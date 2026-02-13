@@ -1,79 +1,99 @@
 import { Link } from "react-router-dom";
-import { Target, Users, Trophy, Camera, ChevronRight, TrendingUp } from "lucide-react";
+import { Target, Users, Trophy, Camera, Dumbbell } from "lucide-react";
 
-const stats = [
-  { label: "Aktive Spieler", value: "12", icon: Users, color: "text-secondary" },
-  { label: "Gespielte Spiele", value: "89", icon: Target, color: "text-primary" },
-  { label: "Turniere", value: "3", icon: Trophy, color: "text-accent" },
+/** Dashboard statistics (will be dynamic once Cloud is connected) */
+const DASHBOARD_STATS = [
+  { label: "Mitglieder", value: "12", icon: Users, colorClass: "text-secondary" },
+  { label: "Spiele", value: "89", icon: Target, colorClass: "text-primary" },
+  { label: "Turniere", value: "3", icon: Trophy, colorClass: "text-accent" },
 ];
 
-const quickActions = [
-  { to: "/game", label: "Neues Spiel", desc: "501, 301 oder Cricket", icon: Target, glow: "glow-red" },
-  { to: "/tournament", label: "Turnier starten", desc: "K.O., Doppel-K.O.", icon: Trophy, glow: "glow-gold" },
-  { to: "/players", label: "Spieler verwalten", desc: "Profile & Statistiken", icon: Users, glow: "glow-green" },
-  { to: "/camera", label: "Kamera Scoring", desc: "Automatische Erkennung", icon: Camera, glow: "" },
+/** Quick action navigation cards */
+const QUICK_ACTIONS = [
+  { to: "/game", label: "Neues Spiel", desc: "501 · 301 · Cricket", icon: Target },
+  { to: "/tournament", label: "Turnier", desc: "K.O.-System", icon: Trophy },
+  { to: "/training", label: "Training", desc: "Drills & Coaching", icon: Dumbbell },
+  { to: "/camera", label: "Kamera", desc: "Auto-Scoring", icon: Camera },
 ];
 
-const recentGames = [
+/** Placeholder recent games (will be replaced by DB data) */
+const RECENT_GAMES = [
   { p1: "Max", p2: "Anna", mode: "501", winner: "Anna", date: "Heute" },
   { p1: "Tom", p2: "Lisa", mode: "301", winner: "Tom", date: "Gestern" },
-  { p1: "Jan", p2: "Paul", mode: "501", winner: "Jan", date: "10.02." },
+  { p1: "Jan", p2: "Paul", mode: "Cricket", winner: "Jan", date: "10.02." },
 ];
 
-const Index = () => {
+/**
+ * Main dashboard / landing page.
+ * Shows club branding, stats overview, quick actions, and recent games.
+ */
+const DashboardPage = () => {
   return (
     <div className="container py-6 animate-slide-up">
-      {/* Hero */}
-      <div className="gradient-hero rounded-2xl p-6 md:p-10 mb-6 border border-border">
-        <h1 className="text-3xl md:text-5xl font-display uppercase leading-tight mb-2">
-          Dart<span className="text-primary">Club</span>
-        </h1>
-        <p className="text-muted-foreground max-w-md">
-          Verwalte Spieler, tracke Scores und organisiere Turniere – alles in einer App.
-        </p>
+      {/* Hero with prominent H-Town United branding */}
+      <div className="gradient-hero rounded-2xl p-8 md:p-12 mb-6 border border-border relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(185_85%_48%/0.06),transparent_60%)]" />
+        <div className="relative">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-14 h-14 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center glow-cyan">
+              <span className="font-display text-primary font-bold text-2xl">H</span>
+            </div>
+            <div>
+              <h1 className="text-4xl md:text-5xl font-display uppercase leading-none">
+                H-Town <span className="text-primary">United</span>
+              </h1>
+              <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground font-display">
+                Dart Club
+              </p>
+            </div>
+          </div>
+          <p className="text-muted-foreground max-w-md mt-4">
+            Verwalte deinen Verein, tracke Scores und organisiere Turniere – alles in einer App.
+          </p>
+        </div>
       </div>
 
-      {/* Stats */}
+      {/* Statistics overview */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        {stats.map((s) => (
-          <div key={s.label} className="bg-card rounded-xl p-3 md:p-4 border border-border text-center">
-            <s.icon className={`w-5 h-5 ${s.color} mx-auto mb-1`} />
-            <p className="text-2xl font-display">{s.value}</p>
-            <p className="text-[10px] md:text-xs text-muted-foreground">{s.label}</p>
+        {DASHBOARD_STATS.map((stat) => (
+          <div key={stat.label} className="bg-card rounded-xl p-3 md:p-4 border border-border text-center">
+            <stat.icon className={`w-5 h-5 ${stat.colorClass} mx-auto mb-1`} />
+            <p className="text-2xl font-display">{stat.value}</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground">{stat.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick action cards */}
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">Schnellzugriff</h2>
       <div className="grid grid-cols-2 gap-3 mb-6">
-        {quickActions.map((a) => (
+        {QUICK_ACTIONS.map((action) => (
           <Link
-            key={a.to}
-            to={a.to}
-            className={`bg-card border border-border rounded-xl p-4 hover:border-primary/40 transition-all group ${a.glow ? `hover:${a.glow}` : ""}`}
+            key={action.to}
+            to={action.to}
+            className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 transition-all group"
           >
-            <a.icon className="w-6 h-6 text-primary mb-2 group-hover:scale-110 transition-transform" />
-            <p className="font-semibold text-sm">{a.label}</p>
-            <p className="text-xs text-muted-foreground">{a.desc}</p>
+            <action.icon className="w-6 h-6 text-primary mb-2 group-hover:scale-110 transition-transform" />
+            <p className="font-semibold text-sm">{action.label}</p>
+            <p className="text-xs text-muted-foreground">{action.desc}</p>
           </Link>
         ))}
       </div>
 
-      {/* Recent Games */}
+      {/* Recent games feed */}
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">Letzte Spiele</h2>
       <div className="space-y-2">
-        {recentGames.map((g, i) => (
-          <div key={i} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between">
+        {RECENT_GAMES.map((game, index) => (
+          <div key={index} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-xs bg-muted px-2 py-0.5 rounded-md font-mono">{g.mode}</span>
+              <span className="text-xs bg-muted px-2 py-0.5 rounded-md font-mono">{game.mode}</span>
               <span className="text-sm">
-                {g.p1} <span className="text-muted-foreground">vs</span> {g.p2}
+                {game.p1} <span className="text-muted-foreground">vs</span> {game.p2}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">{g.date}</span>
-              <span className="text-xs text-secondary font-medium">{g.winner} ✓</span>
+              <span className="text-xs text-muted-foreground">{game.date}</span>
+              <span className="text-xs text-secondary font-medium">{game.winner} ✓</span>
             </div>
           </div>
         ))}
@@ -82,4 +102,4 @@ const Index = () => {
   );
 };
 
-export default Index;
+export default DashboardPage;

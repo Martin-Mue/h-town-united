@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Players from "./pages/Players";
 import Game from "./pages/Game";
 import Tournament from "./pages/Tournament";
+import Training from "./pages/Training";
 import CameraScoring from "./pages/CameraScoring";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/players" element={<Players />} />
             <Route path="/game" element={<Game />} />
             <Route path="/tournament" element={<Tournament />} />
+            <Route path="/training" element={<Training />} />
             <Route path="/camera" element={<CameraScoring />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
