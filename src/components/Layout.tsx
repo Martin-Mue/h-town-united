@@ -1,40 +1,49 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Users, Target, Trophy, Camera } from "lucide-react";
+import { Home, Target, Trophy, Dumbbell, Users } from "lucide-react";
 
-const navItems = [
+/** Navigation item configuration */
+const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home" },
-  { to: "/players", icon: Users, label: "Spieler" },
   { to: "/game", icon: Target, label: "Spiel" },
+  { to: "/training", icon: Dumbbell, label: "Training" },
   { to: "/tournament", icon: Trophy, label: "Turnier" },
-  { to: "/camera", icon: Camera, label: "Kamera" },
+  { to: "/players", icon: Users, label: "Verein" },
 ];
 
+/**
+ * Main application layout with responsive header and bottom navigation.
+ * Provides consistent branding and navigation across all pages.
+ */
 const Layout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
+      {/* Header with prominent HTU branding */}
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center glow-red">
-            <Target className="w-5 h-5 text-primary-foreground" />
+        <Link to="/" className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center glow-cyan">
+            <span className="font-display text-primary font-bold text-lg">H</span>
           </div>
-          <h1 className="text-xl font-display uppercase tracking-wider text-foreground">
-            Dart<span className="text-primary">Club</span>
-          </h1>
+          <div className="leading-tight">
+            <h1 className="text-lg font-display uppercase tracking-widest text-foreground">
+              H-Town <span className="text-primary">United</span>
+            </h1>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Dart Club</p>
+          </div>
         </Link>
-        {/* Desktop nav */}
+
+        {/* Desktop navigation */}
         <nav className="hidden md:flex items-center gap-1">
-          {navItems.map((item) => {
-            const active = location.pathname === item.to;
+          {NAV_ITEMS.map((item) => {
+            const isActive = location.pathname === item.to;
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  active
+                  isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
@@ -47,24 +56,22 @@ const Layout = ({ children }: { children: ReactNode }) => {
         </nav>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 pb-20 md:pb-6">
-        {children}
-      </main>
+      {/* Page content */}
+      <main className="flex-1 pb-20 md:pb-6">{children}</main>
 
-      {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex justify-around py-2 z-50">
-        {navItems.map((item) => {
-          const active = location.pathname === item.to;
+      {/* Mobile bottom navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-md border-t border-border flex justify-around py-2 z-50">
+        {NAV_ITEMS.map((item) => {
+          const isActive = location.pathname === item.to;
           return (
             <Link
               key={item.to}
               to={item.to}
               className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs transition-colors ${
-                active ? "text-primary" : "text-muted-foreground"
+                isActive ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <item.icon className={`w-5 h-5 ${active ? "drop-shadow-[0_0_6px_hsl(var(--primary))]" : ""}`} />
+              <item.icon className={`w-5 h-5 ${isActive ? "drop-shadow-[0_0_6px_hsl(185,85%,48%)]" : ""}`} />
               {item.label}
             </Link>
           );
