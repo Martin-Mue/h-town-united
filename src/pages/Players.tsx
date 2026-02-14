@@ -49,6 +49,36 @@ const PlayersPage = () => {
   const { toast } = useToast();
   const { session } = useAuth();
 
+  /** Generates signed URLs for player avatar/portrait storage paths */
+  const resolveSignedUrls = async (players: PlayerProfile[]): Promise<PlayerProfile[]> => {
+    const resolved = await Promise.all(
+      players.map(async (p) => {
+        const copy = { ...p };
+        for (const field of ["avatar_url", "ai_portrait_url"] as const) {
+          const val = p[field];
+          if (val && !val.startsWith("data:")) {
+            // Extract storage path from full URL or use as-is if already a path
+            let path = val;
+            const publicPrefix = "/object/public/player-avatars/";
+            const idx = val.indexOf(publicPrefix);
+            if (idx !== -1) path = val.substring(idx + publicPrefix.length);
+            const signedPrefix = "/object/sign/player-avatars/";
+            const idx2 = val.indexOf(signedPrefix);
+            if (idx2 !== -1) path = val.substring(idx2 + signedPrefix.length).split("?")[0];
+
+            const { data } = await supabase.storage
+              .from("player-avatars")
+              .createSignedUrl(path, 3600);
+            if (data?.signedUrl) copy[field] = data.signedUrl;
+          }
+          return copy;
+        }
+        return copy;
+      })
+    );
+    return resolved;
+  };
+
   /** Fetches all players from the database */
   const fetchPlayers = useCallback(async () => {
     const { data, error } = await supabase
@@ -60,7 +90,8 @@ const PlayersPage = () => {
       console.error("Failed to fetch players:", error);
       toast({ title: "Fehler", description: "Spieler konnten nicht geladen werden.", variant: "destructive" });
     } else {
-      setPlayers(data || []);
+      const withSignedUrls = await resolveSignedUrls(data || []);
+      setPlayers(withSignedUrls);
     }
     setLoading(false);
   }, [toast]);
@@ -118,7 +149,7 @@ const PlayersPage = () => {
     }
   };
 
-  /** Uploads an image to storage and returns the public URL */
+  /** Uploads an image to storage and returns a signed URL */
   const uploadImageToStorage = async (dataUrl: string, playerId: string, suffix: string): Promise<string | null> => {
     try {
       const res = await fetch(dataUrl);
@@ -132,11 +163,12 @@ const PlayersPage = () => {
 
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage
+      const { data: urlData, error: signError } = await supabase.storage
         .from("player-avatars")
-        .getPublicUrl(path);
+        .createSignedUrl(path, 3600);
 
-      return urlData.publicUrl;
+      if (signError) throw signError;
+      return urlData?.signedUrl ?? null;
     } catch (err) {
       console.error("Upload failed:", err);
       return null;
