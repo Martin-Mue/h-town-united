@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,25 +6,87 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-/**
- * Edge function that generates a professional dart player portrait
- * using Lovable AI (Gemini image model). Accepts an optional base photo
- * and player name, returns a generated portrait image as base64.
- */
+// Simple in-memory rate limiter (per-instance, resets on cold start)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 5; // max requests per window
+const RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_LIMIT;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    // Rate limiting by IP
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (isRateLimited(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const { playerName, sourceImageBase64 } = await req.json();
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("Server configuration error");
+    }
 
-    const promptText = `Generate a professional esports-style portrait photo of a dart player named "${playerName || "Player"}". 
+    const body = await req.json();
+
+    // Validate playerName
+    let playerName = body.playerName || "Player";
+    if (typeof playerName !== "string") {
+      return new Response(
+        JSON.stringify({ error: "playerName must be a string" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    playerName = playerName.trim().substring(0, 100);
+    if (playerName.length === 0) playerName = "Player";
+
+    // Validate sourceImageBase64
+    let sourceImageBase64 = body.sourceImageBase64 || null;
+    if (sourceImageBase64) {
+      if (typeof sourceImageBase64 !== "string") {
+        return new Response(
+          JSON.stringify({ error: "sourceImageBase64 must be a string" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (!sourceImageBase64.startsWith("data:image/")) {
+        return new Response(
+          JSON.stringify({ error: "Invalid image format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      // Max 5MB encoded
+      if (sourceImageBase64.length > 5 * 1024 * 1024) {
+        return new Response(
+          JSON.stringify({ error: "Image too large (max 5MB)" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const mimeMatch = sourceImageBase64.match(/^data:image\/(jpeg|jpg|png|webp);base64,/);
+      if (!mimeMatch) {
+        return new Response(
+          JSON.stringify({ error: "Only JPEG, PNG, and WebP images are allowed" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    const promptText = `Generate a professional esports-style portrait photo of a dart player named "${playerName}". 
 The player should be wearing a sleek dark navy/anthracite dart jersey with cyan neon accents and a subtle "HTU" logo on the chest. 
 The background should be dramatic with spotlight effects and dark tones. 
 The player should look confident and focused, like a professional darts athlete.
@@ -74,9 +135,8 @@ Ultra high resolution.`;
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error(`AI gateway error: ${response.status}`);
+      console.error("AI gateway error:", response.status);
+      throw new Error("AI generation failed");
     }
 
     const data = await response.json();
@@ -95,9 +155,8 @@ Ultra high resolution.`;
     );
   } catch (e) {
     console.error("generate-player-portrait error:", e);
-    const errorMessage = e instanceof Error ? e.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: "An error occurred while generating the portrait" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
