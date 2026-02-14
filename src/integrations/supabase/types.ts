@@ -14,7 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      players: {
+        Row: {
+          ai_portrait_url: string | null
+          avatar_url: string | null
+          average: number
+          created_at: string
+          double_rate: number
+          emoji: string | null
+          games_played: number
+          games_won: number
+          high_score: number
+          id: string
+          name: string
+          nickname: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_portrait_url?: string | null
+          avatar_url?: string | null
+          average?: number
+          created_at?: string
+          double_rate?: number
+          emoji?: string | null
+          games_played?: number
+          games_won?: number
+          high_score?: number
+          id?: string
+          name: string
+          nickname?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_portrait_url?: string | null
+          avatar_url?: string | null
+          average?: number
+          created_at?: string
+          double_rate?: number
+          emoji?: string | null
+          games_played?: number
+          games_won?: number
+          high_score?: number
+          id?: string
+          name?: string
+          nickname?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
