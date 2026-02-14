@@ -1,129 +1,246 @@
-import { useState } from "react";
-import { Plus, Search, Trophy, Target, TrendingUp, BarChart3 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
-/** Player profile with statistics and history */
-export interface Player {
+/** Player profile mapped from database */
+interface PlayerProfile {
   id: string;
   name: string;
-  nickname?: string;
-  avatar: string;
-  gamesPlayed: number;
-  gamesWon: number;
-  highScore: number;
-  avg: number;
-  history: GameRecord[];
+  nickname: string | null;
+  emoji: string;
+  avatar_url: string | null;
+  ai_portrait_url: string | null;
+  games_played: number;
+  games_won: number;
+  high_score: number;
+  average: number;
+  double_rate: number;
 }
 
-/** Individual game record in player history */
-export interface GameRecord {
-  id: string;
-  date: string;
-  mode: string;
-  score: number;
-  won: boolean;
-  opponent?: string;
-  avg?: number;
-}
-
-const AVATARS = ["🎯", "🏆", "⭐", "🔥", "💎", "🦅", "🐉", "🎪"];
-
-/** Sample player data (will be replaced by DB data) */
-const DEFAULT_PLAYERS: Player[] = [
-  {
-    id: "1", name: "Max Müller", nickname: "Bullseye", avatar: "🎯",
-    gamesPlayed: 47, gamesWon: 31, highScore: 180, avg: 62.4,
-    history: [
-      { id: "h1", date: "2026-02-10", mode: "501", score: 501, won: true, opponent: "Anna", avg: 68.2 },
-      { id: "h2", date: "2026-02-08", mode: "301", score: 301, won: false, opponent: "Tom", avg: 55.1 },
-      { id: "h3", date: "2026-02-05", mode: "501", score: 501, won: true, opponent: "Lisa", avg: 72.3 },
-      { id: "h4", date: "2026-02-01", mode: "501", score: 501, won: true, opponent: "Jan", avg: 61.0 },
-      { id: "h5", date: "2026-01-28", mode: "301", score: 301, won: false, opponent: "Paul", avg: 48.5 },
-    ],
-  },
-  {
-    id: "2", name: "Anna Schmidt", nickname: "Triple Queen", avatar: "🏆",
-    gamesPlayed: 52, gamesWon: 38, highScore: 174, avg: 68.1,
-    history: [
-      { id: "h6", date: "2026-02-10", mode: "501", score: 501, won: false, opponent: "Max", avg: 65.0 },
-      { id: "h7", date: "2026-02-07", mode: "Cricket", score: 0, won: true, opponent: "Tom", avg: 0 },
-    ],
-  },
-  {
-    id: "3", name: "Tom Weber", nickname: "The Machine", avatar: "🔥",
-    gamesPlayed: 35, gamesWon: 20, highScore: 160, avg: 55.7,
-    history: [],
-  },
-  {
-    id: "4", name: "Lisa Fischer", avatar: "💎",
-    gamesPlayed: 28, gamesWon: 15, highScore: 140, avg: 48.3,
-    history: [],
-  },
-];
+const EMOJI_AVATARS = ["🎯", "🏆", "⭐", "🔥", "💎", "🦅", "🐉", "🎪"];
 
 /**
- * Club member management page with player profiles and statistics.
- * Shows list view with search and detail view with charts.
+ * Club member management page with persistent player profiles.
+ * Supports photo upload and AI-generated dart jersey portraits.
  */
 const PlayersPage = () => {
-  const [players, setPlayers] = useState<Player[]>(DEFAULT_PLAYERS);
+  const [players, setPlayers] = useState<PlayerProfile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerProfile | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  // New player form state
   const [newName, setNewName] = useState("");
   const [newNickname, setNewNickname] = useState("");
-  const [newAvatar, setNewAvatar] = useState("🎯");
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newEmoji, setNewEmoji] = useState("🎯");
+  const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [generatingPortrait, setGeneratingPortrait] = useState(false);
+  const [generatedPortrait, setGeneratedPortrait] = useState<string | null>(null);
+
+  const { toast } = useToast();
+
+  /** Fetches all players from the database */
+  const fetchPlayers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("players")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to fetch players:", error);
+      toast({ title: "Fehler", description: "Spieler konnten nicht geladen werden.", variant: "destructive" });
+    } else {
+      setPlayers(data || []);
+    }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => {
+    fetchPlayers();
+  }, [fetchPlayers]);
+
+  /** Handles photo file selection and creates preview */
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadedFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setUploadedPhoto(ev.target?.result as string);
+    reader.readAsDataURL(file);
+    setGeneratedPortrait(null);
+  };
+
+  /** Calls AI edge function to generate dart jersey portrait */
+  const generateAiPortrait = async () => {
+    setGeneratingPortrait(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-player-portrait`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            playerName: newName || "Player",
+            sourceImageBase64: uploadedPhoto || undefined,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "AI generation failed");
+      }
+
+      const data = await response.json();
+      if (data.imageBase64) {
+        setGeneratedPortrait(data.imageBase64);
+        toast({ title: "Portrait generiert! 🎯", description: "Dein KI-Spielerportrait ist fertig." });
+      }
+    } catch (err: any) {
+      console.error("AI portrait error:", err);
+      toast({ title: "KI-Fehler", description: err.message || "Portrait konnte nicht generiert werden.", variant: "destructive" });
+    } finally {
+      setGeneratingPortrait(false);
+    }
+  };
+
+  /** Uploads an image to storage and returns the public URL */
+  const uploadImageToStorage = async (dataUrl: string, playerId: string, suffix: string): Promise<string | null> => {
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const ext = blob.type.includes("png") ? "png" : "jpg";
+      const path = `${playerId}/${suffix}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("player-avatars")
+        .upload(path, blob, { upsert: true, contentType: blob.type });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from("player-avatars")
+        .getPublicUrl(path);
+
+      return urlData.publicUrl;
+    } catch (err) {
+      console.error("Upload failed:", err);
+      return null;
+    }
+  };
+
+  /** Creates a new player with optional photos */
+  const addPlayer = async () => {
+    if (!newName.trim()) return;
+
+    // Insert player first to get ID
+    const { data: inserted, error } = await supabase
+      .from("players")
+      .insert({ name: newName.trim(), nickname: newNickname.trim() || null, emoji: newEmoji })
+      .select()
+      .single();
+
+    if (error || !inserted) {
+      toast({ title: "Fehler", description: "Spieler konnte nicht erstellt werden.", variant: "destructive" });
+      return;
+    }
+
+    // Upload photos if available
+    let avatarUrl: string | null = null;
+    let aiPortraitUrl: string | null = null;
+
+    if (uploadedPhoto) {
+      avatarUrl = await uploadImageToStorage(uploadedPhoto, inserted.id, "avatar");
+    }
+    if (generatedPortrait) {
+      aiPortraitUrl = await uploadImageToStorage(generatedPortrait, inserted.id, "ai-portrait");
+    }
+
+    // Update player with image URLs
+    if (avatarUrl || aiPortraitUrl) {
+      await supabase.from("players").update({
+        avatar_url: avatarUrl,
+        ai_portrait_url: aiPortraitUrl,
+      }).eq("id", inserted.id);
+    }
+
+    // Reset form
+    setNewName("");
+    setNewNickname("");
+    setNewEmoji("🎯");
+    setUploadedPhoto(null);
+    setUploadedFile(null);
+    setGeneratedPortrait(null);
+    setDialogOpen(false);
+    fetchPlayers();
+    toast({ title: "Mitglied hinzugefügt! 🎯", description: `${newName} ist jetzt im Verein.` });
+  };
 
   const filteredPlayers = players.filter(
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.nickname?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const addPlayer = () => {
-    if (!newName.trim()) return;
-    setPlayers([...players, {
-      id: Date.now().toString(), name: newName, nickname: newNickname || undefined,
-      avatar: newAvatar, gamesPlayed: 0, gamesWon: 0, highScore: 0, avg: 0, history: [],
-    }]);
-    setNewName(""); setNewNickname(""); setNewAvatar("🎯"); setDialogOpen(false);
+  /** Renders the player's display image (AI portrait > avatar > emoji) */
+  const PlayerAvatar = ({ player, size = "md" }: { player: PlayerProfile; size?: "sm" | "md" | "lg" }) => {
+    const sizeClasses = { sm: "w-10 h-10", md: "w-14 h-14", lg: "w-20 h-20" };
+    const textSize = { sm: "text-lg", md: "text-2xl", lg: "text-4xl" };
+    const imgUrl = player.ai_portrait_url || player.avatar_url;
+
+    if (imgUrl) {
+      return (
+        <img
+          src={imgUrl}
+          alt={`${player.name} portrait`}
+          className={`${sizeClasses[size]} rounded-xl object-cover border border-border`}
+        />
+      );
+    }
+    return (
+      <div className={`${sizeClasses[size]} rounded-xl bg-muted flex items-center justify-center ${textSize[size]}`}>
+        {player.emoji}
+      </div>
+    );
   };
 
   // ─── PLAYER DETAIL VIEW ────────────────────────────
   if (selectedPlayer) {
-    const winRate = selectedPlayer.gamesPlayed > 0
-      ? Math.round((selectedPlayer.gamesWon / selectedPlayer.gamesPlayed) * 100) : 0;
+    const winRate = selectedPlayer.games_played > 0
+      ? Math.round((selectedPlayer.games_won / selectedPlayer.games_played) * 100) : 0;
 
-    /** Chart data for average trend line */
-    const averageTrendData = selectedPlayer.history
-      .filter((g) => g.avg && g.avg > 0)
-      .map((g) => ({ date: g.date.slice(5), avg: g.avg }))
-      .reverse();
-
-    /** Chart data for win/loss bar chart */
-    const winLossData = [
-      { label: "Siege", value: selectedPlayer.gamesWon, fill: "hsl(155 65% 42%)" },
-      { label: "Niederlagen", value: selectedPlayer.gamesPlayed - selectedPlayer.gamesWon, fill: "hsl(0 72% 51%)" },
+    const skillRadarData = [
+      { skill: "Average", value: Math.min(Number(selectedPlayer.average), 100) },
+      { skill: "Highscore", value: (selectedPlayer.high_score / 180) * 100 },
+      { skill: "Siegquote", value: winRate },
+      { skill: "Erfahrung", value: Math.min(selectedPlayer.games_played * 2, 100) },
+      { skill: "Doppelquote", value: Number(selectedPlayer.double_rate) },
     ];
 
-    /** Radar chart data for skill breakdown */
-    const skillRadarData = [
-      { skill: "Average", value: Math.min(selectedPlayer.avg, 100) },
-      { skill: "Highscore", value: (selectedPlayer.highScore / 180) * 100 },
-      { skill: "Siegquote", value: winRate },
-      { skill: "Erfahrung", value: Math.min(selectedPlayer.gamesPlayed * 2, 100) },
-      { skill: "Konstanz", value: selectedPlayer.avg > 50 ? 70 : 40 },
+    const winLossData = [
+      { label: "Siege", value: selectedPlayer.games_won, fill: "hsl(155 65% 42%)" },
+      { label: "Niederlagen", value: selectedPlayer.games_played - selectedPlayer.games_won, fill: "hsl(0 72% 51%)" },
     ];
 
     return (
       <div className="container py-6 animate-slide-up">
-        <Button variant="ghost" onClick={() => setSelectedPlayer(null)} className="mb-4 text-muted-foreground">← Zurück</Button>
+        <Button variant="ghost" onClick={() => setSelectedPlayer(null)} className="mb-4 text-muted-foreground">
+          <ArrowLeft className="w-4 h-4 mr-1" /> Zurück
+        </Button>
 
-        {/* Player header */}
+        {/* Player header with portrait */}
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-xl bg-muted flex items-center justify-center text-3xl">{selectedPlayer.avatar}</div>
+          <PlayerAvatar player={selectedPlayer} size="lg" />
           <div>
             <h2 className="text-2xl font-display uppercase">{selectedPlayer.name}</h2>
             {selectedPlayer.nickname && <p className="text-primary text-sm font-medium">"{selectedPlayer.nickname}"</p>}
@@ -133,10 +250,10 @@ const PlayersPage = () => {
         {/* Stats cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           {[
-            { label: "Spiele", value: selectedPlayer.gamesPlayed, icon: Target },
-            { label: "Siege", value: `${selectedPlayer.gamesWon} (${winRate}%)`, icon: Trophy },
-            { label: "Highscore", value: selectedPlayer.highScore, icon: TrendingUp },
-            { label: "Ø Score", value: selectedPlayer.avg.toFixed(1), icon: BarChart3 },
+            { label: "Spiele", value: selectedPlayer.games_played, icon: Target },
+            { label: "Siege", value: `${selectedPlayer.games_won} (${winRate}%)`, icon: Trophy },
+            { label: "Highscore", value: selectedPlayer.high_score, icon: TrendingUp },
+            { label: "Ø Score", value: Number(selectedPlayer.average).toFixed(1), icon: BarChart3 },
           ].map((stat) => (
             <div key={stat.label} className="bg-card rounded-xl p-4 border border-border">
               <stat.icon className="w-4 h-4 text-primary mb-1" />
@@ -146,27 +263,11 @@ const PlayersPage = () => {
           ))}
         </div>
 
-        {/* Charts section */}
+        {/* Charts */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {/* Average trend */}
-          {averageTrendData.length > 1 && (
-            <div className="bg-card rounded-xl border border-border p-4">
-              <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Average Trend</h3>
-              <ResponsiveContainer width="100%" height={160}>
-                <LineChart data={averageTrendData}>
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: "hsl(222 25% 11%)", border: "1px solid hsl(222 18% 14%)", borderRadius: "8px", fontSize: 12 }} />
-                  <Line type="monotone" dataKey="avg" stroke="hsl(185 85% 48%)" strokeWidth={2} dot={{ fill: "hsl(185 85% 48%)", r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* Skill radar */}
           <div className="bg-card rounded-xl border border-border p-4">
             <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Skill Profil</h3>
-            <ResponsiveContainer width="100%" height={160}>
+            <ResponsiveContainer width="100%" height={180}>
               <RadarChart data={skillRadarData}>
                 <PolarGrid stroke="hsl(222 18% 14%)" />
                 <PolarAngleAxis dataKey="skill" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} />
@@ -176,10 +277,9 @@ const PlayersPage = () => {
             </ResponsiveContainer>
           </div>
 
-          {/* Win/Loss bar */}
           <div className="bg-card rounded-xl border border-border p-4">
             <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Siege / Niederlagen</h3>
-            <ResponsiveContainer width="100%" height={100}>
+            <ResponsiveContainer width="100%" height={120}>
               <BarChart data={winLossData} layout="vertical">
                 <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} width={80} />
@@ -188,30 +288,6 @@ const PlayersPage = () => {
             </ResponsiveContainer>
           </div>
         </div>
-
-        {/* Game history */}
-        <h3 className="font-display text-lg uppercase mb-3">Spielhistorie</h3>
-        {selectedPlayer.history.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Noch keine Spiele gespielt.</p>
-        ) : (
-          <div className="space-y-2">
-            {selectedPlayer.history.map((game) => (
-              <div key={game.id} className="flex items-center justify-between bg-card rounded-lg p-3 border border-border">
-                <div className="flex items-center gap-3">
-                  <span className="font-medium">{game.mode}</span>
-                  {game.opponent && <span className="text-muted-foreground text-sm">vs {game.opponent}</span>}
-                  {game.avg ? <span className="text-xs text-muted-foreground">Ø {game.avg?.toFixed(1)}</span> : null}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground">{game.date}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${game.won ? "bg-secondary/20 text-secondary" : "bg-destructive/20 text-destructive"}`}>
-                    {game.won ? "Sieg" : "Niederlage"}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     );
   }
@@ -221,35 +297,95 @@ const PlayersPage = () => {
     <div className="container py-6 animate-slide-up">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-display uppercase">Verein</h2>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setUploadedPhoto(null);
+            setUploadedFile(null);
+            setGeneratedPortrait(null);
+          }
+        }}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1"><Plus className="w-4 h-4" /> Mitglied</Button>
           </DialogTrigger>
-          <DialogContent className="bg-card border-border">
+          <DialogContent className="bg-card border-border max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-display uppercase">Neues Mitglied</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Name</Label>
-                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name eingeben" className="bg-muted border-border" />
+                <Label>Name *</Label>
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Vor- und Nachname" className="bg-muted border-border" />
               </div>
               <div>
-                <Label>Spitzname (optional)</Label>
-                <Input value={newNickname} onChange={(e) => setNewNickname(e.target.value)} placeholder="Spitzname" className="bg-muted border-border" />
+                <Label>Spitzname</Label>
+                <Input value={newNickname} onChange={(e) => setNewNickname(e.target.value)} placeholder="Optional" className="bg-muted border-border" />
               </div>
+
+              {/* Emoji avatar picker */}
               <div>
-                <Label>Avatar</Label>
-                <div className="flex gap-2 mt-1">
-                  {AVATARS.map((a) => (
-                    <button key={a} onClick={() => setNewAvatar(a)}
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all ${newAvatar === a ? "bg-primary/20 ring-2 ring-primary" : "bg-muted hover:bg-muted/80"}`}>
+                <Label>Emoji Avatar</Label>
+                <div className="flex gap-2 mt-1 flex-wrap">
+                  {EMOJI_AVATARS.map((a) => (
+                    <button key={a} onClick={() => setNewEmoji(a)}
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all ${newEmoji === a ? "bg-primary/20 ring-2 ring-primary" : "bg-muted hover:bg-muted/80"}`}>
                       {a}
                     </button>
                   ))}
                 </div>
               </div>
-              <Button onClick={addPlayer} className="w-full">Mitglied hinzufügen</Button>
+
+              {/* Photo upload */}
+              <div>
+                <Label className="flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5" /> Foto hochladen
+                </Label>
+                <p className="text-xs text-muted-foreground mb-2">Lade ein Foto hoch, um ein KI-Spielerportrait im Darttrikot zu generieren.</p>
+                <label className="flex items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 transition-colors bg-muted/30">
+                  <input type="file" accept="image/*" onChange={handlePhotoSelect} className="hidden" />
+                  {uploadedPhoto ? (
+                    <img src={uploadedPhoto} alt="Preview" className="h-20 w-20 object-cover rounded-lg" />
+                  ) : (
+                    <div className="text-center">
+                      <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
+                      <span className="text-xs text-muted-foreground">Foto auswählen</span>
+                    </div>
+                  )}
+                </label>
+              </div>
+
+              {/* AI Portrait Generation */}
+              {(uploadedPhoto || newName.trim()) && (
+                <div>
+                  <Button
+                    variant="outline"
+                    onClick={generateAiPortrait}
+                    disabled={generatingPortrait}
+                    className="w-full gap-2 border-primary/30 hover:border-primary/60"
+                  >
+                    {generatingPortrait ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> KI generiert Portrait...</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4 text-accent" /> KI-Portrait im Darttrikot generieren</>
+                    )}
+                  </Button>
+
+                  {generatedPortrait && (
+                    <div className="mt-3 text-center">
+                      <p className="text-xs text-muted-foreground mb-2">KI-generiertes Spielerportrait:</p>
+                      <img
+                        src={generatedPortrait}
+                        alt="AI Generated Portrait"
+                        className="w-32 h-32 rounded-xl object-cover mx-auto border-2 border-primary/30 glow-cyan"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button onClick={addPlayer} className="w-full" disabled={!newName.trim()}>
+                Mitglied hinzufügen
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -260,26 +396,39 @@ const PlayersPage = () => {
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Mitglied suchen..." className="pl-9 bg-card border-border" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filteredPlayers.map((player) => (
-          <button key={player.id} onClick={() => setSelectedPlayer(player)}
-            className="bg-card border border-border rounded-xl p-4 text-left hover:border-primary/50 transition-all group">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">{player.avatar}</div>
-              <div>
-                <p className="font-semibold">{player.name}</p>
-                {player.nickname && <p className="text-xs text-primary">"{player.nickname}"</p>}
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      ) : filteredPlayers.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Target className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Noch keine Mitglieder. Füge dein erstes Vereinsmitglied hinzu!</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filteredPlayers.map((player) => (
+            <button key={player.id} onClick={() => setSelectedPlayer(player)}
+              className="bg-card border border-border rounded-xl p-4 text-left hover:border-primary/50 transition-all group">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="group-hover:scale-110 transition-transform">
+                  <PlayerAvatar player={player} size="md" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold truncate">{player.name}</p>
+                  {player.nickname && <p className="text-xs text-primary truncate">"{player.nickname}"</p>}
+                </div>
               </div>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">{player.gamesPlayed} Spiele</span>
-              <span className="text-secondary font-medium">
-                {player.gamesPlayed > 0 ? Math.round((player.gamesWon / player.gamesPlayed) * 100) : 0}% Siege
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{player.games_played} Spiele</span>
+                <span className="text-secondary font-medium">
+                  {player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0}% Siege
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

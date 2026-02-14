@@ -1,1 +1,4 @@
 project_id = "gifbpcouqzjsesvpqbto"
+
+[functions.generate-player-portrait]
+verify_jwt = false
