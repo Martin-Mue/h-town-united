@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 /** Player profile mapped from database */
 interface PlayerProfile {
@@ -46,6 +47,7 @@ const PlayersPage = () => {
   const [generatedPortrait, setGeneratedPortrait] = useState<string | null>(null);
 
   const { toast } = useToast();
+  const { session } = useAuth();
 
   /** Fetches all players from the database */
   const fetchPlayers = useCallback(async () => {
@@ -89,7 +91,7 @@ const PlayersPage = () => {
           headers: {
             "Content-Type": "application/json",
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${session?.access_token}`,
           },
           body: JSON.stringify({
             playerName: newName || "Player",
@@ -148,7 +150,7 @@ const PlayersPage = () => {
     // Insert player first to get ID
     const { data: inserted, error } = await supabase
       .from("players")
-      .insert({ name: newName.trim(), nickname: newNickname.trim() || null, emoji: newEmoji })
+      .insert({ name: newName.trim(), nickname: newNickname.trim() || null, emoji: newEmoji, user_id: session?.user?.id })
       .select()
       .single();
 
