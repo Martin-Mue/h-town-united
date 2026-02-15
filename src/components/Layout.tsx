@@ -1,13 +1,13 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Target, Trophy, Dumbbell, Users, LogOut } from "lucide-react";
+import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home" },
   { to: "/game", icon: Target, label: "Spiel" },
-  { to: "/training", icon: Dumbbell, label: "Training" },
+  { to: "/statistics", icon: BarChart3, label: "Stats" },
   { to: "/tournament", icon: Trophy, label: "Turnier" },
   { to: "/players", icon: Users, label: "Verein" },
 ];

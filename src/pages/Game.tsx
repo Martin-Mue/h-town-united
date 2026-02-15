@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { RotateCcw, Trophy, Target, Edit2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,6 +6,9 @@ import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 /** Creates a fresh leg state */
 function createLegState(legNumber: number, startScore: number, startingPlayer: 1 | 2): LegState {
@@ -54,6 +57,11 @@ const GamePage = () => {
   const [multiplier, setMultiplier] = useState(1);
   const [editingThrowIdx, setEditingThrowIdx] = useState<number | null>(null);
   const [legWinnerBanner, setLegWinnerBanner] = useState<string | null>(null);
+  const [showDetailedStats, setShowDetailedStats] = useState(false);
+  const [gameSaved, setGameSaved] = useState(false);
+  const { session } = useAuth();
+  const navigate = useNavigate();
+  const savingRef = useRef(false);
 
   /** Determines starting score based on mode */
   const getStartScore = (): number => {
@@ -233,7 +241,79 @@ const GamePage = () => {
     setPhase("setup");
     setGame(null);
     setLegWinnerBanner(null);
+    setGameSaved(false);
+    setShowDetailedStats(false);
   };
+
+  /** Saves completed game to database */
+  const saveGame = async () => {
+    if (!game || !game.isFinished || savingRef.current || gameSaved) return;
+    savingRef.current = true;
+    const allLegs = [...game.completedLegs, game.currentLeg];
+    const p1Throws = allLegs.flatMap(l => l.player1Throws);
+    const p2Throws = allLegs.flatMap(l => l.player2Throws);
+    const p1Avg = calculateAverage(p1Throws);
+    const p2Avg = calculateAverage(p2Throws);
+    const p1High = getHighestThrow(p1Throws);
+    const p2High = getHighestThrow(p2Throws);
+
+    // Find player IDs from DB if names match
+    const { data: dbPlayers } = await supabase.from("players").select("id, name");
+    const p1Match = dbPlayers?.find(p => p.name === game.player1Name);
+    const p2Match = dbPlayers?.find(p => p.name === game.player2Name);
+    const winnerMatch = game.winnerName === game.player1Name ? p1Match : p2Match;
+
+    await supabase.from("games").insert({
+      user_id: session?.user?.id,
+      mode: game.mode,
+      start_score: game.startScore,
+      best_of_legs: game.bestOfLegs,
+      player1_name: game.player1Name,
+      player2_name: game.player2Name,
+      player1_id: p1Match?.id || null,
+      player2_id: p2Match?.id || null,
+      player1_legs_won: game.player1LegsWon,
+      player2_legs_won: game.player2LegsWon,
+      player1_average: p1Avg,
+      player2_average: p2Avg,
+      player1_highscore: p1High,
+      player2_highscore: p2High,
+      player1_total_throws: p1Throws.length,
+      player2_total_throws: p2Throws.length,
+      winner_name: game.winnerName!,
+      winner_id: winnerMatch?.id || null,
+    });
+
+    // Update player stats for matched players
+    for (const { match, avg, high, isWinner } of [
+      { match: p1Match, avg: p1Avg, high: p1High, isWinner: game.winnerName === game.player1Name },
+      { match: p2Match, avg: p2Avg, high: p2High, isWinner: game.winnerName === game.player2Name },
+    ]) {
+      if (match) {
+        const { data: current } = await supabase.from("players").select("*").eq("id", match.id).single();
+        if (current) {
+          const gp = current.games_played + 1;
+          const newAvg = (Number(current.average) * current.games_played + avg) / gp;
+          await supabase.from("players").update({
+            games_played: gp,
+            games_won: current.games_won + (isWinner ? 1 : 0),
+            average: Math.round(newAvg * 10) / 10,
+            high_score: Math.max(current.high_score, high),
+          }).eq("id", match.id);
+        }
+      }
+    }
+
+    setGameSaved(true);
+    savingRef.current = false;
+  };
+
+  // Auto-save when game finishes
+  useEffect(() => {
+    if (game?.isFinished && !gameSaved && session?.user?.id) {
+      saveGame();
+    }
+  }, [game?.isFinished]);
 
   /** Post-game statistics derived from completed game */
   const postGameStats = useMemo(() => {
@@ -241,6 +321,12 @@ const GamePage = () => {
     const allLegs = [...game.completedLegs, game.currentLeg];
     const p1Throws = allLegs.flatMap((l) => l.player1Throws);
     const p2Throws = allLegs.flatMap((l) => l.player2Throws);
+    const p1Doubles = p1Throws.filter(t => t.multiplier === 2);
+    const p2Doubles = p2Throws.filter(t => t.multiplier === 2);
+    const p1Triples = p1Throws.filter(t => t.multiplier === 3);
+    const p2Triples = p2Throws.filter(t => t.multiplier === 3);
+    const p1TonPlus = p1Throws.filter(t => t.points >= 100).length;
+    const p2TonPlus = p2Throws.filter(t => t.points >= 100).length;
     return {
       player1Average: calculateAverage(p1Throws),
       player2Average: calculateAverage(p2Throws),
@@ -248,6 +334,14 @@ const GamePage = () => {
       player2Highscore: getHighestThrow(p2Throws),
       p1TotalThrows: p1Throws.length,
       p2TotalThrows: p2Throws.length,
+      p1Doubles: p1Doubles.length,
+      p2Doubles: p2Doubles.length,
+      p1Triples: p1Triples.length,
+      p2Triples: p2Triples.length,
+      p1TonPlus,
+      p2TonPlus,
+      p1TotalPoints: p1Throws.reduce((s, t) => s + t.points, 0),
+      p2TotalPoints: p2Throws.reduce((s, t) => s + t.points, 0),
     };
   }, [game?.isFinished]);
 
@@ -330,15 +424,17 @@ const GamePage = () => {
     <div className="container py-4 animate-slide-up max-w-lg mx-auto">
       {/* Winner overlay */}
       {game.isFinished && (
-        <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-card border border-primary/30 rounded-2xl p-8 text-center animate-scale-in max-w-sm mx-4 glow-cyan">
+        <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto py-8">
+          <div className="bg-card border border-primary/30 rounded-2xl p-8 text-center animate-scale-in max-w-md mx-4 glow-cyan">
             <Trophy className="w-16 h-16 text-accent mx-auto mb-4" />
             <h2 className="text-3xl font-display uppercase mb-1">{game.winnerName}</h2>
             <p className="text-accent font-display text-xl uppercase mb-4">Gewinnt!</p>
+            {game.bestOfLegs > 1 && (
+              <p className="text-sm text-muted-foreground mb-4">{game.player1LegsWon} : {game.player2LegsWon} Legs</p>
+            )}
 
-            {/* Post-game stats */}
             {postGameStats && (
-              <div className="grid grid-cols-2 gap-3 mb-6 text-left">
+              <div className="grid grid-cols-2 gap-3 mb-4 text-left">
                 {[
                   { label: game.player1Name, avg: postGameStats.player1Average, high: postGameStats.player1Highscore, throws: postGameStats.p1TotalThrows, legs: game.player1LegsWon },
                   { label: game.player2Name, avg: postGameStats.player2Average, high: postGameStats.player2Highscore, throws: postGameStats.p2TotalThrows, legs: game.player2LegsWon },
@@ -348,15 +444,62 @@ const GamePage = () => {
                     <p className="text-muted-foreground">Ø <span className="text-foreground font-bold">{p.avg.toFixed(1)}</span></p>
                     <p className="text-muted-foreground">High <span className="text-foreground font-bold">{p.high}</span></p>
                     <p className="text-muted-foreground">Würfe <span className="text-foreground font-bold">{p.throws}</span></p>
-                    {game.bestOfLegs > 1 && (
-                      <p className="text-muted-foreground">Legs <span className="text-foreground font-bold">{p.legs}</span></p>
-                    )}
                   </div>
                 ))}
               </div>
             )}
 
-            <Button onClick={resetGame} className="w-full font-display uppercase">Neues Spiel</Button>
+            {/* Detailed stats toggle */}
+            {postGameStats && (
+              <button onClick={() => setShowDetailedStats(!showDetailedStats)}
+                className="text-xs text-primary underline mb-4 block mx-auto">
+                {showDetailedStats ? "Weniger anzeigen" : "Detaillierte Statistiken anzeigen"}
+              </button>
+            )}
+
+            {showDetailedStats && postGameStats && (
+              <div className="bg-muted/30 rounded-lg p-4 mb-4 text-xs">
+                <div className="grid grid-cols-3 gap-y-2">
+                  <span className="font-semibold text-primary text-right pr-3">{game.player1Name}</span>
+                  <span className="text-muted-foreground text-center">Statistik</span>
+                  <span className="font-semibold text-secondary pl-3">{game.player2Name}</span>
+
+                  <span className="text-right pr-3 font-display">{postGameStats.player1Average.toFixed(1)}</span>
+                  <span className="text-center text-muted-foreground">Ø Average</span>
+                  <span className="pl-3 font-display">{postGameStats.player2Average.toFixed(1)}</span>
+
+                  <span className="text-right pr-3 font-display">{postGameStats.player1Highscore}</span>
+                  <span className="text-center text-muted-foreground">Highscore</span>
+                  <span className="pl-3 font-display">{postGameStats.player2Highscore}</span>
+
+                  <span className="text-right pr-3 font-display">{postGameStats.p1TotalThrows}</span>
+                  <span className="text-center text-muted-foreground">Würfe</span>
+                  <span className="pl-3 font-display">{postGameStats.p2TotalThrows}</span>
+
+                  <span className="text-right pr-3 font-display">{postGameStats.p1Doubles}</span>
+                  <span className="text-center text-muted-foreground">Doubles</span>
+                  <span className="pl-3 font-display">{postGameStats.p2Doubles}</span>
+
+                  <span className="text-right pr-3 font-display">{postGameStats.p1Triples}</span>
+                  <span className="text-center text-muted-foreground">Triples</span>
+                  <span className="pl-3 font-display">{postGameStats.p2Triples}</span>
+
+                  <span className="text-right pr-3 font-display">{postGameStats.p1TonPlus}</span>
+                  <span className="text-center text-muted-foreground">100+ Würfe</span>
+                  <span className="pl-3 font-display">{postGameStats.p2TonPlus}</span>
+
+                  <span className="text-right pr-3 font-display">{postGameStats.p1TotalPoints}</span>
+                  <span className="text-center text-muted-foreground">Gesamtpunkte</span>
+                  <span className="pl-3 font-display">{postGameStats.p2TotalPoints}</span>
+                </div>
+              </div>
+            )}
+
+            <Button onClick={() => { resetGame(); navigate("/game"); }} className="w-full font-display uppercase">
+              Neues Spiel
+            </Button>
+
+            {gameSaved && <p className="text-[10px] text-muted-foreground mt-2">✓ Spiel gespeichert</p>}
           </div>
         </div>
       )}
