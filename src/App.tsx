@@ -10,6 +10,7 @@ import Players from "./pages/Players";
 import Game from "./pages/Game";
 import Tournament from "./pages/Tournament";
 import Training from "./pages/Training";
+import Statistics from "./pages/Statistics";
 import CameraScoring from "./pages/CameraScoring";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
@@ -50,6 +51,7 @@ const App = () => (
                       <Route path="/game" element={<Game />} />
                       <Route path="/tournament" element={<Tournament />} />
                       <Route path="/training" element={<Training />} />
+                      <Route path="/statistics" element={<Statistics />} />
                       <Route path="/camera" element={<CameraScoring />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>

@@ -14,6 +14,116 @@ export type Database = {
   }
   public: {
     Tables: {
+      games: {
+        Row: {
+          best_of_legs: number
+          created_at: string
+          id: string
+          mode: string
+          played_at: string
+          player1_average: number
+          player1_double_rate: number
+          player1_highscore: number
+          player1_id: string | null
+          player1_legs_won: number
+          player1_name: string
+          player1_total_throws: number
+          player2_average: number
+          player2_double_rate: number
+          player2_highscore: number
+          player2_id: string | null
+          player2_legs_won: number
+          player2_name: string
+          player2_total_throws: number
+          start_score: number
+          tournament_id: string | null
+          user_id: string
+          winner_id: string | null
+          winner_name: string
+        }
+        Insert: {
+          best_of_legs?: number
+          created_at?: string
+          id?: string
+          mode?: string
+          played_at?: string
+          player1_average?: number
+          player1_double_rate?: number
+          player1_highscore?: number
+          player1_id?: string | null
+          player1_legs_won?: number
+          player1_name: string
+          player1_total_throws?: number
+          player2_average?: number
+          player2_double_rate?: number
+          player2_highscore?: number
+          player2_id?: string | null
+          player2_legs_won?: number
+          player2_name: string
+          player2_total_throws?: number
+          start_score?: number
+          tournament_id?: string | null
+          user_id: string
+          winner_id?: string | null
+          winner_name: string
+        }
+        Update: {
+          best_of_legs?: number
+          created_at?: string
+          id?: string
+          mode?: string
+          played_at?: string
+          player1_average?: number
+          player1_double_rate?: number
+          player1_highscore?: number
+          player1_id?: string | null
+          player1_legs_won?: number
+          player1_name?: string
+          player1_total_throws?: number
+          player2_average?: number
+          player2_double_rate?: number
+          player2_highscore?: number
+          player2_id?: string | null
+          player2_legs_won?: number
+          player2_name?: string
+          player2_total_throws?: number
+          start_score?: number
+          tournament_id?: string | null
+          user_id?: string
+          winner_id?: string | null
+          winner_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "games_player1_id_fkey"
+            columns: ["player1_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_player2_id_fkey"
+            columns: ["player2_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           ai_portrait_url: string | null
@@ -62,6 +172,51 @@ export type Database = {
           nickname?: string | null
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      tournaments: {
+        Row: {
+          best_of_legs: number
+          bracket: Json
+          champion: string | null
+          created_at: string
+          game_mode: string
+          id: string
+          mode: string
+          name: string
+          players: Json
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          best_of_legs?: number
+          bracket?: Json
+          champion?: string | null
+          created_at?: string
+          game_mode?: string
+          id?: string
+          mode?: string
+          name: string
+          players?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          best_of_legs?: number
+          bracket?: Json
+          champion?: string | null
+          created_at?: string
+          game_mode?: string
+          id?: string
+          mode?: string
+          name?: string
+          players?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
