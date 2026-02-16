@@ -41,10 +41,6 @@ function getHighestThrow(throws: DartThrow[]): number {
   return throws.reduce((max, t) => Math.max(max, t.points), 0);
 }
 
-/**
- * Main game page handling setup, playing, and post-game phases.
- * Supports 501, 301, Cricket, and custom game modes with multi-leg matches.
- */
 const GamePage = () => {
   const [phase, setPhase] = useState<"setup" | "playing" | "postGame">("setup");
   const [mode, setMode] = useState<GameMode>("501");
@@ -63,14 +59,16 @@ const GamePage = () => {
   const navigate = useNavigate();
   const savingRef = useRef(false);
 
-  /** Determines starting score based on mode */
+  // 3-dart turn tracking
+  const [dartsThisRound, setDartsThisRound] = useState(0);
+  const [turnStartRemaining, setTurnStartRemaining] = useState<number>(0);
+
   const getStartScore = (): number => {
     if (mode === "cricket") return 0;
     if (mode === "custom") return customStartScore;
     return parseInt(mode);
   };
 
-  /** Starts a new game with current settings */
   const startGame = () => {
     const startScore = getStartScore();
     const newGame: GameState = {
@@ -92,25 +90,49 @@ const GamePage = () => {
     }
     setGame(newGame);
     setPhase("playing");
+    setDartsThisRound(0);
+    setTurnStartRemaining(startScore);
   };
 
-  /** Processes a standard (x01) dart throw */
+  /** Processes a standard (x01) dart throw with 3-dart turns */
   const handleX01Throw = () => {
     if (!game || game.isFinished) return;
     const points = selectedScore === 25 && multiplier === 3 ? 0 : selectedScore * multiplier;
     const dart: DartThrow = { baseValue: selectedScore, multiplier, points };
+    const isP1 = game.currentPlayerId === 1;
+    const remaining = isP1 ? game.currentLeg.player1Remaining : game.currentLeg.player2Remaining;
+    const newRemaining = remaining - points;
+    const newDartsThisRound = dartsThisRound + 1;
 
+    // Bust: score goes below 0 or equals 1 → reset entire turn, switch player
+    if (newRemaining < 0 || newRemaining === 1) {
+      setGame((prev) => {
+        if (!prev) return prev;
+        const updatedLeg = { ...prev.currentLeg };
+        // Reset remaining to turn start value
+        if (isP1) {
+          updatedLeg.player1Remaining = turnStartRemaining;
+          // Remove darts thrown this turn
+          updatedLeg.player1Throws = updatedLeg.player1Throws.slice(0, updatedLeg.player1Throws.length - (newDartsThisRound - 1));
+        } else {
+          updatedLeg.player2Remaining = turnStartRemaining;
+          updatedLeg.player2Throws = updatedLeg.player2Throws.slice(0, updatedLeg.player2Throws.length - (newDartsThisRound - 1));
+        }
+        const nextPlayer: 1 | 2 = isP1 ? 2 : 1;
+        const nextRemaining = nextPlayer === 1 ? updatedLeg.player1Remaining : updatedLeg.player2Remaining;
+        return { ...prev, currentLeg: updatedLeg, currentPlayerId: nextPlayer };
+      });
+      setDartsThisRound(0);
+      // Set turnStartRemaining for the next player
+      setTurnStartRemaining(
+        isP1 ? game.currentLeg.player2Remaining : game.currentLeg.player1Remaining
+      );
+      return;
+    }
+
+    // Valid throw
     setGame((prev) => {
       if (!prev) return prev;
-      const isP1 = prev.currentPlayerId === 1;
-      const remaining = isP1 ? prev.currentLeg.player1Remaining : prev.currentLeg.player2Remaining;
-      const newRemaining = remaining - points;
-
-      // Bust: score goes below 0 or equals 1
-      if (newRemaining < 0 || newRemaining === 1) {
-        return { ...prev, currentPlayerId: isP1 ? 2 : 1 };
-      }
-
       const updatedLeg = { ...prev.currentLeg };
       if (isP1) {
         updatedLeg.player1Remaining = newRemaining;
@@ -120,46 +142,63 @@ const GamePage = () => {
         updatedLeg.player2Throws = [...updatedLeg.player2Throws, dart];
       }
 
-      const updated: GameState = {
-        ...prev,
-        currentLeg: updatedLeg,
-        currentPlayerId: newRemaining === 0 ? prev.currentPlayerId : (isP1 ? 2 : 1),
-      };
-
-      // Leg won
+      // Checkout (exactly 0)
       if (newRemaining === 0) {
         updatedLeg.winner = isP1 ? 1 : 2;
         const p1Legs = prev.player1LegsWon + (isP1 ? 1 : 0);
         const p2Legs = prev.player2LegsWon + (isP1 ? 0 : 1);
-        updated.player1LegsWon = p1Legs;
-        updated.player2LegsWon = p2Legs;
-
         const legsToWin = Math.ceil(prev.bestOfLegs / 2);
+        const updated: GameState = {
+          ...prev,
+          currentLeg: updatedLeg,
+          player1LegsWon: p1Legs,
+          player2LegsWon: p2Legs,
+        };
+
         if (p1Legs >= legsToWin || p2Legs >= legsToWin) {
           updated.isFinished = true;
           updated.winnerName = isP1 ? prev.player1Name : prev.player2Name;
         } else {
-          // Start next leg (loser starts)
           updated.completedLegs = [...prev.completedLegs, updatedLeg];
-          updated.currentLeg = createLegState(
-            updatedLeg.legNumber + 1,
-            prev.startScore,
-            isP1 ? 2 : 1
-          );
-          updated.currentPlayerId = isP1 ? 2 : 1;
+          const nextStarter: 1 | 2 = isP1 ? 2 : 1;
+          updated.currentLeg = createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter);
+          updated.currentPlayerId = nextStarter;
         }
+        return updated;
       }
 
-      return updated;
+      // After 3 darts → switch player
+      if (newDartsThisRound >= 3) {
+        const nextPlayer: 1 | 2 = isP1 ? 2 : 1;
+        return { ...prev, currentLeg: updatedLeg, currentPlayerId: nextPlayer };
+      }
+
+      return { ...prev, currentLeg: updatedLeg };
     });
+
+    // Handle turn switching
+    if (newRemaining === 0) {
+      setDartsThisRound(0);
+      // turnStart will be set for the next leg's starter
+      const startScore = game.startScore;
+      setTurnStartRemaining(startScore);
+    } else if (newDartsThisRound >= 3) {
+      setDartsThisRound(0);
+      setTurnStartRemaining(
+        isP1 ? game.currentLeg.player2Remaining : game.currentLeg.player1Remaining
+      );
+    } else {
+      setDartsThisRound(newDartsThisRound);
+    }
   };
 
-  /** Processes a cricket dart throw */
+  /** Processes a cricket dart throw with 3-dart turns */
   const handleCricketThrow = () => {
     if (!game || game.isFinished) return;
     const points = selectedScore === 25 && multiplier === 3 ? 0 : selectedScore * multiplier;
     const dart: DartThrow = { baseValue: selectedScore, multiplier, points };
     const targetNumber = selectedScore === 50 ? 25 : selectedScore;
+    const newDartsThisRound = dartsThisRound + 1;
 
     setGame((prev) => {
       if (!prev) return prev;
@@ -167,14 +206,12 @@ const GamePage = () => {
       const myState = isP1 ? { ...prev.player1Cricket! } : { ...prev.player2Cricket! };
       const oppState = isP1 ? prev.player2Cricket! : prev.player1Cricket!;
 
-      // Only cricket numbers count
       if (CRICKET_NUMBERS.includes(targetNumber as any) && targetNumber !== 0) {
         const hitsToAdd = selectedScore === 50 ? 2 : multiplier;
         const currentMarks = myState.marks[targetNumber] || 0;
         const newMarks = currentMarks + hitsToAdd;
         myState.marks = { ...myState.marks, [targetNumber]: newMarks };
 
-        // Score points if I have 3+ and opponent hasn't closed
         if (newMarks > 3 && (oppState.marks[targetNumber] || 0) < 3) {
           const scorableHits = newMarks - Math.max(currentMarks, 3);
           myState.points += targetNumber * scorableHits;
@@ -193,28 +230,34 @@ const GamePage = () => {
         currentLeg: updatedLeg,
         player1Cricket: isP1 ? myState : prev.player1Cricket,
         player2Cricket: isP1 ? prev.player2Cricket : myState,
-        currentPlayerId: isP1 ? 2 : 1,
       };
 
-      // Check cricket win: all numbers closed and points >= opponent
+      // Check cricket win
       const allClosed = CRICKET_NUMBERS.every((n) => (myState.marks[n] || 0) >= 3);
       if (allClosed && myState.points >= oppState.points) {
         updatedLeg.winner = isP1 ? 1 : 2;
         updated.isFinished = true;
         updated.winnerName = isP1 ? prev.player1Name : prev.player2Name;
+      } else if (newDartsThisRound >= 3) {
+        // Switch after 3 darts
+        updated.currentPlayerId = isP1 ? 2 : 1;
       }
 
       return updated;
     });
+
+    if (newDartsThisRound >= 3) {
+      setDartsThisRound(0);
+    } else {
+      setDartsThisRound(newDartsThisRound);
+    }
   };
 
-  /** Routes throw to correct handler based on mode */
   const throwDart = () => {
     if (game?.mode === "cricket") handleCricketThrow();
     else handleX01Throw();
   };
 
-  /** Deletes a throw and recalculates remaining score */
   const deleteThrow = (playerNum: 1 | 2, throwIndex: number) => {
     setGame((prev) => {
       if (!prev) return prev;
@@ -236,16 +279,15 @@ const GamePage = () => {
     setEditingThrowIdx(null);
   };
 
-  /** Resets the game to setup */
   const resetGame = () => {
     setPhase("setup");
     setGame(null);
     setLegWinnerBanner(null);
     setGameSaved(false);
     setShowDetailedStats(false);
+    setDartsThisRound(0);
   };
 
-  /** Saves completed game to database */
   const saveGame = async () => {
     if (!game || !game.isFinished || savingRef.current || gameSaved) return;
     savingRef.current = true;
@@ -257,7 +299,6 @@ const GamePage = () => {
     const p1High = getHighestThrow(p1Throws);
     const p2High = getHighestThrow(p2Throws);
 
-    // Find player IDs from DB if names match
     const { data: dbPlayers } = await supabase.from("players").select("id, name");
     const p1Match = dbPlayers?.find(p => p.name === game.player1Name);
     const p2Match = dbPlayers?.find(p => p.name === game.player2Name);
@@ -284,7 +325,6 @@ const GamePage = () => {
       winner_id: winnerMatch?.id || null,
     });
 
-    // Update player stats for matched players
     for (const { match, avg, high, isWinner } of [
       { match: p1Match, avg: p1Avg, high: p1High, isWinner: game.winnerName === game.player1Name },
       { match: p2Match, avg: p2Avg, high: p2High, isWinner: game.winnerName === game.player2Name },
@@ -308,14 +348,12 @@ const GamePage = () => {
     savingRef.current = false;
   };
 
-  // Auto-save when game finishes
   useEffect(() => {
     if (game?.isFinished && !gameSaved && session?.user?.id) {
       saveGame();
     }
   }, [game?.isFinished]);
 
-  /** Post-game statistics derived from completed game */
   const postGameStats = useMemo(() => {
     if (!game || !game.isFinished) return null;
     const allLegs = [...game.completedLegs, game.currentLeg];
@@ -449,7 +487,6 @@ const GamePage = () => {
               </div>
             )}
 
-            {/* Detailed stats toggle */}
             {postGameStats && (
               <button onClick={() => setShowDetailedStats(!showDetailedStats)}
                 className="text-xs text-primary underline mb-4 block mx-auto">
@@ -535,9 +572,20 @@ const GamePage = () => {
         </div>
       )}
 
-      {/* Current player indicator */}
+      {/* Current player indicator with dart counter */}
       <div className="text-center mb-3">
         <span className="text-sm text-primary font-medium">{currentPlayerName} wirft</span>
+        <div className="flex justify-center gap-1 mt-1">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className={`w-3 h-3 rounded-full transition-all ${
+                i < dartsThisRound ? "bg-primary" : "bg-muted"
+              }`}
+            />
+          ))}
+        </div>
+        <span className="text-[10px] text-muted-foreground">Dart {dartsThisRound + 1} / 3</span>
       </div>
 
       {/* Checkout suggestion (x01 modes only) */}

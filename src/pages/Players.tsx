@@ -9,6 +9,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Static fallback portraits
+import portraitKarsten from "@/assets/portraits/karsten.jpg";
+import portraitMartin1 from "@/assets/portraits/martin1.jpg";
+import portraitMartin2 from "@/assets/portraits/martin2.jpg";
+import portraitMartin3 from "@/assets/portraits/martin3.jpg";
+
+/** Static portrait mapping by player ID */
+const STATIC_PORTRAITS: Record<string, string> = {
+  "a2f19689-d758-4c77-ad7d-69cedd69115a": portraitKarsten,
+  "b1015e88-4cfd-43f5-a529-c5a193cb1ebe": portraitMartin1,
+  "e5b1736c-a098-485b-9709-a692db1f4dee": portraitMartin2,
+  "ff73f02d-6475-410e-8b97-c7c1452c2af3": portraitMartin3,
+};
+
 /** Player profile mapped from database */
 interface PlayerProfile {
   id: string;
@@ -57,7 +71,6 @@ const PlayersPage = () => {
         for (const field of ["avatar_url", "ai_portrait_url"] as const) {
           const val = p[field];
           if (val && !val.startsWith("data:")) {
-            // Extract storage path from full URL or use as-is if already a path
             let path = val;
             const publicPrefix = "/object/public/player-avatars/";
             const idx = val.indexOf(publicPrefix);
@@ -71,7 +84,6 @@ const PlayersPage = () => {
               .createSignedUrl(path, 3600);
             if (data?.signedUrl) copy[field] = data.signedUrl;
           }
-          return copy;
         }
         return copy;
       })
@@ -226,11 +238,11 @@ const PlayersPage = () => {
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.nickname?.toLowerCase().includes(search.toLowerCase())
   );
 
-  /** Renders the player's display image (AI portrait > avatar > emoji) */
+  /** Renders the player's display image (AI portrait > avatar > emoji, with static fallback) */
   const PlayerAvatar = ({ player, size = "md" }: { player: PlayerProfile; size?: "sm" | "md" | "lg" }) => {
     const sizeClasses = { sm: "w-10 h-10", md: "w-14 h-14", lg: "w-20 h-20" };
     const textSize = { sm: "text-lg", md: "text-2xl", lg: "text-4xl" };
-    const imgUrl = player.ai_portrait_url || player.avatar_url;
+    const imgUrl = player.ai_portrait_url || player.avatar_url || STATIC_PORTRAITS[player.id];
 
     if (imgUrl) {
       return (
@@ -238,6 +250,15 @@ const PlayersPage = () => {
           src={imgUrl}
           alt={`${player.name} portrait`}
           className={`${sizeClasses[size]} rounded-xl object-cover border border-border`}
+          onError={(e) => {
+            // Fall back to static portrait or emoji on load failure
+            const staticUrl = STATIC_PORTRAITS[player.id];
+            if (staticUrl && e.currentTarget.src !== staticUrl) {
+              e.currentTarget.src = staticUrl;
+            } else {
+              e.currentTarget.style.display = "none";
+            }
+          }}
         />
       );
     }
