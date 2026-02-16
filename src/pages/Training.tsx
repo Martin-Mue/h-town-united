@@ -1,6 +1,8 @@
-import { useState } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import DartScoreInput from "@/components/game/DartScoreInput";
+import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 
 /** Training drill definition */
 interface TrainingDrill {
@@ -63,7 +65,7 @@ const TRAINING_DRILLS: TrainingDrill[] = [
   {
     id: "t20-grind",
     name: "T20 Grind",
-    description: "100 Darts auf Triple 20. Zähle deine Treffer und verbessere den Score.",
+    description: "30 Darts auf Triple 20. Zähle deine Treffer und verbessere den Score.",
     icon: Target,
     difficulty: "Fortgeschritten",
     durationMinutes: 20,
@@ -77,13 +79,37 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   "Profi": "bg-accent/20 text-accent",
 };
 
-/**
- * Training page with drill selection and coaching features.
- * Offers various practice modes for skill improvement.
- */
+/** Double fields for doubles-only drill */
+const DOUBLE_TARGETS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25];
+
+/** Pressure checkout values */
+const PRESSURE_CHECKOUTS = [32, 40, 16, 36, 24, 8, 20, 50, 64, 80];
+
+/** Generates a random checkout between 2 and 170 */
+function randomCheckout(): number {
+  return Math.floor(Math.random() * 169) + 2;
+}
+
+/** Active drill state */
+interface DrillState {
+  drillId: string;
+  dartsThrown: number;
+  dartsThisRound: number;
+  hits: number;
+  currentTarget: number;
+  targetList: number[];
+  targetIndex: number;
+  remaining: number; // for checkout drills
+  finished: boolean;
+  roundScores: number[]; // per-round scores for summary
+}
+
 const TrainingPage = () => {
   const [selectedDrill, setSelectedDrill] = useState<TrainingDrill | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [drillState, setDrillState] = useState<DrillState | null>(null);
+  const [selectedScore, setSelectedScore] = useState(20);
+  const [multiplier, setMultiplier] = useState(1);
 
   const categories = [
     { key: "all", label: "Alle" },
@@ -97,7 +123,348 @@ const TrainingPage = () => {
     ? TRAINING_DRILLS
     : TRAINING_DRILLS.filter((d) => d.category === filterCategory);
 
-  if (selectedDrill) {
+  /** Start an active drill session */
+  const startDrill = (drill: TrainingDrill) => {
+    let state: DrillState = {
+      drillId: drill.id,
+      dartsThrown: 0,
+      dartsThisRound: 0,
+      hits: 0,
+      currentTarget: 0,
+      targetList: [],
+      targetIndex: 0,
+      remaining: 0,
+      finished: false,
+      roundScores: [],
+    };
+
+    switch (drill.id) {
+      case "around-the-clock":
+        state.targetList = Array.from({ length: 20 }, (_, i) => i + 1);
+        state.currentTarget = 1;
+        break;
+      case "doubles-only":
+        state.targetList = [...DOUBLE_TARGETS];
+        state.currentTarget = DOUBLE_TARGETS[0];
+        break;
+      case "121-challenge":
+        state.remaining = 121;
+        state.currentTarget = 121;
+        break;
+      case "pressure-training":
+        state.targetList = [...PRESSURE_CHECKOUTS];
+        state.currentTarget = PRESSURE_CHECKOUTS[0];
+        state.remaining = PRESSURE_CHECKOUTS[0];
+        break;
+      case "random-finish":
+        const val = randomCheckout();
+        state.remaining = val;
+        state.currentTarget = val;
+        break;
+      case "t20-grind":
+        state.currentTarget = 60; // T20
+        break;
+    }
+
+    setDrillState(state);
+  };
+
+  /** Process a dart throw in the active drill */
+  const handleDrillThrow = useCallback(() => {
+    if (!drillState || drillState.finished || !selectedDrill) return;
+
+    const points = selectedScore === 25 && multiplier === 3 ? 0 : selectedScore * multiplier;
+    const baseValue = selectedScore === 50 ? 25 : selectedScore;
+    const newDartsThisRound = drillState.dartsThisRound + 1;
+
+    setDrillState((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, dartsThrown: prev.dartsThrown + 1, dartsThisRound: newDartsThisRound };
+
+      switch (selectedDrill.id) {
+        case "around-the-clock": {
+          // Hit the current target number (any multiplier)
+          if (baseValue === prev.currentTarget) {
+            updated.hits++;
+            const nextIdx = prev.targetIndex + 1;
+            if (nextIdx >= prev.targetList.length) {
+              updated.finished = true;
+            } else {
+              updated.targetIndex = nextIdx;
+              updated.currentTarget = prev.targetList[nextIdx];
+            }
+          }
+          break;
+        }
+
+        case "doubles-only": {
+          // Must hit the double of the current target
+          if (baseValue === prev.currentTarget && multiplier === 2) {
+            updated.hits++;
+            const nextIdx = prev.targetIndex + 1;
+            if (nextIdx >= prev.targetList.length) {
+              updated.finished = true;
+            } else {
+              updated.targetIndex = nextIdx;
+              updated.currentTarget = prev.targetList[nextIdx];
+            }
+          }
+          break;
+        }
+
+        case "121-challenge": {
+          const newRemaining = prev.remaining - points;
+          if (newRemaining < 0 || newRemaining === 1) {
+            // Bust - reset round, move to next round of 3
+            if (newDartsThisRound >= 3) {
+              updated.dartsThisRound = 0;
+              updated.remaining = prev.remaining; // keep same (bust resets)
+            }
+          } else if (newRemaining === 0) {
+            updated.remaining = 0;
+            updated.finished = true;
+            updated.hits++;
+          } else {
+            updated.remaining = newRemaining;
+            updated.currentTarget = newRemaining;
+          }
+          break;
+        }
+
+        case "pressure-training": {
+          const newRemaining = prev.remaining - points;
+          if (newRemaining === 0) {
+            updated.hits++;
+            const nextIdx = prev.targetIndex + 1;
+            if (nextIdx >= prev.targetList.length) {
+              updated.finished = true;
+            } else {
+              updated.targetIndex = nextIdx;
+              updated.currentTarget = prev.targetList[nextIdx];
+              updated.remaining = prev.targetList[nextIdx];
+            }
+            updated.dartsThisRound = 0;
+          } else if (newRemaining < 0 || newRemaining === 1) {
+            // Bust - reset to start of this checkout after 3 darts
+            if (newDartsThisRound >= 3) {
+              updated.remaining = prev.targetList[prev.targetIndex];
+              updated.dartsThisRound = 0;
+            }
+          } else {
+            updated.remaining = newRemaining;
+            if (newDartsThisRound >= 3) {
+              // Failed to check out in 3 darts, reset
+              updated.remaining = prev.targetList[prev.targetIndex];
+              updated.dartsThisRound = 0;
+            }
+          }
+          break;
+        }
+
+        case "random-finish": {
+          const newRemaining = prev.remaining - points;
+          if (newRemaining === 0) {
+            updated.hits++;
+            // Generate next random checkout
+            const next = randomCheckout();
+            updated.remaining = next;
+            updated.currentTarget = next;
+            updated.dartsThisRound = 0;
+            // After 10 successful checkouts, finish
+            if (updated.hits >= 10) {
+              updated.finished = true;
+            }
+          } else if (newRemaining < 0 || newRemaining === 1) {
+            if (newDartsThisRound >= 3) {
+              // Reset this checkout
+              const next = randomCheckout();
+              updated.remaining = next;
+              updated.currentTarget = next;
+              updated.dartsThisRound = 0;
+            }
+          } else {
+            updated.remaining = newRemaining;
+            if (newDartsThisRound >= 3) {
+              const next = randomCheckout();
+              updated.remaining = next;
+              updated.currentTarget = next;
+              updated.dartsThisRound = 0;
+            }
+          }
+          break;
+        }
+
+        case "t20-grind": {
+          // Count T20 hits out of 30 darts
+          if (baseValue === 20 && multiplier === 3) {
+            updated.hits++;
+          }
+          updated.roundScores = [...(prev.roundScores || []), points];
+          if (updated.dartsThrown >= 30) {
+            updated.finished = true;
+          }
+          break;
+        }
+      }
+
+      // Auto-advance round counter after 3 darts (for drills that don't handle it themselves)
+      if (newDartsThisRound >= 3 && !["pressure-training", "random-finish", "121-challenge"].includes(selectedDrill.id)) {
+        updated.dartsThisRound = 0;
+      }
+
+      return updated;
+    });
+  }, [drillState, selectedDrill, selectedScore, multiplier]);
+
+  const exitDrill = () => {
+    setDrillState(null);
+    setSelectedDrill(null);
+  };
+
+  const restartDrill = () => {
+    if (selectedDrill) startDrill(selectedDrill);
+  };
+
+  // ─── ACTIVE DRILL VIEW ────────────────────────────
+  if (selectedDrill && drillState) {
+    const isCheckoutDrill = ["121-challenge", "pressure-training", "random-finish"].includes(selectedDrill.id);
+
+    return (
+      <div className="container py-6 animate-slide-up max-w-lg mx-auto">
+        <Button variant="ghost" onClick={exitDrill} className="mb-4 text-muted-foreground">
+          <ArrowLeft className="w-4 h-4 mr-1" /> Zurück
+        </Button>
+
+        <div className="text-center mb-4">
+          <selectedDrill.icon className="w-10 h-10 text-primary mx-auto mb-2" />
+          <h2 className="text-xl font-display uppercase">{selectedDrill.name}</h2>
+        </div>
+
+        {/* Drill finished overlay */}
+        {drillState.finished && (
+          <div className="bg-card border border-primary/30 rounded-2xl p-6 text-center mb-4 glow-cyan animate-scale-in">
+            <CheckCircle className="w-12 h-12 text-secondary mx-auto mb-3" />
+            <h3 className="text-2xl font-display uppercase mb-2">Geschafft! 🎯</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+              <div className="bg-muted/50 rounded-lg p-3">
+                <p className="text-2xl font-display">{drillState.dartsThrown}</p>
+                <p className="text-xs text-muted-foreground">Darts geworfen</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3">
+                <p className="text-2xl font-display">{drillState.hits}</p>
+                <p className="text-xs text-muted-foreground">Treffer</p>
+              </div>
+              {selectedDrill.id === "t20-grind" && (
+                <>
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-2xl font-display">
+                      {Math.round((drillState.hits / 30) * 100)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">T20 Quote</p>
+                  </div>
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-2xl font-display">
+                      {Math.round(drillState.roundScores.reduce((a, b) => a + b, 0) / 10)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Ø 3-Dart</p>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={restartDrill} variant="outline" className="flex-1 gap-1">
+                <RotateCcw className="w-4 h-4" /> Nochmal
+              </Button>
+              <Button onClick={exitDrill} className="flex-1">
+                Beenden
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!drillState.finished && (
+          <>
+            {/* Drill status info */}
+            <div className="bg-card rounded-xl border border-border p-4 mb-4 text-center">
+              {/* Target display */}
+              {selectedDrill.id === "around-the-clock" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Triff die</p>
+                  <p className="text-5xl font-display text-primary">{drillState.currentTarget}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{drillState.targetIndex + 1} / {drillState.targetList.length}</p>
+                </div>
+              )}
+              {selectedDrill.id === "doubles-only" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Triff Double</p>
+                  <p className="text-5xl font-display text-primary">D{drillState.currentTarget}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{drillState.targetIndex + 1} / {drillState.targetList.length}</p>
+                </div>
+              )}
+              {isCheckoutDrill && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Checkout</p>
+                  <p className="text-5xl font-display text-primary">{drillState.remaining}</p>
+                  {selectedDrill.id === "pressure-training" && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Checkout {drillState.targetIndex + 1} / {drillState.targetList.length}
+                    </p>
+                  )}
+                  {selectedDrill.id === "random-finish" && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Geschafft: {drillState.hits} / 10
+                    </p>
+                  )}
+                </div>
+              )}
+              {selectedDrill.id === "t20-grind" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Triple 20 Treffer</p>
+                  <p className="text-5xl font-display text-primary">{drillState.hits}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{drillState.dartsThrown} / 30 Darts</p>
+                </div>
+              )}
+
+              {/* Dart counter */}
+              <div className="flex justify-center gap-1 mt-3">
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className={`w-3 h-3 rounded-full transition-all ${
+                      i < drillState.dartsThisRound ? "bg-primary" : "bg-muted"
+                    }`}
+                  />
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Dart {drillState.dartsThisRound + 1} / 3 · Gesamt: {drillState.dartsThrown}
+              </p>
+            </div>
+
+            {/* Checkout suggestion for finish drills */}
+            {isCheckoutDrill && drillState.remaining <= 170 && (
+              <div className="mb-3">
+                <CheckoutSuggestion remaining={drillState.remaining} playerName="Training" />
+              </div>
+            )}
+
+            {/* Score input */}
+            <DartScoreInput
+              selectedValue={selectedScore}
+              selectedMultiplier={multiplier}
+              isDisabled={drillState.finished}
+              onValueSelect={setSelectedScore}
+              onMultiplierSelect={setMultiplier}
+              onSubmit={handleDrillThrow}
+            />
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ─── DRILL SELECTION (pre-start) ──────────────────
+  if (selectedDrill && !drillState) {
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
         <Button variant="ghost" onClick={() => setSelectedDrill(null)} className="mb-4 text-muted-foreground">
@@ -118,18 +485,15 @@ const TrainingPage = () => {
             </span>
           </div>
 
-          <Button className="w-full font-display uppercase text-lg py-6">
+          <Button onClick={() => startDrill(selectedDrill)} className="w-full font-display uppercase text-lg py-6">
             <Play className="w-5 h-5 mr-2" /> Training starten
           </Button>
-
-          <p className="text-xs text-muted-foreground mt-4">
-            🚧 Interaktive Trainings-Logik wird in einem zukünftigen Update verfügbar.
-          </p>
         </div>
       </div>
     );
   }
 
+  // ─── DRILL LIST VIEW ──────────────────────────────
   return (
     <div className="container py-6 animate-slide-up">
       <div className="flex items-center gap-3 mb-6">
@@ -137,7 +501,6 @@ const TrainingPage = () => {
         <h2 className="text-2xl font-display uppercase">Training</h2>
       </div>
 
-      {/* Category filter */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
         {categories.map((cat) => (
           <button
@@ -154,7 +517,6 @@ const TrainingPage = () => {
         ))}
       </div>
 
-      {/* Drill cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {filteredDrills.map((drill) => (
           <button
@@ -181,7 +543,6 @@ const TrainingPage = () => {
         ))}
       </div>
 
-      {/* Coaching teaser */}
       <div className="mt-6 bg-card border border-primary/20 rounded-xl p-4">
         <h3 className="font-display uppercase text-sm mb-2 text-primary">🎯 Coaching</h3>
         <p className="text-sm text-muted-foreground">
