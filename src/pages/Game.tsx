@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect, useRef } from "react";
-import { RotateCcw, Trophy, Target, Edit2, Check, X } from "lucide-react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { RotateCcw, Trophy, Target, Edit2, Check, X, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState } from "@/types/game";
@@ -41,6 +42,12 @@ function getHighestThrow(throws: DartThrow[]): number {
   return throws.reduce((max, t) => Math.max(max, t.points), 0);
 }
 
+interface DbPlayer {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
 const GamePage = () => {
   const [phase, setPhase] = useState<"setup" | "playing" | "postGame">("setup");
   const [mode, setMode] = useState<GameMode>("501");
@@ -58,6 +65,15 @@ const GamePage = () => {
   const { session } = useAuth();
   const navigate = useNavigate();
   const savingRef = useRef(false);
+
+  // Player selection from DB
+  const [dbPlayers, setDbPlayers] = useState<DbPlayer[]>([]);
+
+  useEffect(() => {
+    supabase.from("players").select("id, name, emoji").order("name").then(({ data }) => {
+      if (data) setDbPlayers(data);
+    });
+  }, []);
 
   // 3-dart turn tracking
   const [dartsThisRound, setDartsThisRound] = useState(0);
@@ -429,16 +445,46 @@ const GamePage = () => {
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Spieler 1</label>
-              <input value={p1Name} onChange={(e) => setP1Name(e.target.value)}
-                className="w-full rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
-            </div>
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Spieler 2</label>
-              <input value={p2Name} onChange={(e) => setP2Name(e.target.value)}
-                className="w-full rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
-            </div>
+            {[
+              { label: "Spieler 1", value: p1Name, setter: setP1Name },
+              { label: "Spieler 2", value: p2Name, setter: setP2Name },
+            ].map((p) => (
+              <div key={p.label}>
+                <label className="text-sm text-muted-foreground mb-1 block">{p.label}</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="w-full rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground text-left flex items-center justify-between">
+                      <span className="truncate">{p.value}</span>
+                      <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-2" align="start">
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {dbPlayers.map((dp) => (
+                        <button
+                          key={dp.id}
+                          onClick={() => p.setter(dp.name)}
+                          className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${
+                            p.value === dp.name ? "bg-primary/15 text-primary" : "hover:bg-muted"
+                          }`}
+                        >
+                          <span>{dp.emoji}</span>
+                          <span>{dp.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="border-t border-border mt-2 pt-2">
+                      <input
+                        value={p.value}
+                        onChange={(e) => p.setter(e.target.value)}
+                        placeholder="Oder Name eingeben..."
+                        className="w-full rounded bg-muted border-0 px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            ))}
           </div>
 
           <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
