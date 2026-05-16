@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
+import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
@@ -99,6 +100,7 @@ const GamePage = () => {
   const savingRef = useRef(false);
   const [dbPlayers, setDbPlayers] = useState<DbPlayer[]>([]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
 
   useEffect(() => {
     supabase.from("players").select("id, name, emoji").order("name").then(({ data }) => {
@@ -162,12 +164,14 @@ const GamePage = () => {
     if (soundEnabled) playThrowSound();
   };
 
-  const handleX01Throw = () => {
+  const handleX01Throw = (overrideBase?: number, overrideMul?: 1 | 2 | 3) => {
     if (!game || game.isFinished) return;
     saveUndo();
 
-    const points = selectedScore === 25 && multiplier === 3 ? 0 : selectedScore * multiplier;
-    const dart: DartThrow = { baseValue: selectedScore, multiplier, points };
+    const baseValue = overrideBase ?? selectedScore;
+    const mul = overrideMul ?? multiplier;
+    const points = baseValue === 25 && mul === 3 ? 0 : baseValue * mul;
+    const dart: DartThrow = { baseValue, multiplier: mul, points };
     const isP1 = game.currentPlayerId === 1;
     const remaining = isP1 ? game.currentLeg.player1Remaining : game.currentLeg.player2Remaining;
     const newRemaining = remaining - points;
@@ -175,7 +179,7 @@ const GamePage = () => {
 
     // Bust checks: below 0, equals 1, or equals 0 but checkout not on double (if double-out enabled)
     const isBust = newRemaining < 0 || newRemaining === 1 ||
-      (newRemaining === 0 && doubleOut && multiplier !== 2 && !(selectedScore === 25 && multiplier === 2));
+      (newRemaining === 0 && doubleOut && mul !== 2 && !(baseValue === 25 && mul === 2));
 
     if (isBust) {
       if (soundEnabled) playBustSound();
@@ -271,12 +275,14 @@ const GamePage = () => {
     }
   };
 
-  const handleCricketThrow = () => {
+  const handleCricketThrow = (overrideBase?: number, overrideMul?: 1 | 2 | 3) => {
     if (!game || game.isFinished) return;
     saveUndo();
-    const points = selectedScore === 25 && multiplier === 3 ? 0 : selectedScore * multiplier;
-    const dart: DartThrow = { baseValue: selectedScore, multiplier, points };
-    const targetNumber = selectedScore === 50 ? 25 : selectedScore;
+    const baseValue = overrideBase ?? selectedScore;
+    const mul = overrideMul ?? multiplier;
+    const points = baseValue === 25 && mul === 3 ? 0 : baseValue * mul;
+    const dart: DartThrow = { baseValue, multiplier: mul, points };
+    const targetNumber = baseValue === 50 ? 25 : baseValue;
     const newDartsThisRound = dartsThisRound + 1;
 
     if (soundEnabled) playThrowSound();
@@ -288,7 +294,7 @@ const GamePage = () => {
       const oppState = isP1 ? prev.player2Cricket! : prev.player1Cricket!;
 
       if (CRICKET_NUMBERS.includes(targetNumber as any) && targetNumber !== 0) {
-        const hitsToAdd = selectedScore === 50 ? 2 : multiplier;
+        const hitsToAdd = baseValue === 50 ? 2 : mul;
         const currentMarks = myState.marks[targetNumber] || 0;
         const newMarks = currentMarks + hitsToAdd;
         myState.marks = { ...myState.marks, [targetNumber]: newMarks };
@@ -330,6 +336,28 @@ const GamePage = () => {
   const throwDart = () => {
     if (game?.mode === "cricket") handleCricketThrow();
     else handleX01Throw();
+  };
+
+  /** Submit a dart programmatically (used by live camera). */
+  const submitDetectedDart = (dart: DetectedDart) => {
+    if (!game || game.isFinished) return;
+    if (game.mode === "cricket") handleCricketThrow(dart.baseValue, dart.multiplier);
+    else handleX01Throw(dart.baseValue, dart.multiplier);
+  };
+
+  /** Board cleared: if mid-round, force-advance to next player. */
+  const handleBoardCleared = () => {
+    if (!game || game.isFinished || dartsThisRound === 0) return;
+    setGame((prev) => {
+      if (!prev) return prev;
+      const next: 1 | 2 = prev.currentPlayerId === 1 ? 2 : 1;
+      return { ...prev, currentPlayerId: next };
+    });
+    setDartsThisRound(0);
+    setTurnStartRemaining(
+      game.currentPlayerId === 1 ? game.currentLeg.player2Remaining : game.currentLeg.player1Remaining
+    );
+    if (soundEnabled) playTurnSwitchSound();
   };
 
   const deleteThrow = (playerNum: 1 | 2, throwIndex: number) => {
@@ -659,6 +687,16 @@ const GamePage = () => {
       {/* Checkout suggestion */}
       {!isCricket && <div className="mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
 
+      {/* Live Camera (auto-scoring) */}
+      {cameraEnabled && (
+        <LiveCamera
+          enabled={cameraEnabled}
+          onClose={() => setCameraEnabled(false)}
+          onDartDetected={submitDetectedDart}
+          onBoardCleared={handleBoardCleared}
+        />
+      )}
+
       {/* Cricket scoreboard */}
       {isCricket && game.player1Cricket && game.player2Cricket && (
         <div className="bg-card rounded-xl border border-border p-3 mb-3">
@@ -688,6 +726,14 @@ const GamePage = () => {
       <div className="flex gap-2 mt-3">
         <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
           <Undo2 className="w-4 h-4" /> Rückgängig
+        </Button>
+        <Button
+          variant={cameraEnabled ? "default" : "outline"}
+          onClick={() => setCameraEnabled((v) => !v)}
+          className="gap-1"
+          title="Live-Kamera-Scoring"
+        >
+          <Camera className="w-4 h-4" /> {cameraEnabled ? "Cam an" : "Cam"}
         </Button>
         <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1">
           {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
