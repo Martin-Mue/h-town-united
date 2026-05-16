@@ -687,6 +687,16 @@ const GamePage = () => {
       {/* Checkout suggestion */}
       {!isCricket && <div className="mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
 
+      {/* Live Camera (auto-scoring) */}
+      {cameraEnabled && (
+        <LiveCamera
+          enabled={cameraEnabled}
+          onClose={() => setCameraEnabled(false)}
+          onDartDetected={submitDetectedDart}
+          onBoardCleared={handleBoardCleared}
+        />
+      )}
+
       {/* Cricket scoreboard */}
       {isCricket && game.player1Cricket && game.player2Cricket && (
         <div className="bg-card rounded-xl border border-border p-3 mb-3">
@@ -716,6 +726,14 @@ const GamePage = () => {
       <div className="flex gap-2 mt-3">
         <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
           <Undo2 className="w-4 h-4" /> Rückgängig
+        </Button>
+        <Button
+          variant={cameraEnabled ? "default" : "outline"}
+          onClick={() => setCameraEnabled((v) => !v)}
+          className="gap-1"
+          title="Live-Kamera-Scoring"
+        >
+          <Camera className="w-4 h-4" /> {cameraEnabled ? "Cam an" : "Cam"}
         </Button>
         <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1">
           {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
