@@ -1,13 +1,13 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3, Camera } from "lucide-react";
+import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import htuLogo from "@/assets/htu-logo.jpg";
 
 const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home" },
   { to: "/game", icon: Target, label: "Spiel" },
-  { to: "/camera", icon: Camera, label: "Kamera" },
   { to: "/statistics", icon: BarChart3, label: "Stats" },
   { to: "/training", icon: Dumbbell, label: "Training" },
   { to: "/tournament", icon: Trophy, label: "Turnier" },
@@ -22,12 +22,14 @@ const Layout = ({ children }: { children: ReactNode }) => {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center glow-cyan">
-            <span className="font-display text-primary font-bold text-lg">H</span>
-          </div>
+          <img
+            src={htuLogo}
+            alt="H-Town United e.V. Darts Logo"
+            className="w-12 h-12 rounded-xl object-cover border border-primary/30 glow-cyan"
+          />
           <div className="leading-tight">
             <h1 className="text-lg font-display uppercase tracking-widest text-foreground">
-              H-Town <span className="text-primary">United</span>
+              H-Town <span className="text-primary">United</span> <span className="text-muted-foreground text-xs">e.V.</span>
             </h1>
             <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Dart Club</p>
           </div>
