@@ -8,6 +8,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, 
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import htuLogo from "@/assets/htu-logo.jpg";
 
 // Static fallback portraits
 import portraitKarsten from "@/assets/portraits/karsten.jpg";
@@ -349,9 +350,57 @@ const PlayersPage = () => {
 
   // ─── PLAYER LIST VIEW ──────────────────────────────
   return (
-    <div className="container py-6 animate-slide-up">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-display uppercase">Verein</h2>
+    <div className="container py-6 animate-slide-up relative">
+      {/* Decorative watermark logo */}
+      <img
+        src={htuLogo}
+        alt=""
+        aria-hidden
+        className="absolute right-0 top-32 w-[500px] h-[500px] object-contain opacity-[0.04] pointer-events-none select-none hidden md:block"
+      />
+
+      {/* Club emblem header — interactive spinning logo with live stats */}
+      <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-card via-card to-primary/5 p-6 mb-6">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(185_85%_48%/0.08),transparent_70%)]" />
+        <div className="relative flex items-center gap-5">
+          <div className="relative shrink-0 group cursor-pointer">
+            <div className="absolute inset-0 rounded-full bg-primary/30 blur-xl group-hover:bg-primary/50 transition-colors duration-500" />
+            <div className="absolute -inset-1 rounded-full border border-primary/40 group-hover:rotate-180 transition-transform duration-[2000ms]" />
+            <img
+              src={htuLogo}
+              alt="H-Town United Vereinsemblem"
+              className="relative w-24 h-24 md:w-28 md:h-28 rounded-full object-cover border-2 border-primary/50 glow-cyan group-hover:scale-105 group-active:scale-95 transition-transform duration-300"
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-primary font-display mb-1">Vereinsverwaltung</p>
+            <h2 className="text-2xl md:text-3xl font-display uppercase leading-tight">
+              H-Town United <span className="text-muted-foreground text-base">e.V.</span>
+            </h2>
+            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Users className="w-3.5 h-3.5 text-secondary" />
+                <span className="font-display text-foreground">{players.length}</span> Mitglieder
+              </span>
+              <span className="flex items-center gap-1">
+                <Trophy className="w-3.5 h-3.5 text-accent" />
+                <span className="font-display text-foreground">
+                  {players.reduce((s, p) => s + p.games_won, 0)}
+                </span> Siege
+              </span>
+              <span className="flex items-center gap-1">
+                <Target className="w-3.5 h-3.5 text-primary" />
+                <span className="font-display text-foreground">
+                  {Math.max(0, ...players.map(p => p.high_score))}
+                </span> Highscore
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between mb-6 relative">
+        <h3 className="text-sm font-display uppercase tracking-widest text-muted-foreground">Mitglieder</h3>
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open) {
