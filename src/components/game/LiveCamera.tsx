@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Camera, CameraOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Camera, CameraOff, Loader2, AlertCircle, CheckCircle2, Maximize2, Minimize2, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 
-/** A single dart detected by the AI vision pipeline. */
 export interface DetectedDart {
   baseValue: number;
   multiplier: 1 | 2 | 3;
@@ -12,34 +12,40 @@ export interface DetectedDart {
 }
 
 interface LiveCameraProps {
-  /** Called for each *newly* detected dart since the previous frame. */
+  /** Called once per dart of the last stable reading, right before onBoardCleared. */
   onDartDetected: (dart: DetectedDart) => void;
-  /** Called when the board transitions from N>0 darts to 0 darts (= darts removed). */
+  /** Called once per round, after all onDartDetected calls. */
   onBoardCleared: () => void;
-  /** Poll interval in ms (default 5000). */
   pollIntervalMs?: number;
-  /** Externally controlled enabled flag; when false camera stops. */
   enabled: boolean;
   onClose: () => void;
 }
 
 /**
- * Live camera scoring overlay: continuously analyzes the dartboard via Gemini Vision,
- * automatically submits newly detected darts and advances the turn when the board is cleared.
+ * Live camera scoring. Commit-on-clear strategy:
+ *  - Continuously analyzes the board via Gemini Vision.
+ *  - Tracks the last stable reading with >0 darts.
+ *  - When the board becomes empty (player pulls the darts) for 2 frames,
+ *    commits that stable reading exactly once (emits darts + clear).
+ *  - Never re-deducts while darts remain in the board.
  */
-const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, enabled, onClose }: LiveCameraProps) => {
+const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, enabled, onClose }: LiveCameraProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const intervalRef = useRef<number | null>(null);
-  const prevCountRef = useRef(0);
   const analyzingRef = useRef(false);
+  const stableDartsRef = useRef<DetectedDart[]>([]);
+  const emptyStreakRef = useRef(0);
 
   const [status, setStatus] = useState<"idle" | "starting" | "live" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [lastDarts, setLastDarts] = useState<DetectedDart[]>([]);
+  const [stableCount, setStableCount] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
   const [confidenceWarn, setConfidenceWarn] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [zoom, setZoom] = useState(1);
 
   const stopCamera = useCallback(() => {
     if (intervalRef.current) {
@@ -51,7 +57,9 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
       streamRef.current = null;
     }
     setStatus("idle");
-    prevCountRef.current = 0;
+    stableDartsRef.current = [];
+    emptyStreakRef.current = 0;
+    setStableCount(0);
   }, []);
 
   const captureAndAnalyze = useCallback(async () => {
@@ -62,7 +70,6 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
     try {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      // Downscale for faster upload
       const maxW = 800;
       const scale = Math.min(1, maxW / video.videoWidth);
       canvas.width = Math.round(video.videoWidth * scale);
@@ -76,10 +83,7 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
         body: { imageBase64 },
       });
       if (invokeErr) throw invokeErr;
-      if (!data || data.error) {
-        // Soft-error: e.g. "no darts detected" → just reset
-        return;
-      }
+      if (!data || data.error) return;
 
       const darts: DetectedDart[] = (data.darts || []).map((d: any) => ({
         baseValue: d.segment,
@@ -90,20 +94,24 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
       setLastDarts(darts);
       setConfidenceWarn(darts.some((d) => d.confidence < 0.6));
 
-      const newCount = darts.length;
-      const prevCount = prevCountRef.current;
-
-      if (newCount > prevCount) {
-        // New darts since last frame → emit the trailing diff
-        const newOnes = darts.slice(prevCount);
-        for (const dart of newOnes) {
-          onDartDetected(dart);
+      if (darts.length === 0) {
+        emptyStreakRef.current += 1;
+        if (emptyStreakRef.current >= 2 && stableDartsRef.current.length > 0) {
+          const toCommit = stableDartsRef.current;
+          stableDartsRef.current = [];
+          emptyStreakRef.current = 0;
+          setStableCount(0);
+          for (const d of toCommit) onDartDetected(d);
+          onBoardCleared();
         }
-      } else if (newCount === 0 && prevCount > 0) {
-        // Board cleared → advance turn
-        onBoardCleared();
+      } else {
+        emptyStreakRef.current = 0;
+        // Keep highest reading (covers AI temporarily missing one dart)
+        if (darts.length >= stableDartsRef.current.length) {
+          stableDartsRef.current = darts;
+          setStableCount(darts.length);
+        }
       }
-      prevCountRef.current = newCount;
     } catch (err: any) {
       console.error("Live capture error:", err);
     } finally {
@@ -112,7 +120,6 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
     }
   }, [onDartDetected, onBoardCleared]);
 
-  // Start/stop camera when enabled toggles
   useEffect(() => {
     if (!enabled) {
       stopCamera();
@@ -136,7 +143,6 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
           await videoRef.current.play();
         }
         setStatus("live");
-        // Start polling
         intervalRef.current = window.setInterval(captureAndAnalyze, pollIntervalMs);
       } catch (err: any) {
         console.error("Camera error:", err);
@@ -152,21 +158,45 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
   }, [enabled, pollIntervalMs, captureAndAnalyze, stopCamera]);
 
   return (
-    <div className="bg-card rounded-xl border border-primary/30 p-3 mb-3 glow-cyan">
+    <div
+      className={`bg-card rounded-xl border border-primary/30 p-3 mb-3 glow-cyan ${
+        expanded ? "fixed inset-2 z-50 overflow-auto" : ""
+      }`}
+    >
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Camera className="w-4 h-4 text-primary" />
           <span className="text-xs font-display uppercase">Live-Cam</span>
           {status === "live" && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
           {analyzing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+          {stableCount > 0 && (
+            <span className="text-[10px] text-muted-foreground">
+              · {stableCount} Pfeil(e) erkannt — bitte vom Board ziehen
+            </span>
+          )}
         </div>
-        <Button variant="ghost" size="sm" onClick={onClose} className="h-7 px-2">
-          <CameraOff className="w-3.5 h-3.5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setExpanded((v) => !v)} className="h-7 px-2" title={expanded ? "Verkleinern" : "Vergrößern"}>
+            {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-7 px-2" title="Kamera schließen">
+            <CameraOff className="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </div>
 
-      <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
-        <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+      <div
+        className={`relative rounded-lg overflow-hidden bg-black ${
+          expanded ? "h-[calc(100vh-200px)]" : "aspect-[4/3] md:aspect-video"
+        }`}
+      >
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover transition-transform duration-200 origin-center"
+          style={{ transform: `scale(${zoom})` }}
+          muted
+          playsInline
+        />
         <canvas ref={canvasRef} className="hidden" />
         {status === "starting" && (
           <div className="absolute inset-0 flex items-center justify-center text-white text-xs">
@@ -185,7 +215,14 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
         )}
       </div>
 
-      {/* Last detected darts */}
+      {/* Zoom slider */}
+      <div className="flex items-center gap-2 mt-2">
+        <ZoomOut className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <Slider value={[zoom]} min={1} max={4} step={0.1} onValueChange={(v) => setZoom(v[0])} className="flex-1" />
+        <ZoomIn className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <span className="text-[10px] text-muted-foreground font-mono w-10 text-right">{zoom.toFixed(1)}x</span>
+      </div>
+
       {lastDarts.length > 0 && (
         <div className="flex items-center gap-1 mt-2 flex-wrap">
           <span className="text-[10px] text-muted-foreground uppercase">Erkannt:</span>
@@ -193,9 +230,7 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
             <span
               key={i}
               className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
-                d.confidence >= 0.7
-                  ? "bg-primary/15 text-primary"
-                  : "bg-destructive/15 text-destructive"
+                d.confidence >= 0.7 ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"
               }`}
               title={`Confidence ${(d.confidence * 100).toFixed(0)}%`}
             >
@@ -210,7 +245,7 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 5000, ena
         </div>
       )}
       <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-        Pfeile vom Board entfernen wechselt automatisch zum nächsten Spieler. Korrekturen via „Rückgängig".
+        Punkte werden erst gezählt, wenn du die Pfeile vom Board ziehst. Korrekturen via „Rückgängig".
       </p>
     </div>
   );
