@@ -246,6 +246,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_delete_user: { Args: { _user_id: string }; Returns: undefined }
+      admin_list_users: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          roles: Database["public"]["Enums"]["app_role"][]
+          user_id: string
+        }[]
+      }
+      admin_set_role: {
+        Args: {
+          _grant: boolean
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: undefined
+      }
       club_head_to_head: {
         Args: { _player_a: string; _player_b: string }
         Returns: {
