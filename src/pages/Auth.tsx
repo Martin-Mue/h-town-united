@@ -28,8 +28,8 @@ const AuthPage = () => {
         });
         if (error) throw error;
         toast({
-          title: "Registrierung erfolgreich!",
-          description: "Bitte bestätige deine E-Mail-Adresse, um dich einzuloggen.",
+          title: "Willkommen im Verein! 🎯",
+          description: "Du bist direkt eingeloggt.",
         });
         return;
       }

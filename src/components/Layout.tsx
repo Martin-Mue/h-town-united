@@ -1,8 +1,9 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3 } from "lucide-react";
+import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3, UserCog } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import htuLogo from "@/assets/htu-logo.jpg";
 
 const NAV_ITEMS = [
@@ -16,7 +17,19 @@ const NAV_ITEMS = [
 
 const Layout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) return setIsAdmin(false);
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle()
+      .then(({ data }) => setIsAdmin(!!data));
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -54,6 +67,19 @@ const Layout = ({ children }: { children: ReactNode }) => {
                 </Link>
               );
             })}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname === "/admin"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <UserCog className="w-4 h-4" />
+                Admin
+              </Link>
+            )}
           </nav>
           <Button variant="ghost" size="icon" onClick={signOut} title="Abmelden">
             <LogOut className="w-4 h-4" />
