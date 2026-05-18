@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 
 const AuthPage = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -17,12 +18,13 @@ const AuthPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const normalizedEmail = email.trim().toLowerCase();
+      if (mode === "login") {
+        const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
         if (error) throw error;
-      } else {
+      } else if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
           options: { emailRedirectTo: window.location.origin },
         });
@@ -32,11 +34,25 @@ const AuthPage = () => {
           description: "Du bist direkt eingeloggt.",
         });
         return;
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+          redirectTo: `${window.location.origin}/auth`,
+        });
+        if (error) throw error;
+        toast({
+          title: "E-Mail versendet",
+          description: "Prüfe dein Postfach für den Reset-Link.",
+        });
+        setMode("login");
+        return;
       }
     } catch (err: any) {
+      const msg = err?.message?.includes("Invalid login credentials")
+        ? "E-Mail oder Passwort falsch. Tipp: Passwort mit dem Auge prüfen."
+        : err?.message || "Authentifizierung fehlgeschlagen.";
       toast({
         title: "Fehler",
-        description: err.message || "Authentifizierung fehlgeschlagen.",
+        description: msg,
         variant: "destructive",
       });
     } finally {
@@ -59,7 +75,7 @@ const AuthPage = () => {
 
         <div className="bg-card border border-border rounded-xl p-6">
           <h2 className="font-display uppercase text-lg mb-4">
-            {isLogin ? "Anmelden" : "Registrieren"}
+            {mode === "login" ? "Anmelden" : mode === "signup" ? "Registrieren" : "Passwort zurücksetzen"}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -68,37 +84,78 @@ const AuthPage = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 placeholder="email@example.com"
                 className="bg-muted border-border"
                 required
               />
             </div>
-            <div>
-              <Label>Passwort</Label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="bg-muted border-border"
-                required
-                minLength={6}
-              />
-            </div>
+            {mode !== "reset" && (
+              <div>
+                <Label>Passwort</Label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    placeholder="••••••••"
+                    className="bg-muted border-border pr-10"
+                    required
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    tabIndex={-1}
+                    aria-label={showPassword ? "Passwort verbergen" : "Passwort anzeigen"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {mode === "signup" && (
+                  <p className="text-xs text-muted-foreground mt-1">Mindestens 6 Zeichen.</p>
+                )}
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {isLogin ? "Einloggen" : "Registrieren"}
+              {mode === "login" ? "Einloggen" : mode === "signup" ? "Registrieren" : "Reset-Link senden"}
             </Button>
           </form>
-          <p className="text-sm text-center text-muted-foreground mt-4">
-            {isLogin ? "Noch kein Konto?" : "Bereits registriert?"}{" "}
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline"
-            >
-              {isLogin ? "Registrieren" : "Anmelden"}
-            </button>
-          </p>
+          <div className="mt-4 space-y-2 text-sm text-center text-muted-foreground">
+            {mode === "login" && (
+              <>
+                <p>
+                  Noch kein Konto?{" "}
+                  <button onClick={() => setMode("signup")} className="text-primary hover:underline">
+                    Registrieren
+                  </button>
+                </p>
+                <p>
+                  <button onClick={() => setMode("reset")} className="text-primary hover:underline">
+                    Passwort vergessen?
+                  </button>
+                </p>
+              </>
+            )}
+            {mode === "signup" && (
+              <p>
+                Bereits registriert?{" "}
+                <button onClick={() => setMode("login")} className="text-primary hover:underline">
+                  Anmelden
+                </button>
+              </p>
+            )}
+            {mode === "reset" && (
+              <p>
+                <button onClick={() => setMode("login")} className="text-primary hover:underline">
+                  Zurück zur Anmeldung
+                </button>
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
