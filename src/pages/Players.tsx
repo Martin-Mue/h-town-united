@@ -534,6 +534,94 @@ const PlayersPage = () => {
                 </div>
               )}
 
+              {/* Optional details — collapsible-feel */}
+              <details className="rounded-lg border border-border bg-muted/20 p-3">
+                <summary className="text-sm font-medium cursor-pointer select-none flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  Mehr über mich <span className="text-xs text-muted-foreground">(alles optional)</span>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <Label>Bio / Steckbrief</Label>
+                    <Textarea
+                      value={newBio}
+                      onChange={(e) => setNewBio(e.target.value)}
+                      placeholder="Wie bist du zum Darten gekommen, Lieblings-Spieler, ..."
+                      className="bg-muted border-border min-h-[70px]"
+                    />
+                  </div>
+                  <div>
+                    <Label>Motto</Label>
+                    <Input
+                      value={newMotto}
+                      onChange={(e) => setNewMotto(e.target.value)}
+                      placeholder='z.B. "180 oder gar nix"'
+                      className="bg-muted border-border"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Wurfhand</Label>
+                      <Select value={newHand} onValueChange={setNewHand}>
+                        <SelectTrigger className="bg-muted border-border"><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="right">Rechts</SelectItem>
+                          <SelectItem value="left">Links</SelectItem>
+                          <SelectItem value="ambi">Beidhändig</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Dart-Gewicht (g)</Label>
+                      <Input
+                        type="number" min={10} max={50}
+                        value={newWeight}
+                        onChange={(e) => setNewWeight(e.target.value)}
+                        placeholder="z.B. 23"
+                        className="bg-muted border-border"
+                      />
+                    </div>
+                    <div>
+                      <Label>Lieblings-Double</Label>
+                      <Input
+                        value={newFavDouble}
+                        onChange={(e) => setNewFavDouble(e.target.value)}
+                        placeholder="z.B. D16"
+                        className="bg-muted border-border"
+                      />
+                    </div>
+                    <div>
+                      <Label>Heimatstadt</Label>
+                      <Input
+                        value={newHometown}
+                        onChange={(e) => setNewHometown(e.target.value)}
+                        placeholder="z.B. Hannover"
+                        className="bg-muted border-border"
+                      />
+                    </div>
+                    <div>
+                      <Label>Mitglied seit</Label>
+                      <Input
+                        type="number" min={1900} max={2100}
+                        value={newJoinedYear}
+                        onChange={(e) => setNewJoinedYear(e.target.value)}
+                        placeholder="z.B. 2024"
+                        className="bg-muted border-border"
+                      />
+                    </div>
+                    <div>
+                      <Label>Geburtstag</Label>
+                      <Input
+                        type="date"
+                        value={newBirthday}
+                        onChange={(e) => setNewBirthday(e.target.value)}
+                        className="bg-muted border-border"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </details>
+
               <Button onClick={addPlayer} className="w-full" disabled={!newName.trim()}>
                 Mitglied hinzufügen
               </Button>
