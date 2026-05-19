@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users } from "lucide-react";
+import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSearchParams } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +40,14 @@ interface PlayerProfile {
   high_score: number;
   average: number;
   double_rate: number;
+  bio?: string | null;
+  throwing_hand?: string | null;
+  dart_weight_g?: number | null;
+  favorite_double?: string | null;
+  hometown?: string | null;
+  joined_year?: number | null;
+  motto?: string | null;
+  birthday?: string | null;
 }
 
 const EMOJI_AVATARS = ["🎯", "🏆", "⭐", "🔥", "💎", "🦅", "🐉", "🎪"];
@@ -60,9 +71,29 @@ const PlayersPage = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [generatingPortrait, setGeneratingPortrait] = useState(false);
   const [generatedPortrait, setGeneratedPortrait] = useState<string | null>(null);
+  // Optional profile fields
+  const [newBio, setNewBio] = useState("");
+  const [newHand, setNewHand] = useState<string>("");
+  const [newWeight, setNewWeight] = useState<string>("");
+  const [newFavDouble, setNewFavDouble] = useState("");
+  const [newHometown, setNewHometown] = useState("");
+  const [newJoinedYear, setNewJoinedYear] = useState<string>("");
+  const [newMotto, setNewMotto] = useState("");
+  const [newBirthday, setNewBirthday] = useState("");
 
   const { toast } = useToast();
   const { session } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Auto-open the create dialog right after signup.
+  useEffect(() => {
+    if (searchParams.get("createProfile") === "1") {
+      setDialogOpen(true);
+      const params = new URLSearchParams(searchParams);
+      params.delete("createProfile");
+      setSearchParams(params, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   /** Generates signed URLs for player avatar/portrait storage paths */
   const resolveSignedUrls = async (players: PlayerProfile[]): Promise<PlayerProfile[]> => {
@@ -195,7 +226,20 @@ const PlayersPage = () => {
     // Insert player first to get ID
     const { data: inserted, error } = await supabase
       .from("players")
-      .insert({ name: newName.trim(), nickname: newNickname.trim() || null, emoji: newEmoji, user_id: session?.user?.id })
+      .insert({
+        name: newName.trim(),
+        nickname: newNickname.trim() || null,
+        emoji: newEmoji,
+        user_id: session?.user?.id,
+        bio: newBio.trim() || null,
+        throwing_hand: newHand || null,
+        dart_weight_g: newWeight ? parseInt(newWeight) : null,
+        favorite_double: newFavDouble.trim() || null,
+        hometown: newHometown.trim() || null,
+        joined_year: newJoinedYear ? parseInt(newJoinedYear) : null,
+        motto: newMotto.trim() || null,
+        birthday: newBirthday || null,
+      })
       .select()
       .single();
 
@@ -230,6 +274,9 @@ const PlayersPage = () => {
     setUploadedPhoto(null);
     setUploadedFile(null);
     setGeneratedPortrait(null);
+    setNewBio(""); setNewHand(""); setNewWeight("");
+    setNewFavDouble(""); setNewHometown(""); setNewJoinedYear("");
+    setNewMotto(""); setNewBirthday("");
     setDialogOpen(false);
     fetchPlayers();
     toast({ title: "Mitglied hinzugefügt! 🎯", description: `${newName} ist jetzt im Verein.` });
