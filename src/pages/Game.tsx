@@ -404,7 +404,8 @@ const GamePage = () => {
       const remaining = isP1 ? curGame.currentLeg.player1Remaining : curGame.currentLeg.player2Remaining;
       const newRemaining = remaining - points;
       const newDartsThisRound = curDarts + 1;
-      const isDoubleOut = d.multiplier === 2 || (d.baseValue === 25 && d.multiplier === 2);
+      const mul: number = d.multiplier;
+      const isDoubleOut = mul === 2;
       const isBust = newRemaining < 0 || newRemaining === 1 ||
         (newRemaining === 0 && doubleOut && !isDoubleOut);
 
