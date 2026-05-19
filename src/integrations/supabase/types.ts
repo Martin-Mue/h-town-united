@@ -129,15 +129,23 @@ export type Database = {
           ai_portrait_url: string | null
           avatar_url: string | null
           average: number
+          bio: string | null
+          birthday: string | null
           created_at: string
+          dart_weight_g: number | null
           double_rate: number
           emoji: string | null
+          favorite_double: string | null
           games_played: number
           games_won: number
           high_score: number
+          hometown: string | null
           id: string
+          joined_year: number | null
+          motto: string | null
           name: string
           nickname: string | null
+          throwing_hand: string | null
           updated_at: string
           user_id: string | null
         }
@@ -145,15 +153,23 @@ export type Database = {
           ai_portrait_url?: string | null
           avatar_url?: string | null
           average?: number
+          bio?: string | null
+          birthday?: string | null
           created_at?: string
+          dart_weight_g?: number | null
           double_rate?: number
           emoji?: string | null
+          favorite_double?: string | null
           games_played?: number
           games_won?: number
           high_score?: number
+          hometown?: string | null
           id?: string
+          joined_year?: number | null
+          motto?: string | null
           name: string
           nickname?: string | null
+          throwing_hand?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -161,15 +177,23 @@ export type Database = {
           ai_portrait_url?: string | null
           avatar_url?: string | null
           average?: number
+          bio?: string | null
+          birthday?: string | null
           created_at?: string
+          dart_weight_g?: number | null
           double_rate?: number
           emoji?: string | null
+          favorite_double?: string | null
           games_played?: number
           games_won?: number
           high_score?: number
+          hometown?: string | null
           id?: string
+          joined_year?: number | null
+          motto?: string | null
           name?: string
           nickname?: string | null
+          throwing_hand?: string | null
           updated_at?: string
           user_id?: string | null
         }
