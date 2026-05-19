@@ -347,8 +347,67 @@ const PlayersPage = () => {
           <div>
             <h2 className="text-2xl font-display uppercase">{selectedPlayer.name}</h2>
             {selectedPlayer.nickname && <p className="text-primary text-sm font-medium">"{selectedPlayer.nickname}"</p>}
+            {selectedPlayer.hometown && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                <MapPin className="w-3 h-3" /> {selectedPlayer.hometown}
+                {selectedPlayer.joined_year && <span>· seit {selectedPlayer.joined_year}</span>}
+              </p>
+            )}
           </div>
         </div>
+
+        {/* Motto */}
+        {selectedPlayer.motto && (
+          <div className="bg-card border border-primary/20 rounded-xl p-4 mb-4 flex items-start gap-3">
+            <Quote className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+            <p className="font-display italic text-base">{selectedPlayer.motto}</p>
+          </div>
+        )}
+
+        {/* Bio */}
+        {selectedPlayer.bio && (
+          <div className="bg-card border border-border rounded-xl p-4 mb-4">
+            <p className="text-xs uppercase text-muted-foreground font-display mb-2">Steckbrief</p>
+            <p className="text-sm whitespace-pre-line text-foreground/90">{selectedPlayer.bio}</p>
+          </div>
+        )}
+
+        {/* Quick facts */}
+        {(selectedPlayer.throwing_hand || selectedPlayer.dart_weight_g || selectedPlayer.favorite_double || selectedPlayer.birthday) && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            {selectedPlayer.throwing_hand && (
+              <div className="bg-card rounded-xl p-3 border border-border">
+                <Hand className="w-4 h-4 text-primary mb-1" />
+                <p className="text-sm font-display">{
+                  selectedPlayer.throwing_hand === "right" ? "Rechts" :
+                  selectedPlayer.throwing_hand === "left" ? "Links" : "Beidhändig"
+                }</p>
+                <p className="text-[10px] text-muted-foreground">Wurfhand</p>
+              </div>
+            )}
+            {selectedPlayer.dart_weight_g && (
+              <div className="bg-card rounded-xl p-3 border border-border">
+                <Target className="w-4 h-4 text-primary mb-1" />
+                <p className="text-sm font-display">{selectedPlayer.dart_weight_g} g</p>
+                <p className="text-[10px] text-muted-foreground">Pfeil-Gewicht</p>
+              </div>
+            )}
+            {selectedPlayer.favorite_double && (
+              <div className="bg-card rounded-xl p-3 border border-border">
+                <Trophy className="w-4 h-4 text-primary mb-1" />
+                <p className="text-sm font-display">{selectedPlayer.favorite_double}</p>
+                <p className="text-[10px] text-muted-foreground">Lieblings-Double</p>
+              </div>
+            )}
+            {selectedPlayer.birthday && (
+              <div className="bg-card rounded-xl p-3 border border-border">
+                <Calendar className="w-4 h-4 text-primary mb-1" />
+                <p className="text-sm font-display">{new Date(selectedPlayer.birthday).toLocaleDateString("de-DE")}</p>
+                <p className="text-[10px] text-muted-foreground">Geburtstag</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Stats cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
