@@ -42,8 +42,9 @@ const AuthPage = () => {
         if (error) throw error;
         toast({
           title: "Willkommen im Verein! 🎯",
-          description: "Du bist direkt eingeloggt.",
+          description: "Lege jetzt dein Spielerprofil an.",
         });
+        navigate("/players?createProfile=1", { replace: true });
         return;
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
