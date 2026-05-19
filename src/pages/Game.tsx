@@ -338,26 +338,155 @@ const GamePage = () => {
     else handleX01Throw();
   };
 
-  /** Submit a dart programmatically (used by live camera). */
-  const submitDetectedDart = (dart: DetectedDart) => {
-    if (!game || game.isFinished) return;
-    if (game.mode === "cricket") handleCricketThrow(dart.baseValue, dart.multiplier);
-    else handleX01Throw(dart.baseValue, dart.multiplier);
-  };
+  /**
+   * Atomically commit a full round of camera-detected darts.
+   * Processes all darts in a single state update so dartsThisRound /
+   * turnStartRemaining stay consistent across the round.
+   */
+  const submitDetectedRound = (darts: DetectedDart[]) => {
+    if (!game || game.isFinished || darts.length === 0) return;
 
-  /** Board cleared: if mid-round, force-advance to next player. */
-  const handleBoardCleared = () => {
-    if (!game || game.isFinished || dartsThisRound === 0) return;
-    setGame((prev) => {
-      if (!prev) return prev;
-      const next: 1 | 2 = prev.currentPlayerId === 1 ? 2 : 1;
-      return { ...prev, currentPlayerId: next };
-    });
-    setDartsThisRound(0);
-    setTurnStartRemaining(
-      game.currentPlayerId === 1 ? game.currentLeg.player2Remaining : game.currentLeg.player1Remaining
-    );
-    if (soundEnabled) playTurnSwitchSound();
+    // Snapshot for undo (one entry per camera round).
+    setUndoStack(prev => [...prev.slice(-20), {
+      game: JSON.parse(JSON.stringify(game)),
+      dartsThisRound,
+      turnStartRemaining,
+    }]);
+
+    let curGame: GameState = JSON.parse(JSON.stringify(game));
+    let curDarts = dartsThisRound;
+    let curStart = turnStartRemaining;
+    let busted = false;
+    let checkedOut = false;
+    let roundTotal = 0;
+
+    const dartsToApply = darts.slice(0, 3);
+
+    for (const d of dartsToApply) {
+      if (curGame.isFinished) break;
+      const isP1 = curGame.currentPlayerId === 1;
+      const points = d.baseValue === 25 && d.multiplier === 3 ? 0 : d.baseValue * d.multiplier;
+      const dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points };
+
+      if (curGame.mode === "cricket") {
+        const myState = isP1 ? { ...curGame.player1Cricket! } : { ...curGame.player2Cricket! };
+        const oppState = isP1 ? curGame.player2Cricket! : curGame.player1Cricket!;
+        const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
+        if (CRICKET_NUMBERS.includes(targetNumber as any) && targetNumber !== 0) {
+          const hitsToAdd = d.baseValue === 50 ? 2 : d.multiplier;
+          const currentMarks = myState.marks[targetNumber] || 0;
+          const newMarks = currentMarks + hitsToAdd;
+          myState.marks = { ...myState.marks, [targetNumber]: newMarks };
+          if (newMarks > 3 && (oppState.marks[targetNumber] || 0) < 3) {
+            const scorableHits = newMarks - Math.max(currentMarks, 3);
+            myState.points += targetNumber * scorableHits;
+          }
+        }
+        if (isP1) {
+          curGame.player1Cricket = myState;
+          curGame.currentLeg.player1Throws = [...curGame.currentLeg.player1Throws, dart];
+        } else {
+          curGame.player2Cricket = myState;
+          curGame.currentLeg.player2Throws = [...curGame.currentLeg.player2Throws, dart];
+        }
+        const allClosed = CRICKET_NUMBERS.every((n) => (myState.marks[n] || 0) >= 3);
+        if (allClosed && myState.points >= oppState.points) {
+          curGame.currentLeg.winner = isP1 ? 1 : 2;
+          curGame.isFinished = true;
+          curGame.winnerName = isP1 ? curGame.player1Name : curGame.player2Name;
+          checkedOut = true;
+        }
+        curDarts += 1;
+        continue;
+      }
+
+      // X01 modes
+      const remaining = isP1 ? curGame.currentLeg.player1Remaining : curGame.currentLeg.player2Remaining;
+      const newRemaining = remaining - points;
+      const newDartsThisRound = curDarts + 1;
+      const mul: number = d.multiplier;
+      const isDoubleOut = mul === 2;
+      const isBust = newRemaining < 0 || newRemaining === 1 ||
+        (newRemaining === 0 && doubleOut && !isDoubleOut);
+
+      if (isBust) {
+        if (isP1) {
+          curGame.currentLeg.player1Remaining = curStart;
+          curGame.currentLeg.player1Throws = curGame.currentLeg.player1Throws.slice(
+            0, curGame.currentLeg.player1Throws.length - (newDartsThisRound - 1)
+          );
+        } else {
+          curGame.currentLeg.player2Remaining = curStart;
+          curGame.currentLeg.player2Throws = curGame.currentLeg.player2Throws.slice(
+            0, curGame.currentLeg.player2Throws.length - (newDartsThisRound - 1)
+          );
+        }
+        busted = true;
+        break;
+      }
+
+      if (isP1) {
+        curGame.currentLeg.player1Remaining = newRemaining;
+        curGame.currentLeg.player1Throws = [...curGame.currentLeg.player1Throws, dart];
+      } else {
+        curGame.currentLeg.player2Remaining = newRemaining;
+        curGame.currentLeg.player2Throws = [...curGame.currentLeg.player2Throws, dart];
+      }
+      curDarts = newDartsThisRound;
+      roundTotal += points;
+
+      if (newRemaining === 0) {
+        curGame.currentLeg.winner = isP1 ? 1 : 2;
+        const p1Legs = curGame.player1LegsWon + (isP1 ? 1 : 0);
+        const p2Legs = curGame.player2LegsWon + (isP1 ? 0 : 1);
+        const legsToWin = Math.ceil(curGame.bestOfLegs / 2);
+        curGame.player1LegsWon = p1Legs;
+        curGame.player2LegsWon = p2Legs;
+        if (p1Legs >= legsToWin || p2Legs >= legsToWin) {
+          curGame.isFinished = true;
+          curGame.winnerName = isP1 ? curGame.player1Name : curGame.player2Name;
+        } else {
+          curGame.completedLegs = [...curGame.completedLegs, curGame.currentLeg];
+          const nextStarter: 1 | 2 = isP1 ? 2 : 1;
+          curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter);
+          curGame.currentPlayerId = nextStarter;
+        }
+        checkedOut = true;
+        break;
+      }
+    }
+
+    if (!curGame.isFinished) {
+      // Always advance to next player after a camera-committed round
+      // (player pulled the darts → their turn is over).
+      if (busted || curDarts >= 1) {
+        const isP1 = curGame.currentPlayerId === 1;
+        const nextPlayer: 1 | 2 = isP1 ? 2 : 1;
+        curGame.currentPlayerId = nextPlayer;
+        curStart = isP1 ? curGame.currentLeg.player2Remaining : curGame.currentLeg.player1Remaining;
+        curDarts = 0;
+      }
+    } else {
+      curDarts = 0;
+    }
+
+    setGame(curGame);
+    setDartsThisRound(curDarts);
+    setTurnStartRemaining(curStart);
+
+    if (soundEnabled) {
+      if (checkedOut) {
+        setTimeout(() => playCheckoutSound(), 100);
+      } else if (busted) {
+        playBustSound();
+      } else if (roundTotal === 180) {
+        setTimeout(() => play180Sound(), 100);
+      } else if (roundTotal >= 100) {
+        setTimeout(() => playTonPlusSound(), 100);
+      } else {
+        setTimeout(() => playTurnSwitchSound(), 100);
+      }
+    }
   };
 
   const deleteThrow = (playerNum: 1 | 2, throwIndex: number) => {
@@ -692,8 +821,7 @@ const GamePage = () => {
         <LiveCamera
           enabled={cameraEnabled}
           onClose={() => setCameraEnabled(false)}
-          onDartDetected={submitDetectedDart}
-          onBoardCleared={handleBoardCleared}
+          onRoundCommit={submitDetectedRound}
         />
       )}
 

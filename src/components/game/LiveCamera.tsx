@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Camera, CameraOff, Loader2, AlertCircle, CheckCircle2, Maximize2, Minimize2, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  Camera, CameraOff, Loader2, AlertCircle, CheckCircle2,
+  Maximize2, Minimize2, ZoomIn, ZoomOut, Crop, Check,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,24 +15,23 @@ export interface DetectedDart {
 }
 
 interface LiveCameraProps {
-  /** Called once per dart of the last stable reading, right before onBoardCleared. */
-  onDartDetected: (dart: DetectedDart) => void;
-  /** Called once per round, after all onDartDetected calls. */
-  onBoardCleared: () => void;
+  /** Called exactly once per round when the player pulls the darts.
+   *  Receives all detected darts of the just-finished round atomically. */
+  onRoundCommit: (darts: DetectedDart[]) => void;
   pollIntervalMs?: number;
   enabled: boolean;
   onClose: () => void;
 }
 
 /**
- * Live camera scoring. Commit-on-clear strategy:
- *  - Continuously analyzes the board via Gemini Vision.
+ * Live camera scoring with ROI calibration.
+ *  - Analyzes only the calibrated crop of the dartboard via Gemini Vision.
  *  - Tracks the last stable reading with >0 darts.
- *  - When the board becomes empty (player pulls the darts) for 2 frames,
- *    commits that stable reading exactly once (emits darts + clear).
+ *  - When the board becomes empty for 2 frames, commits that reading once
+ *    as a single atomic round so all 3 darts process together.
  *  - Never re-deducts while darts remain in the board.
  */
-const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, enabled, onClose }: LiveCameraProps) => {
+const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: LiveCameraProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -46,6 +48,12 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
   const [confidenceWarn, setConfidenceWarn] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [zoom, setZoom] = useState(1);
+
+  // ROI = relative crop (0..1) of the captured frame sent to AI.
+  const [roi, setRoi] = useState({ cx: 0.5, cy: 0.5, size: 0.75 });
+  const roiRef = useRef(roi);
+  useEffect(() => { roiRef.current = roi; }, [roi]);
+  const [calibrating, setCalibrating] = useState(true);
 
   const stopCamera = useCallback(() => {
     if (intervalRef.current) {
@@ -70,14 +78,19 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
     try {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      const maxW = 800;
-      const scale = Math.min(1, maxW / video.videoWidth);
-      canvas.width = Math.round(video.videoWidth * scale);
-      canvas.height = Math.round(video.videoHeight * scale);
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const { cx, cy, size } = roiRef.current;
+      const sidePx = Math.round(Math.min(vw, vh) * size);
+      const srcX = Math.max(0, Math.min(vw - sidePx, Math.round(cx * vw - sidePx / 2)));
+      const srcY = Math.max(0, Math.min(vh - sidePx, Math.round(cy * vh - sidePx / 2)));
+      const outSide = Math.min(900, sidePx);
+      canvas.width = outSide;
+      canvas.height = outSide;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageBase64 = canvas.toDataURL("image/jpeg", 0.75);
+      ctx.drawImage(video, srcX, srcY, sidePx, sidePx, 0, 0, outSide, outSide);
+      const imageBase64 = canvas.toDataURL("image/jpeg", 0.85);
 
       const { data, error: invokeErr } = await supabase.functions.invoke("analyze-dartboard", {
         body: { imageBase64 },
@@ -101,12 +114,10 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
           stableDartsRef.current = [];
           emptyStreakRef.current = 0;
           setStableCount(0);
-          for (const d of toCommit) onDartDetected(d);
-          onBoardCleared();
+          onRoundCommit(toCommit);
         }
       } else {
         emptyStreakRef.current = 0;
-        // Keep highest reading (covers AI temporarily missing one dart)
         if (darts.length >= stableDartsRef.current.length) {
           stableDartsRef.current = darts;
           setStableCount(darts.length);
@@ -118,7 +129,7 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
       analyzingRef.current = false;
       setAnalyzing(false);
     }
-  }, [onDartDetected, onBoardCleared]);
+  }, [onRoundCommit]);
 
   useEffect(() => {
     if (!enabled) {
@@ -143,7 +154,6 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
           await videoRef.current.play();
         }
         setStatus("live");
-        intervalRef.current = window.setInterval(captureAndAnalyze, pollIntervalMs);
       } catch (err: any) {
         console.error("Camera error:", err);
         setError(err?.message || "Kamera-Zugriff verweigert");
@@ -155,7 +165,28 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
       cancelled = true;
       stopCamera();
     };
-  }, [enabled, pollIntervalMs, captureAndAnalyze, stopCamera]);
+  }, [enabled, stopCamera]);
+
+  // Start/stop the polling loop based on calibration state.
+  useEffect(() => {
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (status === "live" && !calibrating) {
+      // Reset stable buffer so a stale board reading doesn't get re-committed.
+      stableDartsRef.current = [];
+      emptyStreakRef.current = 0;
+      setStableCount(0);
+      intervalRef.current = window.setInterval(captureAndAnalyze, pollIntervalMs);
+    }
+    return () => {
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [status, calibrating, pollIntervalMs, captureAndAnalyze]);
 
   return (
     <div
@@ -169,13 +200,25 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
           <span className="text-xs font-display uppercase">Live-Cam</span>
           {status === "live" && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
           {analyzing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
-          {stableCount > 0 && (
+          {calibrating && status === "live" && (
+            <span className="text-[10px] text-accent uppercase">Kalibrierung</span>
+          )}
+          {!calibrating && stableCount > 0 && (
             <span className="text-[10px] text-muted-foreground">
-              · {stableCount} Pfeil(e) erkannt — bitte vom Board ziehen
+              · {stableCount} Pfeil(e) — vom Board ziehen
             </span>
           )}
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant={calibrating ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setCalibrating((v) => !v)}
+            className="h-7 px-2"
+            title={calibrating ? "Kalibrierung beenden" : "Erfassungsbereich kalibrieren"}
+          >
+            {calibrating ? <Check className="w-3.5 h-3.5" /> : <Crop className="w-3.5 h-3.5" />}
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setExpanded((v) => !v)} className="h-7 px-2" title={expanded ? "Verkleinern" : "Vergrößern"}>
             {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </Button>
@@ -187,7 +230,7 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
 
       <div
         className={`relative rounded-lg overflow-hidden bg-black ${
-          expanded ? "h-[calc(100vh-200px)]" : "aspect-[4/3] md:aspect-video"
+          expanded ? "h-[calc(100vh-260px)]" : "aspect-[4/3] md:aspect-video"
         }`}
       >
         <video
@@ -198,6 +241,29 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
           playsInline
         />
         <canvas ref={canvasRef} className="hidden" />
+
+        {/* ROI overlay */}
+        {status === "live" && (
+          <div
+            className={`absolute pointer-events-none border-2 rounded ${
+              calibrating ? "border-accent shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" : "border-primary/60"
+            }`}
+            style={{
+              left: `${(roi.cx - roi.size / 2) * 100}%`,
+              top: `${(roi.cy - roi.size / 2) * 100}%`,
+              width: `${roi.size * 100}%`,
+              height: `${roi.size * 100}%`,
+            }}
+          >
+            {calibrating && (
+              <>
+                <div className="absolute inset-x-0 top-1/2 h-px bg-accent/60" />
+                <div className="absolute inset-y-0 left-1/2 w-px bg-accent/60" />
+              </>
+            )}
+          </div>
+        )}
+
         {status === "starting" && (
           <div className="absolute inset-0 flex items-center justify-center text-white text-xs">
             <Loader2 className="w-4 h-4 animate-spin mr-2" /> Kamera startet...
@@ -208,12 +274,35 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
             <AlertCircle className="w-4 h-4 mr-1" /> {error}
           </div>
         )}
-        {confidenceWarn && status === "live" && (
+        {confidenceWarn && status === "live" && !calibrating && (
           <div className="absolute top-1 right-1 bg-destructive/90 text-destructive-foreground text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1">
             <AlertCircle className="w-3 h-3" /> Niedrige Confidence
           </div>
         )}
       </div>
+
+      {/* Calibration controls */}
+      {calibrating && status === "live" && (
+        <div className="space-y-2 mt-2 bg-muted/30 rounded-lg p-2 border border-accent/30">
+          <p className="text-[10px] text-accent uppercase font-display">
+            Rahmen genau um die Scheibe legen, dann ✓ zum Bestätigen
+          </p>
+          <div className="grid grid-cols-3 gap-3 text-[10px]">
+            <div className="space-y-1">
+              <span className="text-muted-foreground block">Horizontal</span>
+              <Slider value={[roi.cx]} min={0.1} max={0.9} step={0.01} onValueChange={(v) => setRoi(r => ({ ...r, cx: v[0] }))} />
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground block">Vertikal</span>
+              <Slider value={[roi.cy]} min={0.1} max={0.9} step={0.01} onValueChange={(v) => setRoi(r => ({ ...r, cy: v[0] }))} />
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground block">Größe</span>
+              <Slider value={[roi.size]} min={0.25} max={1} step={0.01} onValueChange={(v) => setRoi(r => ({ ...r, size: v[0] }))} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Zoom slider */}
       <div className="flex items-center gap-2 mt-2">
@@ -223,7 +312,7 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
         <span className="text-[10px] text-muted-foreground font-mono w-10 text-right">{zoom.toFixed(1)}x</span>
       </div>
 
-      {lastDarts.length > 0 && (
+      {lastDarts.length > 0 && !calibrating && (
         <div className="flex items-center gap-1 mt-2 flex-wrap">
           <span className="text-[10px] text-muted-foreground uppercase">Erkannt:</span>
           {lastDarts.map((d, i) => (
@@ -245,7 +334,9 @@ const LiveCamera = ({ onDartDetected, onBoardCleared, pollIntervalMs = 2500, ena
         </div>
       )}
       <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-        Punkte werden erst gezählt, wenn du die Pfeile vom Board ziehst. Korrekturen via „Rückgängig".
+        {calibrating
+          ? "Tipp: gleichmäßige Beleuchtung, Kamera frontal zur Scheibe."
+          : "Punkte werden erst gezählt, wenn du die Pfeile vom Board ziehst."}
       </p>
     </div>
   );
