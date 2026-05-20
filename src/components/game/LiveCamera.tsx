@@ -100,7 +100,45 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
     setStatus("idle");
     stableDartsRef.current = [];
     emptyStreakRef.current = 0;
+    emptyReferenceRef.current = null;
+    autoCalibratedRef.current = false;
     setStableCount(0);
+    setAutoCalibrationConfidence(null);
+    setBoardEmptyHint(false);
+  }, []);
+
+  const autoCalibrateBoard = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current || autoCalibratedRef.current) return;
+    const video = videoRef.current;
+    if (video.readyState < 2) return;
+    const canvas = canvasRef.current;
+    const side = Math.min(video.videoWidth, video.videoHeight, 960);
+    canvas.width = side;
+    canvas.height = side;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const srcX = Math.max(0, Math.round((video.videoWidth - side) / 2));
+    const srcY = Math.max(0, Math.round((video.videoHeight - side) / 2));
+    ctx.drawImage(video, srcX, srcY, side, side, 0, 0, side, side);
+    const imageBase64 = canvas.toDataURL("image/jpeg", 0.85);
+    const { data, error: invokeErr } = await supabase.functions.invoke("analyze-dartboard", {
+      body: { imageBase64, detectBoard: true },
+    });
+    if (invokeErr) throw invokeErr;
+    const board = data?.board as DetectedBoard | undefined;
+    if (board && board.size > 0.35 && board.size <= 1) {
+      const nextRoi = {
+        cx: Math.min(0.8, Math.max(0.2, board.cx)),
+        cy: Math.min(0.8, Math.max(0.2, board.cy)),
+        size: Math.min(0.95, Math.max(0.45, board.size * 1.08)),
+      };
+      setRoi(nextRoi);
+      setAutoCalibrationConfidence(board.confidence ?? null);
+      setCalibrating(false);
+      autoCalibratedRef.current = true;
+    } else {
+      setCalibrating(true);
+    }
   }, []);
 
   const captureAndAnalyze = useCallback(async () => {
@@ -124,6 +162,7 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       if (!ctx) return;
       ctx.drawImage(video, srcX, srcY, sidePx, sidePx, 0, 0, outSide, outSide);
       const imageBase64 = canvas.toDataURL("image/jpeg", 0.85);
+      const signature = createFrameSignature(canvas);
 
       const { data, error: invokeErr } = await supabase.functions.invoke("analyze-dartboard", {
         body: { imageBase64 },
@@ -140,8 +179,15 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       setLastDarts(darts);
       setConfidenceWarn(darts.some((d) => d.confidence < 0.6));
 
-      if (darts.length === 0) {
+      const referenceDiff = emptyReferenceRef.current ? getSignatureDiff(signature, emptyReferenceRef.current) : null;
+      const looksLikeEmptyBoard = referenceDiff !== null && referenceDiff < 6;
+      setBoardEmptyHint(looksLikeEmptyBoard);
+
+      if (darts.length === 0 || looksLikeEmptyBoard) {
         emptyStreakRef.current += 1;
+        if (!emptyReferenceRef.current || looksLikeEmptyBoard) {
+          emptyReferenceRef.current = signature;
+        }
         if (emptyStreakRef.current >= 2 && stableDartsRef.current.length > 0) {
           const toCommit = stableDartsRef.current;
           stableDartsRef.current = [];
@@ -162,7 +208,7 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       analyzingRef.current = false;
       setAnalyzing(false);
     }
-  }, [onRoundCommit]);
+  }, [createFrameSignature, getSignatureDiff, onRoundCommit]);
 
   useEffect(() => {
     if (!enabled) {
@@ -187,6 +233,7 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
           await videoRef.current.play();
         }
         setStatus("live");
+        await autoCalibrateBoard();
       } catch (err: any) {
         console.error("Camera error:", err);
         setError(err?.message || "Kamera-Zugriff verweigert");
@@ -198,7 +245,7 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       cancelled = true;
       stopCamera();
     };
-  }, [enabled, stopCamera]);
+  }, [enabled, stopCamera, autoCalibrateBoard]);
 
   // Start/stop the polling loop based on calibration state.
   useEffect(() => {
