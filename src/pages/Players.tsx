@@ -477,6 +477,11 @@ const PlayersPage = () => {
               </p>
             )}
           </div>
+          {selectedPlayer.user_id === user?.id && (
+            <Button variant="outline" size="sm" className="ml-auto gap-2" onClick={() => openEditProfile(selectedPlayer)}>
+              <Pencil className="w-3.5 h-3.5" /> Profil bearbeiten
+            </Button>
+          )}
         </div>
 
         {/* Motto */}
@@ -580,6 +585,20 @@ const PlayersPage = () => {
   // ─── PLAYER LIST VIEW ──────────────────────────────
   return (
     <div className="container py-6 animate-slide-up relative">
+      {shouldShowProfileHint && (
+        <Alert className="mb-4 border-primary/30 bg-primary/5">
+          <Info className="h-4 w-4" />
+          <AlertTitle>Neues Profil-Update</AlertTitle>
+          <AlertDescription className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p>Bestehende Mitglieder können ihr Spielerprofil jetzt einmalig ergänzen und später jederzeit bearbeiten.</p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={openCreateProfile}>Profil anlegen</Button>
+              <Button size="sm" variant="ghost" onClick={dismissProfileHint}>Später</Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Decorative watermark logo */}
       <img
         src={htuLogo}
@@ -639,11 +658,11 @@ const PlayersPage = () => {
           }
         }}>
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1"><Plus className="w-4 h-4" /> Mitglied</Button>
+            <Button size="sm" className="gap-1" onClick={openCreateProfile}><Plus className="w-4 h-4" /> Mitglied</Button>
           </DialogTrigger>
           <DialogContent className="bg-card border-border max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-display uppercase">Neues Mitglied</DialogTitle>
+              <DialogTitle className="font-display uppercase">{isEditMode ? "Spielerprofil bearbeiten" : "Neues Mitglied"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
