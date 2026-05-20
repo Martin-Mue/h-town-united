@@ -172,6 +172,68 @@ const PlayersPage = () => {
     fetchPlayers();
   }, [fetchPlayers]);
 
+  useEffect(() => {
+    const stored = window.localStorage.getItem("players-profile-hint-dismissed");
+    setProfileHintDismissed(stored === "1");
+  }, []);
+
+  const dismissProfileHint = () => {
+    setProfileHintDismissed(true);
+    window.localStorage.setItem("players-profile-hint-dismissed", "1");
+  };
+
+  const resetForm = () => {
+    setNewName(EMPTY_PLAYER_FORM.name);
+    setNewNickname(EMPTY_PLAYER_FORM.nickname);
+    setNewEmoji(EMPTY_PLAYER_FORM.emoji);
+    setUploadedPhoto(null);
+    setUploadedFile(null);
+    setGeneratedPortrait(null);
+    setNewBio(EMPTY_PLAYER_FORM.bio);
+    setNewHand(EMPTY_PLAYER_FORM.hand);
+    setNewWeight(EMPTY_PLAYER_FORM.weight);
+    setNewFavDouble(EMPTY_PLAYER_FORM.favDouble);
+    setNewHometown(EMPTY_PLAYER_FORM.hometown);
+    setNewJoinedYear(EMPTY_PLAYER_FORM.joinedYear);
+    setNewMotto(EMPTY_PLAYER_FORM.motto);
+    setNewBirthday(EMPTY_PLAYER_FORM.birthday);
+    setEditingPlayerId(null);
+    setIsEditMode(false);
+  };
+
+  const openCreateProfile = () => {
+    resetForm();
+    if (user?.email) {
+      const suggestedName = user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+      setNewName(suggestedName);
+    }
+    setDialogOpen(true);
+  };
+
+  const openEditProfile = (player: PlayerProfile) => {
+    setIsEditMode(true);
+    setEditingPlayerId(player.id);
+    setNewName(player.name ?? "");
+    setNewNickname(player.nickname ?? "");
+    setNewEmoji(player.emoji ?? "🎯");
+    setNewBio(player.bio ?? "");
+    setNewHand(player.throwing_hand ?? "");
+    setNewWeight(player.dart_weight_g ? String(player.dart_weight_g) : "");
+    setNewFavDouble(player.favorite_double ?? "");
+    setNewHometown(player.hometown ?? "");
+    setNewJoinedYear(player.joined_year ? String(player.joined_year) : "");
+    setNewMotto(player.motto ?? "");
+    setNewBirthday(player.birthday ?? "");
+    setUploadedPhoto(null);
+    setUploadedFile(null);
+    setGeneratedPortrait(null);
+    setDialogOpen(true);
+  };
+
+  const toggleCard = (playerId: string) => {
+    setExpandedCards((prev) => ({ ...prev, [playerId]: !prev[playerId] }));
+  };
+
   /** Handles photo file selection and creates preview */
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
