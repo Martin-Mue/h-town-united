@@ -652,9 +652,7 @@ const PlayersPage = () => {
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open) {
-            setUploadedPhoto(null);
-            setUploadedFile(null);
-            setGeneratedPortrait(null);
+            resetForm();
           }
         }}>
           <DialogTrigger asChild>
@@ -824,7 +822,7 @@ const PlayersPage = () => {
               </details>
 
               <Button onClick={addPlayer} className="w-full" disabled={!newName.trim()}>
-                Mitglied hinzufügen
+                {isEditMode ? "Profil speichern" : "Mitglied hinzufügen"}
               </Button>
             </div>
           </DialogContent>
