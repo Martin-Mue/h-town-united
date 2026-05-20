@@ -283,10 +283,18 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
           {calibrating && status === "live" && (
             <span className="text-[10px] text-accent uppercase">Kalibrierung</span>
           )}
+          {!calibrating && autoCalibrationConfidence !== null && (
+            <span className="text-[10px] text-muted-foreground">
+              · Auto-Kalibrierung {(autoCalibrationConfidence * 100).toFixed(0)}%
+            </span>
+          )}
           {!calibrating && stableCount > 0 && (
             <span className="text-[10px] text-muted-foreground">
               · {stableCount} Pfeil(e) — vom Board ziehen
             </span>
+          )}
+          {!calibrating && boardEmptyHint && (
+            <span className="text-[10px] text-secondary uppercase">Board frei erkannt</span>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -415,8 +423,8 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       )}
       <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
         {calibrating
-          ? "Tipp: gleichmäßige Beleuchtung, Kamera frontal zur Scheibe."
-          : "Punkte werden erst gezählt, wenn du die Pfeile vom Board ziehst."}
+          ? "Auto-Kalibrierung konnte die Scheibe nicht sicher erkennen — richte den Rahmen manuell aus."
+          : "Punkte werden erst gezählt, wenn das Board wieder als frei erkannt wird."}
       </p>
     </div>
   );
