@@ -10,7 +10,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { imageBase64 } = await req.json();
+    const { imageBase64, detectBoard = false } = await req.json();
     if (!imageBase64) {
       return new Response(JSON.stringify({ error: "No image provided" }), {
         status: 400,
@@ -33,9 +33,13 @@ Rules:
 - Single Bull (outer bull): 25 points.
 - Double Bull (inner bull/bullseye): 50 points.
 - Miss: Dart not in the board or in the non-scoring black area outside doubles ring = 0 points.
+- Only count real darts currently stuck in the board. Do not hallucinate removed darts, shadows, reflections, flights, or holes.
+- If a dart is uncertain, prefer omitting it over guessing.
+- When possible, also estimate the visible dartboard position in the image.
 
 Return ONLY a valid JSON object with this exact structure (no markdown, no explanation):
 {
+  "board": { "cx": 0.5, "cy": 0.5, "size": 0.78, "confidence": 0.92 },
   "darts": [
     { "segment": 20, "multiplier": 3, "points": 60, "confidence": 0.9 },
     { "segment": 1, "multiplier": 1, "points": 1, "confidence": 0.7 },
@@ -49,8 +53,10 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
 - segment: The board number (1-20, 25 for bull)
 - multiplier: 1=single, 2=double, 3=triple (bull 25 with multiplier 2 = 50 = bullseye)
 - confidence: Your confidence for each dart (0.0-1.0)
-- If you cannot detect any darts, return: { "darts": [], "totalScore": 0, "overallConfidence": 0, "dartsDetected": 0, "error": "No darts detected" }
-- If the image is not a dartboard, return: { "darts": [], "totalScore": 0, "overallConfidence": 0, "dartsDetected": 0, "error": "No dartboard detected" }`;
+- board.cx / board.cy: estimated center of the dartboard in normalized image coordinates (0..1)
+- board.size: estimated board diameter relative to the shorter image side (0..1)
+- If you cannot detect any darts, still return board info if visible and use: { "darts": [], "totalScore": 0, "overallConfidence": 0, "dartsDetected": 0, "error": "No darts detected" }
+- If the image is not a dartboard, return: { "board": null, "darts": [], "totalScore": 0, "overallConfidence": 0, "dartsDetected": 0, "error": "No dartboard detected" }`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -75,7 +81,9 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
               },
               {
                 type: "text",
-                text: "Analyze this dartboard image. Identify all darts and their exact positions/scores. Return the JSON result.",
+                text: detectBoard
+                  ? "Detect the dartboard position first and return the board center/size. If darts are visible, include them too. Return only JSON."
+                  : "Analyze this dartboard image. Identify all darts currently stuck in the board, estimate the board center/size, and return only JSON.",
               },
             ],
           },
@@ -115,7 +123,11 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
       }
     } catch {
       console.error("Failed to parse AI response:", content);
-      parsed = { darts: [], totalScore: 0, overallConfidence: 0, dartsDetected: 0, error: "Could not parse AI response" };
+      parsed = { board: null, darts: [], totalScore: 0, overallConfidence: 0, dartsDetected: 0, error: "Could not parse AI response" };
+    }
+
+    if (!parsed.board && detectBoard) {
+      parsed.board = { cx: 0.5, cy: 0.5, size: 0.75, confidence: 0.2 };
     }
 
     return new Response(JSON.stringify(parsed), {
