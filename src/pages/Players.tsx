@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSearchParams } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,6 +54,20 @@ interface PlayerProfile {
 }
 
 const EMOJI_AVATARS = ["🎯", "🏆", "⭐", "🔥", "💎", "🦅", "🐉", "🎪"];
+
+const EMPTY_PLAYER_FORM = {
+  name: "",
+  nickname: "",
+  emoji: "🎯",
+  bio: "",
+  hand: "",
+  weight: "",
+  favDouble: "",
+  hometown: "",
+  joinedYear: "",
+  motto: "",
+  birthday: "",
+};
 
 /**
  * Club member management page with persistent player profiles.
