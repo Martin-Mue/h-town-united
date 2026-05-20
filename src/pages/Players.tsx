@@ -848,24 +848,84 @@ const PlayersPage = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredPlayers.map((player) => (
-            <button key={player.id} onClick={() => setSelectedPlayer(player)}
-              className="bg-card border border-border rounded-xl p-4 text-left hover:border-primary/50 transition-all group">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="group-hover:scale-110 transition-transform">
-                  <PlayerAvatar player={player} size="md" />
+            <Collapsible key={player.id} open={!!expandedCards[player.id]} onOpenChange={() => toggleCard(player.id)}>
+              <div className="rounded-xl border border-border bg-card p-4 text-left transition-all group hover:border-primary/50 hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]">
+                <div className="flex items-start gap-3">
+                  <div className="group-hover:scale-105 transition-transform">
+                    <PlayerAvatar player={player} size="md" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <button onClick={() => setSelectedPlayer(player)} className="text-left">
+                          <p className="font-semibold truncate">{player.name}</p>
+                          {player.nickname && <p className="text-xs text-primary truncate">"{player.nickname}"</p>}
+                        </button>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <Badge variant="outline" className="border-primary/30 text-primary">{player.games_played} Spiele</Badge>
+                          <Badge variant="outline" className="border-secondary/40 text-secondary">{player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0}% Siege</Badge>
+                          {player.favorite_double && <Badge variant="outline">{player.favorite_double}</Badge>}
+                        </div>
+                      </div>
+                      {player.user_id === user?.id && (
+                        <Button variant="ghost" size="icon" onClick={() => openEditProfile(player)} title="Profil bearbeiten">
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-lg bg-muted/40 px-2 py-2">
+                        <p className="text-sm font-display">{player.high_score || 0}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">High</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 px-2 py-2">
+                        <p className="text-sm font-display">{Number(player.average).toFixed(1)}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Ø</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 px-2 py-2">
+                        <p className="text-sm font-display">{player.throwing_hand === "left" ? "Links" : player.throwing_hand === "right" ? "Rechts" : player.throwing_hand === "ambi" ? "Beide" : "–"}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Hand</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="font-semibold truncate">{player.name}</p>
-                  {player.nickname && <p className="text-xs text-primary truncate">"{player.nickname}"</p>}
-                </div>
+
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="mt-3 w-full justify-between text-xs text-muted-foreground">
+                    Mehr Details
+                    <ChevronDown className={`w-4 h-4 transition-transform ${expandedCards[player.id] ? "rotate-180" : ""}`} />
+                  </Button>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent className="pt-2">
+                  <div className="grid grid-cols-2 gap-2 border-t border-border pt-3 text-xs">
+                    <div className="rounded-lg bg-muted/30 p-3">
+                      <p className="text-muted-foreground uppercase mb-1">Wohnort</p>
+                      <p>{player.hometown || "Nicht angegeben"}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/30 p-3">
+                      <p className="text-muted-foreground uppercase mb-1">Mitglied seit</p>
+                      <p>{player.joined_year || "–"}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/30 p-3">
+                      <p className="text-muted-foreground uppercase mb-1">Dartgewicht</p>
+                      <p>{player.dart_weight_g ? `${player.dart_weight_g} g` : "–"}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/30 p-3">
+                      <p className="text-muted-foreground uppercase mb-1">Geburtstag</p>
+                      <p>{player.birthday ? new Date(player.birthday).toLocaleDateString("de-DE") : "–"}</p>
+                    </div>
+                  </div>
+                  {(player.motto || player.bio) && (
+                    <div className="mt-3 space-y-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
+                      {player.motto && <p className="font-display italic text-sm">“{player.motto}”</p>}
+                      {player.bio && <p className="text-xs text-muted-foreground line-clamp-4 whitespace-pre-line">{player.bio}</p>}
+                    </div>
+                  )}
+                </CollapsibleContent>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{player.games_played} Spiele</span>
-                <span className="text-secondary font-medium">
-                  {player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0}% Siege
-                </span>
-              </div>
-            </button>
+            </Collapsible>
           ))}
         </div>
       )}
