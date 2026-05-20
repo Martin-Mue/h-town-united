@@ -79,6 +79,9 @@ const PlayersPage = () => {
   const [search, setSearch] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerProfile | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [profileHintDismissed, setProfileHintDismissed] = useState(false);
 
   // New player form state
   const [newName, setNewName] = useState("");
@@ -97,10 +100,17 @@ const PlayersPage = () => {
   const [newJoinedYear, setNewJoinedYear] = useState<string>("");
   const [newMotto, setNewMotto] = useState("");
   const [newBirthday, setNewBirthday] = useState("");
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const { toast } = useToast();
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const ownPlayerProfile = useMemo(
+    () => players.find((player) => player.user_id === user?.id),
+    [players, user?.id]
+  );
+  const shouldShowProfileHint = !!user && !ownPlayerProfile && !profileHintDismissed;
 
   // Auto-open the create dialog right after signup.
   useEffect(() => {
