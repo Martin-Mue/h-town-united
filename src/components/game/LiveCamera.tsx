@@ -14,6 +14,13 @@ export interface DetectedDart {
   confidence: number;
 }
 
+interface DetectedBoard {
+  cx: number;
+  cy: number;
+  size: number;
+  confidence: number;
+}
+
 interface LiveCameraProps {
   /** Called exactly once per round when the player pulls the darts.
    *  Receives all detected darts of the just-finished round atomically. */
@@ -39,6 +46,8 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
   const analyzingRef = useRef(false);
   const stableDartsRef = useRef<DetectedDart[]>([]);
   const emptyStreakRef = useRef(0);
+  const emptyReferenceRef = useRef<number[] | null>(null);
+  const autoCalibratedRef = useRef(false);
 
   const [status, setStatus] = useState<"idle" | "starting" | "live" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -48,12 +57,36 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
   const [confidenceWarn, setConfidenceWarn] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [autoCalibrationConfidence, setAutoCalibrationConfidence] = useState<number | null>(null);
+  const [boardEmptyHint, setBoardEmptyHint] = useState(false);
 
   // ROI = relative crop (0..1) of the captured frame sent to AI.
   const [roi, setRoi] = useState({ cx: 0.5, cy: 0.5, size: 0.75 });
   const roiRef = useRef(roi);
   useEffect(() => { roiRef.current = roi; }, [roi]);
-  const [calibrating, setCalibrating] = useState(true);
+  const [calibrating, setCalibrating] = useState(false);
+
+  const createFrameSignature = useCallback((sourceCanvas: HTMLCanvasElement) => {
+    const sampleCanvas = document.createElement("canvas");
+    sampleCanvas.width = 32;
+    sampleCanvas.height = 32;
+    const sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+    if (!sampleCtx) return [];
+    sampleCtx.drawImage(sourceCanvas, 0, 0, 32, 32);
+    const { data } = sampleCtx.getImageData(0, 0, 32, 32);
+    const signature: number[] = [];
+    for (let i = 0; i < data.length; i += 4) {
+      signature.push((data[i] + data[i + 1] + data[i + 2]) / 3);
+    }
+    return signature;
+  }, []);
+
+  const getSignatureDiff = useCallback((a: number[], b: number[]) => {
+    if (!a.length || !b.length || a.length !== b.length) return Number.POSITIVE_INFINITY;
+    let diff = 0;
+    for (let i = 0; i < a.length; i += 1) diff += Math.abs(a[i] - b[i]);
+    return diff / a.length;
+  }, []);
 
   const stopCamera = useCallback(() => {
     if (intervalRef.current) {
