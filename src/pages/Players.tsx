@@ -33,6 +33,7 @@ const STATIC_PORTRAITS: Record<string, string> = {
 /** Player profile mapped from database */
 interface PlayerProfile {
   id: string;
+  user_id?: string | null;
   name: string;
   nickname: string | null;
   emoji: string;
