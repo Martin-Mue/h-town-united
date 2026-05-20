@@ -116,7 +116,7 @@ const PlayersPage = () => {
   // Auto-open the create dialog right after signup.
   useEffect(() => {
     if (searchParams.get("createProfile") === "1") {
-      setDialogOpen(true);
+      openCreateProfile();
       const params = new URLSearchParams(searchParams);
       params.delete("createProfile");
       setSearchParams(params, { replace: true });
@@ -313,6 +313,47 @@ const PlayersPage = () => {
   const addPlayer = async () => {
     if (!newName.trim()) return;
 
+    if (isEditMode && editingPlayerId) {
+      const updatePayload = {
+        name: newName.trim(),
+        nickname: newNickname.trim() || null,
+        emoji: newEmoji,
+        bio: newBio.trim() || null,
+        throwing_hand: newHand || null,
+        dart_weight_g: newWeight ? parseInt(newWeight) : null,
+        favorite_double: newFavDouble.trim() || null,
+        hometown: newHometown.trim() || null,
+        joined_year: newJoinedYear ? parseInt(newJoinedYear) : null,
+        motto: newMotto.trim() || null,
+        birthday: newBirthday || null,
+      };
+
+      const { error } = await supabase.from("players").update(updatePayload).eq("id", editingPlayerId);
+      if (error) {
+        toast({ title: "Fehler", description: "Profil konnte nicht aktualisiert werden.", variant: "destructive" });
+        return;
+      }
+
+      let avatarUrl: string | null = null;
+      let aiPortraitUrl: string | null = null;
+
+      if (uploadedPhoto) avatarUrl = await uploadImageToStorage(uploadedPhoto, editingPlayerId, "avatar");
+      if (generatedPortrait) aiPortraitUrl = await uploadImageToStorage(generatedPortrait, editingPlayerId, "ai-portrait");
+
+      if (avatarUrl || aiPortraitUrl) {
+        await supabase.from("players").update({
+          ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+          ...(aiPortraitUrl ? { ai_portrait_url: aiPortraitUrl } : {}),
+        }).eq("id", editingPlayerId);
+      }
+
+      resetForm();
+      setDialogOpen(false);
+      fetchPlayers();
+      toast({ title: "Profil aktualisiert", description: "Deine Spielerkarte wurde aktualisiert." });
+      return;
+    }
+
     // Insert player first to get ID
     const { data: inserted, error } = await supabase
       .from("players")
@@ -358,15 +399,7 @@ const PlayersPage = () => {
     }
 
     // Reset form
-    setNewName("");
-    setNewNickname("");
-    setNewEmoji("🎯");
-    setUploadedPhoto(null);
-    setUploadedFile(null);
-    setGeneratedPortrait(null);
-    setNewBio(""); setNewHand(""); setNewWeight("");
-    setNewFavDouble(""); setNewHometown(""); setNewJoinedYear("");
-    setNewMotto(""); setNewBirthday("");
+    resetForm();
     setDialogOpen(false);
     fetchPlayers();
     toast({ title: "Mitglied hinzugefügt! 🎯", description: `${newName} ist jetzt im Verein.` });
