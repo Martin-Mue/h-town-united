@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSearchParams } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +33,7 @@ const STATIC_PORTRAITS: Record<string, string> = {
 /** Player profile mapped from database */
 interface PlayerProfile {
   id: string;
+  user_id?: string | null;
   name: string;
   nickname: string | null;
   emoji: string;
@@ -52,6 +56,20 @@ interface PlayerProfile {
 
 const EMOJI_AVATARS = ["🎯", "🏆", "⭐", "🔥", "💎", "🦅", "🐉", "🎪"];
 
+const EMPTY_PLAYER_FORM = {
+  name: "",
+  nickname: "",
+  emoji: "🎯",
+  bio: "",
+  hand: "",
+  weight: "",
+  favDouble: "",
+  hometown: "",
+  joinedYear: "",
+  motto: "",
+  birthday: "",
+};
+
 /**
  * Club member management page with persistent player profiles.
  * Supports photo upload and AI-generated dart jersey portraits.
@@ -62,6 +80,9 @@ const PlayersPage = () => {
   const [search, setSearch] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerProfile | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [profileHintDismissed, setProfileHintDismissed] = useState(false);
 
   // New player form state
   const [newName, setNewName] = useState("");
@@ -80,15 +101,22 @@ const PlayersPage = () => {
   const [newJoinedYear, setNewJoinedYear] = useState<string>("");
   const [newMotto, setNewMotto] = useState("");
   const [newBirthday, setNewBirthday] = useState("");
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const { toast } = useToast();
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const ownPlayerProfile = useMemo(
+    () => players.find((player) => player.user_id === user?.id),
+    [players, user?.id]
+  );
+  const shouldShowProfileHint = !!user && !ownPlayerProfile && !profileHintDismissed;
 
   // Auto-open the create dialog right after signup.
   useEffect(() => {
     if (searchParams.get("createProfile") === "1") {
-      setDialogOpen(true);
+      openCreateProfile();
       const params = new URLSearchParams(searchParams);
       params.delete("createProfile");
       setSearchParams(params, { replace: true });
@@ -143,6 +171,68 @@ const PlayersPage = () => {
   useEffect(() => {
     fetchPlayers();
   }, [fetchPlayers]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("players-profile-hint-dismissed");
+    setProfileHintDismissed(stored === "1");
+  }, []);
+
+  const dismissProfileHint = () => {
+    setProfileHintDismissed(true);
+    window.localStorage.setItem("players-profile-hint-dismissed", "1");
+  };
+
+  const resetForm = () => {
+    setNewName(EMPTY_PLAYER_FORM.name);
+    setNewNickname(EMPTY_PLAYER_FORM.nickname);
+    setNewEmoji(EMPTY_PLAYER_FORM.emoji);
+    setUploadedPhoto(null);
+    setUploadedFile(null);
+    setGeneratedPortrait(null);
+    setNewBio(EMPTY_PLAYER_FORM.bio);
+    setNewHand(EMPTY_PLAYER_FORM.hand);
+    setNewWeight(EMPTY_PLAYER_FORM.weight);
+    setNewFavDouble(EMPTY_PLAYER_FORM.favDouble);
+    setNewHometown(EMPTY_PLAYER_FORM.hometown);
+    setNewJoinedYear(EMPTY_PLAYER_FORM.joinedYear);
+    setNewMotto(EMPTY_PLAYER_FORM.motto);
+    setNewBirthday(EMPTY_PLAYER_FORM.birthday);
+    setEditingPlayerId(null);
+    setIsEditMode(false);
+  };
+
+  const openCreateProfile = () => {
+    resetForm();
+    if (user?.email) {
+      const suggestedName = user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+      setNewName(suggestedName);
+    }
+    setDialogOpen(true);
+  };
+
+  const openEditProfile = (player: PlayerProfile) => {
+    setIsEditMode(true);
+    setEditingPlayerId(player.id);
+    setNewName(player.name ?? "");
+    setNewNickname(player.nickname ?? "");
+    setNewEmoji(player.emoji ?? "🎯");
+    setNewBio(player.bio ?? "");
+    setNewHand(player.throwing_hand ?? "");
+    setNewWeight(player.dart_weight_g ? String(player.dart_weight_g) : "");
+    setNewFavDouble(player.favorite_double ?? "");
+    setNewHometown(player.hometown ?? "");
+    setNewJoinedYear(player.joined_year ? String(player.joined_year) : "");
+    setNewMotto(player.motto ?? "");
+    setNewBirthday(player.birthday ?? "");
+    setUploadedPhoto(null);
+    setUploadedFile(null);
+    setGeneratedPortrait(null);
+    setDialogOpen(true);
+  };
+
+  const toggleCard = (playerId: string) => {
+    setExpandedCards((prev) => ({ ...prev, [playerId]: !prev[playerId] }));
+  };
 
   /** Handles photo file selection and creates preview */
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -223,6 +313,47 @@ const PlayersPage = () => {
   const addPlayer = async () => {
     if (!newName.trim()) return;
 
+    if (isEditMode && editingPlayerId) {
+      const updatePayload = {
+        name: newName.trim(),
+        nickname: newNickname.trim() || null,
+        emoji: newEmoji,
+        bio: newBio.trim() || null,
+        throwing_hand: newHand || null,
+        dart_weight_g: newWeight ? parseInt(newWeight) : null,
+        favorite_double: newFavDouble.trim() || null,
+        hometown: newHometown.trim() || null,
+        joined_year: newJoinedYear ? parseInt(newJoinedYear) : null,
+        motto: newMotto.trim() || null,
+        birthday: newBirthday || null,
+      };
+
+      const { error } = await supabase.from("players").update(updatePayload).eq("id", editingPlayerId);
+      if (error) {
+        toast({ title: "Fehler", description: "Profil konnte nicht aktualisiert werden.", variant: "destructive" });
+        return;
+      }
+
+      let avatarUrl: string | null = null;
+      let aiPortraitUrl: string | null = null;
+
+      if (uploadedPhoto) avatarUrl = await uploadImageToStorage(uploadedPhoto, editingPlayerId, "avatar");
+      if (generatedPortrait) aiPortraitUrl = await uploadImageToStorage(generatedPortrait, editingPlayerId, "ai-portrait");
+
+      if (avatarUrl || aiPortraitUrl) {
+        await supabase.from("players").update({
+          ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+          ...(aiPortraitUrl ? { ai_portrait_url: aiPortraitUrl } : {}),
+        }).eq("id", editingPlayerId);
+      }
+
+      resetForm();
+      setDialogOpen(false);
+      fetchPlayers();
+      toast({ title: "Profil aktualisiert", description: "Deine Spielerkarte wurde aktualisiert." });
+      return;
+    }
+
     // Insert player first to get ID
     const { data: inserted, error } = await supabase
       .from("players")
@@ -268,15 +399,7 @@ const PlayersPage = () => {
     }
 
     // Reset form
-    setNewName("");
-    setNewNickname("");
-    setNewEmoji("🎯");
-    setUploadedPhoto(null);
-    setUploadedFile(null);
-    setGeneratedPortrait(null);
-    setNewBio(""); setNewHand(""); setNewWeight("");
-    setNewFavDouble(""); setNewHometown(""); setNewJoinedYear("");
-    setNewMotto(""); setNewBirthday("");
+    resetForm();
     setDialogOpen(false);
     fetchPlayers();
     toast({ title: "Mitglied hinzugefügt! 🎯", description: `${newName} ist jetzt im Verein.` });
@@ -354,6 +477,11 @@ const PlayersPage = () => {
               </p>
             )}
           </div>
+          {selectedPlayer.user_id === user?.id && (
+            <Button variant="outline" size="sm" className="ml-auto gap-2" onClick={() => openEditProfile(selectedPlayer)}>
+              <Pencil className="w-3.5 h-3.5" /> Profil bearbeiten
+            </Button>
+          )}
         </div>
 
         {/* Motto */}
@@ -457,6 +585,20 @@ const PlayersPage = () => {
   // ─── PLAYER LIST VIEW ──────────────────────────────
   return (
     <div className="container py-6 animate-slide-up relative">
+      {shouldShowProfileHint && (
+        <Alert className="mb-4 border-primary/30 bg-primary/5">
+          <Info className="h-4 w-4" />
+          <AlertTitle>Neues Profil-Update</AlertTitle>
+          <AlertDescription className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p>Bestehende Mitglieder können ihr Spielerprofil jetzt einmalig ergänzen und später jederzeit bearbeiten.</p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={openCreateProfile}>Profil anlegen</Button>
+              <Button size="sm" variant="ghost" onClick={dismissProfileHint}>Später</Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Decorative watermark logo */}
       <img
         src={htuLogo}
@@ -510,17 +652,15 @@ const PlayersPage = () => {
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open) {
-            setUploadedPhoto(null);
-            setUploadedFile(null);
-            setGeneratedPortrait(null);
+            resetForm();
           }
         }}>
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1"><Plus className="w-4 h-4" /> Mitglied</Button>
+            <Button size="sm" className="gap-1" onClick={openCreateProfile}><Plus className="w-4 h-4" /> Mitglied</Button>
           </DialogTrigger>
           <DialogContent className="bg-card border-border max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-display uppercase">Neues Mitglied</DialogTitle>
+              <DialogTitle className="font-display uppercase">{isEditMode ? "Spielerprofil bearbeiten" : "Neues Mitglied"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -682,7 +822,7 @@ const PlayersPage = () => {
               </details>
 
               <Button onClick={addPlayer} className="w-full" disabled={!newName.trim()}>
-                Mitglied hinzufügen
+                {isEditMode ? "Profil speichern" : "Mitglied hinzufügen"}
               </Button>
             </div>
           </DialogContent>
@@ -706,24 +846,84 @@ const PlayersPage = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filteredPlayers.map((player) => (
-            <button key={player.id} onClick={() => setSelectedPlayer(player)}
-              className="bg-card border border-border rounded-xl p-4 text-left hover:border-primary/50 transition-all group">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="group-hover:scale-110 transition-transform">
-                  <PlayerAvatar player={player} size="md" />
+            <Collapsible key={player.id} open={!!expandedCards[player.id]} onOpenChange={() => toggleCard(player.id)}>
+              <div className="rounded-xl border border-border bg-card p-4 text-left transition-all group hover:border-primary/50 hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]">
+                <div className="flex items-start gap-3">
+                  <div className="group-hover:scale-105 transition-transform">
+                    <PlayerAvatar player={player} size="md" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <button onClick={() => setSelectedPlayer(player)} className="text-left">
+                          <p className="font-semibold truncate">{player.name}</p>
+                          {player.nickname && <p className="text-xs text-primary truncate">"{player.nickname}"</p>}
+                        </button>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <Badge variant="outline" className="border-primary/30 text-primary">{player.games_played} Spiele</Badge>
+                          <Badge variant="outline" className="border-secondary/40 text-secondary">{player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0}% Siege</Badge>
+                          {player.favorite_double && <Badge variant="outline">{player.favorite_double}</Badge>}
+                        </div>
+                      </div>
+                      {player.user_id === user?.id && (
+                        <Button variant="ghost" size="icon" onClick={() => openEditProfile(player)} title="Profil bearbeiten">
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-lg bg-muted/40 px-2 py-2">
+                        <p className="text-sm font-display">{player.high_score || 0}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">High</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 px-2 py-2">
+                        <p className="text-sm font-display">{Number(player.average).toFixed(1)}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Ø</p>
+                      </div>
+                      <div className="rounded-lg bg-muted/40 px-2 py-2">
+                        <p className="text-sm font-display">{player.throwing_hand === "left" ? "Links" : player.throwing_hand === "right" ? "Rechts" : player.throwing_hand === "ambi" ? "Beide" : "–"}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Hand</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="font-semibold truncate">{player.name}</p>
-                  {player.nickname && <p className="text-xs text-primary truncate">"{player.nickname}"</p>}
-                </div>
+
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" className="mt-3 w-full justify-between text-xs text-muted-foreground">
+                    Mehr Details
+                    <ChevronDown className={`w-4 h-4 transition-transform ${expandedCards[player.id] ? "rotate-180" : ""}`} />
+                  </Button>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent className="pt-2">
+                  <div className="grid grid-cols-2 gap-2 border-t border-border pt-3 text-xs">
+                    <div className="rounded-lg bg-muted/30 p-3">
+                      <p className="text-muted-foreground uppercase mb-1">Wohnort</p>
+                      <p>{player.hometown || "Nicht angegeben"}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/30 p-3">
+                      <p className="text-muted-foreground uppercase mb-1">Mitglied seit</p>
+                      <p>{player.joined_year || "–"}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/30 p-3">
+                      <p className="text-muted-foreground uppercase mb-1">Dartgewicht</p>
+                      <p>{player.dart_weight_g ? `${player.dart_weight_g} g` : "–"}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/30 p-3">
+                      <p className="text-muted-foreground uppercase mb-1">Geburtstag</p>
+                      <p>{player.birthday ? new Date(player.birthday).toLocaleDateString("de-DE") : "–"}</p>
+                    </div>
+                  </div>
+                  {(player.motto || player.bio) && (
+                    <div className="mt-3 space-y-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
+                      {player.motto && <p className="font-display italic text-sm">“{player.motto}”</p>}
+                      {player.bio && <p className="text-xs text-muted-foreground line-clamp-4 whitespace-pre-line">{player.bio}</p>}
+                    </div>
+                  )}
+                </CollapsibleContent>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{player.games_played} Spiele</span>
-                <span className="text-secondary font-medium">
-                  {player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0}% Siege
-                </span>
-              </div>
-            </button>
+            </Collapsible>
           ))}
         </div>
       )}

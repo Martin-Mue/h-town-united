@@ -14,6 +14,13 @@ export interface DetectedDart {
   confidence: number;
 }
 
+interface DetectedBoard {
+  cx: number;
+  cy: number;
+  size: number;
+  confidence: number;
+}
+
 interface LiveCameraProps {
   /** Called exactly once per round when the player pulls the darts.
    *  Receives all detected darts of the just-finished round atomically. */
@@ -39,6 +46,8 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
   const analyzingRef = useRef(false);
   const stableDartsRef = useRef<DetectedDart[]>([]);
   const emptyStreakRef = useRef(0);
+  const emptyReferenceRef = useRef<number[] | null>(null);
+  const autoCalibratedRef = useRef(false);
 
   const [status, setStatus] = useState<"idle" | "starting" | "live" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -48,12 +57,36 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
   const [confidenceWarn, setConfidenceWarn] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [autoCalibrationConfidence, setAutoCalibrationConfidence] = useState<number | null>(null);
+  const [boardEmptyHint, setBoardEmptyHint] = useState(false);
 
   // ROI = relative crop (0..1) of the captured frame sent to AI.
   const [roi, setRoi] = useState({ cx: 0.5, cy: 0.5, size: 0.75 });
   const roiRef = useRef(roi);
   useEffect(() => { roiRef.current = roi; }, [roi]);
-  const [calibrating, setCalibrating] = useState(true);
+  const [calibrating, setCalibrating] = useState(false);
+
+  const createFrameSignature = useCallback((sourceCanvas: HTMLCanvasElement) => {
+    const sampleCanvas = document.createElement("canvas");
+    sampleCanvas.width = 32;
+    sampleCanvas.height = 32;
+    const sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+    if (!sampleCtx) return [];
+    sampleCtx.drawImage(sourceCanvas, 0, 0, 32, 32);
+    const { data } = sampleCtx.getImageData(0, 0, 32, 32);
+    const signature: number[] = [];
+    for (let i = 0; i < data.length; i += 4) {
+      signature.push((data[i] + data[i + 1] + data[i + 2]) / 3);
+    }
+    return signature;
+  }, []);
+
+  const getSignatureDiff = useCallback((a: number[], b: number[]) => {
+    if (!a.length || !b.length || a.length !== b.length) return Number.POSITIVE_INFINITY;
+    let diff = 0;
+    for (let i = 0; i < a.length; i += 1) diff += Math.abs(a[i] - b[i]);
+    return diff / a.length;
+  }, []);
 
   const stopCamera = useCallback(() => {
     if (intervalRef.current) {
@@ -67,7 +100,45 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
     setStatus("idle");
     stableDartsRef.current = [];
     emptyStreakRef.current = 0;
+    emptyReferenceRef.current = null;
+    autoCalibratedRef.current = false;
     setStableCount(0);
+    setAutoCalibrationConfidence(null);
+    setBoardEmptyHint(false);
+  }, []);
+
+  const autoCalibrateBoard = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current || autoCalibratedRef.current) return;
+    const video = videoRef.current;
+    if (video.readyState < 2) return;
+    const canvas = canvasRef.current;
+    const side = Math.min(video.videoWidth, video.videoHeight, 960);
+    canvas.width = side;
+    canvas.height = side;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const srcX = Math.max(0, Math.round((video.videoWidth - side) / 2));
+    const srcY = Math.max(0, Math.round((video.videoHeight - side) / 2));
+    ctx.drawImage(video, srcX, srcY, side, side, 0, 0, side, side);
+    const imageBase64 = canvas.toDataURL("image/jpeg", 0.85);
+    const { data, error: invokeErr } = await supabase.functions.invoke("analyze-dartboard", {
+      body: { imageBase64, detectBoard: true },
+    });
+    if (invokeErr) throw invokeErr;
+    const board = data?.board as DetectedBoard | undefined;
+    if (board && board.size > 0.35 && board.size <= 1) {
+      const nextRoi = {
+        cx: Math.min(0.8, Math.max(0.2, board.cx)),
+        cy: Math.min(0.8, Math.max(0.2, board.cy)),
+        size: Math.min(0.95, Math.max(0.45, board.size * 1.08)),
+      };
+      setRoi(nextRoi);
+      setAutoCalibrationConfidence(board.confidence ?? null);
+      setCalibrating(false);
+      autoCalibratedRef.current = true;
+    } else {
+      setCalibrating(true);
+    }
   }, []);
 
   const captureAndAnalyze = useCallback(async () => {
@@ -91,6 +162,7 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       if (!ctx) return;
       ctx.drawImage(video, srcX, srcY, sidePx, sidePx, 0, 0, outSide, outSide);
       const imageBase64 = canvas.toDataURL("image/jpeg", 0.85);
+      const signature = createFrameSignature(canvas);
 
       const { data, error: invokeErr } = await supabase.functions.invoke("analyze-dartboard", {
         body: { imageBase64 },
@@ -107,8 +179,15 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       setLastDarts(darts);
       setConfidenceWarn(darts.some((d) => d.confidence < 0.6));
 
-      if (darts.length === 0) {
+      const referenceDiff = emptyReferenceRef.current ? getSignatureDiff(signature, emptyReferenceRef.current) : null;
+      const looksLikeEmptyBoard = referenceDiff !== null && referenceDiff < 6;
+      setBoardEmptyHint(looksLikeEmptyBoard);
+
+      if (darts.length === 0 || looksLikeEmptyBoard) {
         emptyStreakRef.current += 1;
+        if (!emptyReferenceRef.current || looksLikeEmptyBoard) {
+          emptyReferenceRef.current = signature;
+        }
         if (emptyStreakRef.current >= 2 && stableDartsRef.current.length > 0) {
           const toCommit = stableDartsRef.current;
           stableDartsRef.current = [];
@@ -129,7 +208,7 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       analyzingRef.current = false;
       setAnalyzing(false);
     }
-  }, [onRoundCommit]);
+  }, [createFrameSignature, getSignatureDiff, onRoundCommit]);
 
   useEffect(() => {
     if (!enabled) {
@@ -154,6 +233,7 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
           await videoRef.current.play();
         }
         setStatus("live");
+        await autoCalibrateBoard();
       } catch (err: any) {
         console.error("Camera error:", err);
         setError(err?.message || "Kamera-Zugriff verweigert");
@@ -165,7 +245,7 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       cancelled = true;
       stopCamera();
     };
-  }, [enabled, stopCamera]);
+  }, [enabled, stopCamera, autoCalibrateBoard]);
 
   // Start/stop the polling loop based on calibration state.
   useEffect(() => {
@@ -203,10 +283,18 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
           {calibrating && status === "live" && (
             <span className="text-[10px] text-accent uppercase">Kalibrierung</span>
           )}
+          {!calibrating && autoCalibrationConfidence !== null && (
+            <span className="text-[10px] text-muted-foreground">
+              · Auto-Kalibrierung {(autoCalibrationConfidence * 100).toFixed(0)}%
+            </span>
+          )}
           {!calibrating && stableCount > 0 && (
             <span className="text-[10px] text-muted-foreground">
               · {stableCount} Pfeil(e) — vom Board ziehen
             </span>
+          )}
+          {!calibrating && boardEmptyHint && (
+            <span className="text-[10px] text-secondary uppercase">Board frei erkannt</span>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -335,8 +423,8 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
       )}
       <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
         {calibrating
-          ? "Tipp: gleichmäßige Beleuchtung, Kamera frontal zur Scheibe."
-          : "Punkte werden erst gezählt, wenn du die Pfeile vom Board ziehst."}
+          ? "Auto-Kalibrierung konnte die Scheibe nicht sicher erkennen — richte den Rahmen manuell aus."
+          : "Punkte werden erst gezählt, wenn das Board wieder als frei erkannt wird."}
       </p>
     </div>
   );
