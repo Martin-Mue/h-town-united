@@ -9,6 +9,9 @@ const MULTIPLIER_OPTIONS = [
   { label: "T", fullLabel: "Triple", value: 3 },
 ] as const;
 
+/** Common 3-dart round scores for one-tap entry */
+const QUICK_ROUNDS = [180, 140, 121, 100, 85, 81, 60, 45, 41, 26, 0];
+
 interface DartScoreInputProps {
   /** Currently selected base value */
   selectedValue: number;
@@ -22,6 +25,8 @@ interface DartScoreInputProps {
   onMultiplierSelect: (multiplier: number) => void;
   /** Callback to submit the throw */
   onSubmit: () => void;
+  /** Optional: submit a full 3-dart round at once with a total score */
+  onQuickRound?: (total: number) => void;
 }
 
 /**
@@ -35,12 +40,34 @@ const DartScoreInput = ({
   onValueSelect,
   onMultiplierSelect,
   onSubmit,
+  onQuickRound,
 }: DartScoreInputProps) => {
   const calculatedPoints = selectedValue === 0 ? 0 : selectedValue * selectedMultiplier;
   const isInvalidCombo = selectedValue === 25 && selectedMultiplier === 3;
 
   return (
     <div className="bg-card rounded-xl border border-border p-4">
+      {/* Quick 3-dart round scores */}
+      {onQuickRound && (
+        <div className="mb-3">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground text-center mb-1.5">
+            Schnell-Eingabe (3 Darts)
+          </div>
+          <div className="grid grid-cols-6 gap-1.5">
+            {QUICK_ROUNDS.map((v) => (
+              <button
+                key={v}
+                onClick={() => onQuickRound(v)}
+                disabled={isDisabled}
+                className="py-1.5 rounded-md text-xs font-bold bg-secondary/20 text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-40"
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Multiplier selection */}
       <div className="flex gap-2 mb-3 justify-center">
         {MULTIPLIER_OPTIONS.map((m) => (
