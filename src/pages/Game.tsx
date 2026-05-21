@@ -503,6 +503,39 @@ const GamePage = () => {
     setEditingThrowIdx(null);
   };
 
+  /**
+   * Decompose a 3-dart round total into 3 plausible darts for quick entry.
+   * Not optimal-checkout-aware; use manual entry to finish on a double.
+   */
+  const splitQuickRound = (total: number): DetectedDart[] => {
+    let rem = total;
+    const out: DetectedDart[] = [];
+    for (let i = 0; i < 3; i++) {
+      const dartsLeft = 3 - i;
+      let pts = i === 2 ? rem : Math.min(60, Math.ceil(rem / dartsLeft));
+      if (rem - pts > 60 * (dartsLeft - 1)) pts = rem - 60 * (dartsLeft - 1);
+      pts = Math.max(0, Math.min(60, pts));
+      let base = pts;
+      let mul: 1 | 2 | 3 = 1;
+      if (pts === 0) { base = 0; mul = 1; }
+      else if (pts <= 20) { base = pts; mul = 1; }
+      else if (pts === 25) { base = 25; mul = 1; }
+      else if (pts === 50) { base = 25; mul = 2; }
+      else if (pts % 3 === 0 && pts / 3 <= 20) { base = pts / 3; mul = 3; }
+      else if (pts % 2 === 0 && pts / 2 <= 20) { base = pts / 2; mul = 2; }
+      else { base = 20; mul = 1; pts = 20; }
+      out.push({ baseValue: base, multiplier: mul, points: pts, confidence: 1 });
+      rem -= pts;
+    }
+    return out;
+  };
+
+  const handleQuickRound = (total: number) => {
+    if (!game || game.isFinished) return;
+    if (game.mode === "cricket") return;
+    submitDetectedRound(splitQuickRound(total));
+  };
+
   const resetGame = () => {
     setPhase("setup"); setGame(null); setGameSaved(false); setShowDetailedStats(false);
     setDartsThisRound(0); setUndoStack([]);
@@ -848,7 +881,8 @@ const GamePage = () => {
 
       {/* Score input */}
       <DartScoreInput selectedValue={selectedScore} selectedMultiplier={multiplier} isDisabled={game.isFinished}
-        onValueSelect={setSelectedScore} onMultiplierSelect={setMultiplier} onSubmit={throwDart} />
+        onValueSelect={setSelectedScore} onMultiplierSelect={setMultiplier} onSubmit={throwDart}
+        onQuickRound={!isCricket ? handleQuickRound : undefined} />
 
       {/* Undo & actions row */}
       <div className="flex gap-2 mt-3">

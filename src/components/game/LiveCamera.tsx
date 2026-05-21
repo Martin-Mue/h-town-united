@@ -1,10 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import {
-  Camera, CameraOff, Loader2, AlertCircle, CheckCircle2,
-  Maximize2, Minimize2, ZoomIn, ZoomOut, Crop, Check,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, Loader2, X, ScanLine, Check, RotateCcw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface DetectedDart {
@@ -14,214 +10,42 @@ export interface DetectedDart {
   confidence: number;
 }
 
-interface DetectedBoard {
-  cx: number;
-  cy: number;
-  size: number;
-  confidence: number;
-}
-
 interface LiveCameraProps {
-  /** Called exactly once per round when the player pulls the darts.
-   *  Receives all detected darts of the just-finished round atomically. */
+  /** Called once when the user confirms the scanned darts. */
   onRoundCommit: (darts: DetectedDart[]) => void;
-  pollIntervalMs?: number;
   enabled: boolean;
   onClose: () => void;
 }
 
+type Phase = "starting" | "live" | "scanning" | "review" | "error";
+
 /**
- * Live camera scoring with ROI calibration.
- *  - Analyzes only the calibrated crop of the dartboard via Gemini Vision.
- *  - Tracks the last stable reading with >0 darts.
- *  - When the board becomes empty for 2 frames, commits that reading once
- *    as a single atomic round so all 3 darts process together.
- *  - Never re-deducts while darts remain in the board.
+ * Photo-based dart scoring helper.
+ *  - Live camera preview with a circular guide overlay for the dartboard.
+ *  - User wirft 3 Darts, drückt "Runde scannen": ein einziges Foto wird an die
+ *    AI gesendet. Vorschlag wird angezeigt, Nutzer bestätigt oder verwirft.
+ *  - Keine Dauer-Polls, keine Timeouts, ~1 AI-Call pro Runde.
  */
-const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: LiveCameraProps) => {
+const LiveCamera = ({ onRoundCommit, enabled, onClose }: LiveCameraProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const intervalRef = useRef<number | null>(null);
-  const analyzingRef = useRef(false);
-  const stableDartsRef = useRef<DetectedDart[]>([]);
-  const emptyStreakRef = useRef(0);
-  const emptyReferenceRef = useRef<number[] | null>(null);
-  const autoCalibratedRef = useRef(false);
 
-  const [status, setStatus] = useState<"idle" | "starting" | "live" | "error">("idle");
+  const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
-  const [lastDarts, setLastDarts] = useState<DetectedDart[]>([]);
-  const [stableCount, setStableCount] = useState(0);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [confidenceWarn, setConfidenceWarn] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [autoCalibrationConfidence, setAutoCalibrationConfidence] = useState<number | null>(null);
-  const [boardEmptyHint, setBoardEmptyHint] = useState(false);
+  const [detected, setDetected] = useState<DetectedDart[]>([]);
+  const [snapshot, setSnapshot] = useState<string | null>(null);
 
-  // ROI = relative crop (0..1) of the captured frame sent to AI.
-  const [roi, setRoi] = useState({ cx: 0.5, cy: 0.5, size: 0.75 });
-  const roiRef = useRef(roi);
-  useEffect(() => { roiRef.current = roi; }, [roi]);
-  const [calibrating, setCalibrating] = useState(false);
-
-  const createFrameSignature = useCallback((sourceCanvas: HTMLCanvasElement) => {
-    const sampleCanvas = document.createElement("canvas");
-    sampleCanvas.width = 32;
-    sampleCanvas.height = 32;
-    const sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
-    if (!sampleCtx) return [];
-    sampleCtx.drawImage(sourceCanvas, 0, 0, 32, 32);
-    const { data } = sampleCtx.getImageData(0, 0, 32, 32);
-    const signature: number[] = [];
-    for (let i = 0; i < data.length; i += 4) {
-      signature.push((data[i] + data[i + 1] + data[i + 2]) / 3);
-    }
-    return signature;
-  }, []);
-
-  const getSignatureDiff = useCallback((a: number[], b: number[]) => {
-    if (!a.length || !b.length || a.length !== b.length) return Number.POSITIVE_INFINITY;
-    let diff = 0;
-    for (let i = 0; i < a.length; i += 1) diff += Math.abs(a[i] - b[i]);
-    return diff / a.length;
-  }, []);
-
-  const stopCamera = useCallback(() => {
-    if (intervalRef.current) {
-      window.clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    setStatus("idle");
-    stableDartsRef.current = [];
-    emptyStreakRef.current = 0;
-    emptyReferenceRef.current = null;
-    autoCalibratedRef.current = false;
-    setStableCount(0);
-    setAutoCalibrationConfidence(null);
-    setBoardEmptyHint(false);
-  }, []);
-
-  const autoCalibrateBoard = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current || autoCalibratedRef.current) return;
-    const video = videoRef.current;
-    if (video.readyState < 2) return;
-    const canvas = canvasRef.current;
-    const side = Math.min(video.videoWidth, video.videoHeight, 960);
-    canvas.width = side;
-    canvas.height = side;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const srcX = Math.max(0, Math.round((video.videoWidth - side) / 2));
-    const srcY = Math.max(0, Math.round((video.videoHeight - side) / 2));
-    ctx.drawImage(video, srcX, srcY, side, side, 0, 0, side, side);
-    const imageBase64 = canvas.toDataURL("image/jpeg", 0.85);
-    const { data, error: invokeErr } = await supabase.functions.invoke("analyze-dartboard", {
-      body: { imageBase64, detectBoard: true },
-    });
-    if (invokeErr) throw invokeErr;
-    const board = data?.board as DetectedBoard | undefined;
-    if (board && board.size > 0.35 && board.size <= 1) {
-      const nextRoi = {
-        cx: Math.min(0.8, Math.max(0.2, board.cx)),
-        cy: Math.min(0.8, Math.max(0.2, board.cy)),
-        size: Math.min(0.95, Math.max(0.45, board.size * 1.08)),
-      };
-      setRoi(nextRoi);
-      setAutoCalibrationConfidence(board.confidence ?? null);
-      setCalibrating(false);
-      autoCalibratedRef.current = true;
-    } else {
-      setCalibrating(true);
-    }
-  }, []);
-
-  const captureAndAnalyze = useCallback(async () => {
-    if (analyzingRef.current || !videoRef.current || !canvasRef.current) return;
-    if (videoRef.current.readyState < 2) return;
-    analyzingRef.current = true;
-    setAnalyzing(true);
-    try {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const vw = video.videoWidth;
-      const vh = video.videoHeight;
-      const { cx, cy, size } = roiRef.current;
-      const sidePx = Math.round(Math.min(vw, vh) * size);
-      const srcX = Math.max(0, Math.min(vw - sidePx, Math.round(cx * vw - sidePx / 2)));
-      const srcY = Math.max(0, Math.min(vh - sidePx, Math.round(cy * vh - sidePx / 2)));
-      const outSide = Math.min(900, sidePx);
-      canvas.width = outSide;
-      canvas.height = outSide;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(video, srcX, srcY, sidePx, sidePx, 0, 0, outSide, outSide);
-      const imageBase64 = canvas.toDataURL("image/jpeg", 0.85);
-      const signature = createFrameSignature(canvas);
-
-      const { data, error: invokeErr } = await supabase.functions.invoke("analyze-dartboard", {
-        body: { imageBase64 },
-      });
-      if (invokeErr) throw invokeErr;
-      if (!data || data.error) return;
-
-      const darts: DetectedDart[] = (data.darts || []).map((d: any) => ({
-        baseValue: d.segment,
-        multiplier: d.multiplier,
-        points: d.points,
-        confidence: d.confidence ?? 0.5,
-      }));
-      setLastDarts(darts);
-      setConfidenceWarn(darts.some((d) => d.confidence < 0.6));
-
-      const referenceDiff = emptyReferenceRef.current ? getSignatureDiff(signature, emptyReferenceRef.current) : null;
-      const looksLikeEmptyBoard = referenceDiff !== null && referenceDiff < 6;
-      setBoardEmptyHint(looksLikeEmptyBoard);
-
-      if (darts.length === 0 || looksLikeEmptyBoard) {
-        emptyStreakRef.current += 1;
-        if (!emptyReferenceRef.current || looksLikeEmptyBoard) {
-          emptyReferenceRef.current = signature;
-        }
-        if (emptyStreakRef.current >= 2 && stableDartsRef.current.length > 0) {
-          const toCommit = stableDartsRef.current;
-          stableDartsRef.current = [];
-          emptyStreakRef.current = 0;
-          setStableCount(0);
-          onRoundCommit(toCommit);
-        }
-      } else {
-        emptyStreakRef.current = 0;
-        if (darts.length >= stableDartsRef.current.length) {
-          stableDartsRef.current = darts;
-          setStableCount(darts.length);
-        }
-      }
-    } catch (err: any) {
-      console.error("Live capture error:", err);
-    } finally {
-      analyzingRef.current = false;
-      setAnalyzing(false);
-    }
-  }, [createFrameSignature, getSignatureDiff, onRoundCommit]);
-
+  // Start camera on mount
   useEffect(() => {
-    if (!enabled) {
-      stopCamera();
-      return;
-    }
+    if (!enabled) return;
     let cancelled = false;
-    const start = async () => {
-      setStatus("starting");
-      setError(null);
+    (async () => {
       try {
+        setPhase("starting");
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
         });
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
@@ -230,202 +54,227 @@ const LiveCamera = ({ onRoundCommit, pollIntervalMs = 2500, enabled, onClose }: 
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          await videoRef.current.play();
+          await videoRef.current.play().catch(() => {});
         }
-        setStatus("live");
-        await autoCalibrateBoard();
-      } catch (err: any) {
-        console.error("Camera error:", err);
-        setError(err?.message || "Kamera-Zugriff verweigert");
-        setStatus("error");
+        setPhase("live");
+      } catch (e) {
+        console.error("Camera error:", e);
+        setError("Kamerazugriff nicht möglich. Bitte Berechtigung erteilen.");
+        setPhase("error");
       }
-    };
-    start();
+    })();
     return () => {
       cancelled = true;
-      stopCamera();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     };
-  }, [enabled, stopCamera, autoCalibrateBoard]);
+  }, [enabled]);
 
-  // Start/stop the polling loop based on calibration state.
-  useEffect(() => {
-    if (intervalRef.current) {
-      window.clearInterval(intervalRef.current);
-      intervalRef.current = null;
+  const captureFrame = (): string | null => {
+    const v = videoRef.current;
+    const c = canvasRef.current;
+    if (!v || !c || !v.videoWidth) return null;
+    // Crop to a centred square around the circular guide (where the board should be)
+    const size = Math.min(v.videoWidth, v.videoHeight);
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    const sx = (v.videoWidth - size) / 2;
+    const sy = (v.videoHeight - size) / 2;
+    ctx.drawImage(v, sx, sy, size, size, 0, 0, size, size);
+    return c.toDataURL("image/jpeg", 0.82);
+  };
+
+  const handleScan = async () => {
+    const img = captureFrame();
+    if (!img) {
+      setError("Kamerabild nicht verfügbar.");
+      return;
     }
-    if (status === "live" && !calibrating) {
-      // Reset stable buffer so a stale board reading doesn't get re-committed.
-      stableDartsRef.current = [];
-      emptyStreakRef.current = 0;
-      setStableCount(0);
-      intervalRef.current = window.setInterval(captureAndAnalyze, pollIntervalMs);
+    setSnapshot(img);
+    setPhase("scanning");
+    setError(null);
+    try {
+      const { data, error: fnErr } = await supabase.functions.invoke("analyze-dartboard", {
+        body: { imageBase64: img },
+      });
+      if (fnErr) throw fnErr;
+      if (data?.error) throw new Error(data.error);
+      const darts: DetectedDart[] = Array.isArray(data?.darts)
+        ? data.darts.slice(0, 3).map((d: any) => ({
+            baseValue: Number(d.segment) || 0,
+            multiplier: ([1, 2, 3].includes(Number(d.multiplier)) ? Number(d.multiplier) : 1) as 1 | 2 | 3,
+            points: Number(d.points) || 0,
+            confidence: Number(d.confidence) || 0,
+          }))
+        : [];
+      setDetected(darts);
+      setPhase("review");
+    } catch (e: any) {
+      console.error("Scan error:", e);
+      setError(e?.message || "Erkennung fehlgeschlagen. Bitte erneut versuchen oder manuell eintragen.");
+      setPhase("review");
+      setDetected([]);
     }
-    return () => {
-      if (intervalRef.current) {
-        window.clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [status, calibrating, pollIntervalMs, captureAndAnalyze]);
+  };
+
+  const adjustDart = (idx: number, field: "baseValue" | "multiplier", value: number) => {
+    setDetected((prev) => {
+      const copy = [...prev];
+      const d = { ...copy[idx], [field]: value };
+      const pts = d.baseValue === 25 ? (d.multiplier === 2 ? 50 : 25) : d.baseValue * d.multiplier;
+      copy[idx] = { ...d, points: pts };
+      return copy;
+    });
+  };
+
+  const addEmptyDart = () => {
+    if (detected.length >= 3) return;
+    setDetected((p) => [...p, { baseValue: 0, multiplier: 1, points: 0, confidence: 1 }]);
+  };
+
+  const removeDart = (idx: number) => {
+    setDetected((p) => p.filter((_, i) => i !== idx));
+  };
+
+  const confirmRound = () => {
+    if (detected.length === 0) return;
+    onRoundCommit(detected);
+    setDetected([]);
+    setSnapshot(null);
+    setPhase("live");
+  };
+
+  const retake = () => {
+    setDetected([]);
+    setSnapshot(null);
+    setError(null);
+    setPhase("live");
+  };
+
+  const roundTotal = detected.reduce((s, d) => s + d.points, 0);
 
   return (
-    <div
-      className={`bg-card rounded-xl border border-primary/30 p-3 mb-3 glow-cyan ${
-        expanded ? "fixed inset-2 z-50 overflow-auto" : ""
-      }`}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="bg-card rounded-xl border border-border p-3 mb-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
           <Camera className="w-4 h-4 text-primary" />
-          <span className="text-xs font-display uppercase">Live-Cam</span>
-          {status === "live" && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />}
-          {analyzing && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
-          {calibrating && status === "live" && (
-            <span className="text-[10px] text-accent uppercase">Kalibrierung</span>
-          )}
-          {!calibrating && autoCalibrationConfidence !== null && (
-            <span className="text-[10px] text-muted-foreground">
-              · Auto-Kalibrierung {(autoCalibrationConfidence * 100).toFixed(0)}%
-            </span>
-          )}
-          {!calibrating && stableCount > 0 && (
-            <span className="text-[10px] text-muted-foreground">
-              · {stableCount} Pfeil(e) — vom Board ziehen
-            </span>
-          )}
-          {!calibrating && boardEmptyHint && (
-            <span className="text-[10px] text-secondary uppercase">Board frei erkannt</span>
-          )}
+          <span className="font-display text-sm uppercase tracking-wider">Kamera-Scan</span>
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant={calibrating ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setCalibrating((v) => !v)}
-            className="h-7 px-2"
-            title={calibrating ? "Kalibrierung beenden" : "Erfassungsbereich kalibrieren"}
-          >
-            {calibrating ? <Check className="w-3.5 h-3.5" /> : <Crop className="w-3.5 h-3.5" />}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setExpanded((v) => !v)} className="h-7 px-2" title={expanded ? "Verkleinern" : "Vergrößern"}>
-            {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onClose} className="h-7 px-2" title="Kamera schließen">
-            <CameraOff className="w-3.5 h-3.5" />
-          </Button>
-        </div>
+        <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7">
+          <X className="w-4 h-4" />
+        </Button>
       </div>
 
-      <div
-        className={`relative rounded-lg overflow-hidden bg-black ${
-          expanded ? "h-[calc(100vh-260px)]" : "aspect-[4/3] md:aspect-video"
-        }`}
-      >
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover transition-transform duration-200 origin-center"
-          style={{ transform: `scale(${zoom})` }}
-          muted
-          playsInline
-        />
+      <div className="relative w-full aspect-square max-w-md mx-auto bg-black rounded-lg overflow-hidden">
+        {phase === "review" && snapshot ? (
+          <img src={snapshot} alt="Letzter Scan" className="w-full h-full object-cover" />
+        ) : (
+          <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
+        )}
         <canvas ref={canvasRef} className="hidden" />
 
-        {/* ROI overlay */}
-        {status === "live" && (
-          <div
-            className={`absolute pointer-events-none border-2 rounded ${
-              calibrating ? "border-accent shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" : "border-primary/60"
-            }`}
-            style={{
-              left: `${(roi.cx - roi.size / 2) * 100}%`,
-              top: `${(roi.cy - roi.size / 2) * 100}%`,
-              width: `${roi.size * 100}%`,
-              height: `${roi.size * 100}%`,
-            }}
-          >
-            {calibrating && (
-              <>
-                <div className="absolute inset-x-0 top-1/2 h-px bg-accent/60" />
-                <div className="absolute inset-y-0 left-1/2 w-px bg-accent/60" />
-              </>
+        {/* Circular dartboard guide */}
+        {(phase === "live" || phase === "scanning") && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="relative" style={{ width: "85%", aspectRatio: "1 / 1" }}>
+              <div className="absolute inset-0 rounded-full border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+              <div className="absolute inset-[35%] rounded-full border border-primary/40" />
+              <div className="absolute inset-[48%] rounded-full bg-primary/60" />
+            </div>
+          </div>
+        )}
+
+        {phase === "starting" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-white text-sm">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Kamera startet…
+          </div>
+        )}
+        {phase === "scanning" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-sm">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Erkenne Darts…
+          </div>
+        )}
+        {phase === "error" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-xs px-4 text-center">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {phase === "live" && (
+        <>
+          <p className="text-xs text-muted-foreground text-center">
+            Board mittig im Kreis platzieren · 3 Darts werfen · dann scannen
+          </p>
+          <Button onClick={handleScan} className="w-full gap-2 font-display uppercase">
+            <ScanLine className="w-4 h-4" /> Runde scannen
+          </Button>
+        </>
+      )}
+
+      {phase === "review" && (
+        <div className="space-y-2">
+          {error && (
+            <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded p-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground text-center">
+            Vorschlag prüfen, ggf. anpassen, dann bestätigen.
+          </div>
+          <div className="space-y-1.5">
+            {detected.map((d, i) => (
+              <div key={i} className="flex items-center gap-2 bg-muted rounded-lg p-2">
+                <span className="text-xs text-muted-foreground w-12">Dart {i + 1}</span>
+                <select
+                  value={d.multiplier}
+                  onChange={(e) => adjustDart(i, "multiplier", Number(e.target.value))}
+                  className="bg-background border border-border rounded px-1 py-1 text-xs"
+                  disabled={d.baseValue === 0 || d.baseValue === 25}
+                >
+                  <option value={1}>S</option>
+                  <option value={2}>D</option>
+                  <option value={3}>T</option>
+                </select>
+                <select
+                  value={d.baseValue}
+                  onChange={(e) => adjustDart(i, "baseValue", Number(e.target.value))}
+                  className="bg-background border border-border rounded px-1 py-1 text-xs flex-1"
+                >
+                  <option value={0}>Miss</option>
+                  {Array.from({ length: 20 }, (_, n) => n + 1).map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                  <option value={25}>Bull (25/50)</option>
+                </select>
+                <span className="font-display text-primary w-10 text-right">{d.points}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeDart(i)}>
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+            {detected.length < 3 && (
+              <Button variant="outline" size="sm" className="w-full text-xs" onClick={addEmptyDart}>
+                + Dart hinzufügen
+              </Button>
             )}
           </div>
-        )}
-
-        {status === "starting" && (
-          <div className="absolute inset-0 flex items-center justify-center text-white text-xs">
-            <Loader2 className="w-4 h-4 animate-spin mr-2" /> Kamera startet...
+          <div className="text-center font-display text-2xl text-primary">
+            {roundTotal} Punkte
           </div>
-        )}
-        {status === "error" && (
-          <div className="absolute inset-0 flex items-center justify-center text-destructive text-xs p-2 text-center">
-            <AlertCircle className="w-4 h-4 mr-1" /> {error}
-          </div>
-        )}
-        {confidenceWarn && status === "live" && !calibrating && (
-          <div className="absolute top-1 right-1 bg-destructive/90 text-destructive-foreground text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" /> Niedrige Confidence
-          </div>
-        )}
-      </div>
-
-      {/* Calibration controls */}
-      {calibrating && status === "live" && (
-        <div className="space-y-2 mt-2 bg-muted/30 rounded-lg p-2 border border-accent/30">
-          <p className="text-[10px] text-accent uppercase font-display">
-            Rahmen genau um die Scheibe legen, dann ✓ zum Bestätigen
-          </p>
-          <div className="grid grid-cols-3 gap-3 text-[10px]">
-            <div className="space-y-1">
-              <span className="text-muted-foreground block">Horizontal</span>
-              <Slider value={[roi.cx]} min={0.1} max={0.9} step={0.01} onValueChange={(v) => setRoi(r => ({ ...r, cx: v[0] }))} />
-            </div>
-            <div className="space-y-1">
-              <span className="text-muted-foreground block">Vertikal</span>
-              <Slider value={[roi.cy]} min={0.1} max={0.9} step={0.01} onValueChange={(v) => setRoi(r => ({ ...r, cy: v[0] }))} />
-            </div>
-            <div className="space-y-1">
-              <span className="text-muted-foreground block">Größe</span>
-              <Slider value={[roi.size]} min={0.25} max={1} step={0.01} onValueChange={(v) => setRoi(r => ({ ...r, size: v[0] }))} />
-            </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={retake} className="flex-1 gap-1">
+              <RotateCcw className="w-4 h-4" /> Neu scannen
+            </Button>
+            <Button onClick={confirmRound} disabled={detected.length === 0} className="flex-1 gap-1">
+              <Check className="w-4 h-4" /> Bestätigen
+            </Button>
           </div>
         </div>
       )}
-
-      {/* Zoom slider */}
-      <div className="flex items-center gap-2 mt-2">
-        <ZoomOut className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <Slider value={[zoom]} min={1} max={4} step={0.1} onValueChange={(v) => setZoom(v[0])} className="flex-1" />
-        <ZoomIn className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <span className="text-[10px] text-muted-foreground font-mono w-10 text-right">{zoom.toFixed(1)}x</span>
-      </div>
-
-      {lastDarts.length > 0 && !calibrating && (
-        <div className="flex items-center gap-1 mt-2 flex-wrap">
-          <span className="text-[10px] text-muted-foreground uppercase">Erkannt:</span>
-          {lastDarts.map((d, i) => (
-            <span
-              key={i}
-              className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
-                d.confidence >= 0.7 ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"
-              }`}
-              title={`Confidence ${(d.confidence * 100).toFixed(0)}%`}
-            >
-              {d.multiplier === 3 ? "T" : d.multiplier === 2 ? "D" : ""}
-              {d.baseValue === 25 && d.multiplier === 2 ? "Bull" : d.baseValue}
-              {d.confidence >= 0.8 && <CheckCircle2 className="w-2.5 h-2.5 inline ml-0.5" />}
-            </span>
-          ))}
-          <span className="text-[10px] text-muted-foreground ml-auto">
-            Σ {lastDarts.reduce((s, d) => s + d.points, 0)}
-          </span>
-        </div>
-      )}
-      <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
-        {calibrating
-          ? "Auto-Kalibrierung konnte die Scheibe nicht sicher erkennen — richte den Rahmen manuell aus."
-          : "Punkte werden erst gezählt, wenn das Board wieder als frei erkannt wird."}
-      </p>
     </div>
   );
 };
