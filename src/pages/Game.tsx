@@ -881,7 +881,8 @@ const GamePage = () => {
 
       {/* Score input */}
       <DartScoreInput selectedValue={selectedScore} selectedMultiplier={multiplier} isDisabled={game.isFinished}
-        onValueSelect={setSelectedScore} onMultiplierSelect={setMultiplier} onSubmit={throwDart} />
+        onValueSelect={setSelectedScore} onMultiplierSelect={setMultiplier} onSubmit={throwDart}
+        onQuickRound={!isCricket ? handleQuickRound : undefined} />
 
       {/* Undo & actions row */}
       <div className="flex gap-2 mt-3">
