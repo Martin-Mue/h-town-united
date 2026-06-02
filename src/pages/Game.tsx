@@ -855,6 +855,8 @@ const GamePage = () => {
           enabled={cameraEnabled}
           onClose={() => setCameraEnabled(false)}
           onRoundCommit={submitDetectedRound}
+          dartsRemaining={Math.max(1, 3 - dartsThisRound)}
+          playerName={currentPlayerName}
         />
       )}
 
