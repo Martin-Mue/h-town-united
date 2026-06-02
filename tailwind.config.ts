@@ -94,6 +94,25 @@ export default {
           from: { opacity: "0", transform: "scale(0.9)" },
           to: { opacity: "1", transform: "scale(1)" },
         },
+        "trophy-drop": {
+          "0%": { opacity: "0", transform: "translateY(-120%) rotate(-12deg) scale(0.6)" },
+          "60%": { opacity: "1", transform: "translateY(8%) rotate(2deg) scale(1.05)" },
+          "80%": { transform: "translateY(-4%) rotate(-1deg) scale(0.98)" },
+          "100%": { opacity: "1", transform: "translateY(0) rotate(0) scale(1)" },
+        },
+        "trophy-shine": {
+          "0%": { transform: "translateX(-150%) skewX(-20deg)", opacity: "0" },
+          "40%": { opacity: "0.9" },
+          "100%": { transform: "translateX(150%) skewX(-20deg)", opacity: "0" },
+        },
+        "engrave-in": {
+          "0%": { opacity: "0", letterSpacing: "0.6em", filter: "blur(6px)" },
+          "100%": { opacity: "1", letterSpacing: "0.05em", filter: "blur(0)" },
+        },
+        "confetti-fall": {
+          "0%": { transform: "translateY(-20vh) rotate(0deg)", opacity: "1" },
+          "100%": { transform: "translateY(120vh) rotate(720deg)", opacity: "0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -101,6 +120,10 @@ export default {
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
         "slide-up": "slide-up 0.4s ease-out",
         "scale-in": "scale-in 0.3s ease-out",
+        "trophy-drop": "trophy-drop 1.1s cubic-bezier(.2,.7,.3,1) both",
+        "trophy-shine": "trophy-shine 2.4s ease-in-out 0.8s infinite",
+        "engrave-in": "engrave-in 1.2s ease-out 1s both",
+        "confetti-fall": "confetti-fall linear forwards",
       },
     },
   },
