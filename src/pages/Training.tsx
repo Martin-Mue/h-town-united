@@ -544,7 +544,6 @@ const TrainingPage = () => {
         ))}
       </div>
 
-      <div className="mt-6 bg-card border border-primary/20 rounded-xl p-4">
       <div className="mt-6">
         <CoachingPlan
           onStartDrill={(drillId) => {
