@@ -428,6 +428,9 @@ const TournamentPage = () => {
               <Trophy className="w-8 h-8 text-accent mx-auto mb-1" />
               <p className="font-display uppercase text-xl">{activeTournament.champion}</p>
               <p className="text-accent text-sm font-display uppercase">Champion!</p>
+              <Button size="sm" variant="ghost" className="mt-2 text-xs" onClick={() => setCeremonyChampion(activeTournament.champion)}>
+                🏆 Pokal-Zeremonie zeigen
+              </Button>
             </div>
           </div>
         )}
@@ -462,6 +465,9 @@ const TournamentPage = () => {
             })}
           </div>
         </div>
+        {ceremonyChampion && (
+          <TrophyCeremony champion={ceremonyChampion} tournamentName={activeTournament.name} onClose={() => setCeremonyChampion(null)} />
+        )}
       </div>
     );
   }
