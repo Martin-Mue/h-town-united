@@ -3,6 +3,7 @@ import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, Ro
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
+import CoachingPlan from "@/components/training/CoachingPlan";
 
 /** Training drill definition */
 interface TrainingDrill {
@@ -544,11 +545,16 @@ const TrainingPage = () => {
       </div>
 
       <div className="mt-6 bg-card border border-primary/20 rounded-xl p-4">
-        <h3 className="font-display uppercase text-sm mb-2 text-primary">🎯 Coaching</h3>
-        <p className="text-sm text-muted-foreground">
-          Personalisierte Trainingspläne basierend auf deinen Schwächen kommen bald.
-          Das System analysiert deine Doppel-Quote, Checkout-Effizienz und gibt dir gezielte Übungen.
-        </p>
+      <div className="mt-6">
+        <CoachingPlan
+          onStartDrill={(drillId) => {
+            const drill = TRAINING_DRILLS.find((d) => d.id === drillId);
+            if (drill) {
+              setSelectedDrill(drill);
+              startDrill(drill);
+            }
+          }}
+        />
       </div>
     </div>
   );
