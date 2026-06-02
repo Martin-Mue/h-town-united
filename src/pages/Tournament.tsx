@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 
 interface Match {
   id: string;
@@ -50,6 +51,8 @@ const TournamentPage = () => {
   const [tournaments, setTournaments] = useState<TournamentRecord[]>([]);
   const [activeTournament, setActiveTournament] = useState<TournamentRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ceremonyChampion, setCeremonyChampion] = useState<string | null>(null);
+  const [seenCeremonyFor, setSeenCeremonyFor] = useState<string | null>(null);
 
   // Setup state
   const [tournamentName, setTournamentName] = useState("");
@@ -213,6 +216,10 @@ const TournamentPage = () => {
     }).eq("id", activeTournament.id);
 
     setActiveTournament({ ...activeTournament, bracket: updated, champion });
+    if (champion && seenCeremonyFor !== activeTournament.id) {
+      setCeremonyChampion(champion);
+      setSeenCeremonyFor(activeTournament.id);
+    }
   };
 
   // ─── Round Robin: Set Winner ───────────────────
@@ -236,6 +243,10 @@ const TournamentPage = () => {
     }).eq("id", activeTournament.id);
 
     setActiveTournament({ ...activeTournament, bracket, champion });
+    if (champion && seenCeremonyFor !== activeTournament.id) {
+      setCeremonyChampion(champion);
+      setSeenCeremonyFor(activeTournament.id);
+    }
   };
 
   const calcStandings = (matches: RoundRobinMatch[]): RoundRobinStanding[] => {
