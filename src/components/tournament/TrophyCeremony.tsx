@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -21,8 +21,6 @@ const CONFETTI_COLORS = [
  * and the champion's name gets "engraved" on the plate.
  */
 const TrophyCeremony = ({ champion, tournamentName, onClose }: TrophyCeremonyProps) => {
-  const [dismissed, setDismissed] = useState(false);
-
   // Generate confetti pieces once per mount.
   const confetti = useMemo(
     () =>
@@ -37,18 +35,13 @@ const TrophyCeremony = ({ champion, tournamentName, onClose }: TrophyCeremonyPro
     []
   );
 
-  // Auto-dismiss after 9s if user doesn't close.
+  // Auto-dismiss after 9s — fully unmounts via parent so it can be replayed.
   useEffect(() => {
-    const t = window.setTimeout(() => setDismissed(true), 9000);
+    const t = window.setTimeout(() => onClose?.(), 9000);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [onClose]);
 
-  if (dismissed) return null;
-
-  const close = () => {
-    setDismissed(true);
-    onClose?.();
-  };
+  const close = () => onClose?.();
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/85 backdrop-blur-sm">
@@ -87,44 +80,56 @@ const TrophyCeremony = ({ champion, tournamentName, onClose }: TrophyCeremonyPro
         <p className="text-sm text-muted-foreground mb-4 animate-fade-in">{tournamentName}</p>
       )}
 
-      {/* Trophy */}
-      <div className="relative animate-trophy-drop">
-        <div className="relative w-48 h-56 flex items-center justify-center drop-shadow-[0_10px_40px_hsl(var(--dart-gold)/0.55)]">
-          {/* Cup */}
-          <div className="relative">
-            <div
-              className="relative w-36 h-36 rounded-b-[3rem] rounded-t-3xl border-4 border-[hsl(var(--dart-gold))] overflow-hidden"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(var(--dart-gold)) 0%, hsl(45 95% 65%) 45%, hsl(38 85% 35%) 100%)",
-              }}
-            >
-              <Trophy className="absolute inset-0 m-auto w-16 h-16 text-background/40" />
-              {/* Shine sweep */}
-              <div className="absolute inset-y-0 w-1/3 bg-white/40 blur-md animate-trophy-shine" />
-            </div>
-            {/* Handles */}
-            <div className="absolute -left-6 top-6 w-6 h-16 rounded-full border-4 border-[hsl(var(--dart-gold))] border-r-transparent" />
-            <div className="absolute -right-6 top-6 w-6 h-16 rounded-full border-4 border-[hsl(var(--dart-gold))] border-l-transparent" />
-            {/* Stem */}
-            <div className="mx-auto w-10 h-6 -mt-1 bg-[hsl(var(--dart-gold))]" />
-            {/* Base */}
-            <div
-              className="mx-auto w-44 h-10 rounded-md border-2 border-[hsl(var(--dart-gold))] flex items-center justify-center px-3"
-              style={{
-                background:
-                  "linear-gradient(180deg, hsl(38 75% 45%), hsl(28 65% 22%))",
-              }}
-            >
-              <span
-                className="block w-full text-center font-display uppercase text-sm md:text-base text-[hsl(48_95%_85%)] truncate animate-engrave-in"
-                style={{ textShadow: "0 1px 0 rgba(0,0,0,0.6), 0 0 6px rgba(255,200,80,0.4)" }}
-              >
-                {champion}
-              </span>
-            </div>
-          </div>
-        </div>
+      {/* Trophy (SVG for clean classic cup shape) */}
+      <div className="relative animate-trophy-drop drop-shadow-[0_10px_40px_hsl(var(--dart-gold)/0.55)]">
+        <svg viewBox="0 0 200 240" className="w-48 h-56" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="cupGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="hsl(48 95% 70%)" />
+              <stop offset="50%" stopColor="hsl(45 95% 55%)" />
+              <stop offset="100%" stopColor="hsl(35 85% 35%)" />
+            </linearGradient>
+            <linearGradient id="baseGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="hsl(38 75% 45%)" />
+              <stop offset="100%" stopColor="hsl(28 65% 22%)" />
+            </linearGradient>
+            <clipPath id="cupClip">
+              <path d="M55 30 H145 V100 Q145 150 100 155 Q55 150 55 100 Z" />
+            </clipPath>
+          </defs>
+          {/* Handles */}
+          <path d="M55 45 Q25 50 25 80 Q25 110 55 110" fill="none" stroke="hsl(45 95% 50%)" strokeWidth="8" strokeLinecap="round" />
+          <path d="M145 45 Q175 50 175 80 Q175 110 145 110" fill="none" stroke="hsl(45 95% 50%)" strokeWidth="8" strokeLinecap="round" />
+          {/* Cup body */}
+          <path d="M55 30 H145 V100 Q145 150 100 155 Q55 150 55 100 Z" fill="url(#cupGrad)" stroke="hsl(45 95% 45%)" strokeWidth="2.5" />
+          {/* Shine sweep inside cup */}
+          <rect x="65" y="35" width="18" height="115" fill="white" opacity="0.35" className="animate-trophy-shine" clipPath="url(#cupClip)" />
+          {/* Stem */}
+          <rect x="90" y="155" width="20" height="18" fill="hsl(45 95% 50%)" />
+          {/* Plate (engraving) */}
+          <rect x="40" y="173" width="120" height="32" rx="4" fill="url(#baseGrad)" stroke="hsl(45 95% 45%)" strokeWidth="2" />
+          {/* Base foot */}
+          <rect x="30" y="205" width="140" height="14" rx="3" fill="url(#baseGrad)" stroke="hsl(45 95% 45%)" strokeWidth="2" />
+          {/* Inner cup icon */}
+          <g opacity="0.35" transform="translate(78 55)">
+            <path d="M0 0 h44 v18 q0 18 -22 22 q-22 -4 -22 -22 z" fill="hsl(28 65% 22%)" />
+            <rect x="18" y="40" width="8" height="6" fill="hsl(28 65% 22%)" />
+            <rect x="10" y="46" width="24" height="5" fill="hsl(28 65% 22%)" />
+          </g>
+          {/* Engraved champion name */}
+          <text
+            x="100"
+            y="195"
+            textAnchor="middle"
+            className="font-display animate-engrave-in"
+            fill="hsl(48 95% 88%)"
+            fontSize="14"
+            fontWeight="700"
+            style={{ letterSpacing: "0.1em", textTransform: "uppercase" }}
+          >
+            {champion}
+          </text>
+        </svg>
       </div>
 
       <p className="mt-6 font-display uppercase text-2xl text-accent animate-engrave-in" style={{ animationDelay: "1.6s" }}>
