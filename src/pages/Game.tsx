@@ -799,8 +799,9 @@ const GamePage = () => {
         </div>
       )}
 
-      {/* Scoreboard */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      {/* Scoreboard (sticky so it stays visible when the camera is open) */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40">
+      <div className="grid grid-cols-2 gap-3">
         {[
           { name: game.player1Name, remaining: game.currentLeg.player1Remaining, throws: game.currentLeg.player1Throws, legs: game.player1LegsWon, playerId: 1 as const, cricket: game.player1Cricket },
           { name: game.player2Name, remaining: game.currentLeg.player2Remaining, throws: game.currentLeg.player2Throws, legs: game.player2LegsWon, playerId: 2 as const, cricket: game.player2Cricket },
@@ -824,13 +825,13 @@ const GamePage = () => {
 
       {/* Leg info bar */}
       {game.bestOfLegs > 1 && (
-        <div className="text-center text-xs text-muted-foreground mb-2">
+        <div className="text-center text-xs text-muted-foreground mt-2">
           Leg {game.currentLeg.legNumber} · {game.currentLeg.startingPlayerId === 1 ? game.player1Name : game.player2Name} fängt an
         </div>
       )}
 
       {/* Current player indicator with dart counter + round score */}
-      <div className="text-center mb-3">
+      <div className="text-center mt-2">
         <span className="text-sm text-primary font-medium">{currentPlayerName} wirft</span>
         {!doubleOut && mode !== "cricket" && <span className="text-[10px] text-muted-foreground ml-2">(Single Out)</span>}
         <div className="flex justify-center gap-1 mt-1">
@@ -845,9 +846,10 @@ const GamePage = () => {
           )}
         </div>
       </div>
+      </div>
 
       {/* Checkout suggestion */}
-      {!isCricket && <div className="mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
+      {!isCricket && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
 
       {/* Live Camera (auto-scoring) */}
       {cameraEnabled && (
