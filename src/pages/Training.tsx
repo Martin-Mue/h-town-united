@@ -1,9 +1,10 @@
 import { useState, useCallback } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle } from "lucide-react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import CoachingPlan from "@/components/training/CoachingPlan";
+import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
 
 /** Training drill definition */
 interface TrainingDrill {
@@ -111,6 +112,7 @@ const TrainingPage = () => {
   const [drillState, setDrillState] = useState<DrillState | null>(null);
   const [selectedScore, setSelectedScore] = useState(20);
   const [multiplier, setMultiplier] = useState(1);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
 
   const categories = [
     { key: "all", label: "Alle" },
@@ -170,16 +172,15 @@ const TrainingPage = () => {
     setDrillState(state);
   };
 
-  /** Process a dart throw in the active drill */
-  const handleDrillThrow = useCallback(() => {
-    if (!drillState || drillState.finished || !selectedDrill) return;
-
-    const points = selectedScore === 25 && multiplier === 3 ? 0 : selectedScore * multiplier;
-    const baseValue = selectedScore === 50 ? 25 : selectedScore;
-    const newDartsThisRound = drillState.dartsThisRound + 1;
+  /** Process a single dart (from manual input or camera) in the active drill */
+  const processDart = useCallback((scoreValue: number, mul: number) => {
+    if (!selectedDrill) return;
+    const points = scoreValue === 25 && mul === 3 ? 0 : scoreValue * mul;
+    const baseValue = scoreValue === 50 ? 25 : scoreValue;
 
     setDrillState((prev) => {
-      if (!prev) return prev;
+      if (!prev || prev.finished) return prev;
+      const newDartsThisRound = prev.dartsThisRound + 1;
       const updated = { ...prev, dartsThrown: prev.dartsThrown + 1, dartsThisRound: newDartsThisRound };
 
       switch (selectedDrill.id) {
@@ -200,7 +201,7 @@ const TrainingPage = () => {
 
         case "doubles-only": {
           // Must hit the double of the current target
-          if (baseValue === prev.currentTarget && multiplier === 2) {
+          if (baseValue === prev.currentTarget && mul === 2) {
             updated.hits++;
             const nextIdx = prev.targetIndex + 1;
             if (nextIdx >= prev.targetList.length) {
@@ -297,7 +298,7 @@ const TrainingPage = () => {
 
         case "t20-grind": {
           // Count T20 hits out of 30 darts
-          if (baseValue === 20 && multiplier === 3) {
+          if (baseValue === 20 && mul === 3) {
             updated.hits++;
           }
           updated.roundScores = [...(prev.roundScores || []), points];
@@ -315,7 +316,15 @@ const TrainingPage = () => {
 
       return updated;
     });
-  }, [drillState, selectedDrill, selectedScore, multiplier]);
+  }, [selectedDrill]);
+
+  const handleDrillThrow = useCallback(() => {
+    processDart(selectedScore, multiplier);
+  }, [processDart, selectedScore, multiplier]);
+
+  const handleCameraRound = useCallback((darts: DetectedDart[]) => {
+    darts.forEach((d) => processDart(d.baseValue, d.multiplier));
+  }, [processDart]);
 
   const exitDrill = () => {
     setDrillState(null);
@@ -449,6 +458,17 @@ const TrainingPage = () => {
               </div>
             )}
 
+            {/* Live Camera (auto-scoring) */}
+            {cameraEnabled && (
+              <LiveCamera
+                enabled={cameraEnabled}
+                onClose={() => setCameraEnabled(false)}
+                onRoundCommit={handleCameraRound}
+                dartsRemaining={Math.max(1, 3 - drillState.dartsThisRound)}
+                playerName="Training"
+              />
+            )}
+
             {/* Score input */}
             <DartScoreInput
               selectedValue={selectedScore}
@@ -458,6 +478,17 @@ const TrainingPage = () => {
               onMultiplierSelect={setMultiplier}
               onSubmit={handleDrillThrow}
             />
+
+            {/* Camera toggle */}
+            <div className="mt-3">
+              <Button
+                variant={cameraEnabled ? "default" : "outline"}
+                onClick={() => setCameraEnabled((v) => !v)}
+                className="w-full gap-2"
+              >
+                <Camera className="w-4 h-4" /> {cameraEnabled ? "Kamera aus" : "Kamera-Scoring"}
+              </Button>
+            </div>
           </>
         )}
       </div>
