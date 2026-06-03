@@ -394,8 +394,9 @@ const TrainingPage = () => {
 
         {!drillState.finished && (
           <>
-            {/* Drill status info */}
-            <div className="bg-card rounded-xl border border-border p-4 mb-4 text-center">
+            {/* Drill status info (sticky so it stays visible when the camera is open) */}
+            <div className="sticky top-0 z-30 -mx-4 px-4 pt-2 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 mb-3">
+            <div className="bg-card rounded-xl border border-border p-4 text-center">
               {/* Target display */}
               {selectedDrill.id === "around-the-clock" && (
                 <div>
@@ -449,6 +450,7 @@ const TrainingPage = () => {
               <p className="text-[10px] text-muted-foreground mt-1">
                 Dart {drillState.dartsThisRound + 1} / 3 · Gesamt: {drillState.dartsThrown}
               </p>
+            </div>
             </div>
 
             {/* Checkout suggestion for finish drills */}
