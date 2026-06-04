@@ -14,9 +14,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import {
   playDartDetectedSound,
@@ -105,6 +103,7 @@ const LiveCamera = ({
   const newDartFramesRef = useRef(0);
   const clearFramesRef = useRef(0);
   const scanLockRef = useRef(false);
+  const awaitingThrowResolutionRef = useRef(false);
   const baselineSamplesRef = useRef<number[][]>([]);
 
   const [phase, setPhase] = useState<Phase>("starting");
@@ -138,6 +137,7 @@ const LiveCamera = ({
     newDartFramesRef.current = 0;
     clearFramesRef.current = 0;
     scanLockRef.current = false;
+    awaitingThrowResolutionRef.current = false;
   }, []);
 
   // ── camera lifecycle ──────────────────────────────────────────
@@ -372,6 +372,7 @@ const LiveCamera = ({
           newDartFramesRef.current += 1;
           if (newDartFramesRef.current >= NEW_DART_FRAMES) {
             scanLockRef.current = true;
+            awaitingThrowResolutionRef.current = true;
             newDartFramesRef.current = 0;
             void scanForNewDarts();
           } else {
@@ -400,6 +401,7 @@ const LiveCamera = ({
     const img = captureFrame();
     if (!img) {
       scanLockRef.current = false;
+      awaitingThrowResolutionRef.current = false;
       return;
     }
     setSnapshot(img);
@@ -415,49 +417,92 @@ const LiveCamera = ({
       if (fe) throw fe;
 
       const aiDarts: DetectedDart[] = Array.isArray(data?.darts)
-        ? data.darts.map((d: any) => ({
-            baseValue: Number(d.segment) || 0,
-            multiplier: ([1, 2, 3].includes(Number(d.multiplier))
-              ? Number(d.multiplier)
-              : 1) as 1 | 2 | 3,
-            points: Number(d.points) || 0,
-            confidence: Number(d.confidence) || 0,
-          }))
+        ? data.darts.map((d: unknown) => {
+            const dart = d as Partial<DetectedDart> & {
+              segment?: unknown;
+              multiplier?: unknown;
+              points?: unknown;
+              confidence?: unknown;
+            };
+            return {
+              baseValue: Number(dart.segment) || 0,
+              multiplier: ([1, 2, 3].includes(Number(dart.multiplier))
+                ? Number(dart.multiplier)
+                : 1) as 1 | 2 | 3,
+              points: Number(dart.points) || 0,
+              confidence: Number(dart.confidence) || 0,
+            };
+          })
         : [];
       const conf = Number(data?.overallConfidence) || 0;
       setLastConfidence(conf);
 
-      const prevCount = accumulatedRef.current.length;
-      // AI sees the *total* darts in the board. Anything beyond what we already
-      // logged is considered new.
+      const prevDarts = accumulatedRef.current;
+      const prevCount = prevDarts.length;
+      const compareLength = Math.min(prevCount, aiDarts.length);
+      const sameShape =
+        compareLength === prevCount &&
+        compareLength === aiDarts.length &&
+        prevDarts.slice(0, compareLength).every((dart, index) =>
+          dart.baseValue === aiDarts[index].baseValue &&
+          dart.multiplier === aiDarts[index].multiplier &&
+          dart.points === aiDarts[index].points,
+        );
+
+      const missDart: DetectedDart = {
+        baseValue: 0,
+        multiplier: 1,
+        points: 0,
+        confidence: 0.15,
+      };
+
+      let nextDarts = aiDarts.slice(0, dartsRemaining);
+      let newlyAdded: DetectedDart[] = [];
+      let missAdded = false;
+
       if (aiDarts.length > prevCount) {
-        const newDarts = aiDarts.slice(prevCount, dartsRemaining);
-        // play one ping per new dart, staggered
-        newDarts.forEach((_, i) => {
-          setTimeout(() => playDartDetectedSound(prevCount + i), 120 * i);
-        });
-        setAccumulated((prev) => {
-          const merged = [...prev, ...newDarts].slice(0, dartsRemaining);
-          return merged;
-        });
-        setJustAddedIndex(prevCount);
-        setTimeout(() => setJustAddedIndex(null), 1200);
+        newlyAdded = aiDarts.slice(prevCount, dartsRemaining);
+      } else if (
+        aiDarts.length === prevCount &&
+        awaitingThrowResolutionRef.current &&
+        prevCount < dartsRemaining &&
+        sameShape
+      ) {
+        nextDarts = [...prevDarts, missDart].slice(0, dartsRemaining);
+        newlyAdded = [missDart];
+        missAdded = true;
+      } else {
+        nextDarts = aiDarts.slice(0, dartsRemaining);
       }
 
-      // Always update the round baseline so we only react to the *next* change
+      if (newlyAdded.length > 0 || aiDarts.length !== prevCount || missAdded) {
+        setAccumulated(nextDarts);
+        if (newlyAdded.length > 0) {
+          newlyAdded.forEach((_, i) => {
+            setTimeout(() => playDartDetectedSound(prevCount + i), 120 * i);
+          });
+          setJustAddedIndex(prevCount);
+          setTimeout(() => setJustAddedIndex(null), 1200);
+        }
+      }
+
       const newSig = buildSignature();
       if (newSig) roundBaselineRef.current = newSig;
 
       setSnapshot(null);
       setPhase("live");
       setStatus(
-        aiDarts.length > prevCount
-          ? `Dart ${Math.min(aiDarts.length, dartsRemaining)} erkannt`
-          : "Kein neuer Dart erkannt – warte weiter …",
+        newlyAdded.length > 0
+          ? missAdded
+            ? "Miss erkannt"
+            : `Dart ${Math.min(nextDarts.length, dartsRemaining)} erkannt`
+          : aiDarts.length < prevCount
+            ? "Korrektur uebernommen"
+            : "Kein neuer Dart erkannt – warte weiter …",
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("scan error", err);
-      setError(err?.message || "Erkennung fehlgeschlagen.");
+      setError(err instanceof Error ? err.message : "Erkennung fehlgeschlagen.");
       const newSig = buildSignature();
       if (newSig) roundBaselineRef.current = newSig;
       setSnapshot(null);
@@ -465,6 +510,7 @@ const LiveCamera = ({
       setStatus("Scan unsicher · weiter beobachten");
     } finally {
       scanLockRef.current = false;
+      awaitingThrowResolutionRef.current = false;
     }
   };
 
@@ -845,3 +891,7 @@ const LiveCamera = ({
 };
 
 export default LiveCamera;
+
+
+
+

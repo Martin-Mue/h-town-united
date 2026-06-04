@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera } from "lucide-react";
+import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -17,6 +17,9 @@ import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
   playVictorySound, playTonPlusSound, playTurnSwitchSound,
 } from "@/utils/sounds";
+import { describeDartForSpeech, speakText } from "@/utils/speech";
+
+const SPEECH_PREF_KEY = "dart-speech-enabled";
 
 function createLegState(legNumber: number, startScore: number, startingPlayer: 1 | 2): LegState {
   return { legNumber, startingPlayerId: startingPlayer, player1Remaining: startScore, player2Remaining: startScore, player1Throws: [], player2Throws: [] };
@@ -89,6 +92,11 @@ const GamePage = () => {
   const [p2Name, setP2Name] = useState("Spieler 2");
   const [doubleOut, setDoubleOut] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [speechEnabled, setSpeechEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const raw = window.localStorage.getItem(SPEECH_PREF_KEY);
+    return raw ? raw !== "false" : true;
+  });
   const [game, setGame] = useState<GameState | null>(null);
   const [selectedScore, setSelectedScore] = useState(20);
   const [multiplier, setMultiplier] = useState(1);
@@ -107,6 +115,19 @@ const GamePage = () => {
     supabase.from("players").select("id, name, emoji").order("name").then(({ data }) => {
       if (data) setDbPlayers(data);
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SPEECH_PREF_KEY, JSON.stringify(speechEnabled));
+  }, [speechEnabled]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, []);
 
   const [dartsThisRound, setDartsThisRound] = useState(0);
@@ -294,7 +315,7 @@ const GamePage = () => {
       const myState = isP1 ? { ...prev.player1Cricket! } : { ...prev.player2Cricket! };
       const oppState = isP1 ? prev.player2Cricket! : prev.player1Cricket!;
 
-      if (CRICKET_NUMBERS.includes(targetNumber as any) && targetNumber !== 0) {
+      if (CRICKET_NUMBERS.includes(targetNumber) && targetNumber !== 0) {
         const hitsToAdd = baseValue === 50 ? 2 : mul;
         const currentMarks = myState.marks[targetNumber] || 0;
         const newMarks = currentMarks + hitsToAdd;
@@ -354,7 +375,7 @@ const GamePage = () => {
       turnStartRemaining,
     }]);
 
-    let curGame: GameState = JSON.parse(JSON.stringify(game));
+    const curGame: GameState = JSON.parse(JSON.stringify(game));
     let curDarts = dartsThisRound;
     let curStart = turnStartRemaining;
     let busted = false;
@@ -373,7 +394,7 @@ const GamePage = () => {
         const myState = isP1 ? { ...curGame.player1Cricket! } : { ...curGame.player2Cricket! };
         const oppState = isP1 ? curGame.player2Cricket! : curGame.player1Cricket!;
         const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
-        if (CRICKET_NUMBERS.includes(targetNumber as any) && targetNumber !== 0) {
+        if (CRICKET_NUMBERS.includes(targetNumber) && targetNumber !== 0) {
           const hitsToAdd = d.baseValue === 50 ? 2 : d.multiplier;
           const currentMarks = myState.marks[targetNumber] || 0;
           const newMarks = currentMarks + hitsToAdd;
@@ -475,6 +496,25 @@ const GamePage = () => {
     setDartsThisRound(curDarts);
     setTurnStartRemaining(curStart);
     setPendingCameraDarts([]);
+
+    if (speechEnabled) {
+      const activePlayerName = game.currentPlayerId === 1 ? game.player1Name : game.player2Name;
+      const nextPlayerName = curGame.currentPlayerId === 1 ? curGame.player1Name : curGame.player2Name;
+      const remaining = game.currentPlayerId === 1
+        ? curGame.currentLeg.player1Remaining
+        : curGame.currentLeg.player2Remaining;
+      const dartText = darts.map(describeDartForSpeech).join(", ");
+      const announcement = curGame.isFinished
+        ? `Erkannt: ${dartText}. ${curGame.winnerName} gewinnt.`
+        : checkedOut
+          ? `Erkannt: ${dartText}. Leg gewonnen. ${nextPlayerName} startet das naechste Leg.`
+          : busted
+            ? `Erkannt: ${dartText}. Bust. ${nextPlayerName} ist dran.`
+            : curGame.mode === "cricket"
+              ? `Erkannt: ${dartText}. Runde uebernommen. ${nextPlayerName} ist dran.`
+              : `Erkannt: ${dartText}. ${activePlayerName} hat ${roundTotal} Punkte geworfen. Verbleibend ${remaining}. ${nextPlayerName} ist dran.`;
+      window.setTimeout(() => speakText(announcement), 160);
+    }
 
     if (soundEnabled) {
       if (checkedOut) {
@@ -713,6 +753,14 @@ const GamePage = () => {
               <Label className="text-sm font-medium">Sound & Haptik</Label>
             </div>
             <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+          </div>
+
+          <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              {speechEnabled ? <Mic className="w-4 h-4 text-primary" /> : <MicOff className="w-4 h-4 text-muted-foreground" />}
+              <Label className="text-sm font-medium">Sprachausgabe</Label>
+            </div>
+            <Switch checked={speechEnabled} onCheckedChange={setSpeechEnabled} />
           </div>
 
           <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
