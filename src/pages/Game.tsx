@@ -101,6 +101,7 @@ const GamePage = () => {
   const [dbPlayers, setDbPlayers] = useState<DbPlayer[]>([]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
 
   useEffect(() => {
     supabase.from("players").select("id, name, emoji").order("name").then(({ data }) => {
@@ -473,6 +474,7 @@ const GamePage = () => {
     setGame(curGame);
     setDartsThisRound(curDarts);
     setTurnStartRemaining(curStart);
+    setPendingCameraDarts([]);
 
     if (soundEnabled) {
       if (checkedOut) {
@@ -810,6 +812,13 @@ const GamePage = () => {
           const p180 = count180s(p.throws);
           const isActive = game.currentPlayerId === p.playerId;
           const activeRound = isActive ? currentRoundScores : [];
+          const pendingTotal = isActive && cameraEnabled
+            ? pendingCameraDarts.reduce((s, d) => s + d.points, 0)
+            : 0;
+          const previewRemaining = !isCricket && pendingTotal > 0
+            ? Math.max(0, p.remaining - pendingTotal)
+            : p.remaining;
+          const showPreview = pendingTotal > 0 && !isCricket;
           return (
             <div key={p.playerId}
               className={`bg-card rounded-xl p-4 border-2 transition-all text-center ${isActive ? "border-primary glow-cyan" : "border-border opacity-80"}`}>
@@ -817,7 +826,28 @@ const GamePage = () => {
                 {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse-glow" />}
                 <p className={`text-sm truncate ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>{p.name}</p>
               </div>
-              <p className={`text-4xl font-display mt-1 ${isActive ? "text-foreground" : "text-muted-foreground"}`}>{isCricket ? p.cricket?.points ?? 0 : p.remaining}</p>
+              <p className={`text-4xl font-display mt-1 transition-colors ${
+                showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
+              }`}>
+                {isCricket ? p.cricket?.points ?? 0 : previewRemaining}
+              </p>
+              {showPreview && (
+                <p className="text-[10px] text-muted-foreground -mt-1">
+                  ({p.remaining} − {pendingTotal} live)
+                </p>
+              )}
+              {isActive && cameraEnabled && pendingCameraDarts.length > 0 && (
+                <div className="mt-1 flex items-center justify-center gap-1">
+                  {pendingCameraDarts.map((t, i) => {
+                    const lbl = t.baseValue === 0 ? "M" : t.baseValue === 25 ? (t.multiplier === 2 ? "BULL" : "25") : `${t.multiplier === 2 ? "D" : t.multiplier === 3 ? "T" : ""}${t.baseValue}`;
+                    return (
+                      <span key={i} className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-display text-accent ring-1 ring-accent/40">
+                        {lbl}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
               {isActive && activeRound.length > 0 && (
                 <div className="mt-1 flex items-center justify-center gap-1">
                   {activeRound.map((t, i) => {
@@ -873,8 +903,9 @@ const GamePage = () => {
       {cameraEnabled && (
         <LiveCamera
           enabled={cameraEnabled}
-          onClose={() => setCameraEnabled(false)}
+          onClose={() => { setCameraEnabled(false); setPendingCameraDarts([]); }}
           onRoundCommit={submitDetectedRound}
+          onPendingChange={setPendingCameraDarts}
           dartsRemaining={Math.max(1, 3 - dartsThisRound)}
           playerName={currentPlayerName}
         />

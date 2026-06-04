@@ -1,11 +1,28 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { AlertCircle, Camera, Check, ChevronDown, ChevronUp, Loader2, RotateCcw, ScanLine, Target, X, Zap } from "lucide-react";
+import {
+  AlertCircle,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  RotateCcw,
+  ScanLine,
+  Target,
+  Trash2,
+  X,
+  Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
-import { playDartDetectedSound, playRoundCommittedSound, playScanStartSound } from "@/utils/sounds";
+import {
+  playDartDetectedSound,
+  playRoundCommittedSound,
+  playScanStartSound,
+} from "@/utils/sounds";
 
 export interface DetectedDart {
   baseValue: number;
@@ -16,13 +33,14 @@ export interface DetectedDart {
 
 interface LiveCameraProps {
   onRoundCommit: (darts: DetectedDart[]) => void;
+  onPendingChange?: (darts: DetectedDart[]) => void;
   enabled: boolean;
   onClose: () => void;
   dartsRemaining?: number;
   playerName?: string;
 }
 
-type Phase = "starting" | "detecting" | "baselining" | "live" | "scanning" | "review" | "error";
+type Phase = "starting" | "detecting" | "baselining" | "live" | "scanning" | "error";
 
 interface Calibration {
   x: number;
@@ -32,21 +50,19 @@ interface Calibration {
 }
 
 const CALIB_KEY = "dartcam-calibration-v3";
-const AUTO_KEY = "dartcam-auto-commit-v1";
 const GRID = 32;
-// thresholds tuned for fewer false triggers
 const MOTION_STILL = 0.020;        // frame-to-frame diff considered "still"
-const OCCUPIED_DELTA = 0.085;      // baseline diff to consider darts present
-const CLEAR_DELTA = 0.035;         // baseline diff to consider board free again
-const STILL_FRAMES_REQUIRED = 4;   // ~1.4s at 350ms
-const OCCUPIED_FRAMES_REQUIRED = 5;// ~1.75s of stable presence
-const AUTO_COMMIT_CONFIDENCE = 0.78;
-const AUTO_COMMIT_COUNTDOWN_MS = 1800;
+const NEW_DART_DELTA = 0.045;      // signature jump vs last stable state → new dart landed
+const CLEAR_DELTA = 0.030;         // signature diff vs empty baseline → board is free
+const STILL_FRAMES_REQUIRED = 3;   // ~1s at 350ms
+const NEW_DART_FRAMES = 3;         // stable frames after a jump before we scan
+const CLEAR_FRAMES_REQUIRED = 4;   // stable frames of empty board before commit
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 const loadCalib = (): Calibration => {
-  if (typeof window === "undefined") return { x: 0.5, y: 0.5, size: 0.82, baseline: null };
+  if (typeof window === "undefined")
+    return { x: 0.5, y: 0.5, size: 0.82, baseline: null };
   try {
     const raw = window.localStorage.getItem(CALIB_KEY);
     if (!raw) return { x: 0.5, y: 0.5, size: 0.82, baseline: null };
@@ -55,42 +71,60 @@ const loadCalib = (): Calibration => {
       x: clamp(Number(p?.x) || 0.5, 0.15, 0.85),
       y: clamp(Number(p?.y) || 0.5, 0.15, 0.85),
       size: clamp(Number(p?.size) || 0.82, 0.4, 0.98),
-      baseline: Array.isArray(p?.baseline) ? p.baseline.map((n: unknown) => Number(n) || 0) : null,
+      baseline: Array.isArray(p?.baseline)
+        ? p.baseline.map((n: unknown) => Number(n) || 0)
+        : null,
     };
   } catch {
     return { x: 0.5, y: 0.5, size: 0.82, baseline: null };
   }
 };
 
-const loadAuto = () => typeof window !== "undefined" && window.localStorage.getItem(AUTO_KEY) !== "false";
+const dartLabel = (d: DetectedDart) => {
+  if (d.baseValue === 0) return "Miss";
+  if (d.baseValue === 25) return d.multiplier === 2 ? "Bull 50" : "Bull 25";
+  const prefix = d.multiplier === 2 ? "D" : d.multiplier === 3 ? "T" : "";
+  return `${prefix}${d.baseValue}`;
+};
 
-const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playerName }: LiveCameraProps) => {
+const LiveCamera = ({
+  onRoundCommit,
+  onPendingChange,
+  enabled,
+  onClose,
+  dartsRemaining = 3,
+  playerName,
+}: LiveCameraProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const prevSigRef = useRef<number[] | null>(null);
+  const roundBaselineRef = useRef<number[] | null>(null); // updated after each detected dart
   const stillFramesRef = useRef(0);
-  const occupiedFramesRef = useRef(0);
+  const newDartFramesRef = useRef(0);
   const clearFramesRef = useRef(0);
-  const waitingClearRef = useRef(false);
   const scanLockRef = useRef(false);
   const baselineSamplesRef = useRef<number[][]>([]);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
-  const [detected, setDetected] = useState<DetectedDart[]>([]);
+  const [accumulated, setAccumulated] = useState<DetectedDart[]>([]);
+  const accumulatedRef = useRef<DetectedDart[]>([]);
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [status, setStatus] = useState("Kamera startet …");
   const [motion, setMotion] = useState(0);
   const [boardDelta, setBoardDelta] = useState(0);
-  const [confidence, setConfidence] = useState(0);
-  const [autoCommit, setAutoCommit] = useState(loadAuto);
+  const [lastConfidence, setLastConfidence] = useState(0);
   const [calib, setCalib] = useState<Calibration>(() => loadCalib());
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [autoCommitIn, setAutoCommitIn] = useState<number | null>(null);
-  const autoCommitTimerRef = useRef<number | null>(null);
-  const pendingCommitRef = useRef<DetectedDart[] | null>(null);
+  const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
+
+  // ── refs in sync with state ───────────────────────────────────
+  useEffect(() => {
+    accumulatedRef.current = accumulated;
+    onPendingChange?.(accumulated);
+  }, [accumulated, onPendingChange]);
 
   // persist calibration
   useEffect(() => {
@@ -98,17 +132,11 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
     window.localStorage.setItem(CALIB_KEY, JSON.stringify(calib));
   }, [calib]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(AUTO_KEY, autoCommit ? "true" : "false");
-  }, [autoCommit]);
-
   const resetLoop = useCallback(() => {
     prevSigRef.current = null;
     stillFramesRef.current = 0;
-    occupiedFramesRef.current = 0;
+    newDartFramesRef.current = 0;
     clearFramesRef.current = 0;
-    waitingClearRef.current = false;
     scanLockRef.current = false;
   }, []);
 
@@ -121,7 +149,11 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
         setPhase("starting");
         setStatus("Kamera startet …");
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
           audio: false,
         });
         if (cancelled) {
@@ -133,8 +165,9 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
         }
-        // give the video a moment to deliver frames, then auto-detect the board
-        setTimeout(() => { if (!cancelled) void autoDetectBoard(); }, 700);
+        setTimeout(() => {
+          if (!cancelled) void autoDetectBoard();
+        }, 700);
       } catch (err) {
         console.error("camera error", err);
         setError("Kamerazugriff nicht möglich. Bitte Berechtigung erteilen.");
@@ -145,10 +178,6 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
       cancelled = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
-      if (autoCommitTimerRef.current) {
-        window.clearInterval(autoCommitTimerRef.current);
-        autoCommitTimerRef.current = null;
-      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
@@ -201,7 +230,9 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
         const dy = y + 0.5 - r;
         if (dx * dx + dy * dy > (r - 1) ** 2) continue;
         const i = (y * GRID + x) * 4;
-        sig.push((data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) / 255);
+        sig.push(
+          (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) / 255,
+        );
       }
     }
     return sig;
@@ -223,14 +254,12 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
   const autoDetectBoard = async () => {
     const v = videoRef.current;
     if (!v || !v.videoWidth) {
-      // try again with full-frame snapshot if crop fails
       startBaselining();
       return;
     }
     setPhase("detecting");
     setStatus("Suche Dartboard …");
     try {
-      // capture the *full* video frame, not the current crop
       const c = canvasRef.current;
       if (!c) throw new Error("no canvas");
       const minSide = Math.min(v.videoWidth, v.videoHeight);
@@ -246,7 +275,6 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
         body: { imageBase64: dataUrl, detectBoard: true },
       });
       if (data?.board && Number(data.board.confidence) >= 0.4) {
-        // board coordinates are relative to the cropped square we sent → map back
         const nx = clamp(Number(data.board.cx) || 0.5, 0.1, 0.9);
         const ny = clamp(Number(data.board.cy) || 0.5, 0.1, 0.9);
         const nsize = clamp((Number(data.board.size) || 0.78) * 1.08, 0.5, 0.98);
@@ -265,8 +293,9 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
       setPhase("baselining");
       setStatus("Halte das Board frei – Kalibrierung läuft …");
     } else {
+      roundBaselineRef.current = calib.baseline;
       setPhase("live");
-      setStatus("Bereit – warte auf Würfe");
+      setStatus("Bereit – wirf deinen ersten Dart");
       resetLoop();
     }
   };
@@ -285,22 +314,24 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
       setMotion(m);
       stillFramesRef.current = m < MOTION_STILL ? stillFramesRef.current + 1 : 0;
 
-      // baselining: collect samples once still
+      // ── baselining: average a few still frames into the empty signature
       if (phase === "baselining") {
         if (stillFramesRef.current >= 2) {
           baselineSamplesRef.current.push(sig);
           setStatus(`Kalibriere … ${baselineSamplesRef.current.length}/4`);
           if (baselineSamplesRef.current.length >= 4) {
-            // average the samples
             const len = sig.length;
             const avg = new Array(len).fill(0);
-            for (const s of baselineSamplesRef.current) for (let i = 0; i < len; i++) avg[i] += s[i];
-            for (let i = 0; i < len; i++) avg[i] /= baselineSamplesRef.current.length;
+            for (const s of baselineSamplesRef.current)
+              for (let i = 0; i < len; i++) avg[i] += s[i];
+            for (let i = 0; i < len; i++)
+              avg[i] /= baselineSamplesRef.current.length;
             setCalib((prev) => ({ ...prev, baseline: avg }));
+            roundBaselineRef.current = avg;
             baselineSamplesRef.current = [];
             resetLoop();
             setPhase("live");
-            setStatus("Board kalibriert · bereit für Würfe");
+            setStatus("Board kalibriert · wirf deinen ersten Dart");
           }
         } else {
           setStatus("Board frei halten – warte auf ruhiges Bild …");
@@ -310,120 +341,128 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
 
       if (!calib.baseline) return;
 
-      const delta = sigDiff(calib.baseline, sig);
-      setBoardDelta(delta);
+      const deltaFromEmpty = sigDiff(calib.baseline, sig);
+      const deltaFromRound = sigDiff(roundBaselineRef.current, sig);
+      setBoardDelta(deltaFromEmpty);
 
-      if (waitingClearRef.current) {
-        clearFramesRef.current =
-          delta < CLEAR_DELTA && stillFramesRef.current >= 2 ? clearFramesRef.current + 1 : 0;
-        setStatus(delta < CLEAR_DELTA ? "Board wird frei …" : "Warte bis die Darts gezogen sind …");
-        if (clearFramesRef.current >= 3) {
-          waitingClearRef.current = false;
-          resetLoop();
-          setStatus("Board frei · bereit für nächsten Wurf");
+      const accCount = accumulatedRef.current.length;
+
+      // ── waiting for board to clear → commit round
+      if (accCount > 0 && deltaFromEmpty < CLEAR_DELTA && stillFramesRef.current >= 2) {
+        clearFramesRef.current += 1;
+        setStatus(`Darts werden gezogen … ${clearFramesRef.current}/${CLEAR_FRAMES_REQUIRED}`);
+        if (clearFramesRef.current >= CLEAR_FRAMES_REQUIRED) {
+          const toCommit = accumulatedRef.current;
+          if (toCommit.length > 0) {
+            commitRound(toCommit);
+          }
         }
         return;
+      } else {
+        clearFramesRef.current = 0;
       }
 
-      const occupied = delta > OCCUPIED_DELTA;
-      if (occupied && stillFramesRef.current >= STILL_FRAMES_REQUIRED) {
-        occupiedFramesRef.current += 1;
-        if (occupiedFramesRef.current >= OCCUPIED_FRAMES_REQUIRED && !scanLockRef.current) {
-          scanLockRef.current = true;
-          void scanBoard(true);
+      // ── waiting for a NEW dart since last stable state
+      if (
+        !scanLockRef.current &&
+        accCount < dartsRemaining &&
+        deltaFromRound > NEW_DART_DELTA
+      ) {
+        if (stillFramesRef.current >= STILL_FRAMES_REQUIRED) {
+          newDartFramesRef.current += 1;
+          if (newDartFramesRef.current >= NEW_DART_FRAMES) {
+            scanLockRef.current = true;
+            newDartFramesRef.current = 0;
+            void scanForNewDarts();
+          } else {
+            setStatus(
+              `Neuer Dart erkannt · stabilisiere … ${newDartFramesRef.current}/${NEW_DART_FRAMES}`,
+            );
+          }
         } else {
-          setStatus(`Würfe erkannt · stabilisiere … ${occupiedFramesRef.current}/${OCCUPIED_FRAMES_REQUIRED}`);
+          setStatus("Bewegung erkannt – warte bis Dart still steht …");
         }
-      } else if (occupied) {
-        setStatus("Bewegung erkannt …");
+      } else if (accCount >= dartsRemaining) {
+        setStatus(`${accCount} Darts erkannt · Darts ziehen zum Übernehmen`);
+      } else if (accCount > 0) {
+        setStatus(`${accCount}/${dartsRemaining} Darts erkannt · wirf nächsten Dart`);
       } else {
-        occupiedFramesRef.current = 0;
-        setStatus("Board frei · warte auf Würfe");
+        setStatus("Bereit – wirf deinen ersten Dart");
       }
     }, 350);
 
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, phase, calib.baseline, autoCommit]);
+  }, [enabled, phase, calib.baseline, dartsRemaining]);
 
-  // ── scanning ──────────────────────────────────────────────────
-  const scanBoard = async (automatic: boolean) => {
+  // ── scan & append only newly arrived darts ────────────────────
+  const scanForNewDarts = async () => {
     const img = captureFrame();
     if (!img) {
       scanLockRef.current = false;
-      setError("Kamerabild nicht verfügbar.");
       return;
     }
     setSnapshot(img);
     setPhase("scanning");
     setError(null);
     playScanStartSound();
-    setStatus(automatic ? "Automatischer Scan läuft …" : "Scan läuft …");
+    setStatus("Erkenne neuen Dart …");
 
     try {
-      const { data, error: fe } = await supabase.functions.invoke("analyze-dartboard", { body: { imageBase64: img } });
+      const { data, error: fe } = await supabase.functions.invoke("analyze-dartboard", {
+        body: { imageBase64: img },
+      });
       if (fe) throw fe;
-      if (data?.error && (!Array.isArray(data?.darts) || data.darts.length === 0)) throw new Error(data.error);
 
-      const darts: DetectedDart[] = Array.isArray(data?.darts)
-        ? data.darts.slice(0, dartsRemaining).map((d: any) => ({
+      const aiDarts: DetectedDart[] = Array.isArray(data?.darts)
+        ? data.darts.map((d: any) => ({
             baseValue: Number(d.segment) || 0,
-            multiplier: ([1, 2, 3].includes(Number(d.multiplier)) ? Number(d.multiplier) : 1) as 1 | 2 | 3,
+            multiplier: ([1, 2, 3].includes(Number(d.multiplier))
+              ? Number(d.multiplier)
+              : 1) as 1 | 2 | 3,
             points: Number(d.points) || 0,
             confidence: Number(d.confidence) || 0,
           }))
         : [];
       const conf = Number(data?.overallConfidence) || 0;
-      setConfidence(conf);
+      setLastConfidence(conf);
 
-      // automatic mode: if AI reports no darts but we thought the board was occupied,
-      // it was likely a false trigger → reset and keep watching, no review screen.
-      if (automatic && darts.length === 0) {
-        scanLockRef.current = false;
-        occupiedFramesRef.current = 0;
-        setSnapshot(null);
-        setPhase("live");
-        setStatus("Kein sicherer Treffer – warte weiter …");
-        return;
+      const prevCount = accumulatedRef.current.length;
+      // AI sees the *total* darts in the board. Anything beyond what we already
+      // logged is considered new.
+      if (aiDarts.length > prevCount) {
+        const newDarts = aiDarts.slice(prevCount, dartsRemaining);
+        // play one ping per new dart, staggered
+        newDarts.forEach((_, i) => {
+          setTimeout(() => playDartDetectedSound(prevCount + i), 120 * i);
+        });
+        setAccumulated((prev) => {
+          const merged = [...prev, ...newDarts].slice(0, dartsRemaining);
+          return merged;
+        });
+        setJustAddedIndex(prevCount);
+        setTimeout(() => setJustAddedIndex(null), 1200);
       }
 
-      // play a ping per detected dart so the user can hear what was recognised
-      darts.forEach((_, i) => {
-        setTimeout(() => playDartDetectedSound(i), 120 * i);
-      });
+      // Always update the round baseline so we only react to the *next* change
+      const newSig = buildSignature();
+      if (newSig) roundBaselineRef.current = newSig;
 
-      setDetected(darts);
-      setPhase("review");
-
-      if (automatic && autoCommit && darts.length > 0 && conf >= AUTO_COMMIT_CONFIDENCE) {
-        // give the user a moment to interrupt before we commit automatically
-        pendingCommitRef.current = darts;
-        const start = Date.now();
-        setAutoCommitIn(Math.ceil(AUTO_COMMIT_COUNTDOWN_MS / 1000));
-        if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
-        autoCommitTimerRef.current = window.setInterval(() => {
-          const left = Math.max(0, AUTO_COMMIT_COUNTDOWN_MS - (Date.now() - start));
-          setAutoCommitIn(Math.ceil(left / 1000));
-          if (left <= 0) {
-            if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
-            autoCommitTimerRef.current = null;
-            const d = pendingCommitRef.current;
-            pendingCommitRef.current = null;
-            setAutoCommitIn(null);
-            if (d) commitRound(d);
-          }
-        }, 200);
-        setStatus(`Übernehme automatisch in ${Math.ceil(AUTO_COMMIT_COUNTDOWN_MS / 1000)}s – tippe zum Anpassen`);
-      } else {
-        setStatus(darts.length ? "Erkennung prüfen" : "Keine sicheren Treffer – bitte prüfen");
-      }
+      setSnapshot(null);
+      setPhase("live");
+      setStatus(
+        aiDarts.length > prevCount
+          ? `Dart ${Math.min(aiDarts.length, dartsRemaining)} erkannt`
+          : "Kein neuer Dart erkannt – warte weiter …",
+      );
     } catch (err: any) {
       console.error("scan error", err);
-      setDetected([]);
-      setConfidence(0);
-      setError(err?.message || "Erkennung fehlgeschlagen. Bitte erneut versuchen oder manuell eintragen.");
-      setPhase("review");
-      setStatus("Scan unsicher · bitte prüfen");
+      setError(err?.message || "Erkennung fehlgeschlagen.");
+      const newSig = buildSignature();
+      if (newSig) roundBaselineRef.current = newSig;
+      setSnapshot(null);
+      setPhase("live");
+      setStatus("Scan unsicher · weiter beobachten");
     } finally {
       scanLockRef.current = false;
     }
@@ -432,36 +471,30 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
   const commitRound = (darts: DetectedDart[]) => {
     onRoundCommit(darts.slice(0, dartsRemaining));
     playRoundCommittedSound();
-    setDetected([]);
+    setAccumulated([]);
+    accumulatedRef.current = [];
     setSnapshot(null);
     setError(null);
-    waitingClearRef.current = true;
     resetLoop();
-    waitingClearRef.current = true; // resetLoop clears it; re-set
-    if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
-    autoCommitTimerRef.current = null;
-    pendingCommitRef.current = null;
-    setAutoCommitIn(null);
+    // empty board is the new round baseline
+    roundBaselineRef.current = calib.baseline;
     setPhase("live");
-    setStatus("Runde übernommen · bitte Darts ziehen");
+    setStatus("Runde übernommen · bereit für nächsten Wurf");
   };
 
-  const rescan = () => {
-    setDetected([]);
-    setSnapshot(null);
+  const discardRound = () => {
+    setAccumulated([]);
+    accumulatedRef.current = [];
     setError(null);
-    if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
-    autoCommitTimerRef.current = null;
-    pendingCommitRef.current = null;
-    setAutoCommitIn(null);
     resetLoop();
-    setPhase("live");
-    setStatus("Neuer Scan – warte auf Würfe …");
+    roundBaselineRef.current = calib.baseline;
+    setStatus("Runde verworfen · bereit für nächsten Wurf");
   };
 
   const recalibrate = () => {
     setCalib((prev) => ({ ...prev, baseline: null }));
-    setDetected([]);
+    setAccumulated([]);
+    accumulatedRef.current = [];
     setSnapshot(null);
     resetLoop();
     setPhase("baselining");
@@ -469,24 +502,37 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
     baselineSamplesRef.current = [];
   };
 
-  const adjustDart = (i: number, field: "baseValue" | "multiplier", value: number) => {
-    if (autoCommitTimerRef.current) {
-      window.clearInterval(autoCommitTimerRef.current);
-      autoCommitTimerRef.current = null;
-      pendingCommitRef.current = null;
-      setAutoCommitIn(null);
-      setStatus("Erkennung prüfen");
+  const manualScan = () => {
+    if (!scanLockRef.current) {
+      scanLockRef.current = true;
+      void scanForNewDarts();
     }
-    setDetected((prev) => {
+  };
+
+  const removeDart = (i: number) => {
+    setAccumulated((prev) => prev.filter((_, k) => k !== i));
+  };
+
+  const adjustDart = (
+    i: number,
+    field: "baseValue" | "multiplier",
+    value: number,
+  ) => {
+    setAccumulated((prev) => {
       const next = [...prev];
       const d = { ...next[i], [field]: value };
-      d.points = d.baseValue === 25 ? (d.multiplier === 2 ? 50 : 25) : d.baseValue * d.multiplier;
+      d.points =
+        d.baseValue === 25
+          ? d.multiplier === 2
+            ? 50
+            : 25
+          : d.baseValue * d.multiplier;
       next[i] = d;
       return next;
     });
   };
 
-  const roundTotal = detected.reduce((s, d) => s + d.points, 0);
+  const roundTotal = accumulated.reduce((s, d) => s + d.points, 0);
 
   return (
     <div className="mb-3 space-y-2 rounded-xl border border-border bg-card p-3">
@@ -494,7 +540,9 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Camera className="h-4 w-4 text-primary" />
-          <span className="font-display text-sm uppercase tracking-wider">Auto-Scoring</span>
+          <span className="font-display text-sm uppercase tracking-wider">
+            Live-Erkennung
+          </span>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7">
           <X className="h-4 w-4" />
@@ -502,18 +550,25 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
       </div>
 
       <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
-        {phase === "review" && snapshot ? (
-          <img src={snapshot} alt="Letzter Scan" className="h-full w-full object-cover" />
-        ) : (
-          <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
-        )}
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          className="h-full w-full object-cover"
+        />
         <canvas ref={canvasRef} className="hidden" />
 
         {/* board overlay */}
         {(phase === "live" || phase === "scanning" || phase === "baselining" || phase === "detecting") && (
           <div className="pointer-events-none absolute inset-0">
             <div
-              className={`absolute rounded-full border-2 ${phase === "baselining" ? "border-accent animate-pulse" : "border-primary"}`}
+              className={`absolute rounded-full border-2 ${
+                phase === "baselining"
+                  ? "border-accent animate-pulse"
+                  : phase === "scanning"
+                    ? "border-accent animate-pulse-glow"
+                    : "border-primary"
+              }`}
               style={{
                 width: `${calib.size * 100}%`,
                 height: `${calib.size * 100}%`,
@@ -535,8 +590,8 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
           </div>
         )}
         {phase === "scanning" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/75 text-sm text-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Erkenne Darts…
+          <div className="absolute inset-0 flex items-center justify-center bg-background/60 text-sm text-foreground">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Analysiere neuen Dart…
           </div>
         )}
         {phase === "error" && (
@@ -546,7 +601,7 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
         )}
       </div>
 
-      {/* compact status bar */}
+      {/* status bar */}
       <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
         <div className="flex min-w-0 items-center gap-2">
           <span
@@ -555,18 +610,19 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
                 ? "bg-secondary animate-pulse-glow"
                 : phase === "scanning"
                   ? "bg-primary animate-pulse"
-                  : phase === "review"
-                    ? "bg-accent"
-                    : phase === "error"
-                      ? "bg-destructive"
-                      : "bg-muted-foreground"
+                  : phase === "error"
+                    ? "bg-destructive"
+                    : "bg-muted-foreground"
             }`}
           />
           <div className="min-w-0">
             <p className="truncate font-medium text-foreground">
               {playerName ?? "Auto-Scoring"}
-              {typeof dartsRemaining === "number" && phase !== "review" && (
-                <span className="ml-1 text-muted-foreground">· noch {dartsRemaining} Dart{dartsRemaining === 1 ? "" : "s"}</span>
+              {accumulated.length < dartsRemaining && (
+                <span className="ml-1 text-muted-foreground">
+                  · noch {dartsRemaining - accumulated.length} Dart
+                  {dartsRemaining - accumulated.length === 1 ? "" : "s"}
+                </span>
               )}
             </p>
             <p className="truncate text-muted-foreground">{status}</p>
@@ -578,185 +634,211 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
         </div>
       </div>
 
-      {/* primary actions */}
-      {phase === "live" && (
-        <div className="flex gap-2">
-          <Button onClick={() => scanBoard(false)} className="flex-1 gap-2 font-display uppercase" size="sm">
-            <ScanLine className="h-4 w-4" /> Jetzt scannen
-          </Button>
-          <Button variant="outline" size="sm" onClick={recalibrate} className="gap-1" title="Board neu kalibrieren">
-            <RotateCcw className="h-4 w-4" /> Neu kalibrieren
-          </Button>
+      {/* live accumulated darts */}
+      <div className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-3">
+        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Zap className="h-3 w-3 text-accent" /> Aktuelle Runde
+          </span>
+          <span>
+            {accumulated.length}/{dartsRemaining}
+            {lastConfidence > 0 && (
+              <span className="ml-2">KI {(lastConfidence * 100).toFixed(0)}%</span>
+            )}
+          </span>
+        </div>
+        <div className="mt-1 flex items-end justify-between">
+          <div className="flex flex-wrap gap-1.5">
+            {Array.from({ length: dartsRemaining }).map((_, i) => {
+              const d = accumulated[i];
+              if (!d) {
+                return (
+                  <span
+                    key={`slot-${i}`}
+                    className="inline-flex h-7 w-14 items-center justify-center rounded-md border border-dashed border-border/60 text-[10px] text-muted-foreground"
+                  >
+                    Dart {i + 1}
+                  </span>
+                );
+              }
+              return (
+                <span
+                  key={`dart-${i}`}
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-display ${
+                    d.points === 0
+                      ? "border-muted bg-muted/40 text-muted-foreground"
+                      : "border-primary/60 bg-primary/20 text-primary"
+                  } ${justAddedIndex === i ? "animate-scale-in ring-2 ring-accent" : ""}`}
+                >
+                  <Target className="h-3 w-3 opacity-70" />
+                  {dartLabel(d)} <span className="text-foreground/90">· {d.points}</span>
+                </span>
+              );
+            })}
+          </div>
+          <div className="ml-3 shrink-0 text-right">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Summe
+            </div>
+            <div className="font-display text-3xl leading-none text-primary">
+              {roundTotal}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* per-dart inline editor (compact) */}
+      {accumulated.length > 0 && (
+        <div className="space-y-1.5">
+          {accumulated.map((dart, i) => (
+            <div key={i} className="flex items-center gap-2 rounded-lg bg-muted p-2">
+              <span className="w-10 text-[10px] text-muted-foreground">Dart {i + 1}</span>
+              <select
+                value={dart.multiplier}
+                onChange={(e) => adjustDart(i, "multiplier", Number(e.target.value))}
+                className="rounded border border-border bg-background px-1 py-1 text-xs"
+                disabled={dart.baseValue === 0}
+              >
+                <option value={1}>S</option>
+                <option value={2}>D</option>
+                <option value={3}>T</option>
+              </select>
+              <select
+                value={dart.baseValue}
+                onChange={(e) => adjustDart(i, "baseValue", Number(e.target.value))}
+                className="flex-1 rounded border border-border bg-background px-1 py-1 text-xs"
+              >
+                <option value={0}>Miss</option>
+                {Array.from({ length: 20 }, (_, k) => k + 1).map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+                <option value={25}>Bull (25/50)</option>
+              </select>
+              <span className="w-10 text-right font-display text-primary">{dart.points}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => removeDart(i)}
+                title="Dart entfernen"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
         </div>
       )}
-      {phase === "baselining" && (
-        <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => { baselineSamplesRef.current = []; resetLoop(); }}>
-          <RotateCcw className="h-4 w-4" /> Kalibrierung neu starten
-        </Button>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
       )}
+
+      {/* primary actions */}
+      <div className="flex gap-2">
+        <Button
+          onClick={manualScan}
+          className="flex-1 gap-2 font-display uppercase"
+          size="sm"
+          variant="outline"
+          disabled={phase !== "live"}
+        >
+          <ScanLine className="h-4 w-4" /> Manuell scannen
+        </Button>
+        {accumulated.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={discardRound}
+            className="gap-1"
+            title="Erkannte Darts verwerfen"
+          >
+            <RotateCcw className="h-4 w-4" /> Verwerfen
+          </Button>
+        )}
+        {accumulated.length > 0 && (
+          <Button
+            size="sm"
+            onClick={() => commitRound(accumulated)}
+            className="gap-1"
+            title="Runde sofort übernehmen"
+          >
+            <Check className="h-4 w-4" /> Übernehmen
+          </Button>
+        )}
+      </div>
 
       {/* advanced (collapsible) */}
       <button
         onClick={() => setShowAdvanced((v) => !v)}
         className="flex w-full items-center justify-between rounded border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted"
       >
-        <span>Feinjustierung & Auto-Übernahme</span>
-        {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        <span>Feinjustierung & Kalibrierung</span>
+        {showAdvanced ? (
+          <ChevronUp className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5" />
+        )}
       </button>
       {showAdvanced && (
         <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-2 text-xs">
-          <div className="flex items-center justify-between rounded-md bg-background/60 px-2 py-1.5">
-            <div>
-              <Label htmlFor="auto-commit" className="text-xs">Auto bestätigen</Label>
-              <p className="text-[10px] text-muted-foreground">Nur bei hoher KI-Sicherheit</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={recalibrate}
+            className="w-full gap-1"
+          >
+            <RotateCcw className="h-4 w-4" /> Board neu kalibrieren
+          </Button>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>Horizontal</span>
+              <span>{Math.round(calib.x * 100)}%</span>
             </div>
-            <Switch id="auto-commit" checked={autoCommit} onCheckedChange={setAutoCommit} />
+            <Slider
+              value={[calib.x]}
+              min={0.15}
+              max={0.85}
+              step={0.01}
+              onValueChange={([x]) => setCalib((p) => ({ ...p, x }))}
+            />
           </div>
           <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground"><span>Horizontal</span><span>{Math.round(calib.x * 100)}%</span></div>
-            <Slider value={[calib.x]} min={0.15} max={0.85} step={0.01} onValueChange={([x]) => setCalib((p) => ({ ...p, x }))} />
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>Vertikal</span>
+              <span>{Math.round(calib.y * 100)}%</span>
+            </div>
+            <Slider
+              value={[calib.y]}
+              min={0.15}
+              max={0.85}
+              step={0.01}
+              onValueChange={([y]) => setCalib((p) => ({ ...p, y }))}
+            />
           </div>
           <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground"><span>Vertikal</span><span>{Math.round(calib.y * 100)}%</span></div>
-            <Slider value={[calib.y]} min={0.15} max={0.85} step={0.01} onValueChange={([y]) => setCalib((p) => ({ ...p, y }))} />
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground"><span>Größe</span><span>{Math.round(calib.size * 100)}%</span></div>
-            <Slider value={[calib.size]} min={0.4} max={0.98} step={0.01} onValueChange={([size]) => setCalib((p) => ({ ...p, size }))} />
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>Größe</span>
+              <span>{Math.round(calib.size * 100)}%</span>
+            </div>
+            <Slider
+              value={[calib.size]}
+              min={0.4}
+              max={0.98}
+              step={0.01}
+              onValueChange={([size]) => setCalib((p) => ({ ...p, size }))}
+            />
           </div>
         </div>
       )}
 
-      {/* review */}
-      {phase === "review" && (
-        <div className="space-y-2 animate-scale-in">
-          {error && (
-            <div className="flex items-start gap-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Big detected-score summary */}
-          <div className="rounded-xl border border-primary/40 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-3">
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
-              <span className="flex items-center gap-1"><Zap className="h-3 w-3 text-accent" /> Erkannt</span>
-              <span>KI {(confidence * 100).toFixed(0)}%</span>
-            </div>
-            <div className="mt-1 flex items-end justify-between">
-              <div className="flex flex-wrap gap-1.5">
-                {detected.length === 0 && (
-                  <span className="text-xs text-muted-foreground">Keine sicheren Treffer</span>
-                )}
-                {detected.map((d, i) => {
-                  const label = d.baseValue === 0
-                    ? "Miss"
-                    : d.baseValue === 25
-                      ? (d.multiplier === 2 ? "Bull 50" : "Bull 25")
-                      : `${d.multiplier === 1 ? "" : d.multiplier === 2 ? "D" : "T"}${d.baseValue}`;
-                  return (
-                    <span
-                      key={i}
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-display ${
-                        d.points === 0
-                          ? "border-muted bg-muted/40 text-muted-foreground"
-                          : "border-primary/50 bg-primary/15 text-primary"
-                      }`}
-                    >
-                      <Target className="h-3 w-3 opacity-70" /> {label}
-                      <span className="text-foreground/90">· {d.points}</span>
-                    </span>
-                  );
-                })}
-              </div>
-              <div className="ml-3 shrink-0 text-right">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Summe</div>
-                <div className="font-display text-3xl leading-none text-primary">{roundTotal}</div>
-              </div>
-            </div>
-            {autoCommitIn !== null && (
-              <div className="mt-2 flex items-center justify-between rounded-md bg-background/60 px-2 py-1 text-[11px]">
-                <span className="text-muted-foreground">Auto-Übernahme in {autoCommitIn}s</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[11px]"
-                  onClick={() => {
-                    if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
-                    autoCommitTimerRef.current = null;
-                    pendingCommitRef.current = null;
-                    setAutoCommitIn(null);
-                    setStatus("Erkennung prüfen");
-                  }}
-                >
-                  Stop
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <div className="text-center text-[11px] text-muted-foreground">
-            Vorschlag prüfen, bei Bedarf anpassen, dann bestätigen
-          </div>
-          <div className="space-y-1.5">
-            {detected.map((dart, i) => (
-              <div key={i} className="flex items-center gap-2 rounded-lg bg-muted p-2">
-                <span className="w-10 text-[10px] text-muted-foreground">Dart {i + 1}</span>
-                <select
-                  value={dart.multiplier}
-                  onChange={(e) => adjustDart(i, "multiplier", Number(e.target.value))}
-                  className="rounded border border-border bg-background px-1 py-1 text-xs"
-                  disabled={dart.baseValue === 0 || dart.baseValue === 25}
-                >
-                  <option value={1}>S</option>
-                  <option value={2}>D</option>
-                  <option value={3}>T</option>
-                </select>
-                <select
-                  value={dart.baseValue}
-                  onChange={(e) => adjustDart(i, "baseValue", Number(e.target.value))}
-                  className="flex-1 rounded border border-border bg-background px-1 py-1 text-xs"
-                >
-                  <option value={0}>Miss</option>
-                  {Array.from({ length: 20 }, (_, k) => k + 1).map((v) => (
-                    <option key={v} value={v}>{v}</option>
-                  ))}
-                  <option value={25}>Bull (25/50)</option>
-                </select>
-                <span className="w-10 text-right font-display text-primary">{dart.points}</span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDetected((prev) => prev.filter((_, k) => k !== i))}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-            {detected.length < dartsRemaining && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-xs"
-                onClick={() => setDetected((prev) => [...prev, { baseValue: 0, multiplier: 1, points: 0, confidence: 1 }])}
-              >
-                + Dart hinzufügen
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={rescan} className="flex-1 gap-1">
-              <RotateCcw className="h-4 w-4" /> Neu scannen
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => commitRound(Array.from({ length: dartsRemaining }, () => ({ baseValue: 0, multiplier: 1 as 1, points: 0, confidence: 1 })))}
-              className="flex-1 gap-1"
-            >
-              0 Punkte
-            </Button>
-            <Button size="sm" onClick={() => detected.length > 0 && commitRound(detected)} disabled={detected.length === 0} className="flex-1 gap-1">
-              <Check className="h-4 w-4" /> Bestätigen
-            </Button>
-          </div>
-        </div>
+      {/* hidden snapshot indicator while scanning */}
+      {snapshot && phase === "scanning" && (
+        <img src={snapshot} alt="" className="hidden" />
       )}
     </div>
   );
