@@ -246,8 +246,8 @@ const LiveCamera = ({
   };
 
   const captureFrame = () => {
-    const c = drawToCanvas(768, true);
-    return c ? c.toDataURL("image/jpeg", 0.72) : null;
+    const c = drawToCanvas(512, true);
+    return c ? c.toDataURL("image/jpeg", 0.64) : null;
   };
 
   // ── auto detect board via edge function ───────────────────────
@@ -678,6 +678,19 @@ const LiveCamera = ({
           <div>Bew {(motion * 100).toFixed(0)}%</div>
           <div>Δ {(boardDelta * 100).toFixed(0)}%</div>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-accent/25 bg-accent/5 px-3 py-2 text-[11px] text-muted-foreground">
+        <div className="mb-1 flex items-center gap-1.5 font-medium text-foreground">
+          <Camera className="h-3.5 w-3.5 text-accent" />
+          Optimale Kameraposition
+        </div>
+        <ul className="space-y-0.5">
+          <li>- Board moeglichst gross im Bild halten, aber nicht abgeschnitten.</li>
+          <li>- Leicht seitlich positionieren, damit die Dartspitze gut sichtbar bleibt.</li>
+          <li>- Direkt frontale Sicht ist stabil, leicht schraeg liefert oft bessere Spitzen-Erkennung.</li>
+          <li>- Reflexionen, starke Schatten und Bewegungen beim Scan vermeiden.</li>
+        </ul>
       </div>
 
       {/* live accumulated darts */}

@@ -21,42 +21,12 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const systemPrompt = `You are a professional darts scoring AI. You analyze photos of a dartboard with darts in it.
-
-Your task: Identify exactly where each dart has landed on the board and return the scores.
-
-Rules:
-- A standard dartboard has numbers 1-20 around the ring, plus single bull (25) and double bull/bullseye (50).
-- Single: The large single area scores the number value.
-- Double: The thin outer ring scores double the number.
-- Triple: The thin inner ring scores triple the number.
-- Single Bull (outer bull): 25 points.
-- Double Bull (inner bull/bullseye): 50 points.
-- Miss: Dart not in the board or in the non-scoring black area outside doubles ring = 0 points.
-- Only count real darts currently stuck in the board. Do not hallucinate removed darts, shadows, reflections, flights, or holes.
-- If a dart is uncertain, prefer omitting it over guessing.
-- When possible, also estimate the visible dartboard position in the image.
-
-Return ONLY a valid JSON object with this exact structure (no markdown, no explanation):
-{
-  "board": { "cx": 0.5, "cy": 0.5, "size": 0.78, "confidence": 0.92 },
-  "darts": [
-    { "segment": 20, "multiplier": 3, "points": 60, "confidence": 0.9 },
-    { "segment": 1, "multiplier": 1, "points": 1, "confidence": 0.7 },
-    { "segment": 25, "multiplier": 2, "points": 50, "confidence": 0.8 }
-  ],
-  "totalScore": 111,
-  "overallConfidence": 0.8,
-  "dartsDetected": 3
-}
-
-- segment: The board number (1-20, 25 for bull)
-- multiplier: 1=single, 2=double, 3=triple (bull 25 with multiplier 2 = 50 = bullseye)
-- confidence: Your confidence for each dart (0.0-1.0)
-- board.cx / board.cy: estimated center of the dartboard in normalized image coordinates (0..1)
-- board.size: estimated board diameter relative to the shorter image side (0..1)
-- If you cannot detect any darts, still return board info if visible and use: { "darts": [], "totalScore": 0, "overallConfidence": 0, "dartsDetected": 0, "error": "No darts detected" }
-- If the image is not a dartboard, return: { "board": null, "darts": [], "totalScore": 0, "overallConfidence": 0, "dartsDetected": 0, "error": "No dartboard detected" }`;
+    const systemPrompt = `Score dartboard photos. Use the dart tip position to determine the segment; ignore shaft and flight unless needed to locate the tip.
+Return only JSON. Count only darts currently stuck in the board. If uncertain, omit the dart.
+Scoring: single=segment, double=2x, triple=3x, bull 25, bullseye 50, miss=0.
+Return:
+{"board":{"cx":0.5,"cy":0.5,"size":0.78,"confidence":0.92},"darts":[{"segment":20,"multiplier":3,"points":60,"confidence":0.9}],"totalScore":60,"overallConfidence":0.8,"dartsDetected":1}
+If no darts are visible, return darts=[], totalScore=0, overallConfidence=0, dartsDetected=0 and include board if visible. If no dartboard is visible, set board=null.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -66,6 +36,7 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
+        max_tokens: 350,
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -82,8 +53,8 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no expla
               {
                 type: "text",
                 text: detectBoard
-                  ? "Detect the dartboard position first and return the board center/size. If darts are visible, include them too. Return only JSON."
-                  : "Analyze this dartboard image. Identify all darts currently stuck in the board, estimate the board center/size, and return only JSON.",
+                  ? "Find the board center and size. If darts are visible, include them. Return only JSON."
+                  : "Identify all darts currently stuck in the board. Use dart tips for the score. Return only JSON.",
               },
             ],
           },
