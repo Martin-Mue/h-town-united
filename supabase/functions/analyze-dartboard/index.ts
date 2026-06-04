@@ -36,7 +36,8 @@ If no darts are visible, return darts=[], totalScore=0, overallConfidence=0, dar
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
-        max_tokens: 350,
+        temperature: 0,
+        max_tokens: 240,
         messages: [
           { role: "system", content: systemPrompt },
           {

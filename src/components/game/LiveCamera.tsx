@@ -44,11 +44,15 @@ interface Calibration {
   x: number;
   y: number;
   size: number;
+  zoom: number;
   baseline: number[] | null;
 }
 
 const CALIB_KEY = "dartcam-calibration-v3";
 const GRID = 32;
+const TARGET_BOARD_RATIO = 0.82;
+const DEFAULT_ZOOM = 1;
+const MIN_ANALYSIS_SIZE = 0.58;
 const MOTION_STILL = 0.020;        // frame-to-frame diff considered "still"
 const NEW_DART_DELTA = 0.045;      // signature jump vs last stable state → new dart landed
 const CLEAR_DELTA = 0.030;         // signature diff vs empty baseline → board is free
@@ -60,23 +64,33 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 const loadCalib = (): Calibration => {
   if (typeof window === "undefined")
-    return { x: 0.5, y: 0.5, size: 0.82, baseline: null };
+    return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM, baseline: null };
   try {
     const raw = window.localStorage.getItem(CALIB_KEY);
-    if (!raw) return { x: 0.5, y: 0.5, size: 0.82, baseline: null };
+    if (!raw) return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM, baseline: null };
     const p = JSON.parse(raw);
     return {
       x: clamp(Number(p?.x) || 0.5, 0.15, 0.85),
       y: clamp(Number(p?.y) || 0.5, 0.15, 0.85),
       size: clamp(Number(p?.size) || 0.82, 0.4, 0.98),
+      zoom: clamp(Number(p?.zoom) || DEFAULT_ZOOM, 1, 4),
       baseline: Array.isArray(p?.baseline)
         ? p.baseline.map((n: unknown) => Number(n) || 0)
         : null,
     };
   } catch {
-    return { x: 0.5, y: 0.5, size: 0.82, baseline: null };
+    return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM, baseline: null };
   }
 };
+
+type BoardDetection = {
+  cx?: number;
+  cy?: number;
+  size?: number;
+  confidence?: number;
+};
+
+type ZoomCapability = { min: number; max: number; step: number };
 
 const dartLabel = (d: DetectedDart) => {
   if (d.baseValue === 0) return "Miss";
@@ -96,6 +110,7 @@ const LiveCamera = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const zoomCapsRef = useRef<ZoomCapability | null>(null);
 
   const prevSigRef = useRef<number[] | null>(null);
   const roundBaselineRef = useRef<number[] | null>(null); // updated after each detected dart
@@ -116,6 +131,7 @@ const LiveCamera = ({
   const [boardDelta, setBoardDelta] = useState(0);
   const [lastConfidence, setLastConfidence] = useState(0);
   const [calib, setCalib] = useState<Calibration>(() => loadCalib());
+  const [autoCalibrating, setAutoCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
 
@@ -164,6 +180,20 @@ const LiveCamera = ({
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
+        }
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track?.getCapabilities?.() as MediaTrackCapabilities & {
+          zoom?: { min: number; max: number; step?: number };
+        };
+        if (capabilities?.zoom) {
+          zoomCapsRef.current = {
+            min: capabilities.zoom.min ?? 1,
+            max: capabilities.zoom.max ?? 4,
+            step: capabilities.zoom.step ?? 0.1,
+          };
+          await applyCameraZoom(calib.zoom);
+        } else {
+          zoomCapsRef.current = null;
         }
         setTimeout(() => {
           if (!cancelled) void autoDetectBoard();
@@ -245,9 +275,66 @@ const LiveCamera = ({
     return s / a.length;
   };
 
-  const captureFrame = () => {
-    const c = drawToCanvas(512, true);
-    return c ? c.toDataURL("image/jpeg", 0.64) : null;
+  const getVideoTrack = () => streamRef.current?.getVideoTracks()[0] ?? null;
+
+  const applyCameraZoom = useCallback(async (zoom: number) => {
+    const track = getVideoTrack();
+    if (!track || typeof track.applyConstraints !== "function") return;
+    try {
+      await track.applyConstraints({ advanced: [{ zoom }] });
+    } catch {
+      // Unsupported on some devices.
+    }
+  }, []);
+
+  const updateAutoCalibration = useCallback(async (board?: BoardDetection | null) => {
+    if (!board?.confidence || Number(board.confidence) < 0.35) return;
+
+    const nextX = clamp(Number(board.cx) || calib.x, 0.15, 0.85);
+    const nextY = clamp(Number(board.cy) || calib.y, 0.15, 0.85);
+    const boardSize = clamp(Number(board.size) || calib.size, 0.35, 0.98);
+    const nextSize = clamp(boardSize * 1.08, MIN_ANALYSIS_SIZE, 0.98);
+
+    const nextZoom =
+      zoomCapsRef.current
+        ? clamp(
+            TARGET_BOARD_RATIO / boardSize,
+            zoomCapsRef.current.min,
+            zoomCapsRef.current.max,
+          )
+        : calib.zoom;
+
+    setCalib((prev) => ({
+      ...prev,
+      x: prev.x * 0.6 + nextX * 0.4,
+      y: prev.y * 0.6 + nextY * 0.4,
+      size: prev.size * 0.45 + nextSize * 0.55,
+      zoom: prev.zoom * 0.45 + nextZoom * 0.55,
+    }));
+
+    if (zoomCapsRef.current) {
+      await applyCameraZoom(nextZoom);
+    }
+  }, [applyCameraZoom, calib.x, calib.y, calib.size, calib.zoom]);
+
+  const captureFrame = (target = 512, quality = 0.64) => {
+    const c = drawToCanvas(target, true);
+    return c ? c.toDataURL("image/jpeg", quality) : null;
+  };
+
+  const captureFullFrame = (target = 960, quality = 0.72) => {
+    const v = videoRef.current;
+    const c = canvasRef.current;
+    if (!v || !c || !v.videoWidth || !v.videoHeight) return null;
+    const scale = target / v.videoWidth;
+    const height = Math.max(1, Math.round(v.videoHeight * scale));
+    c.width = target;
+    c.height = height;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, target, height);
+    ctx.drawImage(v, 0, 0, v.videoWidth, v.videoHeight, 0, 0, target, height);
+    return c.toDataURL("image/jpeg", quality);
   };
 
   // ── auto detect board via edge function ───────────────────────
@@ -259,34 +346,23 @@ const LiveCamera = ({
     }
     setPhase("detecting");
     setStatus("Suche Dartboard …");
+    setAutoCalibrating(true);
     try {
-      const c = canvasRef.current;
-      if (!c) throw new Error("no canvas");
-      const minSide = Math.min(v.videoWidth, v.videoHeight);
-      c.width = 640;
-      c.height = 640;
-      const ctx = c.getContext("2d");
-      if (!ctx) throw new Error("no ctx");
-      const sx = (v.videoWidth - minSide) / 2;
-      const sy = (v.videoHeight - minSide) / 2;
-      ctx.drawImage(v, sx, sy, minSide, minSide, 0, 0, 640, 640);
-      const dataUrl = c.toDataURL("image/jpeg", 0.7);
+      const dataUrl = captureFullFrame(960, 0.7);
+      if (!dataUrl) throw new Error("no frame");
       const { data } = await supabase.functions.invoke("analyze-dartboard", {
         body: { imageBase64: dataUrl, detectBoard: true },
       });
       if (data?.board && Number(data.board.confidence) >= 0.4) {
-        const nx = clamp(Number(data.board.cx) || 0.5, 0.1, 0.9);
-        const ny = clamp(Number(data.board.cy) || 0.5, 0.1, 0.9);
-        const nsize = clamp((Number(data.board.size) || 0.78) * 1.08, 0.5, 0.98);
-        setCalib((prev) => ({ ...prev, x: nx, y: ny, size: nsize }));
+        await updateAutoCalibration(data.board as BoardDetection);
       }
     } catch (err) {
       console.warn("auto-detect failed", err);
+    } finally {
+      setAutoCalibrating(false);
     }
     startBaselining();
   };
-
-  // ── automatic baseline (empty board) ──────────────────────────
   const startBaselining = () => {
     baselineSamplesRef.current = [];
     if (!calib.baseline) {
@@ -398,7 +474,7 @@ const LiveCamera = ({
 
   // ── scan & append only newly arrived darts ────────────────────
   const scanForNewDarts = async () => {
-    const img = captureFrame();
+    const img = captureFrame(720, 0.72);
     if (!img) {
       scanLockRef.current = false;
       awaitingThrowResolutionRef.current = false;
@@ -436,6 +512,9 @@ const LiveCamera = ({
         : [];
       const conf = Number(data?.overallConfidence) || 0;
       setLastConfidence(conf);
+      if (data?.board) {
+        void updateAutoCalibration(data.board as BoardDetection);
+      }
 
       const prevDarts = accumulatedRef.current;
       const prevCount = prevDarts.length;
@@ -691,6 +770,9 @@ const LiveCamera = ({
           <li>- Direkt frontale Sicht ist stabil, leicht schraeg liefert oft bessere Spitzen-Erkennung.</li>
           <li>- Reflexionen, starke Schatten und Bewegungen beim Scan vermeiden.</li>
         </ul>
+        {autoCalibrating && (
+          <p className="mt-1 text-[10px] text-accent">Auto-Kalibrierung passt Zoom und Board-Lage an.</p>
+        )}
       </div>
 
       {/* live accumulated darts */}
@@ -892,6 +974,23 @@ const LiveCamera = ({
               onValueChange={([size]) => setCalib((p) => ({ ...p, size }))}
             />
           </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>Zoom</span>
+              <span>{calib.zoom.toFixed(1)}x</span>
+            </div>
+            <Slider
+              value={[calib.zoom]}
+              min={1}
+              max={zoomCapsRef.current?.max ?? 4}
+              step={zoomCapsRef.current?.step ?? 0.1}
+              onValueChange={([zoom]) => {
+                const nextZoom = clamp(zoom, 1, zoomCapsRef.current?.max ?? 4);
+                setCalib((p) => ({ ...p, zoom: nextZoom }));
+                void applyCameraZoom(nextZoom);
+              }}
+            />
+          </div>
         </div>
       )}
 
@@ -904,6 +1003,10 @@ const LiveCamera = ({
 };
 
 export default LiveCamera;
+
+
+
+
 
 
 
