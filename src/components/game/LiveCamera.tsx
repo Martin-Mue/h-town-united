@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { AlertCircle, Camera, Check, ChevronDown, ChevronUp, Loader2, RotateCcw, ScanLine, X } from "lucide-react";
+import { AlertCircle, Camera, Check, ChevronDown, ChevronUp, Loader2, RotateCcw, ScanLine, Target, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
+import { playDartDetectedSound, playRoundCommittedSound, playScanStartSound } from "@/utils/sounds";
 
 export interface DetectedDart {
   baseValue: number;
@@ -40,6 +41,7 @@ const CLEAR_DELTA = 0.035;         // baseline diff to consider board free again
 const STILL_FRAMES_REQUIRED = 4;   // ~1.4s at 350ms
 const OCCUPIED_FRAMES_REQUIRED = 5;// ~1.75s of stable presence
 const AUTO_COMMIT_CONFIDENCE = 0.78;
+const AUTO_COMMIT_COUNTDOWN_MS = 1800;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -86,6 +88,9 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
   const [autoCommit, setAutoCommit] = useState(loadAuto);
   const [calib, setCalib] = useState<Calibration>(() => loadCalib());
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [autoCommitIn, setAutoCommitIn] = useState<number | null>(null);
+  const autoCommitTimerRef = useRef<number | null>(null);
+  const pendingCommitRef = useRef<DetectedDart[] | null>(null);
 
   // persist calibration
   useEffect(() => {
@@ -140,6 +145,10 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
       cancelled = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      if (autoCommitTimerRef.current) {
+        window.clearInterval(autoCommitTimerRef.current);
+        autoCommitTimerRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
@@ -348,6 +357,7 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
     setSnapshot(img);
     setPhase("scanning");
     setError(null);
+    playScanStartSound();
     setStatus(automatic ? "Automatischer Scan läuft …" : "Scan läuft …");
 
     try {
@@ -377,14 +387,36 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
         return;
       }
 
-      if (automatic && autoCommit && darts.length > 0 && conf >= AUTO_COMMIT_CONFIDENCE) {
-        commitRound(darts);
-        return;
-      }
+      // play a ping per detected dart so the user can hear what was recognised
+      darts.forEach((_, i) => {
+        setTimeout(() => playDartDetectedSound(i), 120 * i);
+      });
 
       setDetected(darts);
       setPhase("review");
-      setStatus(darts.length ? "Erkennung prüfen" : "Keine sicheren Treffer – bitte prüfen");
+
+      if (automatic && autoCommit && darts.length > 0 && conf >= AUTO_COMMIT_CONFIDENCE) {
+        // give the user a moment to interrupt before we commit automatically
+        pendingCommitRef.current = darts;
+        const start = Date.now();
+        setAutoCommitIn(Math.ceil(AUTO_COMMIT_COUNTDOWN_MS / 1000));
+        if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+        autoCommitTimerRef.current = window.setInterval(() => {
+          const left = Math.max(0, AUTO_COMMIT_COUNTDOWN_MS - (Date.now() - start));
+          setAutoCommitIn(Math.ceil(left / 1000));
+          if (left <= 0) {
+            if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+            autoCommitTimerRef.current = null;
+            const d = pendingCommitRef.current;
+            pendingCommitRef.current = null;
+            setAutoCommitIn(null);
+            if (d) commitRound(d);
+          }
+        }, 200);
+        setStatus(`Übernehme automatisch in ${Math.ceil(AUTO_COMMIT_COUNTDOWN_MS / 1000)}s – tippe zum Anpassen`);
+      } else {
+        setStatus(darts.length ? "Erkennung prüfen" : "Keine sicheren Treffer – bitte prüfen");
+      }
     } catch (err: any) {
       console.error("scan error", err);
       setDetected([]);
@@ -399,12 +431,17 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
 
   const commitRound = (darts: DetectedDart[]) => {
     onRoundCommit(darts.slice(0, dartsRemaining));
+    playRoundCommittedSound();
     setDetected([]);
     setSnapshot(null);
     setError(null);
     waitingClearRef.current = true;
     resetLoop();
     waitingClearRef.current = true; // resetLoop clears it; re-set
+    if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+    autoCommitTimerRef.current = null;
+    pendingCommitRef.current = null;
+    setAutoCommitIn(null);
     setPhase("live");
     setStatus("Runde übernommen · bitte Darts ziehen");
   };
@@ -413,6 +450,10 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
     setDetected([]);
     setSnapshot(null);
     setError(null);
+    if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+    autoCommitTimerRef.current = null;
+    pendingCommitRef.current = null;
+    setAutoCommitIn(null);
     resetLoop();
     setPhase("live");
     setStatus("Neuer Scan – warte auf Würfe …");
@@ -429,6 +470,13 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
   };
 
   const adjustDart = (i: number, field: "baseValue" | "multiplier", value: number) => {
+    if (autoCommitTimerRef.current) {
+      window.clearInterval(autoCommitTimerRef.current);
+      autoCommitTimerRef.current = null;
+      pendingCommitRef.current = null;
+      setAutoCommitIn(null);
+      setStatus("Erkennung prüfen");
+    }
     setDetected((prev) => {
       const next = [...prev];
       const d = { ...next[i], [field]: value };
@@ -500,9 +548,29 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
 
       {/* compact status bar */}
       <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-        <div className="min-w-0">
-          <p className="truncate font-medium text-foreground">{playerName ?? "Auto-Scoring"}</p>
-          <p className="truncate text-muted-foreground">{status}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+              phase === "live"
+                ? "bg-secondary animate-pulse-glow"
+                : phase === "scanning"
+                  ? "bg-primary animate-pulse"
+                  : phase === "review"
+                    ? "bg-accent"
+                    : phase === "error"
+                      ? "bg-destructive"
+                      : "bg-muted-foreground"
+            }`}
+          />
+          <div className="min-w-0">
+            <p className="truncate font-medium text-foreground">
+              {playerName ?? "Auto-Scoring"}
+              {typeof dartsRemaining === "number" && phase !== "review" && (
+                <span className="ml-1 text-muted-foreground">· noch {dartsRemaining} Dart{dartsRemaining === 1 ? "" : "s"}</span>
+              )}
+            </p>
+            <p className="truncate text-muted-foreground">{status}</p>
+          </div>
         </div>
         <div className="ml-3 shrink-0 space-y-0.5 text-right text-[10px] uppercase tracking-wider text-muted-foreground">
           <div>Bew {(motion * 100).toFixed(0)}%</div>
@@ -561,15 +629,74 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
 
       {/* review */}
       {phase === "review" && (
-        <div className="space-y-2">
+        <div className="space-y-2 animate-scale-in">
           {error && (
             <div className="flex items-start gap-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
+
+          {/* Big detected-score summary */}
+          <div className="rounded-xl border border-primary/40 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-3">
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="flex items-center gap-1"><Zap className="h-3 w-3 text-accent" /> Erkannt</span>
+              <span>KI {(confidence * 100).toFixed(0)}%</span>
+            </div>
+            <div className="mt-1 flex items-end justify-between">
+              <div className="flex flex-wrap gap-1.5">
+                {detected.length === 0 && (
+                  <span className="text-xs text-muted-foreground">Keine sicheren Treffer</span>
+                )}
+                {detected.map((d, i) => {
+                  const label = d.baseValue === 0
+                    ? "Miss"
+                    : d.baseValue === 25
+                      ? (d.multiplier === 2 ? "Bull 50" : "Bull 25")
+                      : `${d.multiplier === 1 ? "" : d.multiplier === 2 ? "D" : "T"}${d.baseValue}`;
+                  return (
+                    <span
+                      key={i}
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-display ${
+                        d.points === 0
+                          ? "border-muted bg-muted/40 text-muted-foreground"
+                          : "border-primary/50 bg-primary/15 text-primary"
+                      }`}
+                    >
+                      <Target className="h-3 w-3 opacity-70" /> {label}
+                      <span className="text-foreground/90">· {d.points}</span>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="ml-3 shrink-0 text-right">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Summe</div>
+                <div className="font-display text-3xl leading-none text-primary">{roundTotal}</div>
+              </div>
+            </div>
+            {autoCommitIn !== null && (
+              <div className="mt-2 flex items-center justify-between rounded-md bg-background/60 px-2 py-1 text-[11px]">
+                <span className="text-muted-foreground">Auto-Übernahme in {autoCommitIn}s</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={() => {
+                    if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+                    autoCommitTimerRef.current = null;
+                    pendingCommitRef.current = null;
+                    setAutoCommitIn(null);
+                    setStatus("Erkennung prüfen");
+                  }}
+                >
+                  Stop
+                </Button>
+              </div>
+            )}
+          </div>
+
           <div className="text-center text-[11px] text-muted-foreground">
-            Vorschlag prüfen, bei Bedarf anpassen, dann bestätigen · KI {(confidence * 100).toFixed(0)}%
+            Vorschlag prüfen, bei Bedarf anpassen, dann bestätigen
           </div>
           <div className="space-y-1.5">
             {detected.map((dart, i) => (
@@ -613,7 +740,6 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
               </Button>
             )}
           </div>
-          <div className="text-center font-display text-2xl text-primary">{roundTotal} Punkte</div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={rescan} className="flex-1 gap-1">
               <RotateCcw className="h-4 w-4" /> Neu scannen
