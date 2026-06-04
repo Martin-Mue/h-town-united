@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { AlertCircle, Camera, Check, ChevronDown, ChevronUp, Loader2, RotateCcw, ScanLine, X } from "lucide-react";
+import { AlertCircle, Camera, Check, ChevronDown, ChevronUp, Loader2, RotateCcw, ScanLine, Target, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
+import { playDartDetectedSound, playRoundCommittedSound, playScanStartSound } from "@/utils/sounds";
 
 export interface DetectedDart {
   baseValue: number;
@@ -40,6 +41,7 @@ const CLEAR_DELTA = 0.035;         // baseline diff to consider board free again
 const STILL_FRAMES_REQUIRED = 4;   // ~1.4s at 350ms
 const OCCUPIED_FRAMES_REQUIRED = 5;// ~1.75s of stable presence
 const AUTO_COMMIT_CONFIDENCE = 0.78;
+const AUTO_COMMIT_COUNTDOWN_MS = 1800;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
