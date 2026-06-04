@@ -88,6 +88,9 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
   const [autoCommit, setAutoCommit] = useState(loadAuto);
   const [calib, setCalib] = useState<Calibration>(() => loadCalib());
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [autoCommitIn, setAutoCommitIn] = useState<number | null>(null);
+  const autoCommitTimerRef = useRef<number | null>(null);
+  const pendingCommitRef = useRef<DetectedDart[] | null>(null);
 
   // persist calibration
   useEffect(() => {
