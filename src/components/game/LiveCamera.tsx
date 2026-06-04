@@ -145,6 +145,10 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
       cancelled = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      if (autoCommitTimerRef.current) {
+        window.clearInterval(autoCommitTimerRef.current);
+        autoCommitTimerRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
