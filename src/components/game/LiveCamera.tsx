@@ -353,6 +353,7 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
     setSnapshot(img);
     setPhase("scanning");
     setError(null);
+    playScanStartSound();
     setStatus(automatic ? "Automatischer Scan läuft …" : "Scan läuft …");
 
     try {
@@ -382,14 +383,36 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
         return;
       }
 
-      if (automatic && autoCommit && darts.length > 0 && conf >= AUTO_COMMIT_CONFIDENCE) {
-        commitRound(darts);
-        return;
-      }
+      // play a ping per detected dart so the user can hear what was recognised
+      darts.forEach((_, i) => {
+        setTimeout(() => playDartDetectedSound(i), 120 * i);
+      });
 
       setDetected(darts);
       setPhase("review");
-      setStatus(darts.length ? "Erkennung prüfen" : "Keine sicheren Treffer – bitte prüfen");
+
+      if (automatic && autoCommit && darts.length > 0 && conf >= AUTO_COMMIT_CONFIDENCE) {
+        // give the user a moment to interrupt before we commit automatically
+        pendingCommitRef.current = darts;
+        const start = Date.now();
+        setAutoCommitIn(Math.ceil(AUTO_COMMIT_COUNTDOWN_MS / 1000));
+        if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+        autoCommitTimerRef.current = window.setInterval(() => {
+          const left = Math.max(0, AUTO_COMMIT_COUNTDOWN_MS - (Date.now() - start));
+          setAutoCommitIn(Math.ceil(left / 1000));
+          if (left <= 0) {
+            if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+            autoCommitTimerRef.current = null;
+            const d = pendingCommitRef.current;
+            pendingCommitRef.current = null;
+            setAutoCommitIn(null);
+            if (d) commitRound(d);
+          }
+        }, 200);
+        setStatus(`Übernehme automatisch in ${Math.ceil(AUTO_COMMIT_COUNTDOWN_MS / 1000)}s – tippe zum Anpassen`);
+      } else {
+        setStatus(darts.length ? "Erkennung prüfen" : "Keine sicheren Treffer – bitte prüfen");
+      }
     } catch (err: any) {
       console.error("scan error", err);
       setDetected([]);
@@ -404,12 +427,17 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
 
   const commitRound = (darts: DetectedDart[]) => {
     onRoundCommit(darts.slice(0, dartsRemaining));
+    playRoundCommittedSound();
     setDetected([]);
     setSnapshot(null);
     setError(null);
     waitingClearRef.current = true;
     resetLoop();
     waitingClearRef.current = true; // resetLoop clears it; re-set
+    if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+    autoCommitTimerRef.current = null;
+    pendingCommitRef.current = null;
+    setAutoCommitIn(null);
     setPhase("live");
     setStatus("Runde übernommen · bitte Darts ziehen");
   };
@@ -418,6 +446,10 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
     setDetected([]);
     setSnapshot(null);
     setError(null);
+    if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+    autoCommitTimerRef.current = null;
+    pendingCommitRef.current = null;
+    setAutoCommitIn(null);
     resetLoop();
     setPhase("live");
     setStatus("Neuer Scan – warte auf Würfe …");
