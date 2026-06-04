@@ -74,3 +74,25 @@ export function playTonPlusSound() {
 export function playTurnSwitchSound() {
   playTone(440, 0.06, "triangle", 0.05);
 }
+
+/** Single dart detected by camera (short bright ping) */
+export function playDartDetectedSound(index = 0) {
+  // ascending pings: 1st dart, 2nd dart, 3rd dart
+  const freqs = [880, 1175, 1568];
+  const f = freqs[Math.min(index, freqs.length - 1)];
+  playTone(f, 0.09, "sine", 0.13);
+  playTone(f * 2, 0.05, "sine", 0.06);
+  vibrate(35);
+}
+
+/** AI scan is starting */
+export function playScanStartSound() {
+  playTone(520, 0.07, "triangle", 0.07);
+}
+
+/** AI scan finished and round was auto-committed */
+export function playRoundCommittedSound() {
+  playTone(660, 0.08, "sine", 0.1);
+  setTimeout(() => playTone(990, 0.12, "sine", 0.12), 70);
+  vibrate([40, 30, 60]);
+}
