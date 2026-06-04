@@ -474,6 +474,7 @@ const GamePage = () => {
     setGame(curGame);
     setDartsThisRound(curDarts);
     setTurnStartRemaining(curStart);
+    setPendingCameraDarts([]);
 
     if (soundEnabled) {
       if (checkedOut) {
