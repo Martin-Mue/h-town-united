@@ -466,6 +466,13 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
   };
 
   const adjustDart = (i: number, field: "baseValue" | "multiplier", value: number) => {
+    if (autoCommitTimerRef.current) {
+      window.clearInterval(autoCommitTimerRef.current);
+      autoCommitTimerRef.current = null;
+      pendingCommitRef.current = null;
+      setAutoCommitIn(null);
+      setStatus("Erkennung prüfen");
+    }
     setDetected((prev) => {
       const next = [...prev];
       const d = { ...next[i], [field]: value };
