@@ -54,8 +54,8 @@ const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
 const MIN_ANALYSIS_SIZE = 0.58;
 const MOTION_STILL = 0.020;        // frame-to-frame diff considered "still"
-const NEW_DART_DELTA = 0.045;      // signature jump vs last stable state → new dart landed
-const CLEAR_DELTA = 0.030;         // signature diff vs empty baseline → board is free
+const NEW_DART_DELTA = 0.045;      // signature jump vs last stable state â†’ new dart landed
+const CLEAR_DELTA = 0.030;         // signature diff vs empty baseline â†’ board is free
 const STILL_FRAMES_REQUIRED = 3;   // ~1s at 350ms
 const NEW_DART_FRAMES = 3;         // stable frames after a jump before we scan
 const CLEAR_FRAMES_REQUIRED = 4;   // stable frames of empty board before commit
@@ -119,6 +119,7 @@ const LiveCamera = ({
   const clearFramesRef = useRef(0);
   const scanLockRef = useRef(false);
   const awaitingThrowResolutionRef = useRef(false);
+  const scanRetryTimerRef = useRef<number | null>(null);
   const baselineSamplesRef = useRef<number[][]>([]);
 
   const [phase, setPhase] = useState<Phase>("starting");
@@ -126,7 +127,7 @@ const LiveCamera = ({
   const [accumulated, setAccumulated] = useState<DetectedDart[]>([]);
   const accumulatedRef = useRef<DetectedDart[]>([]);
   const [snapshot, setSnapshot] = useState<string | null>(null);
-  const [status, setStatus] = useState("Kamera startet …");
+  const [status, setStatus] = useState("Kamera startet â€¦");
   const [motion, setMotion] = useState(0);
   const [boardDelta, setBoardDelta] = useState(0);
   const [lastConfidence, setLastConfidence] = useState(0);
@@ -135,7 +136,7 @@ const LiveCamera = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
 
-  // ── refs in sync with state ───────────────────────────────────
+  // â”€â”€ refs in sync with state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     accumulatedRef.current = accumulated;
     onPendingChange?.(accumulated);
@@ -154,16 +155,20 @@ const LiveCamera = ({
     clearFramesRef.current = 0;
     scanLockRef.current = false;
     awaitingThrowResolutionRef.current = false;
+    if (scanRetryTimerRef.current !== null) {
+      window.clearTimeout(scanRetryTimerRef.current);
+      scanRetryTimerRef.current = null;
+    }
   }, []);
 
-  // ── camera lifecycle ──────────────────────────────────────────
+  // â”€â”€ camera lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
     (async () => {
       try {
         setPhase("starting");
-        setStatus("Kamera startet …");
+        setStatus("Kamera startet â€¦");
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: "environment" },
@@ -200,19 +205,23 @@ const LiveCamera = ({
         }, 700);
       } catch (err) {
         console.error("camera error", err);
-        setError("Kamerazugriff nicht möglich. Bitte Berechtigung erteilen.");
+        setError("Kamerazugriff nicht mÃ¶glich. Bitte Berechtigung erteilen.");
         setPhase("error");
       }
     })();
     return () => {
       cancelled = true;
+      if (scanRetryTimerRef.current !== null) {
+        window.clearTimeout(scanRetryTimerRef.current);
+        scanRetryTimerRef.current = null;
+      }
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
-  // ── helpers ───────────────────────────────────────────────────
+  // â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const cropRect = () => {
     const v = videoRef.current;
     if (!v || !v.videoWidth) return null;
@@ -317,7 +326,9 @@ const LiveCamera = ({
     }
   }, [applyCameraZoom, calib.x, calib.y, calib.size, calib.zoom]);
 
-  const captureFrame = (target = 512, quality = 0.64) => {
+  const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+  const captureFrame = (target = 896, quality = 0.76) => {
     const c = drawToCanvas(target, true);
     return c ? c.toDataURL("image/jpeg", quality) : null;
   };
@@ -337,7 +348,63 @@ const LiveCamera = ({
     return c.toDataURL("image/jpeg", quality);
   };
 
-  // ── auto detect board via edge function ───────────────────────
+  const isRetryableAnalysisError = (error: unknown) => {
+    const status =
+      typeof error === "object" && error !== null && "status" in error
+        ? Number((error as { status?: unknown }).status)
+        : NaN;
+    const retryable =
+      typeof error === "object" && error !== null && "retryable" in error
+        ? Boolean((error as { retryable?: unknown }).retryable)
+        : null;
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    return (
+      retryable === true ||
+      [429, 500, 502, 503, 504].includes(status) ||
+      message.includes("non-2xx") ||
+      message.includes("Rate limit") ||
+      message.includes("AI analysis failed")
+    );
+  };
+
+  const createAnalysisError = (message: string, status?: number, retryable = true) => {
+    const err = new Error(message) as Error & { status?: number; retryable?: boolean };
+    if (typeof status === "number") err.status = status;
+    err.retryable = retryable;
+    return err;
+  };
+
+  const analyzeDartboardFrame = async (imageBase64: string, detectBoard = false) => {
+    const maxAttempts = 3;
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const { data, error } = await supabase.functions.invoke("analyze-dartboard", {
+          body: { imageBase64, detectBoard },
+        });
+        if (error) throw error;
+        if (data?.error) {
+          throw createAnalysisError(
+            String(data.error),
+            Number(data.status) || undefined,
+            Boolean(data.retryable ?? true),
+          );
+        }
+        return data;
+      } catch (error) {
+        lastError = error;
+        if (attempt === maxAttempts - 1 || !isRetryableAnalysisError(error)) {
+          throw error;
+        }
+        await sleep(350 * (attempt + 1));
+      }
+    }
+
+    throw lastError ?? new Error("Unknown analysis error");
+  };
+
+  // â”€â”€ auto detect board via edge function â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const autoDetectBoard = async () => {
     const v = videoRef.current;
     if (!v || !v.videoWidth) {
@@ -345,14 +412,12 @@ const LiveCamera = ({
       return;
     }
     setPhase("detecting");
-    setStatus("Suche Dartboard …");
+    setStatus("Suche Dartboard â€¦");
     setAutoCalibrating(true);
     try {
       const dataUrl = captureFullFrame(960, 0.7);
       if (!dataUrl) throw new Error("no frame");
-      const { data } = await supabase.functions.invoke("analyze-dartboard", {
-        body: { imageBase64: dataUrl, detectBoard: true },
-      });
+      const data = await analyzeDartboardFrame(dataUrl, true);
       if (data?.board && Number(data.board.confidence) >= 0.4) {
         await updateAutoCalibration(data.board as BoardDetection);
       }
@@ -367,16 +432,16 @@ const LiveCamera = ({
     baselineSamplesRef.current = [];
     if (!calib.baseline) {
       setPhase("baselining");
-      setStatus("Halte das Board frei – Kalibrierung läuft …");
+      setStatus("Halte das Board frei â€“ Kalibrierung lÃ¤uft â€¦");
     } else {
       roundBaselineRef.current = calib.baseline;
       setPhase("live");
-      setStatus("Bereit – wirf deinen ersten Dart");
+      setStatus("Bereit â€“ wirf deinen ersten Dart");
       resetLoop();
     }
   };
 
-  // ── main loop ─────────────────────────────────────────────────
+  // â”€â”€ main loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!enabled) return;
     if (phase !== "live" && phase !== "baselining") return;
@@ -390,11 +455,11 @@ const LiveCamera = ({
       setMotion(m);
       stillFramesRef.current = m < MOTION_STILL ? stillFramesRef.current + 1 : 0;
 
-      // ── baselining: average a few still frames into the empty signature
+      // â”€â”€ baselining: average a few still frames into the empty signature
       if (phase === "baselining") {
         if (stillFramesRef.current >= 2) {
           baselineSamplesRef.current.push(sig);
-          setStatus(`Kalibriere … ${baselineSamplesRef.current.length}/4`);
+          setStatus(`Kalibriere â€¦ ${baselineSamplesRef.current.length}/4`);
           if (baselineSamplesRef.current.length >= 4) {
             const len = sig.length;
             const avg = new Array(len).fill(0);
@@ -407,10 +472,10 @@ const LiveCamera = ({
             baselineSamplesRef.current = [];
             resetLoop();
             setPhase("live");
-            setStatus("Board kalibriert · wirf deinen ersten Dart");
+            setStatus("Board kalibriert Â· wirf deinen ersten Dart");
           }
         } else {
-          setStatus("Board frei halten – warte auf ruhiges Bild …");
+          setStatus("Board frei halten â€“ warte auf ruhiges Bild â€¦");
         }
         return;
       }
@@ -423,10 +488,10 @@ const LiveCamera = ({
 
       const accCount = accumulatedRef.current.length;
 
-      // ── waiting for board to clear → commit round
+      // â”€â”€ waiting for board to clear â†’ commit round
       if (accCount > 0 && deltaFromEmpty < CLEAR_DELTA && stillFramesRef.current >= 2) {
         clearFramesRef.current += 1;
-        setStatus(`Darts werden gezogen … ${clearFramesRef.current}/${CLEAR_FRAMES_REQUIRED}`);
+        setStatus(`Darts werden gezogen â€¦ ${clearFramesRef.current}/${CLEAR_FRAMES_REQUIRED}`);
         if (clearFramesRef.current >= CLEAR_FRAMES_REQUIRED) {
           const toCommit = accumulatedRef.current;
           if (toCommit.length > 0) {
@@ -438,7 +503,7 @@ const LiveCamera = ({
         clearFramesRef.current = 0;
       }
 
-      // ── waiting for a NEW dart since last stable state
+      // â”€â”€ waiting for a NEW dart since last stable state
       if (
         !scanLockRef.current &&
         accCount < dartsRemaining &&
@@ -453,18 +518,18 @@ const LiveCamera = ({
             void scanForNewDarts();
           } else {
             setStatus(
-              `Neuer Dart erkannt · stabilisiere … ${newDartFramesRef.current}/${NEW_DART_FRAMES}`,
+              `Neuer Dart erkannt Â· stabilisiere â€¦ ${newDartFramesRef.current}/${NEW_DART_FRAMES}`,
             );
           }
         } else {
-          setStatus("Bewegung erkannt – warte bis Dart still steht …");
+          setStatus("Bewegung erkannt â€“ warte bis Dart still steht â€¦");
         }
       } else if (accCount >= dartsRemaining) {
-        setStatus(`${accCount} Darts erkannt · Darts ziehen zum Übernehmen`);
+        setStatus(`${accCount} Darts erkannt Â· Darts ziehen zum Ãœbernehmen`);
       } else if (accCount > 0) {
-        setStatus(`${accCount}/${dartsRemaining} Darts erkannt · wirf nächsten Dart`);
+        setStatus(`${accCount}/${dartsRemaining} Darts erkannt Â· wirf nÃ¤chsten Dart`);
       } else {
-        setStatus("Bereit – wirf deinen ersten Dart");
+        setStatus("Bereit â€“ wirf deinen ersten Dart");
       }
     }, 350);
 
@@ -472,25 +537,25 @@ const LiveCamera = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, phase, calib.baseline, dartsRemaining]);
 
-  // ── scan & append only newly arrived darts ────────────────────
-  const scanForNewDarts = async () => {
-    const img = captureFrame(720, 0.72);
+  // â”€â”€ scan & append only newly arrived darts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const scanForNewDarts = async (attempt = 0) => {
+    const img = captureFrame(1024, 0.82);
     if (!img) {
       scanLockRef.current = false;
       awaitingThrowResolutionRef.current = false;
       return;
     }
+
     setSnapshot(img);
     setPhase("scanning");
     setError(null);
     playScanStartSound();
-    setStatus("Erkenne neuen Dart …");
+    setStatus(attempt > 0 ? "Bestätige Dart …" : "Erkenne neuen Dart …");
+
+    let keepScanLock = false;
 
     try {
-      const { data, error: fe } = await supabase.functions.invoke("analyze-dartboard", {
-        body: { imageBase64: img },
-      });
-      if (fe) throw fe;
+      const data = await analyzeDartboardFrame(img);
 
       const aiDarts: DetectedDart[] = Array.isArray(data?.darts)
         ? data.darts.map((d: unknown) => {
@@ -518,15 +583,6 @@ const LiveCamera = ({
 
       const prevDarts = accumulatedRef.current;
       const prevCount = prevDarts.length;
-      const compareLength = Math.min(prevCount, aiDarts.length);
-      const sameShape =
-        compareLength === prevCount &&
-        compareLength === aiDarts.length &&
-        prevDarts.slice(0, compareLength).every((dart, index) =>
-          dart.baseValue === aiDarts[index].baseValue &&
-          dart.multiplier === aiDarts[index].multiplier &&
-          dart.points === aiDarts[index].points,
-        );
 
       const missDart: DetectedDart = {
         baseValue: 0,
@@ -542,11 +598,31 @@ const LiveCamera = ({
       if (aiDarts.length > prevCount) {
         newlyAdded = aiDarts.slice(prevCount, dartsRemaining);
       } else if (
-        aiDarts.length === prevCount &&
         awaitingThrowResolutionRef.current &&
         prevCount < dartsRemaining &&
-        sameShape
+        (aiDarts.length === prevCount || aiDarts.length < prevCount)
       ) {
+        const needsConfirmation = attempt < 2;
+        if (needsConfirmation) {
+          keepScanLock = true;
+          setSnapshot(null);
+          setPhase("live");
+          setStatus(
+            aiDarts.length < prevCount
+              ? "Dart noch nicht stabil genug erkannt – bestätige erneut …"
+              : "Dart erkannt – bestätige noch einmal …",
+          );
+          if (scanRetryTimerRef.current !== null) {
+            window.clearTimeout(scanRetryTimerRef.current);
+          }
+          scanRetryTimerRef.current = window.setTimeout(() => {
+            scanRetryTimerRef.current = null;
+            scanLockRef.current = true;
+            void scanForNewDarts(attempt + 1);
+          }, 420 + attempt * 180);
+          return;
+        }
+
         nextDarts = [...prevDarts, missDart].slice(0, dartsRemaining);
         newlyAdded = [missDart];
         missAdded = true;
@@ -588,11 +664,12 @@ const LiveCamera = ({
       setPhase("live");
       setStatus("Scan unsicher · weiter beobachten");
     } finally {
-      scanLockRef.current = false;
-      awaitingThrowResolutionRef.current = false;
+      if (!keepScanLock) {
+        scanLockRef.current = false;
+        awaitingThrowResolutionRef.current = false;
+      }
     }
   };
-
   const commitRound = (darts: DetectedDart[]) => {
     onRoundCommit(darts.slice(0, dartsRemaining));
     playRoundCommittedSound();
@@ -604,7 +681,7 @@ const LiveCamera = ({
     // empty board is the new round baseline
     roundBaselineRef.current = calib.baseline;
     setPhase("live");
-    setStatus("Runde übernommen · bereit für nächsten Wurf");
+    setStatus("Runde Ã¼bernommen Â· bereit fÃ¼r nÃ¤chsten Wurf");
   };
 
   const discardRound = () => {
@@ -613,7 +690,7 @@ const LiveCamera = ({
     setError(null);
     resetLoop();
     roundBaselineRef.current = calib.baseline;
-    setStatus("Runde verworfen · bereit für nächsten Wurf");
+    setStatus("Runde verworfen Â· bereit fÃ¼r nÃ¤chsten Wurf");
   };
 
   const recalibrate = () => {
@@ -623,7 +700,7 @@ const LiveCamera = ({
     setSnapshot(null);
     resetLoop();
     setPhase("baselining");
-    setStatus("Board frei halten – Neukalibrierung …");
+    setStatus("Board frei halten â€“ Neukalibrierung â€¦");
     baselineSamplesRef.current = [];
   };
 
@@ -711,12 +788,12 @@ const LiveCamera = ({
         {(phase === "starting" || phase === "detecting") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 px-4 text-center text-xs text-foreground">
             <Loader2 className="mb-2 h-5 w-5 animate-spin" />
-            {phase === "starting" ? "Kamera startet…" : "Board wird automatisch erkannt…"}
+            {phase === "starting" ? "Kamera startetâ€¦" : "Board wird automatisch erkanntâ€¦"}
           </div>
         )}
         {phase === "scanning" && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/60 text-sm text-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Analysiere neuen Dart…
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Analysiere neuen Dartâ€¦
           </div>
         )}
         {phase === "error" && (
@@ -745,7 +822,7 @@ const LiveCamera = ({
               {playerName ?? "Auto-Scoring"}
               {accumulated.length < dartsRemaining && (
                 <span className="ml-1 text-muted-foreground">
-                  · noch {dartsRemaining - accumulated.length} Dart
+                  Â· noch {dartsRemaining - accumulated.length} Dart
                   {dartsRemaining - accumulated.length === 1 ? "" : "s"}
                 </span>
               )}
@@ -755,7 +832,7 @@ const LiveCamera = ({
         </div>
         <div className="ml-3 shrink-0 space-y-0.5 text-right text-[10px] uppercase tracking-wider text-muted-foreground">
           <div>Bew {(motion * 100).toFixed(0)}%</div>
-          <div>Δ {(boardDelta * 100).toFixed(0)}%</div>
+          <div>Î” {(boardDelta * 100).toFixed(0)}%</div>
         </div>
       </div>
 
@@ -812,7 +889,7 @@ const LiveCamera = ({
                   } ${justAddedIndex === i ? "animate-scale-in ring-2 ring-accent" : ""}`}
                 >
                   <Target className="h-3 w-3 opacity-70" />
-                  {dartLabel(d)} <span className="text-foreground/90">· {d.points}</span>
+                  {dartLabel(d)} <span className="text-foreground/90">Â· {d.points}</span>
                 </span>
               );
             })}
@@ -906,9 +983,9 @@ const LiveCamera = ({
             size="sm"
             onClick={() => commitRound(accumulated)}
             className="gap-1"
-            title="Runde sofort übernehmen"
+            title="Runde sofort Ã¼bernehmen"
           >
-            <Check className="h-4 w-4" /> Übernehmen
+            <Check className="h-4 w-4" /> Ãœbernehmen
           </Button>
         )}
       </div>
@@ -963,7 +1040,7 @@ const LiveCamera = ({
           </div>
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Größe</span>
+              <span>GrÃ¶ÃŸe</span>
               <span>{Math.round(calib.size * 100)}%</span>
             </div>
             <Slider
@@ -1003,6 +1080,8 @@ const LiveCamera = ({
 };
 
 export default LiveCamera;
+
+
 
 
 
