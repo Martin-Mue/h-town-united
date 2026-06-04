@@ -808,11 +808,29 @@ const GamePage = () => {
         ].map((p) => {
           const avg = calculateAverage(p.throws);
           const p180 = count180s(p.throws);
+          const isActive = game.currentPlayerId === p.playerId;
+          const activeRound = isActive ? currentRoundScores : [];
           return (
             <div key={p.playerId}
-              className={`bg-card rounded-xl p-4 border-2 transition-all text-center ${game.currentPlayerId === p.playerId ? "border-primary glow-cyan" : "border-border"}`}>
-              <p className="text-sm text-muted-foreground truncate">{p.name}</p>
-              <p className="text-4xl font-display mt-1">{isCricket ? p.cricket?.points ?? 0 : p.remaining}</p>
+              className={`bg-card rounded-xl p-4 border-2 transition-all text-center ${isActive ? "border-primary glow-cyan" : "border-border opacity-80"}`}>
+              <div className="flex items-center justify-center gap-1.5">
+                {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse-glow" />}
+                <p className={`text-sm truncate ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>{p.name}</p>
+              </div>
+              <p className={`text-4xl font-display mt-1 ${isActive ? "text-foreground" : "text-muted-foreground"}`}>{isCricket ? p.cricket?.points ?? 0 : p.remaining}</p>
+              {isActive && activeRound.length > 0 && (
+                <div className="mt-1 flex items-center justify-center gap-1">
+                  {activeRound.map((t, i) => {
+                    const lbl = t.baseValue === 0 ? "M" : t.baseValue === 25 ? (t.multiplier === 2 ? "BULL" : "25") : `${t.multiplier === 2 ? "D" : t.multiplier === 3 ? "T" : ""}${t.baseValue}`;
+                    return (
+                      <span key={i} className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-display text-primary">
+                        {lbl}
+                      </span>
+                    );
+                  })}
+                  <span className="ml-1 text-[10px] font-display text-accent">+{currentRoundTotal}</span>
+                </div>
+              )}
               <div className="flex justify-center gap-3 mt-1 text-xs text-muted-foreground">
                 <span>Ø {avg.toFixed(1)}</span>
                 {game.bestOfLegs > 1 && <span className="text-primary font-bold">{p.legs} Legs</span>}
