@@ -625,15 +625,74 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
 
       {/* review */}
       {phase === "review" && (
-        <div className="space-y-2">
+        <div className="space-y-2 animate-scale-in">
           {error && (
             <div className="flex items-start gap-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
+
+          {/* Big detected-score summary */}
+          <div className="rounded-xl border border-primary/40 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-3">
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="flex items-center gap-1"><Zap className="h-3 w-3 text-accent" /> Erkannt</span>
+              <span>KI {(confidence * 100).toFixed(0)}%</span>
+            </div>
+            <div className="mt-1 flex items-end justify-between">
+              <div className="flex flex-wrap gap-1.5">
+                {detected.length === 0 && (
+                  <span className="text-xs text-muted-foreground">Keine sicheren Treffer</span>
+                )}
+                {detected.map((d, i) => {
+                  const label = d.baseValue === 0
+                    ? "Miss"
+                    : d.baseValue === 25
+                      ? (d.multiplier === 2 ? "Bull 50" : "Bull 25")
+                      : `${d.multiplier === 1 ? "" : d.multiplier === 2 ? "D" : "T"}${d.baseValue}`;
+                  return (
+                    <span
+                      key={i}
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-display ${
+                        d.points === 0
+                          ? "border-muted bg-muted/40 text-muted-foreground"
+                          : "border-primary/50 bg-primary/15 text-primary"
+                      }`}
+                    >
+                      <Target className="h-3 w-3 opacity-70" /> {label}
+                      <span className="text-foreground/90">· {d.points}</span>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="ml-3 shrink-0 text-right">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Summe</div>
+                <div className="font-display text-3xl leading-none text-primary">{roundTotal}</div>
+              </div>
+            </div>
+            {autoCommitIn !== null && (
+              <div className="mt-2 flex items-center justify-between rounded-md bg-background/60 px-2 py-1 text-[11px]">
+                <span className="text-muted-foreground">Auto-Übernahme in {autoCommitIn}s</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[11px]"
+                  onClick={() => {
+                    if (autoCommitTimerRef.current) window.clearInterval(autoCommitTimerRef.current);
+                    autoCommitTimerRef.current = null;
+                    pendingCommitRef.current = null;
+                    setAutoCommitIn(null);
+                    setStatus("Erkennung prüfen");
+                  }}
+                >
+                  Stop
+                </Button>
+              </div>
+            )}
+          </div>
+
           <div className="text-center text-[11px] text-muted-foreground">
-            Vorschlag prüfen, bei Bedarf anpassen, dann bestätigen · KI {(confidence * 100).toFixed(0)}%
+            Vorschlag prüfen, bei Bedarf anpassen, dann bestätigen
           </div>
           <div className="space-y-1.5">
             {detected.map((dart, i) => (
@@ -677,7 +736,6 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
               </Button>
             )}
           </div>
-          <div className="text-center font-display text-2xl text-primary">{roundTotal} Punkte</div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={rescan} className="flex-1 gap-1">
               <RotateCcw className="h-4 w-4" /> Neu scannen
