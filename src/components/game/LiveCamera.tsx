@@ -544,9 +544,29 @@ const LiveCamera = ({ onRoundCommit, enabled, onClose, dartsRemaining = 3, playe
 
       {/* compact status bar */}
       <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-        <div className="min-w-0">
-          <p className="truncate font-medium text-foreground">{playerName ?? "Auto-Scoring"}</p>
-          <p className="truncate text-muted-foreground">{status}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+              phase === "live"
+                ? "bg-secondary animate-pulse-glow"
+                : phase === "scanning"
+                  ? "bg-primary animate-pulse"
+                  : phase === "review"
+                    ? "bg-accent"
+                    : phase === "error"
+                      ? "bg-destructive"
+                      : "bg-muted-foreground"
+            }`}
+          />
+          <div className="min-w-0">
+            <p className="truncate font-medium text-foreground">
+              {playerName ?? "Auto-Scoring"}
+              {typeof dartsRemaining === "number" && phase !== "review" && (
+                <span className="ml-1 text-muted-foreground">· noch {dartsRemaining} Dart{dartsRemaining === 1 ? "" : "s"}</span>
+              )}
+            </p>
+            <p className="truncate text-muted-foreground">{status}</p>
+          </div>
         </div>
         <div className="ml-3 shrink-0 space-y-0.5 text-right text-[10px] uppercase tracking-wider text-muted-foreground">
           <div>Bew {(motion * 100).toFixed(0)}%</div>
