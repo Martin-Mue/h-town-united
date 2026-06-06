@@ -290,7 +290,7 @@ const LiveCamera = ({
     const track = getVideoTrack();
     if (!track || typeof track.applyConstraints !== "function") return;
     try {
-      await track.applyConstraints({ advanced: [{ zoom }] });
+      await track.applyConstraints({ advanced: [{ zoom } as MediaTrackConstraintSet] });
     } catch {
       // Unsupported on some devices.
     }
