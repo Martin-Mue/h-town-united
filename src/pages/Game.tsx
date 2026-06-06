@@ -315,7 +315,7 @@ const GamePage = () => {
       const myState = isP1 ? { ...prev.player1Cricket! } : { ...prev.player2Cricket! };
       const oppState = isP1 ? prev.player2Cricket! : prev.player1Cricket!;
 
-      if (CRICKET_NUMBERS.includes(targetNumber) && targetNumber !== 0) {
+      if ((CRICKET_NUMBERS as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
         const hitsToAdd = baseValue === 50 ? 2 : mul;
         const currentMarks = myState.marks[targetNumber] || 0;
         const newMarks = currentMarks + hitsToAdd;
@@ -394,7 +394,7 @@ const GamePage = () => {
         const myState = isP1 ? { ...curGame.player1Cricket! } : { ...curGame.player2Cricket! };
         const oppState = isP1 ? curGame.player2Cricket! : curGame.player1Cricket!;
         const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
-        if (CRICKET_NUMBERS.includes(targetNumber) && targetNumber !== 0) {
+        if ((CRICKET_NUMBERS as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
           const hitsToAdd = d.baseValue === 50 ? 2 : d.multiplier;
           const currentMarks = myState.marks[targetNumber] || 0;
           const newMarks = currentMarks + hitsToAdd;
