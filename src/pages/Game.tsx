@@ -1088,6 +1088,8 @@ const GamePage = () => {
       <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
         <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
       </Button>
+
+      <ThrowClipDialog popup={clipPopup} onClose={closeClipPopup} />
     </div>
   );
 };
