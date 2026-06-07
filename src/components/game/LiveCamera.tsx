@@ -32,6 +32,7 @@ export interface DetectedDart {
 interface LiveCameraProps {
   onRoundCommit: (darts: DetectedDart[]) => void;
   onPendingChange?: (darts: DetectedDart[]) => void;
+  onClipReady?: (blob: Blob, darts: DetectedDart[]) => void;
   enabled: boolean;
   onClose: () => void;
   dartsRemaining?: number;
@@ -102,6 +103,7 @@ const dartLabel = (d: DetectedDart) => {
 const LiveCamera = ({
   onRoundCommit,
   onPendingChange,
+  onClipReady,
   enabled,
   onClose,
   dartsRemaining = 3,
@@ -111,6 +113,10 @@ const LiveCamera = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const zoomCapsRef = useRef<ZoomCapability | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recorderMimeRef = useRef<string>("video/webm");
+  const clipChunksRef = useRef<Array<{ blob: Blob; ts: number }>>([]);
+  const CLIP_BUFFER_MS = 12000;
 
   const prevSigRef = useRef<number[] | null>(null);
   const roundBaselineRef = useRef<number[] | null>(null); // updated after each detected dart
@@ -186,6 +192,40 @@ const LiveCamera = ({
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
         }
+        // Start rolling MediaRecorder buffer for throw clips
+        try {
+          if (typeof MediaRecorder !== "undefined") {
+            const candidates = [
+              "video/webm;codecs=vp9",
+              "video/webm;codecs=vp8",
+              "video/webm",
+              "video/mp4",
+            ];
+            const mime = candidates.find((m) =>
+              MediaRecorder.isTypeSupported?.(m),
+            ) ?? "";
+            const rec = mime
+              ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1_500_000 })
+              : new MediaRecorder(stream);
+            recorderMimeRef.current = rec.mimeType || mime || "video/webm";
+            rec.ondataavailable = (e) => {
+              if (!e.data || e.data.size === 0) return;
+              const now = performance.now();
+              clipChunksRef.current.push({ blob: e.data, ts: now });
+              const cutoff = now - CLIP_BUFFER_MS - 1500;
+              while (
+                clipChunksRef.current.length > 0 &&
+                clipChunksRef.current[0].ts < cutoff
+              ) {
+                clipChunksRef.current.shift();
+              }
+            };
+            rec.start(500);
+            recorderRef.current = rec;
+          }
+        } catch (e) {
+          console.warn("recorder init failed", e);
+        }
         const track = stream.getVideoTracks()[0];
         const capabilities = track?.getCapabilities?.() as MediaTrackCapabilities & {
           zoom?: { min: number; max: number; step?: number };
@@ -215,6 +255,15 @@ const LiveCamera = ({
         window.clearTimeout(scanRetryTimerRef.current);
         scanRetryTimerRef.current = null;
       }
+      try {
+        if (recorderRef.current && recorderRef.current.state !== "inactive") {
+          recorderRef.current.stop();
+        }
+      } catch {
+        /* noop */
+      }
+      recorderRef.current = null;
+      clipChunksRef.current = [];
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
@@ -671,6 +720,19 @@ const LiveCamera = ({
     }
   };
   const commitRound = (darts: DetectedDart[]) => {
+    // Capture rolling clip BEFORE parent state updates so the popup
+    // can read pre-commit game state (e.g. to detect checkout).
+    try {
+      if (onClipReady && clipChunksRef.current.length > 0) {
+        const blobs = clipChunksRef.current.map((c) => c.blob);
+        if (blobs.length > 0) {
+          const clip = new Blob(blobs, { type: recorderMimeRef.current });
+          onClipReady(clip, darts.slice(0, dartsRemaining));
+        }
+      }
+    } catch (e) {
+      console.warn("clip capture failed", e);
+    }
     onRoundCommit(darts.slice(0, dartsRemaining));
     playRoundCommittedSound();
     setAccumulated([]);
