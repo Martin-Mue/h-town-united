@@ -720,6 +720,26 @@ const LiveCamera = ({
     }
   };
   const commitRound = (darts: DetectedDart[]) => {
+    // Capture rolling clip BEFORE we reset state
+    try {
+      if (onClipReady && clipChunksRef.current.length > 0) {
+        const rec = recorderRef.current;
+        if (rec && rec.state === "recording") {
+          try { rec.requestData(); } catch { /* not supported */ }
+        }
+        // Defer one tick so the requested chunk lands in the buffer
+        const finalize = () => {
+          const blobs = clipChunksRef.current.map((c) => c.blob);
+          if (blobs.length > 0) {
+            const clip = new Blob(blobs, { type: recorderMimeRef.current });
+            onClipReady(clip, darts.slice(0, dartsRemaining));
+          }
+        };
+        window.setTimeout(finalize, 60);
+      }
+    } catch (e) {
+      console.warn("clip capture failed", e);
+    }
     onRoundCommit(darts.slice(0, dartsRemaining));
     playRoundCommittedSound();
     setAccumulated([]);
