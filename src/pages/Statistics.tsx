@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent } from "lucide-react";
+import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -16,7 +16,7 @@ interface GameRecord {
   player1_average: number; player2_average: number; player1_highscore: number; player2_highscore: number;
   player1_legs_won: number; player2_legs_won: number; player1_double_rate: number; player2_double_rate: number;
   player1_total_throws: number; player2_total_throws: number; winner_name: string; played_at: string;
-  player1_id: string | null; player2_id: string | null; start_score: number;
+  player1_id: string | null; player2_id: string | null; start_score: number; best_of_legs: number;
 }
 
 interface PlayerStats {
@@ -40,6 +40,10 @@ const StatisticsPage = () => {
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"overview" | "players" | "h2h" | "history">("overview");
+  const [filterTime, setFilterTime] = useState<"all" | "today" | "week" | "month" | "year">("all");
+  const [filterMode, setFilterMode] = useState<string>("all");
+  const [filterPlayerId, setFilterPlayerId] = useState<string>("all");
+  const [filterBestOf, setFilterBestOf] = useState<string>("all");
   const { session } = useAuth();
 
   const fetchData = useCallback(async () => {
@@ -54,16 +58,53 @@ const StatisticsPage = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Filtered games — drives every aggregation below
+  const filteredGames = useMemo(() => {
+    const now = Date.now();
+    const dayMs = 86_400_000;
+    let cutoff = 0;
+    if (filterTime === "today") cutoff = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+    else if (filterTime === "week") cutoff = now - 7 * dayMs;
+    else if (filterTime === "month") cutoff = now - 30 * dayMs;
+    else if (filterTime === "year") cutoff = now - 365 * dayMs;
+    return games.filter((g) => {
+      if (cutoff > 0 && new Date(g.played_at).getTime() < cutoff) return false;
+      if (filterMode !== "all" && g.mode !== filterMode) return false;
+      if (filterPlayerId !== "all" && g.player1_id !== filterPlayerId && g.player2_id !== filterPlayerId) return false;
+      if (filterBestOf !== "all" && Number(g.best_of_legs) !== Number(filterBestOf)) return false;
+      return true;
+    });
+  }, [games, filterTime, filterMode, filterPlayerId, filterBestOf]);
+
+  const availableModes = useMemo(() => {
+    const s = new Set<string>();
+    games.forEach((g) => s.add(g.mode));
+    return Array.from(s);
+  }, [games]);
+
+  const availableBestOf = useMemo(() => {
+    const s = new Set<number>();
+    games.forEach((g) => { if (g.best_of_legs) s.add(Number(g.best_of_legs)); });
+    return Array.from(s).sort((a, b) => a - b);
+  }, [games]);
+
+  const filtersActive =
+    filterTime !== "all" || filterMode !== "all" || filterPlayerId !== "all" || filterBestOf !== "all";
+
+  const resetFilters = () => {
+    setFilterTime("all"); setFilterMode("all"); setFilterPlayerId("all"); setFilterBestOf("all");
+  };
+
   // Club-wide stats
   const clubStats = useMemo(() => {
-    const totalGames = games.length;
+    const totalGames = filteredGames.length;
     const totalPlayers = players.length;
     const avgOfAverages = players.length > 0 ? players.reduce((s, p) => s + Number(p.average), 0) / players.length : 0;
     const bestAvg = players.reduce((best, p) => Number(p.average) > best.val ? { name: p.name, val: Number(p.average), emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const bestHighscore = players.reduce((best, p) => p.high_score > best.val ? { name: p.name, val: p.high_score, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const mostGames = players.reduce((best, p) => p.games_played > best.val ? { name: p.name, val: p.games_played, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
-    const totalDarts = games.reduce((s, g) => s + g.player1_total_throws + g.player2_total_throws, 0);
-    const highestGameAvg = games.reduce((best, g) => {
+    const totalDarts = filteredGames.reduce((s, g) => s + g.player1_total_throws + g.player2_total_throws, 0);
+    const highestGameAvg = filteredGames.reduce((best, g) => {
       const max = Math.max(g.player1_average, g.player2_average);
       if (max > best.val) {
         const name = g.player1_average > g.player2_average ? g.player1_name : g.player2_name;
@@ -73,7 +114,7 @@ const StatisticsPage = () => {
     }, { name: "-", val: 0 });
     const mostWins = players.reduce((best, p) => p.games_won > best.val ? { name: p.name, val: p.games_won, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     return { totalGames, totalPlayers, avgOfAverages, bestAvg, bestHighscore, mostGames, totalDarts, highestGameAvg, mostWins };
-  }, [games, players]);
+  }, [filteredGames, players]);
 
   const leaderboard = useMemo(() => {
     return [...players].sort((a, b) => {
@@ -91,24 +132,24 @@ const StatisticsPage = () => {
 
   const modeDistribution = useMemo(() => {
     const counts: Record<string, number> = {};
-    games.forEach(g => { counts[g.mode] = (counts[g.mode] || 0) + 1; });
+    filteredGames.forEach(g => { counts[g.mode] = (counts[g.mode] || 0) + 1; });
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [games]);
+  }, [filteredGames]);
 
   const gamesTimeline = useMemo(() => {
     const days: Record<string, number> = {};
     const now = new Date();
     for (let i = 29; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); days[d.toISOString().slice(0, 10)] = 0; }
-    games.forEach(g => { const day = g.played_at.slice(0, 10); if (days[day] !== undefined) days[day]++; });
+    filteredGames.forEach(g => { const day = g.played_at.slice(0, 10); if (days[day] !== undefined) days[day]++; });
     return Object.entries(days).map(([date, count]) => ({ date: date.slice(5), count }));
-  }, [games]);
+  }, [filteredGames]);
 
   // Per-player stats
   const playerDetailStats = useMemo(() => {
     if (!selectedPlayerId) return null;
     const player = players.find(p => p.id === selectedPlayerId);
     if (!player) return null;
-    const playerGames = games.filter(g => g.player1_id === selectedPlayerId || g.player2_id === selectedPlayerId);
+    const playerGames = filteredGames.filter(g => g.player1_id === selectedPlayerId || g.player2_id === selectedPlayerId);
     const winRate = player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0;
 
     // Average trend (oldest first)
@@ -160,14 +201,14 @@ const StatisticsPage = () => {
     });
 
     return { player, winRate, averageTrend, currentStreak, bestStreak, recentForm, bestGameAvg, worstGameAvg, opponents, totalGames: playerGames.length };
-  }, [selectedPlayerId, games, players]);
+  }, [selectedPlayerId, filteredGames, players]);
 
   const h2hRecords = useMemo(() => {
     if (!compareP1 || !compareP2) return null;
     const p1 = players.find(p => p.id === compareP1);
     const p2 = players.find(p => p.id === compareP2);
     if (!p1 || !p2) return null;
-    const h2hGames = games.filter(g =>
+    const h2hGames = filteredGames.filter(g =>
       (g.player1_id === compareP1 && g.player2_id === compareP2) || (g.player1_id === compareP2 && g.player2_id === compareP1)
     );
     let p1Wins = 0, p2Wins = 0, p1AvgSum = 0, p2AvgSum = 0, p1HighestAvg = 0, p2HighestAvg = 0;
@@ -193,9 +234,9 @@ const StatisticsPage = () => {
         { skill: "Doppel %", p1: Number(p1.double_rate), p2: Number(p2.double_rate) },
       ],
     };
-  }, [compareP1, compareP2, players, games]);
+  }, [compareP1, compareP2, players, filteredGames]);
 
-  const recentGames = games.slice(0, 20);
+  const recentGames = filteredGames.slice(0, 20);
 
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -213,6 +254,58 @@ const StatisticsPage = () => {
       <div className="flex items-center gap-3 mb-4">
         <BarChart3 className="w-6 h-6 text-primary" />
         <h2 className="text-2xl font-display uppercase">Statistiken</h2>
+      </div>
+
+      {/* Filter bar */}
+      <div className="bg-card rounded-xl border border-border p-3 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="flex items-center gap-1.5 text-xs font-display uppercase tracking-wider text-muted-foreground">
+            <Filter className="w-3.5 h-3.5" /> Filter
+            {filtersActive && (
+              <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary">
+                {filteredGames.length} / {games.length} Spiele
+              </span>
+            )}
+          </span>
+          {filtersActive && (
+            <button onClick={resetFilters} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <X className="w-3 h-3" /> Zurücksetzen
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <Select value={filterTime} onValueChange={(v) => setFilterTime(v as typeof filterTime)}>
+            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Zeitraum" /></SelectTrigger>
+            <SelectContent className="bg-card border-border">
+              <SelectItem value="all">Alle Zeit</SelectItem>
+              <SelectItem value="today">Heute</SelectItem>
+              <SelectItem value="week">Letzte 7 Tage</SelectItem>
+              <SelectItem value="month">Letzte 30 Tage</SelectItem>
+              <SelectItem value="year">Letzte 12 Monate</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterMode} onValueChange={setFilterMode}>
+            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Modus" /></SelectTrigger>
+            <SelectContent className="bg-card border-border">
+              <SelectItem value="all">Alle Modi</SelectItem>
+              {availableModes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterPlayerId} onValueChange={setFilterPlayerId}>
+            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Spieler" /></SelectTrigger>
+            <SelectContent className="bg-card border-border">
+              <SelectItem value="all">Alle Spieler</SelectItem>
+              {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterBestOf} onValueChange={setFilterBestOf}>
+            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Best of" /></SelectTrigger>
+            <SelectContent className="bg-card border-border">
+              <SelectItem value="all">Alle Formate</SelectItem>
+              {availableBestOf.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Tab navigation */}
