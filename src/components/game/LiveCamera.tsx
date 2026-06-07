@@ -720,22 +720,15 @@ const LiveCamera = ({
     }
   };
   const commitRound = (darts: DetectedDart[]) => {
-    // Capture rolling clip BEFORE we reset state
+    // Capture rolling clip BEFORE parent state updates so the popup
+    // can read pre-commit game state (e.g. to detect checkout).
     try {
       if (onClipReady && clipChunksRef.current.length > 0) {
-        const rec = recorderRef.current;
-        if (rec && rec.state === "recording") {
-          try { rec.requestData(); } catch { /* not supported */ }
+        const blobs = clipChunksRef.current.map((c) => c.blob);
+        if (blobs.length > 0) {
+          const clip = new Blob(blobs, { type: recorderMimeRef.current });
+          onClipReady(clip, darts.slice(0, dartsRemaining));
         }
-        // Defer one tick so the requested chunk lands in the buffer
-        const finalize = () => {
-          const blobs = clipChunksRef.current.map((c) => c.blob);
-          if (blobs.length > 0) {
-            const clip = new Blob(blobs, { type: recorderMimeRef.current });
-            onClipReady(clip, darts.slice(0, dartsRemaining));
-          }
-        };
-        window.setTimeout(finalize, 60);
       }
     } catch (e) {
       console.warn("clip capture failed", e);
