@@ -73,8 +73,12 @@ const TournamentPage = () => {
 
   // Setup state
   const [tournamentName, setTournamentName] = useState("");
-  const [tournamentMode, setTournamentMode] = useState("ko");
+  const [tournamentMode, setTournamentMode] = useState("event-ko");
+  const [gameMode, setGameMode] = useState("501");
+  const [bestOfLegs, setBestOfLegs] = useState(3);
+  const [targetSize, setTargetSize] = useState("64");
   const [playerInput, setPlayerInput] = useState("");
+  const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
   const [dbPlayers, setDbPlayers] = useState<{ id: string; name: string; emoji: string }[]>([]);
 
@@ -91,6 +95,8 @@ const TournamentPage = () => {
         ...t,
         players: (t.players as any) || [],
         bracket: (t.bracket as any) || [],
+        game_mode: (t as any).game_mode || "501",
+        best_of_legs: (t as any).best_of_legs || 3,
       })) as TournamentRecord[]);
     }
     setLoading(false);
@@ -103,16 +109,29 @@ const TournamentPage = () => {
 
   useEffect(() => { fetchTournaments(); fetchDbPlayers(); }, [fetchTournaments, fetchDbPlayers]);
 
+  const addPlayers = (names: string[]) => {
+    const cleaned = names.map((name) => name.trim()).filter(Boolean);
+    setPlayers((prev) => [...prev, ...cleaned.filter((name) => !prev.includes(name))].slice(0, 64));
+  };
+
   const addPlayer = () => {
-    const name = playerInput.trim();
-    if (name && !players.includes(name)) {
-      setPlayers([...players, name]);
-      setPlayerInput("");
-    }
+    addPlayers([playerInput]);
+    setPlayerInput("");
   };
 
   const addDbPlayer = (name: string) => {
-    if (!players.includes(name)) setPlayers([...players, name]);
+    addPlayers([name]);
+  };
+
+  const addBulkPlayers = () => {
+    addPlayers(bulkInput.split(/[\n,;]+/));
+    setBulkInput("");
+  };
+
+  const fillGuestPlayers = () => {
+    const target = Number(targetSize) || 64;
+    const needed = Math.max(0, target - players.length);
+    addPlayers(Array.from({ length: needed }, (_, i) => `Gast ${String(players.length + i + 1).padStart(2, "0")}`));
   };
 
   const removePlayer = (name: string) => setPlayers(players.filter(p => p !== name));
