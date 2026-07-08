@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Calendar } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +18,7 @@ interface Match {
   winner?: string;
   score1?: number;
   score2?: number;
+  table?: number;
 }
 
 interface RoundRobinMatch {
@@ -44,7 +46,22 @@ interface TournamentRecord {
   players: string[];
   bracket: Match[] | RoundRobinMatch[];
   created_at: string;
+  game_mode?: string;
+  best_of_legs?: number;
 }
+
+const BRACKET_SIZES = [4, 8, 16, 32, 64];
+
+const nextPowerOfTwo = (count: number) => Math.pow(2, Math.ceil(Math.log2(Math.max(count, 2))));
+
+const shuffle = <T,>(list: T[]) => {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
 
 const TournamentPage = () => {
   const [phase, setPhase] = useState<"list" | "setup" | "bracket">("list");
@@ -56,8 +73,12 @@ const TournamentPage = () => {
 
   // Setup state
   const [tournamentName, setTournamentName] = useState("");
-  const [tournamentMode, setTournamentMode] = useState("ko");
+  const [tournamentMode, setTournamentMode] = useState("event-ko");
+  const [gameMode, setGameMode] = useState("501");
+  const [bestOfLegs, setBestOfLegs] = useState(3);
+  const [targetSize, setTargetSize] = useState("64");
   const [playerInput, setPlayerInput] = useState("");
+  const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
   const [dbPlayers, setDbPlayers] = useState<{ id: string; name: string; emoji: string }[]>([]);
 
@@ -74,6 +95,8 @@ const TournamentPage = () => {
         ...t,
         players: (t.players as any) || [],
         bracket: (t.bracket as any) || [],
+        game_mode: (t as any).game_mode || "501",
+        best_of_legs: (t as any).best_of_legs || 3,
       })) as TournamentRecord[]);
     }
     setLoading(false);
@@ -86,36 +109,50 @@ const TournamentPage = () => {
 
   useEffect(() => { fetchTournaments(); fetchDbPlayers(); }, [fetchTournaments, fetchDbPlayers]);
 
+  const addPlayers = (names: string[]) => {
+    const cleaned = names.map((name) => name.trim()).filter(Boolean);
+    setPlayers((prev) => [...prev, ...cleaned.filter((name) => !prev.includes(name))].slice(0, 64));
+  };
+
   const addPlayer = () => {
-    const name = playerInput.trim();
-    if (name && !players.includes(name)) {
-      setPlayers([...players, name]);
-      setPlayerInput("");
-    }
+    addPlayers([playerInput]);
+    setPlayerInput("");
   };
 
   const addDbPlayer = (name: string) => {
-    if (!players.includes(name)) setPlayers([...players, name]);
+    addPlayers([name]);
+  };
+
+  const addBulkPlayers = () => {
+    addPlayers(bulkInput.split(/[\n,;]+/));
+    setBulkInput("");
+  };
+
+  const fillGuestPlayers = () => {
+    const target = Number(targetSize) || 64;
+    const needed = Math.max(0, target - players.length);
+    addPlayers(Array.from({ length: needed }, (_, i) => `Gast ${String(players.length + i + 1).padStart(2, "0")}`));
   };
 
   const removePlayer = (name: string) => setPlayers(players.filter(p => p !== name));
 
   // ─── KO Bracket Generation ──────────────────────
   const generateKoBracket = (playerList: string[]): Match[] => {
-    const size = Math.pow(2, Math.ceil(Math.log2(playerList.length)));
-    const padded = [...playerList];
+    const requestedSize = Number(targetSize) || nextPowerOfTwo(playerList.length);
+    const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requestedSize));
+    const padded = shuffle(playerList).slice(0, size);
     while (padded.length < size) padded.push("BYE");
-    const shuffled = padded.sort(() => Math.random() - 0.5);
 
     const firstRound: Match[] = [];
-    for (let i = 0; i < shuffled.length; i += 2) {
+    for (let i = 0; i < padded.length; i += 2) {
       firstRound.push({
         id: `r1-${i / 2}`,
         round: 1,
         position: i / 2,
-        player1: shuffled[i],
-        player2: shuffled[i + 1],
-        winner: shuffled[i + 1] === "BYE" ? shuffled[i] : shuffled[i] === "BYE" ? shuffled[i + 1] : undefined,
+        table: i / 2 + 1,
+        player1: padded[i],
+        player2: padded[i + 1],
+        winner: padded[i + 1] === "BYE" ? padded[i] : padded[i] === "BYE" ? padded[i + 1] : undefined,
       });
     }
 
@@ -124,7 +161,7 @@ const TournamentPage = () => {
     for (let round = 2; round <= totalRounds; round++) {
       const count = size / Math.pow(2, round);
       for (let pos = 0; pos < count; pos++) {
-        allMatches.push({ id: `r${round}-${pos}`, round, position: pos });
+        allMatches.push({ id: `r${round}-${pos}`, round, position: pos, table: pos + 1 });
       }
     }
     propagateKoWinners(allMatches);
@@ -157,17 +194,19 @@ const TournamentPage = () => {
         matches.push({ id: `rr-${id++}`, player1: playerList[i], player2: playerList[j], played: false });
       }
     }
-    return matches.sort(() => Math.random() - 0.5);
+    return shuffle(matches);
   };
 
   // ─── Start Tournament ──────────────────────────
   const startTournament = async () => {
     if (players.length < 2) return;
-    const bracket = tournamentMode === "ko" ? generateKoBracket(players) : generateRoundRobin(players);
+    const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
 
     const { data, error } = await supabase.from("tournaments").insert({
-      name: tournamentName || "Turnier",
+      name: tournamentName || "Großevent",
       mode: tournamentMode,
+      game_mode: gameMode,
+      best_of_legs: bestOfLegs,
       user_id: session?.user?.id,
       players: players as any,
       bracket: bracket as any,
@@ -179,7 +218,7 @@ const TournamentPage = () => {
       return;
     }
 
-    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any };
+    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs };
     setActiveTournament(record);
     setPhase("bracket");
     setPlayers([]);
@@ -188,10 +227,10 @@ const TournamentPage = () => {
   };
 
   // ─── KO: Set Winner ────────────────────────────
-  const setKoWinner = async (matchId: string, winner: string) => {
+  const setKoWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
     if (!activeTournament) return;
     const bracket = [...(activeTournament.bracket as Match[])];
-    const updated = bracket.map(m => m.id === matchId ? { ...m, winner } : m);
+    const updated = bracket.map(m => m.id === matchId ? { ...m, winner, score1, score2 } : m);
 
     const match = updated.find(m => m.id === matchId)!;
     const nextRound = updated.filter(m => m.round === match.round + 1);
@@ -220,6 +259,30 @@ const TournamentPage = () => {
       setCeremonyChampion(champion);
       setSeenCeremonyFor(activeTournament.id);
     }
+  };
+
+  const setKoScore = async (matchId: string, slot: 1 | 2) => {
+    if (!activeTournament) return;
+    const match = (activeTournament.bracket as Match[]).find(m => m.id === matchId);
+    if (!match || !match.player1 || !match.player2 || match.player1 === "BYE" || match.player2 === "BYE") return;
+    const score1 = slot === 1 ? (match.score1 || 0) + 1 : (match.score1 || 0);
+    const score2 = slot === 2 ? (match.score2 || 0) + 1 : (match.score2 || 0);
+    const legsToWin = Math.ceil((activeTournament.best_of_legs || 1) / 2);
+    const winner = score1 >= legsToWin && score1 > score2 ? match.player1 : score2 >= legsToWin && score2 > score1 ? match.player2 : undefined;
+    if (winner) await setKoWinner(matchId, winner, score1, score2);
+    else {
+      const bracket = (activeTournament.bracket as Match[]).map(m => m.id === matchId ? { ...m, score1, score2 } : m);
+      await supabase.from("tournaments").update({ bracket: bracket as any }).eq("id", activeTournament.id);
+      setActiveTournament({ ...activeTournament, bracket });
+    }
+  };
+
+  const resetKoMatch = async (matchId: string) => {
+    if (!activeTournament) return;
+    const bracket = (activeTournament.bracket as Match[]).map(m => m.id === matchId ? { ...m, winner: undefined, score1: undefined, score2: undefined } : { ...m });
+    propagateKoWinners(bracket);
+    await supabase.from("tournaments").update({ bracket: bracket as any, champion: null, status: "active" }).eq("id", activeTournament.id);
+    setActiveTournament({ ...activeTournament, bracket, champion: null, status: "active" });
   };
 
   // ─── Round Robin: Set Winner ───────────────────
@@ -338,9 +401,13 @@ const TournamentPage = () => {
   // ─── SETUP PHASE ────────────────────────────────
   if (phase === "setup") {
     return (
-      <div className="container py-6 animate-slide-up max-w-lg mx-auto">
+      <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
         <Button variant="ghost" onClick={() => setPhase("list")} className="mb-4 text-muted-foreground text-sm">← Zurück</Button>
-        <h2 className="text-2xl font-display uppercase mb-6 text-center">Turnier erstellen</h2>
+        <div className="mb-6 rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> Großevent-Modus</div>
+          <h2 className="text-2xl font-display uppercase">Turnier erstellen</h2>
+          <p className="text-sm text-muted-foreground">Für bis zu 64 Teilnehmer, Gastspieler und schnelle Ergebnis-Erfassung.</p>
+        </div>
         <div className="space-y-4">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Turniername</label>
@@ -352,10 +419,47 @@ const TournamentPage = () => {
               <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="ko">K.O.-System</SelectItem>
+                <SelectItem value="event-ko">Event K.O. bis 64</SelectItem>
                 <SelectItem value="round-robin">Jeder gegen Jeden</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Spielmodus</label>
+              <Select value={gameMode} onValueChange={setGameMode}>
+                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="501">501</SelectItem>
+                  <SelectItem value="301">301</SelectItem>
+                  <SelectItem value="Cricket">Cricket</SelectItem>
+                  <SelectItem value="Extern">Extern gespielt</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Best of Legs</label>
+              <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
+                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {[1, 3, 5, 7, 9, 11].map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {tournamentMode !== "round-robin" && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Turnierbaum-Größe</label>
+              <Select value={targetSize} onValueChange={setTargetSize}>
+                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>{n}er Baum</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Add from club members */}
           {dbPlayers.length > 0 && (
@@ -377,6 +481,15 @@ const TournamentPage = () => {
             <div className="flex gap-2">
               <Input value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="Name" className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
               <Button onClick={addPlayer} size="icon" variant="outline"><Plus className="w-4 h-4" /></Button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm text-muted-foreground mb-1 block">Gastliste einfügen</label>
+            <Textarea value={bulkInput} onChange={(e) => setBulkInput(e.target.value)} placeholder="Ein Name pro Zeile oder per Komma getrennt" />
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" variant="outline" onClick={addBulkPlayers}>Liste übernehmen</Button>
+              {tournamentMode !== "round-robin" && <Button size="sm" variant="outline" onClick={fillGuestPlayers}>Mit Gästen auffüllen</Button>}
             </div>
           </div>
 
@@ -404,7 +517,7 @@ const TournamentPage = () => {
 
   // ─── BRACKET PHASE ──────────────────────────────
   if (!activeTournament) return null;
-  const isKo = activeTournament.mode === "ko";
+  const isKo = activeTournament.mode !== "round-robin";
 
   if (isKo) {
     const matches = activeTournament.bracket as Match[];
@@ -415,7 +528,7 @@ const TournamentPage = () => {
         <div className="container flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
-            <p className="text-xs text-muted-foreground">K.O.-System · {activeTournament.players.length} Spieler</p>
+            <p className="text-xs text-muted-foreground">{activeTournament.mode === "event-ko" ? "Event K.O." : "K.O.-System"} · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
             ← Übersicht
@@ -448,15 +561,17 @@ const TournamentPage = () => {
                     {roundMatches.map(match => (
                       <div key={match.id} className={`bg-card border rounded-xl overflow-hidden ${match.winner ? "border-border" : "border-primary/30"}`}>
                         {[match.player1, match.player2].map((player, idx) => (
-                          <button key={idx} disabled={!player || player === "BYE" || !!match.winner}
-                            onClick={() => player && setKoWinner(match.id, player)}
-                            className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between transition-colors ${
+                          <div key={idx}
+                            className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
                               idx === 0 ? "border-b border-border" : ""
                             } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-                            <span>{player || "TBD"}</span>
-                            {match.winner === player && <Trophy className="w-3 h-3 text-secondary" />}
-                          </button>
+                            <button disabled={!player || player === "BYE" || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!player || player === "BYE" || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)}><Plus className="w-3 h-3" /></Button>
+                            <span className="w-5 text-center font-display">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
+                            {match.winner === player && <Check className="w-3 h-3 text-secondary" />}
+                          </div>
                         ))}
+                        {(match.winner || match.score1 || match.score2) && <Button variant="ghost" size="sm" className="w-full rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}><RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen</Button>}
                       </div>
                     ))}
                   </div>

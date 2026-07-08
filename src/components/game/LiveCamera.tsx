@@ -41,6 +41,8 @@ export interface DetectedDart {
   multiplier: 1 | 2 | 3;
   points: number;
   confidence: number;
+  x?: number;
+  y?: number;
 }
 
 interface LiveCameraProps {
@@ -63,21 +65,27 @@ interface Calibration {
 }
 
 const CALIB_KEY = "dartcam-calibration-v4";
-const GRID = 32;
+const GRID = 40;
 const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
 const MIN_ANALYSIS_SIZE = 0.55;
 
 // Frame-to-frame diff considered "still" (no motion).
-const MOTION_STILL = 0.022;
+const MOTION_STILL = 0.018;
 // Diff between current and last *stable* frame → physical change occurred.
-const CHANGE_DELTA = 0.038;
+const CHANGE_DELTA = 0.052;
 // Frames of stillness required after a change before scanning.
-const STILL_AFTER_CHANGE = 2; // ~0.6s at 300ms
+const STILL_AFTER_CHANGE = 3; // ~0.9s at 300ms
 // Tick interval of the watcher loop.
 const TICK_MS = 300;
 // Rolling video buffer length for throw clip.
 const CLIP_BUFFER_MS = 12000;
+const SCAN_COOLDOWN_MS = 2200;
+const EMPTY_CONFIRM_SCANS = 2;
+const MIN_DART_CONFIDENCE = 0.54;
+const MIN_OVERALL_CONFIDENCE = 0.48;
+const EMPTY_BOARD_DELTA = 0.026;
+const DART_POSITION_MATCH = 0.09;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -117,20 +125,64 @@ const dartLabel = (d: DetectedDart) => {
 
 const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
 
-/**
- * Try to match darts returned by AI against darts we already accumulated,
- * accounting for slight re-classifications across frames. Returns the
- * darts in `ai` that are genuinely *new* compared to `prev`.
- */
+const hasPosition = (d: DetectedDart) =>
+  typeof d.x === "number" && Number.isFinite(d.x) && typeof d.y === "number" && Number.isFinite(d.y);
+
+const dartDistance = (a: DetectedDart, b: DetectedDart) => {
+  if (!hasPosition(a) || !hasPosition(b)) return Number.POSITIVE_INFINITY;
+  return Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0));
+};
+
+const samePhysicalDart = (a: DetectedDart, b: DetectedDart) =>
+  dartDistance(a, b) < DART_POSITION_MATCH || (!hasPosition(a) && !hasPosition(b) && dartKey(a) === dartKey(b));
+
+const sanitizeAiDarts = (raw: unknown, max: number): DetectedDart[] => {
+  if (!Array.isArray(raw)) return [];
+  const parsed = raw
+    .map((d: unknown) => {
+      const dart = d as Partial<DetectedDart> & {
+        segment?: unknown;
+        multiplier?: unknown;
+        points?: unknown;
+        confidence?: unknown;
+        x?: unknown;
+        y?: unknown;
+      };
+      const baseValue = Number(dart.segment ?? dart.baseValue) || 0;
+      const multiplier = ([1, 2, 3].includes(Number(dart.multiplier))
+        ? Number(dart.multiplier)
+        : 1) as 1 | 2 | 3;
+      const fallbackPoints = baseValue === 25 ? (multiplier === 2 ? 50 : 25) : baseValue * multiplier;
+      const x = Number(dart.x);
+      const y = Number(dart.y);
+      return {
+        baseValue,
+        multiplier,
+        points: Number.isFinite(Number(dart.points)) ? Number(dart.points) : fallbackPoints,
+        confidence: Number(dart.confidence) || 0,
+        ...(Number.isFinite(x) && x >= 0 && x <= 1 ? { x } : {}),
+        ...(Number.isFinite(y) && y >= 0 && y <= 1 ? { y } : {}),
+      };
+    })
+    .filter((d) => d.confidence >= MIN_DART_CONFIDENCE)
+    .sort((a, b) => b.confidence - a.confidence);
+
+  const deduped: DetectedDart[] = [];
+  for (const dart of parsed) {
+    if (deduped.some((existing) => samePhysicalDart(existing, dart))) continue;
+    deduped.push(dart);
+    if (deduped.length >= max) break;
+  }
+  return deduped;
+};
+
 function diffNewDarts(prev: DetectedDart[], ai: DetectedDart[]): DetectedDart[] {
   if (ai.length <= prev.length) return [];
   const remaining = ai.slice();
-  // remove one occurrence per prev dart by key, otherwise drop the first match
   for (const p of prev) {
-    const k = dartKey(p);
-    let idx = remaining.findIndex((d) => dartKey(d) === k);
-    if (idx < 0) idx = 0;
-    if (remaining.length > 0) remaining.splice(idx, 1);
+    let idx = remaining.findIndex((d) => samePhysicalDart(p, d));
+    if (idx < 0) idx = remaining.findIndex((d) => dartKey(d) === dartKey(p));
+    if (idx >= 0) remaining.splice(idx, 1);
   }
   return remaining;
 }
@@ -157,9 +209,11 @@ const LiveCamera = ({
   // Frame state
   const prevSigRef = useRef<number[] | null>(null);
   const stableSigRef = useRef<number[] | null>(null);
+  const emptyBoardSigRef = useRef<number[] | null>(null);
   const stillFramesRef = useRef(0);
   const changeSeenRef = useRef(false);
   const scanLockRef = useRef(false);
+  const lastScanAtRef = useRef(0);
   // Track how many AI scans in a row report zero darts AFTER we had some.
   const emptyConfirmRef = useRef(0);
 
@@ -522,7 +576,8 @@ const LiveCamera = ({
       }
 
       const delta = sigDiff(stableSigRef.current, sig);
-      setChangeDelta(delta);
+      const emptyDelta = sigDiff(emptyBoardSigRef.current, sig);
+      setChangeDelta(emptyBoardSigRef.current ? emptyDelta : delta);
 
       // If picture changed significantly compared to last stable frame,
       // remember that change happened.
@@ -535,8 +590,15 @@ const LiveCamera = ({
       if (
         !scanLockRef.current &&
         changeSeenRef.current &&
-        stillFramesRef.current >= STILL_AFTER_CHANGE
+        stillFramesRef.current >= STILL_AFTER_CHANGE &&
+        performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS
       ) {
+        if (accumulatedRef.current.length === 0 && emptyBoardSigRef.current && emptyDelta < EMPTY_BOARD_DELTA) {
+          stableSigRef.current = sig;
+          changeSeenRef.current = false;
+          setStatus("Licht/Bewegung ignoriert · bereit");
+          return;
+        }
         scanLockRef.current = true;
         changeSeenRef.current = false;
         void runScan();
@@ -546,6 +608,9 @@ const LiveCamera = ({
       // Idle status text
       if (!scanLockRef.current) {
         const accCount = accumulatedRef.current.length;
+        if (accCount === 0 && stillFramesRef.current >= 4) {
+          emptyBoardSigRef.current = sig;
+        }
         if (changeSeenRef.current) {
           setStatus("Bewegung erkannt – warte bis still …");
         } else if (accCount >= dartsRemaining) {
@@ -572,77 +637,73 @@ const LiveCamera = ({
       return;
     }
     setPhase("scanning");
+    lastScanAtRef.current = performance.now();
     setError(null);
     playScanStartSound();
     setStatus("Erkenne Darts …");
 
     try {
       const data = await analyzeFrame(img);
-      const aiDarts: DetectedDart[] = Array.isArray(data?.darts)
-        ? data.darts.map((d: unknown) => {
-            const dart = d as Partial<DetectedDart> & {
-              segment?: unknown;
-              multiplier?: unknown;
-              points?: unknown;
-              confidence?: unknown;
-            };
-            return {
-              baseValue: Number(dart.segment) || 0,
-              multiplier: ([1, 2, 3].includes(Number(dart.multiplier))
-                ? Number(dart.multiplier)
-                : 1) as 1 | 2 | 3,
-              points: Number(dart.points) || 0,
-              confidence: Number(dart.confidence) || 0,
-            };
-          })
-        : [];
-      setLastConfidence(Number(data?.overallConfidence) || 0);
+      const overallConfidence = Number(data?.overallConfidence) || 0;
+      const aiDarts = sanitizeAiDarts(data?.darts, dartsRemaining);
+      setLastConfidence(overallConfidence);
       if (data?.board) void updateAutoCalibration(data.board as BoardDetection);
 
       const prev = accumulatedRef.current;
+      const currentSig = buildSignature();
+      const emptyDelta = sigDiff(emptyBoardSigRef.current, currentSig);
+      const looksEmpty = Boolean(emptyBoardSigRef.current) && emptyDelta < EMPTY_BOARD_DELTA;
+
+      if (overallConfidence > 0 && overallConfidence < MIN_OVERALL_CONFIDENCE && aiDarts.length > prev.length) {
+        if (currentSig) stableSigRef.current = currentSig;
+        setPhase("live");
+        setStatus("Scan unsicher · nicht übernommen");
+        return;
+      }
 
       // Case A: board went empty AFTER having darts → likely user pulled them.
-      if (aiDarts.length === 0 && prev.length > 0) {
+      if ((aiDarts.length === 0 || looksEmpty) && prev.length > 0) {
         emptyConfirmRef.current += 1;
-        if (emptyConfirmRef.current >= 1) {
-          // Commit immediately – the throw is finished.
+        if (emptyConfirmRef.current >= EMPTY_CONFIRM_SCANS) {
           commitRound(prev);
           return;
         }
+        if (currentSig) stableSigRef.current = currentSig;
+        setPhase("live");
+        setStatus("Darts gezogen? Bestätige mit zweitem stabilen Scan …");
+        return;
       } else {
         emptyConfirmRef.current = 0;
       }
 
-      // Case B: more darts visible than before → new dart(s) landed.
-      const newOnes = diffNewDarts(prev, aiDarts);
-      if (newOnes.length > 0) {
-        const merged = [...prev, ...newOnes].slice(0, dartsRemaining);
-        setAccumulated(merged);
-        newOnes.forEach((_, i) => {
+      // Case B: spatial delta matching for genuinely new darts.
+      const newlyDetected = diffNewDarts(prev, aiDarts);
+
+      if (newlyDetected.length > 0) {
+        const finalMerged = [...prev, ...newlyDetected].slice(0, dartsRemaining);
+        setAccumulated(finalMerged);
+        newlyDetected.forEach((_, i) => {
           setTimeout(() => playDartDetectedSound(prev.length + i), 110 * i);
         });
         setJustAddedIndex(prev.length);
         setTimeout(() => setJustAddedIndex(null), 1100);
-      } else if (aiDarts.length === prev.length && aiDarts.length > 0) {
-        // Same number of darts but maybe a re-classification (e.g. dart
-        // shifted slightly). Replace silently to keep accuracy fresh.
-        setAccumulated(aiDarts.slice(0, dartsRemaining));
-      } else if (aiDarts.length < prev.length && aiDarts.length > 0) {
-        // Some darts gone but not all → user pulled mid-round? trim.
-        setAccumulated(aiDarts.slice(0, dartsRemaining));
+      } else if (aiDarts.length > 0) {
+        // Keep accepted darts stable; users can edit any wrong classification.
+        setStatus("Keine neuen Darts erkannt");
       }
 
       // refresh stable reference to the post-scan frame
-      const newSig = buildSignature();
-      if (newSig) stableSigRef.current = newSig;
+      if (currentSig) stableSigRef.current = currentSig;
 
       setPhase("live");
       setStatus(
-        newOnes.length > 0
-          ? `Dart erkannt: ${newOnes.map(dartLabel).join(", ")}`
+        newlyDetected.length > 0
+          ? `Dart erkannt: ${newlyDetected.map(dartLabel).join(", ")}`
           : aiDarts.length === 0
             ? "Board leer"
-            : "Bereit für nächsten Wurf",
+            : prev.length > 0
+              ? "Bestehende Darts bestätigt"
+              : "Bereit für nächsten Wurf",
       );
     } catch (err: unknown) {
       console.error("scan error", err);
@@ -673,6 +734,8 @@ const LiveCamera = ({
     setAccumulated([]);
     accumulatedRef.current = [];
     setError(null);
+    const sig = buildSignature();
+    if (sig) emptyBoardSigRef.current = sig;
     resetLoop();
     setPhase("live");
     setStatus("Runde übernommen · bereit für nächsten Wurf");
@@ -682,6 +745,8 @@ const LiveCamera = ({
     setAccumulated([]);
     accumulatedRef.current = [];
     setError(null);
+    const sig = buildSignature();
+    if (sig) emptyBoardSigRef.current = sig;
     resetLoop();
     setStatus("Runde verworfen · bereit für nächsten Wurf");
   };
