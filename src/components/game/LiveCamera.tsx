@@ -645,20 +645,63 @@ const LiveCamera = ({
         emptyConfirmRef.current = 0;
       }
 
-      // Case B: more darts visible than before → new dart(s) landed.
-      const newOnes = diffNewDarts(prev, aiDarts);
-      if (newOnes.length > 0) {
-        const merged = [...prev, ...newOnes].slice(0, dartsRemaining);
-        setAccumulated(merged);
-        newOnes.forEach((_, i) => {
-          setTimeout(() => playDartDetectedSound(prev.length + i), 110 * i);
+            // Case B: Robust spatial matching to handle new darts and re-classifications
+      const DIST_THRESHOLD = 0.08;
+      const unmatchedAI = aiDarts.map(d => ({ ...d, matched: false }));
+      const newAccumulated = [...prev];
+      const newlyDetected: DetectedDart[] = [];
+
+      // 1. Update existing darts and mark matched AI darts
+      for (let i = 0; i < newAccumulated.length; i++) {
+        const p = newAccumulated[i];
+        let bestIdx = -1;
+        let bestDist = Infinity;
+
+        for (let j = 0; j < unmatchedAI.length; j++) {
+          if (unmatchedAI[j].matched) continue;
+          const d = unmatchedAI[j];
+          if (p.x !== undefined && p.y !== undefined && d.x !== undefined && d.y !== undefined) {
+            const dist = Math.sqrt(Math.pow(p.x - d.x, 2) + Math.pow(p.y - d.y, 2));
+            if (dist < DIST_THRESHOLD && dist < bestDist) {
+              bestDist = dist;
+              bestIdx = j;
+            }
+          } else if (dartKey(p) === dartKey(d)) {
+            bestDist = 0;
+            bestIdx = j;
+            break;
+          }
+        }
+
+        if (bestIdx !== -1) {
+          newAccumulated[i] = { ...unmatchedAI[bestIdx] };
+          unmatchedAI[bestIdx].matched = true;
+        }
+      }
+
+      // 2. Any unmatched AI darts are genuinely new
+      for (const d of unmatchedAI) {
+        if (!d.matched) {
+          newlyDetected.push(d);
+        }
+      }
+
+      if (newlyDetected.length > 0) {
+        const finalMerged = [...newAccumulated, ...newlyDetected].slice(0, dartsRemaining);
+        setAccumulated(finalMerged);
+        newlyDetected.forEach((_, i) => {
+          setTimeout(() => playDartDetectedSound(newAccumulated.length + i), 110 * i);
         });
-        setJustAddedIndex(prev.length);
+        setJustAddedIndex(newAccumulated.length);
         setTimeout(() => setJustAddedIndex(null), 1100);
-      } else if (aiDarts.length === prev.length && aiDarts.length > 0) {
-        // Same number of darts but maybe a re-classification (e.g. dart
-        // shifted slightly). Replace silently to keep accuracy fresh.
-        setAccumulated(aiDarts.slice(0, dartsRemaining));
+      } else if (aiDarts.length > 0) {
+        // If some darts disappeared (but not all), we trim the list to match AI count
+        // to handle cases where a user might pull one dart or a bounce-out occurred.
+        if (aiDarts.length < prev.length) {
+          setAccumulated(aiDarts.slice(0, dartsRemaining));
+        } else {
+          setAccumulated(newAccumulated.slice(0, dartsRemaining));
+        }
       } else if (aiDarts.length < prev.length && aiDarts.length > 0) {
         // Some darts gone but not all → user pulled mid-round? trim.
         setAccumulated(aiDarts.slice(0, dartsRemaining));
