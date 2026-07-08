@@ -138,20 +138,21 @@ const TournamentPage = () => {
 
   // ─── KO Bracket Generation ──────────────────────
   const generateKoBracket = (playerList: string[]): Match[] => {
-    const size = Math.pow(2, Math.ceil(Math.log2(playerList.length)));
-    const padded = [...playerList];
+    const requestedSize = Number(targetSize) || nextPowerOfTwo(playerList.length);
+    const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requestedSize));
+    const padded = shuffle(playerList).slice(0, size);
     while (padded.length < size) padded.push("BYE");
-    const shuffled = padded.sort(() => Math.random() - 0.5);
 
     const firstRound: Match[] = [];
-    for (let i = 0; i < shuffled.length; i += 2) {
+    for (let i = 0; i < padded.length; i += 2) {
       firstRound.push({
         id: `r1-${i / 2}`,
         round: 1,
         position: i / 2,
-        player1: shuffled[i],
-        player2: shuffled[i + 1],
-        winner: shuffled[i + 1] === "BYE" ? shuffled[i] : shuffled[i] === "BYE" ? shuffled[i + 1] : undefined,
+        table: i / 2 + 1,
+        player1: padded[i],
+        player2: padded[i + 1],
+        winner: padded[i + 1] === "BYE" ? padded[i] : padded[i] === "BYE" ? padded[i + 1] : undefined,
       });
     }
 
@@ -160,7 +161,7 @@ const TournamentPage = () => {
     for (let round = 2; round <= totalRounds; round++) {
       const count = size / Math.pow(2, round);
       for (let pos = 0; pos < count; pos++) {
-        allMatches.push({ id: `r${round}-${pos}`, round, position: pos });
+        allMatches.push({ id: `r${round}-${pos}`, round, position: pos, table: pos + 1 });
       }
     }
     propagateKoWinners(allMatches);
@@ -193,17 +194,19 @@ const TournamentPage = () => {
         matches.push({ id: `rr-${id++}`, player1: playerList[i], player2: playerList[j], played: false });
       }
     }
-    return matches.sort(() => Math.random() - 0.5);
+    return shuffle(matches);
   };
 
   // ─── Start Tournament ──────────────────────────
   const startTournament = async () => {
     if (players.length < 2) return;
-    const bracket = tournamentMode === "ko" ? generateKoBracket(players) : generateRoundRobin(players);
+    const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
 
     const { data, error } = await supabase.from("tournaments").insert({
-      name: tournamentName || "Turnier",
+      name: tournamentName || "Großevent",
       mode: tournamentMode,
+      game_mode: gameMode,
+      best_of_legs: bestOfLegs,
       user_id: session?.user?.id,
       players: players as any,
       bracket: bracket as any,
@@ -215,7 +218,7 @@ const TournamentPage = () => {
       return;
     }
 
-    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any };
+    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs };
     setActiveTournament(record);
     setPhase("bracket");
     setPlayers([]);
