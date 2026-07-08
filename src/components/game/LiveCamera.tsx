@@ -124,9 +124,54 @@ const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
  * accounting for slight re-classifications across frames. Returns the
  * darts in `ai` that are genuinely *new* compared to `prev`.
  */
-function diffNewDarts(prev: DetectedDart[], ai: DetectedDart[]): DetectedDart[] {
+/**
+ * Matches new AI detections against previous darts using spatial coordinates.
+ * Returns the updated list of existing darts (with refreshed scores) and
+ * a list of genuinely new darts.
+ */
+function matchDarts(prev: DetectedDart[], ai: DetectedDart[]): { updated: DetectedDart[], newlyDetected: DetectedDart[] } {
   const DIST_THRESHOLD = 0.08;
   const unmatchedAI = ai.map(d => ({ ...d, matched: false }));
+  const updated = [...prev];
+  const newlyDetected: DetectedDart[] = [];
+
+  // 1. Update existing darts with latest AI results if they match spatially
+  for (let i = 0; i < updated.length; i++) {
+    const p = updated[i];
+    let bestIdx = -1;
+    let bestDist = Infinity;
+
+    for (let j = 0; j < unmatchedAI.length; j++) {
+      if (unmatchedAI[j].matched) continue;
+      const d = unmatchedAI[j];
+      if (p.x !== undefined && p.y !== undefined && d.x !== undefined && d.y !== undefined) {
+        const dist = Math.sqrt(Math.pow(p.x - d.x, 2) + Math.pow(p.y - d.y, 2));
+        if (dist < DIST_THRESHOLD && dist < bestDist) {
+          bestDist = dist;
+          bestIdx = j;
+        }
+      } else if (dartKey(p) === dartKey(d)) {
+        bestDist = 0;
+        bestIdx = j;
+        break;
+      }
+    }
+
+    if (bestIdx !== -1) {
+      updated[i] = { ...unmatchedAI[bestIdx] };
+      unmatchedAI[bestIdx].matched = true;
+    }
+  }
+
+  // 2. Any unmatched AI darts are new
+  for (const d of unmatchedAI) {
+    if (!d.matched) {
+      newlyDetected.push(d);
+    }
+  }
+
+  return { updated, newlyDetected };
+}));
   
   // For each previous dart, find the best match in the current AI results
   for (const p of prev) {
@@ -637,7 +682,6 @@ const LiveCamera = ({
       if (aiDarts.length === 0 && prev.length > 0) {
         emptyConfirmRef.current += 1;
         if (emptyConfirmRef.current >= 2) {
-          // Commit immediately – the throw is finished.
           commitRound(prev);
           return;
         }
@@ -645,66 +689,24 @@ const LiveCamera = ({
         emptyConfirmRef.current = 0;
       }
 
-            // Case B: Robust spatial matching to handle new darts and re-classifications
-      const DIST_THRESHOLD = 0.08;
-      const unmatchedAI = aiDarts.map(d => ({ ...d, matched: false }));
-      const newAccumulated = [...prev];
-      const newlyDetected: DetectedDart[] = [];
-
-      // 1. Update existing darts and mark matched AI darts
-      for (let i = 0; i < newAccumulated.length; i++) {
-        const p = newAccumulated[i];
-        let bestIdx = -1;
-        let bestDist = Infinity;
-
-        for (let j = 0; j < unmatchedAI.length; j++) {
-          if (unmatchedAI[j].matched) continue;
-          const d = unmatchedAI[j];
-          if (p.x !== undefined && p.y !== undefined && d.x !== undefined && d.y !== undefined) {
-            const dist = Math.sqrt(Math.pow(p.x - d.x, 2) + Math.pow(p.y - d.y, 2));
-            if (dist < DIST_THRESHOLD && dist < bestDist) {
-              bestDist = dist;
-              bestIdx = j;
-            }
-          } else if (dartKey(p) === dartKey(d)) {
-            bestDist = 0;
-            bestIdx = j;
-            break;
-          }
-        }
-
-        if (bestIdx !== -1) {
-          newAccumulated[i] = { ...unmatchedAI[bestIdx] };
-          unmatchedAI[bestIdx].matched = true;
-        }
-      }
-
-      // 2. Any unmatched AI darts are genuinely new
-      for (const d of unmatchedAI) {
-        if (!d.matched) {
-          newlyDetected.push(d);
-        }
-      }
+      // Case B: Spatial matching for new/updated darts
+      const { updated, newlyDetected } = matchDarts(prev, aiDarts);
 
       if (newlyDetected.length > 0) {
-        const finalMerged = [...newAccumulated, ...newlyDetected].slice(0, dartsRemaining);
+        const finalMerged = [...updated, ...newlyDetected].slice(0, dartsRemaining);
         setAccumulated(finalMerged);
         newlyDetected.forEach((_, i) => {
-          setTimeout(() => playDartDetectedSound(newAccumulated.length + i), 110 * i);
+          setTimeout(() => playDartDetectedSound(updated.length + i), 110 * i);
         });
-        setJustAddedIndex(newAccumulated.length);
+        setJustAddedIndex(updated.length);
         setTimeout(() => setJustAddedIndex(null), 1100);
       } else if (aiDarts.length > 0) {
         // If some darts disappeared (but not all), we trim the list to match AI count
-        // to handle cases where a user might pull one dart or a bounce-out occurred.
         if (aiDarts.length < prev.length) {
           setAccumulated(aiDarts.slice(0, dartsRemaining));
         } else {
-          setAccumulated(newAccumulated.slice(0, dartsRemaining));
+          setAccumulated(updated.slice(0, dartsRemaining));
         }
-      } else if (aiDarts.length < prev.length && aiDarts.length > 0) {
-        // Some darts gone but not all → user pulled mid-round? trim.
-        setAccumulated(aiDarts.slice(0, dartsRemaining));
       }
 
       // refresh stable reference to the post-scan frame
