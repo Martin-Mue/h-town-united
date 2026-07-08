@@ -65,21 +65,27 @@ interface Calibration {
 }
 
 const CALIB_KEY = "dartcam-calibration-v4";
-const GRID = 32;
+const GRID = 40;
 const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
 const MIN_ANALYSIS_SIZE = 0.55;
 
 // Frame-to-frame diff considered "still" (no motion).
-const MOTION_STILL = 0.022;
+const MOTION_STILL = 0.018;
 // Diff between current and last *stable* frame → physical change occurred.
-const CHANGE_DELTA = 0.045;
+const CHANGE_DELTA = 0.052;
 // Frames of stillness required after a change before scanning.
-const STILL_AFTER_CHANGE = 3; // ~0.6s at 300ms
+const STILL_AFTER_CHANGE = 3; // ~0.9s at 300ms
 // Tick interval of the watcher loop.
 const TICK_MS = 300;
 // Rolling video buffer length for throw clip.
 const CLIP_BUFFER_MS = 12000;
+const SCAN_COOLDOWN_MS = 2200;
+const EMPTY_CONFIRM_SCANS = 2;
+const MIN_DART_CONFIDENCE = 0.54;
+const MIN_OVERALL_CONFIDENCE = 0.48;
+const EMPTY_BOARD_DELTA = 0.026;
+const DART_POSITION_MATCH = 0.09;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -119,94 +125,65 @@ const dartLabel = (d: DetectedDart) => {
 
 const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
 
-/**
- * Try to match darts returned by AI against darts we already accumulated,
- * accounting for slight re-classifications across frames. Returns the
- * darts in `ai` that are genuinely *new* compared to `prev`.
- */
-/**
- * Matches new AI detections against previous darts using spatial coordinates.
- * Returns the updated list of existing darts (with refreshed scores) and
- * a list of genuinely new darts.
- */
-function matchDarts(prev: DetectedDart[], ai: DetectedDart[]): { updated: DetectedDart[], newlyDetected: DetectedDart[] } {
-  const DIST_THRESHOLD = 0.08;
-  const unmatchedAI = ai.map(d => ({ ...d, matched: false }));
-  const updated = [...prev];
-  const newlyDetected: DetectedDart[] = [];
+const hasPosition = (d: DetectedDart) =>
+  typeof d.x === "number" && Number.isFinite(d.x) && typeof d.y === "number" && Number.isFinite(d.y);
 
-  // 1. Update existing darts with latest AI results if they match spatially
-  for (let i = 0; i < updated.length; i++) {
-    const p = updated[i];
-    let bestIdx = -1;
-    let bestDist = Infinity;
+const dartDistance = (a: DetectedDart, b: DetectedDart) => {
+  if (!hasPosition(a) || !hasPosition(b)) return Number.POSITIVE_INFINITY;
+  return Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0));
+};
 
-    for (let j = 0; j < unmatchedAI.length; j++) {
-      if (unmatchedAI[j].matched) continue;
-      const d = unmatchedAI[j];
-      if (p.x !== undefined && p.y !== undefined && d.x !== undefined && d.y !== undefined) {
-        const dist = Math.sqrt(Math.pow(p.x - d.x, 2) + Math.pow(p.y - d.y, 2));
-        if (dist < DIST_THRESHOLD && dist < bestDist) {
-          bestDist = dist;
-          bestIdx = j;
-        }
-      } else if (dartKey(p) === dartKey(d)) {
-        bestDist = 0;
-        bestIdx = j;
-        break;
-      }
-    }
+const samePhysicalDart = (a: DetectedDart, b: DetectedDart) =>
+  dartDistance(a, b) < DART_POSITION_MATCH || (!hasPosition(a) && !hasPosition(b) && dartKey(a) === dartKey(b));
 
-    if (bestIdx !== -1) {
-      updated[i] = { ...unmatchedAI[bestIdx] };
-      unmatchedAI[bestIdx].matched = true;
-    }
+const sanitizeAiDarts = (raw: unknown, max: number): DetectedDart[] => {
+  if (!Array.isArray(raw)) return [];
+  const parsed = raw
+    .map((d: unknown) => {
+      const dart = d as Partial<DetectedDart> & {
+        segment?: unknown;
+        multiplier?: unknown;
+        points?: unknown;
+        confidence?: unknown;
+        x?: unknown;
+        y?: unknown;
+      };
+      const baseValue = Number(dart.segment ?? dart.baseValue) || 0;
+      const multiplier = ([1, 2, 3].includes(Number(dart.multiplier))
+        ? Number(dart.multiplier)
+        : 1) as 1 | 2 | 3;
+      const fallbackPoints = baseValue === 25 ? (multiplier === 2 ? 50 : 25) : baseValue * multiplier;
+      const x = Number(dart.x);
+      const y = Number(dart.y);
+      return {
+        baseValue,
+        multiplier,
+        points: Number.isFinite(Number(dart.points)) ? Number(dart.points) : fallbackPoints,
+        confidence: Number(dart.confidence) || 0,
+        ...(Number.isFinite(x) && x >= 0 && x <= 1 ? { x } : {}),
+        ...(Number.isFinite(y) && y >= 0 && y <= 1 ? { y } : {}),
+      };
+    })
+    .filter((d) => d.confidence >= MIN_DART_CONFIDENCE)
+    .sort((a, b) => b.confidence - a.confidence);
+
+  const deduped: DetectedDart[] = [];
+  for (const dart of parsed) {
+    if (deduped.some((existing) => samePhysicalDart(existing, dart))) continue;
+    deduped.push(dart);
+    if (deduped.length >= max) break;
   }
+  return deduped;
+};
 
-  // 2. Any unmatched AI darts are new
-  for (const d of unmatchedAI) {
-    if (!d.matched) {
-      newlyDetected.push(d);
-    }
-  }
-
-  return { updated, newlyDetected };
-}));
-  
-  // For each previous dart, find the best match in the current AI results
+function diffNewDarts(prev: DetectedDart[], ai: DetectedDart[]): DetectedDart[] {
+  if (ai.length <= prev.length) return [];
+  const remaining = ai.slice();
   for (const p of prev) {
-    let bestIdx = -1;
-    let bestDist = Infinity;
-    
-    for (let i = 0; i < unmatchedAI.length; i++) {
-      if (unmatchedAI[i].matched) continue;
-      const d = unmatchedAI[i];
-      
-      // If coordinates are available, use distance
-      if (p.x !== undefined && p.y !== undefined && d.x !== undefined && d.y !== undefined) {
-        const dist = Math.sqrt(Math.pow(p.x - d.x, 2) + Math.pow(p.y - d.y, 2));
-        if (dist < DIST_THRESHOLD && dist < bestDist) {
-          bestDist = dist;
-          bestIdx = i;
-        }
-      } else {
-        // Fallback to score-only matching if no coordinates
-        if (dartKey(p) === dartKey(d)) {
-          bestDist = 0;
-          bestIdx = i;
-          break;
-        }
-      }
-    }
-    
-    if (bestIdx !== -1) {
-      unmatchedAI[bestIdx].matched = true;
-    }
+    let idx = remaining.findIndex((d) => samePhysicalDart(p, d));
+    if (idx < 0) idx = remaining.findIndex((d) => dartKey(d) === dartKey(p));
+    if (idx >= 0) remaining.splice(idx, 1);
   }
-  
-  // Return AI detections that couldn't be mapped to a previously seen dart
-  return unmatchedAI.filter(d => !d.matched).map(({ matched, ...d }) => d as DetectedDart);
-}
   return remaining;
 }
 
