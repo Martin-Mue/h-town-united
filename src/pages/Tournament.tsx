@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Calendar, Brackets, BarChart3, Check, Sparkles } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Brackets, BarChart3, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -401,9 +401,13 @@ const TournamentPage = () => {
   // ─── SETUP PHASE ────────────────────────────────
   if (phase === "setup") {
     return (
-      <div className="container py-6 animate-slide-up max-w-lg mx-auto">
+      <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
         <Button variant="ghost" onClick={() => setPhase("list")} className="mb-4 text-muted-foreground text-sm">← Zurück</Button>
-        <h2 className="text-2xl font-display uppercase mb-6 text-center">Turnier erstellen</h2>
+        <div className="mb-6 rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> Großevent-Modus</div>
+          <h2 className="text-2xl font-display uppercase">Turnier erstellen</h2>
+          <p className="text-sm text-muted-foreground">Für bis zu 64 Teilnehmer, Gastspieler und schnelle Ergebnis-Erfassung.</p>
+        </div>
         <div className="space-y-4">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Turniername</label>
@@ -415,10 +419,47 @@ const TournamentPage = () => {
               <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="ko">K.O.-System</SelectItem>
+                <SelectItem value="event-ko">Event K.O. bis 64</SelectItem>
                 <SelectItem value="round-robin">Jeder gegen Jeden</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Spielmodus</label>
+              <Select value={gameMode} onValueChange={setGameMode}>
+                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="501">501</SelectItem>
+                  <SelectItem value="301">301</SelectItem>
+                  <SelectItem value="Cricket">Cricket</SelectItem>
+                  <SelectItem value="Extern">Extern gespielt</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Best of Legs</label>
+              <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
+                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {[1, 3, 5, 7, 9, 11].map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {tournamentMode !== "round-robin" && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Turnierbaum-Größe</label>
+              <Select value={targetSize} onValueChange={setTargetSize}>
+                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>{n}er Baum</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Add from club members */}
           {dbPlayers.length > 0 && (
@@ -440,6 +481,15 @@ const TournamentPage = () => {
             <div className="flex gap-2">
               <Input value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="Name" className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
               <Button onClick={addPlayer} size="icon" variant="outline"><Plus className="w-4 h-4" /></Button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-sm text-muted-foreground mb-1 block">Gastliste einfügen</label>
+            <Textarea value={bulkInput} onChange={(e) => setBulkInput(e.target.value)} placeholder="Ein Name pro Zeile oder per Komma getrennt" />
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" variant="outline" onClick={addBulkPlayers}>Liste übernehmen</Button>
+              {tournamentMode !== "round-robin" && <Button size="sm" variant="outline" onClick={fillGuestPlayers}>Mit Gästen auffüllen</Button>}
             </div>
           </div>
 
@@ -467,7 +517,7 @@ const TournamentPage = () => {
 
   // ─── BRACKET PHASE ──────────────────────────────
   if (!activeTournament) return null;
-  const isKo = activeTournament.mode === "ko";
+  const isKo = activeTournament.mode !== "round-robin";
 
   if (isKo) {
     const matches = activeTournament.bracket as Match[];
@@ -478,7 +528,7 @@ const TournamentPage = () => {
         <div className="container flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
-            <p className="text-xs text-muted-foreground">K.O.-System · {activeTournament.players.length} Spieler</p>
+            <p className="text-xs text-muted-foreground">{activeTournament.mode === "event-ko" ? "Event K.O." : "K.O.-System"} · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
             ← Übersicht
@@ -511,15 +561,17 @@ const TournamentPage = () => {
                     {roundMatches.map(match => (
                       <div key={match.id} className={`bg-card border rounded-xl overflow-hidden ${match.winner ? "border-border" : "border-primary/30"}`}>
                         {[match.player1, match.player2].map((player, idx) => (
-                          <button key={idx} disabled={!player || player === "BYE" || !!match.winner}
-                            onClick={() => player && setKoWinner(match.id, player)}
-                            className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between transition-colors ${
+                          <div key={idx}
+                            className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
                               idx === 0 ? "border-b border-border" : ""
                             } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-                            <span>{player || "TBD"}</span>
-                            {match.winner === player && <Trophy className="w-3 h-3 text-secondary" />}
-                          </button>
+                            <button disabled={!player || player === "BYE" || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!player || player === "BYE" || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)}><Plus className="w-3 h-3" /></Button>
+                            <span className="w-5 text-center font-display">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
+                            {match.winner === player && <Check className="w-3 h-3 text-secondary" />}
+                          </div>
                         ))}
+                        {(match.winner || match.score1 || match.score2) && <Button variant="ghost" size="sm" className="w-full rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}><RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen</Button>}
                       </div>
                     ))}
                   </div>
