@@ -227,10 +227,10 @@ const TournamentPage = () => {
   };
 
   // ─── KO: Set Winner ────────────────────────────
-  const setKoWinner = async (matchId: string, winner: string) => {
+  const setKoWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
     if (!activeTournament) return;
     const bracket = [...(activeTournament.bracket as Match[])];
-    const updated = bracket.map(m => m.id === matchId ? { ...m, winner } : m);
+    const updated = bracket.map(m => m.id === matchId ? { ...m, winner, score1, score2 } : m);
 
     const match = updated.find(m => m.id === matchId)!;
     const nextRound = updated.filter(m => m.round === match.round + 1);
@@ -259,6 +259,30 @@ const TournamentPage = () => {
       setCeremonyChampion(champion);
       setSeenCeremonyFor(activeTournament.id);
     }
+  };
+
+  const setKoScore = async (matchId: string, slot: 1 | 2) => {
+    if (!activeTournament) return;
+    const match = (activeTournament.bracket as Match[]).find(m => m.id === matchId);
+    if (!match || !match.player1 || !match.player2 || match.player1 === "BYE" || match.player2 === "BYE") return;
+    const score1 = slot === 1 ? (match.score1 || 0) + 1 : (match.score1 || 0);
+    const score2 = slot === 2 ? (match.score2 || 0) + 1 : (match.score2 || 0);
+    const legsToWin = Math.ceil((activeTournament.best_of_legs || 1) / 2);
+    const winner = score1 >= legsToWin && score1 > score2 ? match.player1 : score2 >= legsToWin && score2 > score1 ? match.player2 : undefined;
+    if (winner) await setKoWinner(matchId, winner, score1, score2);
+    else {
+      const bracket = (activeTournament.bracket as Match[]).map(m => m.id === matchId ? { ...m, score1, score2 } : m);
+      await supabase.from("tournaments").update({ bracket: bracket as any }).eq("id", activeTournament.id);
+      setActiveTournament({ ...activeTournament, bracket });
+    }
+  };
+
+  const resetKoMatch = async (matchId: string) => {
+    if (!activeTournament) return;
+    const bracket = (activeTournament.bracket as Match[]).map(m => m.id === matchId ? { ...m, winner: undefined, score1: undefined, score2: undefined } : { ...m });
+    propagateKoWinners(bracket);
+    await supabase.from("tournaments").update({ bracket: bracket as any, champion: null, status: "active" }).eq("id", activeTournament.id);
+    setActiveTournament({ ...activeTournament, bracket, champion: null, status: "active" });
   };
 
   // ─── Round Robin: Set Winner ───────────────────
