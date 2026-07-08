@@ -41,6 +41,8 @@ export interface DetectedDart {
   multiplier: 1 | 2 | 3;
   points: number;
   confidence: number;
+  x?: number;
+  y?: number;
 }
 
 interface LiveCameraProps {
@@ -71,9 +73,9 @@ const MIN_ANALYSIS_SIZE = 0.55;
 // Frame-to-frame diff considered "still" (no motion).
 const MOTION_STILL = 0.022;
 // Diff between current and last *stable* frame → physical change occurred.
-const CHANGE_DELTA = 0.038;
+const CHANGE_DELTA = 0.045;
 // Frames of stillness required after a change before scanning.
-const STILL_AFTER_CHANGE = 2; // ~0.6s at 300ms
+const STILL_AFTER_CHANGE = 3; // ~0.6s at 300ms
 // Tick interval of the watcher loop.
 const TICK_MS = 300;
 // Rolling video buffer length for throw clip.
@@ -123,15 +125,43 @@ const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
  * darts in `ai` that are genuinely *new* compared to `prev`.
  */
 function diffNewDarts(prev: DetectedDart[], ai: DetectedDart[]): DetectedDart[] {
-  if (ai.length <= prev.length) return [];
-  const remaining = ai.slice();
-  // remove one occurrence per prev dart by key, otherwise drop the first match
+  const DIST_THRESHOLD = 0.08;
+  const unmatchedAI = ai.map(d => ({ ...d, matched: false }));
+  
+  // For each previous dart, find the best match in the current AI results
   for (const p of prev) {
-    const k = dartKey(p);
-    let idx = remaining.findIndex((d) => dartKey(d) === k);
-    if (idx < 0) idx = 0;
-    if (remaining.length > 0) remaining.splice(idx, 1);
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    
+    for (let i = 0; i < unmatchedAI.length; i++) {
+      if (unmatchedAI[i].matched) continue;
+      const d = unmatchedAI[i];
+      
+      // If coordinates are available, use distance
+      if (p.x !== undefined && p.y !== undefined && d.x !== undefined && d.y !== undefined) {
+        const dist = Math.sqrt(Math.pow(p.x - d.x, 2) + Math.pow(p.y - d.y, 2));
+        if (dist < DIST_THRESHOLD && dist < bestDist) {
+          bestDist = dist;
+          bestIdx = i;
+        }
+      } else {
+        // Fallback to score-only matching if no coordinates
+        if (dartKey(p) === dartKey(d)) {
+          bestDist = 0;
+          bestIdx = i;
+          break;
+        }
+      }
+    }
+    
+    if (bestIdx !== -1) {
+      unmatchedAI[bestIdx].matched = true;
+    }
   }
+  
+  // Return AI detections that couldn't be mapped to a previously seen dart
+  return unmatchedAI.filter(d => !d.matched).map(({ matched, ...d }) => d as DetectedDart);
+}
   return remaining;
 }
 
@@ -593,6 +623,8 @@ const LiveCamera = ({
                 : 1) as 1 | 2 | 3,
               points: Number(dart.points) || 0,
               confidence: Number(dart.confidence) || 0,
+              x: typeof dart.x === 'number' ? dart.x : undefined,
+              y: typeof dart.y === 'number' ? dart.y : undefined,
             };
           })
         : [];
@@ -604,7 +636,7 @@ const LiveCamera = ({
       // Case A: board went empty AFTER having darts → likely user pulled them.
       if (aiDarts.length === 0 && prev.length > 0) {
         emptyConfirmRef.current += 1;
-        if (emptyConfirmRef.current >= 1) {
+        if (emptyConfirmRef.current >= 2) {
           // Commit immediately – the throw is finished.
           commitRound(prev);
           return;

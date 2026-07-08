@@ -37,9 +37,9 @@ serve(async (req) => {
     const systemPrompt = `Score dartboard photos. Use the dart tip position to determine the segment; ignore shaft and flight unless needed to locate the tip.
 If a dart is partially occluded, follow the visible tip end and shaft direction to infer the exact segment.
 Return only JSON. Count only darts currently stuck in the board. If uncertain, omit the dart.
-Scoring: single=segment, double=2x, triple=3x, bull 25, bullseye 50, miss=0.
+Scoring: single=segment, double=2x, triple=3x, bull 25, bullseye 50, miss=0. Include x,y coordinates (0-1 relative) for each dart tip.
 Return:
-{"board":{"cx":0.5,"cy":0.5,"size":0.78,"confidence":0.92},"darts":[{"segment":20,"multiplier":3,"points":60,"confidence":0.9}],"totalScore":60,"overallConfidence":0.8,"dartsDetected":1}
+{"board":{"cx":0.5,"cy":0.5,"size":0.78,"confidence":0.92},"darts":[{"segment":20,"multiplier":3,"points":60,"confidence":0.9,"x":0.5,"y":0.2}],"totalScore":60,"overallConfidence":0.8,"dartsDetected":1}
 If no darts are visible, return darts=[], totalScore=0, overallConfidence=0, dartsDetected=0 and include board if visible. If no dartboard is visible, set board=null.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
