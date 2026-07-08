@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Brackets, BarChart3, Check, Sparkles } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
