@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Calendar } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Calendar, Brackets, BarChart3, Check, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -17,6 +18,7 @@ interface Match {
   winner?: string;
   score1?: number;
   score2?: number;
+  table?: number;
 }
 
 interface RoundRobinMatch {
@@ -44,7 +46,22 @@ interface TournamentRecord {
   players: string[];
   bracket: Match[] | RoundRobinMatch[];
   created_at: string;
+  game_mode?: string;
+  best_of_legs?: number;
 }
+
+const BRACKET_SIZES = [4, 8, 16, 32, 64];
+
+const nextPowerOfTwo = (count: number) => Math.pow(2, Math.ceil(Math.log2(Math.max(count, 2))));
+
+const shuffle = <T,>(list: T[]) => {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
 
 const TournamentPage = () => {
   const [phase, setPhase] = useState<"list" | "setup" | "bracket">("list");
