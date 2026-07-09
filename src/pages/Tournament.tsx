@@ -453,6 +453,18 @@ const TournamentPage = () => {
             <label className="text-sm text-muted-foreground mb-1 block">Turniername</label>
             <Input value={tournamentName} onChange={(e) => setTournamentName(e.target.value)} placeholder="z.B. Vereinsmeisterschaft 2026" className="bg-card border-border" />
           </div>
+          {seriesList.length > 0 && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> Turnierserie (optional)</label>
+              <Select value={seriesId} onValueChange={setSeriesId}>
+                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="none">Keine Serie</SelectItem>
+                  {seriesList.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Modus</label>
             <Select value={tournamentMode} onValueChange={setTournamentMode}>
