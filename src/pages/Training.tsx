@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera } from "lucide-react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
@@ -73,6 +73,15 @@ const TRAINING_DRILLS: TrainingDrill[] = [
     durationMinutes: 20,
     category: "accuracy",
   },
+  {
+    id: "big-single-lock",
+    name: "Big Single Lock",
+    description: "Triff nacheinander die großen Single-Felder 20→1. Nur Singles zählen – Triple/Double = Miss. Baut Präzision auf.",
+    icon: Lock,
+    difficulty: "Fortgeschritten",
+    durationMinutes: 15,
+    category: "accuracy",
+  },
 ];
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -83,6 +92,9 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 
 /** Double fields for doubles-only drill */
 const DOUBLE_TARGETS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25];
+
+/** Single targets for Big Single Lock (20 down to 1) */
+const BIG_SINGLE_TARGETS = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 
 /** Pressure checkout values */
 const PRESSURE_CHECKOUTS = [32, 40, 16, 36, 24, 8, 20, 50, 64, 80];
@@ -166,6 +178,10 @@ const TrainingPage = () => {
         break;
       case "t20-grind":
         state.currentTarget = 60; // T20
+        break;
+      case "big-single-lock":
+        state.targetList = [...BIG_SINGLE_TARGETS];
+        state.currentTarget = BIG_SINGLE_TARGETS[0];
         break;
     }
 
@@ -305,6 +321,22 @@ const TrainingPage = () => {
           if (updated.dartsThrown >= 30) {
             updated.finished = true;
           }
+          break;
+        }
+
+        case "big-single-lock": {
+          // Must hit exactly the single (mul === 1) of the current target
+          if (baseValue === prev.currentTarget && mul === 1) {
+            updated.hits++;
+            const nextIdx = prev.targetIndex + 1;
+            if (nextIdx >= prev.targetList.length) {
+              updated.finished = true;
+            } else {
+              updated.targetIndex = nextIdx;
+              updated.currentTarget = prev.targetList[nextIdx];
+            }
+          }
+          updated.roundScores = [...(prev.roundScores || []), points];
           break;
         }
       }
