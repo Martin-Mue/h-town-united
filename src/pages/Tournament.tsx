@@ -513,6 +513,40 @@ const TournamentPage = () => {
             </div>
           )}
 
+          {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
+            <div className="bg-muted/30 border border-border rounded-xl p-3">
+              <label className="text-sm text-muted-foreground mb-2 block flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> Modus pro Runde (Steigerung möglich)
+              </label>
+              <div className="space-y-2">
+                {roundConfigs.map((cfg, idx) => {
+                  const total = roundConfigs.length;
+                  const label = idx === total - 1 ? "Finale" : idx === total - 2 ? "Halbfinale" : idx === total - 3 ? "Viertelfinale" : `Runde ${idx + 1}`;
+                  return (
+                    <div key={idx} className="grid grid-cols-[80px_1fr_1fr] gap-2 items-center">
+                      <span className="text-xs font-display uppercase text-muted-foreground">{label}</span>
+                      <Select value={cfg.mode} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, mode: v } : c))}>
+                        <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          <SelectItem value="501">501</SelectItem>
+                          <SelectItem value="301">301</SelectItem>
+                          <SelectItem value="Cricket">Cricket</SelectItem>
+                          <SelectItem value="Extern">Extern</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={String(cfg.bestOf)} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, bestOf: Number(v) } : c))}>
+                        <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          {[1, 3, 5, 7, 9, 11].map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Add from club members */}
           {dbPlayers.length > 0 && (
             <div>
