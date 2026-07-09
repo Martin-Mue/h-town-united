@@ -397,9 +397,14 @@ const TournamentPage = () => {
             <Trophy className="w-6 h-6 text-accent" />
             <h2 className="text-2xl font-display uppercase">Turniere</h2>
           </div>
-          <Button size="sm" onClick={() => setPhase("setup")} className="gap-1">
-            <Plus className="w-4 h-4" /> Neues Turnier
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
+              <Layers className="w-3.5 h-3.5" /> Serien
+            </Link>
+            <Button size="sm" onClick={() => setPhase("setup")} className="gap-1">
+              <Plus className="w-4 h-4" /> Neues Turnier
+            </Button>
+          </div>
         </div>
 
         {loading ? (
