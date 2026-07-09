@@ -467,6 +467,15 @@ const TrainingPage = () => {
                   <p className="text-xs text-muted-foreground mt-1">{drillState.dartsThrown} / 30 Darts</p>
                 </div>
               )}
+              {selectedDrill.id === "big-single-lock" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Triff Single (nur S!)</p>
+                  <p className="text-5xl font-display text-primary">S{drillState.currentTarget}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {drillState.targetIndex + 1} / {drillState.targetList.length} · Darts: {drillState.dartsThrown}
+                  </p>
+                </div>
+              )}
 
               {/* Dart counter */}
               <div className="flex justify-center gap-1 mt-3">
