@@ -643,14 +643,25 @@ const TournamentPage = () => {
           <div className="flex gap-6 min-w-max px-4">
             {Array.from({ length: totalRounds }, (_, r) => r + 1).map(round => {
               const roundMatches = matches.filter(m => m.round === round);
+              const cfg = (activeTournament.round_configs || [])[round - 1];
+              const roundMode = cfg?.mode || activeTournament.game_mode;
+              const roundBestOf = cfg?.bestOf || activeTournament.best_of_legs;
+              const isLastRound = round === totalRounds;
               return (
-                <div key={round} className="flex flex-col gap-4 min-w-[200px]">
-                  <h3 className="text-xs font-display uppercase text-muted-foreground text-center mb-1">
-                    {roundLabel(round, totalRounds)}
-                  </h3>
-                  <div className="flex flex-col justify-around flex-1 gap-4">
+                <div key={round} className="flex flex-col gap-4 min-w-[220px]">
+                  <div className="text-center mb-1">
+                    <h3 className="text-xs font-display uppercase text-muted-foreground">
+                      {roundLabel(round, totalRounds)}
+                    </h3>
+                    <p className="text-[10px] text-primary/80 font-mono">{roundMode} · BO{roundBestOf}</p>
+                  </div>
+                  <div className="flex flex-col justify-around flex-1 gap-4 relative">
                     {roundMatches.map(match => (
-                      <div key={match.id} className={`bg-card border rounded-xl overflow-hidden ${match.winner ? "border-border" : "border-primary/30"}`}>
+                      <div key={match.id} className={`bg-card border rounded-xl overflow-hidden relative ${match.winner ? "border-border" : "border-primary/30"}`}>
+                        {/* Connector line to next round */}
+                        {!isLastRound && (
+                          <span aria-hidden className="hidden md:block absolute top-1/2 -right-6 w-6 h-px bg-border" />
+                        )}
                         {[match.player1, match.player2].map((player, idx) => (
                           <div key={idx}
                             className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
