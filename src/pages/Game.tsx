@@ -88,6 +88,7 @@ const GamePage = () => {
   const [phase, setPhase] = useState<"setup" | "playing" | "postGame">("setup");
   const [mode, setMode] = useState<GameMode>("501");
   const [bestOfLegs, setBestOfLegs] = useState(1);
+  const [maxRoundsX01, setMaxRoundsX01] = useState<number>(0); // 0 = unlimited
   const [customStartScore, setCustomStartScore] = useState(501);
   const [p1Name, setP1Name] = useState("Spieler 1");
   const [p2Name, setP2Name] = useState("Spieler 2");
@@ -191,6 +192,7 @@ const GamePage = () => {
       player1LegsWon: 0, player2LegsWon: 0,
       currentLeg: createLegState(1, startScore, 1), completedLegs: [],
       currentPlayerId: 1, isFinished: false,
+      maxRoundsX01: mode !== "cricket" && maxRoundsX01 > 0 ? maxRoundsX01 : undefined,
     };
     if (mode === "cricket") {
       newGame.player1Cricket = createCricketState();
