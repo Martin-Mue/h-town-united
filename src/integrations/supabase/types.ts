@@ -199,6 +199,39 @@ export type Database = {
         }
         Relationships: []
       }
+      tournament_series: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          scoring: Json
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          scoring?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          scoring?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tournaments: {
         Row: {
           best_of_legs: number
@@ -207,9 +240,12 @@ export type Database = {
           created_at: string
           game_mode: string
           id: string
+          max_rounds_x01: number | null
           mode: string
           name: string
           players: Json
+          round_configs: Json
+          series_id: string | null
           status: string
           updated_at: string
           user_id: string
@@ -221,9 +257,12 @@ export type Database = {
           created_at?: string
           game_mode?: string
           id?: string
+          max_rounds_x01?: number | null
           mode?: string
           name: string
           players?: Json
+          round_configs?: Json
+          series_id?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -235,14 +274,25 @@ export type Database = {
           created_at?: string
           game_mode?: string
           id?: string
+          max_rounds_x01?: number | null
           mode?: string
           name?: string
           players?: Json
+          round_configs?: Json
+          series_id?: string | null
           status?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tournaments_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "tournament_series"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
