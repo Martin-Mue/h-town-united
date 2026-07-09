@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
+import { Link } from "react-router-dom";
 
 interface Match {
   id: string;
@@ -19,6 +20,15 @@ interface Match {
   score1?: number;
   score2?: number;
   table?: number;
+}
+interface RoundConfig {
+  mode: string;      // "501" | "301" | "Cricket" | "Extern"
+  bestOf: number;    // best-of legs
+}
+
+interface SeriesRecord {
+  id: string;
+  name: string;
 }
 
 interface RoundRobinMatch {
@@ -48,6 +58,8 @@ interface TournamentRecord {
   created_at: string;
   game_mode?: string;
   best_of_legs?: number;
+  series_id?: string | null;
+  round_configs?: RoundConfig[];
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
@@ -77,6 +89,9 @@ const TournamentPage = () => {
   const [gameMode, setGameMode] = useState("501");
   const [bestOfLegs, setBestOfLegs] = useState(3);
   const [targetSize, setTargetSize] = useState("64");
+  const [seriesId, setSeriesId] = useState<string>("none");
+  const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
+  const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
   const [playerInput, setPlayerInput] = useState("");
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
@@ -97,6 +112,8 @@ const TournamentPage = () => {
         bracket: (t.bracket as any) || [],
         game_mode: (t as any).game_mode || "501",
         best_of_legs: (t as any).best_of_legs || 3,
+        series_id: (t as any).series_id || null,
+        round_configs: ((t as any).round_configs as RoundConfig[]) || [],
       })) as TournamentRecord[]);
     }
     setLoading(false);
@@ -107,7 +124,26 @@ const TournamentPage = () => {
     if (data) setDbPlayers(data);
   }, []);
 
-  useEffect(() => { fetchTournaments(); fetchDbPlayers(); }, [fetchTournaments, fetchDbPlayers]);
+  const fetchSeries = useCallback(async () => {
+    const { data } = await supabase.from("tournament_series" as any).select("id, name").order("created_at", { ascending: false });
+    if (data) setSeriesList(data as any);
+  }, []);
+
+  useEffect(() => { fetchTournaments(); fetchDbPlayers(); fetchSeries(); }, [fetchTournaments, fetchDbPlayers, fetchSeries]);
+
+  // Auto-generate round configs when target size or defaults change
+  useEffect(() => {
+    if (tournamentMode === "round-robin") return;
+    const size = Number(targetSize) || 64;
+    const totalRounds = Math.log2(nextPowerOfTwo(size));
+    setRoundConfigs((prev) => {
+      const next: RoundConfig[] = [];
+      for (let i = 0; i < totalRounds; i++) {
+        next.push(prev[i] || { mode: gameMode, bestOf: bestOfLegs });
+      }
+      return next;
+    });
+  }, [targetSize, tournamentMode, gameMode, bestOfLegs]);
 
   const addPlayers = (names: string[]) => {
     const cleaned = names.map((name) => name.trim()).filter(Boolean);
@@ -211,6 +247,8 @@ const TournamentPage = () => {
       players: players as any,
       bracket: bracket as any,
       status: "active",
+      series_id: seriesId === "none" ? null : seriesId,
+      round_configs: roundConfigs as any,
     }).select().single();
 
     if (error || !data) {
@@ -218,7 +256,7 @@ const TournamentPage = () => {
       return;
     }
 
-    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs };
+    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [] };
     setActiveTournament(record);
     setPhase("bracket");
     setPlayers([]);
@@ -267,7 +305,9 @@ const TournamentPage = () => {
     if (!match || !match.player1 || !match.player2 || match.player1 === "BYE" || match.player2 === "BYE") return;
     const score1 = slot === 1 ? (match.score1 || 0) + 1 : (match.score1 || 0);
     const score2 = slot === 2 ? (match.score2 || 0) + 1 : (match.score2 || 0);
-    const legsToWin = Math.ceil((activeTournament.best_of_legs || 1) / 2);
+    const cfg = (activeTournament.round_configs || [])[match.round - 1];
+    const bestOf = cfg?.bestOf || activeTournament.best_of_legs || 1;
+    const legsToWin = Math.ceil(bestOf / 2);
     const winner = score1 >= legsToWin && score1 > score2 ? match.player1 : score2 >= legsToWin && score2 > score1 ? match.player2 : undefined;
     if (winner) await setKoWinner(matchId, winner, score1, score2);
     else {
