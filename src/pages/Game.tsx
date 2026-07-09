@@ -296,7 +296,32 @@ const GamePage = () => {
       // After 3 darts → switch
       if (newDartsThisRound >= 3) {
         const nextPlayer: 1 | 2 = isP1 ? 2 : 1;
-        return { ...prev, currentLeg: updatedLeg, currentPlayerId: nextPlayer };
+        const next: GameState = { ...prev, currentLeg: updatedLeg, currentPlayerId: nextPlayer };
+        // Enforce max rounds cap for X01
+        const cap = prev.maxRoundsX01;
+        if (cap && cap > 0) {
+          const p1Rounds = Math.ceil(updatedLeg.player1Throws.length / 3);
+          const p2Rounds = Math.ceil(updatedLeg.player2Throws.length / 3);
+          if (p1Rounds >= cap && p2Rounds >= cap) {
+            // Decide leg by lower remaining
+            const p1Rem = updatedLeg.player1Remaining;
+            const p2Rem = updatedLeg.player2Remaining;
+            const legWinner: 1 | 2 | null = p1Rem < p2Rem ? 1 : p2Rem < p1Rem ? 2 : null;
+            if (legWinner) {
+              updatedLeg.winner = legWinner;
+              const p1Legs = prev.player1LegsWon + (legWinner === 1 ? 1 : 0);
+              const p2Legs = prev.player2LegsWon + (legWinner === 2 ? 1 : 0);
+              const legsToWin = Math.ceil(prev.bestOfLegs / 2);
+              const finished = p1Legs >= legsToWin || p2Legs >= legsToWin;
+              if (finished) {
+                return { ...next, currentLeg: updatedLeg, player1LegsWon: p1Legs, player2LegsWon: p2Legs, isFinished: true, winnerName: legWinner === 1 ? prev.player1Name : prev.player2Name };
+              }
+              const nextStarter: 1 | 2 = legWinner === 1 ? 2 : 1;
+              return { ...next, completedLegs: [...prev.completedLegs, updatedLeg], player1LegsWon: p1Legs, player2LegsWon: p2Legs, currentLeg: createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter), currentPlayerId: nextStarter };
+            }
+          }
+        }
+        return next;
       }
 
       return { ...prev, currentLeg: updatedLeg };
