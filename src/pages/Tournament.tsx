@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
+import { Link } from "react-router-dom";
 
 interface Match {
   id: string;
@@ -19,6 +20,15 @@ interface Match {
   score1?: number;
   score2?: number;
   table?: number;
+}
+interface RoundConfig {
+  mode: string;      // "501" | "301" | "Cricket" | "Extern"
+  bestOf: number;    // best-of legs
+}
+
+interface SeriesRecord {
+  id: string;
+  name: string;
 }
 
 interface RoundRobinMatch {
@@ -48,6 +58,8 @@ interface TournamentRecord {
   created_at: string;
   game_mode?: string;
   best_of_legs?: number;
+  series_id?: string | null;
+  round_configs?: RoundConfig[];
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
@@ -77,6 +89,9 @@ const TournamentPage = () => {
   const [gameMode, setGameMode] = useState("501");
   const [bestOfLegs, setBestOfLegs] = useState(3);
   const [targetSize, setTargetSize] = useState("64");
+  const [seriesId, setSeriesId] = useState<string>("none");
+  const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
+  const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
   const [playerInput, setPlayerInput] = useState("");
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
@@ -97,6 +112,8 @@ const TournamentPage = () => {
         bracket: (t.bracket as any) || [],
         game_mode: (t as any).game_mode || "501",
         best_of_legs: (t as any).best_of_legs || 3,
+        series_id: (t as any).series_id || null,
+        round_configs: ((t as any).round_configs as RoundConfig[]) || [],
       })) as TournamentRecord[]);
     }
     setLoading(false);
@@ -107,7 +124,26 @@ const TournamentPage = () => {
     if (data) setDbPlayers(data);
   }, []);
 
-  useEffect(() => { fetchTournaments(); fetchDbPlayers(); }, [fetchTournaments, fetchDbPlayers]);
+  const fetchSeries = useCallback(async () => {
+    const { data } = await supabase.from("tournament_series" as any).select("id, name").order("created_at", { ascending: false });
+    if (data) setSeriesList(data as any);
+  }, []);
+
+  useEffect(() => { fetchTournaments(); fetchDbPlayers(); fetchSeries(); }, [fetchTournaments, fetchDbPlayers, fetchSeries]);
+
+  // Auto-generate round configs when target size or defaults change
+  useEffect(() => {
+    if (tournamentMode === "round-robin") return;
+    const size = Number(targetSize) || 64;
+    const totalRounds = Math.log2(nextPowerOfTwo(size));
+    setRoundConfigs((prev) => {
+      const next: RoundConfig[] = [];
+      for (let i = 0; i < totalRounds; i++) {
+        next.push(prev[i] || { mode: gameMode, bestOf: bestOfLegs });
+      }
+      return next;
+    });
+  }, [targetSize, tournamentMode, gameMode, bestOfLegs]);
 
   const addPlayers = (names: string[]) => {
     const cleaned = names.map((name) => name.trim()).filter(Boolean);
@@ -211,6 +247,8 @@ const TournamentPage = () => {
       players: players as any,
       bracket: bracket as any,
       status: "active",
+      series_id: seriesId === "none" ? null : seriesId,
+      round_configs: roundConfigs as any,
     }).select().single();
 
     if (error || !data) {
@@ -218,7 +256,7 @@ const TournamentPage = () => {
       return;
     }
 
-    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs };
+    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [] };
     setActiveTournament(record);
     setPhase("bracket");
     setPlayers([]);
@@ -267,7 +305,9 @@ const TournamentPage = () => {
     if (!match || !match.player1 || !match.player2 || match.player1 === "BYE" || match.player2 === "BYE") return;
     const score1 = slot === 1 ? (match.score1 || 0) + 1 : (match.score1 || 0);
     const score2 = slot === 2 ? (match.score2 || 0) + 1 : (match.score2 || 0);
-    const legsToWin = Math.ceil((activeTournament.best_of_legs || 1) / 2);
+    const cfg = (activeTournament.round_configs || [])[match.round - 1];
+    const bestOf = cfg?.bestOf || activeTournament.best_of_legs || 1;
+    const legsToWin = Math.ceil(bestOf / 2);
     const winner = score1 >= legsToWin && score1 > score2 ? match.player1 : score2 >= legsToWin && score2 > score1 ? match.player2 : undefined;
     if (winner) await setKoWinner(matchId, winner, score1, score2);
     else {
@@ -357,9 +397,14 @@ const TournamentPage = () => {
             <Trophy className="w-6 h-6 text-accent" />
             <h2 className="text-2xl font-display uppercase">Turniere</h2>
           </div>
-          <Button size="sm" onClick={() => setPhase("setup")} className="gap-1">
-            <Plus className="w-4 h-4" /> Neues Turnier
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
+              <Layers className="w-3.5 h-3.5" /> Serien
+            </Link>
+            <Button size="sm" onClick={() => setPhase("setup")} className="gap-1">
+              <Plus className="w-4 h-4" /> Neues Turnier
+            </Button>
+          </div>
         </div>
 
         {loading ? (
@@ -413,6 +458,18 @@ const TournamentPage = () => {
             <label className="text-sm text-muted-foreground mb-1 block">Turniername</label>
             <Input value={tournamentName} onChange={(e) => setTournamentName(e.target.value)} placeholder="z.B. Vereinsmeisterschaft 2026" className="bg-card border-border" />
           </div>
+          {seriesList.length > 0 && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> Turnierserie (optional)</label>
+              <Select value={seriesId} onValueChange={setSeriesId}>
+                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="none">Keine Serie</SelectItem>
+                  {seriesList.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Modus</label>
             <Select value={tournamentMode} onValueChange={setTournamentMode}>
@@ -458,6 +515,40 @@ const TournamentPage = () => {
                   {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>{n}er Baum</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
+            <div className="bg-muted/30 border border-border rounded-xl p-3">
+              <label className="text-sm text-muted-foreground mb-2 block flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" /> Modus pro Runde (Steigerung möglich)
+              </label>
+              <div className="space-y-2">
+                {roundConfigs.map((cfg, idx) => {
+                  const total = roundConfigs.length;
+                  const label = idx === total - 1 ? "Finale" : idx === total - 2 ? "Halbfinale" : idx === total - 3 ? "Viertelfinale" : `Runde ${idx + 1}`;
+                  return (
+                    <div key={idx} className="grid grid-cols-[80px_1fr_1fr] gap-2 items-center">
+                      <span className="text-xs font-display uppercase text-muted-foreground">{label}</span>
+                      <Select value={cfg.mode} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, mode: v } : c))}>
+                        <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          <SelectItem value="501">501</SelectItem>
+                          <SelectItem value="301">301</SelectItem>
+                          <SelectItem value="Cricket">Cricket</SelectItem>
+                          <SelectItem value="Extern">Extern</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={String(cfg.bestOf)} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, bestOf: Number(v) } : c))}>
+                        <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          {[1, 3, 5, 7, 9, 11].map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -552,14 +643,25 @@ const TournamentPage = () => {
           <div className="flex gap-6 min-w-max px-4">
             {Array.from({ length: totalRounds }, (_, r) => r + 1).map(round => {
               const roundMatches = matches.filter(m => m.round === round);
+              const cfg = (activeTournament.round_configs || [])[round - 1];
+              const roundMode = cfg?.mode || activeTournament.game_mode;
+              const roundBestOf = cfg?.bestOf || activeTournament.best_of_legs;
+              const isLastRound = round === totalRounds;
               return (
-                <div key={round} className="flex flex-col gap-4 min-w-[200px]">
-                  <h3 className="text-xs font-display uppercase text-muted-foreground text-center mb-1">
-                    {roundLabel(round, totalRounds)}
-                  </h3>
-                  <div className="flex flex-col justify-around flex-1 gap-4">
+                <div key={round} className="flex flex-col gap-4 min-w-[220px]">
+                  <div className="text-center mb-1">
+                    <h3 className="text-xs font-display uppercase text-muted-foreground">
+                      {roundLabel(round, totalRounds)}
+                    </h3>
+                    <p className="text-[10px] text-primary/80 font-mono">{roundMode} · BO{roundBestOf}</p>
+                  </div>
+                  <div className="flex flex-col justify-around flex-1 gap-4 relative">
                     {roundMatches.map(match => (
-                      <div key={match.id} className={`bg-card border rounded-xl overflow-hidden ${match.winner ? "border-border" : "border-primary/30"}`}>
+                      <div key={match.id} className={`bg-card border rounded-xl overflow-hidden relative ${match.winner ? "border-border" : "border-primary/30"}`}>
+                        {/* Connector line to next round */}
+                        {!isLastRound && (
+                          <span aria-hidden className="hidden md:block absolute top-1/2 -right-6 w-6 h-px bg-border" />
+                        )}
                         {[match.player1, match.player2].map((player, idx) => (
                           <div key={idx}
                             className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${

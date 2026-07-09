@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Admin from "./pages/Admin";
+import TournamentSeries from "./pages/TournamentSeries";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,8 @@ const App = () => (
                       <Route path="/players" element={<Players />} />
                       <Route path="/game" element={<Game />} />
                       <Route path="/tournament" element={<Tournament />} />
+                      <Route path="/tournaments/series" element={<TournamentSeries />} />
+                      <Route path="/tournaments/series/:id" element={<TournamentSeries />} />
                       <Route path="/training" element={<Training />} />
                       <Route path="/statistics" element={<Statistics />} />
                       <Route path="/admin" element={<Admin />} />

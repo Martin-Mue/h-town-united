@@ -42,6 +42,8 @@ export interface GameState {
   currentPlayerId: 1 | 2;
   isFinished: boolean;
   winnerName?: string;
+  /** Optional cap on rounds per leg for X01 modes. When both players have played this many rounds and nobody has checked out, the leg ends by remaining score. */
+  maxRoundsX01?: number;
   /** Cricket-specific state (only for cricket mode) */
   player1Cricket?: CricketPlayerState;
   player2Cricket?: CricketPlayerState;

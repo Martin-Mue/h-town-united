@@ -88,6 +88,7 @@ const GamePage = () => {
   const [phase, setPhase] = useState<"setup" | "playing" | "postGame">("setup");
   const [mode, setMode] = useState<GameMode>("501");
   const [bestOfLegs, setBestOfLegs] = useState(1);
+  const [maxRoundsX01, setMaxRoundsX01] = useState<number>(0); // 0 = unlimited
   const [customStartScore, setCustomStartScore] = useState(501);
   const [p1Name, setP1Name] = useState("Spieler 1");
   const [p2Name, setP2Name] = useState("Spieler 2");
@@ -191,6 +192,7 @@ const GamePage = () => {
       player1LegsWon: 0, player2LegsWon: 0,
       currentLeg: createLegState(1, startScore, 1), completedLegs: [],
       currentPlayerId: 1, isFinished: false,
+      maxRoundsX01: mode !== "cricket" && maxRoundsX01 > 0 ? maxRoundsX01 : undefined,
     };
     if (mode === "cricket") {
       newGame.player1Cricket = createCricketState();
@@ -294,7 +296,32 @@ const GamePage = () => {
       // After 3 darts → switch
       if (newDartsThisRound >= 3) {
         const nextPlayer: 1 | 2 = isP1 ? 2 : 1;
-        return { ...prev, currentLeg: updatedLeg, currentPlayerId: nextPlayer };
+        const next: GameState = { ...prev, currentLeg: updatedLeg, currentPlayerId: nextPlayer };
+        // Enforce max rounds cap for X01
+        const cap = prev.maxRoundsX01;
+        if (cap && cap > 0) {
+          const p1Rounds = Math.ceil(updatedLeg.player1Throws.length / 3);
+          const p2Rounds = Math.ceil(updatedLeg.player2Throws.length / 3);
+          if (p1Rounds >= cap && p2Rounds >= cap) {
+            // Decide leg by lower remaining
+            const p1Rem = updatedLeg.player1Remaining;
+            const p2Rem = updatedLeg.player2Remaining;
+            const legWinner: 1 | 2 | null = p1Rem < p2Rem ? 1 : p2Rem < p1Rem ? 2 : null;
+            if (legWinner) {
+              updatedLeg.winner = legWinner;
+              const p1Legs = prev.player1LegsWon + (legWinner === 1 ? 1 : 0);
+              const p2Legs = prev.player2LegsWon + (legWinner === 2 ? 1 : 0);
+              const legsToWin = Math.ceil(prev.bestOfLegs / 2);
+              const finished = p1Legs >= legsToWin || p2Legs >= legsToWin;
+              if (finished) {
+                return { ...next, currentLeg: updatedLeg, player1LegsWon: p1Legs, player2LegsWon: p2Legs, isFinished: true, winnerName: legWinner === 1 ? prev.player1Name : prev.player2Name };
+              }
+              const nextStarter: 1 | 2 = legWinner === 1 ? 2 : 1;
+              return { ...next, completedLegs: [...prev.completedLegs, updatedLeg], player1LegsWon: p1Legs, player2LegsWon: p2Legs, currentLeg: createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter), currentPlayerId: nextStarter };
+            }
+          }
+        }
+        return next;
       }
 
       return { ...prev, currentLeg: updatedLeg };
@@ -734,6 +761,20 @@ const GamePage = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">Rundenlimit pro Leg</label>
+                <Select value={String(maxRoundsX01)} onValueChange={(v) => setMaxRoundsX01(parseInt(v))}>
+                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="0">Kein Limit</SelectItem>
+                    {[8, 10, 12, 15, 20, 25].map((n) => (
+                      <SelectItem key={n} value={String(n)}>Max. {n} Runden</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">Nach dem Limit gewinnt das Leg wer weniger Restpunkte hat.</p>
               </div>
 
               {/* Double-Out toggle */}
