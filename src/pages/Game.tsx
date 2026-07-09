@@ -763,6 +763,20 @@ const GamePage = () => {
                 </Select>
               </div>
 
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">Rundenlimit pro Leg</label>
+                <Select value={String(maxRoundsX01)} onValueChange={(v) => setMaxRoundsX01(parseInt(v))}>
+                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="0">Kein Limit</SelectItem>
+                    {[8, 10, 12, 15, 20, 25].map((n) => (
+                      <SelectItem key={n} value={String(n)}>Max. {n} Runden</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">Nach dem Limit gewinnt das Leg wer weniger Restpunkte hat.</p>
+              </div>
+
               {/* Double-Out toggle */}
               <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
                 <div>
