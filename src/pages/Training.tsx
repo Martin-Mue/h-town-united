@@ -746,7 +746,7 @@ const TrainingPage = () => {
               {supportsRoundLimit && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">
-                    Runden {isTargetGrind ? "" : "(optional – begrenzt „endloses" Training)"}
+                    Runden {isTargetGrind ? "" : "(optional – begrenzt endloses Training)"}
                   </p>
                   <div className="flex gap-2 flex-wrap">
                     {[5, 10, 15, 20, 30].map((n) => (
