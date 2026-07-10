@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock } from "lucide-react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
@@ -65,9 +65,9 @@ const TRAINING_DRILLS: TrainingDrill[] = [
     category: "finishing",
   },
   {
-    id: "t20-grind",
-    name: "T20 Grind",
-    description: "30 Darts auf Triple 20. Zähle deine Treffer und verbessere den Score.",
+    id: "target-grind",
+    name: "Target Grind",
+    description: "Wähle dein Zielfeld (z. B. T20, T19, Bull). Wirf X Runden und zähle deine Treffer.",
     icon: Target,
     difficulty: "Fortgeschritten",
     durationMinutes: 20,
@@ -76,10 +76,19 @@ const TRAINING_DRILLS: TrainingDrill[] = [
   {
     id: "big-single-lock",
     name: "Big Single Lock",
-    description: "Triff nacheinander die großen Single-Felder 20→1. Nur Singles zählen – Triple/Double = Miss. Baut Präzision auf.",
+    description: "Start bei S1. 3 Singles = Segment gelockt. 2 Treffer = weiter, 1 Treffer = zurück zum letzten Lock. Aufsteigend bis S20.",
     icon: Lock,
     difficulty: "Fortgeschritten",
     durationMinutes: 15,
+    category: "accuracy",
+  },
+  {
+    id: "random-score",
+    name: "Random Score",
+    description: "10 Runden, in jeder Runde ein zufälliges Zielsegment (S/D/T). Wirf 3 Darts pro Runde und sammle Treffer.",
+    icon: Shuffle,
+    difficulty: "Fortgeschritten",
+    durationMinutes: 10,
     category: "accuracy",
   },
 ];
@@ -93,8 +102,8 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 /** Double fields for doubles-only drill */
 const DOUBLE_TARGETS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25];
 
-/** Single targets for Big Single Lock (20 down to 1) */
-const BIG_SINGLE_TARGETS = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+/** Single targets for Big Single Lock (ascending 1 → 20) */
+const BIG_SINGLE_TARGETS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
 /** Pressure checkout values */
 const PRESSURE_CHECKOUTS = [32, 40, 16, 36, 24, 8, 20, 50, 64, 80];
@@ -104,18 +113,54 @@ function randomCheckout(): number {
   return Math.floor(Math.random() * 169) + 2;
 }
 
+/** Generates a random random-score target: {base, mul, label} */
+function randomTarget(): { base: number; mul: number; label: string } {
+  const roll = Math.random();
+  if (roll < 0.15) {
+    // Bull / Bullseye
+    return Math.random() < 0.5
+      ? { base: 25, mul: 1, label: "Bull (25)" }
+      : { base: 25, mul: 2, label: "Bullseye (50)" };
+  }
+  const base = Math.floor(Math.random() * 20) + 1;
+  const mulRoll = Math.random();
+  if (mulRoll < 0.55) return { base, mul: 1, label: `S${base}` };
+  if (mulRoll < 0.85) return { base, mul: 2, label: `D${base}` };
+  return { base, mul: 3, label: `T${base}` };
+}
+
 /** Active drill state */
 interface DrillState {
   drillId: string;
   dartsThrown: number;
   dartsThisRound: number;
   hits: number;
+  hitsThisRound: number;
   currentTarget: number;
   targetList: number[];
   targetIndex: number;
   remaining: number; // for checkout drills
   finished: boolean;
   roundScores: number[]; // per-round scores for summary
+  /** Big Single Lock: index of the last locked segment (or -1) */
+  lockedIndex?: number;
+  /** Configurable round cap for endless drills */
+  maxRounds?: number;
+  roundsPlayed?: number;
+  /** Target Grind: chosen target multiplier & base */
+  targetBase?: number;
+  targetMul?: number;
+  /** Random Score: current random target label + spec */
+  randomBase?: number;
+  randomMul?: number;
+  randomLabel?: string;
+}
+
+/** Pre-start configuration for a drill */
+interface DrillConfig {
+  maxRounds?: number;
+  targetBase?: number;
+  targetMul?: number;
 }
 
 const TrainingPage = () => {
@@ -125,6 +170,7 @@ const TrainingPage = () => {
   const [selectedScore, setSelectedScore] = useState(20);
   const [multiplier, setMultiplier] = useState(1);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [drillConfig, setDrillConfig] = useState<DrillConfig>({});
 
   const categories = [
     { key: "all", label: "Alle" },
@@ -139,18 +185,21 @@ const TrainingPage = () => {
     : TRAINING_DRILLS.filter((d) => d.category === filterCategory);
 
   /** Start an active drill session */
-  const startDrill = (drill: TrainingDrill) => {
+  const startDrill = (drill: TrainingDrill, config: DrillConfig = drillConfig) => {
     let state: DrillState = {
       drillId: drill.id,
       dartsThrown: 0,
       dartsThisRound: 0,
       hits: 0,
+      hitsThisRound: 0,
       currentTarget: 0,
       targetList: [],
       targetIndex: 0,
       remaining: 0,
       finished: false,
       roundScores: [],
+      roundsPlayed: 0,
+      maxRounds: config.maxRounds,
     };
 
     switch (drill.id) {
@@ -176,13 +225,28 @@ const TrainingPage = () => {
         state.remaining = val;
         state.currentTarget = val;
         break;
-      case "t20-grind":
-        state.currentTarget = 60; // T20
+      case "target-grind": {
+        const base = config.targetBase ?? 20;
+        const mul = config.targetMul ?? 3;
+        state.targetBase = base;
+        state.targetMul = mul;
+        state.currentTarget = base * mul;
+        state.maxRounds = config.maxRounds ?? 10;
         break;
+      }
       case "big-single-lock":
         state.targetList = [...BIG_SINGLE_TARGETS];
         state.currentTarget = BIG_SINGLE_TARGETS[0];
+        state.lockedIndex = -1;
         break;
+      case "random-score": {
+        const t = randomTarget();
+        state.randomBase = t.base;
+        state.randomMul = t.mul;
+        state.randomLabel = t.label;
+        state.maxRounds = 10;
+        break;
+      }
     }
 
     setDrillState(state);
@@ -312,38 +376,98 @@ const TrainingPage = () => {
           break;
         }
 
-        case "t20-grind": {
-          // Count T20 hits out of 30 darts
-          if (baseValue === 20 && mul === 3) {
+        case "target-grind": {
+          // Count hits on chosen target across configured rounds
+          if (
+            baseValue === (prev.targetBase ?? 20) &&
+            mul === (prev.targetMul ?? 3)
+          ) {
             updated.hits++;
           }
           updated.roundScores = [...(prev.roundScores || []), points];
-          if (updated.dartsThrown >= 30) {
+          const totalDarts = (prev.maxRounds ?? 10) * 3;
+          if (updated.dartsThrown >= totalDarts) {
             updated.finished = true;
           }
           break;
         }
 
         case "big-single-lock": {
-          // Must hit exactly the single (mul === 1) of the current target
+          // Count single hits on the current target within the 3-dart round
           if (baseValue === prev.currentTarget && mul === 1) {
             updated.hits++;
-            const nextIdx = prev.targetIndex + 1;
-            if (nextIdx >= prev.targetList.length) {
-              updated.finished = true;
-            } else {
-              updated.targetIndex = nextIdx;
-              updated.currentTarget = prev.targetList[nextIdx];
-            }
+            updated.hitsThisRound = prev.hitsThisRound + 1;
+          }
+          updated.roundScores = [...(prev.roundScores || []), points];
+          break;
+        }
+
+        case "random-score": {
+          if (
+            baseValue === (prev.randomBase ?? 0) &&
+            mul === (prev.randomMul ?? 0)
+          ) {
+            updated.hits++;
+            updated.hitsThisRound = prev.hitsThisRound + 1;
           }
           updated.roundScores = [...(prev.roundScores || []), points];
           break;
         }
       }
 
-      // Auto-advance round counter after 3 darts (for drills that don't handle it themselves)
+      // End of round handling
       if (newDartsThisRound >= 3 && !["pressure-training", "random-finish", "121-challenge"].includes(selectedDrill.id)) {
         updated.dartsThisRound = 0;
+        updated.roundsPlayed = (prev.roundsPlayed ?? 0) + 1;
+
+        // Big Single Lock: evaluate hits this round
+        if (selectedDrill.id === "big-single-lock") {
+          const hitsRound = updated.hitsThisRound;
+          const locked = prev.lockedIndex ?? -1;
+          const len = prev.targetList.length;
+          let nextIdx = prev.targetIndex;
+          let nextLocked = locked;
+          if (hitsRound >= 3) {
+            // Lock current, advance
+            nextLocked = prev.targetIndex;
+            nextIdx = Math.min(prev.targetIndex + 1, len - 1);
+            if (prev.targetIndex >= len - 1) updated.finished = true;
+          } else if (hitsRound === 2) {
+            // Advance without locking
+            nextIdx = Math.min(prev.targetIndex + 1, len - 1);
+            if (prev.targetIndex >= len - 1) updated.finished = true;
+          } else if (hitsRound <= 1) {
+            // Fall back to last locked segment (or stay at start)
+            nextIdx = locked >= 0 ? locked + 1 <= prev.targetIndex ? locked : prev.targetIndex : 0;
+            nextIdx = locked >= 0 ? locked : 0;
+          }
+          updated.targetIndex = nextIdx;
+          updated.currentTarget = prev.targetList[nextIdx];
+          updated.lockedIndex = nextLocked;
+          updated.hitsThisRound = 0;
+        }
+
+        // Random Score: draw new target
+        if (selectedDrill.id === "random-score") {
+          const t = randomTarget();
+          updated.randomBase = t.base;
+          updated.randomMul = t.mul;
+          updated.randomLabel = t.label;
+          updated.hitsThisRound = 0;
+          if ((updated.roundsPlayed ?? 0) >= (prev.maxRounds ?? 10)) {
+            updated.finished = true;
+          }
+        }
+
+        // Generic round cap for endless drills
+        if (
+          !updated.finished &&
+          prev.maxRounds &&
+          (updated.roundsPlayed ?? 0) >= prev.maxRounds &&
+          ["around-the-clock", "doubles-only", "big-single-lock"].includes(selectedDrill.id)
+        ) {
+          updated.finished = true;
+        }
       }
 
       return updated;
@@ -396,17 +520,19 @@ const TrainingPage = () => {
                 <p className="text-2xl font-display">{drillState.hits}</p>
                 <p className="text-xs text-muted-foreground">Treffer</p>
               </div>
-              {selectedDrill.id === "t20-grind" && (
+              {selectedDrill.id === "target-grind" && (
                 <>
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-2xl font-display">
-                      {Math.round((drillState.hits / 30) * 100)}%
+                      {drillState.dartsThrown > 0 ? Math.round((drillState.hits / drillState.dartsThrown) * 100) : 0}%
                     </p>
-                    <p className="text-xs text-muted-foreground">T20 Quote</p>
+                    <p className="text-xs text-muted-foreground">Trefferquote</p>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-2xl font-display">
-                      {Math.round(drillState.roundScores.reduce((a, b) => a + b, 0) / 10)}
+                      {drillState.roundScores.length > 0
+                        ? Math.round((drillState.roundScores.reduce((a, b) => a + b, 0) / drillState.roundScores.length) * 3)
+                        : 0}
                     </p>
                     <p className="text-xs text-muted-foreground">Ø 3-Dart</p>
                   </div>
@@ -462,17 +588,40 @@ const TrainingPage = () => {
               )}
               {selectedDrill.id === "t20-grind" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Triple 20 Treffer</p>
-                  <p className="text-5xl font-display text-primary">{drillState.hits}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{drillState.dartsThrown} / 30 Darts</p>
+                  <p className="text-xs text-muted-foreground mb-1">Legacy</p>
+                </div>
+              )}
+              {selectedDrill.id === "target-grind" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Ziel</p>
+                  <p className="text-5xl font-display text-primary">
+                    {(drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Treffer: {drillState.hits} · Runde {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10}
+                  </p>
                 </div>
               )}
               {selectedDrill.id === "big-single-lock" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Triff Single (nur S!)</p>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Triff Single · Runde: {drillState.hitsThisRound}/3 Treffer
+                  </p>
                   <p className="text-5xl font-display text-primary">S{drillState.currentTarget}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {drillState.targetIndex + 1} / {drillState.targetList.length} · Darts: {drillState.dartsThrown}
+                    Locked: {drillState.lockedIndex !== undefined && drillState.lockedIndex >= 0
+                      ? `S${drillState.targetList[drillState.lockedIndex]}`
+                      : "—"} · Feld {drillState.targetIndex + 1} / {drillState.targetList.length}
+                    {drillState.maxRounds ? ` · Runde ${(drillState.roundsPlayed ?? 0) + 1}/${drillState.maxRounds}` : ""}
+                  </p>
+                </div>
+              )}
+              {selectedDrill.id === "random-score" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Zufalls-Ziel</p>
+                  <p className="text-5xl font-display text-primary">{drillState.randomLabel}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Runde {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10} · Treffer gesamt: {drillState.hits}
                   </p>
                 </div>
               )}
@@ -540,9 +689,11 @@ const TrainingPage = () => {
 
   // ─── DRILL SELECTION (pre-start) ──────────────────
   if (selectedDrill && !drillState) {
+    const supportsRoundLimit = ["around-the-clock", "doubles-only", "big-single-lock", "target-grind"].includes(selectedDrill.id);
+    const isTargetGrind = selectedDrill.id === "target-grind";
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
-        <Button variant="ghost" onClick={() => setSelectedDrill(null)} className="mb-4 text-muted-foreground">
+        <Button variant="ghost" onClick={() => { setSelectedDrill(null); setDrillConfig({}); }} className="mb-4 text-muted-foreground">
           <ArrowLeft className="w-4 h-4 mr-1" /> Zurück
         </Button>
 
@@ -559,6 +710,75 @@ const TrainingPage = () => {
               ~{selectedDrill.durationMinutes} Min
             </span>
           </div>
+
+          {(supportsRoundLimit || isTargetGrind) && (
+            <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
+                <Settings2 className="w-3.5 h-3.5" /> Einstellungen
+              </div>
+
+              {isTargetGrind && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Zielfeld wählen</p>
+                  <div className="flex gap-2">
+                    <select
+                      className="flex-1 bg-background border border-border rounded-md px-2 py-1.5 text-sm"
+                      value={drillConfig.targetMul ?? 3}
+                      onChange={(e) => setDrillConfig((c) => ({ ...c, targetMul: Number(e.target.value) }))}
+                    >
+                      <option value={1}>Single</option>
+                      <option value={2}>Double</option>
+                      <option value={3}>Triple</option>
+                    </select>
+                    <select
+                      className="flex-1 bg-background border border-border rounded-md px-2 py-1.5 text-sm"
+                      value={drillConfig.targetBase ?? 20}
+                      onChange={(e) => setDrillConfig((c) => ({ ...c, targetBase: Number(e.target.value) }))}
+                    >
+                      {[20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 25].map((n) => (
+                        <option key={n} value={n}>{n === 25 ? "Bull" : n}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {supportsRoundLimit && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Runden {isTargetGrind ? "" : "(optional – begrenzt endloses Training)"}
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    {[5, 10, 15, 20, 30].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setDrillConfig((c) => ({ ...c, maxRounds: n }))}
+                        className={`px-3 py-1 rounded-md text-xs border transition-colors ${
+                          drillConfig.maxRounds === n
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background border-border hover:border-primary/40"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                    {!isTargetGrind && (
+                      <button
+                        onClick={() => setDrillConfig((c) => ({ ...c, maxRounds: undefined }))}
+                        className={`px-3 py-1 rounded-md text-xs border transition-colors ${
+                          !drillConfig.maxRounds
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background border-border hover:border-primary/40"
+                        }`}
+                      >
+                        Endlos
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <Button onClick={() => startDrill(selectedDrill)} className="w-full font-display uppercase text-lg py-6">
             <Play className="w-5 h-5 mr-2" /> Training starten
