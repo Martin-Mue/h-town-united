@@ -85,7 +85,6 @@ const TournamentPage = () => {
   const [ceremonyChampion, setCeremonyChampion] = useState<string | null>(null);
   const [seenCeremonyFor, setSeenCeremonyFor] = useState<string | null>(null);
   const [publicToggling, setPublicToggling] = useState(false);
-  const { toast: toastFn } = { toast: (v: { title: string; description?: string }) => console.log(v) };
 
   // Setup state
   const [tournamentName, setTournamentName] = useState("");
