@@ -238,9 +238,11 @@ const GamePage = () => {
     const newRemaining = remaining - points;
     const newDartsThisRound = dartsThisRound + 1;
 
+    // Per-player double-out setting
+    const activeDoubleOut = isP1 ? (game.player1DoubleOut ?? true) : (game.player2DoubleOut ?? true);
     // Bust checks: below 0, equals 1, or equals 0 but checkout not on double (if double-out enabled)
     const isBust = newRemaining < 0 || newRemaining === 1 ||
-      (newRemaining === 0 && doubleOut && mul !== 2 && !(baseValue === 25 && mul === 2));
+      (newRemaining === 0 && activeDoubleOut && mul !== 2 && !(baseValue === 25 && mul === 2));
 
     if (isBust) {
       if (soundEnabled) playBustSound();
