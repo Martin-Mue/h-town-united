@@ -84,6 +84,8 @@ const TournamentPage = () => {
   const [loading, setLoading] = useState(true);
   const [ceremonyChampion, setCeremonyChampion] = useState<string | null>(null);
   const [seenCeremonyFor, setSeenCeremonyFor] = useState<string | null>(null);
+  const [publicToggling, setPublicToggling] = useState(false);
+  const { toast: toastFn } = { toast: (v: { title: string; description?: string }) => console.log(v) };
 
   // Setup state
   const [tournamentName, setTournamentName] = useState("");
@@ -101,6 +103,32 @@ const TournamentPage = () => {
 
   const { session } = useAuth();
   const { toast } = useToast();
+
+  const togglePublicView = async () => {
+    if (!activeTournament) return;
+    setPublicToggling(true);
+    const next = !activeTournament.public_view;
+    let slug = activeTournament.public_slug;
+    if (next && !slug) {
+      slug = `${activeTournament.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "turnier"}-${activeTournament.id.slice(0, 6)}`;
+    }
+    const { error } = await (supabase as any).from("tournaments").update({
+      public_view: next, public_slug: slug,
+    }).eq("id", activeTournament.id);
+    if (error) {
+      toast({ title: "Fehler", description: "Öffentliche Ansicht konnte nicht geändert werden.", variant: "destructive" });
+    } else {
+      setActiveTournament({ ...activeTournament, public_view: next, public_slug: slug });
+      toast({ title: next ? "Live-Ansicht aktiv" : "Live-Ansicht deaktiviert", description: next && slug ? `${window.location.origin}/live/${slug}` : undefined });
+    }
+    setPublicToggling(false);
+  };
+
+  const copyPublicLink = () => {
+    if (!activeTournament?.public_slug) return;
+    const url = `${window.location.origin}/live/${activeTournament.public_slug}`;
+    navigator.clipboard.writeText(url).then(() => toast({ title: "Link kopiert", description: url }));
+  };
 
   const fetchTournaments = useCallback(async () => {
     const { data } = await supabase
