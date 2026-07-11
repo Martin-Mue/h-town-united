@@ -16,6 +16,7 @@ import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import Admin from "./pages/Admin";
 import TournamentSeries from "./pages/TournamentSeries";
+import PublicTournament from "./pages/PublicTournament";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,7 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/live/:slug" element={<PublicTournament />} />
             <Route
               path="/*"
               element={
