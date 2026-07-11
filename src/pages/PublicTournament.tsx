@@ -35,11 +35,11 @@ const PublicTournamentPage = () => {
     let cancelled = false;
 
     const load = async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("tournaments")
         .select("*")
-        .eq("public_slug" as any, slug)
-        .eq("public_view" as any, true)
+        .eq("public_slug", slug)
+        .eq("public_view", true)
         .maybeSingle();
       if (cancelled) return;
       if (!data) { setNotFound(true); setLoading(false); return; }
