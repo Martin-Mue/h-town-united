@@ -783,13 +783,20 @@ const GamePage = () => {
                 <p className="text-[10px] text-muted-foreground mt-1">Nach dem Limit gewinnt das Leg wer weniger Restpunkte hat.</p>
               </div>
 
-              {/* Double-Out toggle */}
-              <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
+              {/* Per-player Double-Out toggles */}
+              <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-3">
                 <div>
-                  <Label className="text-sm font-medium">Double Out</Label>
-                  <p className="text-xs text-muted-foreground">Checkout muss auf Doppelfeld enden</p>
+                  <Label className="text-sm font-medium">Checkout-Regel pro Spieler</Label>
+                  <p className="text-xs text-muted-foreground">Standard: Double Out. Für ungeübte Gäste ggf. auf Single Out stellen.</p>
                 </div>
-                <Switch checked={doubleOut} onCheckedChange={setDoubleOut} />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm truncate">{p1Name}: {p1DoubleOut ? "Double Out" : "Single Out"}</span>
+                  <Switch checked={p1DoubleOut} onCheckedChange={setP1DoubleOut} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm truncate">{p2Name}: {p2DoubleOut ? "Double Out" : "Single Out"}</span>
+                  <Switch checked={p2DoubleOut} onCheckedChange={setP2DoubleOut} />
+                </div>
               </div>
             </>
           )}
