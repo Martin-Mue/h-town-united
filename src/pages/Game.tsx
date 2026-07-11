@@ -1017,7 +1017,9 @@ const GamePage = () => {
       {/* Current player indicator with dart counter + round score */}
       <div className="text-center mt-2">
         <span className="text-sm text-primary font-medium">{currentPlayerName} wirft</span>
-        {!doubleOut && mode !== "cricket" && <span className="text-[10px] text-muted-foreground ml-2">(Single Out)</span>}
+        {mode !== "cricket" && !(isP1Turn ? (game.player1DoubleOut ?? true) : (game.player2DoubleOut ?? true)) && (
+          <span className="text-[10px] text-muted-foreground ml-2">(Single Out)</span>
+        )}
         <div className="flex justify-center gap-1 mt-1">
           {[0, 1, 2].map((i) => (
             <div key={i} className={`w-3 h-3 rounded-full transition-all ${i < dartsThisRound ? "bg-primary" : "bg-muted"}`} />
