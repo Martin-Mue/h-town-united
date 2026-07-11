@@ -652,10 +652,31 @@ const TournamentPage = () => {
             <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
             <p className="text-xs text-muted-foreground">{activeTournament.mode === "event-ko" ? "Event K.O." : "K.O.-System"} · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
-            ← Übersicht
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
+              <Radio className={`w-3.5 h-3.5 ${activeTournament.public_view ? "animate-pulse" : ""}`} />
+              {activeTournament.public_view ? "Live an" : "Live-Ansicht"}
+            </Button>
+            {activeTournament.public_view && activeTournament.public_slug && (
+              <Button variant="outline" size="sm" onClick={copyPublicLink} className="gap-1" title="Link kopieren">
+                <Copy className="w-3.5 h-3.5" /> Link
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
+              ← Übersicht
+            </Button>
+          </div>
         </div>
+
+        {activeTournament.public_view && activeTournament.public_slug && (
+          <div className="container mb-4">
+            <div className="bg-gradient-to-r from-secondary/10 via-primary/10 to-accent/10 border border-secondary/30 rounded-xl px-4 py-2 text-xs flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" />
+              <span className="text-muted-foreground">Beamer-Link:</span>
+              <code className="font-mono text-secondary truncate">{window.location.origin}/live/{activeTournament.public_slug}</code>
+            </div>
+          </div>
+        )}
 
         {activeTournament.champion && (
           <div className="container mb-4">
