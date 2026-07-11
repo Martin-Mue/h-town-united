@@ -44,6 +44,9 @@ export interface GameState {
   winnerName?: string;
   /** Optional cap on rounds per leg for X01 modes. When both players have played this many rounds and nobody has checked out, the leg ends by remaining score. */
   maxRoundsX01?: number;
+  /** Per-player double-out setting. Default true. Only used in X01 modes. */
+  player1DoubleOut?: boolean;
+  player2DoubleOut?: boolean;
   /** Cricket-specific state (only for cricket mode) */
   player1Cricket?: CricketPlayerState;
   player2Cricket?: CricketPlayerState;

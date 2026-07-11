@@ -92,7 +92,8 @@ const GamePage = () => {
   const [customStartScore, setCustomStartScore] = useState(501);
   const [p1Name, setP1Name] = useState("Spieler 1");
   const [p2Name, setP2Name] = useState("Spieler 2");
-  const [doubleOut, setDoubleOut] = useState(true);
+  const [p1DoubleOut, setP1DoubleOut] = useState(true);
+  const [p2DoubleOut, setP2DoubleOut] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [speechEnabled, setSpeechEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -193,6 +194,8 @@ const GamePage = () => {
       currentLeg: createLegState(1, startScore, 1), completedLegs: [],
       currentPlayerId: 1, isFinished: false,
       maxRoundsX01: mode !== "cricket" && maxRoundsX01 > 0 ? maxRoundsX01 : undefined,
+      player1DoubleOut: p1DoubleOut,
+      player2DoubleOut: p2DoubleOut,
     };
     if (mode === "cricket") {
       newGame.player1Cricket = createCricketState();
@@ -235,9 +238,11 @@ const GamePage = () => {
     const newRemaining = remaining - points;
     const newDartsThisRound = dartsThisRound + 1;
 
+    // Per-player double-out setting
+    const activeDoubleOut = isP1 ? (game.player1DoubleOut ?? true) : (game.player2DoubleOut ?? true);
     // Bust checks: below 0, equals 1, or equals 0 but checkout not on double (if double-out enabled)
     const isBust = newRemaining < 0 || newRemaining === 1 ||
-      (newRemaining === 0 && doubleOut && mul !== 2 && !(baseValue === 25 && mul === 2));
+      (newRemaining === 0 && activeDoubleOut && mul !== 2 && !(baseValue === 25 && mul === 2));
 
     if (isBust) {
       if (soundEnabled) playBustSound();
@@ -489,8 +494,9 @@ const GamePage = () => {
       const newDartsThisRound = curDarts + 1;
       const mul: number = d.multiplier;
       const isDoubleOut = mul === 2;
+      const activeDoubleOut = isP1 ? (curGame.player1DoubleOut ?? true) : (curGame.player2DoubleOut ?? true);
       const isBust = newRemaining < 0 || newRemaining === 1 ||
-        (newRemaining === 0 && doubleOut && !isDoubleOut);
+        (newRemaining === 0 && activeDoubleOut && !isDoubleOut);
 
       if (isBust) {
         if (isP1) {
@@ -777,13 +783,20 @@ const GamePage = () => {
                 <p className="text-[10px] text-muted-foreground mt-1">Nach dem Limit gewinnt das Leg wer weniger Restpunkte hat.</p>
               </div>
 
-              {/* Double-Out toggle */}
-              <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
+              {/* Per-player Double-Out toggles */}
+              <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-3">
                 <div>
-                  <Label className="text-sm font-medium">Double Out</Label>
-                  <p className="text-xs text-muted-foreground">Checkout muss auf Doppelfeld enden</p>
+                  <Label className="text-sm font-medium">Checkout-Regel pro Spieler</Label>
+                  <p className="text-xs text-muted-foreground">Standard: Double Out. Für ungeübte Gäste ggf. auf Single Out stellen.</p>
                 </div>
-                <Switch checked={doubleOut} onCheckedChange={setDoubleOut} />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm truncate">{p1Name}: {p1DoubleOut ? "Double Out" : "Single Out"}</span>
+                  <Switch checked={p1DoubleOut} onCheckedChange={setP1DoubleOut} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm truncate">{p2Name}: {p2DoubleOut ? "Double Out" : "Single Out"}</span>
+                  <Switch checked={p2DoubleOut} onCheckedChange={setP2DoubleOut} />
+                </div>
               </div>
             </>
           )}
@@ -1004,7 +1017,9 @@ const GamePage = () => {
       {/* Current player indicator with dart counter + round score */}
       <div className="text-center mt-2">
         <span className="text-sm text-primary font-medium">{currentPlayerName} wirft</span>
-        {!doubleOut && mode !== "cricket" && <span className="text-[10px] text-muted-foreground ml-2">(Single Out)</span>}
+        {mode !== "cricket" && !(isP1Turn ? (game.player1DoubleOut ?? true) : (game.player2DoubleOut ?? true)) && (
+          <span className="text-[10px] text-muted-foreground ml-2">(Single Out)</span>
+        )}
         <div className="flex justify-center gap-1 mt-1">
           {[0, 1, 2].map((i) => (
             <div key={i} className={`w-3 h-3 rounded-full transition-all ${i < dartsThisRound ? "bg-primary" : "bg-muted"}`} />

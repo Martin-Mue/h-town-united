@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,6 +60,8 @@ interface TournamentRecord {
   best_of_legs?: number;
   series_id?: string | null;
   round_configs?: RoundConfig[];
+  public_view?: boolean;
+  public_slug?: string | null;
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
@@ -82,6 +84,7 @@ const TournamentPage = () => {
   const [loading, setLoading] = useState(true);
   const [ceremonyChampion, setCeremonyChampion] = useState<string | null>(null);
   const [seenCeremonyFor, setSeenCeremonyFor] = useState<string | null>(null);
+  const [publicToggling, setPublicToggling] = useState(false);
 
   // Setup state
   const [tournamentName, setTournamentName] = useState("");
@@ -100,6 +103,32 @@ const TournamentPage = () => {
   const { session } = useAuth();
   const { toast } = useToast();
 
+  const togglePublicView = async () => {
+    if (!activeTournament) return;
+    setPublicToggling(true);
+    const next = !activeTournament.public_view;
+    let slug = activeTournament.public_slug;
+    if (next && !slug) {
+      slug = `${activeTournament.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "turnier"}-${activeTournament.id.slice(0, 6)}`;
+    }
+    const { error } = await (supabase as any).from("tournaments").update({
+      public_view: next, public_slug: slug,
+    }).eq("id", activeTournament.id);
+    if (error) {
+      toast({ title: "Fehler", description: "Öffentliche Ansicht konnte nicht geändert werden.", variant: "destructive" });
+    } else {
+      setActiveTournament({ ...activeTournament, public_view: next, public_slug: slug });
+      toast({ title: next ? "Live-Ansicht aktiv" : "Live-Ansicht deaktiviert", description: next && slug ? `${window.location.origin}/live/${slug}` : undefined });
+    }
+    setPublicToggling(false);
+  };
+
+  const copyPublicLink = () => {
+    if (!activeTournament?.public_slug) return;
+    const url = `${window.location.origin}/live/${activeTournament.public_slug}`;
+    navigator.clipboard.writeText(url).then(() => toast({ title: "Link kopiert", description: url }));
+  };
+
   const fetchTournaments = useCallback(async () => {
     const { data } = await supabase
       .from("tournaments")
@@ -114,6 +143,8 @@ const TournamentPage = () => {
         best_of_legs: (t as any).best_of_legs || 3,
         series_id: (t as any).series_id || null,
         round_configs: ((t as any).round_configs as RoundConfig[]) || [],
+        public_view: (t as any).public_view || false,
+        public_slug: (t as any).public_slug || null,
       })) as TournamentRecord[]);
     }
     setLoading(false);
@@ -621,10 +652,31 @@ const TournamentPage = () => {
             <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
             <p className="text-xs text-muted-foreground">{activeTournament.mode === "event-ko" ? "Event K.O." : "K.O.-System"} · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
-            ← Übersicht
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
+              <Radio className={`w-3.5 h-3.5 ${activeTournament.public_view ? "animate-pulse" : ""}`} />
+              {activeTournament.public_view ? "Live an" : "Live-Ansicht"}
+            </Button>
+            {activeTournament.public_view && activeTournament.public_slug && (
+              <Button variant="outline" size="sm" onClick={copyPublicLink} className="gap-1" title="Link kopieren">
+                <Copy className="w-3.5 h-3.5" /> Link
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
+              ← Übersicht
+            </Button>
+          </div>
         </div>
+
+        {activeTournament.public_view && activeTournament.public_slug && (
+          <div className="container mb-4">
+            <div className="bg-gradient-to-r from-secondary/10 via-primary/10 to-accent/10 border border-secondary/30 rounded-xl px-4 py-2 text-xs flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" />
+              <span className="text-muted-foreground">Beamer-Link:</span>
+              <code className="font-mono text-secondary truncate">{window.location.origin}/live/{activeTournament.public_slug}</code>
+            </div>
+          </div>
+        )}
 
         {activeTournament.champion && (
           <div className="container mb-4">
@@ -682,6 +734,35 @@ const TournamentPage = () => {
             })}
           </div>
         </div>
+
+        {/* Live-Ticker */}
+        {(() => {
+          const done = (matches as Match[]).filter(m => m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE").slice(-10).reverse();
+          if (done.length === 0) return null;
+          return (
+            <div className="container mb-6">
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="w-4 h-4 text-accent" />
+                  <h3 className="font-display uppercase text-sm">Live-Ticker · Turnierverlauf</h3>
+                </div>
+                <ol className="grid md:grid-cols-2 gap-2 text-xs">
+                  {done.map(m => (
+                    <li key={m.id} className="border-l-2 border-primary/40 pl-2">
+                      <p className="font-display text-sm">
+                        <span className="text-secondary">{m.winner}</span>
+                        <span className="text-muted-foreground"> schlägt </span>
+                        {m.winner === m.player1 ? m.player2 : m.player1}
+                      </p>
+                      <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          );
+        })()}
+
         {ceremonyChampion && (
           <TrophyCeremony champion={ceremonyChampion} tournamentName={activeTournament.name} onClose={() => setCeremonyChampion(null)} />
         )}

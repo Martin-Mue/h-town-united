@@ -244,6 +244,8 @@ export type Database = {
           mode: string
           name: string
           players: Json
+          public_slug: string | null
+          public_view: boolean
           round_configs: Json
           series_id: string | null
           status: string
@@ -261,6 +263,8 @@ export type Database = {
           mode?: string
           name: string
           players?: Json
+          public_slug?: string | null
+          public_view?: boolean
           round_configs?: Json
           series_id?: string | null
           status?: string
@@ -278,6 +282,8 @@ export type Database = {
           mode?: string
           name?: string
           players?: Json
+          public_slug?: string | null
+          public_view?: boolean
           round_configs?: Json
           series_id?: string | null
           status?: string
