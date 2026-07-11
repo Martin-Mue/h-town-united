@@ -734,6 +734,35 @@ const TournamentPage = () => {
             })}
           </div>
         </div>
+
+        {/* Live-Ticker */}
+        {(() => {
+          const done = (matches as Match[]).filter(m => m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE").slice(-10).reverse();
+          if (done.length === 0) return null;
+          return (
+            <div className="container mb-6">
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="w-4 h-4 text-accent" />
+                  <h3 className="font-display uppercase text-sm">Live-Ticker · Turnierverlauf</h3>
+                </div>
+                <ol className="grid md:grid-cols-2 gap-2 text-xs">
+                  {done.map(m => (
+                    <li key={m.id} className="border-l-2 border-primary/40 pl-2">
+                      <p className="font-display text-sm">
+                        <span className="text-secondary">{m.winner}</span>
+                        <span className="text-muted-foreground"> schlägt </span>
+                        {m.winner === m.player1 ? m.player2 : m.player1}
+                      </p>
+                      <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          );
+        })()}
+
         {ceremonyChampion && (
           <TrophyCeremony champion={ceremonyChampion} tournamentName={activeTournament.name} onClose={() => setCeremonyChampion(null)} />
         )}
