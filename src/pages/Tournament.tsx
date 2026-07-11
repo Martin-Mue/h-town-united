@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,6 +60,8 @@ interface TournamentRecord {
   best_of_legs?: number;
   series_id?: string | null;
   round_configs?: RoundConfig[];
+  public_view?: boolean;
+  public_slug?: string | null;
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
