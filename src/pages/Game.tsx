@@ -92,7 +92,8 @@ const GamePage = () => {
   const [customStartScore, setCustomStartScore] = useState(501);
   const [p1Name, setP1Name] = useState("Spieler 1");
   const [p2Name, setP2Name] = useState("Spieler 2");
-  const [doubleOut, setDoubleOut] = useState(true);
+  const [p1DoubleOut, setP1DoubleOut] = useState(true);
+  const [p2DoubleOut, setP2DoubleOut] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [speechEnabled, setSpeechEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -193,6 +194,8 @@ const GamePage = () => {
       currentLeg: createLegState(1, startScore, 1), completedLegs: [],
       currentPlayerId: 1, isFinished: false,
       maxRoundsX01: mode !== "cricket" && maxRoundsX01 > 0 ? maxRoundsX01 : undefined,
+      player1DoubleOut: p1DoubleOut,
+      player2DoubleOut: p2DoubleOut,
     };
     if (mode === "cricket") {
       newGame.player1Cricket = createCricketState();
