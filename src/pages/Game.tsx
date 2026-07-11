@@ -494,8 +494,9 @@ const GamePage = () => {
       const newDartsThisRound = curDarts + 1;
       const mul: number = d.multiplier;
       const isDoubleOut = mul === 2;
+      const activeDoubleOut = isP1 ? (curGame.player1DoubleOut ?? true) : (curGame.player2DoubleOut ?? true);
       const isBust = newRemaining < 0 || newRemaining === 1 ||
-        (newRemaining === 0 && doubleOut && !isDoubleOut);
+        (newRemaining === 0 && activeDoubleOut && !isDoubleOut);
 
       if (isBust) {
         if (isP1) {
