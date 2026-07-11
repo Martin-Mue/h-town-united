@@ -116,6 +116,8 @@ const TournamentPage = () => {
         best_of_legs: (t as any).best_of_legs || 3,
         series_id: (t as any).series_id || null,
         round_configs: ((t as any).round_configs as RoundConfig[]) || [],
+        public_view: (t as any).public_view || false,
+        public_slug: (t as any).public_slug || null,
       })) as TournamentRecord[]);
     }
     setLoading(false);
