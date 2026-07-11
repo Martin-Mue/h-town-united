@@ -70,21 +70,21 @@ const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
 const MIN_ANALYSIS_SIZE = 0.55;
 
-// Frame-to-frame diff considered "still" (no motion).
-const MOTION_STILL = 0.018;
-// Diff between current and last *stable* frame → physical change occurred.
-const CHANGE_DELTA = 0.052;
-// Frames of stillness required after a change before scanning.
-const STILL_AFTER_CHANGE = 3; // ~0.9s at 300ms
+// Frame-to-frame diff considered "still" (no motion). Tighter → weniger falsche Trigger.
+const MOTION_STILL = 0.012;
+// Diff between current and last *stable* frame → physical change occurred. Höher → weniger Reaktion auf Licht/Hand.
+const CHANGE_DELTA = 0.075;
+// Frames of stillness required after a change before scanning. ~1.6s bei 400ms Tick.
+const STILL_AFTER_CHANGE = 4;
 // Tick interval of the watcher loop.
-const TICK_MS = 300;
+const TICK_MS = 400;
 // Rolling video buffer length for throw clip.
 const CLIP_BUFFER_MS = 12000;
-const SCAN_COOLDOWN_MS = 2200;
-const EMPTY_CONFIRM_SCANS = 2;
-const MIN_DART_CONFIDENCE = 0.54;
-const MIN_OVERALL_CONFIDENCE = 0.48;
-const EMPTY_BOARD_DELTA = 0.026;
+const SCAN_COOLDOWN_MS = 3200;
+const EMPTY_CONFIRM_SCANS = 3;
+const MIN_DART_CONFIDENCE = 0.6;
+const MIN_OVERALL_CONFIDENCE = 0.55;
+const EMPTY_BOARD_DELTA = 0.022;
 const DART_POSITION_MATCH = 0.09;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
