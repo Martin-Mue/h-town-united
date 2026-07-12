@@ -214,6 +214,12 @@ const LiveCamera = ({
   const lastScanAtRef = useRef(0);
   // Track how many AI scans in a row report zero darts AFTER we had some.
   const emptyConfirmRef = useRef(0);
+  // Cached last stable frame captured WHILE darts were on the board.
+  // Used to send to AI once the user pulls the darts.
+  const preRemovalFrameRef = useRef<string | null>(null);
+  // Visually observed throws in the current turn (motion → still while board non-empty)
+  const throwsSeenRef = useRef(0);
+  const [throwsSeen, setThrowsSeen] = useState(0);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
