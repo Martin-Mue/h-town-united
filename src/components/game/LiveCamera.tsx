@@ -227,6 +227,8 @@ const LiveCamera = ({
   const [autoCalibrating, setAutoCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
+  const [calibStep, setCalibStep] = useState(0);
+  const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
 
   useEffect(() => {
     accumulatedRef.current = accumulated;
