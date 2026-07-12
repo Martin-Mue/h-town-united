@@ -691,7 +691,6 @@ const TournamentPage = () => {
           </div>
         )}
 
-        <div className="overflow-x-auto pb-4">
         <BracketViewport
           matches={matches}
           totalRounds={totalRounds}
