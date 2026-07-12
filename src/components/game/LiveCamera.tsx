@@ -194,7 +194,6 @@ function diffNewDarts(prev: DetectedDart[], ai: DetectedDart[]): DetectedDart[] 
 const LiveCamera = ({
   onRoundCommit,
   onPendingChange,
-  onClipReady,
   enabled,
   onClose,
   dartsRemaining = 3,
@@ -204,11 +203,6 @@ const LiveCamera = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const zoomCapsRef = useRef<ZoomCapability | null>(null);
-
-  // Rolling video buffer
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const recorderMimeRef = useRef<string>("video/webm");
-  const clipChunksRef = useRef<Array<{ blob: Blob; ts: number }>>([]);
 
   // Frame state
   const prevSigRef = useRef<number[] | null>(null);
