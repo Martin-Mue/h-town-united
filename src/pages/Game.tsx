@@ -112,39 +112,6 @@ const GamePage = () => {
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
-  const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
-  const clipPopupRef = useRef<ThrowClipPopup | null>(null);
-  useEffect(() => { clipPopupRef.current = clipPopup; }, [clipPopup]);
-  useEffect(() => () => {
-    if (clipPopupRef.current) URL.revokeObjectURL(clipPopupRef.current.url);
-  }, []);
-
-  const handleClipReady = useCallback((blob: Blob, darts: DetectedDart[]) => {
-    if (!game || darts.length === 0) return;
-    const total = darts.reduce((s, d) => s + d.points, 0);
-    const isP1 = game.currentPlayerId === 1;
-    const remaining = isP1 ? game.currentLeg.player1Remaining : game.currentLeg.player2Remaining;
-    const wouldCheckout = game.mode !== "cricket" && total === remaining;
-    const popup: ThrowClipPopup = {
-      url: URL.createObjectURL(blob),
-      mime: blob.type || "video/webm",
-      total,
-      is180: total === 180,
-      isCheckout: wouldCheckout,
-      isTonPlus: total >= 100 && total !== 180,
-      playerName: isP1 ? game.player1Name : game.player2Name,
-      darts,
-      ts: Date.now(),
-    };
-    // Revoke any previous unviewed clip
-    if (clipPopupRef.current) URL.revokeObjectURL(clipPopupRef.current.url);
-    setClipPopup(popup);
-  }, [game]);
-
-  const closeClipPopup = useCallback(() => {
-    if (clipPopupRef.current) URL.revokeObjectURL(clipPopupRef.current.url);
-    setClipPopup(null);
-  }, []);
 
   useEffect(() => {
     supabase.from("players").select("id, name, emoji").order("name").then(({ data }) => {
@@ -1043,7 +1010,6 @@ const GamePage = () => {
           onClose={() => { setCameraEnabled(false); setPendingCameraDarts([]); }}
           onRoundCommit={submitDetectedRound}
           onPendingChange={setPendingCameraDarts}
-          onClipReady={handleClipReady}
           dartsRemaining={Math.max(1, 3 - dartsThisRound)}
           playerName={currentPlayerName}
         />
@@ -1143,8 +1109,6 @@ const GamePage = () => {
       <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
         <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
       </Button>
-
-      <ThrowClipDialog popup={clipPopup} onClose={closeClipPopup} />
     </div>
   );
 };
