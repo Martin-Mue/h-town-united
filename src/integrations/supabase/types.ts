@@ -116,6 +116,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "games_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "games_winner_id_fkey"
             columns: ["winner_id"]
             isOneToOne: false
@@ -323,7 +330,51 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      tournaments_public: {
+        Row: {
+          best_of_legs: number | null
+          bracket: Json | null
+          champion: string | null
+          game_mode: string | null
+          id: string | null
+          mode: string | null
+          name: string | null
+          players: Json | null
+          public_slug: string | null
+          public_view: boolean | null
+          round_configs: Json | null
+          status: string | null
+        }
+        Insert: {
+          best_of_legs?: number | null
+          bracket?: Json | null
+          champion?: string | null
+          game_mode?: string | null
+          id?: string | null
+          mode?: string | null
+          name?: string | null
+          players?: Json | null
+          public_slug?: string | null
+          public_view?: boolean | null
+          round_configs?: Json | null
+          status?: string | null
+        }
+        Update: {
+          best_of_legs?: number | null
+          bracket?: Json | null
+          champion?: string | null
+          game_mode?: string | null
+          id?: string | null
+          mode?: string | null
+          name?: string | null
+          players?: Json | null
+          public_slug?: string | null
+          public_view?: boolean | null
+          round_configs?: Json | null
+          status?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       admin_delete_user: { Args: { _user_id: string }; Returns: undefined }

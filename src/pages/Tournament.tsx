@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -75,6 +75,144 @@ const shuffle = <T,>(list: T[]) => {
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
+};
+
+// ─── Bracket Viewport: auto-fit + zoom + pan ─────────────────
+interface BracketViewportProps {
+  matches: Match[];
+  totalRounds: number;
+  activeTournament: TournamentRecord;
+  roundLabel: (round: number, total: number) => string;
+  setKoWinner: (matchId: string, winner: string) => void;
+  setKoScore: (matchId: string, slot: 1 | 2) => void;
+  resetKoMatch: (matchId: string) => void;
+}
+
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch }: BracketViewportProps) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [fitScale, setFitScale] = useState(1);
+  const [userZoom, setUserZoom] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  const scale = fitScale * userZoom;
+
+  const measure = useCallback(() => {
+    if (!wrapRef.current || !innerRef.current) return;
+    const wrap = wrapRef.current.getBoundingClientRect();
+    // measure at scale 1
+    const prevTransform = innerRef.current.style.transform;
+    innerRef.current.style.transform = "none";
+    const inner = innerRef.current.getBoundingClientRect();
+    innerRef.current.style.transform = prevTransform;
+    if (inner.width === 0 || inner.height === 0) return;
+    const sx = wrap.width / inner.width;
+    const sy = wrap.height / inner.height;
+    const s = Math.min(sx, sy, 1);
+    setFitScale(Math.max(0.25, s));
+  }, []);
+
+  useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, fullscreen]);
+  useEffect(() => {
+    const ro = new ResizeObserver(() => measure());
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, [measure]);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
+
+  const wrapperClass = fullscreen
+    ? "fixed inset-0 z-50 bg-background flex flex-col"
+    : "relative w-full";
+
+  return (
+    <div className={wrapperClass}>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 bg-background/80 backdrop-blur sticky top-0 z-10">
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          Zoom {(scale * 100).toFixed(0)}%
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.max(0.3, z - 0.15))} title="Verkleinern">
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(1)} title="Auf Bildschirm einpassen">
+            <Maximize2 className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.min(3, z + 0.15))} title="Vergrößern">
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+          <Button variant={fullscreen ? "default" : "outline"} size="sm" className="h-8 gap-1 ml-1" onClick={() => setFullscreen(f => !f)}>
+            {fullscreen ? "Schließen" : "Vollbild"}
+          </Button>
+        </div>
+      </div>
+      <div
+        ref={wrapRef}
+        className="overflow-auto bg-gradient-to-br from-background via-background to-primary/5"
+        style={{ height: fullscreen ? "calc(100vh - 44px)" : "min(75vh, 900px)" }}
+      >
+        <div
+          ref={innerRef}
+          className="flex gap-8 p-6"
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+            width: "max-content",
+          }}
+        >
+          {Array.from({ length: totalRounds }, (_, r) => r + 1).map(round => {
+            const roundMatches = matches.filter(m => m.round === round);
+            const cfg = (activeTournament.round_configs || [])[round - 1];
+            const roundMode = cfg?.mode || activeTournament.game_mode;
+            const roundBestOf = cfg?.bestOf || activeTournament.best_of_legs;
+            const isLastRound = round === totalRounds;
+            return (
+              <div key={round} className="flex flex-col gap-3 min-w-[240px]">
+                <div className="text-center mb-1 sticky top-0">
+                  <h3 className="text-xs font-display uppercase text-muted-foreground">
+                    {roundLabel(round, totalRounds)}
+                  </h3>
+                  <p className="text-[10px] text-primary/80 font-mono">{roundMode} · BO{roundBestOf}</p>
+                </div>
+                <div className="flex flex-col justify-around flex-1 gap-3 relative">
+                  {roundMatches.map(match => (
+                    <div key={match.id} className={`bg-card border rounded-xl overflow-hidden relative ${match.winner ? "border-border" : "border-primary/30"}`}>
+                      {!isLastRound && (
+                        <span aria-hidden className="absolute top-1/2 -right-8 w-8 h-px bg-border" />
+                      )}
+                      {[match.player1, match.player2].map((player, idx) => (
+                        <div key={idx}
+                          className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
+                            idx === 0 ? "border-b border-border" : ""
+                          } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
+                          <button disabled={!player || player === "BYE" || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
+                          <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === "BYE" || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                          <span className="w-6 text-center font-display text-base">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
+                          {match.winner === player && <Check className="w-4 h-4 text-secondary" />}
+                        </div>
+                      ))}
+                      {(match.winner || match.score1 || match.score2) && (
+                        <Button variant="ghost" size="sm" className="w-full rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}>
+                          <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const TournamentPage = () => {
@@ -691,49 +829,15 @@ const TournamentPage = () => {
           </div>
         )}
 
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-6 min-w-max px-4">
-            {Array.from({ length: totalRounds }, (_, r) => r + 1).map(round => {
-              const roundMatches = matches.filter(m => m.round === round);
-              const cfg = (activeTournament.round_configs || [])[round - 1];
-              const roundMode = cfg?.mode || activeTournament.game_mode;
-              const roundBestOf = cfg?.bestOf || activeTournament.best_of_legs;
-              const isLastRound = round === totalRounds;
-              return (
-                <div key={round} className="flex flex-col gap-4 min-w-[220px]">
-                  <div className="text-center mb-1">
-                    <h3 className="text-xs font-display uppercase text-muted-foreground">
-                      {roundLabel(round, totalRounds)}
-                    </h3>
-                    <p className="text-[10px] text-primary/80 font-mono">{roundMode} · BO{roundBestOf}</p>
-                  </div>
-                  <div className="flex flex-col justify-around flex-1 gap-4 relative">
-                    {roundMatches.map(match => (
-                      <div key={match.id} className={`bg-card border rounded-xl overflow-hidden relative ${match.winner ? "border-border" : "border-primary/30"}`}>
-                        {/* Connector line to next round */}
-                        {!isLastRound && (
-                          <span aria-hidden className="hidden md:block absolute top-1/2 -right-6 w-6 h-px bg-border" />
-                        )}
-                        {[match.player1, match.player2].map((player, idx) => (
-                          <div key={idx}
-                            className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
-                              idx === 0 ? "border-b border-border" : ""
-                            } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-                            <button disabled={!player || player === "BYE" || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!player || player === "BYE" || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)}><Plus className="w-3 h-3" /></Button>
-                            <span className="w-5 text-center font-display">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
-                            {match.winner === player && <Check className="w-3 h-3 text-secondary" />}
-                          </div>
-                        ))}
-                        {(match.winner || match.score1 || match.score2) && <Button variant="ghost" size="sm" className="w-full rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}><RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen</Button>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <BracketViewport
+          matches={matches}
+          totalRounds={totalRounds}
+          activeTournament={activeTournament}
+          roundLabel={roundLabel}
+          setKoWinner={setKoWinner}
+          setKoScore={setKoScore}
+          resetKoMatch={resetKoMatch}
+        />
 
         {/* Live-Ticker */}
         {(() => {

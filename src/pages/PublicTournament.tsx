@@ -36,10 +36,9 @@ const PublicTournamentPage = () => {
 
     const load = async () => {
       const { data } = await (supabase as any)
-        .from("tournaments")
+        .from("tournaments_public")
         .select("*")
         .eq("public_slug", slug)
-        .eq("public_view", true)
         .maybeSingle();
       if (cancelled) return;
       if (!data) { setNotFound(true); setLoading(false); return; }
