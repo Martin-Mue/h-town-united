@@ -177,7 +177,7 @@ const GamePage = () => {
   /** Save undo snapshot before each throw */
   const saveUndo = () => {
     if (!game) return;
-    setUndoStack(prev => [...prev.slice(-20), { game: JSON.parse(JSON.stringify(game)), dartsThisRound, turnStartRemaining }]);
+    setUndoStack(prev => [...prev, { game: JSON.parse(JSON.stringify(game)), dartsThisRound, turnStartRemaining }]);
   };
 
   /** Undo the last dart throw */
@@ -401,7 +401,7 @@ const GamePage = () => {
     if (!game || game.isFinished || darts.length === 0) return;
 
     // Snapshot for undo (one entry per camera round).
-    setUndoStack(prev => [...prev.slice(-20), {
+    setUndoStack(prev => [...prev, {
       game: JSON.parse(JSON.stringify(game)),
       dartsThisRound,
       turnStartRemaining,
