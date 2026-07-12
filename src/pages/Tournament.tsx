@@ -692,48 +692,15 @@ const TournamentPage = () => {
         )}
 
         <div className="overflow-x-auto pb-4">
-          <div className="flex gap-6 min-w-max px-4">
-            {Array.from({ length: totalRounds }, (_, r) => r + 1).map(round => {
-              const roundMatches = matches.filter(m => m.round === round);
-              const cfg = (activeTournament.round_configs || [])[round - 1];
-              const roundMode = cfg?.mode || activeTournament.game_mode;
-              const roundBestOf = cfg?.bestOf || activeTournament.best_of_legs;
-              const isLastRound = round === totalRounds;
-              return (
-                <div key={round} className="flex flex-col gap-4 min-w-[220px]">
-                  <div className="text-center mb-1">
-                    <h3 className="text-xs font-display uppercase text-muted-foreground">
-                      {roundLabel(round, totalRounds)}
-                    </h3>
-                    <p className="text-[10px] text-primary/80 font-mono">{roundMode} · BO{roundBestOf}</p>
-                  </div>
-                  <div className="flex flex-col justify-around flex-1 gap-4 relative">
-                    {roundMatches.map(match => (
-                      <div key={match.id} className={`bg-card border rounded-xl overflow-hidden relative ${match.winner ? "border-border" : "border-primary/30"}`}>
-                        {/* Connector line to next round */}
-                        {!isLastRound && (
-                          <span aria-hidden className="hidden md:block absolute top-1/2 -right-6 w-6 h-px bg-border" />
-                        )}
-                        {[match.player1, match.player2].map((player, idx) => (
-                          <div key={idx}
-                            className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
-                              idx === 0 ? "border-b border-border" : ""
-                            } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-                            <button disabled={!player || player === "BYE" || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!player || player === "BYE" || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)}><Plus className="w-3 h-3" /></Button>
-                            <span className="w-5 text-center font-display">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
-                            {match.winner === player && <Check className="w-3 h-3 text-secondary" />}
-                          </div>
-                        ))}
-                        {(match.winner || match.score1 || match.score2) && <Button variant="ghost" size="sm" className="w-full rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}><RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen</Button>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <BracketViewport
+          matches={matches}
+          totalRounds={totalRounds}
+          activeTournament={activeTournament}
+          roundLabel={roundLabel}
+          setKoWinner={setKoWinner}
+          setKoScore={setKoScore}
+          resetKoMatch={resetKoMatch}
+        />
 
         {/* Live-Ticker */}
         {(() => {
