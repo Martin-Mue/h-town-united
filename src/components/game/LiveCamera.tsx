@@ -578,11 +578,8 @@ const LiveCamera = ({
       if (!stableSigRef.current) {
         if (stillFramesRef.current >= 2) {
           stableSigRef.current = sig;
-          setStatus(
-            accumulatedRef.current.length > 0
-              ? `${accumulatedRef.current.length}/${dartsRemaining} erkannt · wirf nächsten Dart`
-              : "Bereit – wirf deinen ersten Dart",
-          );
+          setStatus("Bereit – wirf deine Darts, dann alle 3 ziehen");
+          emptyBoardSigRef.current = sig;
         } else {
           setStatus("Stabilisiere Bild …");
         }
@@ -591,49 +588,49 @@ const LiveCamera = ({
 
       const delta = sigDiff(stableSigRef.current, sig);
       const emptyDelta = sigDiff(emptyBoardSigRef.current, sig);
+      const boardEmpty = emptyBoardSigRef.current !== null && emptyDelta < EMPTY_BOARD_DELTA;
       setChangeDelta(emptyBoardSigRef.current ? emptyDelta : delta);
 
-      // If picture changed significantly compared to last stable frame,
-      // remember that change happened.
       if (!scanLockRef.current && delta > CHANGE_DELTA) {
         changeSeenRef.current = true;
       }
 
-      // When a change has been observed AND the picture is still again,
-      // run an AI scan.
       if (
         !scanLockRef.current &&
         changeSeenRef.current &&
-        stillFramesRef.current >= STILL_AFTER_CHANGE &&
-        performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS
+        stillFramesRef.current >= STILL_AFTER_CHANGE
       ) {
-        if (accumulatedRef.current.length === 0 && emptyBoardSigRef.current && emptyDelta < EMPTY_BOARD_DELTA) {
-          stableSigRef.current = sig;
-          changeSeenRef.current = false;
-          setStatus("Licht/Bewegung ignoriert · bereit");
-          return;
-        }
-        scanLockRef.current = true;
         changeSeenRef.current = false;
-        void runScan();
+        stableSigRef.current = sig;
+        if (boardEmpty) {
+          if (throwsSeenRef.current > 0 && preRemovalFrameRef.current) {
+            if (performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
+              scanLockRef.current = true;
+              void runPullScan();
+              return;
+            }
+          }
+          emptyBoardSigRef.current = sig;
+          setStatus("Board leer · wirf deinen ersten Dart");
+        } else {
+          const frame = captureFrame(1024, 0.82);
+          if (frame) preRemovalFrameRef.current = frame;
+          throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
+          setThrowsSeen(throwsSeenRef.current);
+          setStatus(
+            throwsSeenRef.current >= dartsRemaining
+              ? `${throwsSeenRef.current} Darts auf dem Board · jetzt ziehen`
+              : `${throwsSeenRef.current}/${dartsRemaining} auf dem Board · nächsten werfen oder ziehen`,
+          );
+        }
         return;
       }
 
-      // Idle status text
       if (!scanLockRef.current) {
-        const accCount = accumulatedRef.current.length;
-        if (accCount === 0 && stillFramesRef.current >= 4) {
-          emptyBoardSigRef.current = sig;
-        }
         if (changeSeenRef.current) {
           setStatus("Bewegung erkannt – warte bis still …");
-        } else if (accCount >= dartsRemaining) {
-          setStatus(`${accCount} Darts erkannt · Darts ziehen zum Übernehmen`);
-        } else if (accCount > 0) {
-          setStatus(
-            `${accCount}/${dartsRemaining} erkannt · wirf nächsten Dart oder zieh Darts`,
-          );
-        } else {
+        } else if (throwsSeenRef.current === 0) {
+          if (stillFramesRef.current >= 4 && boardEmpty) emptyBoardSigRef.current = sig;
           setStatus("Bereit – wirf deinen ersten Dart");
         }
       }
@@ -643,9 +640,9 @@ const LiveCamera = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, phase, dartsRemaining]);
 
-  // ─── scan: ask AI for the full board state ──────────────────────────
-  const runScan = async () => {
-    const img = captureFrame(1024, 0.82);
+  // ─── scan: analyze the pre-removal frame after darts are pulled ─────
+  const runPullScan = async () => {
+    const img = preRemovalFrameRef.current;
     if (!img) {
       scanLockRef.current = false;
       return;
@@ -659,75 +656,28 @@ const LiveCamera = ({
     try {
       const data = await analyzeFrame(img);
       const overallConfidence = Number(data?.overallConfidence) || 0;
-      const aiDarts = sanitizeAiDarts(data?.darts, dartsRemaining);
+      const aiDarts = sanitizeAiDarts(data?.darts, Math.max(throwsSeenRef.current, 1));
       setLastConfidence(overallConfidence);
       if (data?.board) void updateAutoCalibration(data.board as BoardDetection);
 
-      const prev = accumulatedRef.current;
-      const currentSig = buildSignature();
-      const emptyDelta = sigDiff(emptyBoardSigRef.current, currentSig);
-      const looksEmpty = Boolean(emptyBoardSigRef.current) && emptyDelta < EMPTY_BOARD_DELTA;
-
-      if (overallConfidence > 0 && overallConfidence < MIN_OVERALL_CONFIDENCE && aiDarts.length > prev.length) {
-        if (currentSig) stableSigRef.current = currentSig;
-        setPhase("live");
-        setStatus("Scan unsicher · nicht übernommen");
-        return;
-      }
-
-      // Case A: board went empty AFTER having darts → likely user pulled them.
-      if ((aiDarts.length === 0 || looksEmpty) && prev.length > 0) {
-        emptyConfirmRef.current += 1;
-        if (emptyConfirmRef.current >= EMPTY_CONFIRM_SCANS) {
-          commitRound(prev);
-          return;
-        }
-        if (currentSig) stableSigRef.current = currentSig;
-        setPhase("live");
-        setStatus("Darts gezogen? Bestätige mit zweitem stabilen Scan …");
-        return;
+      if (aiDarts.length === 0) {
+        setStatus("Keine Darts erkannt · bitte manuell erfassen");
       } else {
-        emptyConfirmRef.current = 0;
+        setAccumulated(aiDarts);
+        aiDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
+        // Darts are already pulled → hand over to the next player immediately.
+        setTimeout(() => commitRound(aiDarts), 250);
+        setStatus(`Runde erkannt: ${aiDarts.map(dartLabel).join(", ")}`);
       }
-
-      // Case B: spatial delta matching for genuinely new darts.
-      const newlyDetected = diffNewDarts(prev, aiDarts);
-
-      if (newlyDetected.length > 0) {
-        const finalMerged = [...prev, ...newlyDetected].slice(0, dartsRemaining);
-        setAccumulated(finalMerged);
-        newlyDetected.forEach((_, i) => {
-          setTimeout(() => playDartDetectedSound(prev.length + i), 110 * i);
-        });
-        setJustAddedIndex(prev.length);
-        setTimeout(() => setJustAddedIndex(null), 1100);
-      } else if (aiDarts.length > 0) {
-        // Keep accepted darts stable; users can edit any wrong classification.
-        setStatus("Keine neuen Darts erkannt");
-      }
-
-      // refresh stable reference to the post-scan frame
-      if (currentSig) stableSigRef.current = currentSig;
-
       setPhase("live");
-      setStatus(
-        newlyDetected.length > 0
-          ? `Dart erkannt: ${newlyDetected.map(dartLabel).join(", ")}`
-          : aiDarts.length === 0
-            ? "Board leer"
-            : prev.length > 0
-              ? "Bestehende Darts bestätigt"
-              : "Bereit für nächsten Wurf",
-      );
     } catch (err: unknown) {
       console.error("scan error", err);
       setError(err instanceof Error ? err.message : "Erkennung fehlgeschlagen.");
-      const newSig = buildSignature();
-      if (newSig) stableSigRef.current = newSig;
       setPhase("live");
-      setStatus("Scan unsicher · weiter beobachten");
+      setStatus("Scan fehlgeschlagen · manuell erfassen");
     } finally {
       scanLockRef.current = false;
+      preRemovalFrameRef.current = null;
     }
   };
 
