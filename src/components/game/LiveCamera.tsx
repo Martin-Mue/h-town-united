@@ -48,23 +48,25 @@ export interface DetectedDart {
 interface LiveCameraProps {
   onRoundCommit: (darts: DetectedDart[]) => void;
   onPendingChange?: (darts: DetectedDart[]) => void;
-  onClipReady?: (blob: Blob, darts: DetectedDart[]) => void;
   enabled: boolean;
   onClose: () => void;
   dartsRemaining?: number;
   playerName?: string;
 }
 
-type Phase = "starting" | "detecting" | "live" | "scanning" | "error";
+type Phase = "starting" | "detecting" | "calibrate" | "live" | "scanning" | "error";
 
 interface Calibration {
   x: number;
   y: number;
   size: number;
   zoom: number;
+  taps?: { x: number; y: number }[]; // 4 reference points in normalized video coords: D20, D3, D11, D6
 }
 
-const CALIB_KEY = "dartcam-calibration-v4";
+const CALIB_KEY = "dartcam-calibration-v5";
+const CALIB_LABELS = ["Doppel 20 (oben)", "Doppel 3 (unten)", "Doppel 11 (links)", "Doppel 6 (rechts)"] as const;
+const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
 const GRID = 40;
 const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
@@ -78,10 +80,8 @@ const CHANGE_DELTA = 0.075;
 const STILL_AFTER_CHANGE = 4;
 // Tick interval of the watcher loop.
 const TICK_MS = 400;
-// Rolling video buffer length for throw clip.
-const CLIP_BUFFER_MS = 12000;
 const SCAN_COOLDOWN_MS = 3200;
-const EMPTY_CONFIRM_SCANS = 3;
+const EMPTY_CONFIRM_SCANS = 2;
 const MIN_DART_CONFIDENCE = 0.6;
 const MIN_OVERALL_CONFIDENCE = 0.55;
 const EMPTY_BOARD_DELTA = 0.022;
@@ -96,11 +96,15 @@ const loadCalib = (): Calibration => {
     const raw = window.localStorage.getItem(CALIB_KEY);
     if (!raw) return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
     const p = JSON.parse(raw);
+    const taps = Array.isArray(p?.taps) && p.taps.length === 4
+      ? p.taps.map((t: any) => ({ x: clamp(Number(t?.x) || 0.5, 0, 1), y: clamp(Number(t?.y) || 0.5, 0, 1) }))
+      : undefined;
     return {
       x: clamp(Number(p?.x) || 0.5, 0.15, 0.85),
       y: clamp(Number(p?.y) || 0.5, 0.15, 0.85),
       size: clamp(Number(p?.size) || 0.82, 0.4, 0.98),
       zoom: clamp(Number(p?.zoom) || DEFAULT_ZOOM, 1, 4),
+      taps,
     };
   } catch {
     return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
