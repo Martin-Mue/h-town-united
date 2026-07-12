@@ -706,8 +706,11 @@ const LiveCamera = ({
 
   const manualScan = () => {
     if (!scanLockRef.current) {
+      const frame = captureFrame(1024, 0.82);
+      if (frame) preRemovalFrameRef.current = frame;
+      throwsSeenRef.current = Math.max(throwsSeenRef.current, dartsRemaining);
       scanLockRef.current = true;
-      void runScan();
+      void runPullScan();
     }
   };
 
