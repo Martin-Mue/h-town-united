@@ -272,39 +272,6 @@ const LiveCamera = ({
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
         }
-        // Rolling MediaRecorder for clip dialog
-        try {
-          if (typeof MediaRecorder !== "undefined") {
-            const candidates = [
-              "video/webm;codecs=vp9",
-              "video/webm;codecs=vp8",
-              "video/webm",
-              "video/mp4",
-            ];
-            const mime = candidates.find((m) => MediaRecorder.isTypeSupported?.(m)) ?? "";
-            const rec = mime
-              ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1_500_000 })
-              : new MediaRecorder(stream);
-            recorderMimeRef.current = rec.mimeType || mime || "video/webm";
-            rec.ondataavailable = (e) => {
-              if (!e.data || e.data.size === 0) return;
-              const now = performance.now();
-              clipChunksRef.current.push({ blob: e.data, ts: now });
-              const cutoff = now - CLIP_BUFFER_MS - 1500;
-              while (
-                clipChunksRef.current.length > 0 &&
-                clipChunksRef.current[0].ts < cutoff
-              ) {
-                clipChunksRef.current.shift();
-              }
-            };
-            rec.start(500);
-            recorderRef.current = rec;
-          }
-        } catch (e) {
-          console.warn("recorder init failed", e);
-        }
-
         const track = stream.getVideoTracks()[0];
         const capabilities = track?.getCapabilities?.() as MediaTrackCapabilities & {
           zoom?: { min: number; max: number; step?: number };
@@ -330,15 +297,6 @@ const LiveCamera = ({
     })();
     return () => {
       cancelled = true;
-      try {
-        if (recorderRef.current && recorderRef.current.state !== "inactive") {
-          recorderRef.current.stop();
-        }
-      } catch {
-        /* noop */
-      }
-      recorderRef.current = null;
-      clipChunksRef.current = [];
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
@@ -716,17 +674,6 @@ const LiveCamera = ({
   };
 
   const commitRound = (darts: DetectedDart[]) => {
-    try {
-      if (onClipReady && clipChunksRef.current.length > 0) {
-        const blobs = clipChunksRef.current.map((c) => c.blob);
-        if (blobs.length > 0) {
-          const clip = new Blob(blobs, { type: recorderMimeRef.current });
-          onClipReady(clip, darts.slice(0, dartsRemaining));
-        }
-      }
-    } catch (e) {
-      console.warn("clip capture failed", e);
-    }
     onRoundCommit(darts.slice(0, dartsRemaining));
     playRoundCommittedSound();
     setAccumulated([]);
