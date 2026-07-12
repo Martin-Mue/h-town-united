@@ -498,8 +498,55 @@ const LiveCamera = ({
       setAutoCalibrating(false);
     }
     resetLoop();
-    setPhase("live");
-    setStatus("Bereit – wirf deinen ersten Dart");
+    // Prompt user to 4-point calibrate once per session/device
+    if (!calib.taps || calib.taps.length !== 4) {
+      setCalibStep(0);
+      setPendingTaps([]);
+      setPhase("calibrate");
+      setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
+    } else {
+      setPhase("live");
+      setStatus("Bereit – wirf deinen ersten Dart");
+    }
+  };
+
+  const handleCalibTap = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (phase !== "calibrate") return;
+    const target = e.currentTarget as HTMLDivElement;
+    const rect = target.getBoundingClientRect();
+    const point = "touches" in e
+      ? (e.touches[0] || e.changedTouches[0])
+      : (e as React.MouseEvent<HTMLDivElement>);
+    const clientX = (point as { clientX: number }).clientX;
+    const clientY = (point as { clientY: number }).clientY;
+    const nx = clamp((clientX - rect.left) / rect.width, 0, 1);
+    const ny = clamp((clientY - rect.top) / rect.height, 0, 1);
+    const next = [...pendingTaps, { x: nx, y: ny }];
+    setPendingTaps(next);
+    if (next.length >= 4) {
+      // Compute center + size from D20(top)/D3(bottom)/D11(left)/D6(right)
+      const cx = (next[2].x + next[3].x) / 2;
+      const cy = (next[0].y + next[1].y) / 2;
+      const w = Math.abs(next[3].x - next[2].x);
+      const h = Math.abs(next[1].y - next[0].y);
+      const size = clamp(Math.max(w, h) * 1.06, MIN_ANALYSIS_SIZE, 0.98);
+      setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next }));
+      setCalibStep(0);
+      setPendingTaps([]);
+      resetLoop();
+      setPhase("live");
+      setStatus("Kalibriert · bereit – wirf deinen ersten Dart");
+    } else {
+      setCalibStep(next.length);
+      setStatus(`Kalibrierung ${next.length + 1}/4: Tippe auf ${CALIB_LABELS[next.length]}`);
+    }
+  };
+
+  const restartCalibration = () => {
+    setPendingTaps([]);
+    setCalibStep(0);
+    setPhase("calibrate");
+    setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
   };
 
   // ─── watcher loop ──────────────────────────────────────────────────
