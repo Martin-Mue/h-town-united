@@ -762,6 +762,21 @@ const LiveCamera = ({
         />
         <canvas ref={canvasRef} className="hidden" />
 
+        {phase === "calibrate" && (
+          <div
+            className="absolute inset-0 z-20 cursor-crosshair bg-background/40"
+            onClick={handleCalibTap}
+          >
+            {pendingTaps.map((t, i) => (
+              <div key={i} className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background"
+                style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%` }} />
+            ))}
+            <div className="absolute inset-x-0 top-0 bg-accent px-2 py-1.5 text-center text-xs font-display uppercase text-accent-foreground">
+              {calibStep + 1}/4 · Tippe auf {CALIB_LABELS[calibStep]}
+            </div>
+          </div>
+        )}
+
         {(phase === "live" || phase === "scanning" || phase === "detecting") && (
           <div className="pointer-events-none absolute inset-0">
             <div
