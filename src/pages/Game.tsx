@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
-import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
@@ -113,39 +112,6 @@ const GamePage = () => {
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
-  const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
-  const clipPopupRef = useRef<ThrowClipPopup | null>(null);
-  useEffect(() => { clipPopupRef.current = clipPopup; }, [clipPopup]);
-  useEffect(() => () => {
-    if (clipPopupRef.current) URL.revokeObjectURL(clipPopupRef.current.url);
-  }, []);
-
-  const handleClipReady = useCallback((blob: Blob, darts: DetectedDart[]) => {
-    if (!game || darts.length === 0) return;
-    const total = darts.reduce((s, d) => s + d.points, 0);
-    const isP1 = game.currentPlayerId === 1;
-    const remaining = isP1 ? game.currentLeg.player1Remaining : game.currentLeg.player2Remaining;
-    const wouldCheckout = game.mode !== "cricket" && total === remaining;
-    const popup: ThrowClipPopup = {
-      url: URL.createObjectURL(blob),
-      mime: blob.type || "video/webm",
-      total,
-      is180: total === 180,
-      isCheckout: wouldCheckout,
-      isTonPlus: total >= 100 && total !== 180,
-      playerName: isP1 ? game.player1Name : game.player2Name,
-      darts,
-      ts: Date.now(),
-    };
-    // Revoke any previous unviewed clip
-    if (clipPopupRef.current) URL.revokeObjectURL(clipPopupRef.current.url);
-    setClipPopup(popup);
-  }, [game]);
-
-  const closeClipPopup = useCallback(() => {
-    if (clipPopupRef.current) URL.revokeObjectURL(clipPopupRef.current.url);
-    setClipPopup(null);
-  }, []);
 
   useEffect(() => {
     supabase.from("players").select("id, name, emoji").order("name").then(({ data }) => {
@@ -211,7 +177,7 @@ const GamePage = () => {
   /** Save undo snapshot before each throw */
   const saveUndo = () => {
     if (!game) return;
-    setUndoStack(prev => [...prev.slice(-20), { game: JSON.parse(JSON.stringify(game)), dartsThisRound, turnStartRemaining }]);
+    setUndoStack(prev => [...prev, { game: JSON.parse(JSON.stringify(game)), dartsThisRound, turnStartRemaining }]);
   };
 
   /** Undo the last dart throw */
@@ -435,7 +401,7 @@ const GamePage = () => {
     if (!game || game.isFinished || darts.length === 0) return;
 
     // Snapshot for undo (one entry per camera round).
-    setUndoStack(prev => [...prev.slice(-20), {
+    setUndoStack(prev => [...prev, {
       game: JSON.parse(JSON.stringify(game)),
       dartsThisRound,
       turnStartRemaining,
@@ -1044,7 +1010,6 @@ const GamePage = () => {
           onClose={() => { setCameraEnabled(false); setPendingCameraDarts([]); }}
           onRoundCommit={submitDetectedRound}
           onPendingChange={setPendingCameraDarts}
-          onClipReady={handleClipReady}
           dartsRemaining={Math.max(1, 3 - dartsThisRound)}
           playerName={currentPlayerName}
         />
@@ -1144,8 +1109,6 @@ const GamePage = () => {
       <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
         <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
       </Button>
-
-      <ThrowClipDialog popup={clipPopup} onClose={closeClipPopup} />
     </div>
   );
 };

@@ -48,23 +48,25 @@ export interface DetectedDart {
 interface LiveCameraProps {
   onRoundCommit: (darts: DetectedDart[]) => void;
   onPendingChange?: (darts: DetectedDart[]) => void;
-  onClipReady?: (blob: Blob, darts: DetectedDart[]) => void;
   enabled: boolean;
   onClose: () => void;
   dartsRemaining?: number;
   playerName?: string;
 }
 
-type Phase = "starting" | "detecting" | "live" | "scanning" | "error";
+type Phase = "starting" | "detecting" | "calibrate" | "live" | "scanning" | "error";
 
 interface Calibration {
   x: number;
   y: number;
   size: number;
   zoom: number;
+  taps?: { x: number; y: number }[]; // 4 reference points in normalized video coords: D20, D3, D11, D6
 }
 
-const CALIB_KEY = "dartcam-calibration-v4";
+const CALIB_KEY = "dartcam-calibration-v5";
+const CALIB_LABELS = ["Doppel 20 (oben)", "Doppel 3 (unten)", "Doppel 11 (links)", "Doppel 6 (rechts)"] as const;
+const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
 const GRID = 40;
 const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
@@ -78,10 +80,8 @@ const CHANGE_DELTA = 0.075;
 const STILL_AFTER_CHANGE = 4;
 // Tick interval of the watcher loop.
 const TICK_MS = 400;
-// Rolling video buffer length for throw clip.
-const CLIP_BUFFER_MS = 12000;
 const SCAN_COOLDOWN_MS = 3200;
-const EMPTY_CONFIRM_SCANS = 3;
+const EMPTY_CONFIRM_SCANS = 2;
 const MIN_DART_CONFIDENCE = 0.6;
 const MIN_OVERALL_CONFIDENCE = 0.55;
 const EMPTY_BOARD_DELTA = 0.022;
@@ -96,11 +96,15 @@ const loadCalib = (): Calibration => {
     const raw = window.localStorage.getItem(CALIB_KEY);
     if (!raw) return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
     const p = JSON.parse(raw);
+    const taps = Array.isArray(p?.taps) && p.taps.length === 4
+      ? p.taps.map((t: any) => ({ x: clamp(Number(t?.x) || 0.5, 0, 1), y: clamp(Number(t?.y) || 0.5, 0, 1) }))
+      : undefined;
     return {
       x: clamp(Number(p?.x) || 0.5, 0.15, 0.85),
       y: clamp(Number(p?.y) || 0.5, 0.15, 0.85),
       size: clamp(Number(p?.size) || 0.82, 0.4, 0.98),
       zoom: clamp(Number(p?.zoom) || DEFAULT_ZOOM, 1, 4),
+      taps,
     };
   } catch {
     return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
@@ -190,7 +194,6 @@ function diffNewDarts(prev: DetectedDart[], ai: DetectedDart[]): DetectedDart[] 
 const LiveCamera = ({
   onRoundCommit,
   onPendingChange,
-  onClipReady,
   enabled,
   onClose,
   dartsRemaining = 3,
@@ -200,11 +203,6 @@ const LiveCamera = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const zoomCapsRef = useRef<ZoomCapability | null>(null);
-
-  // Rolling video buffer
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const recorderMimeRef = useRef<string>("video/webm");
-  const clipChunksRef = useRef<Array<{ blob: Blob; ts: number }>>([]);
 
   // Frame state
   const prevSigRef = useRef<number[] | null>(null);
@@ -216,6 +214,12 @@ const LiveCamera = ({
   const lastScanAtRef = useRef(0);
   // Track how many AI scans in a row report zero darts AFTER we had some.
   const emptyConfirmRef = useRef(0);
+  // Cached last stable frame captured WHILE darts were on the board.
+  // Used to send to AI once the user pulls the darts.
+  const preRemovalFrameRef = useRef<string | null>(null);
+  // Visually observed throws in the current turn (motion → still while board non-empty)
+  const throwsSeenRef = useRef(0);
+  const [throwsSeen, setThrowsSeen] = useState(0);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -229,6 +233,8 @@ const LiveCamera = ({
   const [autoCalibrating, setAutoCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
+  const [calibStep, setCalibStep] = useState(0);
+  const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
 
   useEffect(() => {
     accumulatedRef.current = accumulated;
@@ -247,6 +253,9 @@ const LiveCamera = ({
     changeSeenRef.current = false;
     scanLockRef.current = false;
     emptyConfirmRef.current = 0;
+    preRemovalFrameRef.current = null;
+    throwsSeenRef.current = 0;
+    setThrowsSeen(0);
   }, []);
 
   // ─── camera lifecycle ───────────────────────────────────────────────
@@ -274,39 +283,6 @@ const LiveCamera = ({
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
         }
-        // Rolling MediaRecorder for clip dialog
-        try {
-          if (typeof MediaRecorder !== "undefined") {
-            const candidates = [
-              "video/webm;codecs=vp9",
-              "video/webm;codecs=vp8",
-              "video/webm",
-              "video/mp4",
-            ];
-            const mime = candidates.find((m) => MediaRecorder.isTypeSupported?.(m)) ?? "";
-            const rec = mime
-              ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1_500_000 })
-              : new MediaRecorder(stream);
-            recorderMimeRef.current = rec.mimeType || mime || "video/webm";
-            rec.ondataavailable = (e) => {
-              if (!e.data || e.data.size === 0) return;
-              const now = performance.now();
-              clipChunksRef.current.push({ blob: e.data, ts: now });
-              const cutoff = now - CLIP_BUFFER_MS - 1500;
-              while (
-                clipChunksRef.current.length > 0 &&
-                clipChunksRef.current[0].ts < cutoff
-              ) {
-                clipChunksRef.current.shift();
-              }
-            };
-            rec.start(500);
-            recorderRef.current = rec;
-          }
-        } catch (e) {
-          console.warn("recorder init failed", e);
-        }
-
         const track = stream.getVideoTracks()[0];
         const capabilities = track?.getCapabilities?.() as MediaTrackCapabilities & {
           zoom?: { min: number; max: number; step?: number };
@@ -332,15 +308,6 @@ const LiveCamera = ({
     })();
     return () => {
       cancelled = true;
-      try {
-        if (recorderRef.current && recorderRef.current.state !== "inactive") {
-          recorderRef.current.stop();
-        }
-      } catch {
-        /* noop */
-      }
-      recorderRef.current = null;
-      clipChunksRef.current = [];
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
@@ -540,8 +507,55 @@ const LiveCamera = ({
       setAutoCalibrating(false);
     }
     resetLoop();
-    setPhase("live");
-    setStatus("Bereit – wirf deinen ersten Dart");
+    // Prompt user to 4-point calibrate once per session/device
+    if (!calib.taps || calib.taps.length !== 4) {
+      setCalibStep(0);
+      setPendingTaps([]);
+      setPhase("calibrate");
+      setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
+    } else {
+      setPhase("live");
+      setStatus("Bereit – wirf deinen ersten Dart");
+    }
+  };
+
+  const handleCalibTap = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (phase !== "calibrate") return;
+    const target = e.currentTarget as HTMLDivElement;
+    const rect = target.getBoundingClientRect();
+    const point = "touches" in e
+      ? (e.touches[0] || e.changedTouches[0])
+      : (e as React.MouseEvent<HTMLDivElement>);
+    const clientX = (point as { clientX: number }).clientX;
+    const clientY = (point as { clientY: number }).clientY;
+    const nx = clamp((clientX - rect.left) / rect.width, 0, 1);
+    const ny = clamp((clientY - rect.top) / rect.height, 0, 1);
+    const next = [...pendingTaps, { x: nx, y: ny }];
+    setPendingTaps(next);
+    if (next.length >= 4) {
+      // Compute center + size from D20(top)/D3(bottom)/D11(left)/D6(right)
+      const cx = (next[2].x + next[3].x) / 2;
+      const cy = (next[0].y + next[1].y) / 2;
+      const w = Math.abs(next[3].x - next[2].x);
+      const h = Math.abs(next[1].y - next[0].y);
+      const size = clamp(Math.max(w, h) * 1.06, MIN_ANALYSIS_SIZE, 0.98);
+      setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next }));
+      setCalibStep(0);
+      setPendingTaps([]);
+      resetLoop();
+      setPhase("live");
+      setStatus("Kalibriert · bereit – wirf deinen ersten Dart");
+    } else {
+      setCalibStep(next.length);
+      setStatus(`Kalibrierung ${next.length + 1}/4: Tippe auf ${CALIB_LABELS[next.length]}`);
+    }
+  };
+
+  const restartCalibration = () => {
+    setPendingTaps([]);
+    setCalibStep(0);
+    setPhase("calibrate");
+    setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
   };
 
   // ─── watcher loop ──────────────────────────────────────────────────
@@ -564,11 +578,8 @@ const LiveCamera = ({
       if (!stableSigRef.current) {
         if (stillFramesRef.current >= 2) {
           stableSigRef.current = sig;
-          setStatus(
-            accumulatedRef.current.length > 0
-              ? `${accumulatedRef.current.length}/${dartsRemaining} erkannt · wirf nächsten Dart`
-              : "Bereit – wirf deinen ersten Dart",
-          );
+          setStatus("Bereit – wirf deine Darts, dann alle 3 ziehen");
+          emptyBoardSigRef.current = sig;
         } else {
           setStatus("Stabilisiere Bild …");
         }
@@ -577,49 +588,49 @@ const LiveCamera = ({
 
       const delta = sigDiff(stableSigRef.current, sig);
       const emptyDelta = sigDiff(emptyBoardSigRef.current, sig);
+      const boardEmpty = emptyBoardSigRef.current !== null && emptyDelta < EMPTY_BOARD_DELTA;
       setChangeDelta(emptyBoardSigRef.current ? emptyDelta : delta);
 
-      // If picture changed significantly compared to last stable frame,
-      // remember that change happened.
       if (!scanLockRef.current && delta > CHANGE_DELTA) {
         changeSeenRef.current = true;
       }
 
-      // When a change has been observed AND the picture is still again,
-      // run an AI scan.
       if (
         !scanLockRef.current &&
         changeSeenRef.current &&
-        stillFramesRef.current >= STILL_AFTER_CHANGE &&
-        performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS
+        stillFramesRef.current >= STILL_AFTER_CHANGE
       ) {
-        if (accumulatedRef.current.length === 0 && emptyBoardSigRef.current && emptyDelta < EMPTY_BOARD_DELTA) {
-          stableSigRef.current = sig;
-          changeSeenRef.current = false;
-          setStatus("Licht/Bewegung ignoriert · bereit");
-          return;
-        }
-        scanLockRef.current = true;
         changeSeenRef.current = false;
-        void runScan();
+        stableSigRef.current = sig;
+        if (boardEmpty) {
+          if (throwsSeenRef.current > 0 && preRemovalFrameRef.current) {
+            if (performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
+              scanLockRef.current = true;
+              void runPullScan();
+              return;
+            }
+          }
+          emptyBoardSigRef.current = sig;
+          setStatus("Board leer · wirf deinen ersten Dart");
+        } else {
+          const frame = captureFrame(1024, 0.82);
+          if (frame) preRemovalFrameRef.current = frame;
+          throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
+          setThrowsSeen(throwsSeenRef.current);
+          setStatus(
+            throwsSeenRef.current >= dartsRemaining
+              ? `${throwsSeenRef.current} Darts auf dem Board · jetzt ziehen`
+              : `${throwsSeenRef.current}/${dartsRemaining} auf dem Board · nächsten werfen oder ziehen`,
+          );
+        }
         return;
       }
 
-      // Idle status text
       if (!scanLockRef.current) {
-        const accCount = accumulatedRef.current.length;
-        if (accCount === 0 && stillFramesRef.current >= 4) {
-          emptyBoardSigRef.current = sig;
-        }
         if (changeSeenRef.current) {
           setStatus("Bewegung erkannt – warte bis still …");
-        } else if (accCount >= dartsRemaining) {
-          setStatus(`${accCount} Darts erkannt · Darts ziehen zum Übernehmen`);
-        } else if (accCount > 0) {
-          setStatus(
-            `${accCount}/${dartsRemaining} erkannt · wirf nächsten Dart oder zieh Darts`,
-          );
-        } else {
+        } else if (throwsSeenRef.current === 0) {
+          if (stillFramesRef.current >= 4 && boardEmpty) emptyBoardSigRef.current = sig;
           setStatus("Bereit – wirf deinen ersten Dart");
         }
       }
@@ -629,9 +640,9 @@ const LiveCamera = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, phase, dartsRemaining]);
 
-  // ─── scan: ask AI for the full board state ──────────────────────────
-  const runScan = async () => {
-    const img = captureFrame(1024, 0.82);
+  // ─── scan: analyze the pre-removal frame after darts are pulled ─────
+  const runPullScan = async () => {
+    const img = preRemovalFrameRef.current;
     if (!img) {
       scanLockRef.current = false;
       return;
@@ -645,90 +656,32 @@ const LiveCamera = ({
     try {
       const data = await analyzeFrame(img);
       const overallConfidence = Number(data?.overallConfidence) || 0;
-      const aiDarts = sanitizeAiDarts(data?.darts, dartsRemaining);
+      const aiDarts = sanitizeAiDarts(data?.darts, Math.max(throwsSeenRef.current, 1));
       setLastConfidence(overallConfidence);
       if (data?.board) void updateAutoCalibration(data.board as BoardDetection);
 
-      const prev = accumulatedRef.current;
-      const currentSig = buildSignature();
-      const emptyDelta = sigDiff(emptyBoardSigRef.current, currentSig);
-      const looksEmpty = Boolean(emptyBoardSigRef.current) && emptyDelta < EMPTY_BOARD_DELTA;
-
-      if (overallConfidence > 0 && overallConfidence < MIN_OVERALL_CONFIDENCE && aiDarts.length > prev.length) {
-        if (currentSig) stableSigRef.current = currentSig;
-        setPhase("live");
-        setStatus("Scan unsicher · nicht übernommen");
-        return;
-      }
-
-      // Case A: board went empty AFTER having darts → likely user pulled them.
-      if ((aiDarts.length === 0 || looksEmpty) && prev.length > 0) {
-        emptyConfirmRef.current += 1;
-        if (emptyConfirmRef.current >= EMPTY_CONFIRM_SCANS) {
-          commitRound(prev);
-          return;
-        }
-        if (currentSig) stableSigRef.current = currentSig;
-        setPhase("live");
-        setStatus("Darts gezogen? Bestätige mit zweitem stabilen Scan …");
-        return;
+      if (aiDarts.length === 0) {
+        setStatus("Keine Darts erkannt · bitte manuell erfassen");
       } else {
-        emptyConfirmRef.current = 0;
+        setAccumulated(aiDarts);
+        aiDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
+        // Darts are already pulled → hand over to the next player immediately.
+        setTimeout(() => commitRound(aiDarts), 250);
+        setStatus(`Runde erkannt: ${aiDarts.map(dartLabel).join(", ")}`);
       }
-
-      // Case B: spatial delta matching for genuinely new darts.
-      const newlyDetected = diffNewDarts(prev, aiDarts);
-
-      if (newlyDetected.length > 0) {
-        const finalMerged = [...prev, ...newlyDetected].slice(0, dartsRemaining);
-        setAccumulated(finalMerged);
-        newlyDetected.forEach((_, i) => {
-          setTimeout(() => playDartDetectedSound(prev.length + i), 110 * i);
-        });
-        setJustAddedIndex(prev.length);
-        setTimeout(() => setJustAddedIndex(null), 1100);
-      } else if (aiDarts.length > 0) {
-        // Keep accepted darts stable; users can edit any wrong classification.
-        setStatus("Keine neuen Darts erkannt");
-      }
-
-      // refresh stable reference to the post-scan frame
-      if (currentSig) stableSigRef.current = currentSig;
-
       setPhase("live");
-      setStatus(
-        newlyDetected.length > 0
-          ? `Dart erkannt: ${newlyDetected.map(dartLabel).join(", ")}`
-          : aiDarts.length === 0
-            ? "Board leer"
-            : prev.length > 0
-              ? "Bestehende Darts bestätigt"
-              : "Bereit für nächsten Wurf",
-      );
     } catch (err: unknown) {
       console.error("scan error", err);
       setError(err instanceof Error ? err.message : "Erkennung fehlgeschlagen.");
-      const newSig = buildSignature();
-      if (newSig) stableSigRef.current = newSig;
       setPhase("live");
-      setStatus("Scan unsicher · weiter beobachten");
+      setStatus("Scan fehlgeschlagen · manuell erfassen");
     } finally {
       scanLockRef.current = false;
+      preRemovalFrameRef.current = null;
     }
   };
 
   const commitRound = (darts: DetectedDart[]) => {
-    try {
-      if (onClipReady && clipChunksRef.current.length > 0) {
-        const blobs = clipChunksRef.current.map((c) => c.blob);
-        if (blobs.length > 0) {
-          const clip = new Blob(blobs, { type: recorderMimeRef.current });
-          onClipReady(clip, darts.slice(0, dartsRemaining));
-        }
-      }
-    } catch (e) {
-      console.warn("clip capture failed", e);
-    }
     onRoundCommit(darts.slice(0, dartsRemaining));
     playRoundCommittedSound();
     setAccumulated([]);
@@ -753,8 +706,11 @@ const LiveCamera = ({
 
   const manualScan = () => {
     if (!scanLockRef.current) {
+      const frame = captureFrame(1024, 0.82);
+      if (frame) preRemovalFrameRef.current = frame;
+      throwsSeenRef.current = Math.max(throwsSeenRef.current, dartsRemaining);
       scanLockRef.current = true;
-      void runScan();
+      void runPullScan();
     }
   };
 
@@ -805,6 +761,21 @@ const LiveCamera = ({
           className="h-full w-full object-cover"
         />
         <canvas ref={canvasRef} className="hidden" />
+
+        {phase === "calibrate" && (
+          <div
+            className="absolute inset-0 z-20 cursor-crosshair bg-background/40"
+            onClick={handleCalibTap}
+          >
+            {pendingTaps.map((t, i) => (
+              <div key={i} className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background"
+                style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%` }} />
+            ))}
+            <div className="absolute inset-x-0 top-0 bg-accent px-2 py-1.5 text-center text-xs font-display uppercase text-accent-foreground">
+              {calibStep + 1}/4 · Tippe auf {CALIB_LABELS[calibStep]}
+            </div>
+          </div>
+        )}
 
         {(phase === "live" || phase === "scanning" || phase === "detecting") && (
           <div className="pointer-events-none absolute inset-0">
