@@ -253,6 +253,9 @@ const LiveCamera = ({
     changeSeenRef.current = false;
     scanLockRef.current = false;
     emptyConfirmRef.current = 0;
+    preRemovalFrameRef.current = null;
+    throwsSeenRef.current = 0;
+    setThrowsSeen(0);
   }, []);
 
   // ─── camera lifecycle ───────────────────────────────────────────────
