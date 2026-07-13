@@ -778,16 +778,65 @@ const LiveCamera = ({
 
         {phase === "calibrate" && (
           <div
-            className="absolute inset-0 z-20 cursor-crosshair bg-background/40"
+            ref={calibOverlayRef}
+            className="absolute inset-0 z-20 cursor-crosshair select-none bg-background/30"
             onClick={handleCalibTap}
           >
+            {/* already confirmed taps */}
             {pendingTaps.map((t, i) => (
-              <div key={i} className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background"
-                style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%` }} />
+              <div key={i} className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-secondary ring-2 ring-background"
+                style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%` }}>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded bg-secondary/90 px-1 text-[9px] font-mono text-secondary-foreground">
+                  {CALIB_KEYS[i]}
+                </span>
+              </div>
             ))}
+            {/* active draggable marker */}
+            {activeTap && (
+              <>
+                {/* crosshair lines through active point */}
+                <div className="pointer-events-none absolute left-0 right-0 h-px bg-accent/60" style={{ top: `${activeTap.y * 100}%` }} />
+                <div className="pointer-events-none absolute top-0 bottom-0 w-px bg-accent/60" style={{ left: `${activeTap.x * 100}%` }} />
+                {/* magnifier ring */}
+                <div className="pointer-events-none absolute h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent shadow-lg glow-gold"
+                  style={{ left: `${activeTap.x * 100}%`, top: `${activeTap.y * 100}%` }} />
+                <div className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background"
+                  style={{ left: `${activeTap.x * 100}%`, top: `${activeTap.y * 100}%` }} />
+              </>
+            )}
             <div className="absolute inset-x-0 top-0 bg-accent px-2 py-1.5 text-center text-xs font-display uppercase text-accent-foreground">
-              {calibStep + 1}/4 · Tippe auf {CALIB_LABELS[calibStep]}
+              {calibStep + 1}/4 · {CALIB_LABELS[calibStep]}
             </div>
+            {!activeTap && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-14 flex justify-center">
+                <span className="rounded-md bg-background/80 px-3 py-1 text-[11px] text-foreground">
+                  Tippe grob auf {CALIB_LABELS[calibStep]} – dann fein justieren
+                </span>
+              </div>
+            )}
+            {activeTap && (
+              <div className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-border bg-background/95 p-2 shadow-lg" onClick={(e) => e.stopPropagation()}>
+                <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Fein justieren – dann bestätigen
+                </div>
+                <div className="mx-auto grid w-32 grid-cols-3 gap-1">
+                  <div />
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, -0.005)}>▲</Button>
+                  <div />
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(-0.005, 0)}>◀</Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setActiveTap(null)} title="Neu setzen">
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0.005, 0)}>▶</Button>
+                  <div />
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, 0.005)}>▼</Button>
+                  <div />
+                </div>
+                <Button size="sm" className="mt-2 w-full gap-1 font-display uppercase" onClick={confirmActiveTap}>
+                  <Check className="h-4 w-4" /> Punkt bestätigen
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
