@@ -627,7 +627,7 @@ const LiveCamera = ({
           emptyBoardSigRef.current = sig;
           setStatus("Board leer · wirf deinen ersten Dart");
         } else {
-          const frame = captureFrame(1024, 0.82);
+          const frame = captureFrame(1280, 0.9);
           if (frame) preRemovalFrameRef.current = frame;
           throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
           setThrowsSeen(throwsSeenRef.current);
@@ -720,7 +720,7 @@ const LiveCamera = ({
 
   const manualScan = () => {
     if (!scanLockRef.current) {
-      const frame = captureFrame(1024, 0.82);
+      const frame = captureFrame(1280, 0.9);
       if (frame) preRemovalFrameRef.current = frame;
       throwsSeenRef.current = Math.max(throwsSeenRef.current, dartsRemaining);
       scanLockRef.current = true;
