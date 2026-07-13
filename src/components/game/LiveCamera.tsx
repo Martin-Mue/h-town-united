@@ -235,6 +235,8 @@ const LiveCamera = ({
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
   const [calibStep, setCalibStep] = useState(0);
   const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
+  const [activeTap, setActiveTap] = useState<{ x: number; y: number } | null>(null);
+  const calibOverlayRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     accumulatedRef.current = accumulated;
@@ -530,10 +532,21 @@ const LiveCamera = ({
     const clientY = (point as { clientY: number }).clientY;
     const nx = clamp((clientX - rect.left) / rect.width, 0, 1);
     const ny = clamp((clientY - rect.top) / rect.height, 0, 1);
-    const next = [...pendingTaps, { x: nx, y: ny }];
+    setActiveTap({ x: nx, y: ny });
+  };
+
+  const nudgeActive = (dx: number, dy: number) => {
+    setActiveTap((prev) => prev
+      ? { x: clamp(prev.x + dx, 0, 1), y: clamp(prev.y + dy, 0, 1) }
+      : { x: 0.5, y: 0.5 });
+  };
+
+  const confirmActiveTap = () => {
+    const tap = activeTap ?? { x: 0.5, y: 0.5 };
+    const next = [...pendingTaps, tap];
     setPendingTaps(next);
+    setActiveTap(null);
     if (next.length >= 4) {
-      // Compute center + size from D20(top)/D3(bottom)/D11(left)/D6(right)
       const cx = (next[2].x + next[3].x) / 2;
       const cy = (next[0].y + next[1].y) / 2;
       const w = Math.abs(next[3].x - next[2].x);
@@ -547,15 +560,16 @@ const LiveCamera = ({
       setStatus("Kalibriert · bereit – wirf deinen ersten Dart");
     } else {
       setCalibStep(next.length);
-      setStatus(`Kalibrierung ${next.length + 1}/4: Tippe auf ${CALIB_LABELS[next.length]}`);
+      setStatus(`Kalibrierung ${next.length + 1}/4: ${CALIB_LABELS[next.length]}`);
     }
   };
 
   const restartCalibration = () => {
     setPendingTaps([]);
+    setActiveTap(null);
     setCalibStep(0);
     setPhase("calibrate");
-    setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
+    setStatus(`Kalibrierung 1/4: ${CALIB_LABELS[0]}`);
   };
 
   // ─── watcher loop ──────────────────────────────────────────────────
