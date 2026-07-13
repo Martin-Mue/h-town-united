@@ -108,8 +108,10 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     if (inner.width === 0 || inner.height === 0) return;
     const sx = wrap.width / inner.width;
     const sy = wrap.height / inner.height;
-    const s = Math.min(sx, sy, 1);
-    setFitScale(Math.max(0.25, s));
+    // Fit vertically so all rounds are visible; keep horizontal scroll if needed.
+    // Never shrink below 0.7 → text stays readable, user scrolls horizontally.
+    const s = Math.min(sy, 1);
+    setFitScale(Math.max(0.7, s));
   }, []);
 
   useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, fullscreen]);

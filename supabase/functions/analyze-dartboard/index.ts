@@ -34,13 +34,24 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const systemPrompt = `Score dartboard photos. Use the dart tip position to determine the segment; ignore shaft and flight unless needed to locate the tip.
-If a dart is partially occluded, follow the visible tip end and shaft direction to infer the exact segment.
-Return only JSON. Count only darts currently stuck in the board. If uncertain, omit the dart.
-Scoring: single=segment, double=2x, triple=3x, bull 25, bullseye 50, miss=0. Include x,y coordinates (0-1 relative) for each dart tip; if the tip position is not reliable, omit that dart instead of guessing.
-Return:
+    const systemPrompt = `You score dartboard photos. Return ONLY JSON.
+
+CRITICAL RULE — DART TIP:
+A dart consists of TIP (metal point stuck IN the board) → BARREL → SHAFT → FLIGHT.
+The score is determined by where the TIP enters the board — NEVER by where the barrel, shaft or flight visually overlaps.
+Because darts stick out at an angle, the shaft/flight often visually cover a different segment than the tip.
+Trace the dart from the flight along the barrel down to the tip, and score the segment the TIP is embedded in.
+If the tip is fully occluded, extrapolate the tip position from the shaft direction; if still uncertain, OMIT the dart rather than guess.
+
+Only count darts currently stuck in the board (ignore darts on the floor, in a hand, or bounced out).
+Scoring: single=segment, double=2x (outer thin ring), triple=3x (inner thin ring), bull=25, bullseye=50, miss=0.
+For each dart include x,y coordinates (0..1, image-relative) of the TIP location. If the tip cannot be located reliably, OMIT that dart.
+
+Return exactly this shape:
 {"board":{"cx":0.5,"cy":0.5,"size":0.78,"confidence":0.92},"darts":[{"segment":20,"multiplier":3,"points":60,"confidence":0.9,"x":0.5,"y":0.2}],"totalScore":60,"overallConfidence":0.8,"dartsDetected":1}
-If no darts are visible, return darts=[], totalScore=0, overallConfidence=0, dartsDetected=0 and include board if visible. If no dartboard is visible, set board=null.`;
+
+If no darts are visible, return darts=[], totalScore=0, overallConfidence=0, dartsDetected=0 (still include board if visible).
+If no dartboard is visible, set board=null.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
