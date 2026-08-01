@@ -746,7 +746,7 @@ const TournamentPage = () => {
               <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
                 <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {[1, 3, 5, 7, 9, 11].map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                  {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -765,10 +765,12 @@ const TournamentPage = () => {
           )}
 
           {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
-            <div className="bg-muted/30 border border-border rounded-xl p-3">
-              <label className="text-sm text-muted-foreground mb-2 block flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> Modus pro Runde (Steigerung möglich)
-              </label>
+            <Collapsible className="bg-muted/30 border border-border rounded-xl">
+              <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> Modus pro Runde (optional, Steigerung möglich)</span>
+                <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-3 pb-3">
               <div className="space-y-2">
                 {roundConfigs.map((cfg, idx) => {
                   const total = roundConfigs.length;
@@ -788,14 +790,15 @@ const TournamentPage = () => {
                       <Select value={String(cfg.bestOf)} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, bestOf: Number(v) } : c))}>
                         <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-card border-border">
-                          {[1, 3, 5, 7, 9, 11].map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                          {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                   );
                 })}
               </div>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           {/* Add from club members */}
