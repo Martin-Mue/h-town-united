@@ -764,6 +764,29 @@ const TournamentPage = () => {
             </div>
           )}
 
+          {tournamentMode !== "round-robin" && (
+            <Collapsible className="bg-muted/30 border border-border rounded-xl">
+              <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1"><Settings2 className="w-3.5 h-3.5" /> Auslosung · {drawMode === "random" ? "Zufällig" : "Manuell"}</span>
+                <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-3 pb-3 space-y-2">
+                <Select value={drawMode} onValueChange={(v) => setDrawMode(v as "random" | "manual")}>
+                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="random">Zufällige Auslosung</SelectItem>
+                    <SelectItem value="manual">Manuell festgelegte Partien</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  {drawMode === "random"
+                    ? "Die Paarungen der ersten Runde werden beim Start zufällig gelost."
+                    : "Die Reihenfolge der Teilnehmerliste bestimmt die Paarungen: 1 vs 2, 3 vs 4, usw."}
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
           {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
             <Collapsible className="bg-muted/30 border border-border rounded-xl">
               <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
