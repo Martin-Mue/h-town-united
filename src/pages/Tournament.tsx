@@ -110,13 +110,19 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     if (inner.width === 0 || inner.height === 0) return;
     const sx = wrap.width / inner.width;
     const sy = wrap.height / inner.height;
-    // Fit vertically so all rounds are visible; keep horizontal scroll if needed.
-    // Never shrink below 0.7 → text stays readable, user scrolls horizontally.
-    const s = Math.min(sy, 1);
-    setFitScale(Math.max(0.7, s));
+    // Fit the WHOLE bracket into the viewport on every device (phone → beamer).
+    // Users zoom back in with the +/- buttons when they need to read/tap.
+    const s = Math.min(sx, sy, 1);
+    setFitScale(Math.max(0.18, s));
   }, []);
 
   useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, fullscreen]);
+  useEffect(() => {
+    // Re-fit after fonts/layout settle and on orientation change
+    const t = window.setTimeout(measure, 120);
+    window.addEventListener("orientationchange", measure);
+    return () => { window.clearTimeout(t); window.removeEventListener("orientationchange", measure); };
+  }, [measure]);
   useEffect(() => {
     const ro = new ResizeObserver(() => measure());
     if (wrapRef.current) ro.observe(wrapRef.current);
@@ -158,7 +164,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
       <div
         ref={wrapRef}
         className="overflow-auto bg-gradient-to-br from-background via-background to-primary/5"
-        style={{ height: fullscreen ? "calc(100vh - 44px)" : "min(75vh, 900px)" }}
+        style={{ height: fullscreen ? "calc(100dvh - 44px)" : "min(78dvh, 900px)" }}
       >
         <div
           ref={innerRef}
