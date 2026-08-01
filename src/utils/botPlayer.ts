@@ -135,3 +135,35 @@ export function simulateBotVisit(remaining: number, doubleOut: boolean, level: B
 
   return { darts, bustedOnDartIndex: null, checkedOut: false };
 }
+
+/**
+ * Pick a cricket target and simulate the resulting dart for a bot.
+ * Prefers open numbers on the bot's own scoreboard; once all are closed,
+ * targets the opponent's highest still-open number to keep scoring.
+ */
+export function simulateBotCricketDart(
+  myMarks: Record<number, number>,
+  oppMarks: Record<number, number>,
+  level: BotLevel,
+  numbers: readonly number[]
+): DartThrow {
+  const openMine = numbers.filter((n) => (myMarks[n] || 0) < 3);
+  const target = openMine.length > 0
+    ? openMine.reduce((best, n) => (n > best ? n : best), openMine[0])
+    : numbers.filter((n) => (oppMarks[n] || 0) < 3).reduce((best, n) => (n > best ? n : best), numbers[numbers.length - 1]);
+
+  const cfg = LEVEL_CONFIG[level];
+  const hit = rand() < 0.35 + cfg.doubleHitChance * 0.6;
+  if (!hit) {
+    // Miss the intended number entirely.
+    return { baseValue: 0, multiplier: 1, points: 0 };
+  }
+  const tripleRoll = rand();
+  if (target !== 25 && tripleRoll < cfg.doubleHitChance * 0.5) {
+    return { baseValue: target, multiplier: 3, points: target * 3 };
+  }
+  if (target === 25 && tripleRoll < cfg.doubleHitChance * 0.5) {
+    return { baseValue: 25, multiplier: 2, points: 50 };
+  }
+  return { baseValue: target, multiplier: 1, points: target };
+}
