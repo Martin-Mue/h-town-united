@@ -835,15 +835,39 @@ const TournamentPage = () => {
 
           {players.length > 0 && (
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Teilnehmer ({players.length})</label>
-              <div className="flex flex-wrap gap-2">
-                {players.map(p => (
-                  <button key={p} onClick={() => removePlayer(p)}
-                    className="bg-card border border-border rounded-lg px-3 py-1 text-sm hover:border-destructive hover:text-destructive transition-colors group">
-                    {p} <span className="text-muted-foreground group-hover:text-destructive ml-1">×</span>
-                  </button>
-                ))}
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-muted-foreground">Teilnehmer ({players.length})</label>
+                {drawMode === "random" && (
+                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={shufflePlayers}>
+                    <Shuffle className="w-3.5 h-3.5" /> Neu mischen
+                  </Button>
+                )}
               </div>
+              {drawMode === "manual" ? (
+                <div className="space-y-1">
+                  {players.map((p, i) => (
+                    <div key={p} className="flex items-center gap-2 bg-card border border-border rounded-lg px-2 py-1.5 text-sm">
+                      <span className="w-6 text-center font-mono text-xs text-muted-foreground">{i + 1}</span>
+                      <span className="flex-1 truncate">{p}</span>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === 0} onClick={() => movePlayer(i, -1)}><ArrowUp className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === players.length - 1} onClick={() => movePlayer(i, 1)}><ArrowDown className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removePlayer(p)}><Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></Button>
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-muted-foreground pt-1">
+                    Paarungen Runde 1: {players.filter((_, i) => i % 2 === 0).map((p, i) => `${p} vs ${players[i * 2 + 1] || "BYE"}`).slice(0, 4).join(" · ")}{players.length > 8 ? " …" : ""}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {players.map(p => (
+                    <button key={p} onClick={() => removePlayer(p)}
+                      className="bg-card border border-border rounded-lg px-3 py-1 text-sm hover:border-destructive hover:text-destructive transition-colors group">
+                      {p} <span className="text-muted-foreground group-hover:text-destructive ml-1">×</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
