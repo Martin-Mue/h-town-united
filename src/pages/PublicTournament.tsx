@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap } from "lucide-react";
@@ -22,6 +22,123 @@ const roundLabel = (round: number, total: number) => {
   if (round === total - 1) return "Halbfinale";
   if (round === total - 2) return "Viertelfinale";
   return `Runde ${round}`;
+};
+
+/** Mirrored, auto-fitting bracket — identical layout to the admin view, read-only. */
+const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbackBestOf }: {
+  matches: Match[];
+  totalRounds: number;
+  roundConfigs?: { mode: string; bestOf: number }[];
+  fallbackMode?: string;
+  fallbackBestOf?: number;
+}) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  const measure = useCallback(() => {
+    if (!wrapRef.current || !innerRef.current) return;
+    const wrap = wrapRef.current.getBoundingClientRect();
+    const prev = innerRef.current.style.transform;
+    innerRef.current.style.transform = "none";
+    const inner = innerRef.current.getBoundingClientRect();
+    innerRef.current.style.transform = prev;
+    if (!inner.width || !inner.height) return;
+    setScale(Math.max(0.18, Math.min(wrap.width / inner.width, wrap.height / inner.height, 1)));
+  }, []);
+
+  useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length]);
+  useEffect(() => {
+    const ro = new ResizeObserver(() => measure());
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    const t = window.setTimeout(measure, 150);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+      window.clearTimeout(t);
+    };
+  }, [measure]);
+
+  const renderMatch = (m: Match, side: "left" | "right" | "center", isLast: boolean) => {
+    const live = !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE";
+    return (
+      <div key={m.id} className={`bg-card border rounded-xl overflow-hidden relative ${m.winner ? "border-border" : live ? "border-primary/60 glow-cyan" : "border-border/50"}`}>
+        {!isLast && side === "left" && <span aria-hidden className="absolute top-1/2 -right-4 w-4 h-px bg-border" />}
+        {!isLast && side === "right" && <span aria-hidden className="absolute top-1/2 -left-4 w-4 h-px bg-border" />}
+        {[m.player1, m.player2].map((player, idx) => (
+          <div key={idx} className={`px-3 py-2 text-sm flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/40" : !player ? "text-muted-foreground/40" : ""}`}>
+            <span className="truncate">{player || "TBD"}</span>
+            <span className="font-display text-base">{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const roundHeader = (round: number, align: "left" | "center" | "right") => {
+    const cfg = (roundConfigs || [])[round - 1];
+    return (
+      <div className={`mb-1 ${align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"}`}>
+        <h3 className="text-xs font-display uppercase text-muted-foreground">{roundLabel(round, totalRounds)}</h3>
+        <p className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · BO{cfg?.bestOf || fallbackBestOf}</p>
+      </div>
+    );
+  };
+
+  const column = (round: number, side: "left" | "right", isLast: boolean) => {
+    const all = matches.filter(m => m.round === round).sort((a, b) => a.position - b.position);
+    const half = Math.ceil(all.length / 2);
+    const slice = side === "left" ? all.slice(0, half) : all.slice(half);
+    return (
+      <div key={`${side}-${round}`} className="flex flex-col gap-3 min-w-[220px]">
+        {roundHeader(round, side === "left" ? "left" : "right")}
+        <div className="flex flex-col justify-around flex-1 gap-3 relative">
+          {slice.map(m => renderMatch(m, side, isLast))}
+        </div>
+      </div>
+    );
+  };
+
+  const body = () => {
+    if (totalRounds < 2) return column(1, "left", true);
+    const leftCols = [];
+    const rightCols = [];
+    for (let r = 1; r < totalRounds; r++) leftCols.push(column(r, "left", false));
+    for (let r = totalRounds - 1; r >= 1; r--) rightCols.push(column(r, "right", false));
+    const finals = matches.filter(m => m.round === totalRounds).sort((a, b) => a.position - b.position);
+    return (
+      <>
+        {leftCols}
+        <div key="final" className="flex flex-col gap-3 min-w-[250px] justify-center">
+          {roundHeader(totalRounds, "center")}
+          <div className="flex flex-col justify-center flex-1 gap-3">
+            {finals.map(m => (
+              <div key={m.id} className="relative">
+                <Trophy aria-hidden className="absolute -top-6 left-1/2 -translate-x-1/2 w-5 h-5 text-accent" />
+                {renderMatch(m, "center", true)}
+              </div>
+            ))}
+          </div>
+        </div>
+        {rightCols}
+      </>
+    );
+  };
+
+  return (
+    <div ref={wrapRef} className="overflow-hidden w-full" style={{ height: "min(72dvh, 900px)" }}>
+      <div
+        ref={innerRef}
+        className="flex items-stretch gap-4 p-4"
+        style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: "max-content" }}
+      >
+        {body()}
+      </div>
+    </div>
+  );
 };
 
 const PublicTournamentPage = () => {
@@ -51,7 +168,6 @@ const PublicTournamentPage = () => {
     };
     load();
 
-    // Poll every 8s + realtime subscription
     const interval = window.setInterval(load, 8000);
     const channel = supabase
       .channel(`public-tournament-${slug}`)
@@ -85,8 +201,6 @@ const PublicTournamentPage = () => {
   const isKo = t.mode !== "round-robin";
   const matches = t.bracket as Match[];
   const totalRounds = isKo && matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 0;
-
-  // Live ticker: completed matches in reverse order, plus highlights
   const completed = matches.filter(m => m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE").slice(-8).reverse();
 
   return (
@@ -111,35 +225,15 @@ const PublicTournamentPage = () => {
       </header>
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-4 p-4">
-        {/* Bracket */}
-        <div className="overflow-x-auto pb-4">
+        <div className="min-w-0">
           {isKo ? (
-            <div className="flex gap-6 min-w-max">
-              {Array.from({ length: totalRounds }, (_, r) => r + 1).map(round => {
-                const rm = matches.filter(m => m.round === round);
-                const cfg = (t.round_configs || [])[round - 1];
-                return (
-                  <div key={round} className="flex flex-col gap-4 min-w-[220px]">
-                    <div className="text-center mb-1">
-                      <h3 className="text-xs font-display uppercase text-muted-foreground">{roundLabel(round, totalRounds)}</h3>
-                      {cfg && <p className="text-[10px] text-primary/80 font-mono">{cfg.mode} · BO{cfg.bestOf}</p>}
-                    </div>
-                    <div className="flex flex-col justify-around flex-1 gap-3">
-                      {rm.map(m => (
-                        <div key={m.id} className={`bg-card border rounded-xl overflow-hidden ${m.winner ? "border-border" : m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE" ? "border-primary/60 glow-cyan" : "border-border/50"}`}>
-                          {[m.player1, m.player2].map((player, idx) => (
-                            <div key={idx} className={`px-3 py-2 text-sm flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/40" : ""}`}>
-                              <span className="truncate">{player || "TBD"}</span>
-                              <span className="font-display text-base">{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <LiveBracket
+              matches={matches}
+              totalRounds={totalRounds}
+              roundConfigs={t.round_configs}
+              fallbackMode={t.game_mode}
+              fallbackBestOf={t.best_of_legs}
+            />
           ) : (
             <div className="bg-card border border-border rounded-xl p-4 text-sm text-muted-foreground">
               Round-Robin-Ansicht folgt live über die App.
@@ -147,7 +241,6 @@ const PublicTournamentPage = () => {
           )}
         </div>
 
-        {/* Live ticker */}
         <aside className="bg-card border border-border rounded-xl p-4 lg:sticky lg:top-4 self-start">
           <div className="flex items-center gap-2 mb-3">
             <Zap className="w-4 h-4 text-accent" />
@@ -157,19 +250,16 @@ const PublicTournamentPage = () => {
             <p className="text-xs text-muted-foreground">Noch keine abgeschlossenen Matches.</p>
           ) : (
             <ol className="space-y-2">
-              {completed.map(m => {
-                const upset = m.winner && m.player1 && m.player2;
-                return (
-                  <li key={m.id} className="text-xs border-l-2 border-primary/40 pl-2">
-                    <p className="font-display text-sm">
-                      <span className="text-secondary">{m.winner}</span>
-                      <span className="text-muted-foreground"> schlägt </span>
-                      {m.winner === m.player1 ? m.player2 : m.player1}
-                    </p>
-                    <p className="text-muted-foreground">Runde {m.round} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
-                  </li>
-                );
-              })}
+              {completed.map(m => (
+                <li key={m.id} className="text-xs border-l-2 border-primary/40 pl-2">
+                  <p className="font-display text-sm">
+                    <span className="text-secondary">{m.winner}</span>
+                    <span className="text-muted-foreground"> schlägt </span>
+                    {m.winner === m.player1 ? m.player2 : m.player1}
+                  </p>
+                  <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
+                </li>
+              ))}
             </ol>
           )}
           <div className="mt-4 pt-3 border-t border-border text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1">

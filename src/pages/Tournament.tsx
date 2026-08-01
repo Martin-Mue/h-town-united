@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, Shuffle, ArrowUp, ArrowDown, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -65,6 +66,7 @@ interface TournamentRecord {
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
+const BEST_OF_OPTIONS = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21];
 
 const nextPowerOfTwo = (count: number) => Math.pow(2, Math.ceil(Math.log2(Math.max(count, 2))));
 
@@ -108,13 +110,19 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     if (inner.width === 0 || inner.height === 0) return;
     const sx = wrap.width / inner.width;
     const sy = wrap.height / inner.height;
-    // Fit vertically so all rounds are visible; keep horizontal scroll if needed.
-    // Never shrink below 0.7 → text stays readable, user scrolls horizontally.
-    const s = Math.min(sy, 1);
-    setFitScale(Math.max(0.7, s));
+    // Fit the WHOLE bracket into the viewport on every device (phone → beamer).
+    // Users zoom back in with the +/- buttons when they need to read/tap.
+    const s = Math.min(sx, sy, 1);
+    setFitScale(Math.max(0.18, s));
   }, []);
 
   useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, fullscreen]);
+  useEffect(() => {
+    // Re-fit after fonts/layout settle and on orientation change
+    const t = window.setTimeout(measure, 120);
+    window.addEventListener("orientationchange", measure);
+    return () => { window.clearTimeout(t); window.removeEventListener("orientationchange", measure); };
+  }, [measure]);
   useEffect(() => {
     const ro = new ResizeObserver(() => measure());
     if (wrapRef.current) ro.observe(wrapRef.current);
@@ -156,7 +164,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
       <div
         ref={wrapRef}
         className="overflow-auto bg-gradient-to-br from-background via-background to-primary/5"
-        style={{ height: fullscreen ? "calc(100vh - 44px)" : "min(75vh, 900px)" }}
+        style={{ height: fullscreen ? "calc(100dvh - 44px)" : "min(78dvh, 900px)" }}
       >
         <div
           ref={innerRef}
@@ -288,6 +296,7 @@ const TournamentPage = () => {
   const [seriesId, setSeriesId] = useState<string>("none");
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
+  const [drawMode, setDrawMode] = useState<"random" | "manual">("random");
   const [playerInput, setPlayerInput] = useState("");
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
@@ -396,11 +405,24 @@ const TournamentPage = () => {
 
   const removePlayer = (name: string) => setPlayers(players.filter(p => p !== name));
 
+  const movePlayer = (index: number, dir: -1 | 1) => {
+    setPlayers((prev) => {
+      const next = [...prev];
+      const target = index + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const shufflePlayers = () => setPlayers((prev) => shuffle(prev));
+
   // ─── KO Bracket Generation ──────────────────────
   const generateKoBracket = (playerList: string[]): Match[] => {
     const requestedSize = Number(targetSize) || nextPowerOfTwo(playerList.length);
     const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requestedSize));
-    const padded = shuffle(playerList).slice(0, size);
+    const ordered = drawMode === "random" ? shuffle(playerList) : [...playerList];
+    const padded = ordered.slice(0, size);
     while (padded.length < size) padded.push("BYE");
 
     const firstRound: Match[] = [];
@@ -724,7 +746,7 @@ const TournamentPage = () => {
               <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
                 <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {[1, 3, 5, 7, 9, 11].map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                  {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -742,11 +764,36 @@ const TournamentPage = () => {
             </div>
           )}
 
+          {tournamentMode !== "round-robin" && (
+            <Collapsible className="bg-muted/30 border border-border rounded-xl">
+              <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1"><Settings2 className="w-3.5 h-3.5" /> Auslosung · {drawMode === "random" ? "Zufällig" : "Manuell"}</span>
+                <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-3 pb-3 space-y-2">
+                <Select value={drawMode} onValueChange={(v) => setDrawMode(v as "random" | "manual")}>
+                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="random">Zufällige Auslosung</SelectItem>
+                    <SelectItem value="manual">Manuell festgelegte Partien</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  {drawMode === "random"
+                    ? "Die Paarungen der ersten Runde werden beim Start zufällig gelost."
+                    : "Die Reihenfolge der Teilnehmerliste bestimmt die Paarungen: 1 vs 2, 3 vs 4, usw."}
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
           {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
-            <div className="bg-muted/30 border border-border rounded-xl p-3">
-              <label className="text-sm text-muted-foreground mb-2 block flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" /> Modus pro Runde (Steigerung möglich)
-              </label>
+            <Collapsible className="bg-muted/30 border border-border rounded-xl">
+              <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> Modus pro Runde (optional, Steigerung möglich)</span>
+                <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-3 pb-3">
               <div className="space-y-2">
                 {roundConfigs.map((cfg, idx) => {
                   const total = roundConfigs.length;
@@ -766,14 +813,15 @@ const TournamentPage = () => {
                       <Select value={String(cfg.bestOf)} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, bestOf: Number(v) } : c))}>
                         <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-card border-border">
-                          {[1, 3, 5, 7, 9, 11].map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                          {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                   );
                 })}
               </div>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           {/* Add from club members */}
@@ -810,15 +858,39 @@ const TournamentPage = () => {
 
           {players.length > 0 && (
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Teilnehmer ({players.length})</label>
-              <div className="flex flex-wrap gap-2">
-                {players.map(p => (
-                  <button key={p} onClick={() => removePlayer(p)}
-                    className="bg-card border border-border rounded-lg px-3 py-1 text-sm hover:border-destructive hover:text-destructive transition-colors group">
-                    {p} <span className="text-muted-foreground group-hover:text-destructive ml-1">×</span>
-                  </button>
-                ))}
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-muted-foreground">Teilnehmer ({players.length})</label>
+                {drawMode === "random" && (
+                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={shufflePlayers}>
+                    <Shuffle className="w-3.5 h-3.5" /> Neu mischen
+                  </Button>
+                )}
               </div>
+              {drawMode === "manual" ? (
+                <div className="space-y-1">
+                  {players.map((p, i) => (
+                    <div key={p} className="flex items-center gap-2 bg-card border border-border rounded-lg px-2 py-1.5 text-sm">
+                      <span className="w-6 text-center font-mono text-xs text-muted-foreground">{i + 1}</span>
+                      <span className="flex-1 truncate">{p}</span>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === 0} onClick={() => movePlayer(i, -1)}><ArrowUp className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === players.length - 1} onClick={() => movePlayer(i, 1)}><ArrowDown className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removePlayer(p)}><Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></Button>
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-muted-foreground pt-1">
+                    Paarungen Runde 1: {players.filter((_, i) => i % 2 === 0).map((p, i) => `${p} vs ${players[i * 2 + 1] || "BYE"}`).slice(0, 4).join(" · ")}{players.length > 8 ? " …" : ""}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {players.map(p => (
+                    <button key={p} onClick={() => removePlayer(p)}
+                      className="bg-card border border-border rounded-lg px-3 py-1 text-sm hover:border-destructive hover:text-destructive transition-colors group">
+                      {p} <span className="text-muted-foreground group-hover:text-destructive ml-1">×</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
