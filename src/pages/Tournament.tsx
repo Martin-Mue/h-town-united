@@ -296,6 +296,7 @@ const TournamentPage = () => {
   const [seriesId, setSeriesId] = useState<string>("none");
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
+  const [drawMode, setDrawMode] = useState<"random" | "manual">("random");
   const [playerInput, setPlayerInput] = useState("");
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
@@ -404,11 +405,24 @@ const TournamentPage = () => {
 
   const removePlayer = (name: string) => setPlayers(players.filter(p => p !== name));
 
+  const movePlayer = (index: number, dir: -1 | 1) => {
+    setPlayers((prev) => {
+      const next = [...prev];
+      const target = index + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const shufflePlayers = () => setPlayers((prev) => shuffle(prev));
+
   // ─── KO Bracket Generation ──────────────────────
   const generateKoBracket = (playerList: string[]): Match[] => {
     const requestedSize = Number(targetSize) || nextPowerOfTwo(playerList.length);
     const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requestedSize));
-    const padded = shuffle(playerList).slice(0, size);
+    const ordered = drawMode === "random" ? shuffle(playerList) : [...playerList];
+    const padded = ordered.slice(0, size);
     while (padded.length < size) padded.push("BYE");
 
     const firstRound: Match[] = [];
