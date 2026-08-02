@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, Shuffle, ArrowUp, ArrowDown, Settings2 } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,18 +10,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import { Link } from "react-router-dom";
+import {
+  type Match,
+  BYE,
+  isRealPlayer,
+  isPlayable,
+  recomputeBracket,
+  bracketChampion,
+  buildSchedule,
+  assignScorekeepers,
+  roundLabelFor,
+} from "@/utils/tournament";
 
-interface Match {
-  id: string;
-  round: number;
-  position: number;
-  player1?: string;
-  player2?: string;
-  winner?: string;
-  score1?: number;
-  score2?: number;
-  table?: number;
-}
 interface RoundConfig {
   mode: string;      // "501" | "301" | "Cricket" | "Extern"
   bestOf: number;    // best-of legs
@@ -63,6 +63,7 @@ interface TournamentRecord {
   round_configs?: RoundConfig[];
   public_view?: boolean;
   public_slug?: string | null;
+  boards?: number;
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
@@ -88,9 +89,10 @@ interface BracketViewportProps {
   setKoWinner: (matchId: string, winner: string) => void;
   setKoScore: (matchId: string, slot: 1 | 2) => void;
   resetKoMatch: (matchId: string) => void;
+  onEditMatch?: (match: Match) => void;
 }
 
-const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch }: BracketViewportProps) => {
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch }: BracketViewportProps) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [fitScale, setFitScale] = useState(1);
@@ -191,19 +193,34 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
                   <div key={idx}
                     className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
                       idx === 0 ? "border-b border-border" : ""
-                    } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-                    <button disabled={!player || player === "BYE" || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
-                    <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === "BYE" || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
+                    } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === BYE ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
+                    <button disabled={!player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
+                    <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
                       <Plus className="w-4 h-4" />
                     </Button>
                     <span className="w-6 text-center font-display text-base">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
                     {match.winner === player && <Check className="w-4 h-4 text-secondary" />}
                   </div>
                 ))}
-                {(match.winner || match.score1 || match.score2) && (
-                  <Button variant="ghost" size="sm" className="w-full rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}>
-                    <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
-                  </Button>
+                {(match.scorekeeper || match.board) && !match.winner && (
+                  <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span className="truncate">{match.scorekeeper ? <>✍️ {match.scorekeeper}</> : "✍️ –"}</span>
+                    {match.board ? <span className="font-mono">Board {match.board}</span> : null}
+                  </div>
+                )}
+                {(match.winner || match.score1 || match.score2 || onEditMatch) && (
+                  <div className="flex border-t border-border/60">
+                    {(match.winner || match.score1 || match.score2) && (
+                      <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}>
+                        <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
+                      </Button>
+                    )}
+                    {onEditMatch && match.round === 1 && (
+                      <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => onEditMatch(match)}>
+                        <PencilLine className="w-3 h-3 mr-1" /> bearbeiten
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             );
@@ -297,7 +314,13 @@ const TournamentPage = () => {
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
   const [drawMode, setDrawMode] = useState<"random" | "manual">("random");
+  const [boards, setBoards] = useState(2);
+  const [bracketView, setBracketView] = useState<"tree" | "schedule">("tree");
+  const [editMatch, setEditMatch] = useState<Match | null>(null);
+  const [editP1, setEditP1] = useState("");
+  const [editP2, setEditP2] = useState("");
   const [playerInput, setPlayerInput] = useState("");
+  const [guestCount, setGuestCount] = useState(8);
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
   const [dbPlayers, setDbPlayers] = useState<{ id: string; name: string; emoji: string }[]>([]);
@@ -347,6 +370,7 @@ const TournamentPage = () => {
         round_configs: ((t as any).round_configs as RoundConfig[]) || [],
         public_view: (t as any).public_view || false,
         public_slug: (t as any).public_slug || null,
+        boards: (t as any).boards ?? 2,
       })) as TournamentRecord[]);
     }
     setLoading(false);
@@ -384,7 +408,7 @@ const TournamentPage = () => {
   };
 
   const addPlayer = () => {
-    addPlayers([playerInput]);
+    addPlayers(playerInput.split(/[\n,;]+/));
     setPlayerInput("");
   };
 
@@ -423,7 +447,7 @@ const TournamentPage = () => {
     const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requestedSize));
     const ordered = drawMode === "random" ? shuffle(playerList) : [...playerList];
     const padded = ordered.slice(0, size);
-    while (padded.length < size) padded.push("BYE");
+    while (padded.length < size) padded.push(BYE);
 
     const firstRound: Match[] = [];
     for (let i = 0; i < padded.length; i += 2) {
@@ -434,7 +458,6 @@ const TournamentPage = () => {
         table: i / 2 + 1,
         player1: padded[i],
         player2: padded[i + 1],
-        winner: padded[i + 1] === "BYE" ? padded[i] : padded[i] === "BYE" ? padded[i + 1] : undefined,
       });
     }
 
@@ -446,25 +469,7 @@ const TournamentPage = () => {
         allMatches.push({ id: `r${round}-${pos}`, round, position: pos, table: pos + 1 });
       }
     }
-    propagateKoWinners(allMatches);
-    return allMatches;
-  };
-
-  const propagateKoWinners = (allMatches: Match[]) => {
-    const totalRounds = Math.max(...allMatches.map(m => m.round));
-    for (let round = 1; round < totalRounds; round++) {
-      const roundMatches = allMatches.filter(m => m.round === round);
-      const nextRound = allMatches.filter(m => m.round === round + 1);
-      roundMatches.forEach((match, idx) => {
-        if (match.winner) {
-          const next = nextRound[Math.floor(idx / 2)];
-          if (next) {
-            if (idx % 2 === 0) next.player1 = match.winner;
-            else next.player2 = match.winner;
-          }
-        }
-      });
-    }
+    return assignScorekeepers(recomputeBracket(allMatches), playerList, { boards, keepExisting: false });
   };
 
   // ─── Round Robin Generation ─────────────────────
@@ -495,6 +500,7 @@ const TournamentPage = () => {
       status: "active",
       series_id: seriesId === "none" ? null : seriesId,
       round_configs: roundConfigs as any,
+      boards,
     }).select().single();
 
     if (error || !data) {
@@ -502,73 +508,110 @@ const TournamentPage = () => {
       return;
     }
 
-    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [] };
+    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [], boards: (data as any).boards ?? boards };
     setActiveTournament(record);
+    setBracketView("tree");
     setPhase("bracket");
     setPlayers([]);
     setTournamentName("");
     fetchTournaments();
   };
 
-  // ─── KO: Set Winner ────────────────────────────
-  const setKoWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
+  // ─── KO: persist a recomputed bracket ──────────
+  const persistBracket = async (raw: Match[], opts: { reshuffleKeepers?: boolean } = {}) => {
     if (!activeTournament) return;
-    const bracket = [...(activeTournament.bracket as Match[])];
-    const updated = bracket.map(m => m.id === matchId ? { ...m, winner, score1, score2 } : m);
-
-    const match = updated.find(m => m.id === matchId)!;
-    const nextRound = updated.filter(m => m.round === match.round + 1);
-    if (nextRound.length > 0) {
-      const roundMatches = updated.filter(m => m.round === match.round);
-      const idx = roundMatches.findIndex(m => m.id === matchId);
-      const next = nextRound[Math.floor(idx / 2)];
-      if (next) {
-        if (idx % 2 === 0) next.player1 = winner;
-        else next.player2 = winner;
-      }
-    }
-
-    const totalRounds = Math.max(...updated.map(m => m.round));
-    const finalMatch = updated.find(m => m.round === totalRounds);
-    const champion = finalMatch?.winner || null;
-
+    const recomputed = recomputeBracket(raw);
+    const withKeepers = assignScorekeepers(recomputed, activeTournament.players, {
+      boards: activeTournament.boards || 2,
+      keepExisting: !opts.reshuffleKeepers,
+    });
+    const champion = bracketChampion(withKeepers);
     await supabase.from("tournaments").update({
-      bracket: updated as any,
+      bracket: withKeepers as any,
       champion,
       status: champion ? "finished" : "active",
     }).eq("id", activeTournament.id);
-
-    setActiveTournament({ ...activeTournament, bracket: updated, champion });
+    setActiveTournament({ ...activeTournament, bracket: withKeepers, champion, status: champion ? "finished" : "active" });
     if (champion && seenCeremonyFor !== activeTournament.id) {
       setCeremonyChampion(champion);
       setSeenCeremonyFor(activeTournament.id);
     }
   };
 
+  const setKoWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
+    if (!activeTournament) return;
+    const updated = (activeTournament.bracket as Match[]).map(m =>
+      m.id === matchId ? { ...m, winner, score1, score2 } : { ...m }
+    );
+    await persistBracket(updated);
+  };
+
   const setKoScore = async (matchId: string, slot: 1 | 2) => {
     if (!activeTournament) return;
     const match = (activeTournament.bracket as Match[]).find(m => m.id === matchId);
-    if (!match || !match.player1 || !match.player2 || match.player1 === "BYE" || match.player2 === "BYE") return;
+    if (!match || !isPlayable(match)) return;
     const score1 = slot === 1 ? (match.score1 || 0) + 1 : (match.score1 || 0);
     const score2 = slot === 2 ? (match.score2 || 0) + 1 : (match.score2 || 0);
     const cfg = (activeTournament.round_configs || [])[match.round - 1];
     const bestOf = cfg?.bestOf || activeTournament.best_of_legs || 1;
     const legsToWin = Math.ceil(bestOf / 2);
     const winner = score1 >= legsToWin && score1 > score2 ? match.player1 : score2 >= legsToWin && score2 > score1 ? match.player2 : undefined;
-    if (winner) await setKoWinner(matchId, winner, score1, score2);
-    else {
-      const bracket = (activeTournament.bracket as Match[]).map(m => m.id === matchId ? { ...m, score1, score2 } : m);
-      await supabase.from("tournaments").update({ bracket: bracket as any }).eq("id", activeTournament.id);
-      setActiveTournament({ ...activeTournament, bracket });
-    }
+    const bracket = (activeTournament.bracket as Match[]).map(m =>
+      m.id === matchId ? { ...m, score1, score2, winner: winner ?? m.winner } : { ...m }
+    );
+    await persistBracket(bracket);
   };
 
+  /** Resets a match AND every result that depended on it (cascade via recompute). */
   const resetKoMatch = async (matchId: string) => {
     if (!activeTournament) return;
-    const bracket = (activeTournament.bracket as Match[]).map(m => m.id === matchId ? { ...m, winner: undefined, score1: undefined, score2: undefined } : { ...m });
-    propagateKoWinners(bracket);
-    await supabase.from("tournaments").update({ bracket: bracket as any, champion: null, status: "active" }).eq("id", activeTournament.id);
-    setActiveTournament({ ...activeTournament, bracket, champion: null, status: "active" });
+    const bracket = (activeTournament.bracket as Match[]).map(m =>
+      m.id === matchId ? { ...m, winner: undefined, score1: undefined, score2: undefined } : { ...m }
+    );
+    await persistBracket(bracket);
+  };
+
+  /** Replace the two participants of a first-round match (late changes, no-shows …). */
+  const saveMatchPlayers = async () => {
+    if (!activeTournament || !editMatch) return;
+    const p1 = editP1.trim() || BYE;
+    const p2 = editP2.trim() || BYE;
+    const bracket = (activeTournament.bracket as Match[]).map(m =>
+      m.id === editMatch.id ? { ...m, player1: p1, player2: p2, winner: undefined, score1: undefined, score2: undefined } : { ...m }
+    );
+    const nextPlayers = Array.from(new Set(
+      bracket.filter(m => m.round === 1).flatMap(m => [m.player1, m.player2]).filter(isRealPlayer) as string[]
+    ));
+    await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
+    setActiveTournament({ ...activeTournament, players: nextPlayers });
+    await persistBracket(bracket);
+    setEditMatch(null);
+    toast({ title: "Turnierbaum aktualisiert" });
+  };
+
+  /** Withdraw a player: all of their not-yet-played matches become walkovers. */
+  const withdrawPlayer = async (name: string) => {
+    if (!activeTournament) return;
+    const bracket = (activeTournament.bracket as Match[]).map(m => {
+      const copy = { ...m };
+      if (copy.round === 1) {
+        if (copy.player1 === name) copy.player1 = BYE;
+        if (copy.player2 === name) copy.player2 = BYE;
+      }
+      if (copy.winner === name && copy.round > 1) { copy.winner = undefined; copy.score1 = undefined; copy.score2 = undefined; }
+      return copy;
+    });
+    const nextPlayers = activeTournament.players.filter(p => p !== name);
+    await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
+    setActiveTournament({ ...activeTournament, players: nextPlayers });
+    await persistBracket(bracket);
+    toast({ title: `${name} zurückgezogen`, description: "Turnierbaum und Schreiber wurden neu berechnet." });
+  };
+
+  const reshuffleScorekeepers = async () => {
+    if (!activeTournament) return;
+    await persistBracket([...(activeTournament.bracket as Match[])], { reshuffleKeepers: true });
+    toast({ title: "Schreiber neu ausgelost" });
   };
 
   // ─── Round Robin: Set Winner ───────────────────
@@ -627,12 +670,7 @@ const TournamentPage = () => {
     if (activeTournament?.id === id) { setActiveTournament(null); setPhase("list"); }
   };
 
-  const roundLabel = (round: number, total: number) => {
-    if (round === total) return "Finale";
-    if (round === total - 1) return "Halbfinale";
-    if (round === total - 2) return "Viertelfinale";
-    return `Runde ${round}`;
-  };
+  const roundLabel = roundLabelFor;
 
   // ─── LIST PHASE ─────────────────────────────────
   if (phase === "list") {
@@ -764,6 +802,17 @@ const TournamentPage = () => {
             </div>
           )}
 
+          <div>
+            <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> Verfügbare Boards</label>
+            <Select value={String(boards)} onValueChange={(v) => setBoards(Number(v))}>
+              <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-card border-border">
+                {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <SelectItem key={n} value={String(n)}>{n} Board{n > 1 ? "s" : ""}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">Bestimmt Spielplan-Reihenfolge und Schreiber-Einteilung.</p>
+          </div>
+
           {tournamentMode !== "round-robin" && (
             <Collapsible className="bg-muted/30 border border-border rounded-xl">
               <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
@@ -827,7 +876,12 @@ const TournamentPage = () => {
           {/* Add from club members */}
           {dbPlayers.length > 0 && (
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Vereinsmitglieder hinzufügen</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-muted-foreground">Vereinsmitglieder hinzufügen</label>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => addPlayers(dbPlayers.map(p => p.name))}>
+                  Alle übernehmen
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {dbPlayers.filter(p => !players.includes(p.name)).map(p => (
                   <button key={p.id} onClick={() => addDbPlayer(p.name)}
@@ -840,19 +894,43 @@ const TournamentPage = () => {
           )}
 
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Manuell hinzufügen</label>
+            <label className="text-sm text-muted-foreground mb-1 block">Schnell-Eingabe (Enter = übernehmen, mehrere Namen mit Komma)</label>
             <div className="flex gap-2">
-              <Input value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="Name" className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
+              <Input autoFocus value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="Name, Name, Name …" className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
               <Button onClick={addPlayer} size="icon" variant="outline"><Plus className="w-4 h-4" /></Button>
             </div>
           </div>
 
+          {tournaments.length > 0 && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Teilnehmerfeld aus früherem Turnier übernehmen</label>
+              <Select value="none" onValueChange={(v) => { const t = tournaments.find(x => x.id === v); if (t) addPlayers(t.players); }}>
+                <SelectTrigger className="bg-card border-border"><SelectValue placeholder="Turnier wählen" /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="none">Turnier wählen …</SelectItem>
+                  {tournaments.slice(0, 15).map(t => (
+                    <SelectItem key={t.id} value={t.id}>{t.name} ({t.players.length})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Gastliste einfügen</label>
             <Textarea value={bulkInput} onChange={(e) => setBulkInput(e.target.value)} placeholder="Ein Name pro Zeile oder per Komma getrennt" />
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap items-center gap-2 mt-2">
               <Button size="sm" variant="outline" onClick={addBulkPlayers}>Liste übernehmen</Button>
               {tournamentMode !== "round-robin" && <Button size="sm" variant="outline" onClick={fillGuestPlayers}>Mit Gästen auffüllen</Button>}
+              <div className="flex items-center gap-1">
+                <Input type="number" min={1} max={64} value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value))} className="h-8 w-16 bg-card border-border" />
+                <Button size="sm" variant="outline" onClick={() => addPlayers(Array.from({ length: Math.max(1, guestCount) }, (_, i) => `Gast ${String(players.length + i + 1).padStart(2, "0")}`))}>
+                  Gäste hinzufügen
+                </Button>
+              </div>
+              {players.length > 0 && (
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPlayers([])}>Liste leeren</Button>
+              )}
             </div>
           </div>
 
@@ -956,15 +1034,98 @@ const TournamentPage = () => {
           </div>
         )}
 
-        <BracketViewport
-          matches={matches}
-          totalRounds={totalRounds}
-          activeTournament={activeTournament}
-          roundLabel={roundLabel}
-          setKoWinner={setKoWinner}
-          setKoScore={setKoScore}
-          resetKoMatch={resetKoMatch}
-        />
+        {/* View switcher + tournament management */}
+        <div className="container mb-3 flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-border overflow-hidden">
+            <button onClick={() => setBracketView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${bracketView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+              <Network className="w-3.5 h-3.5" /> Turnierbaum
+            </button>
+            <button onClick={() => setBracketView("schedule")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${bracketView === "schedule" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+              <ListOrdered className="w-3.5 h-3.5" /> Spielplan &amp; Schreiber
+            </button>
+          </div>
+          <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={reshuffleScorekeepers}>
+            <Shuffle className="w-3.5 h-3.5" /> Schreiber neu auslosen
+          </Button>
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Monitor className="w-3.5 h-3.5" /> {activeTournament.boards || 2} Boards
+          </span>
+        </div>
+
+        {bracketView === "tree" ? (
+          <BracketViewport
+            matches={matches}
+            totalRounds={totalRounds}
+            activeTournament={activeTournament}
+            roundLabel={roundLabel}
+            setKoWinner={setKoWinner}
+            setKoScore={setKoScore}
+            resetKoMatch={resetKoMatch}
+            onEditMatch={(m) => { setEditMatch(m); setEditP1(m.player1 === BYE ? "" : m.player1 || ""); setEditP2(m.player2 === BYE ? "" : m.player2 || ""); }}
+          />
+        ) : (
+          <div className="container space-y-4">
+            {(() => {
+              const schedule = buildSchedule(matches, activeTournament.boards || 2);
+              const open = schedule.filter(e => !e.match.winner);
+              const slots = [...new Set(open.map(e => e.slot))].sort((a, b) => a - b);
+              if (slots.length === 0) {
+                return <p className="text-sm text-muted-foreground">Alle aktuell spielbaren Partien sind erledigt.</p>;
+              }
+              return slots.map((slot, i) => (
+                <div key={slot} className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between">
+                    <h3 className="font-display uppercase text-sm">
+                      {i === 0 ? "Jetzt am Board" : `Spielrunde ${i + 1}`}
+                    </h3>
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                      {roundLabel(open.find(e => e.slot === slot)!.round, totalRounds)}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {open.filter(e => e.slot === slot).map(e => (
+                      <div key={e.match.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
+                        <span className="font-mono text-xs bg-primary/10 text-primary rounded px-2 py-0.5 shrink-0">Board {e.board}</span>
+                        <span className="flex-1 truncate">
+                          <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
+                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0">✍️ {e.match.scorekeeper || "–"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ));
+            })()}
+
+            <div className="bg-card border border-border rounded-xl p-4">
+              <h3 className="font-display uppercase text-sm mb-2 flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> Teilnehmer verwalten</h3>
+              <p className="text-[11px] text-muted-foreground mb-2">Spieler, die nicht erscheinen oder aufgeben, hier zurückziehen – Baum, Spielplan und Schreiber werden neu berechnet.</p>
+              <div className="flex flex-wrap gap-2">
+                {activeTournament.players.map(p => (
+                  <button key={p} onClick={() => withdrawPlayer(p)}
+                    className="bg-muted border border-border rounded-lg px-3 py-1 text-xs hover:border-destructive hover:text-destructive transition-colors">
+                    {p} ×
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editMatch && (
+          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditMatch(null)}>
+            <div className="bg-card border border-border rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-display uppercase text-sm">Partie bearbeiten</h3>
+              <p className="text-[11px] text-muted-foreground">Leer lassen = Freilos (BYE). Ergebnisse dieser Partie werden zurückgesetzt.</p>
+              <Input value={editP1} onChange={(e) => setEditP1(e.target.value)} placeholder="Spieler 1 (leer = BYE)" className="bg-background border-border" />
+              <Input value={editP2} onChange={(e) => setEditP2(e.target.value)} placeholder="Spieler 2 (leer = BYE)" className="bg-background border-border" />
+              <div className="flex gap-2 justify-end pt-1">
+                <Button size="sm" variant="ghost" onClick={() => setEditMatch(null)}>Abbrechen</Button>
+                <Button size="sm" onClick={saveMatchPlayers}>Speichern</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Live-Ticker */}
         {(() => {

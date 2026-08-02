@@ -1,11 +1,30 @@
 import type { BotLevel, DartThrow } from "@/types/game";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
 
-/** Approximate per-level accuracy tuning to roughly hit target 3-dart averages. */
-const LEVEL_CONFIG: Record<BotLevel, { scatter: number; doubleHitChance: number }> = {
-  easy: { scatter: 5.5, doubleHitChance: 0.28 },
-  medium: { scatter: 3.2, doubleHitChance: 0.42 },
-  hard: { scatter: 1.3, doubleHitChance: 0.62 },
+/**
+ * Bot tuning. Targets roughly these 3-dart averages:
+ *   easy   ≈ 25–30
+ *   medium ≈ 45–50
+ *   hard   ≈ 68–75
+ * (Club-realistic range of ~20–80 requested by the users.)
+ */
+interface LevelConfig {
+  /** probability of a complete miss on a scoring dart */
+  miss: number;
+  /** probability of hitting a random low-ish single */
+  randomSingle: number;
+  /** probability of hitting the single of the aimed (big) number */
+  aimedSingle: number;
+  /** probability of hitting the triple of the aimed number */
+  aimedTriple: number;
+  /** probability of hitting an aimed double / bull finish */
+  doubleHitChance: number;
+}
+
+const LEVEL_CONFIG: Record<BotLevel, LevelConfig> = {
+  easy: { miss: 0.35, randomSingle: 0.45, aimedSingle: 0.17, aimedTriple: 0.03, doubleHitChance: 0.10 },
+  medium: { miss: 0.18, randomSingle: 0.42, aimedSingle: 0.30, aimedTriple: 0.10, doubleHitChance: 0.20 },
+  hard: { miss: 0.10, randomSingle: 0.30, aimedSingle: 0.38, aimedTriple: 0.22, doubleHitChance: 0.32 },
 };
 
 function rand(): number {
@@ -26,69 +45,63 @@ function pointsFor(baseValue: number, multiplier: number): number {
   return baseValue === 25 && multiplier === 3 ? 0 : baseValue * multiplier;
 }
 
-/** Simulate one dart aimed at a given base/multiplier target, with level-dependent scatter. */
+const miss = (): DartThrow => ({ baseValue: 0, multiplier: 1, points: 0 });
+
+/** Simulate one dart aimed at a given base/multiplier target. */
 function simulateDart(targetBase: number, targetMultiplier: 1 | 2 | 3, level: BotLevel): DartThrow {
   const cfg = LEVEL_CONFIG[level];
 
-  // Special-case: aiming for a double or bullseye — model as hit/miss with a fallback ring.
-  if (targetMultiplier === 2 || (targetBase === 25 && targetMultiplier === 2)) {
-    const hit = rand() < cfg.doubleHitChance;
-    if (hit) {
-      const points = pointsFor(targetBase, targetMultiplier);
-      return { baseValue: targetBase, multiplier: targetMultiplier, points };
+  // Aiming at a double / bullseye (checkout attempt)
+  if (targetMultiplier === 2) {
+    if (rand() < cfg.doubleHitChance) {
+      return { baseValue: targetBase, multiplier: 2, points: pointsFor(targetBase, 2) };
     }
-    // Miss the double: commonly lands single of same number, or just outside (miss/adjacent single)
     const roll = rand();
-    if (roll < 0.55) {
-      const points = pointsFor(targetBase, 1);
-      return { baseValue: targetBase, multiplier: 1, points };
-    }
-    if (roll < 0.8 && targetBase > 1 && targetBase !== 25) {
+    if (roll < 0.5) return { baseValue: targetBase, multiplier: 1, points: pointsFor(targetBase, 1) };
+    if (roll < 0.75 && targetBase > 1 && targetBase !== 25) {
       const neighbor = Math.max(1, targetBase - 1);
       return { baseValue: neighbor, multiplier: 1, points: neighbor };
     }
-    return { baseValue: 0, multiplier: 1, points: 0 };
+    return miss();
   }
 
-  // General scoring throw: scatter around target using a normal-ish distribution.
-  const offset = (rand() + rand() + rand() - 1.5) * cfg.scatter;
-  const scaledOffset = Math.round(offset / 2);
-
+  // Aiming at the single bull
   if (targetBase === 25) {
-    // Aiming at bull (single 25): scatter can miss to nearby low numbers.
-    const hit = rand() < (1 - cfg.scatter / 12);
-    if (hit) return { baseValue: 25, multiplier: 1, points: 25 };
-    return { baseValue: 0, multiplier: 1, points: 0 };
+    return rand() < cfg.doubleHitChance ? { baseValue: 25, multiplier: 1, points: 25 } : miss();
   }
 
-  // Roll for multiplier accuracy around the intended triple/single.
-  let base = Math.min(20, Math.max(1, targetBase + scaledOffset));
-  let multiplier: 1 | 2 | 3 = targetMultiplier;
-  const accuracy = rand();
-  if (targetMultiplier === 3) {
-    if (accuracy < cfg.doubleHitChance) {
-      multiplier = 3;
-    } else if (accuracy < cfg.doubleHitChance + 0.35) {
-      multiplier = 1; // hit the single area of the same number (missed the triple ring)
-    } else {
-      multiplier = 1;
-      base = Math.min(20, Math.max(1, base + (rand() < 0.5 ? -1 : 1)));
+  // Deliberate single (setup shot, e.g. leaving a double)
+  if (targetMultiplier === 1) {
+    const roll = rand();
+    if (roll < cfg.miss * 0.6) return miss();
+    if (roll < cfg.miss * 0.6 + cfg.aimedSingle + cfg.aimedTriple) {
+      return { baseValue: targetBase, multiplier: 1, points: targetBase };
     }
+    const neighbor = Math.min(20, Math.max(1, targetBase + (rand() < 0.5 ? -1 : 1)));
+    return { baseValue: neighbor, multiplier: 1, points: neighbor };
   }
-  const points = pointsFor(base, multiplier);
-  return { baseValue: base, multiplier, points };
+
+  // Scoring dart aimed at a triple
+  const roll = rand();
+  if (roll < cfg.miss) return miss();
+  if (roll < cfg.miss + cfg.randomSingle) {
+    const base = 1 + Math.floor(rand() * 20);
+    return { baseValue: base, multiplier: 1, points: base };
+  }
+  if (roll < cfg.miss + cfg.randomSingle + cfg.aimedSingle) {
+    const base = rand() < 0.7 ? targetBase : Math.min(20, Math.max(1, targetBase + (rand() < 0.5 ? -1 : 1)));
+    return { baseValue: base, multiplier: 1, points: base };
+  }
+  return { baseValue: targetBase, multiplier: 3, points: pointsFor(targetBase, 3) };
 }
 
 /**
  * Simulate a full 3-dart visit for a bot player.
  * Returns the darts actually thrown (may be fewer than 3 if the bot checks out or busts).
- * Bust behaviour matches human rules: bust darts still "count" as thrown but the
- * caller (Game.tsx) is responsible for reverting remaining/throws on bust, exactly
- * like it does for human throws — so this function reports whether the visit busted.
  */
 export interface BotVisitResult {
   darts: DartThrow[];
-  bustedOnDartIndex: number | null; // index within darts[] that caused the bust, if any
+  bustedOnDartIndex: number | null;
   checkedOut: boolean;
 }
 
@@ -110,7 +123,6 @@ export function simulateBotVisit(remaining: number, doubleOut: boolean, level: B
         targetBase = rem / 2;
         targetMultiplier = 2;
       } else if (rem < 60) {
-        // No clean route (e.g. bogey numbers): reduce safely.
         targetBase = Math.min(20, Math.max(1, rem - 2));
         targetMultiplier = 1;
       }
@@ -123,24 +135,16 @@ export function simulateBotVisit(remaining: number, doubleOut: boolean, level: B
 
     darts.push(dart);
 
-    if (isBust) {
-      return { darts, bustedOnDartIndex: i, checkedOut: false };
-    }
+    if (isBust) return { darts, bustedOnDartIndex: i, checkedOut: false };
 
     rem = newRem;
-    if (rem === 0) {
-      return { darts, bustedOnDartIndex: null, checkedOut: true };
-    }
+    if (rem === 0) return { darts, bustedOnDartIndex: null, checkedOut: true };
   }
 
   return { darts, bustedOnDartIndex: null, checkedOut: false };
 }
 
-/**
- * Pick a cricket target and simulate the resulting dart for a bot.
- * Prefers open numbers on the bot's own scoreboard; once all are closed,
- * targets the opponent's highest still-open number to keep scoring.
- */
+/** Pick a cricket target and simulate the resulting dart for a bot. */
 export function simulateBotCricketDart(
   myMarks: Record<number, number>,
   oppMarks: Record<number, number>,
@@ -153,13 +157,9 @@ export function simulateBotCricketDart(
     : numbers.filter((n) => (oppMarks[n] || 0) < 3).reduce((best, n) => (n > best ? n : best), numbers[numbers.length - 1]);
 
   const cfg = LEVEL_CONFIG[level];
-  const hit = rand() < 0.35 + cfg.doubleHitChance * 0.6;
-  if (!hit) {
-    // Miss the intended number entirely.
-    return { baseValue: 0, multiplier: 1, points: 0 };
-  }
+  if (rand() > 1 - cfg.miss) return miss();
   const tripleRoll = rand();
-  if (target !== 25 && tripleRoll < cfg.doubleHitChance * 0.5) {
+  if (target !== 25 && tripleRoll < cfg.aimedTriple) {
     return { baseValue: target, multiplier: 3, points: target * 3 };
   }
   if (target === 25 && tripleRoll < cfg.doubleHitChance * 0.5) {

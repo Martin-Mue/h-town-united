@@ -17,6 +17,15 @@ interface GameRecord {
   player1_legs_won: number; player2_legs_won: number; player1_double_rate: number; player2_double_rate: number;
   player1_total_throws: number; player2_total_throws: number; winner_name: string; played_at: string;
   player1_id: string | null; player2_id: string | null; start_score: number; best_of_legs: number;
+  detail_stats?: {
+    player1?: DetailStat | null;
+    player2?: DetailStat | null;
+  } | null;
+}
+
+interface DetailStat {
+  name: string; visits: number; trebleless: number; treblelessRate: number; triples: number;
+  t20?: number; t19?: number; t18?: number; t17?: number; t16?: number;
 }
 
 interface PlayerStats {
@@ -90,6 +99,42 @@ const StatisticsPage = () => {
 
   const filtersActive =
     filterTime !== "all" || filterMode !== "all" || filterPlayerId !== "all" || filterBestOf !== "all";
+
+  // Treble-less visits + big-triple hit distribution (from per-game detail stats)
+  const trebleStats = useMemo(() => {
+    const entries: DetailStat[] = [];
+    filteredGames.forEach((g) => {
+      const ds = (g.detail_stats || {}) as { player1?: DetailStat | null; player2?: DetailStat | null };
+      ([["player1", g.player1_id], ["player2", g.player2_id]] as const).forEach(([key, pid]) => {
+        const d = ds[key];
+        if (!d) return;
+        if (filterPlayerId !== "all" && pid !== filterPlayerId) return;
+        entries.push(d);
+      });
+    });
+    const visits = entries.reduce((s, d) => s + (d.visits || 0), 0);
+    const trebleless = entries.reduce((s, d) => s + (d.trebleless || 0), 0);
+    const triples = entries.reduce((s, d) => s + (d.triples || 0), 0);
+    const bigTriples = [20, 19, 18, 17, 16].map((n) => ({
+      name: `T${n}`,
+      value: entries.reduce((s, d) => s + ((d as any)[`t${n}`] || 0), 0),
+    }));
+    const perPlayer = Object.values(
+      entries.reduce<Record<string, { name: string; visits: number; trebleless: number; triples: number }>>((acc, d) => {
+        const cur = acc[d.name] || { name: d.name, visits: 0, trebleless: 0, triples: 0 };
+        cur.visits += d.visits || 0;
+        cur.trebleless += d.trebleless || 0;
+        cur.triples += d.triples || 0;
+        acc[d.name] = cur;
+        return acc;
+      }, {})
+    ).sort((a, b) => (a.trebleless / Math.max(1, a.visits)) - (b.trebleless / Math.max(1, b.visits)));
+    return {
+      hasData: entries.length > 0,
+      visits, trebleless, triples, bigTriples, perPlayer,
+      treblelessRate: visits ? (trebleless / visits) * 100 : 0,
+    };
+  }, [filteredGames, filterPlayerId]);
 
   const resetFilters = () => {
     setFilterTime("all"); setFilterMode("all"); setFilterPlayerId("all"); setFilterBestOf("all");
@@ -372,6 +417,48 @@ const StatisticsPage = () => {
           )}
 
           {/* Mode distribution */}
+          {trebleStats.hasData && (
+            <div className="bg-card rounded-xl border border-border p-4 mb-6">
+              <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
+                <Crosshair className="w-4 h-4" /> Triple-Analyse
+              </h3>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-2xl font-display text-destructive">{trebleStats.treblelessRate.toFixed(1)}%</p>
+                  <p className="text-[10px] text-muted-foreground">Trebleless Visits</p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-2xl font-display">{trebleStats.trebleless}</p>
+                  <p className="text-[10px] text-muted-foreground">von {trebleStats.visits} Visits</p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-2xl font-display text-secondary">{trebleStats.triples}</p>
+                  <p className="text-[10px] text-muted-foreground">Triples gesamt</p>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={140}>
+                <BarChart data={trebleStats.bigTriples}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar dataKey="value" fill="hsl(155 65% 42%)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              {trebleStats.perPlayer.length > 1 && (
+                <div className="mt-3 space-y-1">
+                  {trebleStats.perPlayer.slice(0, 8).map((p) => (
+                    <div key={p.name} className="flex items-center justify-between text-xs">
+                      <span className="truncate">{p.name}</span>
+                      <span className="text-muted-foreground font-mono">
+                        {((p.trebleless / Math.max(1, p.visits)) * 100).toFixed(1)}% trebleless · {p.triples} Triples
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {modeDistribution.length > 0 && (
             <div className="bg-card rounded-xl border border-border p-4 mb-6">
               <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Spielmodi</h3>

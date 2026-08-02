@@ -7,7 +7,7 @@ import htuLogo from "@/assets/htu-logo.jpg";
 interface Match {
   id: string; round: number; position: number;
   player1?: string; player2?: string; winner?: string;
-  score1?: number; score2?: number;
+  score1?: number; score2?: number; scorekeeper?: string; board?: number; slot?: number;
 }
 
 interface TournamentRow {
@@ -74,6 +74,12 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
             <span className="font-display text-base">{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
           </div>
         ))}
+        {!m.winner && (m.scorekeeper || m.board) && (
+          <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
+            <span className="truncate">✍️ {m.scorekeeper || "–"}</span>
+            {m.board ? <span className="font-mono">Board {m.board}</span> : null}
+          </div>
+        )}
       </div>
     );
   };
@@ -146,6 +152,23 @@ const PublicTournamentPage = () => {
   const [t, setT] = useState<TournamentRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [flash, setFlash] = useState<Match | null>(null);
+  const seenResults = useRef<Set<string> | null>(null);
+  const flashTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!t) return;
+    const done = (t.bracket || []).filter(m => m.winner && m.winner !== "BYE" && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE");
+    const ids = new Set(done.map(m => `${m.id}:${m.winner}:${m.score1 ?? 0}:${m.score2 ?? 0}`));
+    if (seenResults.current === null) { seenResults.current = ids; return; }
+    const fresh = done.find(m => !seenResults.current!.has(`${m.id}:${m.winner}:${m.score1 ?? 0}:${m.score2 ?? 0}`));
+    seenResults.current = ids;
+    if (fresh) {
+      setFlash(fresh);
+      if (flashTimer.current) window.clearTimeout(flashTimer.current);
+      flashTimer.current = window.setTimeout(() => setFlash(null), 12000);
+    }
+  }, [t]);
 
   useEffect(() => {
     if (!slug) return;
@@ -226,6 +249,30 @@ const PublicTournamentPage = () => {
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-4 p-4">
         <div className="min-w-0">
+          {(() => {
+            const openSlots = matches.filter(m => !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE" && m.slot !== undefined);
+            if (openSlots.length === 0) return null;
+            const minSlot = Math.min(...openSlots.map(m => m.slot!));
+            const now = openSlots.filter(m => m.slot === minSlot).sort((a, b) => (a.board ?? 0) - (b.board ?? 0));
+            return (
+              <div className="mb-3 rounded-2xl border-2 border-primary/50 bg-gradient-to-r from-primary/15 via-card to-accent/10 p-4 glow-cyan">
+                <p className="text-[11px] uppercase tracking-[0.3em] text-primary mb-2 flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" /> Jetzt am Board
+                </p>
+                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                  {now.map(m => (
+                    <div key={m.id} className="rounded-xl bg-background/60 border border-border px-3 py-2">
+                      <p className="font-display text-lg uppercase truncate">{m.player1} <span className="text-muted-foreground text-sm">vs</span> {m.player2}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-2">
+                        <span className="font-mono text-primary">Board {m.board ?? "?"}</span>
+                        <span>✍️ {m.scorekeeper || "–"}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           {isKo ? (
             <LiveBracket
               matches={matches}
@@ -267,6 +314,20 @@ const PublicTournamentPage = () => {
           </div>
         </aside>
       </div>
+
+      {flash && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
+          <div className="rounded-2xl border-2 border-accent bg-card/95 backdrop-blur px-8 py-5 text-center glow-gold shadow-2xl">
+            <p className="text-[11px] uppercase tracking-[0.3em] text-accent mb-1">Ergebnis · {roundLabel(flash.round, totalRounds)}</p>
+            <p className="font-display text-3xl uppercase">
+              <span className="text-secondary">{flash.winner}</span>
+              <span className="text-muted-foreground text-lg"> schlägt </span>
+              {flash.winner === flash.player1 ? flash.player2 : flash.player1}
+            </p>
+            <p className="font-display text-xl text-primary mt-1">{flash.score1 ?? 0} : {flash.score2 ?? 0}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
