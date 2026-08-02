@@ -1034,15 +1034,98 @@ const TournamentPage = () => {
           </div>
         )}
 
-        <BracketViewport
-          matches={matches}
-          totalRounds={totalRounds}
-          activeTournament={activeTournament}
-          roundLabel={roundLabel}
-          setKoWinner={setKoWinner}
-          setKoScore={setKoScore}
-          resetKoMatch={resetKoMatch}
-        />
+        {/* View switcher + tournament management */}
+        <div className="container mb-3 flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-border overflow-hidden">
+            <button onClick={() => setBracketView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${bracketView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+              <Network className="w-3.5 h-3.5" /> Turnierbaum
+            </button>
+            <button onClick={() => setBracketView("schedule")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${bracketView === "schedule" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+              <ListOrdered className="w-3.5 h-3.5" /> Spielplan &amp; Schreiber
+            </button>
+          </div>
+          <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={reshuffleScorekeepers}>
+            <Shuffle className="w-3.5 h-3.5" /> Schreiber neu auslosen
+          </Button>
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Monitor className="w-3.5 h-3.5" /> {activeTournament.boards || 2} Boards
+          </span>
+        </div>
+
+        {bracketView === "tree" ? (
+          <BracketViewport
+            matches={matches}
+            totalRounds={totalRounds}
+            activeTournament={activeTournament}
+            roundLabel={roundLabel}
+            setKoWinner={setKoWinner}
+            setKoScore={setKoScore}
+            resetKoMatch={resetKoMatch}
+            onEditMatch={(m) => { setEditMatch(m); setEditP1(m.player1 === BYE ? "" : m.player1 || ""); setEditP2(m.player2 === BYE ? "" : m.player2 || ""); }}
+          />
+        ) : (
+          <div className="container space-y-4">
+            {(() => {
+              const schedule = buildSchedule(matches, activeTournament.boards || 2);
+              const open = schedule.filter(e => !e.match.winner);
+              const slots = [...new Set(open.map(e => e.slot))].sort((a, b) => a - b);
+              if (slots.length === 0) {
+                return <p className="text-sm text-muted-foreground">Alle aktuell spielbaren Partien sind erledigt.</p>;
+              }
+              return slots.map((slot, i) => (
+                <div key={slot} className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between">
+                    <h3 className="font-display uppercase text-sm">
+                      {i === 0 ? "Jetzt am Board" : `Spielrunde ${i + 1}`}
+                    </h3>
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                      {roundLabel(open.find(e => e.slot === slot)!.round, totalRounds)}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {open.filter(e => e.slot === slot).map(e => (
+                      <div key={e.match.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
+                        <span className="font-mono text-xs bg-primary/10 text-primary rounded px-2 py-0.5 shrink-0">Board {e.board}</span>
+                        <span className="flex-1 truncate">
+                          <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
+                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0">✍️ {e.match.scorekeeper || "–"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ));
+            })()}
+
+            <div className="bg-card border border-border rounded-xl p-4">
+              <h3 className="font-display uppercase text-sm mb-2 flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> Teilnehmer verwalten</h3>
+              <p className="text-[11px] text-muted-foreground mb-2">Spieler, die nicht erscheinen oder aufgeben, hier zurückziehen – Baum, Spielplan und Schreiber werden neu berechnet.</p>
+              <div className="flex flex-wrap gap-2">
+                {activeTournament.players.map(p => (
+                  <button key={p} onClick={() => withdrawPlayer(p)}
+                    className="bg-muted border border-border rounded-lg px-3 py-1 text-xs hover:border-destructive hover:text-destructive transition-colors">
+                    {p} ×
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editMatch && (
+          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditMatch(null)}>
+            <div className="bg-card border border-border rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-display uppercase text-sm">Partie bearbeiten</h3>
+              <p className="text-[11px] text-muted-foreground">Leer lassen = Freilos (BYE). Ergebnisse dieser Partie werden zurückgesetzt.</p>
+              <Input value={editP1} onChange={(e) => setEditP1(e.target.value)} placeholder="Spieler 1 (leer = BYE)" className="bg-background border-border" />
+              <Input value={editP2} onChange={(e) => setEditP2(e.target.value)} placeholder="Spieler 2 (leer = BYE)" className="bg-background border-border" />
+              <div className="flex gap-2 justify-end pt-1">
+                <Button size="sm" variant="ghost" onClick={() => setEditMatch(null)}>Abbrechen</Button>
+                <Button size="sm" onClick={saveMatchPlayers}>Speichern</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Live-Ticker */}
         {(() => {
