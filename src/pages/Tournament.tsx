@@ -876,7 +876,12 @@ const TournamentPage = () => {
           {/* Add from club members */}
           {dbPlayers.length > 0 && (
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Vereinsmitglieder hinzufügen</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-muted-foreground">Vereinsmitglieder hinzufügen</label>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => addPlayers(dbPlayers.map(p => p.name))}>
+                  Alle übernehmen
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {dbPlayers.filter(p => !players.includes(p.name)).map(p => (
                   <button key={p.id} onClick={() => addDbPlayer(p.name)}
@@ -889,19 +894,43 @@ const TournamentPage = () => {
           )}
 
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Manuell hinzufügen</label>
+            <label className="text-sm text-muted-foreground mb-1 block">Schnell-Eingabe (Enter = übernehmen, mehrere Namen mit Komma)</label>
             <div className="flex gap-2">
-              <Input value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="Name" className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
+              <Input autoFocus value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="Name, Name, Name …" className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
               <Button onClick={addPlayer} size="icon" variant="outline"><Plus className="w-4 h-4" /></Button>
             </div>
           </div>
 
+          {tournaments.length > 0 && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Teilnehmerfeld aus früherem Turnier übernehmen</label>
+              <Select value="none" onValueChange={(v) => { const t = tournaments.find(x => x.id === v); if (t) addPlayers(t.players); }}>
+                <SelectTrigger className="bg-card border-border"><SelectValue placeholder="Turnier wählen" /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="none">Turnier wählen …</SelectItem>
+                  {tournaments.slice(0, 15).map(t => (
+                    <SelectItem key={t.id} value={t.id}>{t.name} ({t.players.length})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Gastliste einfügen</label>
             <Textarea value={bulkInput} onChange={(e) => setBulkInput(e.target.value)} placeholder="Ein Name pro Zeile oder per Komma getrennt" />
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap items-center gap-2 mt-2">
               <Button size="sm" variant="outline" onClick={addBulkPlayers}>Liste übernehmen</Button>
               {tournamentMode !== "round-robin" && <Button size="sm" variant="outline" onClick={fillGuestPlayers}>Mit Gästen auffüllen</Button>}
+              <div className="flex items-center gap-1">
+                <Input type="number" min={1} max={64} value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value))} className="h-8 w-16 bg-card border-border" />
+                <Button size="sm" variant="outline" onClick={() => addPlayers(Array.from({ length: Math.max(1, guestCount) }, (_, i) => `Gast ${String(players.length + i + 1).padStart(2, "0")}`))}>
+                  Gäste hinzufügen
+                </Button>
+              </div>
+              {players.length > 0 && (
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPlayers([])}>Liste leeren</Button>
+              )}
             </div>
           </div>
 
