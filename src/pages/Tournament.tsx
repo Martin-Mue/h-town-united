@@ -440,7 +440,7 @@ const TournamentPage = () => {
     const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requestedSize));
     const ordered = drawMode === "random" ? shuffle(playerList) : [...playerList];
     const padded = ordered.slice(0, size);
-    while (padded.length < size) padded.push("BYE");
+    while (padded.length < size) padded.push(BYE);
 
     const firstRound: Match[] = [];
     for (let i = 0; i < padded.length; i += 2) {
@@ -451,7 +451,6 @@ const TournamentPage = () => {
         table: i / 2 + 1,
         player1: padded[i],
         player2: padded[i + 1],
-        winner: padded[i + 1] === "BYE" ? padded[i] : padded[i] === "BYE" ? padded[i + 1] : undefined,
       });
     }
 
@@ -463,25 +462,7 @@ const TournamentPage = () => {
         allMatches.push({ id: `r${round}-${pos}`, round, position: pos, table: pos + 1 });
       }
     }
-    propagateKoWinners(allMatches);
-    return allMatches;
-  };
-
-  const propagateKoWinners = (allMatches: Match[]) => {
-    const totalRounds = Math.max(...allMatches.map(m => m.round));
-    for (let round = 1; round < totalRounds; round++) {
-      const roundMatches = allMatches.filter(m => m.round === round);
-      const nextRound = allMatches.filter(m => m.round === round + 1);
-      roundMatches.forEach((match, idx) => {
-        if (match.winner) {
-          const next = nextRound[Math.floor(idx / 2)];
-          if (next) {
-            if (idx % 2 === 0) next.player1 = match.winner;
-            else next.player2 = match.winner;
-          }
-        }
-      });
-    }
+    return assignScorekeepers(recomputeBracket(allMatches), playerList, { boards, keepExisting: false });
   };
 
   // ─── Round Robin Generation ─────────────────────
