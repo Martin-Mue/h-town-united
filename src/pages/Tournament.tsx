@@ -89,9 +89,10 @@ interface BracketViewportProps {
   setKoWinner: (matchId: string, winner: string) => void;
   setKoScore: (matchId: string, slot: 1 | 2) => void;
   resetKoMatch: (matchId: string) => void;
+  onEditMatch?: (match: Match) => void;
 }
 
-const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch }: BracketViewportProps) => {
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch }: BracketViewportProps) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [fitScale, setFitScale] = useState(1);
@@ -192,19 +193,34 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
                   <div key={idx}
                     className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
                       idx === 0 ? "border-b border-border" : ""
-                    } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-                    <button disabled={!player || player === "BYE" || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
-                    <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === "BYE" || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
+                    } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === BYE ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
+                    <button disabled={!player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
+                    <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
                       <Plus className="w-4 h-4" />
                     </Button>
                     <span className="w-6 text-center font-display text-base">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
                     {match.winner === player && <Check className="w-4 h-4 text-secondary" />}
                   </div>
                 ))}
-                {(match.winner || match.score1 || match.score2) && (
-                  <Button variant="ghost" size="sm" className="w-full rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}>
-                    <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
-                  </Button>
+                {(match.scorekeeper || match.board) && !match.winner && (
+                  <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span className="truncate">{match.scorekeeper ? <>✍️ {match.scorekeeper}</> : "✍️ –"}</span>
+                    {match.board ? <span className="font-mono">Board {match.board}</span> : null}
+                  </div>
+                )}
+                {(match.winner || match.score1 || match.score2 || onEditMatch) && (
+                  <div className="flex border-t border-border/60">
+                    {(match.winner || match.score1 || match.score2) && (
+                      <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}>
+                        <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
+                      </Button>
+                    )}
+                    {onEditMatch && match.round === 1 && (
+                      <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => onEditMatch(match)}>
+                        <PencilLine className="w-3 h-3 mr-1" /> bearbeiten
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             );
