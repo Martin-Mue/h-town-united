@@ -499,6 +499,7 @@ const TournamentPage = () => {
       status: "active",
       series_id: seriesId === "none" ? null : seriesId,
       round_configs: roundConfigs as any,
+      boards,
     }).select().single();
 
     if (error || !data) {
@@ -506,73 +507,110 @@ const TournamentPage = () => {
       return;
     }
 
-    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [] };
+    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [], boards: (data as any).boards ?? boards };
     setActiveTournament(record);
+    setBracketView("tree");
     setPhase("bracket");
     setPlayers([]);
     setTournamentName("");
     fetchTournaments();
   };
 
-  // ─── KO: Set Winner ────────────────────────────
-  const setKoWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
+  // ─── KO: persist a recomputed bracket ──────────
+  const persistBracket = async (raw: Match[], opts: { reshuffleKeepers?: boolean } = {}) => {
     if (!activeTournament) return;
-    const bracket = [...(activeTournament.bracket as Match[])];
-    const updated = bracket.map(m => m.id === matchId ? { ...m, winner, score1, score2 } : m);
-
-    const match = updated.find(m => m.id === matchId)!;
-    const nextRound = updated.filter(m => m.round === match.round + 1);
-    if (nextRound.length > 0) {
-      const roundMatches = updated.filter(m => m.round === match.round);
-      const idx = roundMatches.findIndex(m => m.id === matchId);
-      const next = nextRound[Math.floor(idx / 2)];
-      if (next) {
-        if (idx % 2 === 0) next.player1 = winner;
-        else next.player2 = winner;
-      }
-    }
-
-    const totalRounds = Math.max(...updated.map(m => m.round));
-    const finalMatch = updated.find(m => m.round === totalRounds);
-    const champion = finalMatch?.winner || null;
-
+    const recomputed = recomputeBracket(raw);
+    const withKeepers = assignScorekeepers(recomputed, activeTournament.players, {
+      boards: activeTournament.boards || 2,
+      keepExisting: !opts.reshuffleKeepers,
+    });
+    const champion = bracketChampion(withKeepers);
     await supabase.from("tournaments").update({
-      bracket: updated as any,
+      bracket: withKeepers as any,
       champion,
       status: champion ? "finished" : "active",
     }).eq("id", activeTournament.id);
-
-    setActiveTournament({ ...activeTournament, bracket: updated, champion });
+    setActiveTournament({ ...activeTournament, bracket: withKeepers, champion, status: champion ? "finished" : "active" });
     if (champion && seenCeremonyFor !== activeTournament.id) {
       setCeremonyChampion(champion);
       setSeenCeremonyFor(activeTournament.id);
     }
   };
 
+  const setKoWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
+    if (!activeTournament) return;
+    const updated = (activeTournament.bracket as Match[]).map(m =>
+      m.id === matchId ? { ...m, winner, score1, score2 } : { ...m }
+    );
+    await persistBracket(updated);
+  };
+
   const setKoScore = async (matchId: string, slot: 1 | 2) => {
     if (!activeTournament) return;
     const match = (activeTournament.bracket as Match[]).find(m => m.id === matchId);
-    if (!match || !match.player1 || !match.player2 || match.player1 === "BYE" || match.player2 === "BYE") return;
+    if (!match || !isPlayable(match)) return;
     const score1 = slot === 1 ? (match.score1 || 0) + 1 : (match.score1 || 0);
     const score2 = slot === 2 ? (match.score2 || 0) + 1 : (match.score2 || 0);
     const cfg = (activeTournament.round_configs || [])[match.round - 1];
     const bestOf = cfg?.bestOf || activeTournament.best_of_legs || 1;
     const legsToWin = Math.ceil(bestOf / 2);
     const winner = score1 >= legsToWin && score1 > score2 ? match.player1 : score2 >= legsToWin && score2 > score1 ? match.player2 : undefined;
-    if (winner) await setKoWinner(matchId, winner, score1, score2);
-    else {
-      const bracket = (activeTournament.bracket as Match[]).map(m => m.id === matchId ? { ...m, score1, score2 } : m);
-      await supabase.from("tournaments").update({ bracket: bracket as any }).eq("id", activeTournament.id);
-      setActiveTournament({ ...activeTournament, bracket });
-    }
+    const bracket = (activeTournament.bracket as Match[]).map(m =>
+      m.id === matchId ? { ...m, score1, score2, winner: winner ?? m.winner } : { ...m }
+    );
+    await persistBracket(bracket);
   };
 
+  /** Resets a match AND every result that depended on it (cascade via recompute). */
   const resetKoMatch = async (matchId: string) => {
     if (!activeTournament) return;
-    const bracket = (activeTournament.bracket as Match[]).map(m => m.id === matchId ? { ...m, winner: undefined, score1: undefined, score2: undefined } : { ...m });
-    propagateKoWinners(bracket);
-    await supabase.from("tournaments").update({ bracket: bracket as any, champion: null, status: "active" }).eq("id", activeTournament.id);
-    setActiveTournament({ ...activeTournament, bracket, champion: null, status: "active" });
+    const bracket = (activeTournament.bracket as Match[]).map(m =>
+      m.id === matchId ? { ...m, winner: undefined, score1: undefined, score2: undefined } : { ...m }
+    );
+    await persistBracket(bracket);
+  };
+
+  /** Replace the two participants of a first-round match (late changes, no-shows …). */
+  const saveMatchPlayers = async () => {
+    if (!activeTournament || !editMatch) return;
+    const p1 = editP1.trim() || BYE;
+    const p2 = editP2.trim() || BYE;
+    const bracket = (activeTournament.bracket as Match[]).map(m =>
+      m.id === editMatch.id ? { ...m, player1: p1, player2: p2, winner: undefined, score1: undefined, score2: undefined } : { ...m }
+    );
+    const nextPlayers = Array.from(new Set(
+      bracket.filter(m => m.round === 1).flatMap(m => [m.player1, m.player2]).filter(isRealPlayer) as string[]
+    ));
+    await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
+    setActiveTournament({ ...activeTournament, players: nextPlayers });
+    await persistBracket(bracket);
+    setEditMatch(null);
+    toast({ title: "Turnierbaum aktualisiert" });
+  };
+
+  /** Withdraw a player: all of their not-yet-played matches become walkovers. */
+  const withdrawPlayer = async (name: string) => {
+    if (!activeTournament) return;
+    const bracket = (activeTournament.bracket as Match[]).map(m => {
+      const copy = { ...m };
+      if (copy.round === 1) {
+        if (copy.player1 === name) copy.player1 = BYE;
+        if (copy.player2 === name) copy.player2 = BYE;
+      }
+      if (copy.winner === name && copy.round > 1) { copy.winner = undefined; copy.score1 = undefined; copy.score2 = undefined; }
+      return copy;
+    });
+    const nextPlayers = activeTournament.players.filter(p => p !== name);
+    await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
+    setActiveTournament({ ...activeTournament, players: nextPlayers });
+    await persistBracket(bracket);
+    toast({ title: `${name} zurückgezogen`, description: "Turnierbaum und Schreiber wurden neu berechnet." });
+  };
+
+  const reshuffleScorekeepers = async () => {
+    if (!activeTournament) return;
+    await persistBracket([...(activeTournament.bracket as Match[])], { reshuffleKeepers: true });
+    toast({ title: "Schreiber neu ausgelost" });
   };
 
   // ─── Round Robin: Set Winner ───────────────────
