@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, Shuffle, ArrowUp, ArrowDown, Settings2 } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,18 +10,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import { Link } from "react-router-dom";
+import {
+  type Match,
+  BYE,
+  isRealPlayer,
+  isPlayable,
+  recomputeBracket,
+  bracketChampion,
+  buildSchedule,
+  assignScorekeepers,
+  roundLabelFor,
+} from "@/utils/tournament";
 
-interface Match {
-  id: string;
-  round: number;
-  position: number;
-  player1?: string;
-  player2?: string;
-  winner?: string;
-  score1?: number;
-  score2?: number;
-  table?: number;
-}
 interface RoundConfig {
   mode: string;      // "501" | "301" | "Cricket" | "Extern"
   bestOf: number;    // best-of legs
@@ -63,6 +63,7 @@ interface TournamentRecord {
   round_configs?: RoundConfig[];
   public_view?: boolean;
   public_slug?: string | null;
+  boards?: number;
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
