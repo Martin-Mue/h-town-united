@@ -408,7 +408,7 @@ const TournamentPage = () => {
   };
 
   const addPlayer = () => {
-    addPlayers([playerInput]);
+    addPlayers(playerInput.split(/[\n,;]+/));
     setPlayerInput("");
   };
 
