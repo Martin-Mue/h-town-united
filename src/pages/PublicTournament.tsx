@@ -152,6 +152,23 @@ const PublicTournamentPage = () => {
   const [t, setT] = useState<TournamentRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [flash, setFlash] = useState<Match | null>(null);
+  const seenResults = useRef<Set<string> | null>(null);
+  const flashTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!t) return;
+    const done = (t.bracket || []).filter(m => m.winner && m.winner !== "BYE" && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE");
+    const ids = new Set(done.map(m => `${m.id}:${m.winner}:${m.score1 ?? 0}:${m.score2 ?? 0}`));
+    if (seenResults.current === null) { seenResults.current = ids; return; }
+    const fresh = done.find(m => !seenResults.current!.has(`${m.id}:${m.winner}:${m.score1 ?? 0}:${m.score2 ?? 0}`));
+    seenResults.current = ids;
+    if (fresh) {
+      setFlash(fresh);
+      if (flashTimer.current) window.clearTimeout(flashTimer.current);
+      flashTimer.current = window.setTimeout(() => setFlash(null), 12000);
+    }
+  }, [t]);
 
   useEffect(() => {
     if (!slug) return;
