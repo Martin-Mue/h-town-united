@@ -645,6 +645,27 @@ const GamePage = () => {
     const winnerIdx = game.winnerIndex ?? top1;
     const winnerMatch = winnerIdx === top1 ? p1Match : p2Match;
 
+    // Detailed per-player stats: treble-less visits + hits on the big triples
+    const detailFor = (idx?: number) => {
+      if (idx === undefined) return null;
+      const throws = throwsByPlayer[idx];
+      const visits: typeof throws[] = [];
+      for (let i = 0; i < throws.length; i += 3) visits.push(throws.slice(i, i + 3));
+      const trebleless = visits.filter(v => v.length > 0 && v.every(t => t.multiplier !== 3)).length;
+      const tripleHits: Record<string, number> = {};
+      [20, 19, 18, 17, 16].forEach(n => {
+        tripleHits[`t${n}`] = throws.filter(t => t.multiplier === 3 && t.baseValue === n).length;
+      });
+      return {
+        name: game.players[idx].name,
+        visits: visits.length,
+        trebleless,
+        treblelessRate: visits.length ? Math.round((trebleless / visits.length) * 1000) / 10 : 0,
+        triples: throws.filter(t => t.multiplier === 3).length,
+        ...tripleHits,
+      };
+    };
+
     await supabase.from("games").insert({
       user_id: session?.user?.id, mode: game.mode, start_score: game.startScore,
       best_of_legs: game.bestOfLegs,
@@ -655,6 +676,7 @@ const GamePage = () => {
       player1_highscore: highs[top1], player2_highscore: top2 !== undefined ? highs[top2] : 0,
       player1_total_throws: throwsByPlayer[top1].length, player2_total_throws: top2 !== undefined ? throwsByPlayer[top2].length : 0,
       winner_name: game.winnerName!, winner_id: winnerMatch?.id || null,
+      detail_stats: { player1: detailFor(top1), player2: detailFor(top2) } as any,
     });
 
     for (const i of [top1, top2].filter((v): v is number => v !== undefined)) {
