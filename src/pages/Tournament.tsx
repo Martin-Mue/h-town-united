@@ -314,7 +314,13 @@ const TournamentPage = () => {
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
   const [drawMode, setDrawMode] = useState<"random" | "manual">("random");
+  const [boards, setBoards] = useState(2);
+  const [bracketView, setBracketView] = useState<"tree" | "schedule">("tree");
+  const [editMatch, setEditMatch] = useState<Match | null>(null);
+  const [editP1, setEditP1] = useState("");
+  const [editP2, setEditP2] = useState("");
   const [playerInput, setPlayerInput] = useState("");
+  const [guestCount, setGuestCount] = useState(8);
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
   const [dbPlayers, setDbPlayers] = useState<{ id: string; name: string; emoji: string }[]>([]);
