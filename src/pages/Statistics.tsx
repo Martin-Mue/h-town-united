@@ -417,6 +417,48 @@ const StatisticsPage = () => {
           )}
 
           {/* Mode distribution */}
+          {trebleStats.hasData && (
+            <div className="bg-card rounded-xl border border-border p-4 mb-6">
+              <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
+                <Crosshair className="w-4 h-4" /> Triple-Analyse
+              </h3>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-2xl font-display text-destructive">{trebleStats.treblelessRate.toFixed(1)}%</p>
+                  <p className="text-[10px] text-muted-foreground">Trebleless Visits</p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-2xl font-display">{trebleStats.trebleless}</p>
+                  <p className="text-[10px] text-muted-foreground">von {trebleStats.visits} Visits</p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-3">
+                  <p className="text-2xl font-display text-secondary">{trebleStats.triples}</p>
+                  <p className="text-[10px] text-muted-foreground">Triples gesamt</p>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={140}>
+                <BarChart data={trebleStats.bigTriples}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar dataKey="value" fill="hsl(155 65% 42%)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              {trebleStats.perPlayer.length > 1 && (
+                <div className="mt-3 space-y-1">
+                  {trebleStats.perPlayer.slice(0, 8).map((p) => (
+                    <div key={p.name} className="flex items-center justify-between text-xs">
+                      <span className="truncate">{p.name}</span>
+                      <span className="text-muted-foreground font-mono">
+                        {((p.trebleless / Math.max(1, p.visits)) * 100).toFixed(1)}% trebleless · {p.triples} Triples
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {modeDistribution.length > 0 && (
             <div className="bg-card rounded-xl border border-border p-4 mb-6">
               <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Spielmodi</h3>
