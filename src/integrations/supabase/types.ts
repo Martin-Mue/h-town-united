@@ -245,6 +245,7 @@ export type Database = {
       tournaments: {
         Row: {
           best_of_legs: number
+          boards: number
           bracket: Json
           champion: string | null
           created_at: string
@@ -264,6 +265,7 @@ export type Database = {
         }
         Insert: {
           best_of_legs?: number
+          boards?: number
           bracket?: Json
           champion?: string | null
           created_at?: string
@@ -283,6 +285,7 @@ export type Database = {
         }
         Update: {
           best_of_legs?: number
+          boards?: number
           bracket?: Json
           champion?: string | null
           created_at?: string
