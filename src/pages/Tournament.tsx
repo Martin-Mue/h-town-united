@@ -370,6 +370,7 @@ const TournamentPage = () => {
         round_configs: ((t as any).round_configs as RoundConfig[]) || [],
         public_view: (t as any).public_view || false,
         public_slug: (t as any).public_slug || null,
+        boards: (t as any).boards ?? 2,
       })) as TournamentRecord[]);
     }
     setLoading(false);
@@ -669,12 +670,7 @@ const TournamentPage = () => {
     if (activeTournament?.id === id) { setActiveTournament(null); setPhase("list"); }
   };
 
-  const roundLabel = (round: number, total: number) => {
-    if (round === total) return "Finale";
-    if (round === total - 1) return "Halbfinale";
-    if (round === total - 2) return "Viertelfinale";
-    return `Runde ${round}`;
-  };
+  const roundLabel = roundLabelFor;
 
   // ─── LIST PHASE ─────────────────────────────────
   if (phase === "list") {
