@@ -802,6 +802,17 @@ const TournamentPage = () => {
             </div>
           )}
 
+          <div>
+            <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> Verfügbare Boards</label>
+            <Select value={String(boards)} onValueChange={(v) => setBoards(Number(v))}>
+              <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-card border-border">
+                {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <SelectItem key={n} value={String(n)}>{n} Board{n > 1 ? "s" : ""}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">Bestimmt Spielplan-Reihenfolge und Schreiber-Einteilung.</p>
+          </div>
+
           {tournamentMode !== "round-robin" && (
             <Collapsible className="bg-muted/30 border border-border rounded-xl">
               <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
