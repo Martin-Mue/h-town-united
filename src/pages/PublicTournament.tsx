@@ -7,7 +7,7 @@ import htuLogo from "@/assets/htu-logo.jpg";
 interface Match {
   id: string; round: number; position: number;
   player1?: string; player2?: string; winner?: string;
-  score1?: number; score2?: number;
+  score1?: number; score2?: number; scorekeeper?: string; board?: number; slot?: number;
 }
 
 interface TournamentRow {
@@ -74,6 +74,12 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
             <span className="font-display text-base">{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
           </div>
         ))}
+        {!m.winner && (m.scorekeeper || m.board) && (
+          <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
+            <span className="truncate">✍️ {m.scorekeeper || "–"}</span>
+            {m.board ? <span className="font-mono">Board {m.board}</span> : null}
+          </div>
+        )}
       </div>
     );
   };
