@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           best_of_legs: number
           created_at: string
+          detail_stats: Json
           id: string
           mode: string
           played_at: string
@@ -44,6 +45,7 @@ export type Database = {
         Insert: {
           best_of_legs?: number
           created_at?: string
+          detail_stats?: Json
           id?: string
           mode?: string
           played_at?: string
@@ -70,6 +72,7 @@ export type Database = {
         Update: {
           best_of_legs?: number
           created_at?: string
+          detail_stats?: Json
           id?: string
           mode?: string
           played_at?: string
