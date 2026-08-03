@@ -164,6 +164,12 @@ interface DrillState {
   randomBase?: number;
   randomMul?: number;
   randomLabel?: string;
+  /** Bull Control: players, whose turn it is and who currently owns the scoring licence */
+  bcPlayers?: { name: string; remaining: number }[];
+  bcTurn?: number;
+  bcScorer?: number;
+  bcNumber?: number;
+  bcWinner?: string;
 }
 
 /** Pre-start configuration for a drill */
@@ -171,6 +177,9 @@ interface DrillConfig {
   maxRounds?: number;
   targetBase?: number;
   targetMul?: number;
+  bcPlayerNames?: string[];
+  bcNumber?: number;
+  bcStart?: number;
 }
 
 const TrainingPage = () => {
@@ -255,6 +264,17 @@ const TrainingPage = () => {
         state.randomMul = t.mul;
         state.randomLabel = t.label;
         state.maxRounds = 10;
+        break;
+      }
+      case "bull-control": {
+        const names = (config.bcPlayerNames && config.bcPlayerNames.length >= 2
+          ? config.bcPlayerNames
+          : ["Spieler 1", "Spieler 2"]).map((n, i) => n.trim() || `Spieler ${i + 1}`);
+        const start = config.bcStart ?? 301;
+        state.bcPlayers = names.map((name) => ({ name, remaining: start }));
+        state.bcTurn = 0;
+        state.bcScorer = -1;
+        state.bcNumber = config.bcNumber ?? 20;
         break;
       }
     }
