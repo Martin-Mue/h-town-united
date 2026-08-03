@@ -337,7 +337,7 @@ const TournamentPage = () => {
 
   // Setup state
   const [tournamentName, setTournamentName] = useState("");
-  const [tournamentMode, setTournamentMode] = useState("event-ko");
+  const [tournamentMode, setTournamentMode] = useState("ko");
   const [gameMode, setGameMode] = useState("501");
   const [bestOfLegs, setBestOfLegs] = useState(3);
   const [targetSize, setTargetSize] = useState("auto");
@@ -747,7 +747,7 @@ const TournamentPage = () => {
                     <div>
                       <p className="font-semibold text-sm">{t.name}</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="bg-muted px-1.5 py-0.5 rounded font-mono">{t.mode === "ko" ? "K.O." : "Round Robin"}</span>
+                        <span className="bg-muted px-1.5 py-0.5 rounded font-mono">{t.mode === "round-robin" ? "Jeder gegen Jeden" : "K.O."}</span>
                         <span><Users className="w-3 h-3 inline" /> {t.players.length}</span>
                         <span>{new Date(t.created_at).toLocaleDateString("de-DE")}</span>
                       </div>
@@ -799,7 +799,6 @@ const TournamentPage = () => {
               <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="ko">K.O.-System</SelectItem>
-                <SelectItem value="event-ko">Event K.O. bis 64</SelectItem>
                 <SelectItem value="round-robin">Jeder gegen Jeden</SelectItem>
               </SelectContent>
             </Select>
