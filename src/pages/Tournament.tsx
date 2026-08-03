@@ -628,23 +628,39 @@ const TournamentPage = () => {
     toast({ title: "Turnierbaum aktualisiert" });
   };
 
-  /** Withdraw a player: all of their not-yet-played matches become walkovers. */
+  /** Withdraw a player: only *unplayed* matches are adjusted, results stay untouched. */
   const withdrawPlayer = async (name: string) => {
     if (!activeTournament) return;
     const bracket = (activeTournament.bracket as Match[]).map(m => {
       const copy = { ...m };
+      // already decided matches keep their result – history stays intact
+      if (copy.winner) return copy;
       if (copy.round === 1) {
         if (copy.player1 === name) copy.player1 = BYE;
         if (copy.player2 === name) copy.player2 = BYE;
+      } else {
+        // later round: walkover for the opponent, seeded slots are recomputed anyway
+        if (copy.player1 === name && isRealPlayer(copy.player2)) copy.winner = copy.player2;
+        if (copy.player2 === name && isRealPlayer(copy.player1)) copy.winner = copy.player1;
       }
-      if (copy.winner === name && copy.round > 1) { copy.winner = undefined; copy.score1 = undefined; copy.score2 = undefined; }
       return copy;
     });
     const nextPlayers = activeTournament.players.filter(p => p !== name);
     await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
     setActiveTournament({ ...activeTournament, players: nextPlayers });
     await persistBracket(bracket);
-    toast({ title: `${name} zurückgezogen`, description: "Turnierbaum und Schreiber wurden neu berechnet." });
+    toast({ title: `${name} zurückgezogen`, description: "Gespielte Partien bleiben erhalten, nur offene Stellen werden angepasst." });
+  };
+
+  /** Manually set (and lock) the scorekeeper of a single match. */
+  const setMatchScorekeeper = async (matchId: string, keeper: string) => {
+    if (!activeTournament) return;
+    const bracket = (activeTournament.bracket as Match[]).map(m =>
+      m.id === matchId
+        ? { ...m, scorekeeper: keeper === "__auto" ? undefined : keeper, scorekeeperLocked: keeper !== "__auto" }
+        : { ...m }
+    );
+    await persistBracket(bracket);
   };
 
   const reshuffleScorekeepers = async () => {
