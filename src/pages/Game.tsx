@@ -173,7 +173,9 @@ const GamePage = () => {
     const startScore = getStartScore();
     const n = mode === "cricket" ? 2 : numPlayers;
     const players: PlayerSlot[] = Array.from({ length: n }, (_, i) => ({
-      name: playerNames[i]?.trim() || `Spieler ${i + 1}`,
+      name: playerIsBot[i]
+        ? BOT_PROFILES[playerBotLevel[i] ?? "medium"].name
+        : (playerNames[i]?.trim() || `Spieler ${i + 1}`),
       doubleOut: playerDoubleOut[i] ?? true,
       isBot: mode === "cricket" ? playerIsBot[i] : playerIsBot[i],
       botLevel: playerBotLevel[i] ?? "medium",
