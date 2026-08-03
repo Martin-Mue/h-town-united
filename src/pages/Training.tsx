@@ -91,6 +91,16 @@ const TRAINING_DRILLS: TrainingDrill[] = [
     durationMinutes: 10,
     category: "accuracy",
   },
+  {
+    id: "bull-control",
+    name: "Bull Control",
+    description:
+      "X01 für 2–4 Spieler: Punkten darf nur, wer zuletzt das Bull getroffen hat – und nur auf einer einzigen Zahl (z. B. 20). Jeder Bull-Treffer klaut die Scoring-Lizenz.",
+    icon: Crosshair,
+    difficulty: "Profi",
+    durationMinutes: 25,
+    category: "pressure",
+  },
 ];
 
 const DIFFICULTY_COLORS: Record<string, string> = {
