@@ -1085,7 +1085,7 @@ const TournamentPage = () => {
         <div className="container flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
-            <p className="text-xs text-muted-foreground">{activeTournament.mode === "event-ko" ? "Event K.O." : "K.O.-System"} · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
+            <p className="text-xs text-muted-foreground">K.O.-System · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
