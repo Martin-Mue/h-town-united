@@ -443,12 +443,45 @@ const TrainingPage = () => {
           updated.roundScores = [...(prev.roundScores || []), points];
           break;
         }
+
+        case "bull-control": {
+          const players = (prev.bcPlayers || []).map((p) => ({ ...p }));
+          const turn = prev.bcTurn ?? 0;
+          const number = prev.bcNumber ?? 20;
+          if (baseValue === 25) {
+            // Bull steals the scoring licence
+            updated.bcScorer = turn;
+            updated.hits++;
+          } else if (baseValue === number && (prev.bcScorer ?? -1) === turn) {
+            const rest = players[turn].remaining - points;
+            if (rest > 0) {
+              players[turn].remaining = rest;
+              updated.hits++;
+            } else if (rest === 0) {
+              players[turn].remaining = 0;
+              updated.hits++;
+              updated.finished = true;
+              updated.bcWinner = players[turn].name;
+            }
+            // bust (rest < 0) → dart simply does not count
+          }
+          updated.bcPlayers = players;
+          updated.roundScores = [...(prev.roundScores || []), points];
+          break;
+        }
       }
 
       // End of round handling
       if (newDartsThisRound >= 3 && !["pressure-training", "random-finish", "121-challenge"].includes(selectedDrill.id)) {
         updated.dartsThisRound = 0;
         updated.roundsPlayed = (prev.roundsPlayed ?? 0) + 1;
+
+        // Bull Control: hand over to the next player
+        if (selectedDrill.id === "bull-control" && !updated.finished) {
+          const count = (updated.bcPlayers || []).length || 1;
+          updated.bcTurn = ((prev.bcTurn ?? 0) + 1) % count;
+          updated.hitsThisRound = 0;
+        }
 
         // Big Single Lock: evaluate hits this round
         if (selectedDrill.id === "big-single-lock") {
