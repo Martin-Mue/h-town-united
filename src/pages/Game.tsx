@@ -800,6 +800,12 @@ const GamePage = () => {
             {Array.from({ length: activePlayerCount }, (_, i) => (
               <div key={i} className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
                 <div className="flex items-center gap-2">
+                  {playerIsBot[i] ? (
+                    <div className="flex-1 rounded-lg bg-secondary/10 border border-secondary/40 px-3 py-2 text-sm text-secondary flex items-center gap-2 min-w-0">
+                      <Bot className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{BOT_PROFILES[playerBotLevel[i]].name}</span>
+                    </div>
+                  ) : (
                   <Popover>
                     <PopoverTrigger asChild>
                       <button className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-sm text-foreground text-left flex items-center justify-between min-w-0">
@@ -822,6 +828,7 @@ const GamePage = () => {
                       </div>
                     </PopoverContent>
                   </Popover>
+                  )}
                   <button
                     onClick={() => setPlayerIsBot(prev => prev.map((v, idx) => idx === i ? !v : v))}
                     className={`shrink-0 rounded-lg border px-2.5 py-2 flex items-center gap-1 text-xs transition-colors ${playerIsBot[i] ? "bg-secondary/20 border-secondary text-secondary" : "bg-background border-border text-muted-foreground"}`}
@@ -831,11 +838,12 @@ const GamePage = () => {
                 </div>
 
                 {playerIsBot[i] && (
-                  <div className="flex gap-1.5">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {(["easy", "medium", "hard"] as BotLevel[]).map((lvl) => (
                       <button key={lvl} onClick={() => setPlayerBotLevel(prev => prev.map((v, idx) => idx === i ? lvl : v))}
-                        className={`flex-1 rounded px-2 py-1 text-[11px] font-display uppercase transition-colors ${playerBotLevel[i] === lvl ? "bg-secondary/25 text-secondary" : "bg-background text-muted-foreground"}`}>
-                        {lvl === "easy" ? "Leicht" : lvl === "medium" ? "Mittel" : "Schwer"}
+                        className={`rounded px-2 py-1.5 text-center transition-colors ${playerBotLevel[i] === lvl ? "bg-secondary/25 text-secondary" : "bg-background text-muted-foreground"}`}>
+                        <span className="block text-[11px] font-display uppercase">{BOT_PROFILES[lvl].name}</span>
+                        <span className="block text-[10px] opacity-70">Ø {BOT_PROFILES[lvl].average}</span>
                       </button>
                     ))}
                   </div>
