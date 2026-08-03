@@ -80,6 +80,37 @@ const shuffle = <T,>(list: T[]) => {
   return copy;
 };
 
+/**
+ * Distributes BYEs evenly across the first round: every player with a bye is placed
+ * into their own match, spread over the bracket (never two byes next to each other
+ * while real pairings are still possible).
+ */
+const distributeByes = (ordered: string[], size: number): string[] => {
+  const slots: string[] = new Array(size).fill(BYE);
+  const matchCount = size / 2;
+  const byes = size - ordered.length;
+  if (byes <= 0) return [...ordered];
+  const list = [...ordered];
+  // choose which matches get a bye – evenly spaced across the bracket
+  const byeMatches = new Set<number>();
+  const step = matchCount / Math.min(byes, matchCount);
+  for (let i = 0; i < Math.min(byes, matchCount); i++) {
+    byeMatches.add(Math.min(matchCount - 1, Math.round(i * step)));
+  }
+  for (let m = 0; m < matchCount; m++) {
+    if (byeMatches.has(m)) {
+      slots[m * 2] = list.shift() ?? BYE;
+      slots[m * 2 + 1] = BYE;
+    }
+  }
+  for (let m = 0; m < matchCount; m++) {
+    if (byeMatches.has(m)) continue;
+    slots[m * 2] = list.shift() ?? BYE;
+    slots[m * 2 + 1] = list.shift() ?? BYE;
+  }
+  return slots;
+};
+
 // ─── Bracket Viewport: auto-fit + zoom + pan ─────────────────
 interface BracketViewportProps {
   matches: Match[];
@@ -429,7 +460,7 @@ const TournamentPage = () => {
   };
 
   const fillGuestPlayers = () => {
-    const target = Number(targetSize) || 64;
+    const target = targetSize === "auto" ? nextPowerOfTwo(Math.max(players.length, 2)) : Number(targetSize);
     const needed = Math.max(0, target - players.length);
     addPlayers(Array.from({ length: needed }, (_, i) => `Gast ${String(players.length + i + 1).padStart(2, "0")}`));
   };
@@ -450,11 +481,12 @@ const TournamentPage = () => {
 
   // ─── KO Bracket Generation ──────────────────────
   const generateKoBracket = (playerList: string[]): Match[] => {
-    const requestedSize = Number(targetSize) || nextPowerOfTwo(playerList.length);
-    const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requestedSize));
+    const requested = targetSize === "auto" ? nextPowerOfTwo(playerList.length) : Number(targetSize);
+    const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requested));
     const ordered = drawMode === "random" ? shuffle(playerList) : [...playerList];
-    const padded = ordered.slice(0, size);
-    while (padded.length < size) padded.push(BYE);
+    // Spread the byes evenly over the bracket instead of stacking them at the end,
+    // so no part of the draw gets an unfair cluster of free rides.
+    const padded = distributeByes(ordered.slice(0, size), size);
 
     const firstRound: Match[] = [];
     for (let i = 0; i < padded.length; i += 2) {
