@@ -1197,7 +1197,23 @@ const TournamentPage = () => {
                         <span className="flex-1 truncate">
                           <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
                         </span>
-                        <span className="text-xs text-muted-foreground shrink-0">✍️ {e.match.scorekeeper || "–"}</span>
+                        <div className="shrink-0 flex items-center gap-1">
+                          <span className="text-xs">✍️</span>
+                          <Select
+                            value={e.match.scorekeeperLocked && e.match.scorekeeper ? e.match.scorekeeper : "__auto"}
+                            onValueChange={(v) => setMatchScorekeeper(e.match.id, v)}
+                          >
+                            <SelectTrigger className="h-7 w-40 text-xs bg-background border-border">
+                              <SelectValue>{e.match.scorekeeper || "–"}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-card border-border max-h-64">
+                              <SelectItem value="__auto">Automatisch</SelectItem>
+                              {activeTournament.players
+                                .filter(p => p !== e.match.player1 && p !== e.match.player2)
+                                .map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     ))}
                   </div>
