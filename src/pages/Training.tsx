@@ -688,6 +688,35 @@ const TrainingPage = () => {
                   </p>
                 </div>
               )}
+              {selectedDrill.id === "bull-control" && drillState.bcPlayers && (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    Scoring-Zahl: <span className="text-primary font-display">{drillState.bcNumber}</span> · Lizenz per <span className="text-accent font-display">BULL</span>
+                  </p>
+                  <p className="text-3xl font-display">
+                    {(drillState.bcScorer ?? -1) === (drillState.bcTurn ?? 0)
+                      ? <span className="text-secondary">Scoring aktiv</span>
+                      : <span className="text-muted-foreground">Erst Bull treffen!</span>}
+                  </p>
+                  <div className="grid gap-1.5">
+                    {drillState.bcPlayers.map((p, i) => (
+                      <div key={p.name + i}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
+                          i === (drillState.bcTurn ?? 0) ? "border-primary bg-primary/10" : "border-border bg-background opacity-70"
+                        }`}>
+                        <span className="flex items-center gap-2 truncate">
+                          {i === (drillState.bcScorer ?? -1) && <span title="Scoring-Lizenz">🎯</span>}
+                          {p.name}
+                        </span>
+                        <span className="font-display text-xl">{p.remaining}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {drillState.bcWinner && (
+                    <p className="text-accent font-display uppercase">🏆 {drillState.bcWinner} gewinnt!</p>
+                  )}
+                </div>
+              )}
 
               {/* Dart counter */}
               <div className="flex justify-center gap-1 mt-3">
