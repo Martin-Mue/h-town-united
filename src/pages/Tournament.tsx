@@ -309,7 +309,7 @@ const TournamentPage = () => {
   const [tournamentMode, setTournamentMode] = useState("event-ko");
   const [gameMode, setGameMode] = useState("501");
   const [bestOfLegs, setBestOfLegs] = useState(3);
-  const [targetSize, setTargetSize] = useState("64");
+  const [targetSize, setTargetSize] = useState("auto");
   const [seriesId, setSeriesId] = useState<string>("none");
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
@@ -391,7 +391,7 @@ const TournamentPage = () => {
   // Auto-generate round configs when target size or defaults change
   useEffect(() => {
     if (tournamentMode === "round-robin") return;
-    const size = Number(targetSize) || 64;
+    const size = targetSize === "auto" ? nextPowerOfTwo(Math.max(players.length, 2)) : Number(targetSize);
     const totalRounds = Math.log2(nextPowerOfTwo(size));
     setRoundConfigs((prev) => {
       const next: RoundConfig[] = [];
@@ -400,7 +400,14 @@ const TournamentPage = () => {
       }
       return next;
     });
-  }, [targetSize, tournamentMode, gameMode, bestOfLegs]);
+  }, [targetSize, tournamentMode, gameMode, bestOfLegs, players.length]);
+
+  /** Effective bracket size: automatic (smallest power of two ≥ players) or manual override. */
+  const effectiveSize = useMemo(() => {
+    const auto = nextPowerOfTwo(Math.max(players.length, 2));
+    if (targetSize === "auto") return Math.min(64, auto);
+    return Math.min(64, Math.max(auto, Number(targetSize)));
+  }, [targetSize, players.length]);
 
   const addPlayers = (names: string[]) => {
     const cleaned = names.map((name) => name.trim()).filter(Boolean);
