@@ -835,9 +835,13 @@ const TournamentPage = () => {
               <Select value={targetSize} onValueChange={setTargetSize}>
                 <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>{n}er Baum</SelectItem>)}
+                  <SelectItem value="auto">Automatisch – passt sich der Teilnehmerzahl an</SelectItem>
+                  {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>Fest: {n}er Baum</SelectItem>)}
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Empfohlen: Automatisch. Der Baum wird dann genau so groß wie nötig – das ergibt die wenigsten Freilose.
+              </p>
             </div>
           )}
 
