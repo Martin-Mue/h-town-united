@@ -10,6 +10,8 @@ export interface Match {
   table?: number;
   /** assigned scorekeeper ("Schreiber") for this match */
   scorekeeper?: string;
+  /** manually fixed scorekeeper – never overwritten by the auto-assignment */
+  scorekeeperLocked?: boolean;
   /** board number assigned by the schedule generator */
   board?: number;
   /** global playing slot (round of concurrent matches) */
