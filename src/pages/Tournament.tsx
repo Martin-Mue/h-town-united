@@ -1015,6 +1015,56 @@ const TournamentPage = () => {
             </div>
           )}
 
+          {tournamentMode !== "round-robin" && players.length >= 2 && (() => {
+            const size = effectiveSize;
+            const rounds = Math.log2(size);
+            const byes = size - Math.min(players.length, size);
+            const previewNames = drawMode === "manual" ? players.slice(0, size) : players.slice(0, size);
+            const slots = distributeByes(previewNames, size);
+            const pairs: [string, string][] = [];
+            for (let i = 0; i < slots.length; i += 2) pairs.push([slots[i], slots[i + 1]]);
+            return (
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary">
+                  <Network className="w-3.5 h-3.5" /> Vorschau
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  {[
+                    { label: "Teilnehmer", value: players.length },
+                    { label: "Baumgröße", value: `${size}er` },
+                    { label: "Runden", value: rounds },
+                    { label: "Freilose", value: byes },
+                  ].map((s) => (
+                    <div key={s.label} className="bg-card border border-border rounded-lg py-2">
+                      <p className="font-display text-xl">{s.value}</p>
+                      <p className="text-[10px] uppercase text-muted-foreground">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-[11px] text-muted-foreground space-y-1">
+                  <p>
+                    Modus-Verlauf: {roundConfigs.map((c, i) => `${roundLabelFor(i + 1, roundConfigs.length)}: ${c.mode} BO${c.bestOf}`).join(" · ")}
+                  </p>
+                  <p>
+                    {drawMode === "random"
+                      ? "Paarungen werden beim Start zufällig gelost (Vorschau zeigt die aktuelle Reihenfolge)."
+                      : "Paarungen wie unten festgelegt."}
+                  </p>
+                </div>
+                <div className="max-h-44 overflow-auto grid sm:grid-cols-2 gap-1 text-xs">
+                  {pairs.map((p, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-card border border-border rounded px-2 py-1">
+                      <span className="font-mono text-[10px] text-muted-foreground w-6">{i + 1}</span>
+                      <span className={`flex-1 truncate ${p[0] === BYE ? "text-muted-foreground/50" : ""}`}>{p[0]}</span>
+                      <span className="text-muted-foreground">vs</span>
+                      <span className={`flex-1 truncate text-right ${p[1] === BYE ? "text-muted-foreground/50" : ""}`}>{p[1]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <Button onClick={startTournament} className="w-full mt-4 font-display uppercase text-lg py-6" disabled={players.length < 2}>
             <Play className="w-5 h-5 mr-2" /> Turnier starten
           </Button>
