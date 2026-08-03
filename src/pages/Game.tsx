@@ -15,6 +15,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { simulateBotVisit, simulateBotCricketDart } from "@/utils/botPlayer";
+
+/** Bot personas with their target 3-dart average */
+const BOT_PROFILES: Record<BotLevel, { name: string; average: string }> = {
+  easy: { name: "Bot Lv.1 · Rookie", average: "25–30" },
+  medium: { name: "Bot Lv.2 · Ligaspieler", average: "45–50" },
+  hard: { name: "Bot Lv.3 · Pro", average: "68–75" },
+};
 import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
   playVictorySound, playTonPlusSound, playTurnSwitchSound,
