@@ -80,6 +80,37 @@ const shuffle = <T,>(list: T[]) => {
   return copy;
 };
 
+/**
+ * Distributes BYEs evenly across the first round: every player with a bye is placed
+ * into their own match, spread over the bracket (never two byes next to each other
+ * while real pairings are still possible).
+ */
+const distributeByes = (ordered: string[], size: number): string[] => {
+  const slots: string[] = new Array(size).fill(BYE);
+  const matchCount = size / 2;
+  const byes = size - ordered.length;
+  if (byes <= 0) return [...ordered];
+  const list = [...ordered];
+  // choose which matches get a bye – evenly spaced across the bracket
+  const byeMatches = new Set<number>();
+  const step = matchCount / Math.min(byes, matchCount);
+  for (let i = 0; i < Math.min(byes, matchCount); i++) {
+    byeMatches.add(Math.min(matchCount - 1, Math.round(i * step)));
+  }
+  for (let m = 0; m < matchCount; m++) {
+    if (byeMatches.has(m)) {
+      slots[m * 2] = list.shift() ?? BYE;
+      slots[m * 2 + 1] = BYE;
+    }
+  }
+  for (let m = 0; m < matchCount; m++) {
+    if (byeMatches.has(m)) continue;
+    slots[m * 2] = list.shift() ?? BYE;
+    slots[m * 2 + 1] = list.shift() ?? BYE;
+  }
+  return slots;
+};
+
 // ─── Bracket Viewport: auto-fit + zoom + pan ─────────────────
 interface BracketViewportProps {
   matches: Match[];
@@ -115,7 +146,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     // Fit the WHOLE bracket into the viewport on every device (phone → beamer).
     // Users zoom back in with the +/- buttons when they need to read/tap.
     const s = Math.min(sx, sy, 1);
-    setFitScale(Math.max(0.18, s));
+    setFitScale(Math.max(0.08, s));
   }, []);
 
   useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, fullscreen]);
@@ -237,14 +268,16 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               );
             };
 
+            const compact = totalRounds >= 5;
+            const colWidth = compact ? "min-w-[190px]" : "min-w-[230px]";
             const column = (round: number, side: "left" | "right", isLast: boolean) => {
               const all = matches.filter(m => m.round === round).sort((a, b) => a.position - b.position);
               const half = Math.ceil(all.length / 2);
               const slice = side === "left" ? all.slice(0, half) : all.slice(half);
               return (
-                <div key={`${side}-${round}`} className="flex flex-col gap-3 min-w-[230px]">
+                <div key={`${side}-${round}`} className={`flex flex-col gap-3 ${colWidth}`}>
                   {roundHeader(round, side === "left" ? "left" : "right")}
-                  <div className="flex flex-col justify-around flex-1 gap-3 relative">
+                  <div className={`flex flex-col justify-around flex-1 relative ${compact ? "gap-1.5" : "gap-3"}`}>
                     {slice.map(m => renderMatch(m, side, isLast))}
                   </div>
                 </div>
@@ -306,10 +339,10 @@ const TournamentPage = () => {
 
   // Setup state
   const [tournamentName, setTournamentName] = useState("");
-  const [tournamentMode, setTournamentMode] = useState("event-ko");
+  const [tournamentMode, setTournamentMode] = useState("ko");
   const [gameMode, setGameMode] = useState("501");
   const [bestOfLegs, setBestOfLegs] = useState(3);
-  const [targetSize, setTargetSize] = useState("64");
+  const [targetSize, setTargetSize] = useState("auto");
   const [seriesId, setSeriesId] = useState<string>("none");
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
@@ -391,7 +424,7 @@ const TournamentPage = () => {
   // Auto-generate round configs when target size or defaults change
   useEffect(() => {
     if (tournamentMode === "round-robin") return;
-    const size = Number(targetSize) || 64;
+    const size = targetSize === "auto" ? nextPowerOfTwo(Math.max(players.length, 2)) : Number(targetSize);
     const totalRounds = Math.log2(nextPowerOfTwo(size));
     setRoundConfigs((prev) => {
       const next: RoundConfig[] = [];
@@ -400,7 +433,14 @@ const TournamentPage = () => {
       }
       return next;
     });
-  }, [targetSize, tournamentMode, gameMode, bestOfLegs]);
+  }, [targetSize, tournamentMode, gameMode, bestOfLegs, players.length]);
+
+  /** Effective bracket size: automatic (smallest power of two ≥ players) or manual override. */
+  const effectiveSize = useMemo(() => {
+    const auto = nextPowerOfTwo(Math.max(players.length, 2));
+    if (targetSize === "auto") return Math.min(64, auto);
+    return Math.min(64, Math.max(auto, Number(targetSize)));
+  }, [targetSize, players.length]);
 
   const addPlayers = (names: string[]) => {
     const cleaned = names.map((name) => name.trim()).filter(Boolean);
@@ -422,7 +462,7 @@ const TournamentPage = () => {
   };
 
   const fillGuestPlayers = () => {
-    const target = Number(targetSize) || 64;
+    const target = targetSize === "auto" ? nextPowerOfTwo(Math.max(players.length, 2)) : Number(targetSize);
     const needed = Math.max(0, target - players.length);
     addPlayers(Array.from({ length: needed }, (_, i) => `Gast ${String(players.length + i + 1).padStart(2, "0")}`));
   };
@@ -443,11 +483,12 @@ const TournamentPage = () => {
 
   // ─── KO Bracket Generation ──────────────────────
   const generateKoBracket = (playerList: string[]): Match[] => {
-    const requestedSize = Number(targetSize) || nextPowerOfTwo(playerList.length);
-    const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requestedSize));
+    const requested = targetSize === "auto" ? nextPowerOfTwo(playerList.length) : Number(targetSize);
+    const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requested));
     const ordered = drawMode === "random" ? shuffle(playerList) : [...playerList];
-    const padded = ordered.slice(0, size);
-    while (padded.length < size) padded.push(BYE);
+    // Spread the byes evenly over the bracket instead of stacking them at the end,
+    // so no part of the draw gets an unfair cluster of free rides.
+    const padded = distributeByes(ordered.slice(0, size), size);
 
     const firstRound: Match[] = [];
     for (let i = 0; i < padded.length; i += 2) {
@@ -589,23 +630,39 @@ const TournamentPage = () => {
     toast({ title: "Turnierbaum aktualisiert" });
   };
 
-  /** Withdraw a player: all of their not-yet-played matches become walkovers. */
+  /** Withdraw a player: only *unplayed* matches are adjusted, results stay untouched. */
   const withdrawPlayer = async (name: string) => {
     if (!activeTournament) return;
     const bracket = (activeTournament.bracket as Match[]).map(m => {
       const copy = { ...m };
+      // already decided matches keep their result – history stays intact
+      if (copy.winner) return copy;
       if (copy.round === 1) {
         if (copy.player1 === name) copy.player1 = BYE;
         if (copy.player2 === name) copy.player2 = BYE;
+      } else {
+        // later round: walkover for the opponent, seeded slots are recomputed anyway
+        if (copy.player1 === name && isRealPlayer(copy.player2)) copy.winner = copy.player2;
+        if (copy.player2 === name && isRealPlayer(copy.player1)) copy.winner = copy.player1;
       }
-      if (copy.winner === name && copy.round > 1) { copy.winner = undefined; copy.score1 = undefined; copy.score2 = undefined; }
       return copy;
     });
     const nextPlayers = activeTournament.players.filter(p => p !== name);
     await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
     setActiveTournament({ ...activeTournament, players: nextPlayers });
     await persistBracket(bracket);
-    toast({ title: `${name} zurückgezogen`, description: "Turnierbaum und Schreiber wurden neu berechnet." });
+    toast({ title: `${name} zurückgezogen`, description: "Gespielte Partien bleiben erhalten, nur offene Stellen werden angepasst." });
+  };
+
+  /** Manually set (and lock) the scorekeeper of a single match. */
+  const setMatchScorekeeper = async (matchId: string, keeper: string) => {
+    if (!activeTournament) return;
+    const bracket = (activeTournament.bracket as Match[]).map(m =>
+      m.id === matchId
+        ? { ...m, scorekeeper: keeper === "__auto" ? undefined : keeper, scorekeeperLocked: keeper !== "__auto" }
+        : { ...m }
+    );
+    await persistBracket(bracket);
   };
 
   const reshuffleScorekeepers = async () => {
@@ -708,7 +765,7 @@ const TournamentPage = () => {
                     <div>
                       <p className="font-semibold text-sm">{t.name}</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="bg-muted px-1.5 py-0.5 rounded font-mono">{t.mode === "ko" ? "K.O." : "Round Robin"}</span>
+                        <span className="bg-muted px-1.5 py-0.5 rounded font-mono">{t.mode === "round-robin" ? "Jeder gegen Jeden" : "K.O."}</span>
                         <span><Users className="w-3 h-3 inline" /> {t.players.length}</span>
                         <span>{new Date(t.created_at).toLocaleDateString("de-DE")}</span>
                       </div>
@@ -760,7 +817,6 @@ const TournamentPage = () => {
               <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="ko">K.O.-System</SelectItem>
-                <SelectItem value="event-ko">Event K.O. bis 64</SelectItem>
                 <SelectItem value="round-robin">Jeder gegen Jeden</SelectItem>
               </SelectContent>
             </Select>
@@ -796,9 +852,13 @@ const TournamentPage = () => {
               <Select value={targetSize} onValueChange={setTargetSize}>
                 <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>{n}er Baum</SelectItem>)}
+                  <SelectItem value="auto">Automatisch – passt sich der Teilnehmerzahl an</SelectItem>
+                  {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>Fest: {n}er Baum</SelectItem>)}
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Empfohlen: Automatisch. Der Baum wird dann genau so groß wie nötig – das ergibt die wenigsten Freilose.
+              </p>
             </div>
           )}
 
@@ -972,6 +1032,56 @@ const TournamentPage = () => {
             </div>
           )}
 
+          {tournamentMode !== "round-robin" && players.length >= 2 && (() => {
+            const size = effectiveSize;
+            const rounds = Math.log2(size);
+            const byes = size - Math.min(players.length, size);
+            const previewNames = drawMode === "manual" ? players.slice(0, size) : players.slice(0, size);
+            const slots = distributeByes(previewNames, size);
+            const pairs: [string, string][] = [];
+            for (let i = 0; i < slots.length; i += 2) pairs.push([slots[i], slots[i + 1]]);
+            return (
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary">
+                  <Network className="w-3.5 h-3.5" /> Vorschau
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  {[
+                    { label: "Teilnehmer", value: players.length },
+                    { label: "Baumgröße", value: `${size}er` },
+                    { label: "Runden", value: rounds },
+                    { label: "Freilose", value: byes },
+                  ].map((s) => (
+                    <div key={s.label} className="bg-card border border-border rounded-lg py-2">
+                      <p className="font-display text-xl">{s.value}</p>
+                      <p className="text-[10px] uppercase text-muted-foreground">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-[11px] text-muted-foreground space-y-1">
+                  <p>
+                    Modus-Verlauf: {roundConfigs.map((c, i) => `${roundLabelFor(i + 1, roundConfigs.length)}: ${c.mode} BO${c.bestOf}`).join(" · ")}
+                  </p>
+                  <p>
+                    {drawMode === "random"
+                      ? "Paarungen werden beim Start zufällig gelost (Vorschau zeigt die aktuelle Reihenfolge)."
+                      : "Paarungen wie unten festgelegt."}
+                  </p>
+                </div>
+                <div className="max-h-44 overflow-auto grid sm:grid-cols-2 gap-1 text-xs">
+                  {pairs.map((p, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-card border border-border rounded px-2 py-1">
+                      <span className="font-mono text-[10px] text-muted-foreground w-6">{i + 1}</span>
+                      <span className={`flex-1 truncate ${p[0] === BYE ? "text-muted-foreground/50" : ""}`}>{p[0]}</span>
+                      <span className="text-muted-foreground">vs</span>
+                      <span className={`flex-1 truncate text-right ${p[1] === BYE ? "text-muted-foreground/50" : ""}`}>{p[1]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <Button onClick={startTournament} className="w-full mt-4 font-display uppercase text-lg py-6" disabled={players.length < 2}>
             <Play className="w-5 h-5 mr-2" /> Turnier starten
           </Button>
@@ -993,7 +1103,7 @@ const TournamentPage = () => {
         <div className="container flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
-            <p className="text-xs text-muted-foreground">{activeTournament.mode === "event-ko" ? "Event K.O." : "K.O.-System"} · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
+            <p className="text-xs text-muted-foreground">K.O.-System · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
@@ -1089,7 +1199,23 @@ const TournamentPage = () => {
                         <span className="flex-1 truncate">
                           <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
                         </span>
-                        <span className="text-xs text-muted-foreground shrink-0">✍️ {e.match.scorekeeper || "–"}</span>
+                        <div className="shrink-0 flex items-center gap-1">
+                          <span className="text-xs">✍️</span>
+                          <Select
+                            value={e.match.scorekeeperLocked && e.match.scorekeeper ? e.match.scorekeeper : "__auto"}
+                            onValueChange={(v) => setMatchScorekeeper(e.match.id, v)}
+                          >
+                            <SelectTrigger className="h-7 w-40 text-xs bg-background border-border">
+                              <SelectValue>{e.match.scorekeeper || "–"}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-card border-border max-h-64">
+                              <SelectItem value="__auto">Automatisch</SelectItem>
+                              {activeTournament.players
+                                .filter(p => p !== e.match.player1 && p !== e.match.player2)
+                                .map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -91,6 +91,16 @@ const TRAINING_DRILLS: TrainingDrill[] = [
     durationMinutes: 10,
     category: "accuracy",
   },
+  {
+    id: "bull-control",
+    name: "Bull Control",
+    description:
+      "X01 für 2–4 Spieler: Punkten darf nur, wer zuletzt das Bull getroffen hat – und nur auf einer einzigen Zahl (z. B. 20). Jeder Bull-Treffer klaut die Scoring-Lizenz.",
+    icon: Crosshair,
+    difficulty: "Profi",
+    durationMinutes: 25,
+    category: "pressure",
+  },
 ];
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -154,6 +164,12 @@ interface DrillState {
   randomBase?: number;
   randomMul?: number;
   randomLabel?: string;
+  /** Bull Control: players, whose turn it is and who currently owns the scoring licence */
+  bcPlayers?: { name: string; remaining: number }[];
+  bcTurn?: number;
+  bcScorer?: number;
+  bcNumber?: number;
+  bcWinner?: string;
 }
 
 /** Pre-start configuration for a drill */
@@ -161,6 +177,9 @@ interface DrillConfig {
   maxRounds?: number;
   targetBase?: number;
   targetMul?: number;
+  bcPlayerNames?: string[];
+  bcNumber?: number;
+  bcStart?: number;
 }
 
 const TrainingPage = () => {
@@ -245,6 +264,17 @@ const TrainingPage = () => {
         state.randomMul = t.mul;
         state.randomLabel = t.label;
         state.maxRounds = 10;
+        break;
+      }
+      case "bull-control": {
+        const names = (config.bcPlayerNames && config.bcPlayerNames.length >= 2
+          ? config.bcPlayerNames
+          : ["Spieler 1", "Spieler 2"]).map((n, i) => n.trim() || `Spieler ${i + 1}`);
+        const start = config.bcStart ?? 301;
+        state.bcPlayers = names.map((name) => ({ name, remaining: start }));
+        state.bcTurn = 0;
+        state.bcScorer = -1;
+        state.bcNumber = config.bcNumber ?? 20;
         break;
       }
     }
@@ -413,12 +443,45 @@ const TrainingPage = () => {
           updated.roundScores = [...(prev.roundScores || []), points];
           break;
         }
+
+        case "bull-control": {
+          const players = (prev.bcPlayers || []).map((p) => ({ ...p }));
+          const turn = prev.bcTurn ?? 0;
+          const number = prev.bcNumber ?? 20;
+          if (baseValue === 25) {
+            // Bull steals the scoring licence
+            updated.bcScorer = turn;
+            updated.hits++;
+          } else if (baseValue === number && (prev.bcScorer ?? -1) === turn) {
+            const rest = players[turn].remaining - points;
+            if (rest > 0) {
+              players[turn].remaining = rest;
+              updated.hits++;
+            } else if (rest === 0) {
+              players[turn].remaining = 0;
+              updated.hits++;
+              updated.finished = true;
+              updated.bcWinner = players[turn].name;
+            }
+            // bust (rest < 0) → dart simply does not count
+          }
+          updated.bcPlayers = players;
+          updated.roundScores = [...(prev.roundScores || []), points];
+          break;
+        }
       }
 
       // End of round handling
       if (newDartsThisRound >= 3 && !["pressure-training", "random-finish", "121-challenge"].includes(selectedDrill.id)) {
         updated.dartsThisRound = 0;
         updated.roundsPlayed = (prev.roundsPlayed ?? 0) + 1;
+
+        // Bull Control: hand over to the next player
+        if (selectedDrill.id === "bull-control" && !updated.finished) {
+          const count = (updated.bcPlayers || []).length || 1;
+          updated.bcTurn = ((prev.bcTurn ?? 0) + 1) % count;
+          updated.hitsThisRound = 0;
+        }
 
         // Big Single Lock: evaluate hits this round
         if (selectedDrill.id === "big-single-lock") {
@@ -625,6 +688,35 @@ const TrainingPage = () => {
                   </p>
                 </div>
               )}
+              {selectedDrill.id === "bull-control" && drillState.bcPlayers && (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    Scoring-Zahl: <span className="text-primary font-display">{drillState.bcNumber}</span> · Lizenz per <span className="text-accent font-display">BULL</span>
+                  </p>
+                  <p className="text-3xl font-display">
+                    {(drillState.bcScorer ?? -1) === (drillState.bcTurn ?? 0)
+                      ? <span className="text-secondary">Scoring aktiv</span>
+                      : <span className="text-muted-foreground">Erst Bull treffen!</span>}
+                  </p>
+                  <div className="grid gap-1.5">
+                    {drillState.bcPlayers.map((p, i) => (
+                      <div key={p.name + i}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
+                          i === (drillState.bcTurn ?? 0) ? "border-primary bg-primary/10" : "border-border bg-background opacity-70"
+                        }`}>
+                        <span className="flex items-center gap-2 truncate">
+                          {i === (drillState.bcScorer ?? -1) && <span title="Scoring-Lizenz">🎯</span>}
+                          {p.name}
+                        </span>
+                        <span className="font-display text-xl">{p.remaining}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {drillState.bcWinner && (
+                    <p className="text-accent font-display uppercase">🏆 {drillState.bcWinner} gewinnt!</p>
+                  )}
+                </div>
+              )}
 
               {/* Dart counter */}
               <div className="flex justify-center gap-1 mt-3">
@@ -691,6 +783,8 @@ const TrainingPage = () => {
   if (selectedDrill && !drillState) {
     const supportsRoundLimit = ["around-the-clock", "doubles-only", "big-single-lock", "target-grind"].includes(selectedDrill.id);
     const isTargetGrind = selectedDrill.id === "target-grind";
+    const isBullControl = selectedDrill.id === "bull-control";
+    const bcNames = drillConfig.bcPlayerNames ?? ["Spieler 1", "Spieler 2"];
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
         <Button variant="ghost" onClick={() => { setSelectedDrill(null); setDrillConfig({}); }} className="mb-4 text-muted-foreground">
@@ -710,6 +804,56 @@ const TrainingPage = () => {
               ~{selectedDrill.durationMinutes} Min
             </span>
           </div>
+
+          {isBullControl && (
+            <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
+                <Settings2 className="w-3.5 h-3.5" /> Einstellungen
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Startpunkte</p>
+                  <select className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm"
+                    value={drillConfig.bcStart ?? 301}
+                    onChange={(e) => setDrillConfig((c) => ({ ...c, bcStart: Number(e.target.value) }))}>
+                    {[101, 201, 301, 501].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Scoring-Zahl</p>
+                  <select className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm"
+                    value={drillConfig.bcNumber ?? 20}
+                    onChange={(e) => setDrillConfig((c) => ({ ...c, bcNumber: Number(e.target.value) }))}>
+                    {[20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Spieler ({bcNames.length})</p>
+                {bcNames.map((n, i) => (
+                  <input key={i} value={n}
+                    onChange={(e) => setDrillConfig((c) => ({
+                      ...c,
+                      bcPlayerNames: (c.bcPlayerNames ?? ["Spieler 1", "Spieler 2"]).map((v, idx) => idx === i ? e.target.value : v),
+                    }))}
+                    className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm" />
+                ))}
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" disabled={bcNames.length >= 4}
+                    onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: [...bcNames, `Spieler ${bcNames.length + 1}`] }))}>
+                    + Spieler
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={bcNames.length <= 2}
+                    onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: bcNames.slice(0, -1) }))}>
+                    − Spieler
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Nur wer zuletzt ein Bull geworfen hat, punktet – und ausschließlich mit der gewählten Zahl. Exakt auf 0 gewinnt.
+              </p>
+            </div>
+          )}
 
           {(supportsRoundLimit || isTargetGrind) && (
             <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
