@@ -146,7 +146,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     // Fit the WHOLE bracket into the viewport on every device (phone → beamer).
     // Users zoom back in with the +/- buttons when they need to read/tap.
     const s = Math.min(sx, sy, 1);
-    setFitScale(Math.max(0.18, s));
+    setFitScale(Math.max(0.08, s));
   }, []);
 
   useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, fullscreen]);
@@ -268,14 +268,16 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               );
             };
 
+            const compact = totalRounds >= 5;
+            const colWidth = compact ? "min-w-[190px]" : "min-w-[230px]";
             const column = (round: number, side: "left" | "right", isLast: boolean) => {
               const all = matches.filter(m => m.round === round).sort((a, b) => a.position - b.position);
               const half = Math.ceil(all.length / 2);
               const slice = side === "left" ? all.slice(0, half) : all.slice(half);
               return (
-                <div key={`${side}-${round}`} className="flex flex-col gap-3 min-w-[230px]">
+                <div key={`${side}-${round}`} className={`flex flex-col gap-3 ${colWidth}`}>
                   {roundHeader(round, side === "left" ? "left" : "right")}
-                  <div className="flex flex-col justify-around flex-1 gap-3 relative">
+                  <div className={`flex flex-col justify-around flex-1 relative ${compact ? "gap-1.5" : "gap-3"}`}>
                     {slice.map(m => renderMatch(m, side, isLast))}
                   </div>
                 </div>
