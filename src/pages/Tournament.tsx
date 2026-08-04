@@ -1064,14 +1064,28 @@ const TournamentPage = () => {
             const size = effectiveSize;
             const rounds = Math.log2(size);
             const byes = size - Math.min(players.length, size);
-            const previewNames = drawMode === "manual" ? players.slice(0, size) : players.slice(0, size);
-            const slots = distributeByes(previewNames, size);
-            const pairs: [string, string][] = [];
-            for (let i = 0; i < slots.length; i += 2) pairs.push([slots[i], slots[i + 1]]);
+            const slots = drawSlots;
+            const previewMatches: Match[] = [];
+            for (let i = 0; i < slots.length; i += 2) {
+              previewMatches.push({ id: `p1-${i / 2}`, round: 1, position: i / 2, player1: slots[i], player2: slots[i + 1] });
+            }
+            for (let r = 2; r <= rounds; r++) {
+              for (let pos = 0; pos < size / Math.pow(2, r); pos++) {
+                previewMatches.push({ id: `p${r}-${pos}`, round: r, position: pos });
+              }
+            }
+            const tree = recomputeBracket(previewMatches);
             return (
               <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary">
-                  <Network className="w-3.5 h-3.5" /> Vorschau
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary">
+                    <Network className="w-3.5 h-3.5" /> Vorschau Turnierbaum
+                  </div>
+                  {drawMode === "random" && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={redraw}>
+                      <Shuffle className="w-3.5 h-3.5" /> Neu auslosen
+                    </Button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                   {[
@@ -1092,19 +1106,35 @@ const TournamentPage = () => {
                   </p>
                   <p>
                     {drawMode === "random"
-                      ? "Paarungen werden beim Start zufällig gelost (Vorschau zeigt die aktuelle Reihenfolge)."
+                      ? "Vollständig zufällige Auslosung – genau diese Paarungen werden beim Start übernommen."
                       : "Paarungen wie unten festgelegt."}
                   </p>
                 </div>
-                <div className="max-h-44 overflow-auto grid sm:grid-cols-2 gap-1 text-xs">
-                  {pairs.map((p, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-card border border-border rounded px-2 py-1">
-                      <span className="font-mono text-[10px] text-muted-foreground w-6">{i + 1}</span>
-                      <span className={`flex-1 truncate ${p[0] === BYE ? "text-muted-foreground/50" : ""}`}>{p[0]}</span>
-                      <span className="text-muted-foreground">vs</span>
-                      <span className={`flex-1 truncate text-right ${p[1] === BYE ? "text-muted-foreground/50" : ""}`}>{p[1]}</span>
-                    </div>
-                  ))}
+                <div className="max-h-[60vh] overflow-auto rounded-lg bg-card/40 p-2">
+                  <div className="flex gap-3 min-w-max">
+                    {Array.from({ length: rounds }, (_, ri) => ri + 1).map((r) => {
+                      const list = tree.filter((m) => m.round === r).sort((a, b) => a.position - b.position);
+                      return (
+                        <div key={r} className="flex flex-col justify-around gap-1 min-w-[130px]">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground text-center">
+                            {roundLabelFor(r, rounds)}
+                          </p>
+                          {list.map((m, i) => (
+                            <div key={m.id} className="bg-card border border-border rounded px-1.5 py-1 text-[10px] leading-tight">
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono text-[8px] text-muted-foreground w-4">{r === 1 ? i + 1 : ""}</span>
+                                <span className={`flex-1 truncate ${!isRealPlayer(m.player1) ? "text-muted-foreground/40" : ""}`}>{m.player1 || "—"}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="w-4" />
+                                <span className={`flex-1 truncate ${!isRealPlayer(m.player2) ? "text-muted-foreground/40" : ""}`}>{m.player2 || "—"}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             );
