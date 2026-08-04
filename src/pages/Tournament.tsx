@@ -368,6 +368,7 @@ const TournamentPage = () => {
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
   const [drawMode, setDrawMode] = useState<"random" | "manual">("random");
+  const [drawSeed, setDrawSeed] = useState(() => Math.floor(Math.random() * 1e9));
   const [boards, setBoards] = useState(2);
   const [bracketView, setBracketView] = useState<"tree" | "schedule">("tree");
   const [editMatch, setEditMatch] = useState<Match | null>(null);
