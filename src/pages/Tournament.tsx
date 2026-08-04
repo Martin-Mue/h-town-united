@@ -559,6 +559,36 @@ const TournamentPage = () => {
     if (players.length < 2) return;
     const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
 
+    if (editingId) {
+      const { data: upd, error: updErr } = await supabase.from("tournaments").update({
+        name: tournamentName || "Großevent",
+        mode: tournamentMode,
+        game_mode: gameMode,
+        best_of_legs: bestOfLegs,
+        players: players as any,
+        bracket: bracket as any,
+        status: "active",
+        champion: null,
+        series_id: seriesId === "none" ? null : seriesId,
+        round_configs: roundConfigs as any,
+        boards,
+      }).eq("id", editingId).select().single();
+      if (updErr || !upd) {
+        toast({ title: "Fehler", description: "Turnier konnte nicht gespeichert werden.", variant: "destructive" });
+        return;
+      }
+      const rec: TournamentRecord = { ...(upd as any), players: (upd as any).players, bracket: (upd as any).bracket, round_configs: (upd as any).round_configs || [], boards: (upd as any).boards ?? boards };
+      setActiveTournament(rec);
+      setEditingId(null);
+      setBracketView("tree");
+      setPhase("bracket");
+      setPlayers([]);
+      setTournamentName("");
+      fetchTournaments();
+      toast({ title: "Turnier aktualisiert" });
+      return;
+    }
+
     const { data, error } = await supabase.from("tournaments").insert({
       name: tournamentName || "Großevent",
       mode: tournamentMode,
