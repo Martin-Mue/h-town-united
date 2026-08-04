@@ -1232,6 +1232,11 @@ const TournamentPage = () => {
                 <Copy className="w-3.5 h-3.5" /> Link
               </Button>
             )}
+            {!hasStarted(activeTournament) && (
+              <Button variant="outline" size="sm" onClick={() => editTournament(activeTournament)}>
+                Bearbeiten
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
               ← Übersicht
             </Button>
