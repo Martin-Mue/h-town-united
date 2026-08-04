@@ -875,10 +875,10 @@ const TournamentPage = () => {
   if (phase === "setup") {
     return (
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
-        <Button variant="ghost" onClick={() => setPhase("list")} className="mb-4 text-muted-foreground text-sm">← Zurück</Button>
+        <Button variant="ghost" onClick={() => { setEditingId(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm">← Zurück</Button>
         <div className="mb-6 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> Großevent-Modus</div>
-          <h2 className="text-2xl font-display uppercase">Turnier erstellen</h2>
+          <h2 className="text-2xl font-display uppercase">{editingId ? "Turnier bearbeiten" : "Turnier erstellen"}</h2>
           <p className="text-sm text-muted-foreground">Für bis zu 64 Teilnehmer, Gastspieler und schnelle Ergebnis-Erfassung.</p>
         </div>
         <div className="space-y-4">
@@ -1200,7 +1200,7 @@ const TournamentPage = () => {
           })()}
 
           <Button onClick={startTournament} className="w-full mt-4 font-display uppercase text-lg py-6" disabled={players.length < 2}>
-            <Play className="w-5 h-5 mr-2" /> Turnier starten
+            <Play className="w-5 h-5 mr-2" /> {editingId ? "Änderungen speichern" : "Turnier starten"}
           </Button>
         </div>
       </div>
