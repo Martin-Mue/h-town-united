@@ -788,6 +788,29 @@ const TournamentPage = () => {
 
   const roundLabel = roundLabelFor;
 
+  /** A tournament counts as started as soon as a real match (no BYE) has a winner. */
+  const hasStarted = (t: TournamentRecord) => {
+    if (t.mode === "round-robin") return ((t.bracket as any[]) || []).some((m: any) => m.played);
+    return ((t.bracket as Match[]) || []).some(
+      (m) => !!m.winner && isRealPlayer(m.player1) && isRealPlayer(m.player2)
+    );
+  };
+
+  /** Load an unstarted tournament back into the setup screen. */
+  const editTournament = (t: TournamentRecord) => {
+    setEditingId(t.id);
+    setTournamentName(t.name);
+    setTournamentMode(t.mode);
+    setGameMode(t.game_mode || "501");
+    setBestOfLegs(t.best_of_legs || 3);
+    setSeriesId(t.series_id || "none");
+    setRoundConfigs(t.round_configs || []);
+    setBoards(t.boards || 2);
+    setPlayers(t.players || []);
+    setDrawMode("manual");
+    setPhase("setup");
+  };
+
   // ─── LIST PHASE ─────────────────────────────────
   if (phase === "list") {
     return (
