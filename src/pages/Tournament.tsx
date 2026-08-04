@@ -378,6 +378,7 @@ const TournamentPage = () => {
   const [guestCount, setGuestCount] = useState(8);
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [dbPlayers, setDbPlayers] = useState<{ id: string; name: string; emoji: string }[]>([]);
 
   const { session } = useAuth();
