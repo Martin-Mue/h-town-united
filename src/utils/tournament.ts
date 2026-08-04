@@ -192,6 +192,16 @@ export function assignScorekeepers(
     const entries = schedule.filter((e) => e.slot === slot).sort((a, b) => a.board - b.board);
     const busy = playersInSlot(slot);
     const nextBusy = playersInSlot(slot + 1);
+    const prevBusy = playersInSlot(slot - 1);
+    const singleBoard = Math.max(1, opts.boards) === 1;
+    // loser of the directly preceding match – free and right at the board
+    const prevLosers = new Set<string>();
+    schedule
+      .filter((e) => e.slot === slot - 1 && e.match.winner && e.match.winner !== BYE)
+      .forEach((e) => {
+        const l = e.match.winner === e.match.player1 ? e.match.player2 : e.match.player1;
+        if (isRealPlayer(l)) prevLosers.add(l!);
+      });
     const taken = new Set<string>();
 
     entries.forEach((entry) => {
@@ -209,12 +219,30 @@ export function assignScorekeepers(
       const losers = losersUpTo(entry.round);
       const openInRound = stillPlayingInRound(entry.round, slot);
       const alive = stillAlive(entry.round);
-      // hard constraint: not playing now, not playing next slot, no open match in this round
+      // single board: the loser of the match just played keeps score
+      if (singleBoard) {
+        const direct = [...prevLosers].filter(
+          (p) => !busy.has(p) && !nextBusy.has(p) && !taken.has(p) && !openInRound.has(p)
+        );
+        if (direct.length) {
+          const pick = direct.sort((x, y) => (load[x] ?? 0) - (load[y] ?? 0))[0];
+          m.scorekeeper = pick;
+          load[pick] = (load[pick] ?? 0) + 1;
+          taken.add(pick);
+          return;
+        }
+      }
+      // hard constraint: not playing now, not in the previous slot (match may run long),
+      // not in the next slot, and no open match left in this round
       const base = pool.filter(
-        (p) => !busy.has(p) && !nextBusy.has(p) && !taken.has(p) && !openInRound.has(p)
+        (p) =>
+          !busy.has(p) && !nextBusy.has(p) && !prevBusy.has(p) && !taken.has(p) && !openInRound.has(p)
       );
       // fallbacks, from strict to loose
-      const relaxed = pool.filter((p) => !busy.has(p) && !nextBusy.has(p) && !taken.has(p));
+      const relaxed = pool.filter(
+        (p) => !busy.has(p) && !nextBusy.has(p) && !taken.has(p) && !openInRound.has(p)
+      );
+      const relaxed2 = pool.filter((p) => !busy.has(p) && !nextBusy.has(p) && !taken.has(p));
       const loose = pool.filter((p) => !busy.has(p) && !taken.has(p));
       const tiers = [
         // 1. eliminated players (cannot be called to a board any more)
@@ -223,6 +251,7 @@ export function assignScorekeepers(
         base.filter((p) => !alive.has(p)),
         base,
         relaxed,
+        relaxed2,
         loose,
       ];
       const candidates = tiers.find((t) => t.length > 0) || [];

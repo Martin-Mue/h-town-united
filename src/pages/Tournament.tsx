@@ -378,6 +378,7 @@ const TournamentPage = () => {
   const [guestCount, setGuestCount] = useState(8);
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [dbPlayers, setDbPlayers] = useState<{ id: string; name: string; emoji: string }[]>([]);
 
   const { session } = useAuth();
@@ -557,6 +558,36 @@ const TournamentPage = () => {
   const startTournament = async () => {
     if (players.length < 2) return;
     const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
+
+    if (editingId) {
+      const { data: upd, error: updErr } = await supabase.from("tournaments").update({
+        name: tournamentName || "Großevent",
+        mode: tournamentMode,
+        game_mode: gameMode,
+        best_of_legs: bestOfLegs,
+        players: players as any,
+        bracket: bracket as any,
+        status: "active",
+        champion: null,
+        series_id: seriesId === "none" ? null : seriesId,
+        round_configs: roundConfigs as any,
+        boards,
+      }).eq("id", editingId).select().single();
+      if (updErr || !upd) {
+        toast({ title: "Fehler", description: "Turnier konnte nicht gespeichert werden.", variant: "destructive" });
+        return;
+      }
+      const rec: TournamentRecord = { ...(upd as any), players: (upd as any).players, bracket: (upd as any).bracket, round_configs: (upd as any).round_configs || [], boards: (upd as any).boards ?? boards };
+      setActiveTournament(rec);
+      setEditingId(null);
+      setBracketView("tree");
+      setPhase("bracket");
+      setPlayers([]);
+      setTournamentName("");
+      fetchTournaments();
+      toast({ title: "Turnier aktualisiert" });
+      return;
+    }
 
     const { data, error } = await supabase.from("tournaments").insert({
       name: tournamentName || "Großevent",
@@ -757,6 +788,29 @@ const TournamentPage = () => {
 
   const roundLabel = roundLabelFor;
 
+  /** A tournament counts as started as soon as a real match (no BYE) has a winner. */
+  const hasStarted = (t: TournamentRecord) => {
+    if (t.mode === "round-robin") return ((t.bracket as any[]) || []).some((m: any) => m.played);
+    return ((t.bracket as Match[]) || []).some(
+      (m) => !!m.winner && isRealPlayer(m.player1) && isRealPlayer(m.player2)
+    );
+  };
+
+  /** Load an unstarted tournament back into the setup screen. */
+  const editTournament = (t: TournamentRecord) => {
+    setEditingId(t.id);
+    setTournamentName(t.name);
+    setTournamentMode(t.mode);
+    setGameMode(t.game_mode || "501");
+    setBestOfLegs(t.best_of_legs || 3);
+    setSeriesId(t.series_id || "none");
+    setRoundConfigs(t.round_configs || []);
+    setBoards(t.boards || 2);
+    setPlayers(t.players || []);
+    setDrawMode("manual");
+    setPhase("setup");
+  };
+
   // ─── LIST PHASE ─────────────────────────────────
   if (phase === "list") {
     return (
@@ -770,7 +824,7 @@ const TournamentPage = () => {
             <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
               <Layers className="w-3.5 h-3.5" /> Serien
             </Link>
-            <Button size="sm" onClick={() => setPhase("setup")} className="gap-1">
+            <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setPhase("setup"); }} className="gap-1">
               <Plus className="w-4 h-4" /> Neues Turnier
             </Button>
           </div>
@@ -801,6 +855,11 @@ const TournamentPage = () => {
                   </div>
                   {t.champion && <p className="text-xs text-accent mt-1">🏆 {t.champion}</p>}
                 </button>
+                {!hasStarted(t) && (
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); editTournament(t); }} className="text-xs">
+                    Bearbeiten
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>
                   <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                 </Button>
@@ -816,10 +875,10 @@ const TournamentPage = () => {
   if (phase === "setup") {
     return (
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
-        <Button variant="ghost" onClick={() => setPhase("list")} className="mb-4 text-muted-foreground text-sm">← Zurück</Button>
+        <Button variant="ghost" onClick={() => { setEditingId(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm">← Zurück</Button>
         <div className="mb-6 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> Großevent-Modus</div>
-          <h2 className="text-2xl font-display uppercase">Turnier erstellen</h2>
+          <h2 className="text-2xl font-display uppercase">{editingId ? "Turnier bearbeiten" : "Turnier erstellen"}</h2>
           <p className="text-sm text-muted-foreground">Für bis zu 64 Teilnehmer, Gastspieler und schnelle Ergebnis-Erfassung.</p>
         </div>
         <div className="space-y-4">
@@ -1141,7 +1200,7 @@ const TournamentPage = () => {
           })()}
 
           <Button onClick={startTournament} className="w-full mt-4 font-display uppercase text-lg py-6" disabled={players.length < 2}>
-            <Play className="w-5 h-5 mr-2" /> Turnier starten
+            <Play className="w-5 h-5 mr-2" /> {editingId ? "Änderungen speichern" : "Turnier starten"}
           </Button>
         </div>
       </div>
@@ -1171,6 +1230,11 @@ const TournamentPage = () => {
             {activeTournament.public_view && activeTournament.public_slug && (
               <Button variant="outline" size="sm" onClick={copyPublicLink} className="gap-1" title="Link kopieren">
                 <Copy className="w-3.5 h-3.5" /> Link
+              </Button>
+            )}
+            {!hasStarted(activeTournament) && (
+              <Button variant="outline" size="sm" onClick={() => editTournament(activeTournament)}>
+                Bearbeiten
               </Button>
             )}
             <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
