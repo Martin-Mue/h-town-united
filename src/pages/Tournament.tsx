@@ -503,14 +503,20 @@ const TournamentPage = () => {
 
   const shufflePlayers = () => setPlayers((prev) => shuffle(prev));
 
+  /** The single source of truth for the first round – used by preview AND bracket generation. */
+  const drawSlots = useMemo(() => {
+    const size = effectiveSize;
+    const base = drawMode === "manual" ? [...players] : seededShuffle(players, drawSeed);
+    return distributeByes(base.slice(0, size), size);
+  }, [players, drawMode, drawSeed, effectiveSize]);
+
+  const redraw = () => setDrawSeed(Math.floor(Math.random() * 1e9));
+
   // ─── KO Bracket Generation ──────────────────────
   const generateKoBracket = (playerList: string[]): Match[] => {
-    const requested = targetSize === "auto" ? nextPowerOfTwo(playerList.length) : Number(targetSize);
-    const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requested));
-    const ordered = drawMode === "random" ? shuffle(playerList) : [...playerList];
-    // Spread the byes evenly over the bracket instead of stacking them at the end,
-    // so no part of the draw gets an unfair cluster of free rides.
-    const padded = distributeByes(ordered.slice(0, size), size);
+    const size = effectiveSize;
+    // exactly the draw shown in the preview
+    const padded = drawSlots;
 
     const firstRound: Match[] = [];
     for (let i = 0; i < padded.length; i += 2) {
