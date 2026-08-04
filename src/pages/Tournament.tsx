@@ -80,6 +80,27 @@ const shuffle = <T,>(list: T[]) => {
   return copy;
 };
 
+/** deterministic PRNG so preview and generated bracket use the exact same draw */
+const mulberry32 = (seed: number) => {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const seededShuffle = <T,>(list: T[], seed: number) => {
+  const rnd = mulberry32(seed);
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
+
 /**
  * Distributes BYEs evenly across the first round: every player with a bye is placed
  * into their own match, spread over the bracket (never two byes next to each other
@@ -347,6 +368,7 @@ const TournamentPage = () => {
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
   const [drawMode, setDrawMode] = useState<"random" | "manual">("random");
+  const [drawSeed, setDrawSeed] = useState(() => Math.floor(Math.random() * 1e9));
   const [boards, setBoards] = useState(2);
   const [bracketView, setBracketView] = useState<"tree" | "schedule">("tree");
   const [editMatch, setEditMatch] = useState<Match | null>(null);
@@ -481,14 +503,20 @@ const TournamentPage = () => {
 
   const shufflePlayers = () => setPlayers((prev) => shuffle(prev));
 
+  /** The single source of truth for the first round – used by preview AND bracket generation. */
+  const drawSlots = useMemo(() => {
+    const size = effectiveSize;
+    const base = drawMode === "manual" ? [...players] : seededShuffle(players, drawSeed);
+    return distributeByes(base.slice(0, size), size);
+  }, [players, drawMode, drawSeed, effectiveSize]);
+
+  const redraw = () => setDrawSeed(Math.floor(Math.random() * 1e9));
+
   // ─── KO Bracket Generation ──────────────────────
   const generateKoBracket = (playerList: string[]): Match[] => {
-    const requested = targetSize === "auto" ? nextPowerOfTwo(playerList.length) : Number(targetSize);
-    const size = Math.min(64, Math.max(nextPowerOfTwo(playerList.length), requested));
-    const ordered = drawMode === "random" ? shuffle(playerList) : [...playerList];
-    // Spread the byes evenly over the bracket instead of stacking them at the end,
-    // so no part of the draw gets an unfair cluster of free rides.
-    const padded = distributeByes(ordered.slice(0, size), size);
+    const size = effectiveSize;
+    // exactly the draw shown in the preview
+    const padded = drawSlots;
 
     const firstRound: Match[] = [];
     for (let i = 0; i < padded.length; i += 2) {
@@ -999,8 +1027,8 @@ const TournamentPage = () => {
               <div className="flex items-center justify-between mb-1">
                 <label className="text-sm text-muted-foreground">Teilnehmer ({players.length})</label>
                 {drawMode === "random" && (
-                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={shufflePlayers}>
-                    <Shuffle className="w-3.5 h-3.5" /> Neu mischen
+                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={redraw}>
+                    <Shuffle className="w-3.5 h-3.5" /> Neu auslosen
                   </Button>
                 )}
               </div>
@@ -1016,7 +1044,7 @@ const TournamentPage = () => {
                     </div>
                   ))}
                   <p className="text-[11px] text-muted-foreground pt-1">
-                    Paarungen Runde 1: {players.filter((_, i) => i % 2 === 0).map((p, i) => `${p} vs ${players[i * 2 + 1] || "BYE"}`).slice(0, 4).join(" · ")}{players.length > 8 ? " …" : ""}
+                    Reihenfolge bestimmt die Paarungen – siehe Vorschau unten.
                   </p>
                 </div>
               ) : (
@@ -1036,14 +1064,28 @@ const TournamentPage = () => {
             const size = effectiveSize;
             const rounds = Math.log2(size);
             const byes = size - Math.min(players.length, size);
-            const previewNames = drawMode === "manual" ? players.slice(0, size) : players.slice(0, size);
-            const slots = distributeByes(previewNames, size);
-            const pairs: [string, string][] = [];
-            for (let i = 0; i < slots.length; i += 2) pairs.push([slots[i], slots[i + 1]]);
+            const slots = drawSlots;
+            const previewMatches: Match[] = [];
+            for (let i = 0; i < slots.length; i += 2) {
+              previewMatches.push({ id: `p1-${i / 2}`, round: 1, position: i / 2, player1: slots[i], player2: slots[i + 1] });
+            }
+            for (let r = 2; r <= rounds; r++) {
+              for (let pos = 0; pos < size / Math.pow(2, r); pos++) {
+                previewMatches.push({ id: `p${r}-${pos}`, round: r, position: pos });
+              }
+            }
+            const tree = recomputeBracket(previewMatches);
             return (
               <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary">
-                  <Network className="w-3.5 h-3.5" /> Vorschau
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary">
+                    <Network className="w-3.5 h-3.5" /> Vorschau Turnierbaum
+                  </div>
+                  {drawMode === "random" && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={redraw}>
+                      <Shuffle className="w-3.5 h-3.5" /> Neu auslosen
+                    </Button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                   {[
@@ -1064,19 +1106,35 @@ const TournamentPage = () => {
                   </p>
                   <p>
                     {drawMode === "random"
-                      ? "Paarungen werden beim Start zufällig gelost (Vorschau zeigt die aktuelle Reihenfolge)."
+                      ? "Vollständig zufällige Auslosung – genau diese Paarungen werden beim Start übernommen."
                       : "Paarungen wie unten festgelegt."}
                   </p>
                 </div>
-                <div className="max-h-44 overflow-auto grid sm:grid-cols-2 gap-1 text-xs">
-                  {pairs.map((p, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-card border border-border rounded px-2 py-1">
-                      <span className="font-mono text-[10px] text-muted-foreground w-6">{i + 1}</span>
-                      <span className={`flex-1 truncate ${p[0] === BYE ? "text-muted-foreground/50" : ""}`}>{p[0]}</span>
-                      <span className="text-muted-foreground">vs</span>
-                      <span className={`flex-1 truncate text-right ${p[1] === BYE ? "text-muted-foreground/50" : ""}`}>{p[1]}</span>
-                    </div>
-                  ))}
+                <div className="max-h-[60vh] overflow-auto rounded-lg bg-card/40 p-2">
+                  <div className="flex gap-3 min-w-max">
+                    {Array.from({ length: rounds }, (_, ri) => ri + 1).map((r) => {
+                      const list = tree.filter((m) => m.round === r).sort((a, b) => a.position - b.position);
+                      return (
+                        <div key={r} className="flex flex-col justify-around gap-1 min-w-[130px]">
+                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground text-center">
+                            {roundLabelFor(r, rounds)}
+                          </p>
+                          {list.map((m, i) => (
+                            <div key={m.id} className="bg-card border border-border rounded px-1.5 py-1 text-[10px] leading-tight">
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono text-[8px] text-muted-foreground w-4">{r === 1 ? i + 1 : ""}</span>
+                                <span className={`flex-1 truncate ${!isRealPlayer(m.player1) ? "text-muted-foreground/40" : ""}`}>{m.player1 || "—"}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="w-4" />
+                                <span className={`flex-1 truncate ${!isRealPlayer(m.player2) ? "text-muted-foreground/40" : ""}`}>{m.player2 || "—"}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             );
