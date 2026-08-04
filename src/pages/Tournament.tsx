@@ -824,7 +824,7 @@ const TournamentPage = () => {
             <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
               <Layers className="w-3.5 h-3.5" /> Serien
             </Link>
-            <Button size="sm" onClick={() => setPhase("setup")} className="gap-1">
+            <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setPhase("setup"); }} className="gap-1">
               <Plus className="w-4 h-4" /> Neues Turnier
             </Button>
           </div>
@@ -855,6 +855,11 @@ const TournamentPage = () => {
                   </div>
                   {t.champion && <p className="text-xs text-accent mt-1">🏆 {t.champion}</p>}
                 </button>
+                {!hasStarted(t) && (
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); editTournament(t); }} className="text-xs">
+                    Bearbeiten
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>
                   <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                 </Button>
