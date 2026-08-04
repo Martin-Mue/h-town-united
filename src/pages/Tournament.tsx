@@ -1027,8 +1027,8 @@ const TournamentPage = () => {
               <div className="flex items-center justify-between mb-1">
                 <label className="text-sm text-muted-foreground">Teilnehmer ({players.length})</label>
                 {drawMode === "random" && (
-                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={shufflePlayers}>
-                    <Shuffle className="w-3.5 h-3.5" /> Neu mischen
+                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={redraw}>
+                    <Shuffle className="w-3.5 h-3.5" /> Neu auslosen
                   </Button>
                 )}
               </div>
@@ -1044,7 +1044,7 @@ const TournamentPage = () => {
                     </div>
                   ))}
                   <p className="text-[11px] text-muted-foreground pt-1">
-                    Paarungen Runde 1: {players.filter((_, i) => i % 2 === 0).map((p, i) => `${p} vs ${players[i * 2 + 1] || "BYE"}`).slice(0, 4).join(" · ")}{players.length > 8 ? " …" : ""}
+                    Reihenfolge bestimmt die Paarungen – siehe Vorschau unten.
                   </p>
                 </div>
               ) : (
