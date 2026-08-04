@@ -80,6 +80,27 @@ const shuffle = <T,>(list: T[]) => {
   return copy;
 };
 
+/** deterministic PRNG so preview and generated bracket use the exact same draw */
+const mulberry32 = (seed: number) => {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const seededShuffle = <T,>(list: T[], seed: number) => {
+  const rnd = mulberry32(seed);
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
+
 /**
  * Distributes BYEs evenly across the first round: every player with a bye is placed
  * into their own match, spread over the bracket (never two byes next to each other
