@@ -475,7 +475,7 @@ const TournamentPage = () => {
   const addPlayer = () => {
     const parts = playerInput.split(/[\n,;]+/).map((n) => n.trim()).filter(Boolean);
     const nick = nicknameInput.trim();
-    // a nickname only makes sense for a single entry – it keeps同 names distinguishable
+    // a nickname only makes sense for a single entry – it keeps identical names distinguishable
     if (nick && parts.length === 1) addPlayers([`${parts[0]} (${nick})`]);
     else addPlayers(parts);
     setPlayerInput("");
