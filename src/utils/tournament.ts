@@ -180,32 +180,30 @@ export function assignScorekeepers(
     return set;
   };
 
-  // losers per round (available as scorekeepers from the next round on)
-  const losersUpTo = (round: number) => {
-    const set = new Set<string>();
-    matches
-      .filter((m) => m.round < round && m.winner && m.winner !== BYE)
-      .forEach((m) => {
-        const loser = m.winner === m.player1 ? m.player2 : m.player1;
-        if (isRealPlayer(loser)) set.add(loser!);
-      });
-    return set;
-  };
+  /**
+   * Players who are guaranteed not to be called to a board any more:
+   * they lost a finished match and appear in no open match at all.
+   */
+  const openPlayers = new Set<string>();
+  matches
+    .filter((m) => !m.winner && (isRealPlayer(m.player1) || isRealPlayer(m.player2)))
+    .forEach((m) => {
+      if (isRealPlayer(m.player1)) openPlayers.add(m.player1!);
+      if (isRealPlayer(m.player2)) openPlayers.add(m.player2!);
+    });
+  // players who might still enter a later round (their feeder match is undecided)
+  const potentialPlayers = new Set<string>();
+  matches
+    .filter((m) => !m.winner && isRealPlayer(m.player1) && isRealPlayer(m.player2))
+    .forEach((m) => {
+      potentialPlayers.add(m.player1!);
+      potentialPlayers.add(m.player2!);
+    });
+  const definitelyFree = (p: string) => !openPlayers.has(p) && !potentialPlayers.has(p);
 
   slots.forEach((slot) => {
     const entries = schedule.filter((e) => e.slot === slot).sort((a, b) => a.board - b.board);
     const busy = playersInSlot(slot);
-    const nextBusy = playersInSlot(slot + 1);
-    const prevBusy = playersInSlot(slot - 1);
-    const singleBoard = Math.max(1, opts.boards) === 1;
-    // loser of the directly preceding match – free and right at the board
-    const prevLosers = new Set<string>();
-    schedule
-      .filter((e) => e.slot === slot - 1 && e.match.winner && e.match.winner !== BYE)
-      .forEach((e) => {
-        const l = e.match.winner === e.match.player1 ? e.match.player2 : e.match.player1;
-        if (isRealPlayer(l)) prevLosers.add(l!);
-      });
     const taken = new Set<string>();
 
     entries.forEach((entry) => {
@@ -216,70 +214,79 @@ export function assignScorekeepers(
         taken.add(m.scorekeeper);
         return;
       }
-      if (opts.keepExisting && m.scorekeeper && !busy.has(m.scorekeeper) && !taken.has(m.scorekeeper)) {
+      m.scorekeeperRule = undefined;
+      m.scorekeeperFromMatchId = undefined;
+      if (
+        opts.keepExisting &&
+        m.scorekeeper &&
+        definitelyFree(m.scorekeeper) &&
+        !busy.has(m.scorekeeper) &&
+        !taken.has(m.scorekeeper)
+      ) {
         taken.add(m.scorekeeper);
         return;
       }
-      const losers = losersUpTo(entry.round);
-      const openInRound = stillPlayingInRound(entry.round, slot);
-      const alive = stillAlive(entry.round);
-      // single board: the loser of the match just played keeps score
-      if (singleBoard) {
-        const direct = [...prevLosers].filter(
-          (p) => !busy.has(p) && !nextBusy.has(p) && !taken.has(p) && !openInRound.has(p)
-        );
-        if (direct.length) {
-          const pick = direct.sort((x, y) => (load[x] ?? 0) - (load[y] ?? 0))[0];
-          m.scorekeeper = pick;
-          load[pick] = (load[pick] ?? 0) + 1;
-          taken.add(pick);
-          return;
-        }
-      }
-      // hard constraint: not playing now, not in the previous slot (match may run long),
-      // not in the next slot, and no open match left in this round
-      const base = pool.filter(
-        (p) =>
-          !busy.has(p) && !nextBusy.has(p) && !prevBusy.has(p) && !taken.has(p) && !openInRound.has(p)
-      );
-      // fallbacks, from strict to loose
-      const relaxed = pool.filter(
-        (p) => !busy.has(p) && !nextBusy.has(p) && !taken.has(p) && !openInRound.has(p)
-      );
-      const relaxed2 = pool.filter((p) => !busy.has(p) && !nextBusy.has(p) && !taken.has(p));
-      const loose = pool.filter((p) => !busy.has(p) && !taken.has(p));
-      const tiers = [
-        // 1. eliminated players (cannot be called to a board any more)
-        base.filter((p) => losers.has(p) && !alive.has(p)),
-        base.filter((p) => losers.has(p)),
-        base.filter((p) => !alive.has(p)),
-        base,
-        relaxed,
-        relaxed2,
-        loose,
-      ];
-      const candidates = tiers.find((t) => t.length > 0) || [];
-      if (candidates.length === 0) {
-        m.scorekeeper = undefined;
+      // only players whose tournament run is already decided can be planned by name
+      const candidates = pool.filter((p) => definitelyFree(p) && !busy.has(p) && !taken.has(p));
+      if (candidates.length > 0) {
+        const minLoad = Math.min(...candidates.map((p) => load[p] ?? 0));
+        const best = candidates.filter((p) => (load[p] ?? 0) === minLoad);
+        const pick = best[Math.floor(Math.random() * best.length)];
+        m.scorekeeper = pick;
+        load[pick] = (load[pick] ?? 0) + 1;
+        taken.add(pick);
         return;
       }
-      const minLoad = Math.min(...candidates.map((p) => load[p] ?? 0));
-      const best = candidates.filter((p) => (load[p] ?? 0) === minLoad);
-      const pick = best[Math.floor(Math.random() * best.length)];
-      m.scorekeeper = pick;
-      load[pick] = (load[pick] ?? 0) + 1;
-      taken.add(pick);
+      // nobody is free yet → dynamic rule: the loser of an earlier, not yet decided match writes.
+      // prefer the match on the same board one slot earlier, otherwise any match of the previous slot.
+      const prev =
+        schedule.find((e) => e.slot === slot - 1 && e.board === entry.board) ||
+        schedule
+          .filter((e) => e.slot < slot)
+          .sort((a, b) => b.slot - a.slot || a.board - b.board)
+          .find((e) => !taken.has(`rule:${e.match.id}`));
+      m.scorekeeper = undefined;
+      if (prev) {
+        m.scorekeeperRule = "prev-loser";
+        m.scorekeeperFromMatchId = prev.match.id;
+        taken.add(`rule:${prev.match.id}`);
+      }
     });
   });
 
   // matches that are not playable keep no scorekeeper
   byId.forEach((m) => {
     if (!isPlayable(m) || m.winner) {
-      if (!isPlayable(m)) { m.scorekeeper = undefined; m.scorekeeperLocked = undefined; }
+      if (!isPlayable(m)) {
+        m.scorekeeper = undefined;
+        m.scorekeeperLocked = undefined;
+        m.scorekeeperRule = undefined;
+        m.scorekeeperFromMatchId = undefined;
+      }
     }
   });
 
   return matches.map((m) => byId.get(m.id) || m);
+}
+
+/**
+ * Resolves the scorekeeper of a match for display:
+ * a fixed name, or the (possibly not yet known) loser of a referenced match.
+ */
+export function scorekeeperLabel(match: Match, all: Match[]): string | null {
+  if (match.scorekeeper) return match.scorekeeper;
+  if (match.scorekeeperRule === "prev-loser" && match.scorekeeperFromMatchId) {
+    const src = all.find((m) => m.id === match.scorekeeperFromMatchId);
+    if (!src) return null;
+    if (src.winner && src.winner !== BYE) {
+      const loser = src.winner === src.player1 ? src.player2 : src.player1;
+      if (isRealPlayer(loser)) return loser!;
+    }
+    const a = isRealPlayer(src.player1) ? src.player1 : "?";
+    const b = isRealPlayer(src.player2) ? src.player2 : "?";
+    return `Verlierer ${a} / ${b}`;
+  }
+  return null;
 }
 
 export const roundLabelFor = (round: number, total: number) => {
