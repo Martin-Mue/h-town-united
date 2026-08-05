@@ -254,9 +254,9 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
                     {match.winner === player && <Check className="w-4 h-4 text-secondary" />}
                   </div>
                 ))}
-                {(match.scorekeeper || match.board) && !match.winner && (
+                {(match.scorekeeper || match.scorekeeperRule || match.board) && !match.winner && (
                   <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span className="truncate">{match.scorekeeper ? <>✍️ {match.scorekeeper}</> : "✍️ –"}</span>
+                    <span className="truncate">✍️ {scorekeeperLabel(match, matches) || "–"}</span>
                     {match.board ? <span className="font-mono">Board {match.board}</span> : null}
                   </div>
                 )}
