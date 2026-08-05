@@ -1329,7 +1329,7 @@ const TournamentPage = () => {
                             onValueChange={(v) => setMatchScorekeeper(e.match.id, v)}
                           >
                             <SelectTrigger className="h-7 w-40 text-xs bg-background border-border">
-                              <SelectValue>{e.match.scorekeeper || "–"}</SelectValue>
+                              <SelectValue>{scorekeeperLabel(e.match, matches) || "–"}</SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-card border-border max-h-64">
                               <SelectItem value="__auto">Automatisch</SelectItem>
