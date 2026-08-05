@@ -20,6 +20,7 @@ import {
   buildSchedule,
   assignScorekeepers,
   roundLabelFor,
+  scorekeeperLabel,
 } from "@/utils/tournament";
 
 interface RoundConfig {
@@ -254,9 +255,9 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
                     {match.winner === player && <Check className="w-4 h-4 text-secondary" />}
                   </div>
                 ))}
-                {(match.scorekeeper || match.board) && !match.winner && (
+                {(match.scorekeeper || match.scorekeeperRule || match.board) && !match.winner && (
                   <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span className="truncate">{match.scorekeeper ? <>✍️ {match.scorekeeper}</> : "✍️ –"}</span>
+                    <span className="truncate">✍️ {scorekeeperLabel(match, matches) || "–"}</span>
                     {match.board ? <span className="font-mono">Board {match.board}</span> : null}
                   </div>
                 )}
@@ -375,6 +376,7 @@ const TournamentPage = () => {
   const [editP1, setEditP1] = useState("");
   const [editP2, setEditP2] = useState("");
   const [playerInput, setPlayerInput] = useState("");
+  const [nicknameInput, setNicknameInput] = useState("");
   const [guestCount, setGuestCount] = useState(8);
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
@@ -471,8 +473,13 @@ const TournamentPage = () => {
   };
 
   const addPlayer = () => {
-    addPlayers(playerInput.split(/[\n,;]+/));
+    const parts = playerInput.split(/[\n,;]+/).map((n) => n.trim()).filter(Boolean);
+    const nick = nicknameInput.trim();
+    // a nickname only makes sense for a single entry – it keeps identical names distinguishable
+    if (nick && parts.length === 1) addPlayers([`${parts[0]} (${nick})`]);
+    else addPlayers(parts);
     setPlayerInput("");
+    setNicknameInput("");
   };
 
   const addDbPlayer = (name: string) => {
@@ -807,7 +814,8 @@ const TournamentPage = () => {
     setRoundConfigs(t.round_configs || []);
     setBoards(t.boards || 2);
     setPlayers(t.players || []);
-    setDrawMode("manual");
+    setDrawMode("random");
+    setDrawSeed(Math.floor(Math.random() * 1e9));
     setPhase("setup");
   };
 
@@ -824,7 +832,7 @@ const TournamentPage = () => {
             <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
               <Layers className="w-3.5 h-3.5" /> Serien
             </Link>
-            <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setPhase("setup"); }} className="gap-1">
+            <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
               <Plus className="w-4 h-4" /> Neues Turnier
             </Button>
           </div>
@@ -1044,8 +1052,12 @@ const TournamentPage = () => {
             <label className="text-sm text-muted-foreground mb-1 block">Schnell-Eingabe (Enter = übernehmen, mehrere Namen mit Komma)</label>
             <div className="flex gap-2">
               <Input autoFocus value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="Name, Name, Name …" className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
+              <Input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} placeholder="Spitzname (optional)" className="bg-card border-border w-44" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
               <Button onClick={addPlayer} size="icon" variant="outline"><Plus className="w-4 h-4" /></Button>
             </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Gleiche Namen? Mit Spitznamen bleiben sie unterscheidbar – er wird als „Name (Spitzname)" im Turnierbaum und Spielplan angezeigt.
+            </p>
           </div>
 
           {tournaments.length > 0 && (
@@ -1328,7 +1340,7 @@ const TournamentPage = () => {
                             onValueChange={(v) => setMatchScorekeeper(e.match.id, v)}
                           >
                             <SelectTrigger className="h-7 w-40 text-xs bg-background border-border">
-                              <SelectValue>{e.match.scorekeeper || "–"}</SelectValue>
+                              <SelectValue>{scorekeeperLabel(e.match, matches) || "–"}</SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-card border-border max-h-64">
                               <SelectItem value="__auto">Automatisch</SelectItem>

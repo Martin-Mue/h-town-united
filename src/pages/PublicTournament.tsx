@@ -8,7 +8,23 @@ interface Match {
   id: string; round: number; position: number;
   player1?: string; player2?: string; winner?: string;
   score1?: number; score2?: number; scorekeeper?: string; board?: number; slot?: number;
+  scorekeeperRule?: "prev-loser"; scorekeeperFromMatchId?: string;
 }
+
+/** name of the scorekeeper – or the rule "loser of match X" while it is not decided yet */
+const keeperLabel = (m: Match, all: Match[]): string | null => {
+  if (m.scorekeeper) return m.scorekeeper;
+  if (m.scorekeeperRule === "prev-loser" && m.scorekeeperFromMatchId) {
+    const src = all.find((x) => x.id === m.scorekeeperFromMatchId);
+    if (!src) return null;
+    if (src.winner && src.winner !== "BYE") {
+      const loser = src.winner === src.player1 ? src.player2 : src.player1;
+      if (loser && loser !== "BYE") return loser;
+    }
+    return `Verlierer ${src.player1 || "?"} / ${src.player2 || "?"}`;
+  }
+  return null;
+};
 
 interface TournamentRow {
   id: string; name: string; mode: string; status: string;
@@ -74,9 +90,9 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
             <span className="font-display text-base">{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
           </div>
         ))}
-        {!m.winner && (m.scorekeeper || m.board) && (
+        {!m.winner && (m.scorekeeper || m.scorekeeperRule || m.board) && (
           <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
-            <span className="truncate">✍️ {m.scorekeeper || "–"}</span>
+            <span className="truncate">✍️ {keeperLabel(m, matches) || "–"}</span>
             {m.board ? <span className="font-mono">Board {m.board}</span> : null}
           </div>
         )}
@@ -265,7 +281,7 @@ const PublicTournamentPage = () => {
                       <p className="font-display text-lg uppercase truncate">{m.player1} <span className="text-muted-foreground text-sm">vs</span> {m.player2}</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-2">
                         <span className="font-mono text-primary">Board {m.board ?? "?"}</span>
-                        <span>✍️ {m.scorekeeper || "–"}</span>
+                        <span>✍️ {keeperLabel(m, matches) || "–"}</span>
                       </p>
                     </div>
                   ))}
