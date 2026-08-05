@@ -20,6 +20,7 @@ import {
   buildSchedule,
   assignScorekeepers,
   roundLabelFor,
+  scorekeeperLabel,
 } from "@/utils/tournament";
 
 interface RoundConfig {
