@@ -376,6 +376,7 @@ const TournamentPage = () => {
   const [editP1, setEditP1] = useState("");
   const [editP2, setEditP2] = useState("");
   const [playerInput, setPlayerInput] = useState("");
+  const [nicknameInput, setNicknameInput] = useState("");
   const [guestCount, setGuestCount] = useState(8);
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
@@ -472,8 +473,13 @@ const TournamentPage = () => {
   };
 
   const addPlayer = () => {
-    addPlayers(playerInput.split(/[\n,;]+/));
+    const parts = playerInput.split(/[\n,;]+/).map((n) => n.trim()).filter(Boolean);
+    const nick = nicknameInput.trim();
+    // a nickname only makes sense for a single entry – it keeps同 names distinguishable
+    if (nick && parts.length === 1) addPlayers([`${parts[0]} (${nick})`]);
+    else addPlayers(parts);
     setPlayerInput("");
+    setNicknameInput("");
   };
 
   const addDbPlayer = (name: string) => {
