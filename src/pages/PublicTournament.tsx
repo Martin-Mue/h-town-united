@@ -8,7 +8,23 @@ interface Match {
   id: string; round: number; position: number;
   player1?: string; player2?: string; winner?: string;
   score1?: number; score2?: number; scorekeeper?: string; board?: number; slot?: number;
+  scorekeeperRule?: "prev-loser"; scorekeeperFromMatchId?: string;
 }
+
+/** name of the scorekeeper – or the rule "loser of match X" while it is not decided yet */
+const keeperLabel = (m: Match, all: Match[]): string | null => {
+  if (m.scorekeeper) return m.scorekeeper;
+  if (m.scorekeeperRule === "prev-loser" && m.scorekeeperFromMatchId) {
+    const src = all.find((x) => x.id === m.scorekeeperFromMatchId);
+    if (!src) return null;
+    if (src.winner && src.winner !== "BYE") {
+      const loser = src.winner === src.player1 ? src.player2 : src.player1;
+      if (loser && loser !== "BYE") return loser;
+    }
+    return `Verlierer ${src.player1 || "?"} / ${src.player2 || "?"}`;
+  }
+  return null;
+};
 
 interface TournamentRow {
   id: string; name: string; mode: string; status: string;
