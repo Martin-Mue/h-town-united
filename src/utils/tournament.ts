@@ -156,30 +156,6 @@ export function assignScorekeepers(
     return set;
   };
 
-  /** everyone who still has an open (unfinished) match in this round from `fromSlot` on */
-  const stillPlayingInRound = (round: number, fromSlot: number) => {
-    const set = new Set<string>();
-    schedule
-      .filter((e) => e.round === round && e.slot >= fromSlot && !e.match.winner)
-      .forEach((e) => {
-        if (e.match.player1) set.add(e.match.player1);
-        if (e.match.player2) set.add(e.match.player2);
-      });
-    return set;
-  };
-
-  /** everyone who can still appear in a later round (i.e. is not eliminated) */
-  const stillAlive = (round: number) => {
-    const set = new Set<string>();
-    matches
-      .filter((m) => m.round >= round)
-      .forEach((m) => {
-        if (isRealPlayer(m.player1)) set.add(m.player1!);
-        if (isRealPlayer(m.player2)) set.add(m.player2!);
-      });
-    return set;
-  };
-
   /**
    * Players who are guaranteed not to be called to a board any more:
    * they lost a finished match and appear in no open match at all.
