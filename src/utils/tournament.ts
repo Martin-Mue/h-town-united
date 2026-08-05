@@ -12,6 +12,10 @@ export interface Match {
   scorekeeper?: string;
   /** manually fixed scorekeeper – never overwritten by the auto-assignment */
   scorekeeperLocked?: boolean;
+  /** dynamic rule when no player is guaranteed free yet ("loser of match X writes") */
+  scorekeeperRule?: "prev-loser";
+  /** match whose loser becomes the scorekeeper when `scorekeeperRule` is set */
+  scorekeeperFromMatchId?: string;
   /** board number assigned by the schedule generator */
   board?: number;
   /** global playing slot (round of concurrent matches) */
