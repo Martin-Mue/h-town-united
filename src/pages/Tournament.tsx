@@ -832,7 +832,7 @@ const TournamentPage = () => {
             <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
               <Layers className="w-3.5 h-3.5" /> Serien
             </Link>
-            <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setPhase("setup"); }} className="gap-1">
+            <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
               <Plus className="w-4 h-4" /> Neues Turnier
             </Button>
           </div>
