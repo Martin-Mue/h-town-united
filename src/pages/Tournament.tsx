@@ -814,7 +814,8 @@ const TournamentPage = () => {
     setRoundConfigs(t.round_configs || []);
     setBoards(t.boards || 2);
     setPlayers(t.players || []);
-    setDrawMode("manual");
+    setDrawMode("random");
+    setDrawSeed(Math.floor(Math.random() * 1e9));
     setPhase("setup");
   };
 
