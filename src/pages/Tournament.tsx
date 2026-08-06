@@ -216,9 +216,20 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           </Button>
         </div>
       </div>
+      <div className="relative flex-1">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden"
+      >
+        <img
+          src={htuEmblem.url}
+          alt=""
+          className="w-[70%] max-w-[900px] object-contain invert opacity-[0.06]"
+        />
+      </div>
       <div
         ref={wrapRef}
-        className="overflow-auto bg-gradient-to-br from-background via-background to-primary/5"
+        className="relative z-10 overflow-auto"
         style={{ height: fullscreen ? "calc(100dvh - 44px)" : "min(78dvh, 900px)" }}
       >
         <div
