@@ -226,6 +226,18 @@ export function assignScorekeepers(
         m.scorekeeperRule = "prev-loser";
         m.scorekeeperFromMatchId = prev.match.id;
         taken.add(`rule:${prev.match.id}`);
+        return;
+      }
+      // very first slot: nobody has played yet → pick a player who is not at a board
+      // in this slot (he plays in a later slot) so round 1 has a fixed scorekeeper too.
+      const free = pool.filter((p) => !busy.has(p) && !taken.has(p));
+      if (free.length > 0) {
+        const minLoad = Math.min(...free.map((p) => load[p] ?? 0));
+        const best = free.filter((p) => (load[p] ?? 0) === minLoad);
+        const pick = best[Math.floor(Math.random() * best.length)];
+        m.scorekeeper = pick;
+        load[pick] = (load[pick] ?? 0) + 1;
+        taken.add(pick);
       }
     });
   });
@@ -270,5 +282,7 @@ export const roundLabelFor = (round: number, total: number) => {
   if (round === total - 1) return "Halbfinale";
   if (round === total - 2) return "Viertelfinale";
   if (round === total - 3) return "Achtelfinale";
+  if (round === total - 4) return "Sechzehntelfinale";
+  if (round === total - 5) return "Zweiunddreißigstelfinale";
   return `Runde ${round}`;
 };
