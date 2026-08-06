@@ -103,7 +103,7 @@ const DashboardPage = () => {
           className="w-14 h-14 object-contain invert"
         />
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-display">
-          Ein Verein · Eine Familie
+          Von Heiligenhausern, Für Heiligenhaus
         </p>
       </div>
 
