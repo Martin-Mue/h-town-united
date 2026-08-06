@@ -1261,6 +1261,9 @@ const TournamentPage = () => {
               <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" />
               <span className="text-muted-foreground">Beamer-Link:</span>
               <code className="font-mono text-secondary truncate">{window.location.origin}/live/{activeTournament.public_slug}</code>
+              <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1 ml-auto shrink-0" onClick={copyPublicLink}>
+                <Copy className="w-3 h-3" /> Kopieren
+              </Button>
             </div>
           </div>
         )}
@@ -1320,10 +1323,10 @@ const TournamentPage = () => {
                 <div key={slot} className="bg-card border border-border rounded-xl overflow-hidden">
                   <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between">
                     <h3 className="font-display uppercase text-sm">
-                      {i === 0 ? "Jetzt am Board" : `Spielrunde ${i + 1}`}
+                      {roundLabel(open.find(e => e.slot === slot)!.round, totalRounds)}
                     </h3>
                     <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                      {roundLabel(open.find(e => e.slot === slot)!.round, totalRounds)}
+                      {i === 0 ? "Jetzt am Board" : `Spielrunde ${i + 1}`}
                     </span>
                   </div>
                   <div className="divide-y divide-border">
@@ -1343,7 +1346,7 @@ const TournamentPage = () => {
                               <SelectValue>{scorekeeperLabel(e.match, matches) || "–"}</SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-card border-border max-h-64">
-                              <SelectItem value="__auto">Automatisch</SelectItem>
+                              <SelectItem value="__auto">Automatisch (Turnier-Regel)</SelectItem>
                               {activeTournament.players
                                 .filter(p => p !== e.match.player1 && p !== e.match.player2)
                                 .map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
@@ -1353,6 +1356,10 @@ const TournamentPage = () => {
                       </div>
                     ))}
                   </div>
+                  <p className="px-4 py-1.5 text-[10px] text-muted-foreground border-t border-border/60">
+                    „Automatisch" = Schreiber wird vom Turnierplan vergeben: bevorzugt bereits ausgeschiedene Spieler,
+                    sonst der Verlierer des vorherigen Spiels am selben Board; in der ersten Runde ein Spieler, der erst später dran ist.
+                  </p>
                 </div>
               ));
             })()}
