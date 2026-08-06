@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import htuLogo from "@/assets/htu-logo.jpg";
+import htuEmblem from "@/assets/htu-emblem.png.asset.json";
 
 const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home" },
@@ -49,6 +50,11 @@ const Layout = ({ children }: { children: ReactNode }) => {
         </Link>
 
         <div className="flex items-center gap-1">
+          <img
+            src={htuEmblem.url}
+            alt="H-Town United e.V. Vereinsemblem"
+            className="hidden sm:block w-9 h-9 object-contain invert opacity-60 mr-2"
+          />
           <nav className="hidden md:flex items-center gap-1">
             {NAV_ITEMS.map((item) => {
               const isActive = location.pathname === item.to;
