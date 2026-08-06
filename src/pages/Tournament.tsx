@@ -247,7 +247,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
                     className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
                       idx === 0 ? "border-b border-border" : ""
                     } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === BYE ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-                    <button disabled={!player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed">{player || "TBD"}</button>
+                    <button disabled={!player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left uppercase tracking-wide disabled:cursor-not-allowed">{player || "TBD"}</button>
                     <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
                       <Plus className="w-4 h-4" />
                     </Button>
@@ -1194,11 +1194,11 @@ const TournamentPage = () => {
                             <div key={m.id} className="bg-card border border-border rounded px-1.5 py-1 text-[10px] leading-tight">
                               <div className="flex items-center gap-1">
                                 <span className="font-mono text-[8px] text-muted-foreground w-4">{r === 1 ? i + 1 : ""}</span>
-                                <span className={`flex-1 truncate ${!isRealPlayer(m.player1) ? "text-muted-foreground/40" : ""}`}>{m.player1 || "—"}</span>
+                                <span className={`flex-1 truncate uppercase tracking-wide ${!isRealPlayer(m.player1) ? "text-muted-foreground/40" : ""}`}>{m.player1 || "—"}</span>
                               </div>
                               <div className="flex items-center gap-1">
                                 <span className="w-4" />
-                                <span className={`flex-1 truncate ${!isRealPlayer(m.player2) ? "text-muted-foreground/40" : ""}`}>{m.player2 || "—"}</span>
+                                <span className={`flex-1 truncate uppercase tracking-wide ${!isRealPlayer(m.player2) ? "text-muted-foreground/40" : ""}`}>{m.player2 || "—"}</span>
                               </div>
                             </div>
                           ))}
@@ -1333,7 +1333,7 @@ const TournamentPage = () => {
                     {open.filter(e => e.slot === slot).map(e => (
                       <div key={e.match.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
                         <span className="font-mono text-xs bg-primary/10 text-primary rounded px-2 py-0.5 shrink-0">Board {e.board}</span>
-                        <span className="flex-1 truncate">
+                        <span className="flex-1 truncate uppercase tracking-wide">
                           <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
                         </span>
                         <div className="shrink-0 flex items-center gap-1">
