@@ -357,6 +357,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           })()}
         </div>
       </div>
+      </div>
     </div>
   );
 };
