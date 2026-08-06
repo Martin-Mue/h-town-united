@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap } from "lucide-react";
 import htuLogo from "@/assets/htu-logo.jpg";
+import htuEmblem from "@/assets/htu-emblem.png.asset.json";
 
 interface Match {
   id: string; round: number; position: number;
@@ -151,10 +152,13 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   };
 
   return (
-    <div ref={wrapRef} className="overflow-hidden w-full" style={{ height: "min(72dvh, 900px)" }}>
+    <div ref={wrapRef} className="overflow-hidden w-full relative" style={{ height: "min(72dvh, 900px)" }}>
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
+        <img src={htuEmblem.url} alt="" className="w-[65%] max-w-[900px] object-contain invert opacity-[0.07]" />
+      </div>
       <div
         ref={innerRef}
-        className="flex items-stretch gap-4 p-4"
+        className="relative z-10 flex items-stretch gap-4 p-4"
         style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: "max-content" }}
       >
         {body()}
