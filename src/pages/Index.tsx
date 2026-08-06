@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Target, Users, Trophy, Camera, Dumbbell, BarChart3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import htuLogo from "@/assets/htu-logo.jpg";
+import htuEmblem from "@/assets/htu-emblem.png.asset.json";
 
 const QUICK_ACTIONS = [
   { to: "/game", label: "Neues Spiel", desc: "501 · 301 · Cricket", icon: Target },
@@ -92,6 +93,18 @@ const DashboardPage = () => {
             Verwalte deinen Verein, tracke Scores und organisiere Turniere – alles in einer App.
           </p>
         </div>
+      </div>
+
+      {/* Vereinsemblem – ruhiger Absender */}
+      <div className="flex items-center justify-center gap-3 mb-6 opacity-70">
+        <img
+          src={htuEmblem.url}
+          alt="H-Town United e.V. Vereinsemblem"
+          className="w-14 h-14 object-contain invert"
+        />
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-display">
+          Ein Verein · Eine Familie
+        </p>
       </div>
 
       {/* Statistics overview */}
