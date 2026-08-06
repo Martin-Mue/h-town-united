@@ -86,7 +86,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
         {!isLast && side === "right" && <span aria-hidden className="absolute top-1/2 -left-4 w-4 h-px bg-border" />}
         {[m.player1, m.player2].map((player, idx) => (
           <div key={idx} className={`px-3 py-2 text-sm flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/40" : !player ? "text-muted-foreground/40" : ""}`}>
-            <span className="truncate">{player || "TBD"}</span>
+            <span className="truncate uppercase tracking-wide">{player || "TBD"}</span>
             <span className="font-display text-base">{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
           </div>
         ))}
@@ -278,7 +278,7 @@ const PublicTournamentPage = () => {
                 <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
                   {now.map(m => (
                     <div key={m.id} className="rounded-xl bg-background/60 border border-border px-3 py-2">
-                      <p className="font-display text-lg uppercase truncate">{m.player1} <span className="text-muted-foreground text-sm">vs</span> {m.player2}</p>
+                      <p className="font-display text-lg uppercase truncate">{m.player1} <span className="text-muted-foreground text-sm normal-case">vs</span> {m.player2}</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-2">
                         <span className="font-mono text-primary">Board {m.board ?? "?"}</span>
                         <span>✍️ {keeperLabel(m, matches) || "–"}</span>
@@ -315,9 +315,9 @@ const PublicTournamentPage = () => {
             <ol className="space-y-2">
               {completed.map(m => (
                 <li key={m.id} className="text-xs border-l-2 border-primary/40 pl-2">
-                  <p className="font-display text-sm">
+                  <p className="font-display text-sm uppercase">
                     <span className="text-secondary">{m.winner}</span>
-                    <span className="text-muted-foreground"> schlägt </span>
+                    <span className="text-muted-foreground normal-case"> schlägt </span>
                     {m.winner === m.player1 ? m.player2 : m.player1}
                   </p>
                   <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
