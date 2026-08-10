@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
-import htuEmblem from "@/assets/htu-emblem.png.asset.json";
+import htuEmblem from "@/assets/club-emblem.png";
 import { Link } from "react-router-dom";
 import {
   type Match,
@@ -165,9 +165,12 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     setSizes({ wrapW: wrap.width, wrapH: wrap.height, innerW: inner.width, innerH: inner.height });
   }, []);
 
-  // Never auto-shrink below a legible floor — large brackets scroll/pan instead of vanishing.
+  // Always fit the whole tree in view, no scrollbars, on every device — the
+  // "Spielplan & Schreiber" list view is the always-legible fallback for large
+  // brackets, and zoom/fullscreen are available for close-up taps, so the tree
+  // itself is free to shrink as far as it needs to.
   const fitScale = sizes.wrapW && sizes.innerW
-    ? Math.max(0.5, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
+    ? Math.max(0.12, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
     : 1;
   const scale = fitScale * userZoom;
   const scaledW = sizes.innerW * scale;
@@ -176,6 +179,11 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
   // so the watermark logo behind it is always visually centered on the actual bracket.
   const offsetX = sizes.wrapW && scaledW <= sizes.wrapW ? (sizes.wrapW - scaledW) / 2 : 0;
   const offsetY = sizes.wrapH && scaledH <= sizes.wrapH ? (sizes.wrapH - scaledH) / 2 : 0;
+  // CSS transforms don't shrink an element's scrollable area — a scaled-down box that
+  // visually fits would still report a giant unscaled scrollWidth/Height and trigger a
+  // (redundant, nested-feeling) scrollbar. So only allow scrolling once the content
+  // genuinely overflows the box (i.e. the user zoomed in past the auto-fit).
+  const overflowing = sizes.wrapW > 0 && (scaledW > sizes.wrapW + 0.5 || scaledH > sizes.wrapH + 0.5);
 
   useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, fullscreen]);
   useEffect(() => {
@@ -227,7 +235,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
       <div className="relative flex-1">
       <div
         ref={wrapRef}
-        className="relative z-10 overflow-auto"
+        className={`relative z-10 ${overflowing ? "overflow-auto" : "overflow-hidden"}`}
         style={{ height: fullscreen ? "calc(100dvh - 44px)" : "min(78dvh, 900px)" }}
       >
         <div
@@ -245,7 +253,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
             className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden"
           >
             <img
-              src={htuEmblem.url}
+              src={htuEmblem}
               alt=""
               className="w-[70%] max-w-[900px] object-contain invert opacity-[0.06]"
             />

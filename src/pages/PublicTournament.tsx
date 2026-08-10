@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Network, Rows3 } from "lucide-react";
 import { roundLabelFor } from "@/utils/tournament";
 import htuLogo from "@/assets/htu-logo.jpg";
-import htuEmblem from "@/assets/htu-emblem.png.asset.json";
+import htuEmblem from "@/assets/club-emblem.png";
 
 interface Match {
   id: string; round: number; position: number;
@@ -79,9 +79,11 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     };
   }, [measure]);
 
-  // Never auto-shrink below a legible floor — large brackets scroll/pan instead of vanishing.
+  // Always fit the whole tree in view, no scrollbars, on every device — the
+  // "Rundenliste" toggle is the always-legible fallback for large brackets,
+  // so the tree itself is free to shrink as far as it needs to.
   const fitScale = sizes.wrapW && sizes.innerW
-    ? Math.max(0.5, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
+    ? Math.max(0.12, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
     : 1;
   const scale = fitScale * userZoom;
   const scaledW = sizes.innerW * scale;
@@ -90,6 +92,11 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   // so the watermark logo behind it is always visually centered on the actual bracket.
   const offsetX = sizes.wrapW && scaledW <= sizes.wrapW ? (sizes.wrapW - scaledW) / 2 : 0;
   const offsetY = sizes.wrapH && scaledH <= sizes.wrapH ? (sizes.wrapH - scaledH) / 2 : 0;
+  // CSS transforms don't shrink an element's scrollable area — a scaled-down box that
+  // visually fits would still report a giant unscaled scrollWidth/Height and trigger a
+  // (redundant, nested-feeling) scrollbar. So only allow scrolling once the content
+  // genuinely overflows the box (i.e. the user zoomed in past the auto-fit).
+  const overflowing = sizes.wrapW > 0 && (scaledW > sizes.wrapW + 0.5 || scaledH > sizes.wrapH + 0.5);
 
   const renderMatch = (m: Match, side: "left" | "right" | "center", isLast: boolean) => {
     const live = !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE";
@@ -176,7 +183,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
       </div>
-      <div ref={wrapRef} className="overflow-auto w-full relative" style={{ height: "min(72dvh, 900px)" }}>
+      <div ref={wrapRef} className={`w-full relative ${overflowing ? "overflow-auto" : "overflow-hidden"}`} style={{ height: "min(72dvh, 900px)" }}>
         <div
           ref={innerRef}
           className="relative"
@@ -184,7 +191,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
         >
           {/* Scales and scrolls together with the tree, so it stays centered on the bracket itself. */}
           <div aria-hidden className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
-            <img src={htuEmblem.url} alt="" className="w-[65%] max-w-[900px] object-contain invert opacity-[0.07]" />
+            <img src={htuEmblem} alt="" className="w-[65%] max-w-[900px] object-contain invert opacity-[0.07]" />
           </div>
           <div className="relative z-10 flex items-stretch gap-4 p-4">
             {body()}

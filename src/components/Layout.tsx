@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import htuLogo from "@/assets/htu-logo.jpg";
-import htuEmblem from "@/assets/htu-emblem.png.asset.json";
+import htuEmblem from "@/assets/club-emblem.png";
 
 const NAV_ITEMS = [
   { to: "/", icon: Home, label: "Home" },
@@ -51,7 +51,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
 
         <div className="flex items-center gap-1">
           <img
-            src={htuEmblem.url}
+            src={htuEmblem}
             alt="H-Town United e.V. Vereinsemblem"
             className="hidden sm:block w-9 h-9 object-contain invert opacity-60 mr-2"
           />

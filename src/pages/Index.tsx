@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Target, Users, Trophy, Camera, Dumbbell, BarChart3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import htuLogo from "@/assets/htu-logo.jpg";
-import htuEmblem from "@/assets/htu-emblem.png.asset.json";
+import htuEmblem from "@/assets/club-emblem.png";
 
 const QUICK_ACTIONS = [
   { to: "/game", label: "Neues Spiel", desc: "501 · 301 · Cricket", icon: Target },
@@ -98,10 +98,20 @@ const DashboardPage = () => {
             <div className="relative group">
               <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl scale-125" />
               <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full bg-background/40 border-2 border-primary/40 glow-cyan flex items-center justify-center p-3.5 transition-transform duration-700 group-hover:rotate-[8deg]">
-                <img
-                  src={htuEmblem.url}
-                  alt="H-Town United e.V. Vereinsemblem"
-                  className="w-full h-full object-contain invert"
+                <div
+                  role="img"
+                  aria-label="H-Town United e.V. Vereinsemblem"
+                  className="w-full h-full bg-gradient-to-br from-primary to-secondary"
+                  style={{
+                    WebkitMaskImage: `url(${htuEmblem})`,
+                    maskImage: `url(${htuEmblem})`,
+                    WebkitMaskSize: "contain",
+                    maskSize: "contain",
+                    WebkitMaskRepeat: "no-repeat",
+                    maskRepeat: "no-repeat",
+                    WebkitMaskPosition: "center",
+                    maskPosition: "center",
+                  }}
                 />
               </div>
             </div>
