@@ -72,6 +72,7 @@ const BRACKET_SIZES = [4, 8, 16, 32, 64];
 const BEST_OF_OPTIONS = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21];
 
 const nextPowerOfTwo = (count: number) => Math.pow(2, Math.ceil(Math.log2(Math.max(count, 2))));
+const lowerPowerOfTwo = (count: number) => Math.pow(2, Math.floor(Math.log2(Math.max(count, 2))));
 
 // A 32+ player mirrored tree can't stay legible at any scale that also fits a screen —
 // default those straight to the always-readable "Spielplan" list instead of the tree.
@@ -140,6 +141,52 @@ const distributeByes = (ordered: string[], size: number): string[] => {
     slots[m * 2 + 1] = list.shift() ?? BYE;
   }
   return slots;
+};
+
+interface Seeding {
+  /** Round-1 slots (length = mainSize). `undefined` means "pending — filled by a preliminary-round winner". */
+  round1: (string | undefined)[];
+  prelimPairs: [string, string][];
+  /** Parallel to prelimPairs: which round-1 match/slot that preliminary match's winner feeds into. */
+  prelimFeeds: { position: number; slot: 1 | 2 }[];
+}
+
+/**
+ * Seeds a clean power-of-two main bracket of `mainSize` players. When the real
+ * player count exceeds `mainSize`, the excess plays a small preliminary round
+ * (real matches, no BYEs) instead of padding the whole tree with BYEs up to the
+ * next power of two above — e.g. 34 players → a 32er main bracket with 2
+ * preliminary matches, not a 64er bracket with 30 BYE slots.
+ */
+const buildSeeding = (players: string[], mainSize: number): Seeding => {
+  const excess = Math.max(0, players.length - mainSize);
+
+  if (excess === 0) {
+    // No preliminary round needed — same evenly-spaced BYE distribution as before.
+    return { round1: distributeByes(players.slice(0, mainSize), mainSize), prelimPairs: [], prelimFeeds: [] };
+  }
+
+  const byePlayers = players.slice(0, mainSize - excess);
+  const prelimPlayers = players.slice(mainSize - excess);
+  const prelimPairs: [string, string][] = [];
+  for (let i = 0; i < prelimPlayers.length; i += 2) prelimPairs.push([prelimPlayers[i], prelimPlayers[i + 1]]);
+
+  // Reuse the evenly-spaced BYE distribution (byePlayers are `excess` short of a full
+  // bracket) and turn each resulting BYE slot — there are exactly `excess` of them —
+  // into a "pending, filled by a preliminary winner" slot. A round-1 match can end up
+  // fed by up to two preliminary winners when excess is large (e.g. 62 players → a
+  // 32er main bracket needs 30 preliminary matches, far more than the 16 round-1
+  // matches can each take just one of).
+  const spread = distributeByes(byePlayers, mainSize);
+  const round1: (string | undefined)[] = [...spread];
+  const prelimFeeds: { position: number; slot: 1 | 2 }[] = [];
+  for (let i = 0; i < round1.length && prelimFeeds.length < prelimPairs.length; i++) {
+    if (round1[i] === BYE) {
+      round1[i] = undefined;
+      prelimFeeds.push({ position: Math.floor(i / 2), slot: i % 2 === 0 ? 1 : 2 });
+    }
+  }
+  return { round1, prelimPairs, prelimFeeds };
 };
 
 // ─── Bracket Viewport: auto-fit + zoom + pan ─────────────────
@@ -218,6 +265,51 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     ? "fixed inset-0 z-50 bg-background flex flex-col"
     : "relative w-full";
 
+  const renderMatch = (match: Match, side: "left" | "right" | "center", isLast: boolean) => (
+    <div key={match.id} className={`bg-card border rounded-xl overflow-hidden relative ${match.winner ? "border-border" : "border-primary/30"}`}>
+      {!isLast && side === "left" && (
+        <span aria-hidden className="absolute top-1/2 -right-4 w-4 h-px bg-border" />
+      )}
+      {!isLast && side === "right" && (
+        <span aria-hidden className="absolute top-1/2 -left-4 w-4 h-px bg-border" />
+      )}
+      {[match.player1, match.player2].map((player, idx) => (
+        <div key={idx}
+          className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
+            idx === 0 ? "border-b border-border" : ""
+          } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === BYE ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
+          <button disabled={!player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left uppercase tracking-wide disabled:cursor-not-allowed">{player || "TBD"}</button>
+          <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
+            <Plus className="w-4 h-4" />
+          </Button>
+          <span className="w-6 text-center font-display text-base">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
+          {match.winner === player && <Check className="w-4 h-4 text-secondary" />}
+        </div>
+      ))}
+      {(match.scorekeeper || match.scorekeeperRule || match.board) && !match.winner && (
+        <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
+          <span className="truncate">✍️ {scorekeeperLabel(match, matches) || "–"}</span>
+          {match.board ? <span className="font-mono">Board {match.board}</span> : null}
+        </div>
+      )}
+      {(match.winner || match.score1 || match.score2 || onEditMatch) && (
+        <div className="flex border-t border-border/60">
+          {(match.winner || match.score1 || match.score2) && (
+            <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}>
+              <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
+            </Button>
+          )}
+          {onEditMatch && match.round === 1 && (
+            <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => onEditMatch(match)}>
+              <PencilLine className="w-3 h-3 mr-1" /> bearbeiten
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+  const prelimMatches = matches.filter(m => m.round === 0).sort((a, b) => a.position - b.position);
+
   return (
     <div className={wrapperClass}>
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 bg-background/80 backdrop-blur sticky top-0 z-10">
@@ -239,6 +331,18 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           </Button>
         </div>
       </div>
+      {prelimMatches.length > 0 && (
+        <div className="mx-3 mt-3 rounded-xl border border-border bg-card/60 p-3">
+          <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
+            Preliminary Round · winners advance to the main bracket
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {prelimMatches.map(m => (
+              <div key={m.id} className="min-w-[220px] flex-1">{renderMatch(m, "center", true)}</div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="relative flex-1">
       <div
         ref={wrapRef}
@@ -270,50 +374,6 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
             // Two-sided (mirrored) bracket:
             //   [L R1 · L R2 · … · L Semi]  [Final]  [R Semi · … · R R2 · R R1]
             // Round r has N/2^r matches. Positions 1..half → left side, rest → right side.
-            const renderMatch = (match: Match, side: "left" | "right" | "center", isLast: boolean) => (
-              <div key={match.id} className={`bg-card border rounded-xl overflow-hidden relative ${match.winner ? "border-border" : "border-primary/30"}`}>
-                {!isLast && side === "left" && (
-                  <span aria-hidden className="absolute top-1/2 -right-4 w-4 h-px bg-border" />
-                )}
-                {!isLast && side === "right" && (
-                  <span aria-hidden className="absolute top-1/2 -left-4 w-4 h-px bg-border" />
-                )}
-                {[match.player1, match.player2].map((player, idx) => (
-                  <div key={idx}
-                    className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
-                      idx === 0 ? "border-b border-border" : ""
-                    } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === BYE ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-                    <button disabled={!player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left uppercase tracking-wide disabled:cursor-not-allowed">{player || "TBD"}</button>
-                    <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                    <span className="w-6 text-center font-display text-base">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
-                    {match.winner === player && <Check className="w-4 h-4 text-secondary" />}
-                  </div>
-                ))}
-                {(match.scorekeeper || match.scorekeeperRule || match.board) && !match.winner && (
-                  <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
-                    <span className="truncate">✍️ {scorekeeperLabel(match, matches) || "–"}</span>
-                    {match.board ? <span className="font-mono">Board {match.board}</span> : null}
-                  </div>
-                )}
-                {(match.winner || match.score1 || match.score2 || onEditMatch) && (
-                  <div className="flex border-t border-border/60">
-                    {(match.winner || match.score1 || match.score2) && (
-                      <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}>
-                        <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
-                      </Button>
-                    )}
-                    {onEditMatch && match.round === 1 && (
-                      <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => onEditMatch(match)}>
-                        <PencilLine className="w-3 h-3 mr-1" /> bearbeiten
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-
             const roundHeader = (round: number, align: "left" | "center" | "right") => {
               const cfg = (activeTournament.round_configs || [])[round - 1];
               const roundMode = cfg?.mode || activeTournament.game_mode;
@@ -487,7 +547,9 @@ const TournamentPage = () => {
   // Auto-generate round configs when target size or defaults change
   useEffect(() => {
     if (tournamentMode === "round-robin") return;
-    const size = targetSize === "auto" ? nextPowerOfTwo(Math.max(players.length, 2)) : Number(targetSize);
+    // "auto" targets a clean main bracket (a preliminary round absorbs any excess
+    // players instead of padding the whole tree with BYEs up to the next power of two).
+    const size = targetSize === "auto" ? Math.min(64, lowerPowerOfTwo(Math.max(players.length, 2))) : Number(targetSize);
     const totalRounds = Math.log2(nextPowerOfTwo(size));
     setRoundConfigs((prev) => {
       const next: RoundConfig[] = [];
@@ -498,10 +560,14 @@ const TournamentPage = () => {
     });
   }, [targetSize, tournamentMode, gameMode, bestOfLegs, players.length]);
 
-  /** Effective bracket size: automatic (smallest power of two ≥ players) or manual override. */
+  /**
+   * Effective MAIN bracket size (excludes any preliminary round): automatic mode
+   * uses the largest clean power of two the field already fills (any excess plays
+   * a preliminary round); a manual override always pads with BYEs as before.
+   */
   const effectiveSize = useMemo(() => {
+    if (targetSize === "auto") return Math.min(64, lowerPowerOfTwo(Math.max(players.length, 2)));
     const auto = nextPowerOfTwo(Math.max(players.length, 2));
-    if (targetSize === "auto") return Math.min(64, auto);
     return Math.min(64, Math.max(auto, Number(targetSize)));
   }, [targetSize, players.length]);
 
@@ -549,11 +615,10 @@ const TournamentPage = () => {
 
   const shufflePlayers = () => setPlayers((prev) => shuffle(prev));
 
-  /** The single source of truth for the first round – used by preview AND bracket generation. */
-  const drawSlots = useMemo(() => {
-    const size = effectiveSize;
+  /** The single source of truth for seeding – used by preview AND bracket generation. */
+  const drawSeeding = useMemo(() => {
     const base = drawMode === "manual" ? [...players] : seededShuffle(players, drawSeed);
-    return distributeByes(base.slice(0, size), size);
+    return buildSeeding(base, effectiveSize);
   }, [players, drawMode, drawSeed, effectiveSize]);
 
   const redraw = () => setDrawSeed(Math.floor(Math.random() * 1e9));
@@ -562,22 +627,36 @@ const TournamentPage = () => {
   const generateKoBracket = (playerList: string[]): Match[] => {
     const size = effectiveSize;
     // exactly the draw shown in the preview
-    const padded = drawSlots;
+    const seeding = drawSeeding;
 
+    const round0: Match[] = seeding.prelimPairs.map((pair, i) => ({
+      id: `r0-${i}`,
+      round: 0,
+      position: i,
+      table: i + 1,
+      player1: pair[0],
+      player2: pair[1],
+      feedsRound1Position: seeding.prelimFeeds[i].position,
+      feedsRound1Slot: seeding.prelimFeeds[i].slot,
+    }));
+
+    // Slots not fed by a preliminary match are always filled by buildSeeding (with a
+    // real player or an explicit BYE); slots that are stay undefined (TBD) until the
+    // preliminary match resolves.
     const firstRound: Match[] = [];
-    for (let i = 0; i < padded.length; i += 2) {
+    for (let i = 0; i < seeding.round1.length; i += 2) {
       firstRound.push({
         id: `r1-${i / 2}`,
         round: 1,
         position: i / 2,
         table: i / 2 + 1,
-        player1: padded[i],
-        player2: padded[i + 1],
+        player1: seeding.round1[i],
+        player2: seeding.round1[i + 1],
       });
     }
 
     const totalRounds = Math.log2(size);
-    const allMatches = [...firstRound];
+    const allMatches = [...round0, ...firstRound];
     for (let round = 2; round <= totalRounds; round++) {
       const count = size / Math.pow(2, round);
       for (let pos = 0; pos < count; pos++) {
@@ -1040,7 +1119,7 @@ const TournamentPage = () => {
               <div className="space-y-2">
                 {roundConfigs.map((cfg, idx) => {
                   const total = roundConfigs.length;
-                  const label = idx === total - 1 ? "Finale" : idx === total - 2 ? "Halbfinale" : idx === total - 3 ? "Viertelfinale" : `Runde ${idx + 1}`;
+                  const label = roundLabelFor(idx + 1, total);
                   return (
                     <div key={idx} className="grid grid-cols-[80px_1fr_1fr] gap-2 items-center">
                       <span className="text-xs font-display uppercase text-muted-foreground">{label}</span>
@@ -1173,11 +1252,14 @@ const TournamentPage = () => {
           {tournamentMode !== "round-robin" && players.length >= 2 && (() => {
             const size = effectiveSize;
             const rounds = Math.log2(size);
-            const byes = size - Math.min(players.length, size);
-            const slots = drawSlots;
-            const previewMatches: Match[] = [];
-            for (let i = 0; i < slots.length; i += 2) {
-              previewMatches.push({ id: `p1-${i / 2}`, round: 1, position: i / 2, player1: slots[i], player2: slots[i + 1] });
+            const seeding = drawSeeding;
+            const byes = seeding.round1.filter(p => p === BYE).length;
+            const previewMatches: Match[] = seeding.prelimPairs.map((pair, i) => ({
+              id: `p0-${i}`, round: 0, position: i, player1: pair[0], player2: pair[1],
+              feedsRound1Position: seeding.prelimFeeds[i].position, feedsRound1Slot: seeding.prelimFeeds[i].slot,
+            }));
+            for (let i = 0; i < seeding.round1.length; i += 2) {
+              previewMatches.push({ id: `p1-${i / 2}`, round: 1, position: i / 2, player1: seeding.round1[i], player2: seeding.round1[i + 1] });
             }
             for (let r = 2; r <= rounds; r++) {
               for (let pos = 0; pos < size / Math.pow(2, r); pos++) {
@@ -1200,9 +1282,11 @@ const TournamentPage = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                   {[
                     { label: "Teilnehmer", value: players.length },
-                    { label: "Baumgröße", value: `${size}er` },
+                    { label: "Hauptraster", value: `${size}er` },
                     { label: "Runden", value: rounds },
-                    { label: "Freilose", value: byes },
+                    seeding.prelimPairs.length > 0
+                      ? { label: "Preliminary Matches", value: seeding.prelimPairs.length }
+                      : { label: "Freilose", value: byes },
                   ].map((s) => (
                     <div key={s.label} className="bg-card border border-border rounded-lg py-2">
                       <p className="font-display text-xl">{s.value}</p>
@@ -1222,7 +1306,7 @@ const TournamentPage = () => {
                 </div>
                 <div className="max-h-[60vh] overflow-auto rounded-lg bg-card/40 p-2">
                   <div className="flex gap-3 min-w-max">
-                    {Array.from({ length: rounds }, (_, ri) => ri + 1).map((r) => {
+                    {[...(seeding.prelimPairs.length > 0 ? [0] : []), ...Array.from({ length: rounds }, (_, ri) => ri + 1)].map((r) => {
                       const list = tree.filter((m) => m.round === r).sort((a, b) => a.position - b.position);
                       return (
                         <div key={r} className="flex flex-col justify-around gap-1 min-w-[130px]">

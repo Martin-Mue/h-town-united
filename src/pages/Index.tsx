@@ -89,10 +89,6 @@ const DashboardPage = () => {
           <p className="text-xs md:text-sm uppercase tracking-[0.4em] text-muted-foreground font-display mt-2">
             Darts · Verein · Gemeinschaft
           </p>
-          <p className="text-muted-foreground max-w-md mt-4 text-sm">
-            Verwalte deinen Verein, tracke Scores und organisiere Turniere – alles in einer App.
-          </p>
-
           {/* Vereinsmotto – bewusst laut, wie ein Graffiti-Tag auf der Wand */}
           <div className="relative mt-8 pt-6 border-t border-dashed border-primary/25 w-full flex flex-col items-center gap-3">
             <div className="relative group">

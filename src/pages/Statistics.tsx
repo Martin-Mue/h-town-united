@@ -52,7 +52,7 @@ const StatisticsPage = () => {
   const [players, setPlayers] = useState<PlayerStats[]>([]);
   const [gameLegs, setGameLegs] = useState<GameLegRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate">("average");
+  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate" | "checkout">("average");
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
@@ -64,12 +64,14 @@ const StatisticsPage = () => {
   const { session } = useAuth();
 
   const fetchData = useCallback(async () => {
-    const [gamesRes, playersRes] = await Promise.all([
+    const [gamesRes, playersRes, legsRes] = await Promise.all([
       supabase.from("games").select("*").order("played_at", { ascending: false }).limit(500),
       supabase.from("players").select("id, name, games_played, games_won, average, high_score, double_rate, emoji").order("average", { ascending: false }),
+      supabase.from("game_legs").select("*").order("created_at", { ascending: false }).limit(4000),
     ]);
     if (gamesRes.data) setGames(gamesRes.data as GameRecord[]);
     if (playersRes.data) setPlayers(playersRes.data);
+    if (legsRes.data) setGameLegs(legsRes.data as unknown as GameLegRecord[]);
     setLoading(false);
   }, []);
 
@@ -144,6 +146,42 @@ const StatisticsPage = () => {
     };
   }, [filteredGames, filterPlayerId]);
 
+  // Checkout %, highest checkout, first-9 average — computed from the dart-by-dart
+  // game_legs data (not available on X01 games only; Cricket has no "checkout").
+  const advancedByPlayer = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const modeById = new Map(games.map((g) => [g.id, g.mode]));
+    const byPlayer: Record<string, { name: string; checkouts: CheckoutStats[]; first9s: number[] }> = {};
+    gameLegs.forEach((leg) => {
+      if (!filteredIds.has(leg.game_id)) return;
+      if (modeById.get(leg.game_id) === "cricket") return;
+      if (!leg.player_id || !Array.isArray(leg.throws) || leg.throws.length === 0) return;
+      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, checkouts: [], first9s: [] });
+      bucket.checkouts.push(computeCheckoutStats(leg.throws, leg.starting_score));
+      bucket.first9s.push(first9Average(leg.throws));
+    });
+    const result: Record<string, { name: string; checkout: CheckoutStats; first9: number }> = {};
+    Object.entries(byPlayer).forEach(([id, v]) => {
+      result[id] = {
+        name: v.name,
+        checkout: combineCheckoutStats(v.checkouts),
+        first9: v.first9s.length ? v.first9s.reduce((a, b) => a + b, 0) / v.first9s.length : 0,
+      };
+    });
+    return result;
+  }, [gameLegs, filteredGames, games]);
+
+  const bestCheckoutRate = useMemo(() => {
+    return Object.values(advancedByPlayer)
+      .filter((p) => p.checkout.attempts >= 5)
+      .reduce((best, p) => (p.checkout.percentage > best.val ? { name: p.name, val: p.checkout.percentage } : best), { name: "-", val: 0 });
+  }, [advancedByPlayer]);
+
+  const bestHighestCheckout = useMemo(() => {
+    return Object.values(advancedByPlayer)
+      .reduce((best, p) => (p.checkout.highestCheckout > best.val ? { name: p.name, val: p.checkout.highestCheckout } : best), { name: "-", val: 0 });
+  }, [advancedByPlayer]);
+
   const resetFilters = () => {
     setFilterTime("all"); setFilterMode("all"); setFilterPlayerId("all"); setFilterBestOf("all");
   };
@@ -179,9 +217,12 @@ const StatisticsPage = () => {
         const rateB = b.games_played > 0 ? b.games_won / b.games_played : 0;
         return rateB - rateA;
       }
+      if (sortBy === "checkout") {
+        return (advancedByPlayer[b.id]?.checkout.percentage ?? 0) - (advancedByPlayer[a.id]?.checkout.percentage ?? 0);
+      }
       return Number(b.double_rate) - Number(a.double_rate);
     });
-  }, [players, sortBy]);
+  }, [players, sortBy, advancedByPlayer]);
 
   const modeDistribution = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -397,6 +438,8 @@ const StatisticsPage = () => {
               { label: "Bester Ø", value: clubStats.bestAvg.val.toFixed(1), sub: clubStats.bestAvg.name, icon: Flame, color: "text-destructive" },
               { label: "Bester Game-Ø", value: clubStats.highestGameAvg.val.toFixed(1), sub: clubStats.highestGameAvg.name, icon: Zap, color: "text-secondary" },
               { label: "Meiste Siege", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, color: "text-primary" },
+              { label: "Höchstes Finish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, color: "text-accent" },
+              { label: "Beste Checkout %", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, color: "text-secondary" },
             ].map(s => (
               <div key={s.label} className="bg-card rounded-xl p-3 border border-border">
                 <s.icon className={`w-4 h-4 ${s.color} mb-1`} />
@@ -503,6 +546,7 @@ const StatisticsPage = () => {
                   <SelectItem value="win_rate">Siegquote %</SelectItem>
                   <SelectItem value="high_score">Highscore</SelectItem>
                   <SelectItem value="double_rate">Doppel %</SelectItem>
+                  <SelectItem value="checkout">Checkout %</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -514,7 +558,9 @@ const StatisticsPage = () => {
                   const winRate = p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
                   const sortVal = sortBy === "average" ? Number(p.average).toFixed(1) :
                     sortBy === "games_won" ? p.games_won : sortBy === "high_score" ? p.high_score :
-                    sortBy === "win_rate" ? `${winRate}%` : `${Number(p.double_rate).toFixed(0)}%`;
+                    sortBy === "win_rate" ? `${winRate}%` :
+                    sortBy === "checkout" ? `${(advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0)}%` :
+                    `${Number(p.double_rate).toFixed(0)}%`;
                   return (
                     <button key={p.id} onClick={() => { setSelectedPlayerId(p.id); setActiveTab("players"); }}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-muted/80 ${i < 3 ? "bg-muted/50" : ""}`}>
@@ -585,6 +631,28 @@ const StatisticsPage = () => {
                   <p className="text-2xl font-display text-destructive">{playerDetailStats.worstGameAvg.toFixed(1)}</p>
                 </div>
               </div>
+
+              {/* Checkout & first-9 (from dart-by-dart data — only available for games played since this was added) */}
+              {advancedByPlayer[playerDetailStats.player.id] && (
+                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
+                    <Crosshair className="w-4 h-4" /> Checkout &amp; Eröffnung
+                  </h3>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { label: "First 9 Ø", value: advancedByPlayer[playerDetailStats.player.id].first9.toFixed(1), color: "text-primary" },
+                      { label: "Checkout %", value: `${advancedByPlayer[playerDetailStats.player.id].checkout.percentage.toFixed(0)}%`, color: "text-secondary" },
+                      { label: "Höchstes Finish", value: advancedByPlayer[playerDetailStats.player.id].checkout.highestCheckout, color: "text-accent" },
+                      { label: "Checkout-Versuche", value: advancedByPlayer[playerDetailStats.player.id].checkout.attempts, color: "text-muted-foreground" },
+                    ].map(s => (
+                      <div key={s.label} className="text-center">
+                        <p className={`text-lg font-display ${s.color}`}>{s.value}</p>
+                        <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Average trend */}
               {playerDetailStats.averageTrend.length > 0 && (

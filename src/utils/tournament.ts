@@ -20,6 +20,14 @@ export interface Match {
   board?: number;
   /** global playing slot (round of concurrent matches) */
   slot?: number;
+  /**
+   * Preliminary-round matches only (round 0): which round-1 match/slot the winner
+   * of this match feeds into. Lets a non-power-of-two player count reduce to a
+   * clean power-of-two main bracket via a small play-in round instead of padding
+   * the whole tree with BYEs up to the next power of two.
+   */
+  feedsRound1Position?: number;
+  feedsRound1Slot?: 1 | 2;
 }
 
 export const BYE = "BYE";
@@ -36,6 +44,37 @@ export function recomputeBracket(input: Match[]): Match[] {
   const work = input.map((m) => ({ ...m }));
   if (work.length === 0) return work;
   const totalRounds = Math.max(...work.map((m) => m.round));
+
+  // Preliminary round (round 0): a small play-in stage for non-power-of-two player
+  // counts. Resolved like any other round, but feeds its winners into specific
+  // round-1 slots instead of a uniform pairwise fold.
+  const prelim = work.filter((m) => m.round === 0).sort((a, b) => a.position - b.position);
+  if (prelim.length > 0) {
+    const round1 = work.filter((m) => m.round === 1).sort((a, b) => a.position - b.position);
+    prelim.forEach((m) => {
+      if (m.winner && m.winner !== m.player1 && m.winner !== m.player2) {
+        m.winner = undefined;
+        m.score1 = undefined;
+        m.score2 = undefined;
+      }
+      if (!m.winner && m.player1 && m.player2) {
+        const bye1 = m.player1 === BYE;
+        const bye2 = m.player2 === BYE;
+        if (bye1 && bye2) m.winner = BYE;
+        else if (bye2) m.winner = m.player1;
+        else if (bye1) m.winner = m.player2;
+      }
+      if (m.winner === BYE) {
+        m.score1 = undefined;
+        m.score2 = undefined;
+      }
+      if (m.feedsRound1Position === undefined || !m.feedsRound1Slot) return;
+      const target = round1.find((r1) => r1.position === m.feedsRound1Position);
+      if (!target) return;
+      if (m.feedsRound1Slot === 1) target.player1 = m.winner;
+      else target.player2 = m.winner;
+    });
+  }
 
   for (let r = 1; r <= totalRounds; r++) {
     const rm = work.filter((m) => m.round === r).sort((a, b) => a.position - b.position);
@@ -105,9 +144,10 @@ export function buildSchedule(matches: Match[], boards: number): ScheduleEntry[]
   const b = Math.max(1, boards);
   const entries: ScheduleEntry[] = [];
   const totalRounds = matches.length ? Math.max(...matches.map((m) => m.round)) : 0;
+  const hasPrelim = matches.some((m) => m.round === 0);
   let slotCursor = 0;
 
-  for (let r = 1; r <= totalRounds; r++) {
+  for (let r = hasPrelim ? 0 : 1; r <= totalRounds; r++) {
     const list = matches
       .filter((m) => m.round === r && isPlayable(m))
       .sort((a, b2) => a.position - b2.position);
@@ -278,11 +318,12 @@ export function scorekeeperLabel(match: Match, all: Match[]): string | null {
 }
 
 export const roundLabelFor = (round: number, total: number) => {
-  if (round === total) return "Finale";
-  if (round === total - 1) return "Halbfinale";
-  if (round === total - 2) return "Viertelfinale";
-  if (round === total - 3) return "Achtelfinale";
-  if (round === total - 4) return "Sechzehntelfinale";
-  if (round === total - 5) return "Zweiunddreißigstelfinale";
-  return `Runde ${round}`;
+  if (round === 0) return "Preliminary Round";
+  if (round === total) return "Final";
+  if (round === total - 1) return "Semifinal";
+  if (round === total - 2) return "Quarterfinal";
+  if (round === total - 3) return "Round of 16";
+  if (round === total - 4) return "Round of 32";
+  if (round === total - 5) return "Round of 64";
+  return `Round ${round}`;
 };

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import {
   AlertCircle,
   Camera,
@@ -53,6 +53,27 @@ interface LiveCameraProps {
   dartsRemaining?: number;
   playerName?: string;
 }
+
+/** Imperative handle so the parent can pull a just-recorded clip when a highlight happens. */
+export interface LiveCameraHandle {
+  /** The most recently completed rolling-buffer segment (a few seconds of trailing video), or null if none is ready yet. */
+  getRecentClip(): { url: string; mime: string } | null;
+}
+
+// Rolling video buffer: rather than one long recording, we record back-to-back
+// self-contained segments and always keep the latest completed one in memory.
+// A "true" ring buffer of MediaRecorder chunks isn't reliable — only the first
+// chunk of a session carries the container header, so chunks can't be dropped
+// from the front and reassembled into a valid clip. Short fixed segments avoid
+// that entirely while still giving a no-manual-recording "it just captured it" feel.
+const CLIP_SEGMENT_MS = 6000;
+const pickClipMimeType = (): string => {
+  const candidates = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+  for (const type of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(type)) return type;
+  }
+  return "video/webm";
+};
 
 type Phase = "starting" | "detecting" | "calibrate" | "live" | "scanning" | "error";
 
@@ -239,18 +260,25 @@ function diffNewDarts(prev: DetectedDart[], ai: DetectedDart[]): DetectedDart[] 
   return remaining;
 }
 
-const LiveCamera = ({
+const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   onRoundCommit,
   onPendingChange,
   enabled,
   onClose,
   dartsRemaining = 3,
   playerName,
-}: LiveCameraProps) => {
+}, ref) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const zoomCapsRef = useRef<ZoomCapability | null>(null);
+
+  // Rolling clip recorder
+  const clipRecorderRef = useRef<MediaRecorder | null>(null);
+  const clipChunksRef = useRef<BlobPart[]>([]);
+  const clipMimeRef = useRef<string>("video/webm");
+  const lastClipRef = useRef<{ blob: Blob; mime: string } | null>(null);
+  const clipSegmentTimerRef = useRef<number | null>(null);
 
   // Frame state
   const prevSigRef = useRef<number[] | null>(null);
@@ -308,6 +336,57 @@ const LiveCamera = ({
     setThrowsSeen(0);
   }, []);
 
+  // ─── rolling clip recorder ──────────────────────────────────────────
+  // Records back-to-back short segments for as long as the camera is on, so a
+  // "just captured it" clip is always ready without the user ever hitting record.
+  const stopClipRecorder = useCallback(() => {
+    if (clipSegmentTimerRef.current) {
+      window.clearTimeout(clipSegmentTimerRef.current);
+      clipSegmentTimerRef.current = null;
+    }
+    const rec = clipRecorderRef.current;
+    clipRecorderRef.current = null;
+    if (rec && rec.state !== "inactive") {
+      rec.onstop = null;
+      try { rec.stop(); } catch { /* already stopped */ }
+    }
+  }, []);
+
+  const startClipSegment = useCallback(() => {
+    const stream = streamRef.current;
+    if (!stream || typeof MediaRecorder === "undefined") return;
+    const mime = pickClipMimeType();
+    clipMimeRef.current = mime;
+    clipChunksRef.current = [];
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, { mimeType: mime });
+    } catch {
+      return; // unsupported on this device — no clip feature, scoring still works
+    }
+    clipRecorderRef.current = recorder;
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) clipChunksRef.current.push(e.data); };
+    recorder.onstop = () => {
+      if (clipChunksRef.current.length > 0) {
+        lastClipRef.current = { blob: new Blob(clipChunksRef.current, { type: mime }), mime };
+      }
+      // Immediately roll into the next segment for continuous coverage.
+      if (clipRecorderRef.current === recorder) startClipSegment();
+    };
+    recorder.start();
+    clipSegmentTimerRef.current = window.setTimeout(() => {
+      if (clipRecorderRef.current === recorder && recorder.state !== "inactive") recorder.stop();
+    }, CLIP_SEGMENT_MS);
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    getRecentClip: () => {
+      const clip = lastClipRef.current;
+      if (!clip) return null;
+      return { url: URL.createObjectURL(clip.blob), mime: clip.mime };
+    },
+  }), []);
+
   // ─── camera lifecycle ───────────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -333,6 +412,7 @@ const LiveCamera = ({
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
         }
+        startClipSegment();
         const track = stream.getVideoTracks()[0];
         const capabilities = track?.getCapabilities?.() as MediaTrackCapabilities & {
           zoom?: { min: number; max: number; step?: number };
@@ -358,6 +438,8 @@ const LiveCamera = ({
     })();
     return () => {
       cancelled = true;
+      stopClipRecorder();
+      lastClipRef.current = null;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
@@ -1202,6 +1284,8 @@ const LiveCamera = ({
       )}
     </div>
   );
-};
+});
+
+LiveCamera.displayName = "LiveCamera";
 
 export default LiveCamera;

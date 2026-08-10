@@ -194,8 +194,23 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     );
   };
 
+  const prelimMatches = matches.filter(m => m.round === 0).sort((a, b) => a.position - b.position);
+
   return (
-    <div className="relative">
+    <div>
+      {prelimMatches.length > 0 && (
+        <div className="mb-3 rounded-xl border border-border bg-card/60 p-3">
+          <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
+            Preliminary Round · winners advance to the main bracket
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {prelimMatches.map(m => (
+              <div key={m.id} className="min-w-[180px] flex-1">{renderMatch(m, "center", true)}</div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="relative">
       <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-card/90 backdrop-blur border border-border rounded-lg p-1">
         <button onClick={() => setUserZoom(z => Math.max(0.4, +(z - 0.15).toFixed(2)))} title="Verkleinern" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
           <ZoomOut className="w-3.5 h-3.5" />
@@ -222,6 +237,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
           </div>
         </div>
       </div>
+      </div>
     </div>
   );
 };
@@ -238,7 +254,8 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   fallbackMode?: string;
   fallbackBestOf?: number;
 }) => {
-  const rounds = Array.from({ length: totalRounds }, (_, i) => i + 1);
+  const hasPrelim = matches.some(m => m.round === 0);
+  const rounds = [...(hasPrelim ? [0] : []), ...Array.from({ length: totalRounds }, (_, i) => i + 1)];
   return (
     <div className="space-y-3">
       {rounds.map(round => {
