@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor } from "lucide-react";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Network, Rows3 } from "lucide-react";
+import { roundLabelFor } from "@/utils/tournament";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/htu-emblem.png.asset.json";
 
@@ -34,12 +35,7 @@ interface TournamentRow {
   round_configs?: { mode: string; bestOf: number }[];
 }
 
-const roundLabel = (round: number, total: number) => {
-  if (round === total) return "Finale";
-  if (round === total - 1) return "Halbfinale";
-  if (round === total - 2) return "Viertelfinale";
-  return `Runde ${round}`;
-};
+const roundLabel = roundLabelFor;
 
 /** Mirrored, auto-fitting bracket — identical layout to the admin view, read-only. */
 const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbackBestOf }: {
@@ -51,7 +47,11 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
 }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [sizes, setSizes] = useState({ wrapW: 0, wrapH: 0, innerW: 0, innerH: 0 });
+  const [userZoom, setUserZoom] = useState(1);
+
+  // Large trees (Achtelfinale and earlier) get tighter cards so more fits at a readable scale.
+  const compact = totalRounds >= 5;
 
   const measure = useCallback(() => {
     if (!wrapRef.current || !innerRef.current) return;
@@ -60,11 +60,11 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     innerRef.current.style.transform = "none";
     const inner = innerRef.current.getBoundingClientRect();
     innerRef.current.style.transform = prev;
-    if (!inner.width || !inner.height) return;
-    setScale(Math.max(0.18, Math.min(wrap.width / inner.width, wrap.height / inner.height, 1)));
+    if (!wrap.width || !wrap.height || !inner.width || !inner.height) return;
+    setSizes({ wrapW: wrap.width, wrapH: wrap.height, innerW: inner.width, innerH: inner.height });
   }, []);
 
-  useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length]);
+  useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, compact]);
   useEffect(() => {
     const ro = new ResizeObserver(() => measure());
     if (wrapRef.current) ro.observe(wrapRef.current);
@@ -79,6 +79,18 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     };
   }, [measure]);
 
+  // Never auto-shrink below a legible floor — large brackets scroll/pan instead of vanishing.
+  const fitScale = sizes.wrapW && sizes.innerW
+    ? Math.max(0.5, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
+    : 1;
+  const scale = fitScale * userZoom;
+  const scaledW = sizes.innerW * scale;
+  const scaledH = sizes.innerH * scale;
+  // Center the tree in the viewport when it fits; anchor at the origin (scrollable) when it doesn't,
+  // so the watermark logo behind it is always visually centered on the actual bracket.
+  const offsetX = sizes.wrapW && scaledW <= sizes.wrapW ? (sizes.wrapW - scaledW) / 2 : 0;
+  const offsetY = sizes.wrapH && scaledH <= sizes.wrapH ? (sizes.wrapH - scaledH) / 2 : 0;
+
   const renderMatch = (m: Match, side: "left" | "right" | "center", isLast: boolean) => {
     const live = !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE";
     return (
@@ -86,13 +98,13 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
         {!isLast && side === "left" && <span aria-hidden className="absolute top-1/2 -right-4 w-4 h-px bg-border" />}
         {!isLast && side === "right" && <span aria-hidden className="absolute top-1/2 -left-4 w-4 h-px bg-border" />}
         {[m.player1, m.player2].map((player, idx) => (
-          <div key={idx} className={`px-3 py-2 text-sm flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/40" : !player ? "text-muted-foreground/40" : ""}`}>
+          <div key={idx} className={`${compact ? "px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"} flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/40" : !player ? "text-muted-foreground/40" : ""}`}>
             <span className="truncate uppercase tracking-wide">{player || "TBD"}</span>
-            <span className="font-display text-base">{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
+            <span className={`font-display ${compact ? "text-sm" : "text-base"}`}>{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
           </div>
         ))}
         {!m.winner && (m.scorekeeper || m.scorekeeperRule || m.board) && (
-          <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
+          <div className={`px-2 py-0.5 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[9px] text-muted-foreground ${compact ? "" : "px-3 py-1 text-[10px]"}`}>
             <span className="truncate">✍️ {keeperLabel(m, matches) || "–"}</span>
             {m.board ? <span className="font-mono">Board {m.board}</span> : null}
           </div>
@@ -116,9 +128,9 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     const half = Math.ceil(all.length / 2);
     const slice = side === "left" ? all.slice(0, half) : all.slice(half);
     return (
-      <div key={`${side}-${round}`} className="flex flex-col gap-3 min-w-[220px]">
+      <div key={`${side}-${round}`} className={`flex flex-col gap-3 ${compact ? "min-w-[170px]" : "min-w-[220px]"}`}>
         {roundHeader(round, side === "left" ? "left" : "right")}
-        <div className="flex flex-col justify-around flex-1 gap-3 relative">
+        <div className={`flex flex-col justify-around flex-1 relative ${compact ? "gap-1.5" : "gap-3"}`}>
           {slice.map(m => renderMatch(m, side, isLast))}
         </div>
       </div>
@@ -135,7 +147,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     return (
       <>
         {leftCols}
-        <div key="final" className="flex flex-col gap-3 min-w-[250px] justify-center">
+        <div key="final" className={`flex flex-col gap-3 justify-center ${compact ? "min-w-[190px]" : "min-w-[250px]"}`}>
           {roundHeader(totalRounds, "center")}
           <div className="flex flex-col justify-center flex-1 gap-3">
             {finals.map(m => (
@@ -152,17 +164,84 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   };
 
   return (
-    <div ref={wrapRef} className="overflow-hidden w-full relative" style={{ height: "min(72dvh, 900px)" }}>
-      <div aria-hidden className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
-        <img src={htuEmblem.url} alt="" className="w-[65%] max-w-[900px] object-contain invert opacity-[0.07]" />
+    <div className="relative">
+      <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-card/90 backdrop-blur border border-border rounded-lg p-1">
+        <button onClick={() => setUserZoom(z => Math.max(0.4, +(z - 0.15).toFixed(2)))} title="Verkleinern" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+          <ZoomOut className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={() => setUserZoom(1)} title="Auf Bildschirm einpassen" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+          <Maximize2 className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={() => setUserZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))} title="Vergrößern" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+          <ZoomIn className="w-3.5 h-3.5" />
+        </button>
       </div>
-      <div
-        ref={innerRef}
-        className="relative z-10 flex items-stretch gap-4 p-4"
-        style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: "max-content" }}
-      >
-        {body()}
+      <div ref={wrapRef} className="overflow-auto w-full relative" style={{ height: "min(72dvh, 900px)" }}>
+        <div
+          ref={innerRef}
+          className="relative"
+          style={{ transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`, transformOrigin: "top left", width: "max-content" }}
+        >
+          {/* Scales and scrolls together with the tree, so it stays centered on the bracket itself. */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
+            <img src={htuEmblem.url} alt="" className="w-[65%] max-w-[900px] object-contain invert opacity-[0.07]" />
+          </div>
+          <div className="relative z-10 flex items-stretch gap-4 p-4">
+            {body()}
+          </div>
+        </div>
       </div>
+    </div>
+  );
+};
+
+/**
+ * Round-grouped, vertically stacked match list — no scaling, no shrinking.
+ * The robust fallback for phones and very large trees (e.g. 64 players):
+ * always fully legible, just scroll. Covers every round, not only open matches.
+ */
+const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbackBestOf }: {
+  matches: Match[];
+  totalRounds: number;
+  roundConfigs?: { mode: string; bestOf: number }[];
+  fallbackMode?: string;
+  fallbackBestOf?: number;
+}) => {
+  const rounds = Array.from({ length: totalRounds }, (_, i) => i + 1);
+  return (
+    <div className="space-y-3">
+      {rounds.map(round => {
+        const cfg = (roundConfigs || [])[round - 1];
+        const list = matches.filter(m => m.round === round).sort((a, b) => a.position - b.position);
+        return (
+          <div key={round} className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between">
+              <h3 className="font-display uppercase text-sm">{roundLabel(round, totalRounds)}</h3>
+              <span className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · BO{cfg?.bestOf || fallbackBestOf}</span>
+            </div>
+            <div className="divide-y divide-border">
+              {list.map(m => {
+                const live = !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE";
+                return (
+                  <div key={m.id} className={`px-4 py-2.5 flex items-center gap-3 text-sm ${live ? "bg-primary/5" : ""}`}>
+                    {[m.player1, m.player2].map((player, idx) => (
+                      <span key={idx} className={`flex-1 min-w-0 truncate uppercase tracking-wide ${m.winner === player ? "text-secondary font-semibold" : player === "BYE" || !player ? "text-muted-foreground/40" : ""}`}>
+                        {player || "TBD"}
+                      </span>
+                    ))}
+                    <span className="shrink-0 font-display text-base tabular-nums">
+                      {m.score1 ?? 0}:{m.score2 ?? 0}
+                    </span>
+                    {live && m.board ? (
+                      <span className="shrink-0 font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5">Board {m.board}</span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -175,6 +254,7 @@ const PublicTournamentPage = () => {
   const [flash, setFlash] = useState<Match | null>(null);
   const seenResults = useRef<Set<string> | null>(null);
   const flashTimer = useRef<number | null>(null);
+  const [view, setView] = useState<"tree" | "list">(() => (typeof window !== "undefined" && window.innerWidth < 900 ? "list" : "tree"));
 
   useEffect(() => {
     if (!t) return;
@@ -304,14 +384,34 @@ const PublicTournamentPage = () => {
               </div>
             );
           })()}
+          {isKo && (
+            <div className="mb-2 inline-flex rounded-lg border border-border overflow-hidden">
+              <button onClick={() => setView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <Network className="w-3.5 h-3.5" /> Turnierbaum
+              </button>
+              <button onClick={() => setView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <Rows3 className="w-3.5 h-3.5" /> Rundenliste
+              </button>
+            </div>
+          )}
           {isKo ? (
-            <LiveBracket
-              matches={matches}
-              totalRounds={totalRounds}
-              roundConfigs={t.round_configs}
-              fallbackMode={t.game_mode}
-              fallbackBestOf={t.best_of_legs}
-            />
+            view === "tree" ? (
+              <LiveBracket
+                matches={matches}
+                totalRounds={totalRounds}
+                roundConfigs={t.round_configs}
+                fallbackMode={t.game_mode}
+                fallbackBestOf={t.best_of_legs}
+              />
+            ) : (
+              <BracketList
+                matches={matches}
+                totalRounds={totalRounds}
+                roundConfigs={t.round_configs}
+                fallbackMode={t.game_mode}
+                fallbackBestOf={t.best_of_legs}
+              />
+            )
           ) : (
             <div className="bg-card border border-border rounded-xl p-4 text-sm text-muted-foreground">
               Round-Robin-Ansicht folgt live über die App.

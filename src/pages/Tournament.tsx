@@ -149,11 +149,9 @@ interface BracketViewportProps {
 const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch }: BracketViewportProps) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const [fitScale, setFitScale] = useState(1);
+  const [sizes, setSizes] = useState({ wrapW: 0, wrapH: 0, innerW: 0, innerH: 0 });
   const [userZoom, setUserZoom] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
-
-  const scale = fitScale * userZoom;
 
   const measure = useCallback(() => {
     if (!wrapRef.current || !innerRef.current) return;
@@ -163,27 +161,36 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     innerRef.current.style.transform = "none";
     const inner = innerRef.current.getBoundingClientRect();
     innerRef.current.style.transform = prevTransform;
-    if (inner.width === 0 || inner.height === 0) return;
-    const sx = wrap.width / inner.width;
-    const sy = wrap.height / inner.height;
-    // Fit the WHOLE bracket into the viewport on every device (phone → beamer).
-    // Users zoom back in with the +/- buttons when they need to read/tap.
-    const s = Math.min(sx, sy, 1);
-    setFitScale(Math.max(0.08, s));
+    if (!wrap.width || !wrap.height || !inner.width || !inner.height) return;
+    setSizes({ wrapW: wrap.width, wrapH: wrap.height, innerW: inner.width, innerH: inner.height });
   }, []);
+
+  // Never auto-shrink below a legible floor — large brackets scroll/pan instead of vanishing.
+  const fitScale = sizes.wrapW && sizes.innerW
+    ? Math.max(0.5, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
+    : 1;
+  const scale = fitScale * userZoom;
+  const scaledW = sizes.innerW * scale;
+  const scaledH = sizes.innerH * scale;
+  // Center the tree in the viewport when it fits; anchor at the origin (scrollable) when it doesn't,
+  // so the watermark logo behind it is always visually centered on the actual bracket.
+  const offsetX = sizes.wrapW && scaledW <= sizes.wrapW ? (sizes.wrapW - scaledW) / 2 : 0;
+  const offsetY = sizes.wrapH && scaledH <= sizes.wrapH ? (sizes.wrapH - scaledH) / 2 : 0;
 
   useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, fullscreen]);
   useEffect(() => {
     // Re-fit after fonts/layout settle and on orientation change
-    const t = window.setTimeout(measure, 120);
-    window.addEventListener("orientationchange", measure);
-    return () => { window.clearTimeout(t); window.removeEventListener("orientationchange", measure); };
-  }, [measure]);
-  useEffect(() => {
     const ro = new ResizeObserver(() => measure());
     if (wrapRef.current) ro.observe(wrapRef.current);
     window.addEventListener("resize", measure);
-    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+    window.addEventListener("orientationchange", measure);
+    const t = window.setTimeout(measure, 120);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+      window.clearTimeout(t);
+    };
   }, [measure]);
   useEffect(() => {
     if (!fullscreen) return;
@@ -219,29 +226,31 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
       </div>
       <div className="relative flex-1">
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden"
-      >
-        <img
-          src={htuEmblem.url}
-          alt=""
-          className="w-[70%] max-w-[900px] object-contain invert opacity-[0.06]"
-        />
-      </div>
-      <div
         ref={wrapRef}
         className="relative z-10 overflow-auto"
         style={{ height: fullscreen ? "calc(100dvh - 44px)" : "min(78dvh, 900px)" }}
       >
         <div
           ref={innerRef}
-          className="flex items-stretch gap-4 p-6"
+          className="relative"
           style={{
-            transform: `scale(${scale})`,
+            transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
             transformOrigin: "top left",
             width: "max-content",
           }}
         >
+          {/* Scales and scrolls together with the tree, so it stays centered on the bracket itself. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden"
+          >
+            <img
+              src={htuEmblem.url}
+              alt=""
+              className="w-[70%] max-w-[900px] object-contain invert opacity-[0.06]"
+            />
+          </div>
+          <div className="relative z-10 flex items-stretch gap-4 p-6">
           {(() => {
             // Two-sided (mirrored) bracket:
             //   [L R1 · L R2 · … · L Semi]  [Final]  [R Semi · … · R R2 · R R1]
@@ -356,6 +365,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               </>
             );
           })()}
+          </div>
         </div>
       </div>
       </div>

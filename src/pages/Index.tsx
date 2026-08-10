@@ -94,13 +94,18 @@ const DashboardPage = () => {
           </p>
 
           {/* Vereinsmotto – bewusst laut, wie ein Graffiti-Tag auf der Wand */}
-          <div className="relative mt-8 pt-6 border-t border-dashed border-primary/25 w-full flex flex-col items-center">
-            <img
-              src={htuEmblem.url}
-              alt="H-Town United e.V. Vereinsemblem"
-              className="w-12 h-12 md:w-14 md:h-14 object-contain invert opacity-90 mb-1 drop-shadow-[0_0_10px_hsl(185_85%_48%/0.35)]"
-            />
-            <p className="font-graffiti text-2xl sm:text-3xl md:text-4xl leading-tight text-center -rotate-2 select-none bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent drop-shadow-[2px_3px_0_rgba(0,0,0,0.45)]">
+          <div className="relative mt-8 pt-6 border-t border-dashed border-primary/25 w-full flex flex-col items-center gap-3">
+            <div className="relative group">
+              <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl scale-125" />
+              <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full bg-background/40 border-2 border-primary/40 glow-cyan flex items-center justify-center p-3.5 transition-transform duration-700 group-hover:rotate-[8deg]">
+                <img
+                  src={htuEmblem.url}
+                  alt="H-Town United e.V. Vereinsemblem"
+                  className="w-full h-full object-contain invert"
+                />
+              </div>
+            </div>
+            <p className="font-graffiti text-3xl sm:text-4xl md:text-5xl leading-tight text-center -rotate-2 select-none text-primary drop-shadow-[0_0_18px_hsl(185_85%_48%/0.45)]">
               Von Heiligenhausern,
               <br />
               für Heiligenhaus

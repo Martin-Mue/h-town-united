@@ -127,6 +127,54 @@ const dartLabel = (d: DetectedDart) => {
   return `${prefix}${d.baseValue}`;
 };
 
+// ─── calibration-based scoring ──────────────────────────────────────
+// The AI is good at pointing at a pixel, but unreliable at eyeballing which of
+// 82 thin wedges that pixel falls in. Since every session already collects a
+// precise 4-point calibration (D20/D3/D11/D6 outer-double-edge taps), we use
+// that known geometry to compute the segment/ring deterministically instead
+// of trusting the AI's own segment/multiplier guess.
+const SEGMENTS_CLOCKWISE = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+// Standard WDF/PDC ring radii as a fraction of the outer double-ring edge (radius 1.0 = the calibration taps).
+const RING = {
+  bullInner: 0.037,
+  bullOuter: 0.094,
+  trebleInner: 0.394,
+  trebleOuter: 0.429,
+  doubleInner: 0.936,
+  doubleOuter: 1.0,
+};
+const MISS_TOLERANCE = 1.06; // calibration is never pixel-perfect — a little slack beyond the double edge
+
+interface BoardTransform { cx: number; cy: number; rx: number; ry: number }
+
+const boardTransformFromTaps = (taps?: { x: number; y: number }[]): BoardTransform | null => {
+  if (!taps || taps.length !== 4) return null;
+  const [top, bottom, left, right] = taps; // D20, D3, D11, D6
+  const cx = (left.x + right.x) / 2;
+  const cy = (top.y + bottom.y) / 2;
+  const rx = (right.x - left.x) / 2;
+  const ry = (bottom.y - top.y) / 2;
+  if (!(rx > 0.01) || !(ry > 0.01)) return null;
+  return { cx, cy, rx, ry };
+};
+
+const scoreFromBoardPoint = (fx: number, fy: number, t: BoardTransform) => {
+  const u = (fx - t.cx) / t.rx;
+  const v = (fy - t.cy) / t.ry;
+  const radius = Math.hypot(u, v);
+  let angleDeg = (Math.atan2(v, u) * 180) / Math.PI + 90; // 0° = top (D20), growing clockwise
+  angleDeg = ((angleDeg % 360) + 360) % 360;
+  const baseValue = SEGMENTS_CLOCKWISE[Math.round(angleDeg / 18) % 20];
+
+  if (radius <= RING.bullInner) return { baseValue: 25, multiplier: 2 as const, points: 50 };
+  if (radius <= RING.bullOuter) return { baseValue: 25, multiplier: 1 as const, points: 25 };
+  if (radius <= RING.trebleInner) return { baseValue, multiplier: 1 as const, points: baseValue };
+  if (radius <= RING.trebleOuter) return { baseValue, multiplier: 3 as const, points: baseValue * 3 };
+  if (radius <= RING.doubleInner) return { baseValue, multiplier: 1 as const, points: baseValue };
+  if (radius <= MISS_TOLERANCE) return { baseValue, multiplier: 2 as const, points: baseValue * 2 };
+  return { baseValue: 0, multiplier: 1 as const, points: 0 };
+};
+
 const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
 
 const hasPosition = (d: DetectedDart) =>
@@ -327,6 +375,25 @@ const LiveCamera = ({
     const sx = clamp(cx - side / 2, 0, v.videoWidth - side);
     const sy = clamp(cy - side / 2, 0, v.videoHeight - side);
     return { sx, sy, side };
+  };
+
+  // Recompute each dart's segment/multiplier from its tip pixel via the 4-point
+  // calibration instead of trusting the AI's own visual guess — much more reliable
+  // since it turns "classify into 1 of 82 thin wedges" into simple geometry.
+  const refineWithCalibration = (darts: DetectedDart[]): DetectedDart[] => {
+    const transform = boardTransformFromTaps(calib.taps);
+    const v = videoRef.current;
+    const rect = cropRect();
+    if (!transform || !v || !rect || !v.videoWidth || !v.videoHeight) return darts;
+    return darts.map((d) => {
+      if (!hasPosition(d)) return d;
+      // Dart x/y are relative to the cropped/zoomed analysis frame — map back to the
+      // full video frame (the same space the calibration taps were recorded in).
+      const fx = (rect.sx + (d.x ?? 0) * rect.side) / v.videoWidth;
+      const fy = (rect.sy + (d.y ?? 0) * rect.side) / v.videoHeight;
+      const scored = scoreFromBoardPoint(fx, fy, transform);
+      return { ...d, baseValue: scored.baseValue, multiplier: scored.multiplier, points: scored.points };
+    });
   };
 
   const drawToCanvas = (target: number, circular = true) => {
@@ -670,7 +737,7 @@ const LiveCamera = ({
     try {
       const data = await analyzeFrame(img);
       const overallConfidence = Number(data?.overallConfidence) || 0;
-      const aiDarts = sanitizeAiDarts(data?.darts, Math.max(throwsSeenRef.current, 1));
+      const aiDarts = refineWithCalibration(sanitizeAiDarts(data?.darts, Math.max(throwsSeenRef.current, 1)));
       setLastConfidence(overallConfidence);
       if (data?.board) void updateAutoCalibration(data.board as BoardDetection);
 
