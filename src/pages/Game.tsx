@@ -833,28 +833,34 @@ const GamePage = () => {
                       <span className="truncate">{BOT_PROFILES[playerBotLevel[i]].name}</span>
                     </div>
                   ) : (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-sm text-foreground text-left flex items-center justify-between min-w-0">
-                        <span className="truncate">{playerNames[i]}</span>
-                        <Users className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-56 p-2" align="start">
-                      <div className="space-y-1 max-h-48 overflow-y-auto">
-                        {dbPlayers.map((dp) => (
-                          <button key={dp.id} onClick={() => setPlayerNames(prev => prev.map((v, idx) => idx === i ? dp.name : v))}
-                            className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${playerNames[i] === dp.name ? "bg-primary/15 text-primary" : "hover:bg-muted"}`}>
-                            <span>{dp.emoji}</span><span>{dp.name}</span>
+                  <>
+                    <input
+                      value={playerNames[i]}
+                      onChange={(e) => setPlayerNames(prev => prev.map((v, idx) => idx === i ? e.target.value : v))}
+                      placeholder="Name eingeben..."
+                      className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    {dbPlayers.length > 0 && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="shrink-0 rounded-lg border border-border px-2.5 py-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Vereinsmitglied wählen">
+                            <Users className="w-3.5 h-3.5" />
                           </button>
-                        ))}
-                      </div>
-                      <div className="border-t border-border mt-2 pt-2">
-                        <input value={playerNames[i]} onChange={(e) => setPlayerNames(prev => prev.map((v, idx) => idx === i ? e.target.value : v))} placeholder="Oder Name eingeben..."
-                          className="w-full rounded bg-muted border-0 px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-2" align="end">
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 pb-1">Vereinsmitglied wählen</p>
+                          <div className="space-y-1 max-h-48 overflow-y-auto">
+                            {dbPlayers.map((dp) => (
+                              <button key={dp.id} onClick={() => setPlayerNames(prev => prev.map((v, idx) => idx === i ? dp.name : v))}
+                                className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${playerNames[i] === dp.name ? "bg-primary/15 text-primary" : "hover:bg-muted"}`}>
+                                <span>{dp.emoji}</span><span>{dp.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </>
                   )}
                   <button
                     onClick={() => setPlayerIsBot(prev => prev.map((v, idx) => idx === i ? !v : v))}
