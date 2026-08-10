@@ -7,7 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
-import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
+import LiveCamera, { type DetectedDart, type LiveCameraHandle } from "@/components/game/LiveCamera";
+import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, BotLevel } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
@@ -98,6 +99,8 @@ const GamePage = () => {
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
+  const liveCameraRef = useRef<LiveCameraHandle>(null);
+  const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
   const [botThinking, setBotThinking] = useState(false);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const botPlanRef = useRef<{ key: string; darts: DartThrow[]; applied: number } | null>(null);
@@ -520,6 +523,24 @@ const GamePage = () => {
         setTimeout(() => playTonPlusSound(), 100);
       } else {
         setTimeout(() => playTurnSwitchSound(), 100);
+      }
+    }
+
+    // Highlight → pull the just-recorded rolling-buffer clip, no manual recording needed.
+    if (!busted && (checkedOut || roundTotal >= 100)) {
+      const clip = liveCameraRef.current?.getRecentClip();
+      if (clip) {
+        setClipPopup({
+          url: clip.url,
+          mime: clip.mime,
+          total: roundTotal,
+          is180: roundTotal === 180,
+          isCheckout: checkedOut,
+          isTonPlus: roundTotal >= 100 && roundTotal !== 180,
+          playerName: game.players[startIdx].name,
+          darts,
+          ts: Date.now(),
+        });
       }
     }
   };
@@ -1067,6 +1088,7 @@ const GamePage = () => {
       {/* Live Camera (auto-scoring) — never shown for bot turns */}
       {cameraEnabled && !currentPlayer?.isBot && (
         <LiveCamera
+          ref={liveCameraRef}
           enabled={cameraEnabled}
           onClose={() => { setCameraEnabled(false); setPendingCameraDarts([]); }}
           onRoundCommit={submitDetectedRound}
@@ -1075,6 +1097,13 @@ const GamePage = () => {
           playerName={currentPlayerName}
         />
       )}
+      <ThrowClipDialog
+        popup={clipPopup}
+        onClose={() => {
+          if (clipPopup) URL.revokeObjectURL(clipPopup.url);
+          setClipPopup(null);
+        }}
+      />
 
       {/* Cricket scoreboard */}
       {isCricket && game.cricket && (
