@@ -16,6 +16,7 @@ export default {
       fontFamily: {
         display: ["Oswald", "sans-serif"],
         body: ["Inter", "sans-serif"],
+        graffiti: ["'Rubik Wet Paint'", "cursive"],
       },
       colors: {
         border: "hsl(var(--border))",

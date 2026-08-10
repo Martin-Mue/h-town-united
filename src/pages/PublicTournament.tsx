@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap } from "lucide-react";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor } from "lucide-react";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/htu-emblem.png.asset.json";
 
@@ -30,7 +30,7 @@ const keeperLabel = (m: Match, all: Match[]): string | null => {
 interface TournamentRow {
   id: string; name: string; mode: string; status: string;
   champion: string | null; players: string[]; bracket: Match[];
-  game_mode?: string; best_of_legs?: number;
+  game_mode?: string; best_of_legs?: number; boards?: number;
   round_configs?: { mode: string; bestOf: number }[];
 }
 
@@ -245,6 +245,17 @@ const PublicTournamentPage = () => {
   const matches = t.bracket as Match[];
   const totalRounds = isKo && matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 0;
   const completed = matches.filter(m => m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE").slice(-8).reverse();
+  const boardsCount = t.boards ?? 2;
+
+  // Board-aware look-ahead: every match already paired but not yet decided,
+  // grouped by playing slot – the same "slot" the admin scheduler assigns live.
+  const pending = matches
+    .filter(m => !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE" && m.slot !== undefined)
+    .sort((a, b) => (a.slot! - b.slot!) || ((a.board ?? 0) - (b.board ?? 0)));
+  const pendingSlots = [...new Set(pending.map(m => m.slot))] as number[];
+  const nextSlot = pendingSlots[1]; // index 0 is "Jetzt am Board", already shown above
+  const onDeck = nextSlot !== undefined ? pending.filter(m => m.slot === nextSlot) : [];
+  const queuedCount = pendingSlots.length > 2 ? pending.filter(m => m.slot !== pendingSlots[0] && m.slot !== nextSlot).length : 0;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -255,7 +266,7 @@ const PublicTournamentPage = () => {
             <h1 className="font-display text-2xl uppercase tracking-widest">{t.name}</h1>
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
               <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" />
-              Live · {t.players.length} Spieler · {t.game_mode} BO{t.best_of_legs}
+              Live · {t.players.length} Spieler · {t.game_mode} BO{t.best_of_legs} · {boardsCount} Board{boardsCount > 1 ? "s" : ""}
             </p>
           </div>
         </div>
@@ -308,29 +319,73 @@ const PublicTournamentPage = () => {
           )}
         </div>
 
-        <aside className="bg-card border border-border rounded-xl p-4 lg:sticky lg:top-4 self-start">
-          <div className="flex items-center gap-2 mb-3">
-            <Zap className="w-4 h-4 text-accent" />
-            <h3 className="font-display uppercase text-sm">Live-Ticker</h3>
-          </div>
-          {completed.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Noch keine abgeschlossenen Matches.</p>
-          ) : (
-            <ol className="space-y-2">
-              {completed.map(m => (
-                <li key={m.id} className="text-xs border-l-2 border-primary/40 pl-2">
-                  <p className="font-display text-sm uppercase">
-                    <span className="text-secondary">{m.winner}</span>
-                    <span className="text-muted-foreground normal-case"> schlägt </span>
-                    {m.winner === m.player1 ? m.player2 : m.player1}
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-4 self-start">
+          {isKo && (
+            <div className="bg-card border border-border rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <ListOrdered className="w-4 h-4 text-primary" />
+                  <h3 className="font-display uppercase text-sm">Als Nächstes</h3>
+                </div>
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <Monitor className="w-3 h-3" /> {boardsCount}
+                </span>
+              </div>
+              {onDeck.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {pendingSlots.length === 0 ? "Noch keine Paarungen feststehend." : "Alle bekannten Paarungen laufen bereits."}
+                </p>
+              ) : (
+                <>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
+                    {roundLabel(onDeck[0].round, totalRounds)}
                   </p>
-                  <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
-                </li>
-              ))}
-            </ol>
+                  <ul className="space-y-1.5">
+                    {onDeck.map(m => (
+                      <li key={m.id} className="flex items-center gap-2 text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">
+                        <span className="font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5 shrink-0">
+                          Board {m.board ?? "?"}
+                        </span>
+                        <span className="truncate uppercase tracking-wide">
+                          {m.player1} <span className="text-muted-foreground normal-case">vs</span> {m.player2}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {queuedCount > 0 && (
+                <p className="mt-2.5 pt-2 border-t border-border/60 text-[10px] uppercase tracking-widest text-muted-foreground">
+                  +{queuedCount} weitere Partie{queuedCount > 1 ? "n" : ""} in der Warteschlange
+                </p>
+              )}
+            </div>
           )}
-          <div className="mt-4 pt-3 border-t border-border text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-            <Users className="w-3 h-3" /> {t.players.length} Teilnehmer
+
+          <div className="bg-card border border-border rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Zap className="w-4 h-4 text-accent" />
+              <h3 className="font-display uppercase text-sm">Live-Ticker</h3>
+            </div>
+            {completed.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Noch keine abgeschlossenen Matches.</p>
+            ) : (
+              <ol className="space-y-2">
+                {completed.map(m => (
+                  <li key={m.id} className="text-xs border-l-2 border-primary/40 pl-2">
+                    <p className="font-display text-sm uppercase">
+                      <span className="text-secondary">{m.winner}</span>
+                      <span className="text-muted-foreground normal-case"> schlägt </span>
+                      {m.winner === m.player1 ? m.player2 : m.player1}
+                    </p>
+                    <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
+                  </li>
+                ))}
+              </ol>
+            )}
+            <div className="mt-4 pt-3 border-t border-border text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+              <Users className="w-3 h-3" /> {t.players.length} Teilnehmer
+            </div>
           </div>
         </aside>
       </div>

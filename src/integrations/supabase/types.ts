@@ -339,6 +339,7 @@ export type Database = {
       tournaments_public: {
         Row: {
           best_of_legs: number | null
+          boards: number | null
           bracket: Json | null
           champion: string | null
           game_mode: string | null
@@ -353,6 +354,7 @@ export type Database = {
         }
         Insert: {
           best_of_legs?: number | null
+          boards?: number | null
           bracket?: Json | null
           champion?: string | null
           game_mode?: string | null
@@ -367,6 +369,7 @@ export type Database = {
         }
         Update: {
           best_of_legs?: number | null
+          boards?: number | null
           bracket?: Json | null
           champion?: string | null
           game_mode?: string | null

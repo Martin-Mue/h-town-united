@@ -92,19 +92,21 @@ const DashboardPage = () => {
           <p className="text-muted-foreground max-w-md mt-4 text-sm">
             Verwalte deinen Verein, tracke Scores und organisiere Turniere – alles in einer App.
           </p>
-        </div>
-      </div>
 
-      {/* Vereinsemblem – ruhiger Absender */}
-      <div className="flex items-center justify-center gap-3 mb-6 opacity-70">
-        <img
-          src={htuEmblem.url}
-          alt="H-Town United e.V. Vereinsemblem"
-          className="w-14 h-14 object-contain invert"
-        />
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-display">
-          Von Heiligenhausern, Für Heiligenhaus
-        </p>
+          {/* Vereinsmotto – bewusst laut, wie ein Graffiti-Tag auf der Wand */}
+          <div className="relative mt-8 pt-6 border-t border-dashed border-primary/25 w-full flex flex-col items-center">
+            <img
+              src={htuEmblem.url}
+              alt="H-Town United e.V. Vereinsemblem"
+              className="w-12 h-12 md:w-14 md:h-14 object-contain invert opacity-90 mb-1 drop-shadow-[0_0_10px_hsl(185_85%_48%/0.35)]"
+            />
+            <p className="font-graffiti text-2xl sm:text-3xl md:text-4xl leading-tight text-center -rotate-2 select-none bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent drop-shadow-[2px_3px_0_rgba(0,0,0,0.45)]">
+              Von Heiligenhausern,
+              <br />
+              für Heiligenhaus
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Statistics overview */}
