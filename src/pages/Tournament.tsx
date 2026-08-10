@@ -255,7 +255,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
             <img
               src={htuEmblem}
               alt=""
-              className="w-[70%] max-w-[900px] object-contain invert opacity-[0.06]"
+              className="w-[70%] max-w-[900px] object-contain opacity-[0.06]"
             />
           </div>
           <div className="relative z-10 flex items-stretch gap-4 p-6">

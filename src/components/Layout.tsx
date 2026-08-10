@@ -53,7 +53,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
           <img
             src={htuEmblem}
             alt="H-Town United e.V. Vereinsemblem"
-            className="hidden sm:block w-9 h-9 object-contain invert opacity-60 mr-2"
+            className="hidden sm:block w-9 h-9 object-contain opacity-60 mr-2"
           />
           <nav className="hidden md:flex items-center gap-1">
             {NAV_ITEMS.map((item) => {

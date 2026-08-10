@@ -191,7 +191,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
         >
           {/* Scales and scrolls together with the tree, so it stays centered on the bracket itself. */}
           <div aria-hidden className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
-            <img src={htuEmblem} alt="" className="w-[65%] max-w-[900px] object-contain invert opacity-[0.07]" />
+            <img src={htuEmblem} alt="" className="w-[65%] max-w-[900px] object-contain opacity-[0.07]" />
           </div>
           <div className="relative z-10 flex items-stretch gap-4 p-4">
             {body()}

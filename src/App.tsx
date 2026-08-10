@@ -45,6 +45,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/live/:slug" element={<PublicTournament />} />
+            <Route path="/__index-preview" element={<Index />} />
             <Route
               path="/*"
               element={
