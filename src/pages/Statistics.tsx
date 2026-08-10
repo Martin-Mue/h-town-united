@@ -10,6 +10,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
+import { first9Average, computeCheckoutStats, combineCheckoutStats, type DartThrow, type CheckoutStats } from "@/utils/dartStats";
 
 interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
@@ -33,6 +34,12 @@ interface PlayerStats {
   average: number; high_score: number; double_rate: number; emoji: string;
 }
 
+interface GameLegRecord {
+  id: string; game_id: string; leg_number: number; player_index: number;
+  player_name: string; player_id: string | null; starting_score: number;
+  throws: DartThrow[]; won: boolean;
+}
+
 const CHART_COLORS = [
   "hsl(185 85% 48%)", "hsl(155 65% 42%)", "hsl(45 100% 58%)",
   "hsl(280 70% 55%)", "hsl(0 72% 51%)", "hsl(200 80% 55%)",
@@ -43,6 +50,7 @@ const TOOLTIP_STYLE = { background: "hsl(222 25% 9%)", border: "1px solid hsl(22
 const StatisticsPage = () => {
   const [games, setGames] = useState<GameRecord[]>([]);
   const [players, setPlayers] = useState<PlayerStats[]>([]);
+  const [gameLegs, setGameLegs] = useState<GameLegRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate">("average");
   const [compareP1, setCompareP1] = useState<string>("");

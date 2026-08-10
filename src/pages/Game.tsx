@@ -15,6 +15,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { simulateBotVisit, simulateBotCricketDart } from "@/utils/botPlayer";
+import {
+  average as calculateAverage,
+  highestVisit as getHighest3DartRound,
+  first9Average as getFirst9Average,
+  tonPlusCount as countTonPlusRounds,
+  count180s,
+  computeCheckoutStats,
+} from "@/utils/dartStats";
 
 /** Bot personas with their target 3-dart average */
 const BOT_PROFILES: Record<BotLevel, { name: string; average: string }> = {
@@ -43,39 +51,6 @@ function createCricketState(): CricketPlayerState {
   const marks: Record<number, number> = {};
   CRICKET_NUMBERS.forEach((n) => (marks[n] = 0));
   return { marks, points: 0 };
-}
-function calculateAverage(throws: DartThrow[]): number {
-  if (throws.length === 0) return 0;
-  return (throws.reduce((sum, t) => sum + t.points, 0) / throws.length) * 3;
-}
-function getHighest3DartRound(throws: DartThrow[]): number {
-  let max = 0;
-  for (let i = 0; i < throws.length; i += 3) {
-    const round = throws.slice(i, i + 3).reduce((s, t) => s + t.points, 0);
-    if (round > max) max = round;
-  }
-  return max;
-}
-function getFirst9Average(throws: DartThrow[]): number {
-  const first9 = throws.slice(0, 9);
-  if (first9.length === 0) return 0;
-  return (first9.reduce((s, t) => s + t.points, 0) / first9.length) * 3;
-}
-function countTonPlusRounds(throws: DartThrow[]): number {
-  let count = 0;
-  for (let i = 0; i < throws.length; i += 3) {
-    const round = throws.slice(i, i + 3).reduce((s, t) => s + t.points, 0);
-    if (round >= 100) count++;
-  }
-  return count;
-}
-function count180s(throws: DartThrow[]): number {
-  let count = 0;
-  for (let i = 0; i < throws.length; i += 3) {
-    const round = throws.slice(i, i + 3).reduce((s, t) => s + t.points, 0);
-    if (round === 180) count++;
-  }
-  return count;
 }
 function dartLabel(t: DartThrow): string {
   return t.baseValue === 0 ? "M" : t.baseValue === 25 ? (t.multiplier === 2 ? "BULL" : "25") : `${t.multiplier === 2 ? "D" : t.multiplier === 3 ? "T" : ""}${t.baseValue}`;
@@ -675,7 +650,7 @@ const GamePage = () => {
       };
     };
 
-    await supabase.from("games").insert({
+    const { data: insertedGame } = await supabase.from("games").insert({
       user_id: session?.user?.id, mode: game.mode, start_score: game.startScore,
       best_of_legs: game.bestOfLegs,
       player1_name: game.players[top1].name, player2_name: top2 !== undefined ? game.players[top2].name : "—",
@@ -686,9 +661,31 @@ const GamePage = () => {
       player1_total_throws: throwsByPlayer[top1].length, player2_total_throws: top2 !== undefined ? throwsByPlayer[top2].length : 0,
       winner_name: game.winnerName!, winner_id: winnerMatch?.id || null,
       detail_stats: { player1: detailFor(top1), player2: detailFor(top2) } as any,
-    });
+    }).select("id").single();
 
-    for (const i of [top1, top2].filter((v): v is number => v !== undefined)) {
+    // Every player's every leg, dart-by-dart — the source of truth for checkout %,
+    // first-9 average, and full results for 3-4 player games (the `games` row above
+    // only ever tracks the top 2 finishers for backwards compatibility).
+    if (insertedGame?.id) {
+      const legRows = allLegs.flatMap((leg) =>
+        game.players.map((p, i) => ({
+          game_id: insertedGame.id,
+          user_id: session?.user?.id,
+          leg_number: leg.legNumber,
+          player_index: i,
+          player_name: p.name,
+          player_id: allDbPlayers?.find((dp) => dp.name === p.name)?.id || null,
+          starting_score: game.startScore,
+          throws: leg.throws[i] ?? [],
+          won: leg.winnerIndex === i,
+        }))
+      );
+      if (legRows.length > 0) {
+        await supabase.from("game_legs").insert(legRows as any);
+      }
+    }
+
+    for (let i = 0; i < n; i++) {
       const match = allDbPlayers?.find(p => p.name === game.players[i].name);
       if (match && !game.players[i].isBot) {
         const { data: current } = await supabase.from("players").select("*").eq("id", match.id).single();
@@ -703,7 +700,7 @@ const GamePage = () => {
       }
     }
     if (n > 2) {
-      toast({ title: "Spiel gespeichert", description: "Bei mehr als 2 Spielern werden nur die Top 2 in der Statistik-Datenbank erfasst." });
+      toast({ title: "Spiel gespeichert", description: "Alle Spieler wurden erfasst — der Turnierverlauf im Klassiker-Datensatz zeigt aber nur die Top 2." });
     }
     setGameSaved(true);
     savingRef.current = false;

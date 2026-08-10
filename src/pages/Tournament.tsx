@@ -73,6 +73,14 @@ const BEST_OF_OPTIONS = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21];
 
 const nextPowerOfTwo = (count: number) => Math.pow(2, Math.ceil(Math.log2(Math.max(count, 2))));
 
+// A 32+ player mirrored tree can't stay legible at any scale that also fits a screen —
+// default those straight to the always-readable "Spielplan" list instead of the tree.
+const defaultBracketView = (bracket: Match[] | undefined): "tree" | "schedule" => {
+  if (!bracket || bracket.length === 0) return "tree";
+  const totalRounds = Math.max(...bracket.map(m => m.round));
+  return totalRounds >= 5 ? "schedule" : "tree";
+};
+
 const shuffle = <T,>(list: T[]) => {
   const copy = [...list];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -165,12 +173,11 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     setSizes({ wrapW: wrap.width, wrapH: wrap.height, innerW: inner.width, innerH: inner.height });
   }, []);
 
-  // Always fit the whole tree in view, no scrollbars, on every device — the
-  // "Spielplan & Schreiber" list view is the always-legible fallback for large
-  // brackets, and zoom/fullscreen are available for close-up taps, so the tree
-  // itself is free to shrink as far as it needs to.
+  // Fit the whole tree when it reasonably can; below a legible floor, stop shrinking
+  // and let it scroll/pan instead — the "Spielplan & Schreiber" list view is the
+  // always-legible fallback for large brackets, and zoom/fullscreen cover close-up taps.
   const fitScale = sizes.wrapW && sizes.innerW
-    ? Math.max(0.12, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
+    ? Math.max(0.55, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
     : 1;
   const scale = fitScale * userZoom;
   const scaledW = sizes.innerW * scale;
@@ -618,7 +625,7 @@ const TournamentPage = () => {
       const rec: TournamentRecord = { ...(upd as any), players: (upd as any).players, bracket: (upd as any).bracket, round_configs: (upd as any).round_configs || [], boards: (upd as any).boards ?? boards };
       setActiveTournament(rec);
       setEditingId(null);
-      setBracketView("tree");
+      setBracketView(defaultBracketView(rec.bracket as Match[]));
       setPhase("bracket");
       setPlayers([]);
       setTournamentName("");
@@ -648,7 +655,7 @@ const TournamentPage = () => {
 
     const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [], boards: (data as any).boards ?? boards };
     setActiveTournament(record);
-    setBracketView("tree");
+    setBracketView(defaultBracketView(record.bracket as Match[]));
     setPhase("bracket");
     setPlayers([]);
     setTournamentName("");
@@ -815,6 +822,7 @@ const TournamentPage = () => {
 
   const openTournament = (t: TournamentRecord) => {
     setActiveTournament(t);
+    setBracketView(defaultBracketView(t.bracket as Match[]));
     setPhase("bracket");
   };
 

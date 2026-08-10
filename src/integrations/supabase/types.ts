@@ -134,6 +134,63 @@ export type Database = {
           },
         ]
       }
+      game_legs: {
+        Row: {
+          created_at: string
+          game_id: string
+          id: string
+          leg_number: number
+          player_id: string | null
+          player_index: number
+          player_name: string
+          starting_score: number
+          throws: Json
+          user_id: string
+          won: boolean
+        }
+        Insert: {
+          created_at?: string
+          game_id: string
+          id?: string
+          leg_number: number
+          player_id?: string | null
+          player_index: number
+          player_name: string
+          starting_score: number
+          throws?: Json
+          user_id: string
+          won?: boolean
+        }
+        Update: {
+          created_at?: string
+          game_id?: string
+          id?: string
+          leg_number?: number
+          player_id?: string | null
+          player_index?: number
+          player_name?: string
+          starting_score?: number
+          throws?: Json
+          user_id?: string
+          won?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_legs_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_legs_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           ai_portrait_url: string | null

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, useLayoutEffect } from "react";
+import { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Network, Rows3 } from "lucide-react";
@@ -52,6 +52,15 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
 
   // Large trees (Achtelfinale and earlier) get tighter cards so more fits at a readable scale.
   const compact = totalRounds >= 5;
+  const liveColRef = useRef<HTMLDivElement>(null);
+
+  // Earliest round that still has an undecided, playable match — used to auto-scroll
+  // the tree to the action instead of dropping the viewer on round 1.
+  const currentRound = useMemo(() => {
+    const open = matches.filter(m => !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE");
+    if (open.length === 0) return null;
+    return Math.min(...open.map(m => m.round));
+  }, [matches]);
 
   const measure = useCallback(() => {
     if (!wrapRef.current || !innerRef.current) return;
@@ -79,11 +88,12 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     };
   }, [measure]);
 
-  // Always fit the whole tree in view, no scrollbars, on every device — the
-  // "Rundenliste" toggle is the always-legible fallback for large brackets,
-  // so the tree itself is free to shrink as far as it needs to.
+  // Fit the whole tree when it reasonably can; below a legible floor, stop shrinking
+  // and let it scroll/pan instead (the "Rundenliste" toggle is the always-legible
+  // fallback and is the default for big brackets, so this only affects the tree
+  // when someone opts into it for a large bracket).
   const fitScale = sizes.wrapW && sizes.innerW
-    ? Math.max(0.12, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
+    ? Math.max(0.55, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
     : 1;
   const scale = fitScale * userZoom;
   const scaledW = sizes.innerW * scale;
@@ -97,6 +107,16 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   // (redundant, nested-feeling) scrollbar. So only allow scrolling once the content
   // genuinely overflows the box (i.e. the user zoomed in past the auto-fit).
   const overflowing = sizes.wrapW > 0 && (scaledW > sizes.wrapW + 0.5 || scaledH > sizes.wrapH + 0.5);
+
+  // Bring the live round into view instead of dropping the viewer on round 1 —
+  // especially important for large trees where most of the early rounds are done.
+  useEffect(() => {
+    if (!liveColRef.current) return;
+    const t = window.setTimeout(() => {
+      liveColRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [currentRound, scale]);
 
   const renderMatch = (m: Match, side: "left" | "right" | "center", isLast: boolean) => {
     const live = !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE";
@@ -135,7 +155,11 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     const half = Math.ceil(all.length / 2);
     const slice = side === "left" ? all.slice(0, half) : all.slice(half);
     return (
-      <div key={`${side}-${round}`} className={`flex flex-col gap-3 ${compact ? "min-w-[170px]" : "min-w-[220px]"}`}>
+      <div
+        key={`${side}-${round}`}
+        ref={side === "left" && round === currentRound ? liveColRef : undefined}
+        className={`flex flex-col gap-3 ${compact ? "min-w-[170px]" : "min-w-[220px]"}`}
+      >
         {roundHeader(round, side === "left" ? "left" : "right")}
         <div className={`flex flex-col justify-around flex-1 relative ${compact ? "gap-1.5" : "gap-3"}`}>
           {slice.map(m => renderMatch(m, side, isLast))}
@@ -262,6 +286,19 @@ const PublicTournamentPage = () => {
   const seenResults = useRef<Set<string> | null>(null);
   const flashTimer = useRef<number | null>(null);
   const [view, setView] = useState<"tree" | "list">(() => (typeof window !== "undefined" && window.innerWidth < 900 ? "list" : "tree"));
+  const autoViewSetRef = useRef(false);
+
+  // A 32+ player mirrored tree can't stay legible at any scale that also fits a
+  // screen — default those straight to the always-readable round list. Runs once,
+  // so it never overrides a view the user picked by hand afterwards.
+  useEffect(() => {
+    if (autoViewSetRef.current || !t) return;
+    autoViewSetRef.current = true;
+    const isKoNow = t.mode !== "round-robin";
+    const ms = (t.bracket as Match[]) || [];
+    const rounds = isKoNow && ms.length > 0 ? Math.max(...ms.map(m => m.round)) : 0;
+    if (rounds >= 5) setView("list");
+  }, [t]);
 
   useEffect(() => {
     if (!t) return;
