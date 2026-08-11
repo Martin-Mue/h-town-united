@@ -2,6 +2,9 @@ export interface DartThrow {
   baseValue: number;
   multiplier: number;
   points: number;
+  /** Tip position in board-relative unit coordinates (0,0 = bull, radius ~1 = double edge), camera-scored throws only. */
+  boardU?: number;
+  boardV?: number;
 }
 
 /** Darts grouped into visits of up to 3. */

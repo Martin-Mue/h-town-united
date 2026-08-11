@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
+import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import {
   first9Average, average, highestVisit, computeCheckoutStats, combineCheckoutStats,
   computeCricketStats, combineCricketStats,
@@ -410,6 +411,24 @@ const StatisticsPage = () => {
 
     return { player, winRate, averageTrend, currentStreak, bestStreak, recentForm, bestGameAvg, worstGameAvg, opponents, totalGames: playerGames.length };
   }, [selectedPlayerId, filteredGames, players]);
+
+  // Throw heatmap — board-relative tip coordinates (boardU/boardV) are camera-framing-
+  // independent, so points from different games/devices/sessions are directly comparable.
+  // Only camera-scored throws carry them; manual entries simply don't contribute a dot.
+  const playerHeatmapPoints = useMemo(() => {
+    if (!selectedPlayerId) return [];
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const points: { u: number; v: number; points: number }[] = [];
+    gameLegs.forEach((leg) => {
+      if (leg.player_id !== selectedPlayerId || !filteredIds.has(leg.game_id) || !Array.isArray(leg.throws)) return;
+      (leg.throws as unknown as DartThrow[]).forEach((t) => {
+        if (typeof t.boardU === "number" && typeof t.boardV === "number") {
+          points.push({ u: t.boardU, v: t.boardV, points: t.points });
+        }
+      });
+    });
+    return points;
+  }, [selectedPlayerId, filteredGames, gameLegs]);
 
   const h2hRecords = useMemo(() => {
     if (!compareP1 || !compareP2) return null;
@@ -897,6 +916,19 @@ const StatisticsPage = () => {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Throw heatmap — only camera-scored throws carry a tip position */}
+              {playerHeatmapPoints.length > 0 && (
+                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                  <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
+                    <Crosshair className="w-4 h-4" /> Wurf-Heatmap
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground mb-3">
+                    {playerHeatmapPoints.length} per Kamera erfasste Würfe · zeigt, wo die Darts wirklich landen
+                  </p>
+                  <DartboardHeatmap points={playerHeatmapPoints} />
                 </div>
               )}
 

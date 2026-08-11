@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
+import { SEGMENTS_CLOCKWISE, RING } from "@/utils/dartboardGeometry";
 import {
   playDartDetectedSound,
   playRoundCommittedSound,
@@ -41,8 +42,12 @@ export interface DetectedDart {
   multiplier: 1 | 2 | 3;
   points: number;
   confidence: number;
+  /** Tip position relative to the cropped analysis frame (0-1) — for the live on-screen overlay only. */
   x?: number;
   y?: number;
+  /** Tip position in board-relative unit coordinates (0,0 = bull, radius ~1 = double edge) — camera-framing-independent, safe to persist/aggregate (see heatmap). */
+  boardU?: number;
+  boardV?: number;
 }
 
 interface LiveCameraProps {
@@ -112,7 +117,10 @@ const EMPTY_CONFIRM_SCANS = 2;
 // "nothing found" to the player. Better to show a borderline detection (which
 // they can edit/remove) than to show nothing.
 const MIN_DART_CONFIDENCE = 0.4;
-const MIN_OVERALL_CONFIDENCE = 0.35;
+// Below this, or if any dart is missing a usable tip position (falling back to the AI's
+// much less reliable raw segment guess instead of the deterministic calibration math),
+// the round is shown for manual review (Übernehmen/Verwerfen) instead of auto-committing.
+const AUTO_COMMIT_CONFIDENCE = 0.6;
 const EMPTY_BOARD_DELTA = 0.022;
 const DART_POSITION_MATCH = 0.09;
 
@@ -162,16 +170,6 @@ const dartLabel = (d: DetectedDart) => {
 // precise 4-point calibration (D20/D3/D11/D6 outer-double-edge taps), we use
 // that known geometry to compute the segment/ring deterministically instead
 // of trusting the AI's own segment/multiplier guess.
-const SEGMENTS_CLOCKWISE = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
-// Standard WDF/PDC ring radii as a fraction of the outer double-ring edge (radius 1.0 = the calibration taps).
-const RING = {
-  bullInner: 0.037,
-  bullOuter: 0.094,
-  trebleInner: 0.394,
-  trebleOuter: 0.429,
-  doubleInner: 0.936,
-  doubleOuter: 1.0,
-};
 const MISS_TOLERANCE = 1.06; // calibration is never pixel-perfect — a little slack beyond the double edge
 
 interface BoardTransform { cx: number; cy: number; rx: number; ry: number }
@@ -187,6 +185,10 @@ const boardTransformFromTaps = (taps?: { x: number; y: number }[]): BoardTransfo
   return { cx, cy, rx, ry };
 };
 
+// u/v are the tip position in board-relative unit coordinates (0,0 = bull center, radius
+// ~1.0 = the calibrated double-ring edge) — independent of camera framing/zoom, so unlike
+// the raw video-frame x/y they're safe to persist and compare across different games,
+// sessions and devices (see the per-player heatmap in Statistics).
 const scoreFromBoardPoint = (fx: number, fy: number, t: BoardTransform) => {
   const u = (fx - t.cx) / t.rx;
   const v = (fy - t.cy) / t.ry;
@@ -195,13 +197,13 @@ const scoreFromBoardPoint = (fx: number, fy: number, t: BoardTransform) => {
   angleDeg = ((angleDeg % 360) + 360) % 360;
   const baseValue = SEGMENTS_CLOCKWISE[Math.round(angleDeg / 18) % 20];
 
-  if (radius <= RING.bullInner) return { baseValue: 25, multiplier: 2 as const, points: 50 };
-  if (radius <= RING.bullOuter) return { baseValue: 25, multiplier: 1 as const, points: 25 };
-  if (radius <= RING.trebleInner) return { baseValue, multiplier: 1 as const, points: baseValue };
-  if (radius <= RING.trebleOuter) return { baseValue, multiplier: 3 as const, points: baseValue * 3 };
-  if (radius <= RING.doubleInner) return { baseValue, multiplier: 1 as const, points: baseValue };
-  if (radius <= MISS_TOLERANCE) return { baseValue, multiplier: 2 as const, points: baseValue * 2 };
-  return { baseValue: 0, multiplier: 1 as const, points: 0 };
+  if (radius <= RING.bullInner) return { baseValue: 25, multiplier: 2 as const, points: 50, u, v };
+  if (radius <= RING.bullOuter) return { baseValue: 25, multiplier: 1 as const, points: 25, u, v };
+  if (radius <= RING.trebleInner) return { baseValue, multiplier: 1 as const, points: baseValue, u, v };
+  if (radius <= RING.trebleOuter) return { baseValue, multiplier: 3 as const, points: baseValue * 3, u, v };
+  if (radius <= RING.doubleInner) return { baseValue, multiplier: 1 as const, points: baseValue, u, v };
+  if (radius <= MISS_TOLERANCE) return { baseValue, multiplier: 2 as const, points: baseValue * 2, u, v };
+  return { baseValue: 0, multiplier: 1 as const, points: 0, u, v };
 };
 
 const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
@@ -318,6 +320,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const accumulatedRef = useRef<DetectedDart[]>([]);
   const [status, setStatus] = useState("Kamera startet …");
   const [scanFailed, setScanFailed] = useState(false);
+  const [needsReview, setNeedsReview] = useState(false);
   const [motion, setMotion] = useState(0);
   const [changeDelta, setChangeDelta] = useState(0);
   const [lastConfidence, setLastConfidence] = useState(0);
@@ -478,22 +481,29 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     return { sx, sy, side };
   };
 
+  // Dart x/y come back relative to the cropped/zoomed analysis frame — map to the full
+  // video frame (the same space calibration taps and the live overlay both use).
+  const toFullFrameXY = (d: DetectedDart): { fx: number; fy: number } | null => {
+    const v = videoRef.current;
+    const rect = cropRect();
+    if (!hasPosition(d) || !v || !rect || !v.videoWidth || !v.videoHeight) return null;
+    return {
+      fx: (rect.sx + (d.x ?? 0) * rect.side) / v.videoWidth,
+      fy: (rect.sy + (d.y ?? 0) * rect.side) / v.videoHeight,
+    };
+  };
+
   // Recompute each dart's segment/multiplier from its tip pixel via the 4-point
   // calibration instead of trusting the AI's own visual guess — much more reliable
   // since it turns "classify into 1 of 82 thin wedges" into simple geometry.
   const refineWithCalibration = (darts: DetectedDart[]): DetectedDart[] => {
     const transform = boardTransformFromTaps(calib.taps);
-    const v = videoRef.current;
-    const rect = cropRect();
-    if (!transform || !v || !rect || !v.videoWidth || !v.videoHeight) return darts;
+    if (!transform) return darts;
     return darts.map((d) => {
-      if (!hasPosition(d)) return d;
-      // Dart x/y are relative to the cropped/zoomed analysis frame — map back to the
-      // full video frame (the same space the calibration taps were recorded in).
-      const fx = (rect.sx + (d.x ?? 0) * rect.side) / v.videoWidth;
-      const fy = (rect.sy + (d.y ?? 0) * rect.side) / v.videoHeight;
-      const scored = scoreFromBoardPoint(fx, fy, transform);
-      return { ...d, baseValue: scored.baseValue, multiplier: scored.multiplier, points: scored.points };
+      const full = toFullFrameXY(d);
+      if (!full) return d;
+      const scored = scoreFromBoardPoint(full.fx, full.fy, transform);
+      return { ...d, baseValue: scored.baseValue, multiplier: scored.multiplier, points: scored.points, boardU: scored.u, boardV: scored.v };
     });
   };
 
@@ -861,9 +871,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       } else {
         setAccumulated(aiDarts);
         aiDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
-        // Darts are already pulled → hand over to the next player immediately.
-        setTimeout(() => commitRound(aiDarts), 250);
-        setStatus(`Runde erkannt: ${aiDarts.map(dartLabel).join(", ")}`);
+        const allPositioned = aiDarts.every(hasPosition);
+        const highConfidence = overallConfidence >= AUTO_COMMIT_CONFIDENCE && allPositioned;
+        if (highConfidence) {
+          // Board is already confirmed empty (that's what triggered this scan) and the AI
+          // is confident — safe to hand straight over to the next player.
+          setNeedsReview(false);
+          setTimeout(() => commitRound(aiDarts), 250);
+          setStatus(`Runde erkannt: ${aiDarts.map(dartLabel).join(", ")}`);
+        } else {
+          // Unsure — wait for a manual Übernehmen/Verwerfen instead of guessing wrong
+          // silently. The board is still empty either way, so nothing is lost by waiting.
+          setNeedsReview(true);
+          setStatus(`Bitte prüfen: ${aiDarts.map(dartLabel).join(", ")}`);
+        }
       }
       setPhase("live");
     } catch (err: unknown) {
@@ -885,6 +906,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     accumulatedRef.current = [];
     setError(null);
     setScanFailed(false);
+    setNeedsReview(false);
     const sig = buildSignature();
     if (sig) emptyBoardSigRef.current = sig;
     resetLoop();
@@ -894,6 +916,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const discardRound = () => {
     setScanFailed(false);
+    setNeedsReview(false);
     setAccumulated([]);
     accumulatedRef.current = [];
     setError(null);
@@ -1047,6 +1070,28 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
         )}
 
+        {/* Detected-dart markers — shows exactly what the AI saw, at the tip position it used. */}
+        {accumulated.length > 0 && (
+          <div className="pointer-events-none absolute inset-0">
+            {accumulated.map((d, i) => {
+              const full = toFullFrameXY(d);
+              if (!full) return null;
+              return (
+                <div
+                  key={i}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 animate-scale-in"
+                  style={{ left: `${full.fx * 100}%`, top: `${full.fy * 100}%` }}
+                >
+                  <div className={`h-3.5 w-3.5 rounded-full ring-2 ring-background ${needsReview ? "bg-accent" : "bg-secondary"}`} />
+                  <span className={`absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded px-1 py-0.5 text-[9px] font-display text-background ${needsReview ? "bg-accent" : "bg-secondary"}`}>
+                    {dartLabel(d)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {(phase === "starting" || phase === "detecting") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 px-4 text-center text-xs text-foreground">
             <Loader2 className="mb-2 h-5 w-5 animate-spin" />
@@ -1117,8 +1162,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </div>
       )}
 
+      {needsReview && (
+        <div className="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-[11px] text-accent">
+          Nicht ganz sicher erkannt — bitte unten prüfen und mit „Übernehmen" bestätigen (oder einzelne Darts korrigieren).
+        </div>
+      )}
+
       {/* live accumulated darts */}
-      <div className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-3">
+      <div className={`rounded-xl border p-3 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent ${needsReview ? "border-accent/50" : "border-primary/30"}`}>
         <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
           <span className="flex items-center gap-1">
             <Zap className="h-3 w-3 text-accent" /> Aktuelle Runde
@@ -1245,8 +1296,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <Button
             size="sm"
             onClick={() => commitRound(accumulated)}
-            className="gap-1"
-            title="Runde sofort übernehmen"
+            className={`gap-1 ${needsReview ? "animate-pulse-glow" : ""}`}
+            title="Runde übernehmen"
           >
             <Check className="h-4 w-4" /> Übernehmen
           </Button>

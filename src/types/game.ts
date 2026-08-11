@@ -12,6 +12,9 @@ export interface DartThrow {
   multiplier: number;
   /** Calculated points (baseValue × multiplier) */
   points: number;
+  /** Tip position in board-relative unit coordinates (0,0 = bull, radius ~1 = double edge), camera-scored throws only. Camera-framing-independent, so safe to aggregate across games/devices for a throw heatmap. */
+  boardU?: number;
+  boardV?: number;
 }
 
 /** A single player slot in the match (human or bot) */

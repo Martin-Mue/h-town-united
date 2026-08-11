@@ -494,7 +494,7 @@ const GamePage = () => {
       if (curGame.isFinished) break;
       const idx = curGame.currentPlayerIndex;
       const points = d.baseValue === 25 && d.multiplier === 3 ? 0 : d.baseValue * d.multiplier;
-      const dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points };
+      const dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points, boardU: d.boardU, boardV: d.boardV };
 
       if (curGame.mode === "cricket") {
         const cricketNumbers = curGame.cricketNumbers ?? CRICKET_NUMBERS;
@@ -539,7 +539,7 @@ const GamePage = () => {
       const effectivePoints = stillWaitingForDoubleIn ? 0 : points;
       const newRemaining = remaining - effectivePoints;
 
-      const x01Dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points: effectivePoints };
+      const x01Dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points: effectivePoints, boardU: d.boardU, boardV: d.boardV };
       const activeDoubleOut = curGame.players[idx].doubleOut ?? true;
       const isBust = !stillWaitingForDoubleIn && (newRemaining < 0 || newRemaining === 1 ||
         (newRemaining === 0 && activeDoubleOut && !isDoubleOut));
