@@ -23,6 +23,7 @@ import {
   tonPlusCount as countTonPlusRounds,
   count180s,
   computeCheckoutStats,
+  combineCheckoutStats,
 } from "@/utils/dartStats";
 
 /** Bot personas with their target 3-dart average */
@@ -35,17 +36,18 @@ import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
   playVictorySound, playTonPlusSound, playTurnSwitchSound,
 } from "@/utils/sounds";
-import { describeDartForSpeech, speakText } from "@/utils/speech";
+import { describeDartForSpeech, speakText, buildRoundAnnouncement } from "@/utils/speech";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const MAX_PLAYERS = 8;
 
-function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, numPlayers: number): LegState {
+function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, players: PlayerSlot[]): LegState {
   return {
     legNumber,
     startingPlayerIndex,
-    remaining: Array(numPlayers).fill(startScore),
-    throws: Array.from({ length: numPlayers }, () => []),
+    remaining: Array(players.length).fill(startScore),
+    throws: Array.from({ length: players.length }, () => []),
+    startedScoring: players.map((p) => !p.doubleIn),
   };
 }
 function createCricketState(numbers: readonly number[] = CRICKET_NUMBERS): CricketPlayerState {
@@ -87,6 +89,7 @@ const GamePage = () => {
   const [customCricket, setCustomCricket] = useState(false);
   const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
   const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(Array(MAX_PLAYERS).fill(true));
+  const [playerDoubleIn, setPlayerDoubleIn] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
   const [playerIsBot, setPlayerIsBot] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
   const [playerBotLevel, setPlayerBotLevel] = useState<BotLevel[]>(Array(MAX_PLAYERS).fill("medium"));
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -120,12 +123,34 @@ const GamePage = () => {
   const [botThinking, setBotThinking] = useState(false);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const botPlanRef = useRef<{ key: string; darts: DartThrow[]; applied: number } | null>(null);
+  const [checkoutRates, setCheckoutRates] = useState<Record<string, number>>({});
 
   useEffect(() => {
     supabase.from("players").select("id, name, emoji").order("name").then(({ data }) => {
       if (data) setDbPlayers(data);
     });
   }, []);
+
+  // Fetches the current player's career checkout conversion rate on demand (once per
+  // player per session) so CheckoutSuggestion can show "how often do I actually convert this".
+  useEffect(() => {
+    if (!game || game.mode === "cricket" || phase !== "playing") return;
+    const player = game.players[game.currentPlayerIndex];
+    if (!player || player.isBot || checkoutRates[player.name] !== undefined) return;
+    const match = dbPlayers.find((p) => p.name === player.name);
+    if (!match) return;
+    supabase
+      .from("game_legs")
+      .select("throws, starting_score")
+      .eq("player_id", match.id)
+      .then(({ data }) => {
+        if (!data || data.length === 0) return;
+        const combined = combineCheckoutStats(
+          (data as any[]).map((leg) => computeCheckoutStats(leg.throws as DartThrow[], leg.starting_score))
+        );
+        if (combined.attempts > 0) setCheckoutRates((prev) => ({ ...prev, [player.name]: combined.percentage }));
+      });
+  }, [game?.currentPlayerIndex, game?.mode, phase, dbPlayers]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -171,13 +196,14 @@ const GamePage = () => {
         ? BOT_PROFILES[playerBotLevel[i] ?? "medium"].name
         : (playerNames[i]?.trim() || `Spieler ${i + 1}`),
       doubleOut: playerDoubleOut[i] ?? true,
+      doubleIn: playerDoubleIn[i] ?? false,
       isBot: mode === "cricket" ? playerIsBot[i] : playerIsBot[i],
       botLevel: playerBotLevel[i] ?? "medium",
     }));
     const newGame: GameState = {
       mode, startScore, bestOfLegs, players,
       legsWon: Array(n).fill(0),
-      currentLeg: createLegState(1, startScore, 0, n), completedLegs: [],
+      currentLeg: createLegState(1, startScore, 0, players), completedLegs: [],
       currentPlayerIndex: 0, isFinished: false,
       maxRoundsX01: mode !== "cricket" && maxRoundsX01 > 0 ? maxRoundsX01 : undefined,
     };
@@ -221,16 +247,25 @@ const GamePage = () => {
     const baseValue = overrideBase ?? selectedScore;
     const mul = overrideMul ?? multiplier;
     const points = baseValue === 25 && mul === 3 ? 0 : baseValue * mul;
-    const dart: DartThrow = { baseValue, multiplier: mul, points };
     const idx = game.currentPlayerIndex;
     const n = game.players.length;
     const remaining = game.currentLeg.remaining[idx];
-    const newRemaining = remaining - points;
     const newDartsThisRound = dartsThisRound + 1;
 
+    const requiresDoubleIn = game.players[idx].doubleIn ?? false;
+    const alreadyStartedScoring = game.currentLeg.startedScoring?.[idx] ?? true;
+    const isQualifyingDouble = mul === 2 || (baseValue === 25 && mul === 2);
+    const justGotIn = requiresDoubleIn && !alreadyStartedScoring && isQualifyingDouble;
+    const stillWaitingForDoubleIn = requiresDoubleIn && !alreadyStartedScoring && !isQualifyingDouble;
+    // While still waiting to get in, a non-double dart contributes 0 to remaining/stats — it's
+    // still shown in the throw history with its real face value, just not counted.
+    const effectivePoints = stillWaitingForDoubleIn ? 0 : points;
+    const dart: DartThrow = { baseValue, multiplier: mul, points: effectivePoints };
+    const newRemaining = remaining - effectivePoints;
+
     const activeDoubleOut = game.players[idx].doubleOut ?? true;
-    const isBust = newRemaining < 0 || newRemaining === 1 ||
-      (newRemaining === 0 && activeDoubleOut && mul !== 2 && !(baseValue === 25 && mul === 2));
+    const isBust = !stillWaitingForDoubleIn && (newRemaining < 0 || newRemaining === 1 ||
+      (newRemaining === 0 && activeDoubleOut && mul !== 2 && !(baseValue === 25 && mul === 2)));
 
     if (isBust) {
       if (soundEnabled) playBustSound();
@@ -255,6 +290,9 @@ const GamePage = () => {
       const updatedLeg: LegState = { ...prev.currentLeg, remaining: [...prev.currentLeg.remaining], throws: prev.currentLeg.throws.map(t => [...t]) };
       updatedLeg.remaining[idx] = newRemaining;
       updatedLeg.throws[idx] = [...updatedLeg.throws[idx], dart];
+      if (justGotIn) {
+        updatedLeg.startedScoring = (updatedLeg.startedScoring ?? prev.players.map(() => true)).map((v, i) => i === idx ? true : v);
+      }
 
       // Checkout
       if (newRemaining === 0) {
@@ -271,7 +309,7 @@ const GamePage = () => {
         } else {
           updated.completedLegs = [...prev.completedLegs, updatedLeg];
           const nextStarter = (updatedLeg.startingPlayerIndex + 1) % n;
-          updated.currentLeg = createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, n);
+          updated.currentLeg = createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players);
           updated.currentPlayerIndex = nextStarter;
         }
         return updated;
@@ -298,7 +336,7 @@ const GamePage = () => {
                 return { ...next, currentLeg: updatedLeg, legsWon, isFinished: true, winnerName: prev.players[legWinner].name, winnerIndex: legWinner };
               }
               const nextStarter = (legWinner + 1) % n;
-              return { ...next, completedLegs: [...prev.completedLegs, updatedLeg], legsWon, currentLeg: createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, n), currentPlayerIndex: nextStarter };
+              return { ...next, completedLegs: [...prev.completedLegs, updatedLeg], legsWon, currentLeg: createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players), currentPlayerIndex: nextStarter };
             }
           }
         }
@@ -322,7 +360,7 @@ const GamePage = () => {
       }
     } else if (newDartsThisRound >= 3) {
       const roundThrows = game.currentLeg.throws[idx].slice(-2);
-      const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0) + points;
+      const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0) + effectivePoints;
       if (soundEnabled) {
         if (roundTotal === 180) setTimeout(() => play180Sound(), 100);
         else if (roundTotal >= 100) setTimeout(() => playTonPlusSound(), 100);
@@ -490,13 +528,21 @@ const GamePage = () => {
 
       // X01 modes
       const remaining = curGame.currentLeg.remaining[idx];
-      const newRemaining = remaining - points;
       const newDartsThisRound = curDarts + 1;
       const mul: number = d.multiplier;
       const isDoubleOut = mul === 2;
+
+      const requiresDoubleIn = curGame.players[idx].doubleIn ?? false;
+      const alreadyStartedScoring = curGame.currentLeg.startedScoring?.[idx] ?? true;
+      const justGotIn = requiresDoubleIn && !alreadyStartedScoring && isDoubleOut;
+      const stillWaitingForDoubleIn = requiresDoubleIn && !alreadyStartedScoring && !isDoubleOut;
+      const effectivePoints = stillWaitingForDoubleIn ? 0 : points;
+      const newRemaining = remaining - effectivePoints;
+
+      const x01Dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points: effectivePoints };
       const activeDoubleOut = curGame.players[idx].doubleOut ?? true;
-      const isBust = newRemaining < 0 || newRemaining === 1 ||
-        (newRemaining === 0 && activeDoubleOut && !isDoubleOut);
+      const isBust = !stillWaitingForDoubleIn && (newRemaining < 0 || newRemaining === 1 ||
+        (newRemaining === 0 && activeDoubleOut && !isDoubleOut));
 
       if (isBust) {
         curGame.currentLeg.remaining[idx] = curStart;
@@ -508,9 +554,12 @@ const GamePage = () => {
       }
 
       curGame.currentLeg.remaining[idx] = newRemaining;
-      curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], dart];
+      curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], x01Dart];
+      if (justGotIn) {
+        curGame.currentLeg.startedScoring = (curGame.currentLeg.startedScoring ?? curGame.players.map(() => true)).map((v, i) => i === idx ? true : v);
+      }
       curDarts = newDartsThisRound;
-      roundTotal += points;
+      roundTotal += effectivePoints;
 
       if (newRemaining === 0) {
         curGame.currentLeg.winnerIndex = idx;
@@ -523,7 +572,7 @@ const GamePage = () => {
         } else {
           curGame.completedLegs = [...curGame.completedLegs, curGame.currentLeg];
           const nextStarter = (curGame.currentLeg.startingPlayerIndex + 1) % n;
-          curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter, n);
+          curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter, curGame.players);
           curGame.currentPlayerIndex = nextStarter;
         }
         checkedOut = true;
@@ -553,16 +602,13 @@ const GamePage = () => {
       const nextPlayerName = curGame.players[curGame.currentPlayerIndex].name;
       const remaining = curGame.mode === "cricket" ? undefined : game.currentLeg.remaining[startIdx];
       const dartText = darts.map(describeDartForSpeech).join(", ");
-      const announcement = curGame.isFinished
-        ? `Erkannt: ${dartText}. ${curGame.winnerName} gewinnt.`
-        : checkedOut
-          ? `Erkannt: ${dartText}. Leg gewonnen. ${nextPlayerName} startet das naechste Leg.`
-          : busted
-            ? `Erkannt: ${dartText}. Bust. ${nextPlayerName} ist dran.`
-            : curGame.mode === "cricket"
-              ? `Erkannt: ${dartText}. Runde uebernommen. ${nextPlayerName} ist dran.`
-              : `Erkannt: ${dartText}. ${activePlayerName} hat ${roundTotal} Punkte geworfen. Verbleibend ${remaining}. ${nextPlayerName} ist dran.`;
-      window.setTimeout(() => speakText(announcement), 160);
+      const { text: announcement, options } = buildRoundAnnouncement({
+        dartText, roundTotal, activePlayerName, nextPlayerName, remaining,
+        isCricket: curGame.mode === "cricket",
+        checkedOut: checkedOut && !curGame.isFinished,
+        busted, matchWon: curGame.isFinished, winnerName: curGame.winnerName,
+      });
+      window.setTimeout(() => speakText(announcement, options), 160);
     }
 
     if (soundEnabled) {
@@ -683,7 +729,8 @@ const GamePage = () => {
         const key = `${idx}-${game.currentLeg.legNumber}-${dartsThisRound}`;
         let plan = botPlanRef.current;
         if (!plan || plan.key.split("-")[0] !== String(idx) || plan.key.split("-")[1] !== String(game.currentLeg.legNumber) || dartsThisRound === 0) {
-          const visit = simulateBotVisit(game.currentLeg.remaining[idx], player.doubleOut ?? true, level);
+          const mustDoubleIn = (player.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[idx] ?? true);
+          const visit = simulateBotVisit(game.currentLeg.remaining[idx], player.doubleOut ?? true, level, mustDoubleIn);
           plan = { key: `${idx}-${game.currentLeg.legNumber}`, darts: visit.darts, applied: 0 };
           botPlanRef.current = plan;
         }
@@ -707,6 +754,12 @@ const GamePage = () => {
     const throwsByPlayer = Array.from({ length: n }, (_, i) => allLegs.flatMap(l => l.throws[i] ?? []));
     const averages = throwsByPlayer.map(calculateAverage);
     const highs = throwsByPlayer.map(getHighest3DartRound);
+    // Double/checkout rate: % of checkout-range visits (X01 only) that actually finished the leg.
+    const doubleRates = game.mode === "cricket"
+      ? Array(n).fill(0)
+      : Array.from({ length: n }, (_, i) =>
+          combineCheckoutStats(allLegs.map(leg => computeCheckoutStats(leg.throws[i] ?? [], game.startScore))).percentage
+        );
 
     // Rank players by legs won (desc) to determine the top-2 finishers for the legacy DB schema.
     const ranking = game.players.map((_, i) => i).sort((a, b) => game.legsWon[b] - game.legsWon[a]);
@@ -718,9 +771,8 @@ const GamePage = () => {
     const winnerIdx = game.winnerIndex ?? top1;
     const winnerMatch = winnerIdx === top1 ? p1Match : p2Match;
 
-    // Detailed per-player stats: treble-less visits + hits on the big triples
-    const detailFor = (idx?: number) => {
-      if (idx === undefined) return null;
+    // Detailed per-player stats: treble-less visits + hits on the big triples (all players, not just the top 2)
+    const detailFor = (idx: number) => {
       const throws = throwsByPlayer[idx];
       const visits: typeof throws[] = [];
       for (let i = 0; i < throws.length; i += 3) visits.push(throws.slice(i, i + 3));
@@ -729,8 +781,10 @@ const GamePage = () => {
       [20, 19, 18, 17, 16].forEach(n => {
         tripleHits[`t${n}`] = throws.filter(t => t.multiplier === 3 && t.baseValue === n).length;
       });
+      const playerMatch = allDbPlayers?.find(p => p.name === game.players[idx].name);
       return {
         name: game.players[idx].name,
+        player_id: playerMatch?.id || null,
         visits: visits.length,
         trebleless,
         treblelessRate: visits.length ? Math.round((trebleless / visits.length) * 1000) / 10 : 0,
@@ -748,9 +802,10 @@ const GamePage = () => {
       player1_legs_won: game.legsWon[top1], player2_legs_won: top2 !== undefined ? game.legsWon[top2] : 0,
       player1_average: averages[top1], player2_average: top2 !== undefined ? averages[top2] : 0,
       player1_highscore: highs[top1], player2_highscore: top2 !== undefined ? highs[top2] : 0,
+      player1_double_rate: doubleRates[top1], player2_double_rate: top2 !== undefined ? doubleRates[top2] : 0,
       player1_total_throws: throwsByPlayer[top1].length, player2_total_throws: top2 !== undefined ? throwsByPlayer[top2].length : 0,
       winner_name: game.winnerName!, winner_id: winnerMatch?.id || null,
-      detail_stats: { player1: detailFor(top1), player2: detailFor(top2) } as any,
+      detail_stats: { players: game.players.map((_, i) => detailFor(i)) } as any,
     }).select("id").single();
 
     // Every player's every leg, dart-by-dart — the source of truth for checkout %,
@@ -782,9 +837,14 @@ const GamePage = () => {
         if (current) {
           const gp = current.games_played + 1;
           const newAvg = (Number(current.average) * current.games_played + averages[i]) / gp;
+          // Cricket games don't have a double rate — only fold X01 games into the running career average.
+          const newDoubleRate = game.mode === "cricket"
+            ? Number(current.double_rate) || 0
+            : (Number(current.double_rate) * current.games_played + doubleRates[i]) / gp;
           await supabase.from("players").update({
             games_played: gp, games_won: current.games_won + (game.winnerIndex === i ? 1 : 0),
             average: Math.round(newAvg * 10) / 10, high_score: Math.max(current.high_score, highs[i]),
+            double_rate: Math.round(newDoubleRate * 10) / 10,
           }).eq("id", match.id);
         }
       }
@@ -962,10 +1022,16 @@ const GamePage = () => {
                 )}
 
                 {mode !== "cricket" && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{playerDoubleOut[i] ? "Double Out" : "Single Out"}</span>
-                    <Switch checked={playerDoubleOut[i]} onCheckedChange={(v) => setPlayerDoubleOut(prev => prev.map((val, idx) => idx === i ? v : val))} />
-                  </div>
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">{playerDoubleIn[i] ? "Double In" : "Straight In"}</span>
+                      <Switch checked={playerDoubleIn[i]} onCheckedChange={(v) => setPlayerDoubleIn(prev => prev.map((val, idx) => idx === i ? v : val))} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">{playerDoubleOut[i] ? "Double Out" : "Single Out"}</span>
+                      <Switch checked={playerDoubleOut[i]} onCheckedChange={(v) => setPlayerDoubleOut(prev => prev.map((val, idx) => idx === i ? v : val))} />
+                    </div>
+                  </>
                 )}
               </div>
             ))}
@@ -1003,6 +1069,13 @@ const GamePage = () => {
   const currentRemaining = game.currentLeg.remaining[activeIdx];
   const currentThrows = game.currentLeg.throws[activeIdx];
   const numCols = game.players.length <= 2 ? "grid-cols-2" : game.players.length === 3 ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4";
+  const awaitingDoubleIn = !isCricket && (currentPlayer?.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[activeIdx] ?? true);
+
+  const doubleInBanner = awaitingDoubleIn ? (
+    <div className="mb-3 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-center text-xs text-accent font-display uppercase tracking-wide">
+      Double In erforderlich – nur ein Doppel bringt {currentPlayerName} rein
+    </div>
+  ) : null;
 
   const cricketBoard = isCricket && game.cricket ? (
     <div className="bg-card rounded-xl border border-border p-3 mb-3 overflow-x-auto">
@@ -1219,7 +1292,8 @@ const GamePage = () => {
           {/* Everything below the scoreboard scrolls WITHIN this region only — the
               outer window (and the page behind it) never scrolls while the camera is open. */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3">
-            {!isCricket && !currentPlayer?.isBot && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
+            {doubleInBanner}
+            {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} /></div>}
 
             {!currentPlayer?.isBot && (
               <LiveCamera
@@ -1230,6 +1304,7 @@ const GamePage = () => {
                 onPendingChange={setPendingCameraDarts}
                 dartsRemaining={Math.max(1, 3 - dartsThisRound)}
                 playerName={currentPlayerName}
+                onRequestManualEntry={() => setShowManualInput(true)}
               />
             )}
 
@@ -1332,7 +1407,7 @@ const GamePage = () => {
       ) : (
         <>
           {/* Checkout suggestion */}
-          {!isCricket && !currentPlayer?.isBot && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
+          {!isCricket && !currentPlayer?.isBot && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} /></div>}
 
           {/* Cricket scoreboard */}
           {cricketBoard}

@@ -52,6 +52,8 @@ interface LiveCameraProps {
   onClose: () => void;
   dartsRemaining?: number;
   playerName?: string;
+  /** Called when the player wants to give up on auto-scoring and switch to manual entry after a failed/empty scan. */
+  onRequestManualEntry?: () => void;
 }
 
 /** Imperative handle so the parent can pull a just-recorded clip when a highlight happens. */
@@ -273,6 +275,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   onClose,
   dartsRemaining = 3,
   playerName,
+  onRequestManualEntry,
 }, ref) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -308,6 +311,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [accumulated, setAccumulated] = useState<DetectedDart[]>([]);
   const accumulatedRef = useRef<DetectedDart[]>([]);
   const [status, setStatus] = useState("Kamera startet …");
+  const [scanFailed, setScanFailed] = useState(false);
   const [motion, setMotion] = useState(0);
   const [changeDelta, setChangeDelta] = useState(0);
   const [lastConfidence, setLastConfidence] = useState(0);
@@ -822,6 +826,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setPhase("scanning");
     lastScanAtRef.current = performance.now();
     setError(null);
+    setScanFailed(false);
     playScanStartSound();
     setStatus("Erkenne Darts …");
 
@@ -837,6 +842,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         // "found darts but they got filtered out" when this happens in the field.
         console.warn("[LiveCamera] scan found 0 darts. Raw AI response:", data);
         setStatus("Keine Darts erkannt · bitte manuell erfassen");
+        setScanFailed(true);
       } else {
         setAccumulated(aiDarts);
         aiDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
@@ -850,6 +856,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setError(err instanceof Error ? err.message : "Erkennung fehlgeschlagen.");
       setPhase("live");
       setStatus("Scan fehlgeschlagen · manuell erfassen");
+      setScanFailed(true);
     } finally {
       scanLockRef.current = false;
       preRemovalFrameRef.current = null;
@@ -862,6 +869,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setAccumulated([]);
     accumulatedRef.current = [];
     setError(null);
+    setScanFailed(false);
     const sig = buildSignature();
     if (sig) emptyBoardSigRef.current = sig;
     resetLoop();
@@ -870,6 +878,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   };
 
   const discardRound = () => {
+    setScanFailed(false);
     setAccumulated([]);
     accumulatedRef.current = [];
     setError(null);
@@ -1076,6 +1085,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       {autoCalibrating && (
         <div className="rounded-md border border-accent/30 bg-accent/5 px-3 py-1.5 text-[11px] text-accent">
           Auto-Kalibrierung läuft – Zoom & Board-Lage werden angepasst.
+        </div>
+      )}
+
+      {scanFailed && onRequestManualEntry && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[11px]">
+          <span className="text-destructive">Scan hat keine Darts gefunden.</span>
+          <div className="flex shrink-0 gap-1.5">
+            <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => { setScanFailed(false); manualScan(); }}>
+              Erneut scannen
+            </Button>
+            <Button size="sm" variant="default" className="h-6 px-2 text-[11px]" onClick={onRequestManualEntry}>
+              Manuell erfassen
+            </Button>
+          </div>
         </div>
       )}
 

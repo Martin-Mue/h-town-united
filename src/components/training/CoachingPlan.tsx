@@ -40,22 +40,22 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     ];
   }
 
-  // Double rate weakness
-  if (s.doubleRate < 0.25) {
+  // Double rate weakness (doubleRate is already a 0-100 percentage)
+  if (s.doubleRate < 25) {
     recs.push({
       drillId: "doubles-only",
       title: "Doubles Only",
-      reason: `Deine Doppel-Quote liegt bei ${Math.round(s.doubleRate * 100)} %. Gezieltes Doppel-Training bringt dir die meisten Punkte zurück.`,
-      metric: `Doppel ${Math.round(s.doubleRate * 100)} %`,
+      reason: `Deine Doppel-Quote liegt bei ${Math.round(s.doubleRate)} %. Gezieltes Doppel-Training bringt dir die meisten Punkte zurück.`,
+      metric: `Doppel ${Math.round(s.doubleRate)} %`,
       priority: 1,
       icon: Target,
     });
-  } else if (s.doubleRate < 0.4) {
+  } else if (s.doubleRate < 40) {
     recs.push({
       drillId: "pressure-training",
       title: "Pressure Training",
-      reason: `Mit ${Math.round(s.doubleRate * 100)} % Doppel solltest du Druck-Finishes (32, 40, 16) automatisieren.`,
-      metric: `Doppel ${Math.round(s.doubleRate * 100)} %`,
+      reason: `Mit ${Math.round(s.doubleRate)} % Doppel solltest du Druck-Finishes (32, 40, 16) automatisieren.`,
+      metric: `Doppel ${Math.round(s.doubleRate)} %`,
       priority: 1,
       icon: Zap,
     });
@@ -223,7 +223,7 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
               <Stat label="Spiele" value={stats.games.toString()} />
               <Stat label="Siege" value={stats.wins.toString()} />
               <Stat label="Ø Score" value={stats.avg.toFixed(1)} />
-              <Stat label="Doppel" value={`${Math.round(stats.doubleRate * 100)}%`} />
+              <Stat label="Doppel" value={`${Math.round(stats.doubleRate)}%`} />
             </div>
           ) : (
             <p className="text-xs text-muted-foreground mb-3">

@@ -105,15 +105,20 @@ export interface BotVisitResult {
   checkedOut: boolean;
 }
 
-export function simulateBotVisit(remaining: number, doubleOut: boolean, level: BotLevel): BotVisitResult {
+export function simulateBotVisit(remaining: number, doubleOut: boolean, level: BotLevel, mustDoubleIn = false): BotVisitResult {
   const darts: DartThrow[] = [];
   let rem = remaining;
+  let gotIn = !mustDoubleIn;
 
   for (let i = 0; i < 3; i++) {
     let targetBase = 20;
     let targetMultiplier: 1 | 2 | 3 = 3;
 
-    if (rem <= 170) {
+    if (!gotIn) {
+      // Not in yet: every dart aims at a double until one lands, ignoring normal checkout strategy.
+      targetBase = rem <= 40 && rem % 2 === 0 && rem > 0 ? rem / 2 : 20;
+      targetMultiplier = 2;
+    } else if (rem <= 170) {
       const route = getCheckoutSuggestion(rem);
       if (route && route.length > 0) {
         const seg = parseRouteSegment(route[0]);
@@ -129,11 +134,17 @@ export function simulateBotVisit(remaining: number, doubleOut: boolean, level: B
     }
 
     const dart = simulateDart(targetBase, targetMultiplier, level);
+    darts.push(dart);
+
+    if (!gotIn) {
+      // Only a landed double counts while still trying to get in; anything else is a dead dart.
+      if (dart.multiplier !== 2) continue;
+      gotIn = true;
+    }
+
     const newRem = rem - dart.points;
     const isBust = newRem < 0 || newRem === 1 ||
       (newRem === 0 && doubleOut && !(dart.multiplier === 2 || (dart.baseValue === 25 && dart.multiplier === 2)));
-
-    darts.push(dart);
 
     if (isBust) return { darts, bustedOnDartIndex: i, checkedOut: false };
 

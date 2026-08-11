@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2 } from "lucide-react";
+import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -11,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import {
-  first9Average, average, computeCheckoutStats, combineCheckoutStats,
+  first9Average, average, highestVisit, computeCheckoutStats, combineCheckoutStats,
   computeCricketStats, combineCricketStats,
   type DartThrow, type CheckoutStats, type CricketStats,
 } from "@/utils/dartStats";
@@ -20,16 +24,18 @@ interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
   player1_average: number; player2_average: number; player1_highscore: number; player2_highscore: number;
   player1_legs_won: number; player2_legs_won: number; player1_double_rate: number; player2_double_rate: number;
-  player1_total_throws: number; player2_total_throws: number; winner_name: string; played_at: string;
+  player1_total_throws: number; player2_total_throws: number; winner_name: string; winner_id: string | null; played_at: string;
   player1_id: string | null; player2_id: string | null; start_score: number; best_of_legs: number;
   detail_stats?: {
+    players?: DetailStat[];
+    /** Legacy shape from before detail_stats covered every player, not just the top 2. */
     player1?: DetailStat | null;
     player2?: DetailStat | null;
   } | null;
 }
 
 interface DetailStat {
-  name: string; visits: number; trebleless: number; treblelessRate: number; triples: number;
+  name: string; player_id?: string | null; visits: number; trebleless: number; treblelessRate: number; triples: number;
   t20?: number; t19?: number; t18?: number; t17?: number; t16?: number;
 }
 
@@ -61,6 +67,8 @@ const StatisticsPage = () => {
   const [players, setPlayers] = useState<PlayerStats[]>([]);
   const [gameLegs, setGameLegs] = useState<GameLegRecord[]>([]);
   const [highlightClips, setHighlightClips] = useState<HighlightClipRecord[]>([]);
+  const [cleanupDays, setCleanupDays] = useState("90");
+  const [cleaningUpClips, setCleaningUpClips] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate" | "checkout">("average");
   const [compareP1, setCompareP1] = useState<string>("");
@@ -72,6 +80,7 @@ const StatisticsPage = () => {
   const [filterMode, setFilterMode] = useState<string>("all");
   const [filterPlayerId, setFilterPlayerId] = useState<string>("all");
   const [filterBestOf, setFilterBestOf] = useState<string>("all");
+  const [filterYear, setFilterYear] = useState<string>("all");
   const { session } = useAuth();
 
   const fetchData = useCallback(async () => {
@@ -101,12 +110,13 @@ const StatisticsPage = () => {
     else if (filterTime === "year") cutoff = now - 365 * dayMs;
     return games.filter((g) => {
       if (cutoff > 0 && new Date(g.played_at).getTime() < cutoff) return false;
+      if (filterYear !== "all" && new Date(g.played_at).getFullYear() !== Number(filterYear)) return false;
       if (filterMode !== "all" && g.mode !== filterMode) return false;
       if (filterPlayerId !== "all" && g.player1_id !== filterPlayerId && g.player2_id !== filterPlayerId) return false;
       if (filterBestOf !== "all" && Number(g.best_of_legs) !== Number(filterBestOf)) return false;
       return true;
     });
-  }, [games, filterTime, filterMode, filterPlayerId, filterBestOf]);
+  }, [games, filterTime, filterYear, filterMode, filterPlayerId, filterBestOf]);
 
   const availableModes = useMemo(() => {
     const s = new Set<string>();
@@ -120,20 +130,35 @@ const StatisticsPage = () => {
     return Array.from(s).sort((a, b) => a - b);
   }, [games]);
 
+  const availableYears = useMemo(() => {
+    const s = new Set<number>();
+    games.forEach((g) => s.add(new Date(g.played_at).getFullYear()));
+    return Array.from(s).sort((a, b) => b - a);
+  }, [games]);
+
   const filtersActive =
-    filterTime !== "all" || filterMode !== "all" || filterPlayerId !== "all" || filterBestOf !== "all";
+    filterTime !== "all" || filterYear !== "all" || filterMode !== "all" || filterPlayerId !== "all" || filterBestOf !== "all";
 
   // Treble-less visits + big-triple hit distribution (from per-game detail stats)
   const trebleStats = useMemo(() => {
     const entries: DetailStat[] = [];
     filteredGames.forEach((g) => {
-      const ds = (g.detail_stats || {}) as { player1?: DetailStat | null; player2?: DetailStat | null };
-      ([["player1", g.player1_id], ["player2", g.player2_id]] as const).forEach(([key, pid]) => {
-        const d = ds[key];
-        if (!d) return;
-        if (filterPlayerId !== "all" && pid !== filterPlayerId) return;
-        entries.push(d);
-      });
+      const ds = (g.detail_stats || {}) as { players?: DetailStat[]; player1?: DetailStat | null; player2?: DetailStat | null };
+      if (ds.players && ds.players.length > 0) {
+        ds.players.forEach((d) => {
+          if (!d) return;
+          if (filterPlayerId !== "all" && (d.player_id ?? null) !== filterPlayerId) return;
+          entries.push(d);
+        });
+      } else {
+        // Legacy games saved before detail_stats covered every player, not just the top 2.
+        ([["player1", g.player1_id], ["player2", g.player2_id]] as const).forEach(([key, pid]) => {
+          const d = ds[key];
+          if (!d) return;
+          if (filterPlayerId !== "all" && pid !== filterPlayerId) return;
+          entries.push(d);
+        });
+      }
     });
     const visits = entries.reduce((s, d) => s + (d.visits || 0), 0);
     const trebleless = entries.reduce((s, d) => s + (d.trebleless || 0), 0);
@@ -184,6 +209,37 @@ const StatisticsPage = () => {
     return result;
   }, [gameLegs, filteredGames, games]);
 
+  // Season/filter-aware leaderboard stats — built from game_legs (covers every player,
+  // not just the top-2 tracked on the `games` row) so a season/year filter actually
+  // changes the leaderboard instead of always showing lifetime totals.
+  const filteredPlayerStats = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const winsByPlayer: Record<string, number> = {};
+    filteredGames.forEach((g) => { if (g.winner_id) winsByPlayer[g.winner_id] = (winsByPlayer[g.winner_id] || 0) + 1; });
+    const byPlayer: Record<string, { name: string; gameIds: Set<string>; throws: DartThrow[]; highScore: number; checkouts: CheckoutStats[] }> = {};
+    gameLegs.forEach((leg) => {
+      if (!filteredIds.has(leg.game_id) || !leg.player_id || !Array.isArray(leg.throws)) return;
+      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, gameIds: new Set(), throws: [], highScore: 0, checkouts: [] });
+      bucket.gameIds.add(leg.game_id);
+      bucket.throws.push(...leg.throws);
+      bucket.highScore = Math.max(bucket.highScore, highestVisit(leg.throws));
+      bucket.checkouts.push(computeCheckoutStats(leg.throws, leg.starting_score));
+    });
+    const result: Record<string, PlayerStats> = {};
+    Object.entries(byPlayer).forEach(([id, v]) => {
+      const club = players.find((p) => p.id === id);
+      result[id] = {
+        id, name: v.name, emoji: club?.emoji || "🎯",
+        games_played: v.gameIds.size,
+        games_won: winsByPlayer[id] || 0,
+        average: average(v.throws),
+        high_score: v.highScore,
+        double_rate: combineCheckoutStats(v.checkouts).percentage,
+      };
+    });
+    return result;
+  }, [gameLegs, filteredGames, players]);
+
   const bestCheckoutRate = useMemo(() => {
     return Object.values(advancedByPlayer)
       .filter((p) => p.checkout.attempts >= 5)
@@ -221,7 +277,7 @@ const StatisticsPage = () => {
   }, [cricketByPlayer]);
 
   const resetFilters = () => {
-    setFilterTime("all"); setFilterMode("all"); setFilterPlayerId("all"); setFilterBestOf("all");
+    setFilterTime("all"); setFilterYear("all"); setFilterMode("all"); setFilterPlayerId("all"); setFilterBestOf("all");
   };
 
   // Club-wide stats
@@ -246,7 +302,10 @@ const StatisticsPage = () => {
   }, [filteredGames, players]);
 
   const leaderboard = useMemo(() => {
-    return [...players].sort((a, b) => {
+    // Any active filter (season, time range, mode, ...) switches the leaderboard from
+    // lifetime totals to stats recomputed for just the filtered games.
+    const source = filtersActive ? Object.values(filteredPlayerStats) : players;
+    return [...source].sort((a, b) => {
       if (sortBy === "average") return Number(b.average) - Number(a.average);
       if (sortBy === "games_won") return b.games_won - a.games_won;
       if (sortBy === "high_score") return b.high_score - a.high_score;
@@ -260,7 +319,24 @@ const StatisticsPage = () => {
       }
       return Number(b.double_rate) - Number(a.double_rate);
     });
-  }, [players, sortBy, advancedByPlayer]);
+  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive]);
+
+  const exportLeaderboardCsv = () => {
+    const header = ["Platz", "Name", "Spiele", "Siege", "Average", "Highscore", "Doppel %"];
+    const rows = leaderboard.map((p, i) => [
+      i + 1, p.name, p.games_played, p.games_won,
+      Number(p.average).toFixed(1), p.high_score, Number(p.double_rate).toFixed(0),
+    ]);
+    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob([String.fromCharCode(0xFEFF) + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const suffix = filterYear !== "all" ? `saison-${filterYear}` : "gesamt";
+    a.href = url;
+    a.download = `bestenliste-${suffix}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const modeDistribution = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -431,6 +507,37 @@ const StatisticsPage = () => {
 
   const clipKindLabel = (kind: string) => kind === "180" ? "🎯 180" : kind === "checkout" ? "🏆 Checkout" : "🔥 Ton+";
 
+  const oldClips = useMemo(() => {
+    const cutoff = Date.now() - Number(cleanupDays) * 86_400_000;
+    return highlightClips.filter((c) => new Date(c.created_at).getTime() < cutoff);
+  }, [highlightClips, cleanupDays]);
+
+  const deleteOldClips = async () => {
+    if (oldClips.length === 0 || cleaningUpClips) return;
+    setCleaningUpClips(true);
+    try {
+      await supabase.storage.from("dart-clips").remove(oldClips.map((c) => c.storage_path));
+      await supabase.from("highlight_clips").delete().in("id", oldClips.map((c) => c.id));
+      const removedIds = new Set(oldClips.map((c) => c.id));
+      setHighlightClips((prev) => prev.filter((c) => !removedIds.has(c.id)));
+    } finally {
+      setCleaningUpClips(false);
+    }
+  };
+
+  // The clip's game_id is a soft reference (no DB-enforced FK — see migration
+  // 20260811180049) since the clip is often captured before the `games` row exists,
+  // so a miss here just means the match/leg context isn't shown, not an error.
+  const gamesById = useMemo(() => new Map(games.map((g) => [g.id, g])), [games]);
+  const clipGameLabel = (clip: HighlightClipRecord): string | null => {
+    if (!clip.game_id) return null;
+    const g = gamesById.get(clip.game_id);
+    if (!g) return null;
+    const modeLabel = g.mode === "cricket" ? "Cricket" : g.mode === "custom" ? `Custom ${g.start_score}` : g.mode;
+    const opponent = g.player1_name === clip.player_name ? g.player2_name : g.player1_name;
+    return opponent && opponent !== "—" ? `${modeLabel} · vs ${opponent}` : modeLabel;
+  };
+
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
@@ -467,7 +574,7 @@ const StatisticsPage = () => {
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
           <Select value={filterTime} onValueChange={(v) => setFilterTime(v as typeof filterTime)}>
             <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Zeitraum" /></SelectTrigger>
             <SelectContent className="bg-card border-border">
@@ -476,6 +583,13 @@ const StatisticsPage = () => {
               <SelectItem value="week">Letzte 7 Tage</SelectItem>
               <SelectItem value="month">Letzte 30 Tage</SelectItem>
               <SelectItem value="year">Letzte 12 Monate</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterYear} onValueChange={setFilterYear}>
+            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Saison" /></SelectTrigger>
+            <SelectContent className="bg-card border-border">
+              <SelectItem value="all">Alle Saisons</SelectItem>
+              {availableYears.map(y => <SelectItem key={y} value={String(y)}>Saison {y}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterMode} onValueChange={setFilterMode}>
@@ -637,20 +751,30 @@ const StatisticsPage = () => {
 
           {/* Leaderboard */}
           <div className="bg-card rounded-xl border border-border p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2"><Trophy className="w-4 h-4" /> Rangliste</h3>
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-                <SelectTrigger className="w-[140px] h-8 text-xs bg-muted border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="average">Ø Average</SelectItem>
-                  <SelectItem value="games_won">Siege</SelectItem>
-                  <SelectItem value="win_rate">Siegquote %</SelectItem>
-                  <SelectItem value="high_score">Highscore</SelectItem>
-                  <SelectItem value="double_rate">Doppel %</SelectItem>
-                  <SelectItem value="checkout">Checkout %</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+              <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
+                <Trophy className="w-4 h-4" /> Rangliste{filterYear !== "all" ? ` · Saison ${filterYear}` : filtersActive ? " · gefiltert" : ""}
+              </h3>
+              <div className="flex items-center gap-1.5">
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={exportLeaderboardCsv} disabled={leaderboard.length === 0} title="Als CSV exportieren">
+                  <Download className="w-3.5 h-3.5" /> CSV
+                </Button>
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+                  <SelectTrigger className="w-[140px] h-8 text-xs bg-muted border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="average">Ø Average</SelectItem>
+                    <SelectItem value="games_won">Siege</SelectItem>
+                    <SelectItem value="win_rate">Siegquote %</SelectItem>
+                    <SelectItem value="high_score">Highscore</SelectItem>
+                    <SelectItem value="double_rate">Doppel %</SelectItem>
+                    <SelectItem value="checkout">Checkout %</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <p className="text-[10px] text-muted-foreground mb-3">
+              {filtersActive ? "Werte für den aktuell gefilterten Zeitraum/Modus." : "Lebenszeit-Werte über alle Spiele."}
+            </p>
             {leaderboard.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Noch keine Spieler.</p>
             ) : (
@@ -1019,9 +1143,44 @@ const StatisticsPage = () => {
       {/* HIGHLIGHTS TAB */}
       {activeTab === "highlights" && (
         <div className="bg-card rounded-xl border border-border p-4">
-          <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-            <Video className="w-4 h-4" /> Highlight-Clips
-          </h3>
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
+              <Video className="w-4 h-4" /> Highlight-Clips
+            </h3>
+            {highlightClips.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Select value={cleanupDays} onValueChange={setCleanupDays}>
+                  <SelectTrigger className="h-7 w-[110px] text-[11px] bg-background border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="30">älter als 30 Tage</SelectItem>
+                    <SelectItem value="90">älter als 90 Tage</SelectItem>
+                    <SelectItem value="365">älter als 1 Jahr</SelectItem>
+                  </SelectContent>
+                </Select>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" disabled={oldClips.length === 0}>
+                      <Trash2 className="w-3 h-3" /> Aufräumen ({oldClips.length})
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{oldClips.length} Clips löschen?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Alle Highlight-Clips, die älter als {cleanupDays === "365" ? "1 Jahr" : `${cleanupDays} Tage`} sind, werden unwiderruflich gelöscht — Video-Dateien und Datenbankeinträge.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                      <AlertDialogAction onClick={deleteOldClips} disabled={cleaningUpClips}>
+                        {cleaningUpClips ? "Löscht…" : "Löschen"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
+          </div>
           {filteredClips.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               Noch keine Highlight-Clips. 180er, Checkouts und Ton-Plus-Aufnahmen aus der Kamera-Erkennung landen hier automatisch.
@@ -1036,9 +1195,12 @@ const StatisticsPage = () => {
                       <span className="text-xs font-display uppercase truncate">{clip.player_name}</span>
                       <span className="text-[10px] rounded-full bg-accent/15 text-accent px-2 py-0.5 shrink-0 ml-1">{clipKindLabel(clip.kind)}</span>
                     </div>
+                    {clipGameLabel(clip) && (
+                      <p className="text-[10px] text-primary/80 truncate mb-1">{clipGameLabel(clip)}</p>
+                    )}
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                       <span>{clip.points} Punkte · {new Date(clip.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
-                      <button onClick={() => deleteClip(clip)} className="text-muted-foreground hover:text-destructive transition-colors" title="Clip löschen">
+                      <button onClick={() => deleteClip(clip)} className="text-muted-foreground hover:text-destructive transition-colors" title="Clip löschen" aria-label="Clip löschen">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>

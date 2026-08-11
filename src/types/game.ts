@@ -19,6 +19,8 @@ export interface PlayerSlot {
   name: string;
   /** Double-out required to finish a leg (X01 only). Default true. */
   doubleOut: boolean;
+  /** Double-in required to start scoring in a leg (X01 only). Darts before the opening double don't count. Default false (straight in). */
+  doubleIn?: boolean;
   isBot: boolean;
   botLevel?: BotLevel;
 }
@@ -32,6 +34,8 @@ export interface LegState {
   /** Throws per player index */
   throws: DartThrow[][];
   winnerIndex?: number;
+  /** Per-player: has this player thrown their opening double yet this leg? Always true for players without doubleIn. */
+  startedScoring?: boolean[];
 }
 
 /** Cricket marks for a single number (15-20, 25=Bull) */
