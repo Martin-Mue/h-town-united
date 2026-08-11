@@ -236,13 +236,19 @@ const sanitizeAiDarts = (raw: unknown, max: number): DetectedDart[] => {
       const fallbackPoints = baseValue === 25 ? (multiplier === 2 ? 50 : 25) : baseValue * multiplier;
       const x = Number(dart.x);
       const y = Number(dart.y);
+      // Tips near the double ring legitimately land close to the crop edge — clamp a
+      // small overshoot into range instead of dropping the position outright, since
+      // losing it means falling back to the AI's much less reliable raw segment guess.
+      const EDGE_TOLERANCE = 0.08;
+      const validX = Number.isFinite(x) && x >= -EDGE_TOLERANCE && x <= 1 + EDGE_TOLERANCE;
+      const validY = Number.isFinite(y) && y >= -EDGE_TOLERANCE && y <= 1 + EDGE_TOLERANCE;
       return {
         baseValue,
         multiplier,
         points: Number.isFinite(Number(dart.points)) ? Number(dart.points) : fallbackPoints,
         confidence: Number(dart.confidence) || 0,
-        ...(Number.isFinite(x) && x >= 0 && x <= 1 ? { x } : {}),
-        ...(Number.isFinite(y) && y >= 0 && y <= 1 ? { y } : {}),
+        ...(validX ? { x: clamp(x, 0, 1) } : {}),
+        ...(validY ? { y: clamp(y, 0, 1) } : {}),
       };
     })
     .filter((d) => d.confidence >= MIN_DART_CONFIDENCE)
@@ -555,6 +561,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const updateAutoCalibration = useCallback(async (board?: BoardDetection | null) => {
     if (!board?.confidence || Number(board.confidence) < 0.35) return;
+    // Once the user has done the precise 4-point tap calibration, those tap coordinates
+    // are recorded relative to the camera's physical framing at that moment. Letting
+    // auto-calibration keep nudging the actual hardware zoom afterwards silently
+    // invalidates every tap — the board transform in scoreFromBoardPoint would then be
+    // computing segments/rings against a frame that's no longer what was calibrated,
+    // which reads as "detection got worse over the session" even though nothing about
+    // the AI changed. So: soft-drift the digital crop (x/y/size) for framing/motion-diff
+    // purposes always, but never touch physical zoom again once real taps exist.
+    const hasManualCalibration = (calib.taps?.length ?? 0) === 4;
     const nextX = clamp(Number(board.cx) || calib.x, 0.15, 0.85);
     const nextY = clamp(Number(board.cy) || calib.y, 0.15, 0.85);
     const boardSize = clamp(Number(board.size) || calib.size, 0.35, 0.98);
@@ -567,10 +582,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       x: prev.x * 0.5 + nextX * 0.5,
       y: prev.y * 0.5 + nextY * 0.5,
       size: prev.size * 0.4 + nextSize * 0.6,
-      zoom: prev.zoom * 0.4 + nextZoom * 0.6,
+      zoom: hasManualCalibration ? prev.zoom : prev.zoom * 0.4 + nextZoom * 0.6,
     }));
-    if (zoomCapsRef.current) await applyCameraZoom(nextZoom);
-  }, [applyCameraZoom, calib.x, calib.y, calib.size, calib.zoom]);
+    if (zoomCapsRef.current && !hasManualCalibration) await applyCameraZoom(nextZoom);
+  }, [applyCameraZoom, calib.x, calib.y, calib.size, calib.zoom, calib.taps]);
 
   const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 

@@ -36,7 +36,7 @@ import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
   playVictorySound, playTonPlusSound, playTurnSwitchSound,
 } from "@/utils/sounds";
-import { describeDartForSpeech, speakText, buildRoundAnnouncement } from "@/utils/speech";
+import { describeDartForSpeech, speakSequence, buildRoundAnnouncement } from "@/utils/speech";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const MAX_PLAYERS = 8;
@@ -602,13 +602,13 @@ const GamePage = () => {
       const nextPlayerName = curGame.players[curGame.currentPlayerIndex].name;
       const remaining = curGame.mode === "cricket" ? undefined : game.currentLeg.remaining[startIdx];
       const dartText = darts.map(describeDartForSpeech).join(", ");
-      const { text: announcement, options } = buildRoundAnnouncement({
+      const { parts } = buildRoundAnnouncement({
         dartText, roundTotal, activePlayerName, nextPlayerName, remaining,
         isCricket: curGame.mode === "cricket",
         checkedOut: checkedOut && !curGame.isFinished,
         busted, matchWon: curGame.isFinished, winnerName: curGame.winnerName,
       });
-      window.setTimeout(() => speakText(announcement, options), 160);
+      window.setTimeout(() => speakSequence(parts), 160);
     }
 
     if (soundEnabled) {

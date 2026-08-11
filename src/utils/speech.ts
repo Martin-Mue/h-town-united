@@ -12,6 +12,42 @@ export interface DartSpeechLike {
   points: number;
 }
 
+// The default OS/browser TTS voice (e.g. Windows "Microsoft Hedda/Katja") reads flat and
+// mechanical no matter what pitch/rate you throw at it. Browsers that ship a cloud/neural
+// voice (Chrome's "Google Deutsch", Edge's "Online (Natural)" voices) sound dramatically
+// more human — so actively prefer one of those over whatever the platform default is.
+let voiceCache: SpeechSynthesisVoice[] | null = null;
+
+function refreshVoiceCache() {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) voiceCache = voices;
+}
+
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  refreshVoiceCache();
+  window.speechSynthesis.addEventListener?.("voiceschanged", refreshVoiceCache);
+}
+
+function pickGermanVoice(): SpeechSynthesisVoice | undefined {
+  refreshVoiceCache();
+  const voices = voiceCache;
+  if (!voices || voices.length === 0) return undefined;
+  const german = voices.filter((v) => v.lang?.toLowerCase().startsWith("de"));
+  const pool = german.length > 0 ? german : voices;
+  const byQuality = [...pool].sort((a, b) => {
+    const score = (v: SpeechSynthesisVoice) => {
+      const name = v.name.toLowerCase();
+      if (name.includes("natural") || name.includes("online")) return 3;
+      if (name.includes("google")) return 2;
+      if (v.localService === false) return 1;
+      return 0;
+    };
+    return score(b) - score(a);
+  });
+  return byQuality[0];
+}
+
 export function speakText(text: string, options: SpeechOptions = {}) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   if (!text.trim()) return;
@@ -24,7 +60,36 @@ export function speakText(text: string, options: SpeechOptions = {}) {
   utterance.rate = options.rate ?? 1;
   utterance.pitch = options.pitch ?? 1;
   utterance.volume = options.volume ?? 1;
+  const voice = pickGermanVoice();
+  if (voice) utterance.voice = voice;
   synthesis.speak(utterance);
+}
+
+export interface SpeechPart {
+  text: string;
+  options?: SpeechOptions;
+}
+
+/**
+ * Speaks several utterances back-to-back, each with its own pitch/rate/volume — this is
+ * what actually reads as "dynamic delivery" instead of one flat sentence at a single pitch.
+ * Only the first part clears any currently-queued speech; the rest just play in order.
+ */
+export function speakSequence(parts: SpeechPart[], lang = "de-DE") {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  const synthesis = window.speechSynthesis;
+  const voice = pickGermanVoice();
+  parts.forEach((part, i) => {
+    if (!part.text.trim()) return;
+    if (i === 0) synthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(part.text);
+    utterance.lang = part.options?.lang ?? lang;
+    utterance.rate = part.options?.rate ?? 1;
+    utterance.pitch = part.options?.pitch ?? 1;
+    utterance.volume = part.options?.volume ?? 1;
+    if (voice) utterance.voice = voice;
+    synthesis.speak(utterance);
+  });
 }
 
 export function describeDartForSpeech(dart: DartSpeechLike) {
@@ -39,43 +104,50 @@ function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-/** Darts-caller style hype phrases, picked at random so repeat 180s/checkouts don't sound canned. */
+// Two-tier delivery for big moments: a short, punchy exclamation shouted at high
+// pitch/rate/volume, followed by a calmer detail sentence — real announcers vary their
+// delivery within a single call, and that contrast reads as "alive" far more than
+// nudging one flat sentence's pitch by a few tenths ever could.
 const HYPE_180 = [
   "Einhundertachtzig!",
   "One hundred and eighty!",
-  "Maximum! Einhundertachtzig!",
-  "Was für ein Wurf – Einhundertachtzig!",
-  "Da ist er, der Maximum-Wurf! Einhundertachtzig!",
+  "Maximum!",
+  "Was für ein Wurf!",
+  "Da ist er! Der Maximum-Wurf!",
 ] as const;
 
 const HYPE_TON_PLUS = [
-  "Starker Wurf",
-  "Klasse Runde",
-  "Sauber getroffen",
-  "Stark gepunktet",
-  "Richtig stark",
+  "Starker Wurf!",
+  "Klasse Runde!",
+  "Sauber getroffen!",
+  "Stark gepunktet!",
+  "Richtig stark!",
 ] as const;
 
 const HYPE_CHECKOUT = [
-  "Und raus! Starker Checkout",
-  "Checkout! Sensationell",
-  "Das Leg ist durch",
-  "Perfekt ausgecheckt",
-  "Ins Schwarze getroffen, Leg gewonnen",
+  "Und raus!",
+  "Checkout!",
+  "Das Leg ist durch!",
+  "Perfekt ausgecheckt!",
+  "Ins Schwarze getroffen!",
 ] as const;
 
 const HYPE_MATCH_WIN = [
-  "gewinnt das Match! Glückwunsch",
-  "holt sich den Sieg! Was für eine Leistung",
-  "macht den Deckel drauf und gewinnt das Match",
-  "krönt sich zum Sieger dieses Matches",
+  "gewinnt das Match!",
+  "holt sich den Sieg!",
+  "macht den Deckel drauf!",
+  "krönt sich zum Sieger!",
 ] as const;
 
 const HYPE_BUST = [
-  "Autsch, daneben",
-  "Das sitzt nicht, Bust",
-  "Knapp vorbei, Bust",
+  "Autsch, daneben.",
+  "Das sitzt nicht — Bust.",
+  "Knapp vorbei — Bust.",
 ] as const;
+
+const HYPE_OPTIONS: SpeechOptions = { pitch: 1.55, rate: 1.22, volume: 1 };
+const CALM_OPTIONS: SpeechOptions = { pitch: 0.92, rate: 0.96, volume: 0.92 };
+const NORMAL_OPTIONS: SpeechOptions = { pitch: 1.02, rate: 1.03, volume: 1 };
 
 export interface RoundAnnouncementParams {
   dartText: string;
@@ -90,46 +162,59 @@ export interface RoundAnnouncementParams {
   winnerName?: string;
 }
 
-/** Builds an enthusiastic, darts-caller-style announcement plus the speech intensity to say it with. */
-export function buildRoundAnnouncement(p: RoundAnnouncementParams): { text: string; options: SpeechOptions } {
+/** Builds an enthusiastic, darts-caller-style multi-part announcement (see speakSequence). */
+export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: SpeechPart[] } {
   if (p.matchWon) {
     return {
-      text: `${p.dartText}! ${p.winnerName} ${pickRandom(HYPE_MATCH_WIN)}!`,
-      options: { pitch: 1.3, rate: 1.12, volume: 1 },
+      parts: [
+        { text: `${p.dartText}!`, options: HYPE_OPTIONS },
+        { text: `${p.winnerName} ${pickRandom(HYPE_MATCH_WIN)} Herzlichen Glückwunsch!`, options: { ...HYPE_OPTIONS, rate: 1.1 } },
+      ],
     };
   }
   if (p.checkedOut) {
     return {
-      text: `${p.dartText}. ${pickRandom(HYPE_CHECKOUT)}, ${p.activePlayerName}! ${p.nextPlayerName} startet das nächste Leg.`,
-      options: { pitch: 1.22, rate: 1.1, volume: 1 },
+      parts: [
+        { text: p.dartText, options: NORMAL_OPTIONS },
+        { text: pickRandom(HYPE_CHECKOUT), options: HYPE_OPTIONS },
+        { text: `Leg an ${p.activePlayerName}! ${p.nextPlayerName} startet das nächste Leg.`, options: NORMAL_OPTIONS },
+      ],
     };
   }
   if (p.busted) {
     return {
-      text: `${p.dartText}. ${pickRandom(HYPE_BUST)}. ${p.nextPlayerName} ist dran.`,
-      options: { pitch: 0.95, rate: 0.98, volume: 0.95 },
+      parts: [
+        { text: p.dartText, options: NORMAL_OPTIONS },
+        { text: `${pickRandom(HYPE_BUST)} ${p.nextPlayerName} ist dran.`, options: CALM_OPTIONS },
+      ],
     };
   }
   if (p.isCricket) {
     return {
-      text: `${p.dartText}. Runde übernommen. ${p.nextPlayerName} ist dran.`,
-      options: { pitch: 1, rate: 1, volume: 1 },
+      parts: [{ text: `${p.dartText}. Runde übernommen. ${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS }],
     };
   }
   if (p.roundTotal === 180) {
     return {
-      text: `${p.dartText}! ${pickRandom(HYPE_180)} ${p.activePlayerName}! Noch ${p.remaining} übrig. ${p.nextPlayerName} ist dran.`,
-      options: { pitch: 1.35, rate: 1.15, volume: 1 },
+      parts: [
+        { text: p.dartText, options: NORMAL_OPTIONS },
+        { text: pickRandom(HYPE_180), options: HYPE_OPTIONS },
+        { text: `${p.activePlayerName}! Noch ${p.remaining} übrig. ${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
+      ],
     };
   }
   if (p.roundTotal >= 100) {
     return {
-      text: `${p.dartText}. ${pickRandom(HYPE_TON_PLUS)}, ${p.activePlayerName} mit ${p.roundTotal}! Noch ${p.remaining} übrig. ${p.nextPlayerName} ist dran.`,
-      options: { pitch: 1.15, rate: 1.08, volume: 1 },
+      parts: [
+        { text: p.dartText, options: NORMAL_OPTIONS },
+        { text: `${pickRandom(HYPE_TON_PLUS)} ${p.activePlayerName} mit ${p.roundTotal}!`, options: { pitch: 1.28, rate: 1.14, volume: 1 } },
+        { text: `Noch ${p.remaining} übrig. ${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
+      ],
     };
   }
   return {
-    text: `${p.dartText}. ${p.activePlayerName} wirft ${p.roundTotal} Punkte. Noch ${p.remaining} übrig. ${p.nextPlayerName} ist dran.`,
-    options: { pitch: 1, rate: 1, volume: 1 },
+    parts: [
+      { text: `${p.dartText}. ${p.activePlayerName} wirft ${p.roundTotal} Punkte. Noch ${p.remaining} übrig. ${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
+    ],
   };
 }

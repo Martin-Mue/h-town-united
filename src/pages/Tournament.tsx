@@ -78,6 +78,29 @@ const BEST_OF_OPTIONS = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21];
 const nextPowerOfTwo = (count: number) => Math.pow(2, Math.ceil(Math.log2(Math.max(count, 2))));
 const lowerPowerOfTwo = (count: number) => Math.pow(2, Math.floor(Math.log2(Math.max(count, 2))));
 
+/**
+ * Picks the "auto" main bracket size for a field of `count` players. Both a preliminary
+ * round (main size = lowerPowerOfTwo) and BYE-only padding (main size = the next power of
+ * two up) end up producing the exact same set of matches for the players who'd be "extra"
+ * either way — the only real difference is how many players are affected: a preliminary
+ * round makes `2 * excess` players play one more match than everyone else, while BYE
+ * padding just leaves `next - count` players idle for a round. So: use whichever framing
+ * touches fewer players. E.g. 30 players is much closer to 32 than to 16 — a 32er bracket
+ * with 2 BYEs beats forcing 28 of the 30 through a preliminary round to fill a 16er.
+ * 34 players is the opposite case — 2 preliminary matches (4 players) beats a 64er
+ * bracket with 30 BYE slots.
+ */
+const chooseAutoMainSize = (count: number): number => {
+  const lower = Math.min(64, lowerPowerOfTwo(Math.max(count, 2)));
+  if (count <= lower) return lower;
+  const upper = lower * 2;
+  if (upper > 64) return lower; // 64 is the largest supported bracket — no bigger option to compare against
+  const excess = count - lower;
+  const prelimPlayers = excess * 2;
+  const byesIfUpper = upper - count;
+  return byesIfUpper <= prelimPlayers ? upper : lower;
+};
+
 // A 32+ player mirrored tree can't stay legible at any scale that also fits a screen —
 // default those straight to the always-readable "Spielplan" list instead of the tree.
 const defaultBracketView = (bracket: Match[] | undefined): "tree" | "schedule" => {
@@ -552,9 +575,9 @@ const TournamentPage = () => {
   // Auto-generate round configs when target size or defaults change
   useEffect(() => {
     if (tournamentMode === "round-robin") return;
-    // "auto" targets a clean main bracket (a preliminary round absorbs any excess
-    // players instead of padding the whole tree with BYEs up to the next power of two).
-    const size = targetSize === "auto" ? Math.min(64, lowerPowerOfTwo(Math.max(players.length, 2))) : Number(targetSize);
+    // "auto" picks whichever main bracket size (see chooseAutoMainSize) keeps the
+    // fewest players affected by a preliminary round or BYEs.
+    const size = targetSize === "auto" ? chooseAutoMainSize(players.length) : Number(targetSize);
     const totalRounds = Math.log2(nextPowerOfTwo(size));
     setRoundConfigs((prev) => {
       const next: RoundConfig[] = [];
@@ -566,12 +589,12 @@ const TournamentPage = () => {
   }, [targetSize, tournamentMode, gameMode, bestOfLegs, players.length]);
 
   /**
-   * Effective MAIN bracket size (excludes any preliminary round): automatic mode
-   * uses the largest clean power of two the field already fills (any excess plays
-   * a preliminary round); a manual override always pads with BYEs as before.
+   * Effective MAIN bracket size (excludes any preliminary round): automatic mode uses
+   * chooseAutoMainSize to minimize how many players are stuck with an "irregular" slot
+   * (preliminary match or BYE); a manual override always pads with BYEs as before.
    */
   const effectiveSize = useMemo(() => {
-    if (targetSize === "auto") return Math.min(64, lowerPowerOfTwo(Math.max(players.length, 2)));
+    if (targetSize === "auto") return chooseAutoMainSize(players.length);
     const auto = nextPowerOfTwo(Math.max(players.length, 2));
     return Math.min(64, Math.max(auto, Number(targetSize)));
   }, [targetSize, players.length]);
