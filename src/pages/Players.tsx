@@ -80,6 +80,7 @@ const PlayersPage = () => {
   const [search, setSearch] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerProfile | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [savingPlayer, setSavingPlayer] = useState(false);
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [profileHintDismissed, setProfileHintDismissed] = useState(false);
@@ -311,7 +312,9 @@ const PlayersPage = () => {
 
   /** Creates a new player with optional photos */
   const addPlayer = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || savingPlayer) return;
+    setSavingPlayer(true);
+    try {
 
     if (isEditMode && editingPlayerId) {
       const updatePayload = {
@@ -403,6 +406,9 @@ const PlayersPage = () => {
     setDialogOpen(false);
     fetchPlayers();
     toast({ title: "Mitglied hinzugefügt! 🎯", description: `${newName} ist jetzt im Verein.` });
+    } finally {
+      setSavingPlayer(false);
+    }
   };
 
   const filteredPlayers = players.filter(
@@ -821,8 +827,8 @@ const PlayersPage = () => {
                 </div>
               </details>
 
-              <Button onClick={addPlayer} className="w-full" disabled={!newName.trim()}>
-                {isEditMode ? "Profil speichern" : "Mitglied hinzufügen"}
+              <Button onClick={addPlayer} className="w-full" disabled={!newName.trim() || savingPlayer}>
+                {savingPlayer ? "Speichern…" : isEditMode ? "Profil speichern" : "Mitglied hinzufügen"}
               </Button>
             </div>
           </DialogContent>

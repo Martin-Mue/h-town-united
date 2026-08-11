@@ -48,10 +48,19 @@ function createLegState(legNumber: number, startScore: number, startingPlayerInd
     throws: Array.from({ length: numPlayers }, () => []),
   };
 }
-function createCricketState(): CricketPlayerState {
+function createCricketState(numbers: readonly number[] = CRICKET_NUMBERS): CricketPlayerState {
   const marks: Record<number, number> = {};
-  CRICKET_NUMBERS.forEach((n) => (marks[n] = 0));
+  numbers.forEach((n) => (marks[n] = 0));
   return { marks, points: 0 };
+}
+/** 6 unique random numbers (1-20) plus Bull, freshly rolled — never memoized/cached across games. */
+function generateRandomCricketNumbers(): number[] {
+  const pool = Array.from({ length: 20 }, (_, i) => i + 1);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return [...pool.slice(0, 6), 25];
 }
 function dartLabel(t: DartThrow): string {
   return t.baseValue === 0 ? "M" : t.baseValue === 25 ? (t.multiplier === 2 ? "BULL" : "25") : `${t.multiplier === 2 ? "D" : t.multiplier === 3 ? "T" : ""}${t.baseValue}`;
@@ -75,6 +84,7 @@ const GamePage = () => {
   const [maxRoundsX01, setMaxRoundsX01] = useState<number>(0); // 0 = unlimited
   const [customStartScore, setCustomStartScore] = useState(501);
   const [numPlayers, setNumPlayers] = useState(2);
+  const [customCricket, setCustomCricket] = useState(false);
   const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
   const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(Array(MAX_PLAYERS).fill(true));
   const [playerIsBot, setPlayerIsBot] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
@@ -155,7 +165,7 @@ const GamePage = () => {
 
   const startGame = () => {
     const startScore = getStartScore();
-    const n = mode === "cricket" ? 2 : numPlayers;
+    const n = numPlayers;
     const players: PlayerSlot[] = Array.from({ length: n }, (_, i) => ({
       name: playerIsBot[i]
         ? BOT_PROFILES[playerBotLevel[i] ?? "medium"].name
@@ -172,7 +182,9 @@ const GamePage = () => {
       maxRoundsX01: mode !== "cricket" && maxRoundsX01 > 0 ? maxRoundsX01 : undefined,
     };
     if (mode === "cricket") {
-      newGame.cricket = [createCricketState(), createCricketState()];
+      const cricketNumbers = customCricket ? generateRandomCricketNumbers() : [...CRICKET_NUMBERS];
+      newGame.cricketNumbers = cricketNumbers;
+      newGame.cricket = Array.from({ length: n }, () => createCricketState(cricketNumbers));
     }
     setGame(newGame);
     setPhase("playing");
@@ -338,17 +350,19 @@ const GamePage = () => {
     setGame((prev) => {
       if (!prev) return prev;
       const idx = prev.currentPlayerIndex;
-      const oppIdx = idx === 0 ? 1 : 0;
+      const n = prev.players.length;
+      const cricketNumbers = prev.cricketNumbers ?? CRICKET_NUMBERS;
       const cricket = prev.cricket!.map(c => ({ ...c, marks: { ...c.marks } }));
       const myState = cricket[idx];
-      const oppState = cricket[oppIdx];
+      const others = cricket.filter((_, j) => j !== idx);
 
-      if ((CRICKET_NUMBERS as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
+      if ((cricketNumbers as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
         const hitsToAdd = baseValue === 50 ? 2 : mul;
         const currentMarks = myState.marks[targetNumber] || 0;
         const newMarks = currentMarks + hitsToAdd;
         myState.marks[targetNumber] = newMarks;
-        if (newMarks > 3 && (oppState.marks[targetNumber] || 0) < 3) {
+        const stillOpenForSomeoneElse = others.some(o => (o.marks[targetNumber] || 0) < 3);
+        if (newMarks > 3 && stillOpenForSomeoneElse) {
           const scorableHits = newMarks - Math.max(currentMarks, 3);
           myState.points += targetNumber * scorableHits;
         }
@@ -359,14 +373,15 @@ const GamePage = () => {
 
       const updated: GameState = { ...prev, currentLeg: updatedLeg, cricket };
 
-      const allClosed = CRICKET_NUMBERS.every((n) => (myState.marks[n] || 0) >= 3);
-      if (allClosed && myState.points >= oppState.points) {
+      const allClosed = cricketNumbers.every((num) => (myState.marks[num] || 0) >= 3);
+      const hasHighestPoints = others.every(o => myState.points >= o.points);
+      if (allClosed && hasHighestPoints) {
         updatedLeg.winnerIndex = idx;
         updated.isFinished = true;
         updated.winnerName = prev.players[idx].name;
         updated.winnerIndex = idx;
       } else if (newDartsThisRound >= 3) {
-        updated.currentPlayerIndex = oppIdx;
+        updated.currentPlayerIndex = (idx + 1) % n;
       }
       return updated;
     });
@@ -444,23 +459,25 @@ const GamePage = () => {
       const dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points };
 
       if (curGame.mode === "cricket") {
-        const oppIdx = idx === 0 ? 1 : 0;
+        const cricketNumbers = curGame.cricketNumbers ?? CRICKET_NUMBERS;
         const myState = curGame.cricket![idx];
-        const oppState = curGame.cricket![oppIdx];
+        const others = curGame.cricket!.filter((_, j) => j !== idx);
         const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
-        if ((CRICKET_NUMBERS as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
+        if ((cricketNumbers as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
           const hitsToAdd = d.baseValue === 50 ? 2 : d.multiplier;
           const currentMarks = myState.marks[targetNumber] || 0;
           const newMarks = currentMarks + hitsToAdd;
           myState.marks = { ...myState.marks, [targetNumber]: newMarks };
-          if (newMarks > 3 && (oppState.marks[targetNumber] || 0) < 3) {
+          const stillOpenForSomeoneElse = others.some(o => (o.marks[targetNumber] || 0) < 3);
+          if (newMarks > 3 && stillOpenForSomeoneElse) {
             const scorableHits = newMarks - Math.max(currentMarks, 3);
             myState.points += targetNumber * scorableHits;
           }
         }
         curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], dart];
-        const allClosed = CRICKET_NUMBERS.every((num) => (myState.marks[num] || 0) >= 3);
-        if (allClosed && myState.points >= oppState.points) {
+        const allClosed = cricketNumbers.every((num) => (myState.marks[num] || 0) >= 3);
+        const hasHighestPoints = others.every(o => myState.points >= o.points);
+        if (allClosed && hasHighestPoints) {
           curGame.currentLeg.winnerIndex = idx;
           curGame.isFinished = true;
           curGame.winnerName = curGame.players[idx].name;
@@ -652,8 +669,15 @@ const GamePage = () => {
 
     botTimerRef.current = setTimeout(() => {
       if (game.mode === "cricket") {
-        const oppIdx = idx === 0 ? 1 : 0;
-        const dart = simulateBotCricketDart(game.cricket![idx].marks, game.cricket![oppIdx].marks, level, CRICKET_NUMBERS);
+        const cricketNumbers = game.cricketNumbers ?? CRICKET_NUMBERS;
+        const others = game.cricket!.filter((_, j) => j !== idx);
+        // A number only still counts as "open" for the bot's targeting heuristic if at least
+        // one opponent hasn't closed it yet — represented as the lowest mark count among them.
+        const aggOppMarks: Record<number, number> = {};
+        cricketNumbers.forEach((num) => {
+          aggOppMarks[num] = others.length > 0 ? Math.min(...others.map(o => o.marks[num] || 0)) : 0;
+        });
+        const dart = simulateBotCricketDart(game.cricket![idx].marks, aggOppMarks, level, cricketNumbers);
         handleCricketThrow(dart.baseValue, dart.multiplier as 1 | 2 | 3);
       } else {
         const key = `${idx}-${game.currentLeg.legNumber}-${dartsThisRound}`;
@@ -799,7 +823,7 @@ const GamePage = () => {
 
   // ─── SETUP PHASE ───────────────────────────────
   if (phase === "setup") {
-    const activePlayerCount = mode === "cricket" ? 2 : numPlayers;
+    const activePlayerCount = numPlayers;
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
         <h2 className="text-2xl font-display uppercase mb-6 text-center">Neues Spiel</h2>
@@ -825,20 +849,30 @@ const GamePage = () => {
             </div>
           )}
 
+          <div>
+            <label className="text-sm text-muted-foreground mb-1 block">Anzahl Spieler</label>
+            <div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2).map((n) => (
+                <button key={n} onClick={() => setNumPlayers(n)}
+                  className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-card border-border text-muted-foreground"}`}>
+                  {n} Spieler
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mode === "cricket" && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+              <div className="min-w-0">
+                <Label htmlFor="custom-cricket" className="text-sm">Custom Cricket</Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">6 zufällige Zahlen + Bull, jedes Spiel neu ausgelost – statt immer 20-15 + Bull.</p>
+              </div>
+              <Switch id="custom-cricket" checked={customCricket} onCheckedChange={setCustomCricket} />
+            </div>
+          )}
+
           {mode !== "cricket" && (
             <>
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">Anzahl Spieler</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2).map((n) => (
-                    <button key={n} onClick={() => setNumPlayers(n)}
-                      className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-card border-border text-muted-foreground"}`}>
-                      {n} Spieler
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div>
                 <label className="text-sm text-muted-foreground mb-1 block">Best of (Legs)</label>
                 <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))}>
@@ -969,6 +1003,41 @@ const GamePage = () => {
   const currentRemaining = game.currentLeg.remaining[activeIdx];
   const currentThrows = game.currentLeg.throws[activeIdx];
   const numCols = game.players.length <= 2 ? "grid-cols-2" : game.players.length === 3 ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4";
+
+  const cricketBoard = isCricket && game.cricket ? (
+    <div className="bg-card rounded-xl border border-border p-3 mb-3 overflow-x-auto">
+      <table className="w-full text-center text-xs border-collapse">
+        <thead>
+          <tr>
+            <th className="text-left font-normal text-muted-foreground pb-1 pr-2">Ziel</th>
+            {game.players.map((p, i) => (
+              <th key={i} className={`font-bold truncate px-1 pb-1 max-w-[4.5rem] ${i === activeIdx ? "text-primary" : ""}`}>{p.name}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {(game.cricketNumbers ?? CRICKET_NUMBERS).map((num) => (
+            <tr key={num}>
+              <td className="text-left font-display text-muted-foreground py-0.5 pr-2">{num === 25 ? "Bull" : num}</td>
+              {game.cricket!.map((c, i) => {
+                const m = c.marks[num] || 0;
+                const renderMarks = (mm: number) => mm >= 3 ? "✕" : mm === 2 ? "╳" : mm === 1 ? "/" : "·";
+                return (
+                  <td key={i} className={`py-0.5 ${m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}`}>{renderMarks(m)}</td>
+                );
+              })}
+            </tr>
+          ))}
+          <tr className="border-t border-border/50">
+            <td className="text-left text-muted-foreground pt-1 pr-2">Punkte</td>
+            {game.cricket!.map((c, i) => (
+              <td key={i} className={`pt-1 font-display ${i === activeIdx ? "text-primary font-bold" : ""}`}>{c.points}</td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  ) : null;
 
   // ─── PLAYING PHASE ─────────────────────────────────
   return (
@@ -1164,25 +1233,7 @@ const GamePage = () => {
               />
             )}
 
-            {isCricket && game.cricket && (
-              <div className="bg-card rounded-xl border border-border p-3 mb-3">
-                <div className="grid grid-cols-3 gap-1 text-center text-xs">
-                  <span className="font-bold truncate">{game.players[0].name}</span>
-                  <span className="text-muted-foreground">Ziel</span>
-                  <span className="font-bold truncate">{game.players[1].name}</span>
-                  {CRICKET_NUMBERS.map((num) => {
-                    const p1m = game.cricket![0].marks[num] || 0;
-                    const p2m = game.cricket![1].marks[num] || 0;
-                    const renderMarks = (m: number) => m >= 3 ? "✕" : m === 2 ? "╳" : m === 1 ? "/" : "·";
-                    return [
-                      <span key={`p1-${num}`} className={p1m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p1m)}</span>,
-                      <span key={`n-${num}`} className="font-display">{num === 25 ? "Bull" : num}</span>,
-                      <span key={`p2-${num}`} className={p2m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p2m)}</span>,
-                    ];
-                  })}
-                </div>
-              </div>
-            )}
+            {cricketBoard}
 
             {/* Manual entry stays fully available — just tucked away by default since the camera scores for you. */}
             <button
@@ -1227,6 +1278,7 @@ const GamePage = () => {
                                   </span>
                                   {editingThrowIdx !== null && (
                                     <button onClick={() => deleteThrow(activeIdx, globalIdx)}
+                                      title="Wurf löschen" aria-label="Wurf löschen"
                                       className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
                                       <X className="w-2.5 h-2.5 text-destructive-foreground" />
                                     </button>
@@ -1272,7 +1324,7 @@ const GamePage = () => {
             >
               <Camera className="w-4 h-4" /> Cam an
             </Button>
-            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1">
+            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? "Sound ausschalten" : "Sound einschalten"} aria-label={soundEnabled ? "Sound ausschalten" : "Sound einschalten"}>
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </Button>
           </div>
@@ -1283,25 +1335,7 @@ const GamePage = () => {
           {!isCricket && !currentPlayer?.isBot && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
 
           {/* Cricket scoreboard */}
-          {isCricket && game.cricket && (
-            <div className="bg-card rounded-xl border border-border p-3 mb-3">
-              <div className="grid grid-cols-3 gap-1 text-center text-xs">
-                <span className="font-bold truncate">{game.players[0].name}</span>
-                <span className="text-muted-foreground">Ziel</span>
-                <span className="font-bold truncate">{game.players[1].name}</span>
-                {CRICKET_NUMBERS.map((num) => {
-                  const p1m = game.cricket![0].marks[num] || 0;
-                  const p2m = game.cricket![1].marks[num] || 0;
-                  const renderMarks = (m: number) => m >= 3 ? "✕" : m === 2 ? "╳" : m === 1 ? "/" : "·";
-                  return [
-                    <span key={`p1-${num}`} className={p1m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p1m)}</span>,
-                    <span key={`n-${num}`} className="font-display">{num === 25 ? "Bull" : num}</span>,
-                    <span key={`p2-${num}`} className={p2m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p2m)}</span>,
-                  ];
-                })}
-              </div>
-            </div>
-          )}
+          {cricketBoard}
 
           {/* Score input — disabled during a bot's turn */}
           <DartScoreInput selectedValue={selectedScore} selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
@@ -1322,7 +1356,7 @@ const GamePage = () => {
             >
               <Camera className="w-4 h-4" /> Cam
             </Button>
-            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1">
+            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? "Sound ausschalten" : "Sound einschalten"} aria-label={soundEnabled ? "Sound ausschalten" : "Sound einschalten"}>
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </Button>
           </div>

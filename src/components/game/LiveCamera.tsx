@@ -923,7 +923,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             Auto-Scoring
           </span>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7">
+        <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7" title="Kamera schließen" aria-label="Kamera schließen">
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -1232,9 +1232,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             variant="outline"
             size="sm"
             onClick={() => void autoDetectBoard()}
+            disabled={phase === "detecting"}
             className="w-full gap-1"
           >
-            <RotateCcw className="h-4 w-4" /> Board neu auto-erkennen
+            <RotateCcw className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> {phase === "detecting" ? "Erkenne Board…" : "Board neu auto-erkennen"}
           </Button>
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">

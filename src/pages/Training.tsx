@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2 } from "lucide-react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
@@ -101,6 +101,16 @@ const TRAINING_DRILLS: TrainingDrill[] = [
     durationMinutes: 25,
     category: "pressure",
   },
+  {
+    id: "shanghai",
+    name: "Shanghai",
+    description:
+      "Runde für Runde von 1 bis 20: Triffst du Single, Double UND Triple derselben Zahl in einer einzigen Aufnahme, gewinnst du sofort – ein Shanghai! Sonst zählt jeder Treffer als Score. Der Nervenkitzel-Klassiker, den man in kaum einer App findet.",
+    icon: PartyPopper,
+    difficulty: "Profi",
+    durationMinutes: 15,
+    category: "pressure",
+  },
 ];
 
 const DIFFICULTY_COLORS: Record<string, string> = {
@@ -172,6 +182,10 @@ interface DrillState {
   bcScorer?: number;
   bcNumber?: number;
   bcWinner?: string;
+  /** Shanghai: multipliers (1/2/3) hit on the current number so far this round, and running score */
+  shanghaiMultsHit?: number[];
+  shanghaiScore?: number;
+  shanghaiWin?: boolean;
 }
 
 /** Pre-start configuration for a drill */
@@ -268,6 +282,12 @@ const TrainingPage = () => {
         state.maxRounds = 10;
         break;
       }
+      case "shanghai":
+        state.targetList = Array.from({ length: 20 }, (_, i) => i + 1);
+        state.currentTarget = 1;
+        state.shanghaiScore = 0;
+        state.shanghaiMultsHit = [];
+        break;
       case "bull-control": {
         const names = (config.bcPlayerNames && config.bcPlayerNames.length >= 2
           ? config.bcPlayerNames
@@ -446,6 +466,23 @@ const TrainingPage = () => {
           break;
         }
 
+        case "shanghai": {
+          const targetNum = prev.currentTarget;
+          if (baseValue === targetNum) {
+            const multsHit = new Set(prev.shanghaiMultsHit ?? []);
+            multsHit.add(mul);
+            updated.shanghaiMultsHit = Array.from(multsHit);
+            updated.shanghaiScore = (prev.shanghaiScore ?? 0) + points;
+            updated.hits = prev.hits + 1;
+            if (multsHit.has(1) && multsHit.has(2) && multsHit.has(3)) {
+              updated.finished = true;
+              updated.shanghaiWin = true;
+            }
+          }
+          updated.roundScores = [...(prev.roundScores || []), baseValue === targetNum ? points : 0];
+          break;
+        }
+
         case "bull-control": {
           const players = (prev.bcPlayers || []).map((p) => ({ ...p }));
           const turn = prev.bcTurn ?? 0;
@@ -512,6 +549,18 @@ const TrainingPage = () => {
           updated.hitsThisRound = 0;
         }
 
+        // Shanghai: advance to the next number (1 → 20), unless already won this round
+        if (selectedDrill.id === "shanghai" && !updated.finished) {
+          const nextIdx = prev.targetIndex + 1;
+          updated.shanghaiMultsHit = [];
+          if (nextIdx >= prev.targetList.length) {
+            updated.finished = true;
+          } else {
+            updated.targetIndex = nextIdx;
+            updated.currentTarget = prev.targetList[nextIdx];
+          }
+        }
+
         // Random Score: draw new target
         if (selectedDrill.id === "random-score") {
           const t = randomTarget();
@@ -574,17 +623,34 @@ const TrainingPage = () => {
         {/* Drill finished overlay */}
         {drillState.finished && (
           <div className="bg-card border border-primary/30 rounded-2xl p-6 text-center mb-4 glow-cyan animate-scale-in">
-            <CheckCircle className="w-12 h-12 text-secondary mx-auto mb-3" />
-            <h3 className="text-2xl font-display uppercase mb-2">Geschafft! 🎯</h3>
+            {drillState.shanghaiWin ? (
+              <PartyPopper className="w-12 h-12 text-accent mx-auto mb-3" />
+            ) : (
+              <CheckCircle className="w-12 h-12 text-secondary mx-auto mb-3" />
+            )}
+            <h3 className="text-2xl font-display uppercase mb-2">
+              {drillState.shanghaiWin ? "SHANGHAI! 🎉" : "Geschafft! 🎯"}
+            </h3>
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-              <div className="bg-muted/50 rounded-lg p-3">
-                <p className="text-2xl font-display">{drillState.dartsThrown}</p>
-                <p className="text-xs text-muted-foreground">Darts geworfen</p>
-              </div>
-              <div className="bg-muted/50 rounded-lg p-3">
-                <p className="text-2xl font-display">{drillState.hits}</p>
-                <p className="text-xs text-muted-foreground">Treffer</p>
-              </div>
+              {selectedDrill.id === "shanghai" ? (
+                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                  <p className="text-2xl font-display">{drillState.shanghaiScore ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {drillState.shanghaiWin ? `Shanghai auf der ${drillState.currentTarget}, Runde ${drillState.targetIndex + 1}!` : "Score nach 20 Runden"}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-2xl font-display">{drillState.dartsThrown}</p>
+                    <p className="text-xs text-muted-foreground">Darts geworfen</p>
+                  </div>
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-2xl font-display">{drillState.hits}</p>
+                    <p className="text-xs text-muted-foreground">Treffer</p>
+                  </div>
+                </>
+              )}
               {selectedDrill.id === "target-grind" && (
                 <>
                   <div className="bg-muted/50 rounded-lg p-3">
@@ -688,6 +754,24 @@ const TrainingPage = () => {
                   <p className="text-xs text-muted-foreground mt-1">
                     Runde {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10} · Treffer gesamt: {drillState.hits}
                   </p>
+                </div>
+              )}
+              {selectedDrill.id === "shanghai" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Shanghai · Runde {drillState.targetIndex + 1} / 20</p>
+                  <p className="text-5xl font-display text-primary">{drillState.currentTarget}</p>
+                  <div className="flex justify-center gap-2 mt-2">
+                    {[1, 2, 3].map((m) => (
+                      <span key={m} className={`text-xs font-display px-2.5 py-1 rounded-full border transition-colors ${
+                        (drillState.shanghaiMultsHit ?? []).includes(m)
+                          ? "bg-secondary/20 border-secondary text-secondary"
+                          : "border-border text-muted-foreground"
+                      }`}>
+                        {m === 1 ? "S" : m === 2 ? "D" : "T"}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">Score: <span className="text-foreground font-bold">{drillState.shanghaiScore ?? 0}</span></p>
                 </div>
               )}
               {selectedDrill.id === "bull-control" && drillState.bcPlayers && (

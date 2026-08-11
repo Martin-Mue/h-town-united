@@ -40,7 +40,7 @@ export interface CricketPlayerState {
   points: number;
 }
 
-/** Complete game state for all modes. Cricket is restricted to exactly 2 players. */
+/** Complete game state for all modes. Cricket supports 2-8 players. */
 export interface GameState {
   mode: GameMode;
   startScore: number;
@@ -57,6 +57,8 @@ export interface GameState {
   maxRoundsX01?: number;
   /** Cricket-specific state (only for cricket mode, index-aligned with players) */
   cricket?: CricketPlayerState[];
+  /** Cricket target numbers actually in play this game. Defaults to CRICKET_NUMBERS; set to a fresh random set when Custom Cricket is enabled. */
+  cricketNumbers?: readonly number[];
 }
 
 /** Post-game statistics summary, index-aligned with players */

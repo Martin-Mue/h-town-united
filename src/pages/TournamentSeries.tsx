@@ -4,6 +4,10 @@ import { Layers, Plus, Trash2, Loader2, Trophy, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +52,7 @@ const TournamentSeriesPage = () => {
   const [tournaments, setTournaments] = useState<TournamentLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [savingSeries, setSavingSeries] = useState(false);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [scoring, setScoring] = useState<Scoring>(DEFAULT_SCORING);
@@ -65,13 +70,18 @@ const TournamentSeriesPage = () => {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const createSeries = async () => {
-    if (!name.trim() || !session?.user?.id) return;
-    const { error } = await supabase.from("tournament_series" as any).insert({
-      user_id: session.user.id, name: name.trim(), description: desc.trim() || null, scoring: scoring as any,
-    });
-    if (error) { toast({ title: "Fehler", description: error.message, variant: "destructive" }); return; }
-    setName(""); setDesc(""); setScoring(DEFAULT_SCORING); setCreating(false);
-    fetchAll();
+    if (!name.trim() || !session?.user?.id || savingSeries) return;
+    setSavingSeries(true);
+    try {
+      const { error } = await supabase.from("tournament_series" as any).insert({
+        user_id: session.user.id, name: name.trim(), description: desc.trim() || null, scoring: scoring as any,
+      });
+      if (error) { toast({ title: "Fehler", description: error.message, variant: "destructive" }); return; }
+      setName(""); setDesc(""); setScoring(DEFAULT_SCORING); setCreating(false);
+      fetchAll();
+    } finally {
+      setSavingSeries(false);
+    }
   };
 
   const deleteSeries = async (sid: string) => {
@@ -180,7 +190,7 @@ const TournamentSeriesPage = () => {
               ))}
             </div>
           </div>
-          <Button onClick={createSeries} className="w-full">Serie anlegen</Button>
+          <Button onClick={createSeries} className="w-full" disabled={!name.trim() || savingSeries}>{savingSeries ? "Anlegen…" : "Serie anlegen"}</Button>
         </div>
       )}
 
@@ -202,9 +212,25 @@ const TournamentSeriesPage = () => {
                   <p className="text-xs text-muted-foreground mt-0.5">{count} Turniere · {new Date(s.created_at).toLocaleDateString("de-DE")}</p>
                 </Link>
                 {s.user_id === session?.user?.id && (
-                  <Button variant="ghost" size="icon" onClick={() => deleteSeries(s.id)}>
-                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" title="Serie löschen" aria-label="Serie löschen">
+                        <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Serie löschen?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          „{s.name}" wird gelöscht. Die enthaltenen Turniere bleiben erhalten, verlieren aber ihre Zuordnung zur Serie.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteSeries(s.id)}>Löschen</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 )}
               </div>
             );

@@ -5,6 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -478,6 +482,7 @@ const TournamentPage = () => {
   const [guestCount, setGuestCount] = useState(8);
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
+  const [savingTournament, setSavingTournament] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dbPlayers, setDbPlayers] = useState<{ id: string; name: string; emoji: string }[]>([]);
 
@@ -680,7 +685,9 @@ const TournamentPage = () => {
 
   // ─── Start Tournament ──────────────────────────
   const startTournament = async () => {
-    if (players.length < 2) return;
+    if (players.length < 2 || savingTournament) return;
+    setSavingTournament(true);
+    try {
     const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
 
     if (editingId) {
@@ -739,6 +746,9 @@ const TournamentPage = () => {
     setPlayers([]);
     setTournamentName("");
     fetchTournaments();
+    } finally {
+      setSavingTournament(false);
+    }
   };
 
   // ─── KO: persist a recomputed bracket ──────────
@@ -986,9 +996,25 @@ const TournamentPage = () => {
                     Bearbeiten
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); deleteTournament(t.id); }}>
-                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()} title="Turnier löschen" aria-label="Turnier löschen">
+                      <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Turnier löschen?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        „{t.name}" wird unwiderruflich gelöscht, inklusive Turnierbaum und Ergebnissen.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => deleteTournament(t.id)}>Löschen</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             ))}
           </div>
@@ -1162,6 +1188,9 @@ const TournamentPage = () => {
                     {p.emoji} {p.name}
                   </button>
                 ))}
+                {dbPlayers.every(p => players.includes(p.name)) && (
+                  <p className="text-xs text-muted-foreground italic py-1">Alle Vereinsmitglieder sind bereits im Turnier.</p>
+                )}
               </div>
             </div>
           )}
@@ -1171,7 +1200,7 @@ const TournamentPage = () => {
             <div className="flex gap-2">
               <Input autoFocus value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="Name, Name, Name …" className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
               <Input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} placeholder="Spitzname (optional)" className="bg-card border-border w-44" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
-              <Button onClick={addPlayer} size="icon" variant="outline"><Plus className="w-4 h-4" /></Button>
+              <Button onClick={addPlayer} size="icon" variant="outline" title="Spieler hinzufügen" aria-label="Spieler hinzufügen"><Plus className="w-4 h-4" /></Button>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
               Gleiche Namen? Mit Spitznamen bleiben sie unterscheidbar – er wird als „Name (Spitzname)" im Turnierbaum und Spielplan angezeigt.
@@ -1227,9 +1256,9 @@ const TournamentPage = () => {
                     <div key={p} className="flex items-center gap-2 bg-card border border-border rounded-lg px-2 py-1.5 text-sm">
                       <span className="w-6 text-center font-mono text-xs text-muted-foreground">{i + 1}</span>
                       <span className="flex-1 truncate">{p}</span>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === 0} onClick={() => movePlayer(i, -1)}><ArrowUp className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === players.length - 1} onClick={() => movePlayer(i, 1)}><ArrowDown className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removePlayer(p)}><Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === 0} onClick={() => movePlayer(i, -1)} title="Nach oben" aria-label={`${p} nach oben verschieben`}><ArrowUp className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === players.length - 1} onClick={() => movePlayer(i, 1)} title="Nach unten" aria-label={`${p} nach unten verschieben`}><ArrowDown className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removePlayer(p)} title="Entfernen" aria-label={`${p} entfernen`}><Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></Button>
                     </div>
                   ))}
                   <p className="text-[11px] text-muted-foreground pt-1">
@@ -1334,8 +1363,8 @@ const TournamentPage = () => {
             );
           })()}
 
-          <Button onClick={startTournament} className="w-full mt-4 font-display uppercase text-lg py-6" disabled={players.length < 2}>
-            <Play className="w-5 h-5 mr-2" /> {editingId ? "Änderungen speichern" : "Turnier starten"}
+          <Button onClick={startTournament} className="w-full mt-4 font-display uppercase text-lg py-6" disabled={players.length < 2 || savingTournament}>
+            <Play className="w-5 h-5 mr-2" /> {savingTournament ? "Speichern…" : editingId ? "Änderungen speichern" : "Turnier starten"}
           </Button>
         </div>
       </div>
