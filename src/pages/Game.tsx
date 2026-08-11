@@ -9,7 +9,7 @@ import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import LiveCamera, { type DetectedDart, type LiveCameraHandle } from "@/components/game/LiveCamera";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
-import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, BotLevel } from "@/types/game";
+import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, TeamSlot, BotLevel } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,13 +41,25 @@ import { describeDartForSpeech, speakSequence, buildRoundAnnouncement } from "@/
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const MAX_PLAYERS = 8;
 
-function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, players: PlayerSlot[]): LegState {
+/**
+ * In team mode, remaining/legsWon/cricket/startedScoring are shared per team while throws
+ * stay per individual player — players are interleaved [TeamA-1, TeamB-1, TeamA-2, ...] at
+ * setup time, so "team index" is just playerIndex % teams.length.
+ */
+function teamIndexFor(teams: TeamSlot[] | undefined, playerIdx: number): number {
+  return teams && teams.length > 0 ? playerIdx % teams.length : playerIdx;
+}
+
+function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, players: PlayerSlot[], teams?: TeamSlot[]): LegState {
+  const scoreSlots = teams?.length ?? players.length;
   return {
     legNumber,
     startingPlayerIndex,
-    remaining: Array(players.length).fill(startScore),
+    remaining: Array(scoreSlots).fill(startScore),
     throws: Array.from({ length: players.length }, () => []),
-    startedScoring: players.map((p) => !p.doubleIn),
+    startedScoring: teams
+      ? Array.from({ length: scoreSlots }, (_, teamIdx) => !players.some((p, i) => teamIndexFor(teams, i) === teamIdx && p.doubleIn))
+      : players.map((p) => !p.doubleIn),
   };
 }
 function createCricketState(numbers: readonly number[] = CRICKET_NUMBERS): CricketPlayerState {
@@ -87,6 +99,8 @@ const GamePage = () => {
   const [customStartScore, setCustomStartScore] = useState(501);
   const [numPlayers, setNumPlayers] = useState(2);
   const [customCricket, setCustomCricket] = useState(false);
+  const [teamMode, setTeamMode] = useState(false);
+  const [teamNames, setTeamNames] = useState<[string, string]>(["Team 1", "Team 2"]);
   const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
   const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(Array(MAX_PLAYERS).fill(true));
   const [playerDoubleIn, setPlayerDoubleIn] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
@@ -200,17 +214,20 @@ const GamePage = () => {
       isBot: mode === "cricket" ? playerIsBot[i] : playerIsBot[i],
       botLevel: playerBotLevel[i] ?? "medium",
     }));
+    const teams = teamMode ? [{ name: teamNames[0].trim() || "Team 1" }, { name: teamNames[1].trim() || "Team 2" }] : undefined;
+    const scoreSlots = teams?.length ?? n;
     const newGame: GameState = {
       mode, startScore, bestOfLegs, players,
-      legsWon: Array(n).fill(0),
-      currentLeg: createLegState(1, startScore, 0, players), completedLegs: [],
+      legsWon: Array(scoreSlots).fill(0),
+      currentLeg: createLegState(1, startScore, 0, players, teams), completedLegs: [],
       currentPlayerIndex: 0, isFinished: false,
       maxRoundsX01: mode !== "cricket" && maxRoundsX01 > 0 ? maxRoundsX01 : undefined,
+      teams,
     };
     if (mode === "cricket") {
       const cricketNumbers = customCricket ? generateRandomCricketNumbers() : [...CRICKET_NUMBERS];
       newGame.cricketNumbers = cricketNumbers;
-      newGame.cricket = Array.from({ length: n }, () => createCricketState(cricketNumbers));
+      newGame.cricket = Array.from({ length: scoreSlots }, () => createCricketState(cricketNumbers));
     }
     setGame(newGame);
     setPhase("playing");
@@ -249,11 +266,12 @@ const GamePage = () => {
     const points = baseValue === 25 && mul === 3 ? 0 : baseValue * mul;
     const idx = game.currentPlayerIndex;
     const n = game.players.length;
-    const remaining = game.currentLeg.remaining[idx];
+    const teamIdx = teamIndexFor(game.teams, idx);
+    const remaining = game.currentLeg.remaining[teamIdx];
     const newDartsThisRound = dartsThisRound + 1;
 
     const requiresDoubleIn = game.players[idx].doubleIn ?? false;
-    const alreadyStartedScoring = game.currentLeg.startedScoring?.[idx] ?? true;
+    const alreadyStartedScoring = game.currentLeg.startedScoring?.[teamIdx] ?? true;
     const isQualifyingDouble = mul === 2 || (baseValue === 25 && mul === 2);
     const justGotIn = requiresDoubleIn && !alreadyStartedScoring && isQualifyingDouble;
     const stillWaitingForDoubleIn = requiresDoubleIn && !alreadyStartedScoring && !isQualifyingDouble;
@@ -272,13 +290,13 @@ const GamePage = () => {
       setGame((prev) => {
         if (!prev) return prev;
         const updatedLeg: LegState = { ...prev.currentLeg, remaining: [...prev.currentLeg.remaining], throws: prev.currentLeg.throws.map(t => [...t]) };
-        updatedLeg.remaining[idx] = turnStartRemaining;
+        updatedLeg.remaining[teamIdx] = turnStartRemaining;
         updatedLeg.throws[idx] = updatedLeg.throws[idx].slice(0, updatedLeg.throws[idx].length - (newDartsThisRound - 1));
         const nextIdx = (idx + 1) % n;
         return { ...prev, currentLeg: updatedLeg, currentPlayerIndex: nextIdx };
       });
       setDartsThisRound(0);
-      setTurnStartRemaining(game.currentLeg.remaining[(idx + 1) % n]);
+      setTurnStartRemaining(game.currentLeg.remaining[teamIndexFor(game.teams, (idx + 1) % n)]);
       if (soundEnabled) setTimeout(() => playTurnSwitchSound(), 300);
       return;
     }
@@ -288,28 +306,28 @@ const GamePage = () => {
     setGame((prev) => {
       if (!prev) return prev;
       const updatedLeg: LegState = { ...prev.currentLeg, remaining: [...prev.currentLeg.remaining], throws: prev.currentLeg.throws.map(t => [...t]) };
-      updatedLeg.remaining[idx] = newRemaining;
+      updatedLeg.remaining[teamIdx] = newRemaining;
       updatedLeg.throws[idx] = [...updatedLeg.throws[idx], dart];
       if (justGotIn) {
-        updatedLeg.startedScoring = (updatedLeg.startedScoring ?? prev.players.map(() => true)).map((v, i) => i === idx ? true : v);
+        updatedLeg.startedScoring = (updatedLeg.startedScoring ?? prev.players.map(() => true)).map((v, i) => i === teamIdx ? true : v);
       }
 
       // Checkout
       if (newRemaining === 0) {
-        updatedLeg.winnerIndex = idx;
+        updatedLeg.winnerIndex = teamIdx;
         const legsWon = [...prev.legsWon];
-        legsWon[idx] += 1;
+        legsWon[teamIdx] += 1;
         const legsToWin = Math.ceil(prev.bestOfLegs / 2);
         const updated: GameState = { ...prev, currentLeg: updatedLeg, legsWon };
 
-        if (legsWon[idx] >= legsToWin) {
+        if (legsWon[teamIdx] >= legsToWin) {
           updated.isFinished = true;
-          updated.winnerName = prev.players[idx].name;
-          updated.winnerIndex = idx;
+          updated.winnerName = prev.teams ? prev.teams[teamIdx].name : prev.players[idx].name;
+          updated.winnerIndex = teamIdx;
         } else {
           updated.completedLegs = [...prev.completedLegs, updatedLeg];
           const nextStarter = (updatedLeg.startingPlayerIndex + 1) % n;
-          updated.currentLeg = createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players);
+          updated.currentLeg = createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams);
           updated.currentPlayerIndex = nextStarter;
         }
         return updated;
@@ -321,8 +339,9 @@ const GamePage = () => {
         const next: GameState = { ...prev, currentLeg: updatedLeg, currentPlayerIndex: nextIdx };
         const cap = prev.maxRoundsX01;
         if (cap && cap > 0) {
-          const rounds = updatedLeg.throws.map(t => Math.ceil(t.length / 3));
-          if (rounds.every(r => r >= cap)) {
+          const rounds = prev.players.map((_, i) => Math.ceil(updatedLeg.throws[i].length / 3));
+          const scoreSlotRounds = updatedLeg.remaining.map((_, si) => Math.max(...rounds.filter((_, i) => teamIndexFor(prev.teams, i) === si)));
+          if (scoreSlotRounds.every(r => r >= cap)) {
             const minRemaining = Math.min(...updatedLeg.remaining);
             const winners = updatedLeg.remaining.reduce<number[]>((acc, r, i) => (r === minRemaining ? [...acc, i] : acc), []);
             if (winners.length === 1) {
@@ -332,11 +351,12 @@ const GamePage = () => {
               legsWon[legWinner] += 1;
               const legsToWin = Math.ceil(prev.bestOfLegs / 2);
               const finished = legsWon[legWinner] >= legsToWin;
+              const winnerName = prev.teams ? prev.teams[legWinner].name : prev.players[legWinner].name;
               if (finished) {
-                return { ...next, currentLeg: updatedLeg, legsWon, isFinished: true, winnerName: prev.players[legWinner].name, winnerIndex: legWinner };
+                return { ...next, currentLeg: updatedLeg, legsWon, isFinished: true, winnerName, winnerIndex: legWinner };
               }
               const nextStarter = (legWinner + 1) % n;
-              return { ...next, completedLegs: [...prev.completedLegs, updatedLeg], legsWon, currentLeg: createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players), currentPlayerIndex: nextStarter };
+              return { ...next, completedLegs: [...prev.completedLegs, updatedLeg], legsWon, currentLeg: createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams), currentPlayerIndex: nextStarter };
             }
           }
         }
@@ -349,7 +369,7 @@ const GamePage = () => {
     if (newRemaining === 0) {
       setDartsThisRound(0);
       setTurnStartRemaining(game.startScore);
-      const legsWon = game.legsWon[idx] + 1;
+      const legsWon = game.legsWon[teamIdx] + 1;
       const legsToWin = Math.ceil(game.bestOfLegs / 2);
       if (soundEnabled) {
         if (legsWon >= legsToWin) {
@@ -367,7 +387,7 @@ const GamePage = () => {
         else setTimeout(() => playTurnSwitchSound(), 100);
       }
       setDartsThisRound(0);
-      setTurnStartRemaining(game.currentLeg.remaining[(idx + 1) % game.players.length]);
+      setTurnStartRemaining(game.currentLeg.remaining[teamIndexFor(game.teams, (idx + 1) % game.players.length)]);
     } else {
       setDartsThisRound(newDartsThisRound);
     }
@@ -389,10 +409,11 @@ const GamePage = () => {
       if (!prev) return prev;
       const idx = prev.currentPlayerIndex;
       const n = prev.players.length;
+      const teamIdx = teamIndexFor(prev.teams, idx);
       const cricketNumbers = prev.cricketNumbers ?? CRICKET_NUMBERS;
       const cricket = prev.cricket!.map(c => ({ ...c, marks: { ...c.marks } }));
-      const myState = cricket[idx];
-      const others = cricket.filter((_, j) => j !== idx);
+      const myState = cricket[teamIdx];
+      const others = cricket.filter((_, j) => j !== teamIdx);
 
       if ((cricketNumbers as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
         const hitsToAdd = baseValue === 50 ? 2 : mul;
@@ -414,10 +435,10 @@ const GamePage = () => {
       const allClosed = cricketNumbers.every((num) => (myState.marks[num] || 0) >= 3);
       const hasHighestPoints = others.every(o => myState.points >= o.points);
       if (allClosed && hasHighestPoints) {
-        updatedLeg.winnerIndex = idx;
+        updatedLeg.winnerIndex = teamIdx;
         updated.isFinished = true;
-        updated.winnerName = prev.players[idx].name;
-        updated.winnerIndex = idx;
+        updated.winnerName = prev.teams ? prev.teams[teamIdx].name : prev.players[idx].name;
+        updated.winnerIndex = teamIdx;
       } else if (newDartsThisRound >= 3) {
         updated.currentPlayerIndex = (idx + 1) % n;
       }
@@ -493,13 +514,14 @@ const GamePage = () => {
     for (const d of dartsToApply) {
       if (curGame.isFinished) break;
       const idx = curGame.currentPlayerIndex;
+      const teamIdx = teamIndexFor(curGame.teams, idx);
       const points = d.baseValue === 25 && d.multiplier === 3 ? 0 : d.baseValue * d.multiplier;
       const dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points, boardU: d.boardU, boardV: d.boardV };
 
       if (curGame.mode === "cricket") {
         const cricketNumbers = curGame.cricketNumbers ?? CRICKET_NUMBERS;
-        const myState = curGame.cricket![idx];
-        const others = curGame.cricket!.filter((_, j) => j !== idx);
+        const myState = curGame.cricket![teamIdx];
+        const others = curGame.cricket!.filter((_, j) => j !== teamIdx);
         const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
         if ((cricketNumbers as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
           const hitsToAdd = d.baseValue === 50 ? 2 : d.multiplier;
@@ -516,10 +538,10 @@ const GamePage = () => {
         const allClosed = cricketNumbers.every((num) => (myState.marks[num] || 0) >= 3);
         const hasHighestPoints = others.every(o => myState.points >= o.points);
         if (allClosed && hasHighestPoints) {
-          curGame.currentLeg.winnerIndex = idx;
+          curGame.currentLeg.winnerIndex = teamIdx;
           curGame.isFinished = true;
-          curGame.winnerName = curGame.players[idx].name;
-          curGame.winnerIndex = idx;
+          curGame.winnerName = curGame.teams ? curGame.teams[teamIdx].name : curGame.players[idx].name;
+          curGame.winnerIndex = teamIdx;
           checkedOut = true;
         }
         curDarts += 1;
@@ -527,13 +549,13 @@ const GamePage = () => {
       }
 
       // X01 modes
-      const remaining = curGame.currentLeg.remaining[idx];
+      const remaining = curGame.currentLeg.remaining[teamIdx];
       const newDartsThisRound = curDarts + 1;
       const mul: number = d.multiplier;
       const isDoubleOut = mul === 2;
 
       const requiresDoubleIn = curGame.players[idx].doubleIn ?? false;
-      const alreadyStartedScoring = curGame.currentLeg.startedScoring?.[idx] ?? true;
+      const alreadyStartedScoring = curGame.currentLeg.startedScoring?.[teamIdx] ?? true;
       const justGotIn = requiresDoubleIn && !alreadyStartedScoring && isDoubleOut;
       const stillWaitingForDoubleIn = requiresDoubleIn && !alreadyStartedScoring && !isDoubleOut;
       const effectivePoints = stillWaitingForDoubleIn ? 0 : points;
@@ -545,7 +567,7 @@ const GamePage = () => {
         (newRemaining === 0 && activeDoubleOut && !isDoubleOut));
 
       if (isBust) {
-        curGame.currentLeg.remaining[idx] = curStart;
+        curGame.currentLeg.remaining[teamIdx] = curStart;
         curGame.currentLeg.throws[idx] = curGame.currentLeg.throws[idx].slice(
           0, curGame.currentLeg.throws[idx].length - (newDartsThisRound - 1)
         );
@@ -553,26 +575,26 @@ const GamePage = () => {
         break;
       }
 
-      curGame.currentLeg.remaining[idx] = newRemaining;
+      curGame.currentLeg.remaining[teamIdx] = newRemaining;
       curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], x01Dart];
       if (justGotIn) {
-        curGame.currentLeg.startedScoring = (curGame.currentLeg.startedScoring ?? curGame.players.map(() => true)).map((v, i) => i === idx ? true : v);
+        curGame.currentLeg.startedScoring = (curGame.currentLeg.startedScoring ?? curGame.players.map(() => true)).map((v, i) => i === teamIdx ? true : v);
       }
       curDarts = newDartsThisRound;
       roundTotal += effectivePoints;
 
       if (newRemaining === 0) {
-        curGame.currentLeg.winnerIndex = idx;
-        curGame.legsWon[idx] += 1;
+        curGame.currentLeg.winnerIndex = teamIdx;
+        curGame.legsWon[teamIdx] += 1;
         const legsToWin = Math.ceil(curGame.bestOfLegs / 2);
-        if (curGame.legsWon[idx] >= legsToWin) {
+        if (curGame.legsWon[teamIdx] >= legsToWin) {
           curGame.isFinished = true;
-          curGame.winnerName = curGame.players[idx].name;
-          curGame.winnerIndex = idx;
+          curGame.winnerName = curGame.teams ? curGame.teams[teamIdx].name : curGame.players[idx].name;
+          curGame.winnerIndex = teamIdx;
         } else {
           curGame.completedLegs = [...curGame.completedLegs, curGame.currentLeg];
           const nextStarter = (curGame.currentLeg.startingPlayerIndex + 1) % n;
-          curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter, curGame.players);
+          curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter, curGame.players, curGame.teams);
           curGame.currentPlayerIndex = nextStarter;
         }
         checkedOut = true;
@@ -585,7 +607,7 @@ const GamePage = () => {
         const idx = curGame.currentPlayerIndex;
         const nextIdx = (idx + 1) % n;
         curGame.currentPlayerIndex = nextIdx;
-        curStart = curGame.currentLeg.remaining[nextIdx];
+        curStart = curGame.currentLeg.remaining[teamIndexFor(curGame.teams, nextIdx)];
         curDarts = 0;
       }
     } else {
@@ -600,7 +622,7 @@ const GamePage = () => {
     if (speechEnabled) {
       const activePlayerName = game.players[startIdx].name;
       const nextPlayerName = curGame.players[curGame.currentPlayerIndex].name;
-      const remaining = curGame.mode === "cricket" ? undefined : game.currentLeg.remaining[startIdx];
+      const remaining = curGame.mode === "cricket" ? undefined : game.currentLeg.remaining[teamIndexFor(game.teams, startIdx)];
       const dartText = darts.map(describeDartForSpeech).join(", ");
       const { parts } = buildRoundAnnouncement({
         dartText, roundTotal, activePlayerName, nextPlayerName, remaining,
@@ -659,7 +681,7 @@ const GamePage = () => {
       const removed = throws.splice(throwIndex, 1)[0];
       const updatedLeg: LegState = { ...prev.currentLeg, throws: [...prev.currentLeg.throws], remaining: [...prev.currentLeg.remaining] };
       updatedLeg.throws[playerIdx] = throws;
-      updatedLeg.remaining[playerIdx] += removed.points;
+      updatedLeg.remaining[teamIndexFor(prev.teams, playerIdx)] += removed.points;
       return { ...prev, currentLeg: updatedLeg };
     });
     setEditingThrowIdx(null);
@@ -714,23 +736,24 @@ const GamePage = () => {
     const level = player.botLevel ?? "medium";
 
     botTimerRef.current = setTimeout(() => {
+      const teamIdx = teamIndexFor(game.teams, idx);
       if (game.mode === "cricket") {
         const cricketNumbers = game.cricketNumbers ?? CRICKET_NUMBERS;
-        const others = game.cricket!.filter((_, j) => j !== idx);
+        const others = game.cricket!.filter((_, j) => j !== teamIdx);
         // A number only still counts as "open" for the bot's targeting heuristic if at least
         // one opponent hasn't closed it yet — represented as the lowest mark count among them.
         const aggOppMarks: Record<number, number> = {};
         cricketNumbers.forEach((num) => {
           aggOppMarks[num] = others.length > 0 ? Math.min(...others.map(o => o.marks[num] || 0)) : 0;
         });
-        const dart = simulateBotCricketDart(game.cricket![idx].marks, aggOppMarks, level, cricketNumbers);
+        const dart = simulateBotCricketDart(game.cricket![teamIdx].marks, aggOppMarks, level, cricketNumbers);
         handleCricketThrow(dart.baseValue, dart.multiplier as 1 | 2 | 3);
       } else {
         const key = `${idx}-${game.currentLeg.legNumber}-${dartsThisRound}`;
         let plan = botPlanRef.current;
         if (!plan || plan.key.split("-")[0] !== String(idx) || plan.key.split("-")[1] !== String(game.currentLeg.legNumber) || dartsThisRound === 0) {
-          const mustDoubleIn = (player.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[idx] ?? true);
-          const visit = simulateBotVisit(game.currentLeg.remaining[idx], player.doubleOut ?? true, level, mustDoubleIn);
+          const mustDoubleIn = (player.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[teamIdx] ?? true);
+          const visit = simulateBotVisit(game.currentLeg.remaining[teamIdx], player.doubleOut ?? true, level, mustDoubleIn);
           plan = { key: `${idx}-${game.currentLeg.legNumber}`, darts: visit.darts, applied: 0 };
           botPlanRef.current = plan;
         }
@@ -762,7 +785,16 @@ const GamePage = () => {
         );
 
     // Rank players by legs won (desc) to determine the top-2 finishers for the legacy DB schema.
-    const ranking = game.players.map((_, i) => i).sort((a, b) => game.legsWon[b] - game.legsWon[a]);
+    // In team mode, "top1"/"top2" are always one representative per team (players are
+    // interleaved [Team0-1, Team1-1, Team0-2, ...] at setup, so those reps sit at index 0/1 —
+    // which conveniently equals their own team index, so every game.legsWon[topN]-style lookup
+    // below stays correct without a separate translation).
+    const ranking = game.teams
+      ? [
+          game.players.findIndex((_, i) => teamIndexFor(game.teams, i) === 0),
+          game.players.findIndex((_, i) => teamIndexFor(game.teams, i) === 1),
+        ]
+      : game.players.map((_, i) => i).sort((a, b) => game.legsWon[b] - game.legsWon[a]);
     const [top1, top2] = ranking;
 
     const { data: allDbPlayers } = await supabase.from("players").select("id, name");
@@ -770,6 +802,8 @@ const GamePage = () => {
     const p2Match = top2 !== undefined ? allDbPlayers?.find(p => p.name === game.players[top2].name) : undefined;
     const winnerIdx = game.winnerIndex ?? top1;
     const winnerMatch = winnerIdx === top1 ? p1Match : p2Match;
+    const player1Name = game.teams ? game.teams[0].name : game.players[top1].name;
+    const player2Name = game.teams ? game.teams[1].name : (top2 !== undefined ? game.players[top2].name : "—");
 
     // Detailed per-player stats: treble-less visits + hits on the big triples (all players, not just the top 2)
     const detailFor = (idx: number) => {
@@ -797,7 +831,7 @@ const GamePage = () => {
       id: pendingGameIdRef.current,
       user_id: session?.user?.id, mode: game.mode, start_score: game.startScore,
       best_of_legs: game.bestOfLegs,
-      player1_name: game.players[top1].name, player2_name: top2 !== undefined ? game.players[top2].name : "—",
+      player1_name: player1Name, player2_name: player2Name,
       player1_id: p1Match?.id || null, player2_id: p2Match?.id || null,
       player1_legs_won: game.legsWon[top1], player2_legs_won: top2 !== undefined ? game.legsWon[top2] : 0,
       player1_average: averages[top1], player2_average: top2 !== undefined ? averages[top2] : 0,
@@ -822,7 +856,7 @@ const GamePage = () => {
           player_id: allDbPlayers?.find((dp) => dp.name === p.name)?.id || null,
           starting_score: game.startScore,
           throws: leg.throws[i] ?? [],
-          won: leg.winnerIndex === i,
+          won: leg.winnerIndex === teamIndexFor(game.teams, i),
         }))
       );
       if (legRows.length > 0) {
@@ -842,7 +876,7 @@ const GamePage = () => {
             ? Number(current.double_rate) || 0
             : (Number(current.double_rate) * current.games_played + doubleRates[i]) / gp;
           await supabase.from("players").update({
-            games_played: gp, games_won: current.games_won + (game.winnerIndex === i ? 1 : 0),
+            games_played: gp, games_won: current.games_won + (game.winnerIndex === teamIndexFor(game.teams, i) ? 1 : 0),
             average: Math.round(newAvg * 10) / 10, high_score: Math.max(current.high_score, highs[i]),
             double_rate: Math.round(newDoubleRate * 10) / 10,
           }).eq("id", match.id);
@@ -876,7 +910,7 @@ const GamePage = () => {
         s180: count180s(throws),
         first9: getFirst9Average(throws),
         totalPoints: throws.reduce((s, t) => s + t.points, 0),
-        legs: game.legsWon[i],
+        legs: game.legsWon[teamIndexFor(game.teams, i)],
       };
     });
   }, [game?.isFinished]);
@@ -909,13 +943,33 @@ const GamePage = () => {
             </div>
           )}
 
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+            <div className="min-w-0">
+              <Label htmlFor="team-mode" className="text-sm">Team-Modus</Label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">2 Teams werfen abwechselnd, ein Teammitglied nach dem anderen, mit gemeinsamem Score.</p>
+            </div>
+            <Switch id="team-mode" checked={teamMode} onCheckedChange={(v) => {
+              setTeamMode(v);
+              if (v && (numPlayers < 4 || numPlayers % 2 !== 0)) setNumPlayers(4);
+            }} />
+          </div>
+
+          {teamMode && (
+            <div className="grid grid-cols-2 gap-2">
+              <input value={teamNames[0]} onChange={(e) => setTeamNames([e.target.value, teamNames[1]])}
+                placeholder="Team 1" className="rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
+              <input value={teamNames[1]} onChange={(e) => setTeamNames([teamNames[0], e.target.value])}
+                placeholder="Team 2" className="rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
+            </div>
+          )}
+
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Anzahl Spieler</label>
+            <label className="text-sm text-muted-foreground mb-1 block">{teamMode ? "Spieler pro Team" : "Anzahl Spieler"}</label>
             <div className="grid grid-cols-4 gap-2">
-              {Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2).map((n) => (
+              {(teamMode ? [4, 6, 8] : Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2)).map((n) => (
                 <button key={n} onClick={() => setNumPlayers(n)}
                   className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-card border-border text-muted-foreground"}`}>
-                  {n} Spieler
+                  {teamMode ? `${n / 2} vs ${n / 2}` : `${n} Spieler`}
                 </button>
               ))}
             </div>
@@ -964,7 +1018,12 @@ const GamePage = () => {
           {/* Player slots: name, double-out, bot toggle */}
           <div className="space-y-3">
             {Array.from({ length: activePlayerCount }, (_, i) => (
-              <div key={i} className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
+              <div key={i} className={`bg-card rounded-lg border px-4 py-3 space-y-2 ${teamMode ? (i % 2 === 0 ? "border-primary/30" : "border-secondary/30") : "border-border"}`}>
+                {teamMode && (
+                  <p className={`text-[10px] font-display uppercase ${i % 2 === 0 ? "text-primary" : "text-secondary"}`}>
+                    {i % 2 === 0 ? (teamNames[0] || "Team 1") : (teamNames[1] || "Team 2")}
+                  </p>
+                )}
                 <div className="flex items-center gap-2">
                   {playerIsBot[i] ? (
                     <div className="flex-1 rounded-lg bg-secondary/10 border border-secondary/40 px-3 py-2 text-sm text-secondary flex items-center gap-2 min-w-0">
@@ -1065,15 +1124,17 @@ const GamePage = () => {
   if (!game) return null;
 
   const activeIdx = game.currentPlayerIndex;
+  const activeTeamIdx = teamIndexFor(game.teams, activeIdx);
   const currentPlayerName = game.players[activeIdx].name;
-  const currentRemaining = game.currentLeg.remaining[activeIdx];
+  const currentRemaining = game.currentLeg.remaining[activeTeamIdx];
   const currentThrows = game.currentLeg.throws[activeIdx];
-  const numCols = game.players.length <= 2 ? "grid-cols-2" : game.players.length === 3 ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4";
-  const awaitingDoubleIn = !isCricket && (currentPlayer?.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[activeIdx] ?? true);
+  const scoreLabels = game.teams ? game.teams.map((t) => t.name) : game.players.map((p) => p.name);
+  const numCols = scoreLabels.length <= 2 ? "grid-cols-2" : scoreLabels.length === 3 ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4";
+  const awaitingDoubleIn = !isCricket && (currentPlayer?.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[activeTeamIdx] ?? true);
 
   const doubleInBanner = awaitingDoubleIn ? (
     <div className="mb-3 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-center text-xs text-accent font-display uppercase tracking-wide">
-      Double In erforderlich – nur ein Doppel bringt {currentPlayerName} rein
+      Double In erforderlich – nur ein Doppel bringt {game.teams ? `${game.teams[activeTeamIdx].name} (${currentPlayerName})` : currentPlayerName} rein
     </div>
   ) : null;
 
@@ -1083,10 +1144,20 @@ const GamePage = () => {
         <thead>
           <tr>
             <th className="text-left font-normal text-muted-foreground pb-1 pr-2">Ziel</th>
-            {game.players.map((p, i) => (
-              <th key={i} className={`font-bold truncate px-1 pb-1 max-w-[4.5rem] ${i === activeIdx ? "text-primary" : ""}`}>{p.name}</th>
+            {scoreLabels.map((name, i) => (
+              <th key={i} className={`font-bold truncate px-1 pb-1 max-w-[4.5rem] ${i === activeTeamIdx ? "text-primary" : ""}`}>{name}</th>
             ))}
           </tr>
+          {game.teams && (
+            <tr>
+              <th />
+              {game.teams.map((_, ti) => (
+                <th key={ti} className="font-normal text-[9px] text-muted-foreground truncate px-1 pb-1 max-w-[4.5rem]">
+                  {game.players.filter((_, pi) => teamIndexFor(game.teams, pi) === ti).map((p) => p.name).join(" & ")}
+                </th>
+              ))}
+            </tr>
+          )}
         </thead>
         <tbody>
           {(game.cricketNumbers ?? CRICKET_NUMBERS).map((num) => (
@@ -1104,7 +1175,7 @@ const GamePage = () => {
           <tr className="border-t border-border/50">
             <td className="text-left text-muted-foreground pt-1 pr-2">Punkte</td>
             {game.cricket!.map((c, i) => (
-              <td key={i} className={`pt-1 font-display ${i === activeIdx ? "text-primary font-bold" : ""}`}>{c.points}</td>
+              <td key={i} className={`pt-1 font-display ${i === activeTeamIdx ? "text-primary font-bold" : ""}`}>{c.points}</td>
             ))}
           </tr>
         </tbody>
@@ -1184,41 +1255,58 @@ const GamePage = () => {
         ? "shrink-0 px-4 pt-3 pb-2 bg-background/95 backdrop-blur border-b border-border/40"
         : "sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40"}>
       <div className={`grid ${numCols} gap-3`}>
-        {game.players.map((slot, i) => {
-          const throws = game.currentLeg.throws[i];
-          const remaining = game.currentLeg.remaining[i];
-          const cricket = game.cricket?.[i];
-          const avg = calculateAverage(throws);
-          const p180 = count180s(throws);
-          const isActive = activeIdx === i;
+        {(game.teams
+          ? game.teams.map((t, ti) => {
+              const memberIdxs = game.players.map((_, pi) => pi).filter((pi) => teamIndexFor(game.teams, pi) === ti);
+              const throws = memberIdxs.flatMap((pi) => game.currentLeg.throws[pi]);
+              return {
+                key: ti, label: t.name, subLabel: memberIdxs.map((pi) => game.players[pi].name).join(" & "),
+                isBot: false, remaining: game.currentLeg.remaining[ti], cricketPoints: game.cricket?.[ti]?.points ?? 0,
+                avg: calculateAverage(throws), p180: count180s(throws), legsWon: game.legsWon[ti],
+                isActive: activeTeamIdx === ti,
+              };
+            })
+          : game.players.map((p, i) => ({
+              key: i, label: p.name, subLabel: undefined as string | undefined,
+              isBot: p.isBot, remaining: game.currentLeg.remaining[i], cricketPoints: game.cricket?.[i]?.points ?? 0,
+              avg: calculateAverage(game.currentLeg.throws[i]), p180: count180s(game.currentLeg.throws[i]),
+              legsWon: game.legsWon[i], isActive: activeIdx === i,
+            }))
+        ).map((card) => {
+          const isActive = card.isActive;
           const activeRound = isActive ? currentRoundScores : [];
           const pendingTotal = isActive && cameraEnabled
             ? pendingCameraDarts.reduce((s, d) => s + d.points, 0)
             : 0;
           const previewRemaining = !isCricket && pendingTotal > 0
-            ? Math.max(0, remaining - pendingTotal)
-            : remaining;
+            ? Math.max(0, card.remaining - pendingTotal)
+            : card.remaining;
           const showPreview = pendingTotal > 0 && !isCricket;
           return (
-            <div key={i}
+            <div key={card.key}
               className={`bg-card rounded-xl p-4 border-2 transition-all text-center ${isActive ? "border-primary glow-cyan" : "border-border opacity-80"}`}>
               <div className="flex items-center justify-center gap-1.5">
                 {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse-glow" />}
-                {slot.isBot && <Bot className="w-3 h-3 text-secondary shrink-0" />}
-                <p className={`text-sm truncate ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>{slot.name}</p>
+                {card.isBot && <Bot className="w-3 h-3 text-secondary shrink-0" />}
+                <p className={`text-sm truncate ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>{card.label}</p>
               </div>
-              {isActive && slot.isBot && botThinking ? (
+              {card.subLabel && (
+                <p className={`text-[10px] truncate ${isActive ? "text-primary/70" : "text-muted-foreground/70"}`}>
+                  {card.subLabel}{isActive ? ` · dran: ${currentPlayerName}` : ""}
+                </p>
+              )}
+              {isActive && card.isBot && botThinking ? (
                 <p className="text-sm font-display mt-1 text-secondary animate-pulse">Bot wirft…</p>
               ) : (
                 <p className={`text-4xl font-display mt-1 transition-colors ${
                   showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
                 }`}>
-                  {isCricket ? cricket?.points ?? 0 : previewRemaining}
+                  {isCricket ? card.cricketPoints : previewRemaining}
                 </p>
               )}
               {showPreview && (
                 <p className="text-[10px] text-muted-foreground -mt-1">
-                  ({remaining} − {pendingTotal} live)
+                  ({card.remaining} − {pendingTotal} live)
                 </p>
               )}
               {isActive && cameraEnabled && pendingCameraDarts.length > 0 && (
@@ -1241,9 +1329,9 @@ const GamePage = () => {
                 </div>
               )}
               <div className="flex justify-center flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
-                <span>Ø {avg.toFixed(1)}</span>
-                {game.bestOfLegs > 1 && <span className="text-primary font-bold">{game.legsWon[i]} Legs</span>}
-                {p180 > 0 && <span className="text-accent font-bold">🎯{p180}</span>}
+                <span>Ø {card.avg.toFixed(1)}</span>
+                {game.bestOfLegs > 1 && <span className="text-primary font-bold">{card.legsWon} Legs</span>}
+                {card.p180 > 0 && <span className="text-accent font-bold">🎯{card.p180}</span>}
               </div>
             </div>
           );

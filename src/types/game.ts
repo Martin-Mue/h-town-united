@@ -47,6 +47,11 @@ export interface CricketPlayerState {
   points: number;
 }
 
+/** A team of players sharing one score/leg-win record in team mode. */
+export interface TeamSlot {
+  name: string;
+}
+
 /** Complete game state for all modes. Cricket supports 2-8 players. */
 export interface GameState {
   mode: GameMode;
@@ -66,6 +71,16 @@ export interface GameState {
   cricket?: CricketPlayerState[];
   /** Cricket target numbers actually in play this game. Defaults to CRICKET_NUMBERS; set to a fresh random set when Custom Cricket is enabled. */
   cricketNumbers?: readonly number[];
+  /**
+   * Team mode: players are grouped into exactly 2 teams, interleaved in `players` as
+   * [TeamA-1, TeamB-1, TeamA-2, TeamB-2, ...] so the existing per-player round-robin turn
+   * order naturally alternates teams and rotates each team's own members. `legsWon`,
+   * `currentLeg.remaining`, `currentLeg.startedScoring` and `cricket` are then indexed by
+   * TEAM (playerIndex % teams.length), not by individual player — see teamIndexFor().
+   * `currentLeg.throws` stays indexed per individual player so personal stats/average
+   * still work per person.
+   */
+  teams?: TeamSlot[];
 }
 
 /** Post-game statistics summary, index-aligned with players */
