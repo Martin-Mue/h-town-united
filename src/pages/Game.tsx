@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus } from "lucide-react";
+import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -38,7 +38,7 @@ import {
 import { describeDartForSpeech, speakText } from "@/utils/speech";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
-const MAX_PLAYERS = 4;
+const MAX_PLAYERS = 8;
 
 function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, numPlayers: number): LegState {
   return {
@@ -66,7 +66,7 @@ interface UndoSnapshot {
   turnStartRemaining: number;
 }
 
-const DEFAULT_NAMES = ["Spieler 1", "Spieler 2", "Spieler 3", "Spieler 4"];
+const DEFAULT_NAMES = Array.from({ length: MAX_PLAYERS }, (_, i) => `Spieler ${i + 1}`);
 
 const GamePage = () => {
   const [phase, setPhase] = useState<"setup" | "playing" | "postGame">("setup");
@@ -76,9 +76,9 @@ const GamePage = () => {
   const [customStartScore, setCustomStartScore] = useState(501);
   const [numPlayers, setNumPlayers] = useState(2);
   const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
-  const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>([true, true, true, true]);
-  const [playerIsBot, setPlayerIsBot] = useState<boolean[]>([false, false, false, false]);
-  const [playerBotLevel, setPlayerBotLevel] = useState<BotLevel[]>(["medium", "medium", "medium", "medium"]);
+  const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(Array(MAX_PLAYERS).fill(true));
+  const [playerIsBot, setPlayerIsBot] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
+  const [playerBotLevel, setPlayerBotLevel] = useState<BotLevel[]>(Array(MAX_PLAYERS).fill("medium"));
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [speechEnabled, setSpeechEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -101,6 +101,9 @@ const GamePage = () => {
   const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
   const liveCameraRef = useRef<LiveCameraHandle>(null);
   const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
+  // While the camera is on, the game view becomes a fixed, non-scrolling window — the
+  // manual number pad isn't needed for scoring then, so it's tucked behind this toggle.
+  const [showManualInput, setShowManualInput] = useState(false);
   // Generated up front (before the game row exists) so highlight clips captured
   // mid-game can already reference the game they'll end up saved under.
   const pendingGameIdRef = useRef<string>(crypto.randomUUID());
@@ -826,8 +829,8 @@ const GamePage = () => {
             <>
               <div>
                 <label className="text-sm text-muted-foreground mb-1 block">Anzahl Spieler</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[2, 3, 4].map((n) => (
+                <div className="grid grid-cols-4 gap-2">
+                  {Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2).map((n) => (
                     <button key={n} onClick={() => setNumPlayers(n)}
                       className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-card border-border text-muted-foreground"}`}>
                       {n} Spieler
@@ -969,7 +972,9 @@ const GamePage = () => {
 
   // ─── PLAYING PHASE ─────────────────────────────────
   return (
-    <div className="container py-4 animate-slide-up max-w-lg mx-auto">
+    <div className={cameraEnabled
+      ? "fixed inset-0 z-40 bg-background flex flex-col animate-slide-up"
+      : "container py-4 animate-slide-up max-w-lg mx-auto"}>
       {/* Winner overlay */}
       {game.isFinished && (
         <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto py-8">
@@ -1032,8 +1037,10 @@ const GamePage = () => {
         </div>
       )}
 
-      {/* Scoreboard (sticky so it stays visible when the camera is open) */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40">
+      {/* Scoreboard (sticky in the scrolling layout; a fixed top bar in the camera window) */}
+      <div className={cameraEnabled
+        ? "shrink-0 px-4 pt-3 pb-2 bg-background/95 backdrop-blur border-b border-border/40"
+        : "sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40"}>
       <div className={`grid ${numCols} gap-3`}>
         {game.players.map((slot, i) => {
           const throws = game.currentLeg.throws[i];
@@ -1130,21 +1137,6 @@ const GamePage = () => {
       </div>
       </div>
 
-      {/* Checkout suggestion */}
-      {!isCricket && !currentPlayer?.isBot && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
-
-      {/* Live Camera (auto-scoring) — never shown for bot turns */}
-      {cameraEnabled && !currentPlayer?.isBot && (
-        <LiveCamera
-          ref={liveCameraRef}
-          enabled={cameraEnabled}
-          onClose={() => { setCameraEnabled(false); setPendingCameraDarts([]); }}
-          onRoundCommit={submitDetectedRound}
-          onPendingChange={setPendingCameraDarts}
-          dartsRemaining={Math.max(1, 3 - dartsThisRound)}
-          playerName={currentPlayerName}
-        />
-      )}
       <ThrowClipDialog
         popup={clipPopup}
         onClose={() => {
@@ -1153,100 +1145,239 @@ const GamePage = () => {
         }}
       />
 
-      {/* Cricket scoreboard */}
-      {isCricket && game.cricket && (
-        <div className="bg-card rounded-xl border border-border p-3 mb-3">
-          <div className="grid grid-cols-3 gap-1 text-center text-xs">
-            <span className="font-bold truncate">{game.players[0].name}</span>
-            <span className="text-muted-foreground">Ziel</span>
-            <span className="font-bold truncate">{game.players[1].name}</span>
-            {CRICKET_NUMBERS.map((num) => {
-              const p1m = game.cricket![0].marks[num] || 0;
-              const p2m = game.cricket![1].marks[num] || 0;
-              const renderMarks = (m: number) => m >= 3 ? "✕" : m === 2 ? "╳" : m === 1 ? "/" : "·";
-              return [
-                <span key={`p1-${num}`} className={p1m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p1m)}</span>,
-                <span key={`n-${num}`} className="font-display">{num === 25 ? "Bull" : num}</span>,
-                <span key={`p2-${num}`} className={p2m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p2m)}</span>,
-              ];
-            })}
-          </div>
-        </div>
-      )}
+      {cameraEnabled ? (
+        <>
+          {/* Everything below the scoreboard scrolls WITHIN this region only — the
+              outer window (and the page behind it) never scrolls while the camera is open. */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3">
+            {!isCricket && !currentPlayer?.isBot && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
 
-      {/* Score input — disabled during a bot's turn */}
-      <DartScoreInput selectedValue={selectedScore} selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
-        onValueSelect={setSelectedScore} onMultiplierSelect={setMultiplier} onSubmit={throwDart}
-        onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
+            {!currentPlayer?.isBot && (
+              <LiveCamera
+                ref={liveCameraRef}
+                enabled={cameraEnabled}
+                onClose={() => { setCameraEnabled(false); setPendingCameraDarts([]); }}
+                onRoundCommit={submitDetectedRound}
+                onPendingChange={setPendingCameraDarts}
+                dartsRemaining={Math.max(1, 3 - dartsThisRound)}
+                playerName={currentPlayerName}
+              />
+            )}
 
-      {/* Undo & actions row */}
-      <div className="flex gap-2 mt-3">
-        <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
-          <Undo2 className="w-4 h-4" /> Rückgängig
-        </Button>
-        <Button
-          variant={cameraEnabled ? "default" : "outline"}
-          onClick={() => setCameraEnabled((v) => !v)}
-          disabled={!!currentPlayer?.isBot}
-          className="gap-1"
-          title="Live-Kamera-Scoring"
-        >
-          <Camera className="w-4 h-4" /> {cameraEnabled ? "Cam an" : "Cam"}
-        </Button>
-        <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1">
-          {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-        </Button>
-      </div>
-
-      {/* Throw history (editable) */}
-      {currentThrows.length > 0 && (
-        <div className="mt-3 bg-card rounded-xl border border-border p-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-muted-foreground uppercase font-display">Würfe · {currentPlayerName}</p>
-            <button onClick={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)} className="text-xs text-primary flex items-center gap-1">
-              <Edit2 className="w-3 h-3" /> Bearbeiten
-            </button>
-          </div>
-          <div className="space-y-1">
-            {Array.from({ length: Math.ceil(currentThrows.length / 3) }, (_, roundIdx) => {
-              const roundThrows = currentThrows.slice(roundIdx * 3, roundIdx * 3 + 3);
-              const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0);
-              const is180 = roundTotal === 180 && roundThrows.length === 3;
-              return (
-                <div key={roundIdx} className={`flex items-center gap-1.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
-                  <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
-                  {roundThrows.map((t, i) => {
-                    const globalIdx = roundIdx * 3 + i;
-                    return (
-                      <div key={globalIdx} className="relative group">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
-                          t.multiplier === 3 ? "bg-destructive/20 text-destructive" :
-                          t.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
-                        }`}>
-                          {t.multiplier === 3 ? "T" : t.multiplier === 2 ? "D" : ""}{t.baseValue === 50 ? "Bull" : t.baseValue === 0 ? "Miss" : t.baseValue}
-                        </span>
-                        {editingThrowIdx !== null && (
-                          <button onClick={() => deleteThrow(activeIdx, globalIdx)}
-                            className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
-                            <X className="w-2.5 h-2.5 text-destructive-foreground" />
-                          </button>
-                        )}
-                      </div>
-                    );
+            {isCricket && game.cricket && (
+              <div className="bg-card rounded-xl border border-border p-3 mb-3">
+                <div className="grid grid-cols-3 gap-1 text-center text-xs">
+                  <span className="font-bold truncate">{game.players[0].name}</span>
+                  <span className="text-muted-foreground">Ziel</span>
+                  <span className="font-bold truncate">{game.players[1].name}</span>
+                  {CRICKET_NUMBERS.map((num) => {
+                    const p1m = game.cricket![0].marks[num] || 0;
+                    const p2m = game.cricket![1].marks[num] || 0;
+                    const renderMarks = (m: number) => m >= 3 ? "✕" : m === 2 ? "╳" : m === 1 ? "/" : "·";
+                    return [
+                      <span key={`p1-${num}`} className={p1m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p1m)}</span>,
+                      <span key={`n-${num}`} className="font-display">{num === 25 ? "Bull" : num}</span>,
+                      <span key={`p2-${num}`} className={p2m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p2m)}</span>,
+                    ];
                   })}
-                  <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
-                    {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
-                  </span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+              </div>
+            )}
 
-      <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
-        <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
-      </Button>
+            {/* Manual entry stays fully available — just tucked away by default since the camera scores for you. */}
+            <button
+              onClick={() => setShowManualInput((v) => !v)}
+              className="w-full flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted mb-3"
+            >
+              <span className="flex items-center gap-1.5"><Keyboard className="w-3.5 h-3.5" /> Manuelle Eingabe</span>
+              {showManualInput ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+
+            {showManualInput && (
+              <>
+                <DartScoreInput selectedValue={selectedScore} selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
+                  onValueSelect={setSelectedScore} onMultiplierSelect={setMultiplier} onSubmit={throwDart}
+                  onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
+
+                {currentThrows.length > 0 && (
+                  <div className="mt-3 bg-card rounded-xl border border-border p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs text-muted-foreground uppercase font-display">Würfe · {currentPlayerName}</p>
+                      <button onClick={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)} className="text-xs text-primary flex items-center gap-1">
+                        <Edit2 className="w-3 h-3" /> Bearbeiten
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {Array.from({ length: Math.ceil(currentThrows.length / 3) }, (_, roundIdx) => {
+                        const roundThrows = currentThrows.slice(roundIdx * 3, roundIdx * 3 + 3);
+                        const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0);
+                        const is180 = roundTotal === 180 && roundThrows.length === 3;
+                        return (
+                          <div key={roundIdx} className={`flex items-center gap-1.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
+                            <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
+                            {roundThrows.map((t, i) => {
+                              const globalIdx = roundIdx * 3 + i;
+                              return (
+                                <div key={globalIdx} className="relative group">
+                                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
+                                    t.multiplier === 3 ? "bg-destructive/20 text-destructive" :
+                                    t.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
+                                  }`}>
+                                    {t.multiplier === 3 ? "T" : t.multiplier === 2 ? "D" : ""}{t.baseValue === 50 ? "Bull" : t.baseValue === 0 ? "Miss" : t.baseValue}
+                                  </span>
+                                  {editingThrowIdx !== null && (
+                                    <button onClick={() => deleteThrow(activeIdx, globalIdx)}
+                                      className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
+                                      <X className="w-2.5 h-2.5 text-destructive-foreground" />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
+                              {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
+              <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
+            </Button>
+          </div>
+
+          {/* Compact bottom bar — always reachable, no matter how tall the camera/manual-input content gets. */}
+          <div className="shrink-0 border-t border-border bg-background/95 backdrop-blur px-4 py-2.5 flex gap-2">
+            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
+              <Undo2 className="w-4 h-4" /> Rückgängig
+            </Button>
+            <Button
+              variant={showManualInput ? "default" : "outline"}
+              onClick={() => setShowManualInput((v) => !v)}
+              className="gap-1"
+              title="Manuelle Eingabe ein-/ausblenden"
+            >
+              <Keyboard className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => setCameraEnabled(false)}
+              className="gap-1"
+              title="Kamera schließen"
+            >
+              <Camera className="w-4 h-4" /> Cam an
+            </Button>
+            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1">
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Checkout suggestion */}
+          {!isCricket && !currentPlayer?.isBot && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} /></div>}
+
+          {/* Cricket scoreboard */}
+          {isCricket && game.cricket && (
+            <div className="bg-card rounded-xl border border-border p-3 mb-3">
+              <div className="grid grid-cols-3 gap-1 text-center text-xs">
+                <span className="font-bold truncate">{game.players[0].name}</span>
+                <span className="text-muted-foreground">Ziel</span>
+                <span className="font-bold truncate">{game.players[1].name}</span>
+                {CRICKET_NUMBERS.map((num) => {
+                  const p1m = game.cricket![0].marks[num] || 0;
+                  const p2m = game.cricket![1].marks[num] || 0;
+                  const renderMarks = (m: number) => m >= 3 ? "✕" : m === 2 ? "╳" : m === 1 ? "/" : "·";
+                  return [
+                    <span key={`p1-${num}`} className={p1m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p1m)}</span>,
+                    <span key={`n-${num}`} className="font-display">{num === 25 ? "Bull" : num}</span>,
+                    <span key={`p2-${num}`} className={p2m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}>{renderMarks(p2m)}</span>,
+                  ];
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Score input — disabled during a bot's turn */}
+          <DartScoreInput selectedValue={selectedScore} selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
+            onValueSelect={setSelectedScore} onMultiplierSelect={setMultiplier} onSubmit={throwDart}
+            onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
+
+          {/* Undo & actions row */}
+          <div className="flex gap-2 mt-3">
+            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
+              <Undo2 className="w-4 h-4" /> Rückgängig
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setCameraEnabled(true)}
+              disabled={!!currentPlayer?.isBot}
+              className="gap-1"
+              title="Live-Kamera-Scoring"
+            >
+              <Camera className="w-4 h-4" /> Cam
+            </Button>
+            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1">
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </Button>
+          </div>
+
+          {/* Throw history (editable) */}
+          {currentThrows.length > 0 && (
+            <div className="mt-3 bg-card rounded-xl border border-border p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground uppercase font-display">Würfe · {currentPlayerName}</p>
+                <button onClick={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)} className="text-xs text-primary flex items-center gap-1">
+                  <Edit2 className="w-3 h-3" /> Bearbeiten
+                </button>
+              </div>
+              <div className="space-y-1">
+                {Array.from({ length: Math.ceil(currentThrows.length / 3) }, (_, roundIdx) => {
+                  const roundThrows = currentThrows.slice(roundIdx * 3, roundIdx * 3 + 3);
+                  const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0);
+                  const is180 = roundTotal === 180 && roundThrows.length === 3;
+                  return (
+                    <div key={roundIdx} className={`flex items-center gap-1.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
+                      <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
+                      {roundThrows.map((t, i) => {
+                        const globalIdx = roundIdx * 3 + i;
+                        return (
+                          <div key={globalIdx} className="relative group">
+                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
+                              t.multiplier === 3 ? "bg-destructive/20 text-destructive" :
+                              t.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
+                            }`}>
+                              {t.multiplier === 3 ? "T" : t.multiplier === 2 ? "D" : ""}{t.baseValue === 50 ? "Bull" : t.baseValue === 0 ? "Miss" : t.baseValue}
+                            </span>
+                            {editingThrowIdx !== null && (
+                              <button onClick={() => deleteThrow(activeIdx, globalIdx)}
+                                className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
+                                <X className="w-2.5 h-2.5 text-destructive-foreground" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
+                        {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
+            <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
+          </Button>
+        </>
+      )}
     </div>
   );
 };

@@ -95,7 +95,7 @@ const TRAINING_DRILLS: TrainingDrill[] = [
     id: "bull-control",
     name: "Bull Control",
     description:
-      "X01 für 2–4 Spieler: Punkten darf nur, wer zuletzt das Bull getroffen hat – und nur auf einer einzigen Zahl (z. B. 20). Jeder Bull-Treffer klaut die Scoring-Lizenz.",
+      "X01 für 2–8 Spieler: Punkten darf nur, wer zuletzt das Bull getroffen hat – und nur auf einer einzigen Zahl (z. B. 20). Jeder Bull-Treffer klaut die Scoring-Lizenz.",
     icon: Crosshair,
     difficulty: "Profi",
     durationMinutes: 25,
@@ -117,6 +117,8 @@ const BIG_SINGLE_TARGETS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1
 
 /** Pressure checkout values */
 const PRESSURE_CHECKOUTS = [32, 40, 16, 36, 24, 8, 20, 50, 64, 80];
+
+const BULL_CONTROL_MAX_PLAYERS = 8;
 
 /** Generates a random checkout between 2 and 170 */
 function randomCheckout(): number {
@@ -839,7 +841,7 @@ const TrainingPage = () => {
                     className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm" />
                 ))}
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" disabled={bcNames.length >= 4}
+                  <Button size="sm" variant="outline" disabled={bcNames.length >= BULL_CONTROL_MAX_PLAYERS}
                     onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: [...bcNames, `Spieler ${bcNames.length + 1}`] }))}>
                     + Spieler
                   </Button>
