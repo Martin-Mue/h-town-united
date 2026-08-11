@@ -150,7 +150,6 @@ const CALM_OPTIONS: SpeechOptions = { pitch: 0.92, rate: 0.96, volume: 0.92 };
 const NORMAL_OPTIONS: SpeechOptions = { pitch: 1.02, rate: 1.03, volume: 1 };
 
 export interface RoundAnnouncementParams {
-  dartText: string;
   roundTotal: number;
   activePlayerName: string;
   nextPlayerName: string;
@@ -162,12 +161,16 @@ export interface RoundAnnouncementParams {
   winnerName?: string;
 }
 
-/** Builds an enthusiastic, darts-caller-style multi-part announcement (see speakSequence). */
+/**
+ * Builds a terse, darts-caller-style announcement — just the round total (spoken the way a
+ * real caller shouts a score, not a play-by-play of which segments were hit) plus whatever
+ * state actually changed (checkout, bust, match win).
+ */
 export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: SpeechPart[] } {
   if (p.matchWon) {
     return {
       parts: [
-        { text: `${p.dartText}!`, options: HYPE_OPTIONS },
+        { text: pickRandom(HYPE_CHECKOUT), options: HYPE_OPTIONS },
         { text: `${p.winnerName} ${pickRandom(HYPE_MATCH_WIN)} Herzlichen Glückwunsch!`, options: { ...HYPE_OPTIONS, rate: 1.1 } },
       ],
     };
@@ -175,7 +178,6 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
   if (p.checkedOut) {
     return {
       parts: [
-        { text: p.dartText, options: NORMAL_OPTIONS },
         { text: pickRandom(HYPE_CHECKOUT), options: HYPE_OPTIONS },
         { text: `Leg an ${p.activePlayerName}! ${p.nextPlayerName} startet das nächste Leg.`, options: NORMAL_OPTIONS },
       ],
@@ -183,38 +185,24 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
   }
   if (p.busted) {
     return {
-      parts: [
-        { text: p.dartText, options: NORMAL_OPTIONS },
-        { text: `${pickRandom(HYPE_BUST)} ${p.nextPlayerName} ist dran.`, options: CALM_OPTIONS },
-      ],
+      parts: [{ text: `${pickRandom(HYPE_BUST)} ${p.nextPlayerName} ist dran.`, options: CALM_OPTIONS }],
     };
   }
   if (p.isCricket) {
     return {
-      parts: [{ text: `${p.dartText}. Runde übernommen. ${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS }],
+      parts: [{ text: `${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS }],
     };
   }
   if (p.roundTotal === 180) {
-    return {
-      parts: [
-        { text: p.dartText, options: NORMAL_OPTIONS },
-        { text: pickRandom(HYPE_180), options: HYPE_OPTIONS },
-        { text: `${p.activePlayerName}! Noch ${p.remaining} übrig. ${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
-      ],
-    };
+    return { parts: [{ text: pickRandom(HYPE_180), options: HYPE_OPTIONS }] };
   }
   if (p.roundTotal >= 100) {
     return {
       parts: [
-        { text: p.dartText, options: NORMAL_OPTIONS },
-        { text: `${pickRandom(HYPE_TON_PLUS)} ${p.activePlayerName} mit ${p.roundTotal}!`, options: { pitch: 1.28, rate: 1.14, volume: 1 } },
-        { text: `Noch ${p.remaining} übrig. ${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
+        { text: `${p.roundTotal}!`, options: { pitch: 1.28, rate: 1.14, volume: 1 } },
+        { text: pickRandom(HYPE_TON_PLUS), options: { pitch: 1.28, rate: 1.14, volume: 1 } },
       ],
     };
   }
-  return {
-    parts: [
-      { text: `${p.dartText}. ${p.activePlayerName} wirft ${p.roundTotal} Punkte. Noch ${p.remaining} übrig. ${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
-    ],
-  };
+  return { parts: [{ text: `${p.roundTotal}.`, options: NORMAL_OPTIONS }] };
 }

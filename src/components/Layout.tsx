@@ -33,8 +33,13 @@ const Layout = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="border-b border-border px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen bg-background flex flex-col relative">
+      {/* Subtle full-page watermark so plainer list/empty-state pages don't feel bare */}
+      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden flex items-center justify-center">
+        <img src={htuEmblem} alt="" aria-hidden="true" className="w-[140vw] max-w-none opacity-[0.03] select-none" />
+      </div>
+
+      <header className="border-b border-border px-4 py-3 flex items-center justify-between bg-background/80 backdrop-blur-sm relative z-10">
         <Link to="/" className="flex items-center gap-3">
           <img
             src={htuLogo}

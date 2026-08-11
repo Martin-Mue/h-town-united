@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown } from "lucide-react";
+import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -36,7 +36,8 @@ import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
   playVictorySound, playTonPlusSound, playTurnSwitchSound,
 } from "@/utils/sounds";
-import { describeDartForSpeech, speakSequence, buildRoundAnnouncement } from "@/utils/speech";
+import { speakSequence, buildRoundAnnouncement } from "@/utils/speech";
+import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const MAX_PLAYERS = 8;
@@ -117,6 +118,7 @@ const GamePage = () => {
   const [multiplier, setMultiplier] = useState(1);
   const [editingThrowIdx, setEditingThrowIdx] = useState<number | null>(null);
   const [showDetailedStats, setShowDetailedStats] = useState(false);
+  const [sharingResult, setSharingResult] = useState(false);
   const [gameSaved, setGameSaved] = useState(false);
   const { session } = useAuth();
   const navigate = useNavigate();
@@ -623,9 +625,8 @@ const GamePage = () => {
       const activePlayerName = game.players[startIdx].name;
       const nextPlayerName = curGame.players[curGame.currentPlayerIndex].name;
       const remaining = curGame.mode === "cricket" ? undefined : game.currentLeg.remaining[teamIndexFor(game.teams, startIdx)];
-      const dartText = darts.map(describeDartForSpeech).join(", ");
       const { parts } = buildRoundAnnouncement({
-        dartText, roundTotal, activePlayerName, nextPlayerName, remaining,
+        roundTotal, activePlayerName, nextPlayerName, remaining,
         isCricket: curGame.mode === "cricket",
         checkedOut: checkedOut && !curGame.isFinished,
         busted, matchWon: curGame.isFinished, winnerName: curGame.winnerName,
@@ -714,6 +715,24 @@ const GamePage = () => {
     if (!game || game.isFinished) return;
     if (game.mode === "cricket") return;
     submitDetectedRound(splitQuickRound(total));
+  };
+
+  const shareResult = async () => {
+    if (!game || !postGameStats || sharingResult) return;
+    setSharingResult(true);
+    try {
+      await shareOrDownloadResultImage(
+        {
+          mode: game.mode === "custom" ? `Custom ${game.startScore}` : game.mode,
+          winnerName: game.winnerName ?? "?",
+          bestOfLegs: game.bestOfLegs,
+          players: postGameStats.map((p) => ({ name: p.name, average: p.average, highscore: p.highscore, s180: p.s180, legs: p.legs })),
+        },
+        `ergebnis-${new Date().toISOString().slice(0, 10)}.png`
+      );
+    } finally {
+      setSharingResult(false);
+    }
   };
 
   const resetGame = () => {
@@ -1244,7 +1263,12 @@ const GamePage = () => {
               </div>
             )}
 
-            <Button onClick={() => { resetGame(); navigate("/game"); }} className="w-full font-display uppercase">Neues Spiel</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={shareResult} disabled={sharingResult} className="gap-1.5 shrink-0">
+                <Share2 className="w-4 h-4" /> {sharingResult ? "…" : "Teilen"}
+              </Button>
+              <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">Neues Spiel</Button>
+            </div>
             {gameSaved && <p className="text-[10px] text-muted-foreground mt-2">✓ Spiel gespeichert</p>}
           </div>
         </div>
