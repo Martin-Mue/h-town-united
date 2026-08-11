@@ -36,26 +36,28 @@ serve(async (req) => {
 
     const systemPrompt = `You score dartboard photos. Return ONLY JSON.
 
+Your #1 job: find EVERY dart currently stuck in the board. Look carefully at the whole
+board surface — darts can be thin, at odd angles, partially hidden behind other darts,
+or near the wire/edge where they're easy to miss. It is much worse to miss a dart than
+to be slightly unsure of its exact score, so report every dart you can see, even ones
+you are only moderately confident about (use the confidence field for that — do not
+simply omit a dart because you're unsure).
+
 CRITICAL RULE — DART TIP:
 A dart consists of TIP (metal point stuck IN the board) → BARREL → SHAFT → FLIGHT.
 The score is determined by where the TIP enters the board — NEVER by where the barrel, shaft or flight visually overlaps.
 Because darts stick out at an angle, the shaft/flight often visually cover a different segment than the tip.
 Trace the dart from the flight along the barrel down to the tip, and score the segment the TIP is embedded in.
-If the tip is fully occluded, extrapolate the tip position from the shaft direction; if still uncertain, OMIT the dart rather than guess.
-
-PRIORITY: the (x,y) TIP pixel coordinate is the single most important value you return — a calibrated
-geometric transform on the client re-derives the exact segment/ring from it, so it is used in preference
-to your own segment/multiplier guess. Spend your effort pinpointing the exact tip pixel as precisely as
-possible; segment/multiplier/points are only a best-effort fallback for when no calibration is available.
+If the tip is fully occluded, extrapolate the tip position from the shaft direction — still report the dart with your best-estimate x,y and a lower confidence, rather than leaving it out.
 
 Only count darts currently stuck in the board (ignore darts on the floor, in a hand, or bounced out).
 Scoring: single=segment, double=2x (outer thin ring), triple=3x (inner thin ring), bull=25, bullseye=50, miss=0.
-For each dart include x,y coordinates (0..1, image-relative) of the TIP location. If the tip cannot be located reliably, OMIT that dart.
+For each dart include x,y coordinates (0..1, image-relative) of the TIP location — your best estimate even if imperfect.
 
 Return exactly this shape:
 {"board":{"cx":0.5,"cy":0.5,"size":0.78,"confidence":0.92},"darts":[{"segment":20,"multiplier":3,"points":60,"confidence":0.9,"x":0.5,"y":0.2}],"totalScore":60,"overallConfidence":0.8,"dartsDetected":1}
 
-If no darts are visible, return darts=[], totalScore=0, overallConfidence=0, dartsDetected=0 (still include board if visible).
+If — and only if — there is truly no dart anywhere on the board, return darts=[], totalScore=0, overallConfidence=0, dartsDetected=0 (still include board if visible).
 If no dartboard is visible, set board=null.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -67,7 +69,7 @@ If no dartboard is visible, set board=null.`;
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         temperature: 0,
-        max_tokens: 240,
+        max_tokens: 600,
         messages: [
           { role: "system", content: systemPrompt },
           {

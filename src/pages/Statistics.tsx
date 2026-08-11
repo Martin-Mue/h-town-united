@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X } from "lucide-react";
+import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -10,7 +10,11 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
-import { first9Average, computeCheckoutStats, combineCheckoutStats, type DartThrow, type CheckoutStats } from "@/utils/dartStats";
+import {
+  first9Average, average, computeCheckoutStats, combineCheckoutStats,
+  computeCricketStats, combineCricketStats,
+  type DartThrow, type CheckoutStats, type CricketStats,
+} from "@/utils/dartStats";
 
 interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
@@ -40,6 +44,11 @@ interface GameLegRecord {
   throws: DartThrow[]; won: boolean;
 }
 
+interface HighlightClipRecord {
+  id: string; game_id: string | null; player_id: string | null; player_name: string;
+  kind: string; points: number; darts: DartThrow[]; storage_path: string; mime: string; created_at: string;
+}
+
 const CHART_COLORS = [
   "hsl(185 85% 48%)", "hsl(155 65% 42%)", "hsl(45 100% 58%)",
   "hsl(280 70% 55%)", "hsl(0 72% 51%)", "hsl(200 80% 55%)",
@@ -51,12 +60,14 @@ const StatisticsPage = () => {
   const [games, setGames] = useState<GameRecord[]>([]);
   const [players, setPlayers] = useState<PlayerStats[]>([]);
   const [gameLegs, setGameLegs] = useState<GameLegRecord[]>([]);
+  const [highlightClips, setHighlightClips] = useState<HighlightClipRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate" | "checkout">("average");
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"overview" | "players" | "h2h" | "history">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "players" | "h2h" | "history" | "highlights">("overview");
+  const [expandedGameId, setExpandedGameId] = useState<string | null>(null);
   const [filterTime, setFilterTime] = useState<"all" | "today" | "week" | "month" | "year">("all");
   const [filterMode, setFilterMode] = useState<string>("all");
   const [filterPlayerId, setFilterPlayerId] = useState<string>("all");
@@ -64,14 +75,16 @@ const StatisticsPage = () => {
   const { session } = useAuth();
 
   const fetchData = useCallback(async () => {
-    const [gamesRes, playersRes, legsRes] = await Promise.all([
+    const [gamesRes, playersRes, legsRes, clipsRes] = await Promise.all([
       supabase.from("games").select("*").order("played_at", { ascending: false }).limit(500),
       supabase.from("players").select("id, name, games_played, games_won, average, high_score, double_rate, emoji").order("average", { ascending: false }),
       supabase.from("game_legs").select("*").order("created_at", { ascending: false }).limit(4000),
+      supabase.from("highlight_clips").select("*").order("created_at", { ascending: false }).limit(200),
     ]);
     if (gamesRes.data) setGames(gamesRes.data as GameRecord[]);
     if (playersRes.data) setPlayers(playersRes.data);
     if (legsRes.data) setGameLegs(legsRes.data as unknown as GameLegRecord[]);
+    if (clipsRes.data) setHighlightClips(clipsRes.data as unknown as HighlightClipRecord[]);
     setLoading(false);
   }, []);
 
@@ -181,6 +194,31 @@ const StatisticsPage = () => {
     return Object.values(advancedByPlayer)
       .reduce((best, p) => (p.checkout.highestCheckout > best.val ? { name: p.name, val: p.checkout.highestCheckout } : best), { name: "-", val: 0 });
   }, [advancedByPlayer]);
+
+  // Cricket-specific stats (MPR, hit rate) — separate from the X01-only checkout/first-9 bucket above.
+  const cricketByPlayer = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const modeById = new Map(games.map((g) => [g.id, g.mode]));
+    const byPlayer: Record<string, { name: string; legs: CricketStats[] }> = {};
+    gameLegs.forEach((leg) => {
+      if (!filteredIds.has(leg.game_id)) return;
+      if (modeById.get(leg.game_id) !== "cricket") return;
+      if (!leg.player_id || !Array.isArray(leg.throws) || leg.throws.length === 0) return;
+      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, legs: [] });
+      bucket.legs.push(computeCricketStats(leg.throws));
+    });
+    const result: Record<string, { name: string; cricket: CricketStats }> = {};
+    Object.entries(byPlayer).forEach(([id, v]) => {
+      result[id] = { name: v.name, cricket: combineCricketStats(v.legs) };
+    });
+    return result;
+  }, [gameLegs, filteredGames, games]);
+
+  const bestMpr = useMemo(() => {
+    return Object.values(cricketByPlayer)
+      .filter((p) => p.cricket.rounds >= 3)
+      .reduce((best, p) => (p.cricket.mpr > best.val ? { name: p.name, val: p.cricket.mpr } : best), { name: "-", val: 0 });
+  }, [cricketByPlayer]);
 
   const resetFilters = () => {
     setFilterTime("all"); setFilterMode("all"); setFilterPlayerId("all"); setFilterBestOf("all");
@@ -332,6 +370,67 @@ const StatisticsPage = () => {
 
   const recentGames = filteredGames.slice(0, 20);
 
+  // Leg-by-leg breakdown per game, from the dart-by-dart game_legs data.
+  const legsByGame = useMemo(() => {
+    const byGame: Record<string, GameLegRecord[]> = {};
+    gameLegs.forEach((leg) => {
+      (byGame[leg.game_id] ||= []).push(leg);
+    });
+    const gameById = new Map(games.map((g) => [g.id, g]));
+    const result: Record<string, { legNumber: number; mode: string; players: { name: string; average: number; first9: number; mpr: number; hitRate: number; points: number; dartsThrown: number; won: boolean }[] }[]> = {};
+    Object.entries(byGame).forEach(([gameId, legs]) => {
+      const mode = gameById.get(gameId)?.mode || "501";
+      const isCricket = mode === "cricket";
+      const byLegNumber: Record<number, GameLegRecord[]> = {};
+      legs.forEach((l) => { (byLegNumber[l.leg_number] ||= []).push(l); });
+      result[gameId] = Object.entries(byLegNumber)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([legNumber, rows]) => ({
+          legNumber: Number(legNumber),
+          mode,
+          players: [...rows].sort((a, b) => a.player_index - b.player_index).map((r) => {
+            const cricket = isCricket ? computeCricketStats(r.throws) : null;
+            return {
+              name: r.player_name,
+              average: average(r.throws),
+              first9: !isCricket ? first9Average(r.throws) : 0,
+              mpr: cricket?.mpr ?? 0,
+              hitRate: cricket?.hitRate ?? 0,
+              points: r.throws.reduce((s, t) => s + t.points, 0),
+              dartsThrown: r.throws.length,
+              won: r.won,
+            };
+          }),
+        }));
+    });
+    return result;
+  }, [gameLegs, games]);
+
+  const filteredClips = useMemo(() => {
+    const now = Date.now();
+    const dayMs = 86_400_000;
+    let cutoff = 0;
+    if (filterTime === "today") cutoff = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+    else if (filterTime === "week") cutoff = now - 7 * dayMs;
+    else if (filterTime === "month") cutoff = now - 30 * dayMs;
+    else if (filterTime === "year") cutoff = now - 365 * dayMs;
+    return highlightClips.filter((c) => {
+      if (cutoff > 0 && new Date(c.created_at).getTime() < cutoff) return false;
+      if (filterPlayerId !== "all" && c.player_id !== filterPlayerId) return false;
+      return true;
+    });
+  }, [highlightClips, filterTime, filterPlayerId]);
+
+  const clipUrl = (path: string) => supabase.storage.from("dart-clips").getPublicUrl(path).data.publicUrl;
+
+  const deleteClip = async (clip: HighlightClipRecord) => {
+    await supabase.storage.from("dart-clips").remove([clip.storage_path]);
+    await supabase.from("highlight_clips").delete().eq("id", clip.id);
+    setHighlightClips((prev) => prev.filter((c) => c.id !== clip.id));
+  };
+
+  const clipKindLabel = (kind: string) => kind === "180" ? "🎯 180" : kind === "checkout" ? "🏆 Checkout" : "🔥 Ton+";
+
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
@@ -341,6 +440,7 @@ const StatisticsPage = () => {
     { key: "players" as const, label: "Spieler", icon: Users },
     { key: "h2h" as const, label: "H2H", icon: Crosshair },
     { key: "history" as const, label: "Spiele", icon: Target },
+    { key: "highlights" as const, label: "Highlights", icon: Video },
   ];
 
   return (
@@ -440,6 +540,7 @@ const StatisticsPage = () => {
               { label: "Meiste Siege", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, color: "text-primary" },
               { label: "Höchstes Finish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, color: "text-accent" },
               { label: "Beste Checkout %", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, color: "text-secondary" },
+              { label: "Beste MPR (Cricket)", value: bestMpr.val ? bestMpr.val.toFixed(2) : "-", sub: bestMpr.name, icon: Target, color: "text-accent" },
             ].map(s => (
               <div key={s.label} className="bg-card rounded-xl p-3 border border-border">
                 <s.icon className={`w-4 h-4 ${s.color} mb-1`} />
@@ -654,6 +755,27 @@ const StatisticsPage = () => {
                 </div>
               )}
 
+              {/* Cricket-specific stats (from dart-by-dart data on Cricket legs) */}
+              {cricketByPlayer[playerDetailStats.player.id] && (
+                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
+                    <Target className="w-4 h-4" /> Cricket
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: "MPR", value: cricketByPlayer[playerDetailStats.player.id].cricket.mpr.toFixed(2), color: "text-primary" },
+                      { label: "Trefferquote", value: `${cricketByPlayer[playerDetailStats.player.id].cricket.hitRate.toFixed(0)}%`, color: "text-secondary" },
+                      { label: "Marks gesamt", value: cricketByPlayer[playerDetailStats.player.id].cricket.marks, color: "text-accent" },
+                    ].map(s => (
+                      <div key={s.label} className="text-center">
+                        <p className={`text-lg font-display ${s.color}`}>{s.value}</p>
+                        <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Average trend */}
               {playerDetailStats.averageTrend.length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-4 mb-4">
@@ -823,24 +945,103 @@ const StatisticsPage = () => {
             <p className="text-sm text-muted-foreground text-center py-4">Noch keine Spiele.</p>
           ) : (
             <div className="space-y-2">
-              {recentGames.map(g => (
-                <div key={g.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <span className="text-xs bg-muted px-2 py-0.5 rounded-md font-mono shrink-0">{g.mode}</span>
-                    <div className="min-w-0">
-                      <span className="text-sm block truncate">
-                        {g.player1_name} <span className="text-muted-foreground">vs</span> {g.player2_name}
-                      </span>
-                      <div className="text-[10px] text-muted-foreground">
-                        Ø {Number(g.player1_average).toFixed(1)} - {Number(g.player2_average).toFixed(1)} · {g.player1_legs_won}:{g.player2_legs_won} Legs
+              {recentGames.map(g => {
+                const legs = legsByGame[g.id];
+                const isExpanded = expandedGameId === g.id;
+                return (
+                  <div key={g.id} className="rounded-lg bg-muted/30 overflow-hidden">
+                    <button
+                      onClick={() => setExpandedGameId(isExpanded ? null : g.id)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded-md font-mono shrink-0">{g.mode}</span>
+                        <div className="min-w-0">
+                          <span className="text-sm block truncate">
+                            {g.player1_name} <span className="text-muted-foreground">vs</span> {g.player2_name}
+                          </span>
+                          <div className="text-[10px] text-muted-foreground">
+                            Ø {Number(g.player1_average).toFixed(1)} - {Number(g.player2_average).toFixed(1)} · {g.player1_legs_won}:{g.player2_legs_won} Legs
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(g.played_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+                          </span>
+                          <span className="text-xs text-secondary font-medium">{g.winner_name} ✓</span>
+                        </div>
+                        {legs && legs.length > 0 && (
+                          isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      legs && legs.length > 0 ? (
+                        <div className="px-3 pb-3 space-y-1.5 border-t border-border/60 pt-2">
+                          {legs.map((leg) => (
+                            <div key={leg.legNumber} className="rounded-md bg-background/60 px-2.5 py-2">
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Leg {leg.legNumber}</p>
+                              <div className="space-y-1">
+                                {leg.players.map((p) => (
+                                  <div key={p.name} className="flex items-center justify-between text-xs">
+                                    <span className={`truncate ${p.won ? "text-secondary font-semibold" : "text-foreground"}`}>
+                                      {p.won && "🏆 "}{p.name}
+                                    </span>
+                                    <span className="text-muted-foreground font-mono shrink-0 ml-2">
+                                      {leg.mode === "cricket"
+                                        ? `MPR ${p.mpr.toFixed(2)} · ${p.hitRate.toFixed(0)}% Trefferquote`
+                                        : `Ø ${p.average.toFixed(1)}${p.first9 > 0 ? ` · F9 ${p.first9.toFixed(1)}` : ""}`}
+                                      {" · "}{p.dartsThrown} Darts
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="px-3 pb-3 pt-1 text-[11px] text-muted-foreground border-t border-border/60">
+                          Keine Leg-Details verfügbar — dieses Spiel wurde vor der Detail-Aufzeichnung gespielt.
+                        </p>
+                      )
+                    )}
                   </div>
-                  <div className="flex flex-col items-end gap-0.5 shrink-0 ml-2">
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(g.played_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
-                    </span>
-                    <span className="text-xs text-secondary font-medium">{g.winner_name} ✓</span>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* HIGHLIGHTS TAB */}
+      {activeTab === "highlights" && (
+        <div className="bg-card rounded-xl border border-border p-4">
+          <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
+            <Video className="w-4 h-4" /> Highlight-Clips
+          </h3>
+          {filteredClips.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Noch keine Highlight-Clips. 180er, Checkouts und Ton-Plus-Aufnahmen aus der Kamera-Erkennung landen hier automatisch.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredClips.map((clip) => (
+                <div key={clip.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
+                  <video src={clipUrl(clip.storage_path)} controls playsInline className="w-full aspect-video bg-black" preload="metadata" />
+                  <div className="p-2.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-display uppercase truncate">{clip.player_name}</span>
+                      <span className="text-[10px] rounded-full bg-accent/15 text-accent px-2 py-0.5 shrink-0 ml-1">{clipKindLabel(clip.kind)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>{clip.points} Punkte · {new Date(clip.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
+                      <button onClick={() => deleteClip(clip)} className="text-muted-foreground hover:text-destructive transition-colors" title="Clip löschen">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

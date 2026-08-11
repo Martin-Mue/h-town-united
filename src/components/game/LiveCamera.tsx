@@ -57,7 +57,7 @@ interface LiveCameraProps {
 /** Imperative handle so the parent can pull a just-recorded clip when a highlight happens. */
 export interface LiveCameraHandle {
   /** The most recently completed rolling-buffer segment (a few seconds of trailing video), or null if none is ready yet. */
-  getRecentClip(): { url: string; mime: string } | null;
+  getRecentClip(): { url: string; mime: string; blob: Blob } | null;
 }
 
 // Rolling video buffer: rather than one long recording, we record back-to-back
@@ -103,8 +103,14 @@ const STILL_AFTER_CHANGE = 4;
 const TICK_MS = 400;
 const SCAN_COOLDOWN_MS = 3200;
 const EMPTY_CONFIRM_SCANS = 2;
-const MIN_DART_CONFIDENCE = 0.6;
-const MIN_OVERALL_CONFIDENCE = 0.55;
+// The client now derives the actual segment/ring geometrically from the tip
+// position (see refineWithCalibration below), so the AI's confidence is really
+// just "is this a real dart tip" — a lower bar than "did I classify it right".
+// Keeping this too strict silently drops real detections, which reads as
+// "nothing found" to the player. Better to show a borderline detection (which
+// they can edit/remove) than to show nothing.
+const MIN_DART_CONFIDENCE = 0.4;
+const MIN_OVERALL_CONFIDENCE = 0.35;
 const EMPTY_BOARD_DELTA = 0.022;
 const DART_POSITION_MATCH = 0.09;
 
@@ -360,7 +366,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     clipChunksRef.current = [];
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(stream, { mimeType: mime });
+      // Modest bitrate — this is a short highlight replay, not archival footage, and
+      // keeping the encoder light avoids competing with the frame-diff/AI-scan pipeline
+      // for CPU on lower-end phones.
+      recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1_000_000 });
     } catch {
       return; // unsupported on this device — no clip feature, scoring still works
     }
@@ -383,7 +392,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     getRecentClip: () => {
       const clip = lastClipRef.current;
       if (!clip) return null;
-      return { url: URL.createObjectURL(clip.blob), mime: clip.mime };
+      return { url: URL.createObjectURL(clip.blob), mime: clip.mime, blob: clip.blob };
     },
   }), []);
 
@@ -824,6 +833,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (data?.board) void updateAutoCalibration(data.board as BoardDetection);
 
       if (aiDarts.length === 0) {
+        // Diagnostic only — helps tell "AI genuinely saw nothing" apart from
+        // "found darts but they got filtered out" when this happens in the field.
+        console.warn("[LiveCamera] scan found 0 darts. Raw AI response:", data);
         setStatus("Keine Darts erkannt · bitte manuell erfassen");
       } else {
         setAccumulated(aiDarts);

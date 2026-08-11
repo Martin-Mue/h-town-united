@@ -101,6 +101,9 @@ const GamePage = () => {
   const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
   const liveCameraRef = useRef<LiveCameraHandle>(null);
   const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
+  // Generated up front (before the game row exists) so highlight clips captured
+  // mid-game can already reference the game they'll end up saved under.
+  const pendingGameIdRef = useRef<string>(crypto.randomUUID());
   const [botThinking, setBotThinking] = useState(false);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const botPlanRef = useRef<{ key: string; darts: DartThrow[]; applied: number } | null>(null);
@@ -174,6 +177,7 @@ const GamePage = () => {
     setTurnStartRemaining(startScore);
     setUndoStack([]);
     botPlanRef.current = null;
+    pendingGameIdRef.current = crypto.randomUUID();
   };
 
   /** Save undo snapshot before each throw */
@@ -377,6 +381,35 @@ const GamePage = () => {
     else handleX01Throw();
   };
 
+  /** Uploads a captured highlight clip in the background — playback already uses the local blob URL, this just makes it browsable later. */
+  const uploadHighlightClip = async (params: {
+    blob: Blob; mime: string; playerName: string; kind: "180" | "checkout" | "ton_plus"; points: number; darts: DetectedDart[];
+  }) => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    try {
+      const ext = params.mime.includes("mp4") ? "mp4" : "webm";
+      const path = `${userId}/${pendingGameIdRef.current}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("dart-clips").upload(path, params.blob, { contentType: params.mime });
+      if (upErr) throw upErr;
+      const playerMatch = dbPlayers.find(p => p.name === params.playerName);
+      const { error: insErr } = await supabase.from("highlight_clips").insert({
+        user_id: userId,
+        game_id: pendingGameIdRef.current,
+        player_id: playerMatch?.id || null,
+        player_name: params.playerName,
+        kind: params.kind,
+        points: params.points,
+        darts: params.darts as any,
+        storage_path: path,
+        mime: params.mime,
+      });
+      if (insErr) throw insErr;
+    } catch (err) {
+      console.error("highlight clip upload failed", err);
+    }
+  };
+
   /**
    * Atomically commit a full round of camera-detected darts.
    */
@@ -541,6 +574,14 @@ const GamePage = () => {
           darts,
           ts: Date.now(),
         });
+        void uploadHighlightClip({
+          blob: clip.blob,
+          mime: clip.mime,
+          playerName: game.players[startIdx].name,
+          kind: roundTotal === 180 ? "180" : checkedOut ? "checkout" : "ton_plus",
+          points: roundTotal,
+          darts,
+        });
       }
     }
   };
@@ -672,6 +713,7 @@ const GamePage = () => {
     };
 
     const { data: insertedGame } = await supabase.from("games").insert({
+      id: pendingGameIdRef.current,
       user_id: session?.user?.id, mode: game.mode, start_score: game.startScore,
       best_of_legs: game.bestOfLegs,
       player1_name: game.players[top1].name, player2_name: top2 !== undefined ? game.players[top2].name : "—",

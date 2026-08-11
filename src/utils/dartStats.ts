@@ -88,3 +88,50 @@ export function combineCheckoutStats(all: CheckoutStats[]): CheckoutStats {
     highestCheckout,
   };
 }
+
+// ─── Cricket ──────────────────────────────────────────────────────────
+const CRICKET_MARK_NUMBERS = [20, 19, 18, 17, 16, 15, 25];
+
+export interface CricketStats {
+  marks: number;
+  rounds: number;
+  /** Marks Per Round — the standard Cricket average (3 darts = 1 round). */
+  mpr: number;
+  /** % of darts that landed on a scoring Cricket number (15-20 or Bull), regardless of multiplier. */
+  hitRate: number;
+  totalDarts: number;
+}
+
+export function computeCricketStats(throws: DartThrow[]): CricketStats {
+  const totalDarts = throws.length;
+  const rounds = Math.ceil(totalDarts / 3);
+  let marks = 0;
+  let hits = 0;
+  for (const t of throws) {
+    if (!CRICKET_MARK_NUMBERS.includes(t.baseValue)) continue;
+    hits++;
+    marks += t.baseValue === 25 ? (t.multiplier === 2 ? 2 : 1) : t.multiplier;
+  }
+  return {
+    marks,
+    rounds,
+    mpr: rounds > 0 ? Math.round((marks / rounds) * 100) / 100 : 0,
+    hitRate: totalDarts > 0 ? Math.round((hits / totalDarts) * 1000) / 10 : 0,
+    totalDarts,
+  };
+}
+
+/** Aggregates Cricket stats across multiple legs. */
+export function combineCricketStats(all: CricketStats[]): CricketStats {
+  const marks = all.reduce((s, c) => s + c.marks, 0);
+  const rounds = all.reduce((s, c) => s + c.rounds, 0);
+  const totalDarts = all.reduce((s, c) => s + c.totalDarts, 0);
+  const hits = all.reduce((s, c) => s + Math.round((c.hitRate / 100) * c.totalDarts), 0);
+  return {
+    marks,
+    rounds,
+    mpr: rounds > 0 ? Math.round((marks / rounds) * 100) / 100 : 0,
+    hitRate: totalDarts > 0 ? Math.round((hits / totalDarts) * 1000) / 10 : 0,
+    totalDarts,
+  };
+}

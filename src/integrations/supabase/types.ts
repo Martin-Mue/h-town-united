@@ -191,6 +191,63 @@ export type Database = {
           },
         ]
       }
+      highlight_clips: {
+        Row: {
+          created_at: string
+          darts: Json
+          game_id: string | null
+          id: string
+          kind: string
+          mime: string
+          player_id: string | null
+          player_name: string
+          points: number
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          darts?: Json
+          game_id?: string | null
+          id?: string
+          kind: string
+          mime?: string
+          player_id?: string | null
+          player_name: string
+          points?: number
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          darts?: Json
+          game_id?: string | null
+          id?: string
+          kind?: string
+          mime?: string
+          player_id?: string | null
+          player_name?: string
+          points?: number
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "highlight_clips_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "highlight_clips_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           ai_portrait_url: string | null
