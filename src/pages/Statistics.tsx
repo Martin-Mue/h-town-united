@@ -16,7 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import {
-  first9Average, average, highestVisit, computeCheckoutStats, combineCheckoutStats,
+  first9Average, average, highestVisit, count180s, computeCheckoutStats, combineCheckoutStats,
   computeCricketStats, combineCricketStats,
   type DartThrow, type CheckoutStats, type CricketStats,
 } from "@/utils/dartStats";
@@ -71,7 +71,7 @@ const StatisticsPage = () => {
   const [cleanupDays, setCleanupDays] = useState("90");
   const [cleaningUpClips, setCleaningUpClips] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate" | "checkout">("average");
+  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate" | "checkout" | "points">("average");
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
@@ -318,14 +318,15 @@ const StatisticsPage = () => {
       if (sortBy === "checkout") {
         return (advancedByPlayer[b.id]?.checkout.percentage ?? 0) - (advancedByPlayer[a.id]?.checkout.percentage ?? 0);
       }
+      if (sortBy === "points") return b.games_won * 2 - a.games_won * 2;
       return Number(b.double_rate) - Number(a.double_rate);
     });
   }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive]);
 
   const exportLeaderboardCsv = () => {
-    const header = ["Platz", "Name", "Spiele", "Siege", "Average", "Highscore", "Doppel %"];
+    const header = ["Platz", "Name", "Spiele", "Siege", "Punkte", "Average", "Highscore", "Doppel %"];
     const rows = leaderboard.map((p, i) => [
-      i + 1, p.name, p.games_played, p.games_won,
+      i + 1, p.name, p.games_played, p.games_won, p.games_won * 2,
       Number(p.average).toFixed(1), p.high_score, Number(p.double_rate).toFixed(0),
     ]);
     const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
@@ -409,7 +410,21 @@ const StatisticsPage = () => {
       else opponents[opp].losses++;
     });
 
-    return { player, winRate, averageTrend, currentStreak, bestStreak, recentForm, bestGameAvg, worstGameAvg, opponents, totalGames: playerGames.length };
+    // Nemesis / favorite opponent — needs at least 2 games against them so a single fluke
+    // result doesn't get crowned "0% win rate against X" or "100% against Y".
+    const qualifyingOpponents = Object.entries(opponents).filter(([, r]) => r.wins + r.losses >= 2);
+    const nemesis = qualifyingOpponents.reduce<{ name: string; losses: number; wins: number } | null>((worst, [name, r]) => {
+      const rate = r.losses / (r.wins + r.losses);
+      const worstRate = worst ? worst.losses / (worst.losses + worst.wins) : -1;
+      return rate > worstRate ? { name, losses: r.losses, wins: r.wins } : worst;
+    }, null);
+    const favoriteOpponent = qualifyingOpponents.reduce<{ name: string; losses: number; wins: number } | null>((best, [name, r]) => {
+      const rate = r.wins / (r.wins + r.losses);
+      const bestRate = best ? best.wins / (best.wins + best.losses) : -1;
+      return rate > bestRate ? { name, losses: r.losses, wins: r.wins } : best;
+    }, null);
+
+    return { player, winRate, averageTrend, currentStreak, bestStreak, recentForm, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: playerGames.length };
   }, [selectedPlayerId, filteredGames, players]);
 
   // Throw heatmap — board-relative tip coordinates (boardU/boardV) are camera-framing-
@@ -429,6 +444,32 @@ const StatisticsPage = () => {
     });
     return points;
   }, [selectedPlayerId, filteredGames, gameLegs]);
+
+  // Achievements — derived entirely from data already loaded (games/legs/players),
+  // no separate table: unlocking is just "does the existing stat cross this threshold".
+  const playerAchievements = useMemo(() => {
+    if (!selectedPlayerId || !playerDetailStats) return [];
+    const player = playerDetailStats.player;
+    const myLegs = gameLegs.filter((l) => l.player_id === selectedPlayerId && Array.isArray(l.throws));
+    const total180s = myLegs.reduce((s, l) => s + count180s(l.throws as unknown as DartThrow[]), 0);
+    const nineDarters = myLegs.filter((l) => l.won && l.throws.length === 9).length;
+    const highestCheckout = advancedByPlayer[player.id]?.checkout.highestCheckout ?? 0;
+    const bestMpr = cricketByPlayer[player.id]?.cricket.mpr ?? 0;
+
+    const defs: { icon: string; title: string; desc: string; unlocked: boolean }[] = [
+      { icon: "🎮", title: "Erstes Spiel", desc: "Das erste Spiel gespielt", unlocked: player.games_played >= 1 },
+      { icon: "💯", title: "100 Spiele", desc: "100 Spiele gespielt", unlocked: player.games_played >= 100 },
+      { icon: "🎯", title: "Erster 180er", desc: "Einen 180er geworfen", unlocked: total180s >= 1 },
+      { icon: "🔥", title: "180er-Serie", desc: "10× die 180 getroffen", unlocked: total180s >= 10 },
+      { icon: "⚡", title: "Siegesserie", desc: "5 Spiele in Folge gewonnen", unlocked: playerDetailStats.bestStreak >= 5 },
+      { icon: "🚀", title: "Ton-Finish", desc: "Ein Checkout von 100+ geworfen", unlocked: highestCheckout >= 100 },
+      { icon: "🐐", title: "170er-Finish", desc: "Das höchstmögliche Checkout: 170", unlocked: highestCheckout >= 170 },
+      { icon: "🎳", title: "Perfektes Leg", desc: "Ein Leg in genau 9 Darts gewonnen", unlocked: nineDarters >= 1 },
+      { icon: "📈", title: "Klub-Elite", desc: "Ø 60+ über die Karriere", unlocked: Number(player.average) >= 60 },
+      { icon: "🦾", title: "Cricket-Meister", desc: "3.0+ MPR in einem Spiel", unlocked: bestMpr >= 3 },
+    ];
+    return defs;
+  }, [selectedPlayerId, playerDetailStats, gameLegs, advancedByPlayer, cricketByPlayer]);
 
   const h2hRecords = useMemo(() => {
     if (!compareP1 || !compareP2) return null;
@@ -781,6 +822,7 @@ const StatisticsPage = () => {
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
                   <SelectTrigger className="w-[140px] h-8 text-xs bg-muted border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
+                    <SelectItem value="points">Punkte (Saison)</SelectItem>
                     <SelectItem value="average">Ø Average</SelectItem>
                     <SelectItem value="games_won">Siege</SelectItem>
                     <SelectItem value="win_rate">Siegquote %</SelectItem>
@@ -792,7 +834,9 @@ const StatisticsPage = () => {
               </div>
             </div>
             <p className="text-[10px] text-muted-foreground mb-3">
-              {filtersActive ? "Werte für den aktuell gefilterten Zeitraum/Modus." : "Lebenszeit-Werte über alle Spiele."}
+              {sortBy === "points"
+                ? "2 Punkte pro Sieg — als Saison-Tabelle nutzbar, wenn oben eine Saison ausgewählt ist."
+                : filtersActive ? "Werte für den aktuell gefilterten Zeitraum/Modus." : "Lebenszeit-Werte über alle Spiele."}
             </p>
             {leaderboard.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Noch keine Spieler.</p>
@@ -804,6 +848,7 @@ const StatisticsPage = () => {
                     sortBy === "games_won" ? p.games_won : sortBy === "high_score" ? p.high_score :
                     sortBy === "win_rate" ? `${winRate}%` :
                     sortBy === "checkout" ? `${(advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0)}%` :
+                    sortBy === "points" ? `${p.games_won * 2} Pkt` :
                     `${Number(p.double_rate).toFixed(0)}%`;
                   return (
                     <button key={p.id} onClick={() => { setSelectedPlayerId(p.id); setActiveTab("players"); }}
@@ -863,6 +908,27 @@ const StatisticsPage = () => {
                   ))}
                 </div>
               </div>
+
+              {/* Achievements */}
+              {playerAchievements.length > 0 && (
+                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
+                    <Award className="w-4 h-4" /> Erfolge
+                    <span className="text-[10px] normal-case text-muted-foreground/70">
+                      ({playerAchievements.filter((a) => a.unlocked).length}/{playerAchievements.length})
+                    </span>
+                  </h3>
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                    {playerAchievements.map((a) => (
+                      <div key={a.title} title={a.desc}
+                        className={`rounded-lg border p-2 text-center transition-opacity ${a.unlocked ? "border-accent/40 bg-accent/10" : "border-border bg-muted/20 opacity-40"}`}>
+                        <p className="text-xl">{a.icon}</p>
+                        <p className="text-[9px] mt-0.5 leading-tight">{a.title}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Best/worst game */}
               <div className="grid grid-cols-2 gap-3 mb-4">
@@ -976,6 +1042,30 @@ const StatisticsPage = () => {
                         <span className="text-muted-foreground">{f.date}</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Nemesis / favorite opponent */}
+              {(playerDetailStats.nemesis || playerDetailStats.favoriteOpponent) && (
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-card rounded-xl border border-destructive/30 p-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">😈 Nemesis</p>
+                    {playerDetailStats.nemesis ? (
+                      <>
+                        <p className="text-lg font-display text-destructive truncate">{playerDetailStats.nemesis.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{playerDetailStats.nemesis.wins}W-{playerDetailStats.nemesis.losses}L gegen sie</p>
+                      </>
+                    ) : <p className="text-xs text-muted-foreground">Noch keine Daten</p>}
+                  </div>
+                  <div className="bg-card rounded-xl border border-secondary/30 p-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">🎯 Lieblingsgegner</p>
+                    {playerDetailStats.favoriteOpponent ? (
+                      <>
+                        <p className="text-lg font-display text-secondary truncate">{playerDetailStats.favoriteOpponent.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{playerDetailStats.favoriteOpponent.wins}W-{playerDetailStats.favoriteOpponent.losses}L gegen sie</p>
+                      </>
+                    ) : <p className="text-xs text-muted-foreground">Noch keine Daten</p>}
                   </div>
                 </div>
               )}
