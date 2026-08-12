@@ -137,7 +137,12 @@ const TournamentSeriesPage = () => {
         <div className="bg-card border border-border rounded-xl p-4">
           <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Turniere ({seriesTourneys.length})</h3>
           {seriesTourneys.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Noch keine Turniere zugeordnet. Wähle bei der Turniererstellung diese Serie aus.</p>
+            <div className="text-center py-4">
+              <p className="text-sm text-muted-foreground mb-3">Noch keine Turniere zugeordnet. Wähle bei der Turniererstellung diese Serie aus.</p>
+              <Button asChild size="sm">
+                <Link to="/tournament">Turnier erstellen</Link>
+              </Button>
+            </div>
           ) : (
             <div className="space-y-2">
               {seriesTourneys.map((t) => (

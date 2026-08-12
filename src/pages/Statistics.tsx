@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -70,6 +71,7 @@ const StatisticsPage = () => {
   const [highlightClips, setHighlightClips] = useState<HighlightClipRecord[]>([]);
   const [cleanupDays, setCleanupDays] = useState("90");
   const [cleaningUpClips, setCleaningUpClips] = useState(false);
+  const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate" | "checkout" | "points">("average");
   const [compareP1, setCompareP1] = useState<string>("");
@@ -560,9 +562,15 @@ const StatisticsPage = () => {
   const clipUrl = (path: string) => supabase.storage.from("dart-clips").getPublicUrl(path).data.publicUrl;
 
   const deleteClip = async (clip: HighlightClipRecord) => {
-    await supabase.storage.from("dart-clips").remove([clip.storage_path]);
-    await supabase.from("highlight_clips").delete().eq("id", clip.id);
-    setHighlightClips((prev) => prev.filter((c) => c.id !== clip.id));
+    if (deletingClipId) return;
+    setDeletingClipId(clip.id);
+    try {
+      await supabase.storage.from("dart-clips").remove([clip.storage_path]);
+      await supabase.from("highlight_clips").delete().eq("id", clip.id);
+      setHighlightClips((prev) => prev.filter((c) => c.id !== clip.id));
+    } finally {
+      setDeletingClipId(null);
+    }
   };
 
   const clipKindLabel = (kind: string) => kind === "180" ? "🎯 180" : kind === "checkout" ? "🏆 Checkout" : "🔥 Ton+";
@@ -839,7 +847,10 @@ const StatisticsPage = () => {
                 : filtersActive ? "Werte für den aktuell gefilterten Zeitraum/Modus." : "Lebenszeit-Werte über alle Spiele."}
             </p>
             {leaderboard.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Noch keine Spieler.</p>
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground mb-3">Noch keine Spieler.</p>
+                <Button asChild size="sm"><Link to="/players">Mitglied hinzufügen</Link></Button>
+              </div>
             ) : (
               <div className="space-y-1">
                 {leaderboard.map((p, i) => {
@@ -1188,7 +1199,10 @@ const StatisticsPage = () => {
             <Target className="w-4 h-4" /> Spielverlauf
           </h3>
           {recentGames.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Noch keine Spiele.</p>
+            <div className="text-center py-4">
+              <p className="text-sm text-muted-foreground mb-3">Noch keine Spiele.</p>
+              <Button asChild size="sm"><Link to="/game">Spiel starten</Link></Button>
+            </div>
           ) : (
             <div className="space-y-2">
               {recentGames.map(g => {
@@ -1322,7 +1336,9 @@ const StatisticsPage = () => {
                     )}
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                       <span>{clip.points} Punkte · {new Date(clip.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
-                      <button onClick={() => deleteClip(clip)} className="text-muted-foreground hover:text-destructive transition-colors" title="Clip löschen" aria-label="Clip löschen">
+                      <button onClick={() => deleteClip(clip)} disabled={deletingClipId === clip.id}
+                        className="p-2 -m-2 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
+                        title="Clip löschen" aria-label="Clip löschen">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>

@@ -197,8 +197,10 @@ const AdminPage = () => {
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteUser(u)}>Entfernen</AlertDialogAction>
+                            <AlertDialogCancel disabled={busyId === u.user_id}>Abbrechen</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteUser(u)} disabled={busyId === u.user_id}>
+                              {busyId === u.user_id ? "Entfernt…" : "Entfernen"}
+                            </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>

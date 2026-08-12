@@ -1279,9 +1279,9 @@ const TournamentPage = () => {
                     <div key={p} className="flex items-center gap-2 bg-card border border-border rounded-lg px-2 py-1.5 text-sm">
                       <span className="w-6 text-center font-mono text-xs text-muted-foreground">{i + 1}</span>
                       <span className="flex-1 truncate">{p}</span>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === 0} onClick={() => movePlayer(i, -1)} title="Nach oben" aria-label={`${p} nach oben verschieben`}><ArrowUp className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={i === players.length - 1} onClick={() => movePlayer(i, 1)} title="Nach unten" aria-label={`${p} nach unten verschieben`}><ArrowDown className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removePlayer(p)} title="Entfernen" aria-label={`${p} entfernen`}><Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled={i === 0} onClick={() => movePlayer(i, -1)} title="Nach oben" aria-label={`${p} nach oben verschieben`}><ArrowUp className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled={i === players.length - 1} onClick={() => movePlayer(i, 1)} title="Nach unten" aria-label={`${p} nach unten verschieben`}><ArrowDown className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => removePlayer(p)} title="Entfernen" aria-label={`${p} entfernen`}><Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></Button>
                     </div>
                   ))}
                   <p className="text-[11px] text-muted-foreground pt-1">

@@ -970,7 +970,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             Auto-Scoring
           </span>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7" title="Kamera schließen" aria-label="Kamera schließen">
+        <Button variant="ghost" size="icon" onClick={onClose} className="h-9 w-9" title="Kamera schließen" aria-label="Kamera schließen">
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -1152,10 +1152,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[11px]">
           <span className="text-destructive">Scan hat keine Darts gefunden.</span>
           <div className="flex shrink-0 gap-1.5">
-            <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => { setScanFailed(false); manualScan(); }}>
+            <Button size="sm" variant="outline" className="h-9 px-3 text-[11px]" onClick={() => { setScanFailed(false); manualScan(); }}>
               Erneut scannen
             </Button>
-            <Button size="sm" variant="default" className="h-6 px-2 text-[11px]" onClick={onRequestManualEntry}>
+            <Button size="sm" variant="default" className="h-9 px-3 text-[11px]" onClick={onRequestManualEntry}>
               Manuell erfassen
             </Button>
           </div>
@@ -1253,7 +1253,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-9 w-9"
                 onClick={() => removeDart(i)}
                 title="Dart entfernen"
               >
