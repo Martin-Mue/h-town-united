@@ -96,3 +96,14 @@ export function playRoundCommittedSound() {
   setTimeout(() => playTone(990, 0.12, "sine", 0.12), 70);
   vibrate([40, 30, 60]);
 }
+
+/** Walk-on intro sting — a short rising build-up into a bright announce chord. */
+export function playWalkonSound() {
+  [200, 220, 245, 270].forEach((freq, i) => {
+    setTimeout(() => playTone(freq, 0.08, "square", 0.06), i * 90);
+  });
+  setTimeout(() => {
+    [523, 659, 784].forEach((freq) => playTone(freq, 0.4, "sine", 0.13));
+  }, 420);
+  vibrate([40, 40, 40, 40, 40, 40, 150]);
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw } from "lucide-react";
+import QrCodeDialog from "@/components/QrCodeDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1445,9 +1446,22 @@ const TournamentPage = () => {
               {activeTournament.public_view ? "Live an" : "Live-Ansicht"}
             </Button>
             {activeTournament.public_view && activeTournament.public_slug && (
-              <Button variant="outline" size="sm" onClick={copyPublicLink} className="gap-1" title="Link kopieren">
-                <Copy className="w-3.5 h-3.5" /> Link
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={copyPublicLink} className="gap-1" title="Link kopieren">
+                  <Copy className="w-3.5 h-3.5" /> Link
+                </Button>
+                <QrCodeDialog
+                  url={`${window.location.origin}/live/${activeTournament.public_slug}`}
+                  title="Live-Ansicht"
+                  description="Scannen führt direkt zur öffentlichen Live-Ansicht — ohne Login oder Registrierung."
+                  downloadName={`live-${activeTournament.public_slug}`}
+                  trigger={
+                    <Button variant="outline" size="sm" className="gap-1" title="QR-Code anzeigen">
+                      <QrCode className="w-3.5 h-3.5" /> QR
+                    </Button>
+                  }
+                />
+              </>
             )}
             {!hasStarted(activeTournament) && (
               <Button variant="outline" size="sm" onClick={() => editTournament(activeTournament)}>
@@ -1466,9 +1480,39 @@ const TournamentPage = () => {
               <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" />
               <span className="text-muted-foreground">Beamer-Link:</span>
               <code className="font-mono text-secondary truncate">{window.location.origin}/live/{activeTournament.public_slug}</code>
-              <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1 ml-auto shrink-0" onClick={copyPublicLink}>
-                <Copy className="w-3 h-3" /> Kopieren
-              </Button>
+              <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1" onClick={copyPublicLink}>
+                  <Copy className="w-3 h-3" /> Kopieren
+                </Button>
+                <QrCodeDialog
+                  url={`${window.location.origin}/live/${activeTournament.public_slug}`}
+                  title="Live-Ansicht"
+                  description="Scannen führt direkt zur öffentlichen Live-Ansicht — ohne Login oder Registrierung. Zum Ausdrucken oder Anzeigen am Eingang."
+                  downloadName={`live-${activeTournament.public_slug}`}
+                  trigger={
+                    <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1">
+                      <QrCode className="w-3 h-3" /> QR-Code
+                    </Button>
+                  }
+                />
+              </div>
+            </div>
+            <div className="mt-1.5 bg-card border border-border rounded-xl px-4 py-2 text-[11px] flex items-center gap-2 text-muted-foreground">
+              <RefreshCcw className="w-3 h-3 shrink-0" />
+              <span>Für einen Bildschirm, den niemand mehr bedient: dieser Link startet direkt im automatischen Wechsel zwischen Turnierbaum und Board-Übersicht.</span>
+              <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                <QrCodeDialog
+                  url={`${window.location.origin}/live/${activeTournament.public_slug}?view=auto`}
+                  title="Bildschirm-Modus"
+                  description="Startet direkt im automatischen Wechsel zwischen Turnierbaum/Liste und Board-Übersicht (alle 15s) — ideal für einen TV oder Beamer, den niemand mehr bedient."
+                  downloadName={`live-auto-${activeTournament.public_slug}`}
+                  trigger={
+                    <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1">
+                      <QrCode className="w-3 h-3" /> QR
+                    </Button>
+                  }
+                />
+              </div>
             </div>
           </div>
         )}

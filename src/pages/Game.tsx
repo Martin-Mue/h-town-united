@@ -9,6 +9,8 @@ import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import LiveCamera, { type DetectedDart, type LiveCameraHandle } from "@/components/game/LiveCamera";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
+import ConfettiBurst from "@/components/ConfettiBurst";
+import AnimatedScore from "@/components/AnimatedScore";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, TeamSlot, BotLevel } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,7 +36,7 @@ const BOT_PROFILES: Record<BotLevel, { name: string; average: string }> = {
 };
 import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
-  playVictorySound, playTonPlusSound, playTurnSwitchSound,
+  playVictorySound, playTonPlusSound, playTurnSwitchSound, playWalkonSound,
 } from "@/utils/sounds";
 import { speakSequence, buildRoundAnnouncement } from "@/utils/speech";
 import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
@@ -45,6 +47,10 @@ import { enqueueGameSave } from "@/lib/offlineQueue";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
+const WALKON_PREF_KEY = "dart-walkon-enabled";
+/** How long the walk-on intro stays up before auto-advancing (ms) — also the window
+ *  during which a tap skips straight to the match. */
+const WALKON_DURATION_MS = 3200;
 const MAX_PLAYERS = 8;
 
 function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, players: PlayerSlot[], teams?: TeamSlot[]): LegState {
@@ -88,7 +94,7 @@ interface UndoSnapshot {
 const DEFAULT_NAMES = Array.from({ length: MAX_PLAYERS }, (_, i) => `Spieler ${i + 1}`);
 
 const GamePage = () => {
-  const [phase, setPhase] = useState<"setup" | "warmup" | "playing" | "postGame">("setup");
+  const [phase, setPhase] = useState<"setup" | "warmup" | "walkon" | "playing" | "postGame">("setup");
   const [mode, setMode] = useState<GameMode>("501");
   const [bestOfLegs, setBestOfLegs] = useState(1);
   const [maxRoundsX01, setMaxRoundsX01] = useState<number>(0); // 0 = unlimited
@@ -116,6 +122,11 @@ const GamePage = () => {
     const raw = window.localStorage.getItem(SPEECH_PREF_KEY);
     return raw ? raw !== "false" : true;
   });
+  const [walkonEnabled, setWalkonEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const raw = window.localStorage.getItem(WALKON_PREF_KEY);
+    return raw ? raw !== "false" : true;
+  });
   const [game, setGame] = useState<GameState | null>(null);
   const [selectedScore, setSelectedScore] = useState(20);
   const [multiplier, setMultiplier] = useState(1);
@@ -134,6 +145,15 @@ const GamePage = () => {
   const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
   const liveCameraRef = useRef<LiveCameraHandle>(null);
   const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
+  const [confettiKey, setConfettiKey] = useState<number | null>(null);
+  /** 180s and checkouts get a quick confetti burst — the same falling-piece look as the
+   *  tournament trophy ceremony, minus the trophy. Not gated by soundEnabled since it's a
+   *  separate visual layer, not a sound. */
+  const triggerConfetti = () => {
+    const key = Date.now();
+    setConfettiKey(key);
+    setTimeout(() => setConfettiKey((k) => (k === key ? null : k)), 3000);
+  };
   // While the camera is on, the game view becomes a fixed, non-scrolling window — the
   // manual number pad isn't needed for scoring then, so it's tucked behind this toggle.
   const [showManualInput, setShowManualInput] = useState(false);
@@ -174,6 +194,11 @@ const GamePage = () => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(SPEECH_PREF_KEY, JSON.stringify(speechEnabled));
   }, [speechEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(WALKON_PREF_KEY, JSON.stringify(walkonEnabled));
+  }, [walkonEnabled]);
 
   useEffect(() => {
     return () => {
@@ -249,9 +274,12 @@ const GamePage = () => {
       setWarmupMultiplier(1);
       setPhase("warmup");
     } else {
-      setPhase("playing");
+      enterMatch();
     }
   };
+
+  /** Goes from setup/warm-up into the actual match — via the walk-on intro if enabled. */
+  const enterMatch = () => setPhase(walkonEnabled ? "walkon" : "playing");
 
   // ─── warm-up (pre-match, doesn't touch game/stats) ──────────────────
   useEffect(() => {
@@ -261,8 +289,16 @@ const GamePage = () => {
   }, [phase, warmupRemaining]);
 
   useEffect(() => {
-    if (phase === "warmup" && warmupRemaining <= 0) setPhase("playing");
+    if (phase === "warmup" && warmupRemaining <= 0) enterMatch();
   }, [phase, warmupRemaining]);
+
+  // ─── walk-on intro (pre-match, doesn't touch game/stats) ────────────
+  useEffect(() => {
+    if (phase !== "walkon") return;
+    if (soundEnabled) playWalkonSound();
+    const t = setTimeout(() => setPhase("playing"), WALKON_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   const submitWarmupDart = () => {
     const pts = warmupValue === 0 ? 0 : (warmupValue === 25 && warmupMultiplier === 3 ? 0 : warmupValue * warmupMultiplier);
@@ -404,6 +440,7 @@ const GamePage = () => {
       setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
       const legsWon = game.legsWon[teamIdx] + 1;
       const legsToWin = Math.ceil(game.bestOfLegs / 2);
+      triggerConfetti();
       if (soundEnabled) {
         if (legsWon >= legsToWin) {
           setTimeout(() => playVictorySound(), 200);
@@ -414,6 +451,7 @@ const GamePage = () => {
     } else if (newDartsThisRound >= 3) {
       const roundThrows = game.currentLeg.throws[idx].slice(-2);
       const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0) + effectivePoints;
+      if (roundTotal === 180) triggerConfetti();
       if (soundEnabled) {
         if (roundTotal === 180) setTimeout(() => play180Sound(), 100);
         else if (roundTotal >= 100) setTimeout(() => playTonPlusSound(), 100);
@@ -665,6 +703,7 @@ const GamePage = () => {
       window.setTimeout(() => speakSequence(parts), 160);
     }
 
+    if (!busted && (checkedOut || roundTotal === 180)) triggerConfetti();
     if (soundEnabled) {
       if (checkedOut) {
         setTimeout(() => playCheckoutSound(), 100);
@@ -1114,6 +1153,14 @@ const GamePage = () => {
             )}
           </div>
 
+          <div className="flex items-center justify-between gap-3 bg-card rounded-lg border border-border px-4 py-3">
+            <div className="min-w-0">
+              <Label htmlFor="walkon-mode" className="text-sm">Walk-on-Intro</Label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Kurze Namens-Einblendung mit Sound vor dem ersten Wurf.</p>
+            </div>
+            <Switch id="walkon-mode" checked={walkonEnabled} onCheckedChange={setWalkonEnabled} />
+          </div>
+
           <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
             <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? "Aufwärmen starten" : "Spiel starten"}
           </Button>
@@ -1157,9 +1204,56 @@ const GamePage = () => {
           onSubmit={submitWarmupDart}
         />
 
-        <Button onClick={() => setPhase("playing")} className="w-full mt-4 font-display uppercase text-lg py-6">
+        <Button onClick={enterMatch} className="w-full mt-4 font-display uppercase text-lg py-6">
           <Target className="w-5 h-5 mr-2" /> Los geht's
         </Button>
+      </div>
+    );
+  }
+
+  // ─── WALK-ON INTRO ──────────────────────────────────
+  if (phase === "walkon" && game) {
+    const names = game.teams ? game.teams.map((t) => t.name) : game.players.map((p) => p.name);
+    const isDuel = names.length === 2;
+    return (
+      <div
+        onClick={() => setPhase("playing")}
+        className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-6 cursor-pointer overflow-hidden"
+      >
+        <div className="absolute inset-0 gradient-hero" />
+        <p className="relative text-[11px] uppercase tracking-[0.4em] text-muted-foreground mb-6 animate-slide-up">
+          Auf die Bühne
+        </p>
+        {isDuel ? (
+          <div className="relative flex flex-col items-center gap-3 w-full max-w-md">
+            <h2 className="font-display text-4xl sm:text-5xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full">
+              {names[0]}
+            </h2>
+            <span className="font-display text-lg text-accent animate-scale-in" style={{ animationDelay: "150ms" }}>VS</span>
+            <h2
+              className="font-display text-4xl sm:text-5xl uppercase text-secondary text-center glow-green animate-scale-in truncate max-w-full"
+              style={{ animationDelay: "300ms" }}
+            >
+              {names[1]}
+            </h2>
+          </div>
+        ) : (
+          <div className="relative flex flex-col items-center gap-2 w-full max-w-md">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Es spielen</p>
+            {names.map((name, i) => (
+              <h2
+                key={i}
+                className="font-display text-2xl sm:text-3xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full"
+                style={{ animationDelay: `${i * 120}ms` }}
+              >
+                {name}
+              </h2>
+            ))}
+          </div>
+        )}
+        <p className="relative text-[10px] uppercase tracking-widest text-muted-foreground mt-8 animate-slide-up" style={{ animationDelay: "400ms" }}>
+          Antippen zum Überspringen
+        </p>
       </div>
     );
   }
@@ -1231,6 +1325,7 @@ const GamePage = () => {
     <div className={cameraEnabled
       ? "fixed inset-0 z-40 bg-background flex flex-col animate-slide-up"
       : "container py-4 animate-slide-up max-w-lg mx-auto"}>
+      {confettiKey !== null && <ConfettiBurst triggerKey={confettiKey} />}
       {/* Winner overlay */}
       {game.isFinished && (
         <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto py-8">
@@ -1353,7 +1448,7 @@ const GamePage = () => {
                 <p className={`text-4xl font-display mt-1 transition-colors ${
                   showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
                 }`}>
-                  {isCricket ? card.cricketPoints : previewRemaining}
+                  <AnimatedScore value={isCricket ? card.cricketPoints : previewRemaining} />
                 </p>
               )}
               {showPreview && (

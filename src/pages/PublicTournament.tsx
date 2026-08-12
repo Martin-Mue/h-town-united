@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine } from "lucide-react";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw } from "lucide-react";
 import { roundLabelFor, currentBoardSchedule, type Match } from "@/utils/tournament";
+import QrCodeDialog from "@/components/QrCodeDialog";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
 
@@ -443,14 +444,29 @@ const BoardOverview = ({
         <p className="text-[clamp(0.7rem,1.2vw,0.9rem)] uppercase tracking-[0.3em] text-primary flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary animate-pulse" /> Board-Übersicht · Live
         </p>
-        <button
-          onClick={toggleFullscreen}
-          className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1.5"
-          title={isFullscreen ? "Vollbild verlassen" : "Vollbild (für TV/Beamer)"}
-        >
-          {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-          {isFullscreen ? "Vollbild verlassen" : "Vollbild"}
-        </button>
+        <div className="flex items-center gap-1.5">
+          {typeof window !== "undefined" && (
+            <QrCodeDialog
+              url={`${window.location.origin}${window.location.pathname}?view=boards`}
+              title="Board-Übersicht"
+              description="Auf dem eigenen Handy weiterverfolgen — scannen öffnet direkt diese Ansicht, ohne Login."
+              downloadName="board-uebersicht"
+              trigger={
+                <button className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1.5" title="QR-Code zum Mitverfolgen">
+                  <QrCodeIcon className="w-3.5 h-3.5" /> QR
+                </button>
+              }
+            />
+          )}
+          <button
+            onClick={toggleFullscreen}
+            className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1.5"
+            title={isFullscreen ? "Vollbild verlassen" : "Vollbild (für TV/Beamer)"}
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            {isFullscreen ? "Vollbild verlassen" : "Vollbild"}
+          </button>
+        </div>
       </div>
 
       {now.length === 0 ? (
@@ -507,6 +523,14 @@ const BoardOverview = ({
   );
 };
 
+// A device showing this page (a TV, a tablet propped up at the entrance) often never
+// gets touched again after setup, so the chosen view/rotation has to survive a reload on
+// its own — persisted per-device in localStorage, with the URL's `?view=` taking priority
+// so one link/QR code can pin a specific screen to a specific view regardless of history.
+const VIEW_PREF_KEY = "dart-live-view-pref";
+const AUTO_ROTATE_PREF_KEY = "dart-live-autorotate-pref";
+const AUTO_ROTATE_MS = 15000;
+
 const PublicTournamentPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const [t, setT] = useState<TournamentRow | null>(null);
@@ -515,20 +539,70 @@ const PublicTournamentPage = () => {
   const [flash, setFlash] = useState<Match | null>(null);
   const seenResults = useRef<Set<string> | null>(null);
   const flashTimer = useRef<number | null>(null);
-  const [view, setView] = useState<"tree" | "list" | "boards">(() => (typeof window !== "undefined" && window.innerWidth < 900 ? "list" : "tree"));
+  // A QR code can deep-link straight to a specific view (?view=boards|tree|list|auto) —
+  // handy for a TV/projector screen's own corner QR, or one printed specifically for a
+  // board. Falls back to this device's last manually-picked view, then the usual default.
+  const urlView = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
+  const hadExplicitViewPref =
+    urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "auto" ||
+    (typeof window !== "undefined" && !!window.localStorage.getItem(VIEW_PREF_KEY));
+  const [view, setViewRaw] = useState<"tree" | "list" | "boards">(() => {
+    if (typeof window === "undefined") return "tree";
+    if (urlView === "boards" || urlView === "tree" || urlView === "list") return urlView;
+    const stored = window.localStorage.getItem(VIEW_PREF_KEY);
+    if (stored === "boards" || stored === "tree" || stored === "list") return stored;
+    return window.innerWidth < 900 ? "list" : "tree";
+  });
+  const [autoRotate, setAutoRotateRaw] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (urlView === "auto") return true;
+    if (urlView) return false; // an explicit non-auto view param always wins over a stored rotation preference
+    return window.localStorage.getItem(AUTO_ROTATE_PREF_KEY) === "1";
+  });
+  // Remembers which bracket view (tree/list) to rotate back to — auto-rotation alternates
+  // between "the bracket" and "boards" rather than cycling tree→list→boards→tree, so each
+  // screen stays up long enough to actually read.
+  const bracketViewRef = useRef<"tree" | "list">(view === "list" ? "list" : "tree");
   const autoViewSetRef = useRef(false);
 
-  // A 32+ player mirrored tree can't stay legible at any scale that also fits a
-  // screen — default those straight to the always-readable round list. Runs once,
-  // so it never overrides a view the user picked by hand afterwards.
+  /** User-driven view change — persists the pick and turns off auto-rotate (picking a
+   *  view by hand means "show me this now", not "keep rotating"). */
+  const selectView = (next: "tree" | "list" | "boards") => {
+    if (next !== "boards") bracketViewRef.current = next;
+    setViewRaw(next);
+    setAutoRotateRaw(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(VIEW_PREF_KEY, next);
+      window.localStorage.setItem(AUTO_ROTATE_PREF_KEY, "0");
+    }
+  };
+
+  const toggleAutoRotate = () => {
+    const next = !autoRotate;
+    setAutoRotateRaw(next);
+    if (typeof window !== "undefined") window.localStorage.setItem(AUTO_ROTATE_PREF_KEY, next ? "1" : "0");
+  };
+
   useEffect(() => {
-    if (autoViewSetRef.current || !t) return;
+    if (!autoRotate) return;
+    const id = window.setInterval(() => {
+      setViewRaw((v) => (v === "boards" ? bracketViewRef.current : "boards"));
+    }, AUTO_ROTATE_MS);
+    return () => window.clearInterval(id);
+  }, [autoRotate]);
+
+  // A 32+ player mirrored tree can't stay legible at any scale that also fits a
+  // screen — default those straight to the always-readable round list. Only applies when
+  // nothing already chose a view explicitly (URL param or a remembered device preference),
+  // and runs once so it never overrides a view picked by hand afterwards.
+  useEffect(() => {
+    if (autoViewSetRef.current || !t || hadExplicitViewPref) return;
     autoViewSetRef.current = true;
     const isKoNow = t.mode !== "round-robin";
     const ms = (t.bracket as Match[]) || [];
     const rounds = isKoNow && ms.length > 0 ? Math.max(...ms.map(m => m.round)) : 0;
-    if (rounds >= 5) setView("list");
-  }, [t]);
+    if (rounds >= 5) { setViewRaw("list"); bracketViewRef.current = "list"; }
+  }, [t, hadExplicitViewPref]);
 
   useEffect(() => {
     if (!t) return;
@@ -660,20 +734,29 @@ const PublicTournamentPage = () => {
               </div>
             </div>
           )}
-          <div className="mb-2 inline-flex rounded-lg border border-border overflow-hidden">
-            <button onClick={() => setView("boards")} className="px-3 py-1.5 text-xs flex items-center gap-1 hover:bg-muted text-muted-foreground">
-              <Monitor className="w-3.5 h-3.5" /> Board-Übersicht
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg border border-border overflow-hidden">
+              <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <Monitor className="w-3.5 h-3.5" /> Board-Übersicht
+              </button>
+              {isKo && (
+                <>
+                  <button onClick={() => selectView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                    <Network className="w-3.5 h-3.5" /> Turnierbaum
+                  </button>
+                  <button onClick={() => selectView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                    <Rows3 className="w-3.5 h-3.5" /> Rundenliste
+                  </button>
+                </>
+              )}
+            </div>
+            <button
+              onClick={toggleAutoRotate}
+              className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 ${autoRotate ? "border-secondary bg-secondary/15 text-secondary" : "border-border hover:bg-muted text-muted-foreground"}`}
+              title="Wechselt automatisch alle 15s zwischen Turnierbaum/Liste und Board-Übersicht — praktisch für einen Bildschirm, den niemand mehr bedient."
+            >
+              <RefreshCcw className={`w-3.5 h-3.5 ${autoRotate ? "animate-pulse" : ""}`} /> Automatisch wechseln
             </button>
-            {isKo && (
-              <>
-                <button onClick={() => setView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                  <Network className="w-3.5 h-3.5" /> Turnierbaum
-                </button>
-                <button onClick={() => setView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                  <Rows3 className="w-3.5 h-3.5" /> Rundenliste
-                </button>
-              </>
-            )}
           </div>
           {isKo ? (
             view === "tree" ? (
