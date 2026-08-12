@@ -174,14 +174,21 @@ const MISS_TOLERANCE = 1.06; // calibration is never pixel-perfect — a little 
 
 interface BoardTransform { cx: number; cy: number; rx: number; ry: number }
 
-const boardTransformFromTaps = (taps?: { x: number; y: number }[]): BoardTransform | null => {
+/**
+ * `liveCenter`, when given, replaces the tap-derived center while keeping the tap-derived
+ * radius — so a board that's drifted a few cm since calibration (bumped table, wobbly phone
+ * mount) still scores correctly as long as it's still fully framed, instead of requiring a
+ * pixel-perfect re-tap every time. Radius stays tap-derived since camera zoom is frozen once
+ * real taps exist (see updateAutoCalibration), so it doesn't need live tracking too.
+ */
+const boardTransformFromTaps = (taps?: { x: number; y: number }[], liveCenter?: { x: number; y: number }): BoardTransform | null => {
   if (!taps || taps.length !== 4) return null;
   const [top, bottom, left, right] = taps; // D20, D3, D11, D6
-  const cx = (left.x + right.x) / 2;
-  const cy = (top.y + bottom.y) / 2;
   const rx = (right.x - left.x) / 2;
   const ry = (bottom.y - top.y) / 2;
   if (!(rx > 0.01) || !(ry > 0.01)) return null;
+  const cx = liveCenter?.x ?? (left.x + right.x) / 2;
+  const cy = liveCenter?.y ?? (top.y + bottom.y) / 2;
   return { cx, cy, rx, ry };
 };
 
@@ -497,7 +504,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // calibration instead of trusting the AI's own visual guess — much more reliable
   // since it turns "classify into 1 of 82 thin wedges" into simple geometry.
   const refineWithCalibration = (darts: DetectedDart[]): DetectedDart[] => {
-    const transform = boardTransformFromTaps(calib.taps);
+    const transform = boardTransformFromTaps(calib.taps, { x: calib.x, y: calib.y });
     if (!transform) return darts;
     return darts.map((d) => {
       const full = toFullFrameXY(d);
@@ -961,6 +968,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const roundTotal = accumulated.reduce((s, d) => s + d.points, 0);
 
+  // Tracking-health ring: green once calibrated and the live-tracked board center hasn't
+  // drifted far from where it was calibrated, amber if it's drifted enough that a recalibration
+  // is worth doing, cyan (neutral) if not calibrated yet at all. Board can still shift a few cm
+  // — it doesn't need to be pixel-perfect, just still fully framed (see boardTransformFromTaps).
+  const hasCalibration = (calib.taps?.length ?? 0) === 4;
+  const calibOrigCenter = hasCalibration
+    ? { x: (calib.taps![2].x + calib.taps![3].x) / 2, y: (calib.taps![0].y + calib.taps![1].y) / 2 }
+    : null;
+  const driftFraction = calibOrigCenter
+    ? Math.hypot(calib.x - calibOrigCenter.x, calib.y - calibOrigCenter.y) / calib.size
+    : 0;
+  const trackingStatus: "uncalibrated" | "ok" | "warn" = !hasCalibration ? "uncalibrated" : driftFraction > 0.15 ? "warn" : "ok";
+  const ringColorClass = trackingStatus === "ok" ? "border-secondary" : trackingStatus === "warn" ? "border-accent" : "border-primary/80";
+
   return (
     <div className="mb-3 space-y-2 rounded-xl border border-border bg-card p-3">
       <div className="flex items-center justify-between">
@@ -1051,10 +1072,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         {(phase === "live" || phase === "scanning" || phase === "detecting") && (
           <div className="pointer-events-none absolute inset-0">
             <div
-              className={`absolute rounded-full border-2 ${
-                phase === "scanning"
-                  ? "border-accent animate-pulse-glow"
-                  : "border-primary/80"
+              className={`absolute rounded-full border-2 transition-colors duration-500 ${
+                phase === "scanning" ? "border-accent animate-pulse-glow" : ringColorClass
               }`}
               style={{
                 width: `${calib.size * 100}%`,
@@ -1064,9 +1083,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 transform: "translate(-50%, -50%)",
               }}
             >
-              <div className="absolute inset-[35%] rounded-full border border-primary/40" />
-              <div className="absolute inset-[48%] rounded-full bg-primary/70" />
+              <div className="absolute inset-[35%] rounded-full border border-current opacity-40" />
+              <div className="absolute inset-[48%] rounded-full bg-current opacity-70" />
             </div>
+            {phase === "live" && trackingStatus === "warn" && (
+              <div className="absolute inset-x-0 bottom-2 flex justify-center">
+                <span className="rounded-md bg-accent/90 px-2.5 py-1 text-[10px] font-medium text-accent-foreground shadow">
+                  Board hat sich verschoben — bei Bedarf neu kalibrieren
+                </span>
+              </div>
+            )}
           </div>
         )}
 

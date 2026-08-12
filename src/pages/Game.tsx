@@ -1458,7 +1458,7 @@ const GamePage = () => {
                               return (
                                 <div key={globalIdx} className="relative group">
                                   <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
-                                    t.multiplier === 3 ? "bg-destructive/20 text-destructive" :
+                                    t.multiplier === 3 ? "bg-primary/20 text-primary" :
                                     t.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
                                   }`}>
                                     {t.multiplier === 3 ? "T" : t.multiplier === 2 ? "D" : ""}{t.baseValue === 50 ? "Bull" : t.baseValue === 0 ? "Miss" : t.baseValue}

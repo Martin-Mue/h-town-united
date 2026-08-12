@@ -10,6 +10,7 @@ const QUICK_ACTIONS = [
   { to: "/tournament", label: "Turnier", desc: "K.O. · Round Robin", icon: Trophy },
   { to: "/statistics", label: "Statistiken", desc: "Ranglisten & Vergleiche", icon: BarChart3 },
   { to: "/training", label: "Training", desc: "Drills & Coaching", icon: Dumbbell },
+  { to: "/players", label: "Verein", desc: "Mitglieder verwalten", icon: Users },
 ];
 
 interface RecentGame {
@@ -137,9 +138,9 @@ const DashboardPage = () => {
       {/* Recent games feed */}
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">Letzte Spiele</h2>
       {recentGames.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl px-4 py-6 text-center text-sm text-muted-foreground">
-          Noch keine Spiele gespielt. Starte dein erstes Spiel!
-        </div>
+        <Link to="/game" className="block bg-card border border-border hover:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-colors">
+          Noch keine Spiele gespielt. <span className="text-primary font-medium">Starte dein erstes Spiel!</span>
+        </Link>
       ) : (
         <div className="space-y-2">
           {recentGames.map((game) => (

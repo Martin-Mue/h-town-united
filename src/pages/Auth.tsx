@@ -14,6 +14,7 @@ const AuthPage = () => {
   const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -26,6 +27,10 @@ const AuthPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === "signup" && password !== confirmPassword) {
+      toast({ title: "Fehler", description: "Die Passwörter stimmen nicht überein.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
@@ -59,9 +64,16 @@ const AuthPage = () => {
         return;
       }
     } catch (err: any) {
-      const msg = err?.message?.includes("Invalid login credentials")
+      const raw: string = err?.message || "";
+      const msg = raw.includes("Invalid login credentials")
         ? "E-Mail oder Passwort falsch. Tipp: Passwort mit dem Auge prüfen."
-        : err?.message || "Authentifizierung fehlgeschlagen.";
+        : raw.includes("User already registered")
+        ? "Für diese E-Mail existiert bereits ein Konto. Einfach einloggen."
+        : raw.includes("Password should be at least")
+        ? "Das Passwort muss mindestens 6 Zeichen lang sein."
+        : /rate limit|too many/i.test(raw)
+        ? "Zu viele Versuche. Bitte kurz warten und erneut probieren."
+        : raw || "Authentifizierung fehlgeschlagen.";
       toast({
         title: "Fehler",
         description: msg,
@@ -128,6 +140,24 @@ const AuthPage = () => {
                 </div>
                 {mode === "signup" && (
                   <p className="text-xs text-muted-foreground mt-1">Mindestens 6 Zeichen.</p>
+                )}
+              </div>
+            )}
+            {mode === "signup" && (
+              <div>
+                <Label>Passwort bestätigen</Label>
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  placeholder="••••••••"
+                  className="bg-muted border-border"
+                  required
+                  minLength={6}
+                />
+                {confirmPassword.length > 0 && confirmPassword !== password && (
+                  <p className="text-xs text-destructive mt-1">Stimmt noch nicht mit dem Passwort überein.</p>
                 )}
               </div>
             )}

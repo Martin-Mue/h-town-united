@@ -34,7 +34,7 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate }: Che
           <span key={i}>
             <span className={`text-sm font-bold ${
               dart.startsWith("D") ? "text-secondary" :
-              dart.startsWith("T") ? "text-destructive" :
+              dart.startsWith("T") ? "text-primary" :
               dart === "Bull" ? "text-accent" :
               "text-foreground"
             }`}>

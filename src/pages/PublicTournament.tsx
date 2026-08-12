@@ -212,13 +212,13 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
       )}
       <div className="relative">
       <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-card/90 backdrop-blur border border-border rounded-lg p-1">
-        <button onClick={() => setUserZoom(z => Math.max(0.4, +(z - 0.15).toFixed(2)))} title="Verkleinern" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+        <button onClick={() => setUserZoom(z => Math.max(0.4, +(z - 0.15).toFixed(2)))} title="Verkleinern" aria-label="Verkleinern" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
-        <button onClick={() => setUserZoom(1)} title="Auf Bildschirm einpassen" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+        <button onClick={() => setUserZoom(1)} title="Auf Bildschirm einpassen" aria-label="Auf Bildschirm einpassen" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
-        <button onClick={() => setUserZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))} title="Vergrößern" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+        <button onClick={() => setUserZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))} title="Vergrößern" aria-label="Vergrößern" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
       </div>

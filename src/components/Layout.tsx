@@ -20,6 +20,17 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
   const { signOut, user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) return setIsAdmin(false);
@@ -92,7 +103,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
               </Link>
             )}
           </nav>
-          <Button variant="ghost" size="icon" onClick={signOut} title="Abmelden">
+          <Button variant="ghost" size="icon" onClick={handleSignOut} disabled={signingOut} title="Abmelden" aria-label="Abmelden">
             <LogOut className="w-4 h-4" />
           </Button>
         </div>
