@@ -35,6 +35,94 @@ interface TournamentRow {
   round_configs?: { mode: string; bestOf: number }[];
 }
 
+interface RoundRobinMatch {
+  id: string; player1: string; player2: string; winner?: string; played: boolean;
+}
+
+interface RoundRobinStanding {
+  name: string; played: number; won: number; lost: number; points: number;
+}
+
+const calcStandings = (matches: RoundRobinMatch[]): RoundRobinStanding[] => {
+  const map: Record<string, RoundRobinStanding> = {};
+  matches.forEach((m) => {
+    [m.player1, m.player2].forEach((p) => {
+      if (!map[p]) map[p] = { name: p, played: 0, won: 0, lost: 0, points: 0 };
+    });
+    if (m.played && m.winner) {
+      map[m.player1].played++;
+      map[m.player2].played++;
+      map[m.winner].won++;
+      map[m.winner].points += 2;
+      const loser = m.winner === m.player1 ? m.player2 : m.player1;
+      map[loser].lost++;
+    }
+  });
+  return Object.values(map).sort((a, b) => b.points - a.points || b.won - a.won);
+};
+
+/** Read-only round-robin standings + match list — mirrors the admin Tabelle view. */
+const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
+  const standings = calcStandings(matches);
+  const unplayed = matches.filter((m) => !m.played);
+  const played = matches.filter((m) => m.played);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-card rounded-xl border border-border p-4">
+        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Tabelle</h3>
+        <div className="grid grid-cols-[auto_1fr_repeat(4,40px)] gap-x-2 gap-y-1 text-xs">
+          <span className="text-muted-foreground">#</span>
+          <span className="text-muted-foreground">Spieler</span>
+          <span className="text-muted-foreground text-center">Sp</span>
+          <span className="text-muted-foreground text-center">S</span>
+          <span className="text-muted-foreground text-center">N</span>
+          <span className="text-muted-foreground text-center">Pkt</span>
+          {standings.map((s, i) => (
+            <div className="contents" key={s.name}>
+              <span className={`font-display ${i === 0 ? "text-accent" : ""}`}>
+                {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
+              </span>
+              <span className="font-semibold truncate">{s.name}</span>
+              <span className="text-center">{s.played}</span>
+              <span className="text-center text-secondary">{s.won}</span>
+              <span className="text-center text-destructive">{s.lost}</span>
+              <span className="text-center font-display text-primary">{s.points}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {unplayed.length > 0 && (
+        <div className="bg-card rounded-xl border border-border p-4">
+          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Ausstehende Spiele ({unplayed.length})</h3>
+          <div className="space-y-1.5">
+            {unplayed.map((m) => (
+              <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2 text-sm">
+                <span className="truncate uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">vs</span> {m.player2}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {played.length > 0 && (
+        <div className="bg-card rounded-xl border border-border p-4">
+          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Gespielte Partien ({played.length})</h3>
+          <div className="space-y-1">
+            {played.map((m) => (
+              <div key={m.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
+                <span className="truncate uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">vs</span> {m.player2}</span>
+                <span className="text-xs text-secondary font-medium shrink-0 ml-2">{m.winner} ✓</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const roundLabel = roundLabelFor;
 
 /** Mirrored, auto-fitting bracket — identical layout to the admin view, read-only. */
@@ -400,19 +488,21 @@ const PublicTournamentPage = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border px-6 py-4 flex items-center justify-between bg-gradient-to-r from-primary/10 via-transparent to-accent/10">
-        <div className="flex items-center gap-3">
-          <img src={htuLogo} alt="Logo" className="w-12 h-12 rounded-xl object-cover border border-primary/30" />
-          <div>
-            <h1 className="font-display text-2xl uppercase tracking-widest">{t.name}</h1>
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2">
-              <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" />
-              Live · {t.players.length} Spieler · {t.game_mode} BO{t.best_of_legs} · {boardsCount} Board{boardsCount > 1 ? "s" : ""}
+      <header className="border-b border-border px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-primary/10 via-transparent to-accent/10">
+        <div className="flex items-center gap-3 min-w-0">
+          <img src={htuLogo} alt="Logo" className="w-12 h-12 rounded-xl object-cover border border-primary/30 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="font-display text-xl sm:text-2xl uppercase tracking-widest truncate">{t.name}</h1>
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="inline-flex items-center gap-2 shrink-0">
+                <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" /> Live
+              </span>
+              <span>{t.players.length} Spieler · {t.game_mode} BO{t.best_of_legs} · {boardsCount} Board{boardsCount > 1 ? "s" : ""}</span>
             </p>
           </div>
         </div>
         {t.champion && (
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <p className="text-[10px] uppercase tracking-widest text-accent">Champion</p>
             <p className="font-display text-xl text-accent">🏆 {t.champion}</p>
           </div>
@@ -474,9 +564,7 @@ const PublicTournamentPage = () => {
               />
             )
           ) : (
-            <div className="bg-card border border-border rounded-xl p-4 text-sm text-muted-foreground">
-              Round-Robin-Ansicht folgt live über die App.
-            </div>
+            <RoundRobinLive matches={t.bracket as unknown as RoundRobinMatch[]} />
           )}
         </div>
 
