@@ -95,6 +95,35 @@ interface Calibration {
 const CALIB_KEY = "dartcam-calibration-v5";
 const CALIB_LABELS = ["Doppel 20 (oben)", "Doppel 3 (unten)", "Doppel 11 (links)", "Doppel 6 (rechts)"] as const;
 const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
+
+// Multi-board support: club nights run several boards (and cameras) at once. Each device
+// remembers which physical board it's pointed at, and calibration + camera-device choice are
+// namespaced per board so the same tablet can be reassigned between boards over an evening
+// without clobbering another board's tap calibration. Board "1" reuses the original
+// unsuffixed key so existing single-board calibrations keep working after this update.
+const ACTIVE_BOARD_KEY = "dartcam-active-board";
+const calibKeyFor = (board: string) => (board && board !== "1" ? `${CALIB_KEY}:${board}` : CALIB_KEY);
+const deviceKeyFor = (board: string) => `dartcam-device:${board}`;
+
+const loadActiveBoard = (): string => {
+  if (typeof window === "undefined") return "1";
+  const raw = window.localStorage.getItem(ACTIVE_BOARD_KEY);
+  const n = raw ? parseInt(raw, 10) : 1;
+  return String(Number.isFinite(n) && n > 0 ? n : 1);
+};
+const saveActiveBoard = (board: string) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ACTIVE_BOARD_KEY, board);
+};
+const loadDeviceId = (board: string): string | null => {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(deviceKeyFor(board));
+};
+const saveDeviceId = (board: string, deviceId: string | null) => {
+  if (typeof window === "undefined") return;
+  if (deviceId) window.localStorage.setItem(deviceKeyFor(board), deviceId);
+  else window.localStorage.removeItem(deviceKeyFor(board));
+};
 const GRID = 40;
 const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
@@ -126,11 +155,11 @@ const DART_POSITION_MATCH = 0.09;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-const loadCalib = (): Calibration => {
+const loadCalib = (key: string = CALIB_KEY): Calibration => {
   if (typeof window === "undefined")
     return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
   try {
-    const raw = window.localStorage.getItem(CALIB_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
     const p = JSON.parse(raw);
     const taps = Array.isArray(p?.taps) && p.taps.length === 4
@@ -331,7 +360,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [motion, setMotion] = useState(0);
   const [changeDelta, setChangeDelta] = useState(0);
   const [lastConfidence, setLastConfidence] = useState(0);
-  const [calib, setCalib] = useState<Calibration>(() => loadCalib());
+  const [activeBoard, setActiveBoard] = useState<string>(() => loadActiveBoard());
+  const [calib, setCalib] = useState<Calibration>(() => loadCalib(calibKeyFor(loadActiveBoard())));
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(() => loadDeviceId(loadActiveBoard()));
   const [autoCalibrating, setAutoCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
@@ -347,8 +379,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(CALIB_KEY, JSON.stringify(calib));
-  }, [calib]);
+    window.localStorage.setItem(calibKeyFor(activeBoard), JSON.stringify(calib));
+  }, [calib, activeBoard]);
 
   const resetLoop = useCallback(() => {
     prevSigRef.current = null;
@@ -426,7 +458,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         setStatus("Kamera startet …");
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: "environment" },
+            ...(selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : { facingMode: { ideal: "environment" } }),
             width: { ideal: 1280 },
             height: { ideal: 720 },
           },
@@ -441,6 +473,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
         }
+        // Device labels are only populated once permission has been granted — this is the
+        // first point they're available, letting the "Kamera" picker show real names instead
+        // of blank entries when a machine has more than one camera attached (multi-board rigs).
+        navigator.mediaDevices.enumerateDevices()
+          .then((all) => setDevices(all.filter((d) => d.kind === "videoinput")))
+          .catch(() => undefined);
         startClipSegment();
         const track = stream.getVideoTracks()[0];
         const capabilities = track?.getCapabilities?.() as MediaTrackCapabilities & {
@@ -473,7 +511,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       streamRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
+  }, [enabled, selectedDeviceId, activeBoard]);
 
   // ─── helpers ────────────────────────────────────────────────────────
   const cropRect = () => {
@@ -764,6 +802,25 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setCalibStep(0);
     setPhase("calibrate");
     setStatus(`Kalibrierung 1/4: ${CALIB_LABELS[0]}`);
+  };
+
+  /** Switches which physical board this device is scoring — reloads that board's own saved
+   *  calibration/camera choice and restarts the stream so autoDetectBoard re-checks it. */
+  const switchBoard = (next: string) => {
+    const board = String(Math.max(1, parseInt(next, 10) || 1));
+    if (board === activeBoard) return;
+    saveActiveBoard(board);
+    setActiveBoard(board);
+    setCalib(loadCalib(calibKeyFor(board)));
+    setSelectedDeviceId(loadDeviceId(board));
+    setPendingTaps([]);
+    setActiveTap(null);
+    setCalibStep(0);
+  };
+
+  const switchCamera = (deviceId: string | null) => {
+    saveDeviceId(activeBoard, deviceId);
+    setSelectedDeviceId(deviceId);
   };
 
   // ─── watcher loop ──────────────────────────────────────────────────
@@ -1343,6 +1400,49 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       </button>
       {showAdvanced && (
         <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-2 text-xs">
+          <div className="space-y-1">
+            <div className="text-[10px] text-muted-foreground">Dieses Gerät ist kalibriert für</div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => switchBoard(String(Math.max(1, Number(activeBoard) - 1)))}
+                disabled={activeBoard === "1"}
+                title="Vorheriges Board"
+              >
+                −
+              </Button>
+              <span className="flex-1 text-center font-display text-sm text-foreground">Board {activeBoard}</span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => switchBoard(String(Number(activeBoard) + 1))}
+                title="Nächstes Board"
+              >
+                +
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Jedes Board hat seine eigene Kalibrierung — praktisch, wenn dasselbe Tablet an mehreren Boards eines Vereinsabends läuft.
+            </p>
+          </div>
+          {devices.length > 1 && (
+            <div className="space-y-1">
+              <div className="text-[10px] text-muted-foreground">Kamera für Board {activeBoard}</div>
+              <select
+                value={selectedDeviceId ?? ""}
+                onChange={(e) => switchCamera(e.target.value || null)}
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
+              >
+                <option value="">Automatisch</option>
+                {devices.map((d, i) => (
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || `Kamera ${i + 1}`}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"

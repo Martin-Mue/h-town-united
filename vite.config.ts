@@ -18,17 +18,14 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      // App-shell caching only — scoring/stats still need a live Supabase connection,
-      // this just means the app itself loads instantly even on weak venue wifi and can
-      // be installed to the home screen.
-      workbox: {
+      // Custom service worker (src/sw.ts) instead of the fully-generated one — same
+      // app-shell-only precaching policy as before, but this lets the SW also handle Web
+      // Push (`push`/`notificationclick`), which the generateSW strategy can't do.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,png,jpg,jpeg,svg,ico,woff2}"],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.hostname.endsWith(".supabase.co"),
-            handler: "NetworkOnly",
-          },
-        ],
       },
       manifest: {
         name: "H-Town United e.V. · Darts Club",

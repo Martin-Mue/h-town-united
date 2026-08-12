@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download } from "lucide-react";
+import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -21,6 +21,7 @@ import {
   computeCricketStats, combineCricketStats,
   type DartThrow, type CheckoutStats, type CricketStats,
 } from "@/utils/dartStats";
+import { generateSeasonReportPdf } from "@/utils/seasonReport";
 
 interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
@@ -44,6 +45,7 @@ interface DetailStat {
 interface PlayerStats {
   id: string; name: string; games_played: number; games_won: number;
   average: number; high_score: number; double_rate: number; emoji: string;
+  elo_rating?: number;
 }
 
 interface GameLegRecord {
@@ -73,7 +75,7 @@ const StatisticsPage = () => {
   const [cleaningUpClips, setCleaningUpClips] = useState(false);
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate" | "checkout" | "points">("average");
+  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate" | "checkout" | "points" | "elo">("average");
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
@@ -89,7 +91,7 @@ const StatisticsPage = () => {
   const fetchData = useCallback(async () => {
     const [gamesRes, playersRes, legsRes, clipsRes] = await Promise.all([
       supabase.from("games").select("*").order("played_at", { ascending: false }).limit(500),
-      supabase.from("players").select("id, name, games_played, games_won, average, high_score, double_rate, emoji").order("average", { ascending: false }),
+      supabase.from("players").select("id, name, games_played, games_won, average, high_score, double_rate, elo_rating, emoji").order("average", { ascending: false }),
       supabase.from("game_legs").select("*").order("created_at", { ascending: false }).limit(4000),
       supabase.from("highlight_clips").select("*").order("created_at", { ascending: false }).limit(200),
     ]);
@@ -238,6 +240,9 @@ const StatisticsPage = () => {
         average: average(v.throws),
         high_score: v.highScore,
         double_rate: combineCheckoutStats(v.checkouts).percentage,
+        // Elo is a running lifetime rating, not something meaningful to recompute for a
+        // filtered date range, so filtered leaderboards still show the current rating.
+        elo_rating: club?.elo_rating,
       };
     });
     return result;
@@ -321,14 +326,15 @@ const StatisticsPage = () => {
         return (advancedByPlayer[b.id]?.checkout.percentage ?? 0) - (advancedByPlayer[a.id]?.checkout.percentage ?? 0);
       }
       if (sortBy === "points") return b.games_won * 2 - a.games_won * 2;
+      if (sortBy === "elo") return (b.elo_rating ?? 1000) - (a.elo_rating ?? 1000);
       return Number(b.double_rate) - Number(a.double_rate);
     });
   }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive]);
 
   const exportLeaderboardCsv = () => {
-    const header = ["Platz", "Name", "Spiele", "Siege", "Punkte", "Average", "Highscore", "Doppel %"];
+    const header = ["Platz", "Name", "Spiele", "Siege", "Punkte", "Elo", "Average", "Highscore", "Doppel %"];
     const rows = leaderboard.map((p, i) => [
-      i + 1, p.name, p.games_played, p.games_won, p.games_won * 2,
+      i + 1, p.name, p.games_played, p.games_won, p.games_won * 2, p.elo_rating ?? 1000,
       Number(p.average).toFixed(1), p.high_score, Number(p.double_rate).toFixed(0),
     ]);
     const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
@@ -340,6 +346,32 @@ const StatisticsPage = () => {
     a.download = `bestenliste-${suffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportSeasonPdf = () => {
+    const periodLabel = filterYear !== "all" ? `Saison ${filterYear}` : "Gesamt";
+    generateSeasonReportPdf({
+      clubName: "H-Town United e.V. · Darts Club",
+      periodLabel,
+      totalGames: clubStats.totalGames,
+      totalPlayers: clubStats.totalPlayers,
+      avgOfAverages: clubStats.avgOfAverages,
+      totalDarts: clubStats.totalDarts,
+      highlights: [
+        { label: "Bester Ø Average", name: clubStats.bestAvg.name, value: clubStats.bestAvg.val.toFixed(1) },
+        { label: "Höchster Highscore", name: clubStats.bestHighscore.name, value: String(clubStats.bestHighscore.val) },
+        { label: "Höchstes Einzelspiel-Average", name: clubStats.highestGameAvg.name, value: clubStats.highestGameAvg.val.toFixed(1) },
+        { label: "Meiste Siege", name: clubStats.mostWins.name, value: String(clubStats.mostWins.val) },
+        { label: "Beste Checkout-Quote (≥5 Versuche)", name: bestCheckoutRate.name, value: `${bestCheckoutRate.val.toFixed(0)}%` },
+        { label: "Höchstes Checkout", name: bestHighestCheckout.name, value: String(bestHighestCheckout.val) },
+        { label: "Beste Cricket-MPR (≥3 Runden)", name: bestMpr.name, value: bestMpr.val.toFixed(2) },
+      ].filter((h) => h.name !== "-"),
+      leaderboard: leaderboard.map((p, i) => ({
+        rank: i + 1, name: p.name, gamesPlayed: p.games_played, gamesWon: p.games_won,
+        points: p.games_won * 2, elo: Math.round(p.elo_rating ?? 1000),
+        average: Number(p.average), highScore: p.high_score, doubleRate: Number(p.double_rate),
+      })),
+    });
   };
 
   const modeDistribution = useMemo(() => {
@@ -827,10 +859,14 @@ const StatisticsPage = () => {
                 <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={exportLeaderboardCsv} disabled={leaderboard.length === 0} title="Als CSV exportieren">
                   <Download className="w-3.5 h-3.5" /> CSV
                 </Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={exportSeasonPdf} disabled={leaderboard.length === 0} title="Ausführlicher Saisonbericht als PDF">
+                  <FileText className="w-3.5 h-3.5" /> PDF
+                </Button>
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
                   <SelectTrigger className="w-[140px] h-8 text-xs bg-muted border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     <SelectItem value="points">Punkte (Saison)</SelectItem>
+                    <SelectItem value="elo">Elo-Rating</SelectItem>
                     <SelectItem value="average">Ø Average</SelectItem>
                     <SelectItem value="games_won">Siege</SelectItem>
                     <SelectItem value="win_rate">Siegquote %</SelectItem>
@@ -860,6 +896,7 @@ const StatisticsPage = () => {
                     sortBy === "win_rate" ? `${winRate}%` :
                     sortBy === "checkout" ? `${(advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0)}%` :
                     sortBy === "points" ? `${p.games_won * 2} Pkt` :
+                    sortBy === "elo" ? Math.round(p.elo_rating ?? 1000) :
                     `${Number(p.double_rate).toFixed(0)}%`;
                   return (
                     <button key={p.id} onClick={() => { setSelectedPlayerId(p.id); setActiveTab("players"); }}
@@ -870,7 +907,7 @@ const StatisticsPage = () => {
                       <span className="text-lg">{p.emoji}</span>
                       <div className="flex-1 min-w-0 text-left">
                         <p className="text-sm font-semibold truncate">{p.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{p.games_played} Spiele · {winRate}%</p>
+                        <p className="text-[10px] text-muted-foreground">{p.games_played} Spiele · {winRate}% · {Math.round(p.elo_rating ?? 1000)} Elo</p>
                       </div>
                       <span className="font-display text-lg text-primary">{sortVal}</span>
                     </button>
@@ -902,7 +939,7 @@ const StatisticsPage = () => {
                   <span className="text-3xl">{playerDetailStats.player.emoji}</span>
                   <div>
                     <h3 className="text-xl font-display uppercase">{playerDetailStats.player.name}</h3>
-                    <p className="text-xs text-muted-foreground">{playerDetailStats.totalGames} Spiele · {playerDetailStats.winRate}% Siegquote</p>
+                    <p className="text-xs text-muted-foreground">{playerDetailStats.totalGames} Spiele · {playerDetailStats.winRate}% Siegquote · {Math.round(playerDetailStats.player.elo_rating ?? 1000)} Elo</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-2">

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper } from "lucide-react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
@@ -111,7 +111,49 @@ const TRAINING_DRILLS: TrainingDrill[] = [
     durationMinutes: 15,
     category: "pressure",
   },
+  {
+    id: "halve-it",
+    name: "Halve It",
+    description:
+      "10 Runden, jede mit eigenem Ziel (Zahl, Doppel, Triple, Bull). Ein Treffer bringt Punkte – ein kompletter Fehlwurf halbiert deinen Punktestand sofort. Der Klassiker aus jeder Vereinskneipe, gnadenlos und selten digital zu finden.",
+    icon: Divide,
+    difficulty: "Fortgeschritten",
+    durationMinutes: 15,
+    category: "pressure",
+  },
+  {
+    id: "bobs-27",
+    name: "Bob's 27",
+    description:
+      "Start bei 27 Punkten. Von 1 bis 20 immer auf das Doppel der laufenden Runde: Treffer bringen den doppelten Zahlenwert, ein Fehlwurf kostet ihn. Fällt dein Konto auf 0, ist Schluss. Das beliebteste Aufwärm-Ritual im Ligadarts.",
+    icon: ListOrdered,
+    difficulty: "Profi",
+    durationMinutes: 15,
+    category: "doubles",
+  },
 ];
+
+interface HalveItRound {
+  label: string;
+  kind: "number" | "anyDouble" | "anyTriple" | "bull";
+  number?: number;
+}
+/** 10-round Halve It sequence — mixes fixed numbers with "any double/triple/bull" rounds,
+ *  the way it's traditionally chalked up on a pub blackboard. */
+const HALVE_IT_ROUNDS: HalveItRound[] = [
+  { label: "20", kind: "number", number: 20 },
+  { label: "Doppel (beliebig)", kind: "anyDouble" },
+  { label: "19", kind: "number", number: 19 },
+  { label: "18", kind: "number", number: 18 },
+  { label: "Bull", kind: "bull" },
+  { label: "17", kind: "number", number: 17 },
+  { label: "Triple (beliebig)", kind: "anyTriple" },
+  { label: "16", kind: "number", number: 16 },
+  { label: "15", kind: "number", number: 15 },
+  { label: "Doppel (beliebig)", kind: "anyDouble" },
+];
+const HALVE_IT_START = 40;
+const BOBS_27_ROUNDS = 20;
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   "Anfänger": "bg-secondary/20 text-secondary",
@@ -186,6 +228,8 @@ interface DrillState {
   shanghaiMultsHit?: number[];
   shanghaiScore?: number;
   shanghaiWin?: boolean;
+  /** Halve It: points accumulated so far this round (reset each round; `remaining` is the running score) */
+  hiRoundPoints?: number;
 }
 
 /** Pre-start configuration for a drill */
@@ -287,6 +331,15 @@ const TrainingPage = () => {
         state.currentTarget = 1;
         state.shanghaiScore = 0;
         state.shanghaiMultsHit = [];
+        break;
+      case "halve-it":
+        state.remaining = HALVE_IT_START;
+        state.hiRoundPoints = 0;
+        state.targetIndex = 0;
+        break;
+      case "bobs-27":
+        state.remaining = 27;
+        state.targetIndex = 0; // round number = targetIndex + 1
         break;
       case "bull-control": {
         const names = (config.bcPlayerNames && config.bcPlayerNames.length >= 2
@@ -483,6 +536,32 @@ const TrainingPage = () => {
           break;
         }
 
+        case "halve-it": {
+          const round = HALVE_IT_ROUNDS[prev.targetIndex] ?? HALVE_IT_ROUNDS[0];
+          const matches = round.kind === "number" ? baseValue === round.number
+            : round.kind === "anyDouble" ? mul === 2 && baseValue !== 0
+            : round.kind === "anyTriple" ? mul === 3 && baseValue !== 0
+            : baseValue === 25; // bull
+          if (matches) {
+            updated.hiRoundPoints = (prev.hiRoundPoints ?? 0) + points;
+            updated.hits = prev.hits + 1;
+          }
+          updated.roundScores = [...(prev.roundScores || []), matches ? points : 0];
+          break;
+        }
+
+        case "bobs-27": {
+          const roundNumber = prev.targetIndex + 1;
+          const isDoubleHit = baseValue === roundNumber && mul === 2;
+          if (isDoubleHit) {
+            updated.remaining = prev.remaining + points;
+            updated.hits = prev.hits + 1;
+            updated.hitsThisRound = prev.hitsThisRound + 1;
+          }
+          updated.roundScores = [...(prev.roundScores || []), isDoubleHit ? points : 0];
+          break;
+        }
+
         case "bull-control": {
           const players = (prev.bcPlayers || []).map((p) => ({ ...p }));
           const turn = prev.bcTurn ?? 0;
@@ -561,6 +640,40 @@ const TrainingPage = () => {
           }
         }
 
+        // Halve It: no hit this round → halve the running score; otherwise add it. Advance
+        // through the 10 fixed rounds, ending the drill after the last one.
+        if (selectedDrill.id === "halve-it") {
+          const roundPts = updated.hiRoundPoints ?? 0;
+          updated.remaining = roundPts > 0 ? prev.remaining + roundPts : Math.floor(prev.remaining / 2);
+          updated.hiRoundPoints = 0;
+          const nextIdx = prev.targetIndex + 1;
+          if (nextIdx >= HALVE_IT_ROUNDS.length) {
+            updated.finished = true;
+          } else {
+            updated.targetIndex = nextIdx;
+          }
+        }
+
+        // Bob's 27: no double hit this round → subtract its value; busting to 0 ends the
+        // drill early, otherwise it runs through all 20 numbers.
+        if (selectedDrill.id === "bobs-27") {
+          const roundNumber = prev.targetIndex + 1;
+          if ((updated.hitsThisRound ?? 0) === 0) {
+            updated.remaining = prev.remaining - roundNumber * 2;
+          }
+          updated.hitsThisRound = 0;
+          if (updated.remaining <= 0) {
+            updated.finished = true;
+          } else {
+            const nextIdx = prev.targetIndex + 1;
+            if (nextIdx >= BOBS_27_ROUNDS) {
+              updated.finished = true;
+            } else {
+              updated.targetIndex = nextIdx;
+            }
+          }
+        }
+
         // Random Score: draw new target
         if (selectedDrill.id === "random-score") {
           const t = randomTarget();
@@ -621,15 +734,19 @@ const TrainingPage = () => {
         </div>
 
         {/* Drill finished overlay */}
-        {drillState.finished && (
+        {drillState.finished && (() => {
+          const bobsBusted = selectedDrill.id === "bobs-27" && drillState.remaining <= 0;
+          return (
           <div className="bg-card border border-primary/30 rounded-2xl p-6 text-center mb-4 glow-cyan animate-scale-in">
             {drillState.shanghaiWin ? (
               <PartyPopper className="w-12 h-12 text-accent mx-auto mb-3" />
+            ) : bobsBusted ? (
+              <RotateCcw className="w-12 h-12 text-destructive mx-auto mb-3" />
             ) : (
               <CheckCircle className="w-12 h-12 text-secondary mx-auto mb-3" />
             )}
             <h3 className="text-2xl font-display uppercase mb-2">
-              {drillState.shanghaiWin ? "SHANGHAI! 🎉" : "Geschafft! 🎯"}
+              {drillState.shanghaiWin ? "SHANGHAI! 🎉" : bobsBusted ? "Konto leer 💸" : "Geschafft! 🎯"}
             </h3>
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
               {selectedDrill.id === "shanghai" ? (
@@ -637,6 +754,18 @@ const TrainingPage = () => {
                   <p className="text-2xl font-display">{drillState.shanghaiScore ?? 0}</p>
                   <p className="text-xs text-muted-foreground">
                     {drillState.shanghaiWin ? `Shanghai auf der ${drillState.currentTarget}, Runde ${drillState.targetIndex + 1}!` : "Score nach 20 Runden"}
+                  </p>
+                </div>
+              ) : selectedDrill.id === "halve-it" ? (
+                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                  <p className="text-2xl font-display">{drillState.remaining}</p>
+                  <p className="text-xs text-muted-foreground">Endstand nach 10 Runden</p>
+                </div>
+              ) : selectedDrill.id === "bobs-27" ? (
+                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                  <p className="text-2xl font-display">{Math.max(0, drillState.remaining)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {bobsBusted ? `Pleite in Runde ${drillState.targetIndex + 1}` : "Endstand nach 20 Runden"}
                   </p>
                 </div>
               ) : (
@@ -679,7 +808,8 @@ const TrainingPage = () => {
               </Button>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {!drillState.finished && (
           <>
@@ -772,6 +902,32 @@ const TrainingPage = () => {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">Score: <span className="text-foreground font-bold">{drillState.shanghaiScore ?? 0}</span></p>
+                </div>
+              )}
+              {selectedDrill.id === "halve-it" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Halve It · Runde {drillState.targetIndex + 1} / {HALVE_IT_ROUNDS.length}
+                  </p>
+                  <p className="text-4xl font-display text-primary">
+                    {HALVE_IT_ROUNDS[drillState.targetIndex]?.label ?? "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Punktestand: <span className="text-foreground font-bold">{drillState.remaining}</span>
+                    {(drillState.hiRoundPoints ?? 0) > 0 && <span className="text-secondary"> (+{drillState.hiRoundPoints})</span>}
+                  </p>
+                </div>
+              )}
+              {selectedDrill.id === "bobs-27" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Bob's 27 · Runde {drillState.targetIndex + 1} / {BOBS_27_ROUNDS}
+                  </p>
+                  <p className="text-5xl font-display text-primary">D{drillState.targetIndex + 1}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Konto: <span className={`font-bold ${drillState.remaining <= 6 ? "text-destructive" : "text-foreground"}`}>{drillState.remaining}</span>
+                    {" · "}Treffer diese Runde: {drillState.hitsThisRound}/3
+                  </p>
                 </div>
               )}
               {selectedDrill.id === "bull-control" && drillState.bcPlayers && (

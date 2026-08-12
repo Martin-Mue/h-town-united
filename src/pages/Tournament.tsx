@@ -12,6 +12,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import htuEmblem from "@/assets/club-emblem.png";
 import { Link } from "react-router-dom";
@@ -507,7 +508,7 @@ const TournamentPage = () => {
   const [players, setPlayers] = useState<string[]>([]);
   const [savingTournament, setSavingTournament] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [dbPlayers, setDbPlayers] = useState<{ id: string; name: string; emoji: string }[]>([]);
+  const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
 
   const { session } = useAuth();
   const { toast } = useToast();
@@ -561,9 +562,27 @@ const TournamentPage = () => {
   }, []);
 
   const fetchDbPlayers = useCallback(async () => {
-    const { data } = await supabase.from("players").select("id, name, emoji").order("name");
-    if (data) setDbPlayers(data);
+    setDbPlayers(await fetchClubPlayers());
   }, []);
+
+  /** Push "your match is up next" to whichever of the match's players have claimed their
+   *  own club profile (players.user_id) and opted into notifications — most club members
+   *  play under a shared/organizer login, so this silently no-ops for anyone who hasn't. */
+  const notifyMatchReady = useCallback((match: Match) => {
+    const userIds = [match.player1, match.player2]
+      .map((name) => dbPlayers.find((p) => p.name === name)?.user_id)
+      .filter((id): id is string => !!id);
+    if (userIds.length === 0) return;
+    const boardLabel = match.board ? ` (Board ${match.board})` : "";
+    supabase.functions.invoke("send-push", {
+      body: {
+        userIds,
+        title: "Dein Match ist bereit",
+        body: `${match.player1} vs. ${match.player2}${boardLabel} — ihr seid dran.`,
+        url: "/tournament",
+      },
+    }).catch((err) => console.error("notifyMatchReady failed", err));
+  }, [dbPlayers]);
 
   const fetchSeries = useCallback(async () => {
     const { data } = await supabase.from("tournament_series" as any).select("id, name").order("created_at", { ascending: false });
@@ -783,6 +802,17 @@ const TournamentPage = () => {
       keepExisting: !opts.reshuffleKeepers,
     });
     const champion = bracketChampion(withKeepers);
+
+    // "Your match is up next" — only for matches that just BECAME playable (both players
+    // now known, not already playable before this update), so this fires once per match.
+    const prevBracket = activeTournament.bracket as Match[];
+    withKeepers.forEach((m) => {
+      if (!isPlayable(m) || m.winner) return;
+      const prev = prevBracket.find((p) => p.id === m.id);
+      const wasReady = prev && isPlayable(prev) && !prev.winner;
+      if (!wasReady) notifyMatchReady(m);
+    });
+
     await supabase.from("tournaments").update({
       bracket: withKeepers as any,
       champion,

@@ -1,9 +1,12 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3, UserCog } from "lucide-react";
+import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3, UserCog, CloudOff, RefreshCw, Bell, BellOff, Sun, Moon } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useOfflineGameQueue } from "@/hooks/useOfflineGameQueue";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
 
@@ -21,6 +24,9 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const { signOut, user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const { pendingCount, syncing } = useOfflineGameQueue();
+  const push = usePushSubscription(user?.id);
+  const { resolvedTheme, setTheme } = useTheme();
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -103,6 +109,37 @@ const Layout = ({ children }: { children: ReactNode }) => {
               </Link>
             )}
           </nav>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+            title={resolvedTheme === "dark" ? "Helles Design" : "Dunkles Design"}
+            aria-label="Design wechseln"
+          >
+            {resolvedTheme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </Button>
+          {push.supported && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={push.toggle}
+              disabled={push.busy}
+              title={push.enabled ? "Benachrichtigungen deaktivieren" : "Benachrichtigungen aktivieren (z. B. Turnier-Erinnerung)"}
+              aria-label="Benachrichtigungen"
+              className={push.enabled ? "text-primary" : undefined}
+            >
+              {push.enabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+            </Button>
+          )}
+          {pendingCount > 0 && (
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 text-xs font-medium mr-1"
+              title={`${pendingCount} offline gespeicherte${pendingCount === 1 ? "s Spiel" : " Spiele"} — wird synchronisiert, sobald Netz da ist`}
+            >
+              {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CloudOff className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{pendingCount} offline</span>
+            </div>
+          )}
           <Button variant="ghost" size="icon" onClick={handleSignOut} disabled={signingOut} title="Abmelden" aria-label="Abmelden">
             <LogOut className="w-4 h-4" />
           </Button>

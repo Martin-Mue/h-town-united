@@ -251,6 +251,7 @@ export type Database = {
           created_at: string
           dart_weight_g: number | null
           double_rate: number
+          elo_rating: number
           emoji: string | null
           favorite_double: string | null
           games_played: number
@@ -275,6 +276,7 @@ export type Database = {
           created_at?: string
           dart_weight_g?: number | null
           double_rate?: number
+          elo_rating?: number
           emoji?: string | null
           favorite_double?: string | null
           games_played?: number
@@ -299,6 +301,7 @@ export type Database = {
           created_at?: string
           dart_weight_g?: number | null
           double_rate?: number
+          elo_rating?: number
           emoji?: string | null
           favorite_double?: string | null
           games_played?: number
@@ -313,6 +316,33 @@ export type Database = {
           throwing_hand?: string | null
           updated_at?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_id?: string
         }
         Relationships: []
       }

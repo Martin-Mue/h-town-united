@@ -38,25 +38,21 @@ import {
 } from "@/utils/sounds";
 import { speakSequence, buildRoundAnnouncement } from "@/utils/speech";
 import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
+import { teamIndexFor } from "@/utils/teamUtils";
+import { effectiveStartScore } from "@/utils/handicap";
+import { saveGameRecord } from "@/lib/gameSync";
+import { enqueueGameSave } from "@/lib/offlineQueue";
+import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const MAX_PLAYERS = 8;
-
-/**
- * In team mode, remaining/legsWon/cricket/startedScoring are shared per team while throws
- * stay per individual player — players are interleaved [TeamA-1, TeamB-1, TeamA-2, ...] at
- * setup time, so "team index" is just playerIndex % teams.length.
- */
-function teamIndexFor(teams: TeamSlot[] | undefined, playerIdx: number): number {
-  return teams && teams.length > 0 ? playerIdx % teams.length : playerIdx;
-}
 
 function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, players: PlayerSlot[], teams?: TeamSlot[]): LegState {
   const scoreSlots = teams?.length ?? players.length;
   return {
     legNumber,
     startingPlayerIndex,
-    remaining: Array(scoreSlots).fill(startScore),
+    remaining: Array.from({ length: scoreSlots }, (_, i) => effectiveStartScore(startScore, players, i, teams)),
     throws: Array.from({ length: players.length }, () => []),
     startedScoring: teams
       ? Array.from({ length: scoreSlots }, (_, teamIdx) => !players.some((p, i) => teamIndexFor(teams, i) === teamIdx && p.doubleIn))
@@ -81,7 +77,6 @@ function dartLabel(t: DartThrow): string {
   return t.baseValue === 0 ? "M" : t.baseValue === 25 ? (t.multiplier === 2 ? "BULL" : "25") : `${t.multiplier === 2 ? "D" : t.multiplier === 3 ? "T" : ""}${t.baseValue}`;
 }
 
-interface DbPlayer { id: string; name: string; emoji: string; }
 
 /** Undo snapshot for reverting last dart */
 interface UndoSnapshot {
@@ -93,7 +88,7 @@ interface UndoSnapshot {
 const DEFAULT_NAMES = Array.from({ length: MAX_PLAYERS }, (_, i) => `Spieler ${i + 1}`);
 
 const GamePage = () => {
-  const [phase, setPhase] = useState<"setup" | "playing" | "postGame">("setup");
+  const [phase, setPhase] = useState<"setup" | "warmup" | "playing" | "postGame">("setup");
   const [mode, setMode] = useState<GameMode>("501");
   const [bestOfLegs, setBestOfLegs] = useState(1);
   const [maxRoundsX01, setMaxRoundsX01] = useState<number>(0); // 0 = unlimited
@@ -105,6 +100,14 @@ const GamePage = () => {
   const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
   const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(Array(MAX_PLAYERS).fill(true));
   const [playerDoubleIn, setPlayerDoubleIn] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
+  const [playerHandicap, setPlayerHandicap] = useState<number[]>(Array(MAX_PLAYERS).fill(0));
+  const [warmupEnabled, setWarmupEnabled] = useState(false);
+  const [warmupSeconds, setWarmupSeconds] = useState(60);
+  const [warmupRemaining, setWarmupRemaining] = useState(0);
+  const [warmupDarts, setWarmupDarts] = useState(0);
+  const [warmupTotal, setWarmupTotal] = useState(0);
+  const [warmupValue, setWarmupValue] = useState(20);
+  const [warmupMultiplier, setWarmupMultiplier] = useState(1);
   const [playerIsBot, setPlayerIsBot] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
   const [playerBotLevel, setPlayerBotLevel] = useState<BotLevel[]>(Array(MAX_PLAYERS).fill("medium"));
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -120,11 +123,12 @@ const GamePage = () => {
   const [showDetailedStats, setShowDetailedStats] = useState(false);
   const [sharingResult, setSharingResult] = useState(false);
   const [gameSaved, setGameSaved] = useState(false);
+  const [queuedOffline, setQueuedOffline] = useState(false);
   const { session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const savingRef = useRef(false);
-  const [dbPlayers, setDbPlayers] = useState<DbPlayer[]>([]);
+  const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
@@ -142,9 +146,7 @@ const GamePage = () => {
   const [checkoutRates, setCheckoutRates] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    supabase.from("players").select("id, name, emoji").order("name").then(({ data }) => {
-      if (data) setDbPlayers(data);
-    });
+    fetchClubPlayers().then(setDbPlayers).catch((err) => console.error("fetchClubPlayers failed", err));
   }, []);
 
   // Fetches the current player's career checkout conversion rate on demand (once per
@@ -215,6 +217,7 @@ const GamePage = () => {
       doubleIn: playerDoubleIn[i] ?? false,
       isBot: mode === "cricket" ? playerIsBot[i] : playerIsBot[i],
       botLevel: playerBotLevel[i] ?? "medium",
+      handicap: !teamMode && mode !== "cricket" ? (playerHandicap[i] || 0) : undefined,
     }));
     const teams = teamMode ? [{ name: teamNames[0].trim() || "Team 1" }, { name: teamNames[1].trim() || "Team 2" }] : undefined;
     const scoreSlots = teams?.length ?? n;
@@ -232,12 +235,39 @@ const GamePage = () => {
       newGame.cricket = Array.from({ length: scoreSlots }, () => createCricketState(cricketNumbers));
     }
     setGame(newGame);
-    setPhase("playing");
     setDartsThisRound(0);
-    setTurnStartRemaining(startScore);
+    setTurnStartRemaining(newGame.currentLeg.remaining[0] ?? startScore);
     setUndoStack([]);
     botPlanRef.current = null;
     pendingGameIdRef.current = crypto.randomUUID();
+    setQueuedOffline(false);
+    if (warmupEnabled) {
+      setWarmupRemaining(warmupSeconds);
+      setWarmupDarts(0);
+      setWarmupTotal(0);
+      setWarmupValue(20);
+      setWarmupMultiplier(1);
+      setPhase("warmup");
+    } else {
+      setPhase("playing");
+    }
+  };
+
+  // ─── warm-up (pre-match, doesn't touch game/stats) ──────────────────
+  useEffect(() => {
+    if (phase !== "warmup" || warmupRemaining <= 0) return;
+    const t = setTimeout(() => setWarmupRemaining((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, warmupRemaining]);
+
+  useEffect(() => {
+    if (phase === "warmup" && warmupRemaining <= 0) setPhase("playing");
+  }, [phase, warmupRemaining]);
+
+  const submitWarmupDart = () => {
+    const pts = warmupValue === 0 ? 0 : (warmupValue === 25 && warmupMultiplier === 3 ? 0 : warmupValue * warmupMultiplier);
+    setWarmupTotal((t) => t + pts);
+    setWarmupDarts((d) => d + 1);
   };
 
   /** Save undo snapshot before each throw */
@@ -370,7 +400,8 @@ const GamePage = () => {
 
     if (newRemaining === 0) {
       setDartsThisRound(0);
-      setTurnStartRemaining(game.startScore);
+      const nextStarter = (game.currentLeg.startingPlayerIndex + 1) % n;
+      setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
       const legsWon = game.legsWon[teamIdx] + 1;
       const legsToWin = Math.ceil(game.bestOfLegs / 2);
       if (soundEnabled) {
@@ -791,119 +822,23 @@ const GamePage = () => {
   const saveGame = async () => {
     if (!game || !game.isFinished || savingRef.current || gameSaved) return;
     savingRef.current = true;
-    const allLegs = [...game.completedLegs, game.currentLeg];
-    const n = game.players.length;
-    const throwsByPlayer = Array.from({ length: n }, (_, i) => allLegs.flatMap(l => l.throws[i] ?? []));
-    const averages = throwsByPlayer.map(calculateAverage);
-    const highs = throwsByPlayer.map(getHighest3DartRound);
-    // Double/checkout rate: % of checkout-range visits (X01 only) that actually finished the leg.
-    const doubleRates = game.mode === "cricket"
-      ? Array(n).fill(0)
-      : Array.from({ length: n }, (_, i) =>
-          combineCheckoutStats(allLegs.map(leg => computeCheckoutStats(leg.throws[i] ?? [], game.startScore))).percentage
-        );
-
-    // Rank players by legs won (desc) to determine the top-2 finishers for the legacy DB schema.
-    // In team mode, "top1"/"top2" are always one representative per team (players are
-    // interleaved [Team0-1, Team1-1, Team0-2, ...] at setup, so those reps sit at index 0/1 —
-    // which conveniently equals their own team index, so every game.legsWon[topN]-style lookup
-    // below stays correct without a separate translation).
-    const ranking = game.teams
-      ? [
-          game.players.findIndex((_, i) => teamIndexFor(game.teams, i) === 0),
-          game.players.findIndex((_, i) => teamIndexFor(game.teams, i) === 1),
-        ]
-      : game.players.map((_, i) => i).sort((a, b) => game.legsWon[b] - game.legsWon[a]);
-    const [top1, top2] = ranking;
-
-    const { data: allDbPlayers } = await supabase.from("players").select("id, name");
-    const p1Match = allDbPlayers?.find(p => p.name === game.players[top1].name);
-    const p2Match = top2 !== undefined ? allDbPlayers?.find(p => p.name === game.players[top2].name) : undefined;
-    const winnerIdx = game.winnerIndex ?? top1;
-    const winnerMatch = winnerIdx === top1 ? p1Match : p2Match;
-    const player1Name = game.teams ? game.teams[0].name : game.players[top1].name;
-    const player2Name = game.teams ? game.teams[1].name : (top2 !== undefined ? game.players[top2].name : "—");
-
-    // Detailed per-player stats: treble-less visits + hits on the big triples (all players, not just the top 2)
-    const detailFor = (idx: number) => {
-      const throws = throwsByPlayer[idx];
-      const visits: typeof throws[] = [];
-      for (let i = 0; i < throws.length; i += 3) visits.push(throws.slice(i, i + 3));
-      const trebleless = visits.filter(v => v.length > 0 && v.every(t => t.multiplier !== 3)).length;
-      const tripleHits: Record<string, number> = {};
-      [20, 19, 18, 17, 16].forEach(n => {
-        tripleHits[`t${n}`] = throws.filter(t => t.multiplier === 3 && t.baseValue === n).length;
+    try {
+      if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
+      await saveGameRecord(game, session?.user?.id, pendingGameIdRef.current);
+      if (game.players.length > 2) {
+        toast({ title: "Spiel gespeichert", description: "Alle Spieler wurden erfasst — der Turnierverlauf im Klassiker-Datensatz zeigt aber nur die Top 2." });
+      }
+    } catch (err) {
+      // No connection (or a mid-request drop) — the result is far too valuable to lose, so
+      // it's queued in IndexedDB and replayed automatically once the app is back online
+      // (see offlineQueue.ts / App.tsx). The client-generated pendingGameIdRef keeps the
+      // eventual insert idempotent even if this fires more than once.
+      await enqueueGameSave({ id: pendingGameIdRef.current, game, userId: session?.user?.id });
+      setQueuedOffline(true);
+      toast({
+        title: "Offline gespeichert",
+        description: "Keine Verbindung — das Ergebnis bleibt auf diesem Gerät und synchronisiert automatisch, sobald wieder Netz da ist.",
       });
-      const playerMatch = allDbPlayers?.find(p => p.name === game.players[idx].name);
-      return {
-        name: game.players[idx].name,
-        player_id: playerMatch?.id || null,
-        visits: visits.length,
-        trebleless,
-        treblelessRate: visits.length ? Math.round((trebleless / visits.length) * 1000) / 10 : 0,
-        triples: throws.filter(t => t.multiplier === 3).length,
-        ...tripleHits,
-      };
-    };
-
-    const { data: insertedGame } = await supabase.from("games").insert({
-      id: pendingGameIdRef.current,
-      user_id: session?.user?.id, mode: game.mode, start_score: game.startScore,
-      best_of_legs: game.bestOfLegs,
-      player1_name: player1Name, player2_name: player2Name,
-      player1_id: p1Match?.id || null, player2_id: p2Match?.id || null,
-      player1_legs_won: game.legsWon[top1], player2_legs_won: top2 !== undefined ? game.legsWon[top2] : 0,
-      player1_average: averages[top1], player2_average: top2 !== undefined ? averages[top2] : 0,
-      player1_highscore: highs[top1], player2_highscore: top2 !== undefined ? highs[top2] : 0,
-      player1_double_rate: doubleRates[top1], player2_double_rate: top2 !== undefined ? doubleRates[top2] : 0,
-      player1_total_throws: throwsByPlayer[top1].length, player2_total_throws: top2 !== undefined ? throwsByPlayer[top2].length : 0,
-      winner_name: game.winnerName!, winner_id: winnerMatch?.id || null,
-      detail_stats: { players: game.players.map((_, i) => detailFor(i)) } as any,
-    }).select("id").single();
-
-    // Every player's every leg, dart-by-dart — the source of truth for checkout %,
-    // first-9 average, and full results for 3-4 player games (the `games` row above
-    // only ever tracks the top 2 finishers for backwards compatibility).
-    if (insertedGame?.id) {
-      const legRows = allLegs.flatMap((leg) =>
-        game.players.map((p, i) => ({
-          game_id: insertedGame.id,
-          user_id: session?.user?.id,
-          leg_number: leg.legNumber,
-          player_index: i,
-          player_name: p.name,
-          player_id: allDbPlayers?.find((dp) => dp.name === p.name)?.id || null,
-          starting_score: game.startScore,
-          throws: leg.throws[i] ?? [],
-          won: leg.winnerIndex === teamIndexFor(game.teams, i),
-        }))
-      );
-      if (legRows.length > 0) {
-        await supabase.from("game_legs").insert(legRows as any);
-      }
-    }
-
-    for (let i = 0; i < n; i++) {
-      const match = allDbPlayers?.find(p => p.name === game.players[i].name);
-      if (match && !game.players[i].isBot) {
-        const { data: current } = await supabase.from("players").select("*").eq("id", match.id).single();
-        if (current) {
-          const gp = current.games_played + 1;
-          const newAvg = (Number(current.average) * current.games_played + averages[i]) / gp;
-          // Cricket games don't have a double rate — only fold X01 games into the running career average.
-          const newDoubleRate = game.mode === "cricket"
-            ? Number(current.double_rate) || 0
-            : (Number(current.double_rate) * current.games_played + doubleRates[i]) / gp;
-          await supabase.from("players").update({
-            games_played: gp, games_won: current.games_won + (game.winnerIndex === teamIndexFor(game.teams, i) ? 1 : 0),
-            average: Math.round(newAvg * 10) / 10, high_score: Math.max(current.high_score, highs[i]),
-            double_rate: Math.round(newDoubleRate * 10) / 10,
-          }).eq("id", match.id);
-        }
-      }
-    }
-    if (n > 2) {
-      toast({ title: "Spiel gespeichert", description: "Alle Spieler wurden erfasst — der Turnierverlauf im Klassiker-Datensatz zeigt aber nur die Top 2." });
     }
     setGameSaved(true);
     savingRef.current = false;
@@ -1109,6 +1044,30 @@ const GamePage = () => {
                       <span className="text-xs text-muted-foreground">{playerDoubleOut[i] ? "Double Out" : "Single Out"}</span>
                       <Switch checked={playerDoubleOut[i]} onCheckedChange={(v) => setPlayerDoubleOut(prev => prev.map((val, idx) => idx === i ? v : val))} />
                     </div>
+                    {!teamMode && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground" title="Startpunkte-Ausgleich für ungleich starke Spieler">Handicap</span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min={0}
+                            step={10}
+                            value={playerHandicap[i] || 0}
+                            onChange={(e) => {
+                              const v = Math.max(0, parseInt(e.target.value, 10) || 0);
+                              setPlayerHandicap(prev => prev.map((val, idx) => idx === i ? v : val));
+                            }}
+                            className="w-16 rounded-lg bg-background border border-border px-2 py-1 text-sm text-foreground text-right focus:outline-none focus:ring-1 focus:ring-primary"
+                          />
+                          <span className="text-[10px] text-muted-foreground">Punkte</span>
+                        </div>
+                      </div>
+                    )}
+                    {!teamMode && playerHandicap[i] > 0 && (
+                      <p className="text-[10px] text-muted-foreground text-right -mt-1.5">
+                        Startet bei {Math.max(2, getStartScore() - playerHandicap[i])} statt {getStartScore()}
+                      </p>
+                    )}
                   </>
                 )}
               </div>
@@ -1132,10 +1091,75 @@ const GamePage = () => {
             <Switch checked={speechEnabled} onCheckedChange={setSpeechEnabled} />
           </div>
 
+          <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <Label htmlFor="warmup-mode" className="text-sm">Aufwärmen vor dem Match</Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Kurze Einwerf-Phase mit Timer — zählt nicht in die Statistik.</p>
+              </div>
+              <Switch id="warmup-mode" checked={warmupEnabled} onCheckedChange={setWarmupEnabled} />
+            </div>
+            {warmupEnabled && (
+              <div className="grid grid-cols-4 gap-1.5 pt-1">
+                {[30, 60, 90, 120].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setWarmupSeconds(s)}
+                    className={`rounded-lg py-1.5 text-xs font-display transition-colors ${warmupSeconds === s ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}
+                  >
+                    {s}s
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
-            <Target className="w-5 h-5 mr-2" /> Spiel starten
+            <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? "Aufwärmen starten" : "Spiel starten"}
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  // ─── WARM-UP PHASE ─────────────────────────────────
+  if (phase === "warmup") {
+    const mm = Math.floor(warmupRemaining / 60);
+    const ss = warmupRemaining % 60;
+    return (
+      <div className="container py-6 animate-slide-up max-w-lg mx-auto">
+        <div className="text-center mb-4">
+          <h2 className="text-2xl font-display uppercase text-primary">Aufwärmen</h2>
+          <p className="text-xs text-muted-foreground mt-1">Frei einwerfen — zählt nicht in die Statistik.</p>
+        </div>
+
+        <div className="bg-card rounded-2xl border border-primary/30 glow-cyan p-6 mb-4 text-center">
+          <div className="font-display text-6xl tabular-nums text-primary">
+            {mm}:{String(ss).padStart(2, "0")}
+          </div>
+          <div className="flex items-center justify-center gap-4 mt-3 text-xs text-muted-foreground">
+            <span>{warmupDarts} Darts</span>
+            <span>·</span>
+            <span>{warmupTotal} Punkte</span>
+          </div>
+          <div className="flex items-center justify-center gap-2 mt-3">
+            <Button size="sm" variant="outline" onClick={() => setWarmupRemaining((s) => s + 30)}>+30s</Button>
+            <Button size="sm" variant="outline" onClick={() => setWarmupRemaining(0)}>Timer beenden</Button>
+          </div>
+        </div>
+
+        <DartScoreInput
+          selectedValue={warmupValue}
+          selectedMultiplier={warmupMultiplier}
+          isDisabled={false}
+          onValueSelect={setWarmupValue}
+          onMultiplierSelect={setWarmupMultiplier}
+          onSubmit={submitWarmupDart}
+        />
+
+        <Button onClick={() => setPhase("playing")} className="w-full mt-4 font-display uppercase text-lg py-6">
+          <Target className="w-5 h-5 mr-2" /> Los geht's
+        </Button>
       </div>
     );
   }
@@ -1269,7 +1293,11 @@ const GamePage = () => {
               </Button>
               <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">Neues Spiel</Button>
             </div>
-            {gameSaved && <p className="text-[10px] text-muted-foreground mt-2">✓ Spiel gespeichert</p>}
+            {gameSaved && (
+              <p className="text-[10px] text-muted-foreground mt-2">
+                {queuedOffline ? "⏳ Offline gespeichert — wird synchronisiert, sobald wieder Netz da ist" : "✓ Spiel gespeichert"}
+              </p>
+            )}
           </div>
         </div>
       )}

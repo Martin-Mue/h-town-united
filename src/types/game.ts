@@ -26,6 +26,8 @@ export interface PlayerSlot {
   doubleIn?: boolean;
   isBot: boolean;
   botLevel?: BotLevel;
+  /** Handicap (X01, non-team only): points subtracted from the mode's base starting score, giving a weaker player a head start against stronger opponents. */
+  handicap?: number;
 }
 
 /** State tracking for a single leg within a match (N players, X01) */
