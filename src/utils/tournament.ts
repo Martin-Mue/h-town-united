@@ -317,6 +317,41 @@ export function scorekeeperLabel(match: Match, all: Match[]): string | null {
   return null;
 }
 
+export interface BoardScheduleEntry {
+  board: number;
+  match: Match;
+}
+
+export interface CurrentBoardSchedule {
+  /** Matches on the lowest open playing slot — "on a board right now". */
+  now: BoardScheduleEntry[];
+  /** Matches on the next slot after "now". */
+  onDeck: BoardScheduleEntry[];
+  /** Open matches beyond `now`/`onDeck`, not itemized. */
+  queuedCount: number;
+}
+
+/**
+ * Derives "what's on which board right now" from the schedule — the single source of
+ * truth shared by the public live view's banner + sidebar (previously computed twice,
+ * slightly differently, in each spot). Not used by the admin schedule tab, which needs
+ * every open slot (not just the next two) for planning/scorekeeper editing.
+ */
+export function currentBoardSchedule(matches: Match[], boards: number): CurrentBoardSchedule {
+  const schedule = buildSchedule(matches, boards);
+  const open = schedule.filter((e) => !e.match.winner);
+  const slots = [...new Set(open.map((e) => e.slot))].sort((a, b) => a - b);
+  const [nowSlot, nextSlot] = slots;
+  const collect = (slot: number | undefined): BoardScheduleEntry[] =>
+    slot === undefined
+      ? []
+      : open.filter((e) => e.slot === slot).sort((a, b) => a.board - b.board).map((e) => ({ board: e.board, match: e.match }));
+  const now = collect(nowSlot);
+  const onDeck = collect(nextSlot);
+  const queuedCount = open.filter((e) => e.slot !== nowSlot && e.slot !== nextSlot).length;
+  return { now, onDeck, queuedCount };
+}
+
 export const roundLabelFor = (round: number, total: number) => {
   if (round === 0) return "Preliminary Round";
   if (round === total) return "Final";

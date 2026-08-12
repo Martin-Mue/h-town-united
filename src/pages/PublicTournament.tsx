@@ -1,17 +1,10 @@
 import { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Network, Rows3 } from "lucide-react";
-import { roundLabelFor } from "@/utils/tournament";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine } from "lucide-react";
+import { roundLabelFor, currentBoardSchedule, type Match } from "@/utils/tournament";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
-
-interface Match {
-  id: string; round: number; position: number;
-  player1?: string; player2?: string; winner?: string;
-  score1?: number; score2?: number; scorekeeper?: string; board?: number; slot?: number;
-  scorekeeperRule?: "prev-loser"; scorekeeperFromMatchId?: string;
-}
 
 /** name of the scorekeeper – or the rule "loser of match X" while it is not decided yet */
 const keeperLabel = (m: Match, all: Match[]): string | null => {
@@ -382,6 +375,138 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   );
 };
 
+/** Normalized shape both KO matches and round-robin matches get mapped into before
+ *  reaching `BoardOverview` — keeps that component free of KO-vs-round-robin branching. */
+interface BoardCard {
+  id: string;
+  board: number;
+  player1: string;
+  player2: string;
+  score1: number;
+  score2: number;
+  /** KO only — round-robin has no round concept. */
+  round?: number;
+  /** KO only — round-robin has no scorekeeper assignment. */
+  scorekeeper?: string | null;
+}
+
+const koToBoardCards = (entries: { board: number; match: Match }[], allMatches: Match[]): BoardCard[] =>
+  entries.map(({ board, match: m }) => ({
+    id: m.id, board, player1: m.player1 || "?", player2: m.player2 || "?",
+    score1: m.score1 ?? 0, score2: m.score2 ?? 0, round: m.round,
+    scorekeeper: keeperLabel(m, allMatches),
+  }));
+
+/** Round-robin has no persisted board/slot scheduling (unlike KO matches) — this just
+ *  fills the configured board count with the next pending matches in list order, purely
+ *  for display. Good enough for "what's roughly playing where" without a real scheduler. */
+function roundRobinBoardCards(matches: RoundRobinMatch[], boards: number): { now: BoardCard[]; onDeck: BoardCard[]; queuedCount: number } {
+  const pending = matches.filter((m) => !m.played);
+  const toCards = (list: RoundRobinMatch[]) => list.map((m, i): BoardCard => ({ id: m.id, board: i + 1, player1: m.player1, player2: m.player2, score1: 0, score2: 0 }));
+  const now = toCards(pending.slice(0, boards));
+  const onDeck = toCards(pending.slice(boards, boards * 2));
+  const queuedCount = Math.max(0, pending.length - now.length - onDeck.length);
+  return { now, onDeck, queuedCount };
+}
+
+/**
+ * Full-bleed, large-type board grid for TV/projector mirroring at club nights — shows
+ * every board's current pairing + last known leg score at a glance from across the room,
+ * alongside tablets showing the same view up close. Sizes fluidly via CSS clamp() instead
+ * of fixed breakpoints so it stays legible whether mirrored to a 10" tablet or a 65" TV.
+ */
+const BoardOverview = ({
+  now, onDeck, queuedCount, totalRounds,
+}: {
+  now: BoardCard[];
+  onDeck: BoardCard[];
+  queuedCount: number;
+  totalRounds: number;
+}) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === wrapRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+    else wrapRef.current?.requestFullscreen().catch(() => undefined);
+  };
+
+  return (
+    <div ref={wrapRef} className="p-4 sm:p-6 bg-background min-h-[60vh]">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-[clamp(0.7rem,1.2vw,0.9rem)] uppercase tracking-[0.3em] text-primary flex items-center gap-2">
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary animate-pulse" /> Board-Übersicht · Live
+        </p>
+        <button
+          onClick={toggleFullscreen}
+          className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1.5"
+          title={isFullscreen ? "Vollbild verlassen" : "Vollbild (für TV/Beamer)"}
+        >
+          {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          {isFullscreen ? "Vollbild verlassen" : "Vollbild"}
+        </button>
+      </div>
+
+      {now.length === 0 ? (
+        <p className="text-[clamp(1rem,2vw,1.5rem)] text-muted-foreground text-center py-12">
+          Noch keine laufenden Partien.
+        </p>
+      ) : (
+        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 320px), 1fr))` }}>
+          {now.map((c) => (
+            <div key={c.id} className="rounded-2xl border-2 border-primary/50 bg-gradient-to-br from-primary/10 via-card to-accent/5 p-4 sm:p-6 glow-cyan">
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-display text-[clamp(1.1rem,2vw,1.6rem)] text-primary">Board {c.board}</span>
+                {c.round !== undefined && <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-muted-foreground">{roundLabelFor(c.round, totalRounds)}</span>}
+              </div>
+              <p className="font-display uppercase leading-tight text-[clamp(1.3rem,3.2vw,2.4rem)]">
+                {c.player1}
+                <span className="block text-muted-foreground text-[clamp(0.8rem,1.6vw,1.1rem)] normal-case my-0.5">vs</span>
+                {c.player2}
+              </p>
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
+                <span className="font-display text-[clamp(1.4rem,2.6vw,2rem)] text-secondary">{c.score1} : {c.score2}</span>
+                {c.scorekeeper !== undefined && (
+                  <span className="text-[clamp(0.7rem,1.1vw,0.9rem)] text-muted-foreground flex items-center gap-1">
+                    <PenLine className="w-3.5 h-3.5" /> {c.scorekeeper || "–"}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {onDeck.length > 0 && (
+        <div className="mt-6">
+          <p className="text-[clamp(0.7rem,1.1vw,0.85rem)] uppercase tracking-widest text-muted-foreground mb-2">Als Nächstes</p>
+          <div className="flex flex-wrap gap-2">
+            {onDeck.map((c) => (
+              <div key={c.id} className="rounded-xl border border-border bg-card/60 px-3 py-2 flex items-center gap-2">
+                <span className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] bg-primary/10 text-primary rounded px-1.5 py-0.5 shrink-0">Board {c.board}</span>
+                <span className="text-[clamp(0.85rem,1.4vw,1.05rem)] uppercase tracking-wide">
+                  {c.player1} <span className="text-muted-foreground normal-case">vs</span> {c.player2}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {queuedCount > 0 && (
+        <p className="mt-3 text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-muted-foreground">
+          +{queuedCount} weitere Partie{queuedCount > 1 ? "n" : ""} in der Warteschlange
+        </p>
+      )}
+    </div>
+  );
+};
+
 const PublicTournamentPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const [t, setT] = useState<TournamentRow | null>(null);
@@ -390,7 +515,7 @@ const PublicTournamentPage = () => {
   const [flash, setFlash] = useState<Match | null>(null);
   const seenResults = useRef<Set<string> | null>(null);
   const flashTimer = useRef<number | null>(null);
-  const [view, setView] = useState<"tree" | "list">(() => (typeof window !== "undefined" && window.innerWidth < 900 ? "list" : "tree"));
+  const [view, setView] = useState<"tree" | "list" | "boards">(() => (typeof window !== "undefined" && window.innerWidth < 900 ? "list" : "tree"));
   const autoViewSetRef = useRef(false);
 
   // A 32+ player mirrored tree can't stay legible at any scale that also fits a
@@ -476,15 +601,18 @@ const PublicTournamentPage = () => {
   const completed = matches.filter(m => m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE").slice(-8).reverse();
   const boardsCount = t.boards ?? 2;
 
-  // Board-aware look-ahead: every match already paired but not yet decided,
-  // grouped by playing slot – the same "slot" the admin scheduler assigns live.
-  const pending = matches
-    .filter(m => !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE" && m.slot !== undefined)
-    .sort((a, b) => (a.slot! - b.slot!) || ((a.board ?? 0) - (b.board ?? 0)));
-  const pendingSlots = [...new Set(pending.map(m => m.slot))] as number[];
-  const nextSlot = pendingSlots[1]; // index 0 is "Jetzt am Board", already shown above
-  const onDeck = nextSlot !== undefined ? pending.filter(m => m.slot === nextSlot) : [];
-  const queuedCount = pendingSlots.length > 2 ? pending.filter(m => m.slot !== pendingSlots[0] && m.slot !== nextSlot).length : 0;
+  // Board-aware look-ahead — single source of truth shared by the "Jetzt am Board"
+  // banner, the "Als Nächstes" sidebar card, and the full-screen board overview.
+  const boardSchedule = isKo ? currentBoardSchedule(matches, boardsCount) : null;
+  const nowBoards = boardSchedule?.now ?? [];
+  const onDeck = boardSchedule?.onDeck ?? [];
+  const queuedCount = boardSchedule?.queuedCount ?? 0;
+
+  // Same look-ahead, normalized into BoardOverview's KO-agnostic BoardCard shape.
+  const rrBoards = !isKo ? roundRobinBoardCards(t.bracket as unknown as RoundRobinMatch[], boardsCount) : null;
+  const boardCardsNow = isKo ? koToBoardCards(nowBoards, matches) : rrBoards!.now;
+  const boardCardsOnDeck = isKo ? koToBoardCards(onDeck, matches) : rrBoards!.onDeck;
+  const boardCardsQueued = isKo ? queuedCount : rrBoards!.queuedCount;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -492,7 +620,7 @@ const PublicTournamentPage = () => {
         <div className="flex items-center gap-3 min-w-0">
           <img src={htuLogo} alt="Logo" className="w-12 h-12 rounded-xl object-cover border border-primary/30 shrink-0" />
           <div className="min-w-0">
-            <h1 className="font-display text-xl sm:text-2xl uppercase tracking-widest truncate">{t.name}</h1>
+            <h1 className="font-display text-[clamp(1.1rem,2.4vw,2rem)] uppercase tracking-widest truncate">{t.name}</h1>
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="inline-flex items-center gap-2 shrink-0">
                 <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" /> Live
@@ -509,42 +637,44 @@ const PublicTournamentPage = () => {
         )}
       </header>
 
+      {view === "boards" ? (
+        <BoardOverview now={boardCardsNow} onDeck={boardCardsOnDeck} queuedCount={boardCardsQueued} totalRounds={totalRounds} />
+      ) : (
       <div className="grid lg:grid-cols-[1fr_320px] gap-4 p-4">
         <div className="min-w-0">
-          {(() => {
-            const openSlots = matches.filter(m => !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE" && m.slot !== undefined);
-            if (openSlots.length === 0) return null;
-            const minSlot = Math.min(...openSlots.map(m => m.slot!));
-            const now = openSlots.filter(m => m.slot === minSlot).sort((a, b) => (a.board ?? 0) - (b.board ?? 0));
-            return (
-              <div className="mb-3 rounded-2xl border-2 border-primary/50 bg-gradient-to-r from-primary/15 via-card to-accent/10 p-4 glow-cyan">
-                <p className="text-[11px] uppercase tracking-[0.3em] text-primary mb-2 flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" /> Jetzt am Board
-                </p>
-                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                  {now.map(m => (
-                    <div key={m.id} className="rounded-xl bg-background/60 border border-border px-3 py-2">
-                      <p className="font-display text-lg uppercase truncate">{m.player1} <span className="text-muted-foreground text-sm normal-case">vs</span> {m.player2}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-2">
-                        <span className="font-mono text-primary">Board {m.board ?? "?"}</span>
-                        <span>✍️ {keeperLabel(m, matches) || "–"}</span>
-                      </p>
-                    </div>
-                  ))}
-                </div>
+          {nowBoards.length > 0 && (
+            <div className="mb-3 rounded-2xl border-2 border-primary/50 bg-gradient-to-r from-primary/15 via-card to-accent/10 p-4 glow-cyan">
+              <p className="text-[11px] uppercase tracking-[0.3em] text-primary mb-2 flex items-center gap-2">
+                <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" /> Jetzt am Board
+              </p>
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                {nowBoards.map(({ board, match: m }) => (
+                  <div key={m.id} className="rounded-xl bg-background/60 border border-border px-3 py-2">
+                    <p className="font-display text-lg uppercase truncate">{m.player1} <span className="text-muted-foreground text-sm normal-case">vs</span> {m.player2}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-2">
+                      <span className="font-mono text-primary">Board {board}</span>
+                      <span>✍️ {keeperLabel(m, matches) || "–"}</span>
+                    </p>
+                  </div>
+                ))}
               </div>
-            );
-          })()}
-          {isKo && (
-            <div className="mb-2 inline-flex rounded-lg border border-border overflow-hidden">
-              <button onClick={() => setView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                <Network className="w-3.5 h-3.5" /> Turnierbaum
-              </button>
-              <button onClick={() => setView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                <Rows3 className="w-3.5 h-3.5" /> Rundenliste
-              </button>
             </div>
           )}
+          <div className="mb-2 inline-flex rounded-lg border border-border overflow-hidden">
+            <button onClick={() => setView("boards")} className="px-3 py-1.5 text-xs flex items-center gap-1 hover:bg-muted text-muted-foreground">
+              <Monitor className="w-3.5 h-3.5" /> Board-Übersicht
+            </button>
+            {isKo && (
+              <>
+                <button onClick={() => setView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                  <Network className="w-3.5 h-3.5" /> Turnierbaum
+                </button>
+                <button onClick={() => setView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                  <Rows3 className="w-3.5 h-3.5" /> Rundenliste
+                </button>
+              </>
+            )}
+          </div>
           {isKo ? (
             view === "tree" ? (
               <LiveBracket
@@ -582,18 +712,18 @@ const PublicTournamentPage = () => {
               </div>
               {onDeck.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  {pendingSlots.length === 0 ? "Noch keine Paarungen feststehend." : "Alle bekannten Paarungen laufen bereits."}
+                  {nowBoards.length === 0 ? "Noch keine Paarungen feststehend." : "Alle bekannten Paarungen laufen bereits."}
                 </p>
               ) : (
                 <>
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
-                    {roundLabel(onDeck[0].round, totalRounds)}
+                    {roundLabel(onDeck[0].match.round, totalRounds)}
                   </p>
                   <ul className="space-y-1.5">
-                    {onDeck.map(m => (
+                    {onDeck.map(({ board, match: m }) => (
                       <li key={m.id} className="flex items-center gap-2 text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">
                         <span className="font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5 shrink-0">
-                          Board {m.board ?? "?"}
+                          Board {board}
                         </span>
                         <span className="truncate uppercase tracking-wide">
                           {m.player1} <span className="text-muted-foreground normal-case">vs</span> {m.player2}
@@ -638,6 +768,7 @@ const PublicTournamentPage = () => {
           </div>
         </aside>
       </div>
+      )}
 
       {flash && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
