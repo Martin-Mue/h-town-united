@@ -33,6 +33,7 @@ import {
   roundLabelFor,
   scorekeeperLabel,
   calcStandings,
+  newlyPlayableMatches,
 } from "@/utils/tournament";
 
 interface RoundConfig {
@@ -222,9 +223,11 @@ interface BracketViewportProps {
   /** undefined for a match round marked "Extern" (played outside the app) — no live-game option then. */
   canStartLiveGame: (match: Match) => boolean;
   onStartLiveGame: (match: Match) => void;
+  /** Absolute URL for the QR code — null when the match isn't in a live-startable state. */
+  getLiveGameUrl: (match: Match) => string | null;
 }
 
-const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame }: BracketViewportProps) => {
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl }: BracketViewportProps) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState({ wrapW: 0, wrapH: 0, innerW: 0, innerH: 0 });
@@ -316,10 +319,23 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
         </div>
       )}
       {canStartLiveGame(match) && (
-        <div className="border-t border-border/60">
-          <Button variant="secondary" size="sm" className="w-full rounded-none h-8 text-xs gap-1.5" onClick={() => onStartLiveGame(match)}>
+        <div className="flex border-t border-border/60">
+          <Button variant="secondary" size="sm" className="flex-1 rounded-none h-8 text-xs gap-1.5" onClick={() => onStartLiveGame(match)}>
             <Play className="w-3.5 h-3.5" /> Spiel starten
           </Button>
+          {getLiveGameUrl(match) && (
+            <QrCodeDialog
+              url={getLiveGameUrl(match)!}
+              title="Spiel starten"
+              description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
+              downloadName={`match-${match.id}`}
+              trigger={
+                <button className="shrink-0 rounded-none border-l border-border/60 px-3 h-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="QR-Code für dieses Match">
+                  <QrCode className="w-3.5 h-3.5" />
+                </button>
+              }
+            />
+          )}
         </div>
       )}
       {(match.winner || match.score1 || match.score2 || onEditMatch) && (
@@ -843,10 +859,10 @@ const TournamentPage = () => {
       boards,
       live_play_enabled: livePlayEnabled,
     };
-    let { data, error } = await supabase.from("tournaments").insert(insertPayload).select().single();
+    let { data, error } = await supabase.from("tournaments").insert(insertPayload as any).select().single();
     if (error && missingLivePlayColumn(error)) {
       const { live_play_enabled, ...fallback } = insertPayload;
-      ({ data, error } = await supabase.from("tournaments").insert(fallback).select().single());
+      ({ data, error } = await supabase.from("tournaments").insert(fallback as any).select().single());
     }
 
     if (error || !data) {
@@ -878,22 +894,15 @@ const TournamentPage = () => {
     const freshBracket = (freshRow?.bracket as unknown as Match[] | undefined) ?? (activeTournament.bracket as Match[]);
     const freshPlayers = (freshRow?.players as unknown as string[] | undefined) ?? activeTournament.players;
     const raw = patch(freshBracket);
-    const recomputed = recomputeBracket(raw);
+    const recomputed = recomputeBracket(raw, freshPlayers);
     const withKeepers = assignScorekeepers(recomputed, freshPlayers, {
       boards: activeTournament.boards || 2,
       keepExisting: !opts.reshuffleKeepers,
     });
     const champion = bracketChampion(withKeepers);
 
-    // "Your match is up next" — only for matches that just BECAME playable (both players
-    // now known, not already playable before this update), so this fires once per match.
-    const prevBracket = activeTournament.bracket as Match[];
-    withKeepers.forEach((m) => {
-      if (!isPlayable(m) || m.winner) return;
-      const prev = prevBracket.find((p) => p.id === m.id);
-      const wasReady = prev && isPlayable(prev) && !prev.winner;
-      if (!wasReady) notifyMatchReady(m);
-    });
+    // "Your match is up next" — only for matches that just BECAME playable, so this fires once per match.
+    newlyPlayableMatches(activeTournament.bracket as Match[], withKeepers).forEach(notifyMatchReady);
 
     await supabase.from("tournaments").update({
       bracket: withKeepers as any,
@@ -960,18 +969,14 @@ const TournamentPage = () => {
   /** Withdraw a player: only *unplayed* matches are adjusted, results stay untouched. */
   const withdrawPlayer = async (name: string) => {
     if (!activeTournament) return;
+    // Round-1 slots are raw seed data → set directly to BYE. Later rounds are propagated by
+    // recomputeBracket, which now auto-awards a walkover for any withdrawn (no-longer-active)
+    // player as soon as their next opponent's slot becomes known — see its `activePlayers` param.
     const patch = (fresh: Match[]) => fresh.map(m => {
+      if (m.winner || m.round !== 1) return { ...m };
       const copy = { ...m };
-      // already decided matches keep their result – history stays intact
-      if (copy.winner) return copy;
-      if (copy.round === 1) {
-        if (copy.player1 === name) copy.player1 = BYE;
-        if (copy.player2 === name) copy.player2 = BYE;
-      } else {
-        // later round: walkover for the opponent, seeded slots are recomputed anyway
-        if (copy.player1 === name && isRealPlayer(copy.player2)) copy.winner = copy.player2;
-        if (copy.player2 === name && isRealPlayer(copy.player1)) copy.winner = copy.player1;
-      }
+      if (copy.player1 === name) copy.player1 = BYE;
+      if (copy.player2 === name) copy.player2 = BYE;
       return copy;
     });
     const nextPlayers = activeTournament.players.filter(p => p !== name);
@@ -1010,36 +1015,42 @@ const TournamentPage = () => {
 
   /** Opens Game.tsx prefilled for this match — playing stays entirely optional, this is purely
    *  an additive shortcut next to the existing manual "tap winner" / "+1 leg" controls. */
-  const startLiveGame = (match: Match) => {
-    if (!activeTournament || !isRealPlayer(match.player1) || !isRealPlayer(match.player2)) return;
+  const liveGamePath = (matchId: string, player1: string, player2: string, mode: string, bestOf: number): string => {
+    const params = new URLSearchParams({
+      tid: activeTournament!.id,
+      mid: matchId,
+      p1: player1,
+      p2: player2,
+      mode: mode.toLowerCase(),
+      bestOf: String(bestOf),
+      tname: activeTournament!.name,
+    });
+    return `/game?${params.toString()}`;
+  };
+
+  /** Shared by the "Spiel starten" button and the QR-code dialog — both point at the exact same URL. */
+  const koLiveGamePath = (match: Match): string | null => {
+    if (!activeTournament || !isRealPlayer(match.player1) || !isRealPlayer(match.player2)) return null;
     const roundMode = resolveRoundMode(match.round);
     const bestOf = (activeTournament.round_configs || [])[match.round - 1]?.bestOf || activeTournament.best_of_legs || 1;
-    const params = new URLSearchParams({
-      tid: activeTournament.id,
-      mid: match.id,
-      p1: match.player1!,
-      p2: match.player2!,
-      mode: roundMode.toLowerCase(),
-      bestOf: String(bestOf),
-      tname: activeTournament.name,
-    });
-    navigate(`/game?${params.toString()}`);
+    return liveGamePath(match.id, match.player1!, match.player2!, roundMode, bestOf);
+  };
+
+  const rrLiveGamePath = (match: RoundRobinMatch): string | null => {
+    if (!activeTournament) return null;
+    const roundMode = activeTournament.game_mode || "501";
+    if (roundMode === "Extern") return null;
+    return liveGamePath(match.id, match.player1, match.player2, roundMode, activeTournament.best_of_legs || 1);
+  };
+
+  const startLiveGame = (match: Match) => {
+    const path = koLiveGamePath(match);
+    if (path) navigate(path);
   };
 
   const startLiveGameRr = (match: RoundRobinMatch) => {
-    if (!activeTournament) return;
-    const roundMode = activeTournament.game_mode || "501";
-    if (roundMode === "Extern") return;
-    const params = new URLSearchParams({
-      tid: activeTournament.id,
-      mid: match.id,
-      p1: match.player1,
-      p2: match.player2,
-      mode: roundMode.toLowerCase(),
-      bestOf: String(activeTournament.best_of_legs || 1),
-      tname: activeTournament.name,
-    });
-    navigate(`/game?${params.toString()}`);
+    const path = rrLiveGamePath(match);
+    if (path) navigate(path);
   };
 
   // ─── Round Robin: Set Winner ───────────────────
@@ -1689,6 +1700,7 @@ const TournamentPage = () => {
             onEditMatch={(m) => { setEditMatch(m); setEditP1(m.player1 === BYE ? "" : m.player1 || ""); setEditP2(m.player2 === BYE ? "" : m.player2 || ""); }}
             canStartLiveGame={canStartLiveGame}
             onStartLiveGame={startLiveGame}
+            getLiveGameUrl={(m) => { const p = koLiveGamePath(m); return p ? `${window.location.origin}${p}` : null; }}
           />
         ) : (
           <div className="container space-y-4">
@@ -1717,9 +1729,24 @@ const TournamentPage = () => {
                           <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
                         </span>
                         {canStartLiveGame(e.match) && (
-                          <Button size="sm" variant="secondary" className="h-7 text-xs gap-1 shrink-0" onClick={() => startLiveGame(e.match)}>
-                            <Play className="w-3 h-3" /> Spiel starten
-                          </Button>
+                          <>
+                            <Button size="sm" variant="secondary" className="h-7 text-xs gap-1 shrink-0" onClick={() => startLiveGame(e.match)}>
+                              <Play className="w-3 h-3" /> Spiel starten
+                            </Button>
+                            {koLiveGamePath(e.match) && (
+                              <QrCodeDialog
+                                url={`${window.location.origin}${koLiveGamePath(e.match)}`}
+                                title="Spiel starten"
+                                description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
+                                downloadName={`match-${e.match.id}`}
+                                trigger={
+                                  <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" title="QR-Code für dieses Match">
+                                    <QrCode className="w-3.5 h-3.5" />
+                                  </Button>
+                                }
+                              />
+                            )}
+                          </>
                         )}
                         <div className="shrink-0 flex items-center gap-1">
                           <span className="text-xs">✍️</span>
@@ -1890,9 +1917,24 @@ const TournamentPage = () => {
                 <span className="text-sm">{m.player1} <span className="text-muted-foreground">vs</span> {m.player2}</span>
                 <div className="flex gap-1">
                   {(activeTournament.live_play_enabled ?? true) && activeTournament.game_mode !== "Extern" && (
-                    <Button size="sm" variant="secondary" className="text-xs h-7 px-2 gap-1" onClick={() => startLiveGameRr(m)}>
-                      <Play className="w-3 h-3" /> Spiel starten
-                    </Button>
+                    <>
+                      <Button size="sm" variant="secondary" className="text-xs h-7 px-2 gap-1" onClick={() => startLiveGameRr(m)}>
+                        <Play className="w-3 h-3" /> Spiel starten
+                      </Button>
+                      {rrLiveGamePath(m) && (
+                        <QrCodeDialog
+                          url={`${window.location.origin}${rrLiveGamePath(m)}`}
+                          title="Spiel starten"
+                          description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
+                          downloadName={`match-${m.id}`}
+                          trigger={
+                            <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" title="QR-Code für dieses Match">
+                              <QrCode className="w-3.5 h-3.5" />
+                            </Button>
+                          }
+                        />
+                      )}
+                    </>
                   )}
                   <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player1)}>
                     {m.player1} ✓

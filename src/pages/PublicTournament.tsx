@@ -6,9 +6,11 @@ import {
   roundLabelFor,
   currentBoardSchedule,
   calcStandings,
+  isLiveSnapshotFresh,
   type Match,
   type RoundRobinMatch,
   type RoundRobinStanding,
+  type LiveSnapshot,
 } from "@/utils/tournament";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import htuLogo from "@/assets/htu-logo.jpg";
@@ -370,13 +372,15 @@ interface BoardCard {
   round?: number;
   /** KO only — round-robin has no scorekeeper assignment. */
   scorekeeper?: string | null;
+  /** Present + fresh while someone's playing this match live via "Spiel starten". */
+  live?: LiveSnapshot;
 }
 
 const koToBoardCards = (entries: { board: number; match: Match }[], allMatches: Match[]): BoardCard[] =>
   entries.map(({ board, match: m }) => ({
     id: m.id, board, player1: m.player1 || "?", player2: m.player2 || "?",
     score1: m.score1 ?? 0, score2: m.score2 ?? 0, round: m.round,
-    scorekeeper: keeperLabel(m, allMatches),
+    scorekeeper: keeperLabel(m, allMatches), live: m.live,
   }));
 
 /** Round-robin has no persisted board/slot scheduling (unlike KO matches) — this just
@@ -384,7 +388,7 @@ const koToBoardCards = (entries: { board: number; match: Match }[], allMatches: 
  *  for display. Good enough for "what's roughly playing where" without a real scheduler. */
 function roundRobinBoardCards(matches: RoundRobinMatch[], boards: number): { now: BoardCard[]; onDeck: BoardCard[]; queuedCount: number } {
   const pending = matches.filter((m) => !m.played);
-  const toCards = (list: RoundRobinMatch[]) => list.map((m, i): BoardCard => ({ id: m.id, board: i + 1, player1: m.player1, player2: m.player2, score1: 0, score2: 0 }));
+  const toCards = (list: RoundRobinMatch[]) => list.map((m, i): BoardCard => ({ id: m.id, board: i + 1, player1: m.player1, player2: m.player2, score1: 0, score2: 0, live: m.live }));
   const now = toCards(pending.slice(0, boards));
   const onDeck = toCards(pending.slice(boards, boards * 2));
   const queuedCount = Math.max(0, pending.length - now.length - onDeck.length);
@@ -475,6 +479,16 @@ const BoardOverview = ({
                   </span>
                 )}
               </div>
+              {isLiveSnapshotFresh(c.live) && (
+                <div className="mt-2 flex items-center justify-between rounded-lg bg-destructive/10 border border-destructive/30 px-2.5 py-1.5">
+                  <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-destructive flex items-center gap-1.5">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" /> Live
+                  </span>
+                  <span className="font-display text-[clamp(1rem,1.8vw,1.4rem)]">
+                    {c.live!.remaining1} : {c.live!.remaining2}
+                  </span>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -717,7 +731,7 @@ const PublicTournamentPage = () => {
           )}
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-lg border border-border overflow-hidden">
-              <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+              <button onClick={() => selectView("boards")} className="px-3 py-1.5 text-xs flex items-center gap-1 hover:bg-muted text-muted-foreground">
                 <Monitor className="w-3.5 h-3.5" /> Board-Übersicht
               </button>
               {isKo && (

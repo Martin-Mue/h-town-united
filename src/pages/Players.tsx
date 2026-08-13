@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSearchParams } from "react-router-dom";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import htuLogo from "@/assets/htu-logo.jpg";
+
+// recharts (~390KB) is only needed once a player's detail view is open, not for browsing
+// the roster list — split into its own chunk instead of loading it for every /players visit.
+const PlayerStatsCharts = lazy(() => import("@/components/players/PlayerStatsCharts"));
 
 // Static fallback portraits
 import portraitKarsten from "@/assets/portraits/karsten.jpg";
@@ -560,30 +563,9 @@ const PlayersPage = () => {
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-card rounded-xl border border-border p-4">
-            <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Skill Profil</h3>
-            <ResponsiveContainer width="100%" height={180}>
-              <RadarChart data={skillRadarData}>
-                <PolarGrid stroke="hsl(222 18% 14%)" />
-                <PolarAngleAxis dataKey="skill" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} />
-                <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
-                <Radar dataKey="value" stroke="hsl(185 85% 48%)" fill="hsl(185 85% 48%)" fillOpacity={0.15} strokeWidth={2} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border p-4">
-            <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Siege / Niederlagen</h3>
-            <ResponsiveContainer width="100%" height={120}>
-              <BarChart data={winLossData} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} width={80} />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <Suspense fallback={<div className="h-[180px] mb-6 flex items-center justify-center text-muted-foreground text-sm">Lade Diagramme…</div>}>
+          <PlayerStatsCharts skillRadarData={skillRadarData} winLossData={winLossData} />
+        </Suspense>
       </div>
     );
   }

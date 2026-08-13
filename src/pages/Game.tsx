@@ -17,7 +17,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { recordMatchResult } from "@/lib/tournamentMatchSync";
+import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
+import { isBustThrow, isQualifyingDouble as qualifyingDouble } from "@/utils/x01Rules";
 import { simulateBotVisit, simulateBotCricketDart } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
@@ -44,7 +45,7 @@ import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
 import { saveGameRecord } from "@/lib/gameSync";
-import { enqueueGameSave } from "@/lib/offlineQueue";
+import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
@@ -207,6 +208,25 @@ const GamePage = () => {
     // change would clobber the scorekeeper's own edits to the setup form.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Pushes a lightweight "score right now" snapshot to the tournament's public live view while
+  // a tournament-linked match is being played — debounced so it fires a couple seconds after
+  // scoring settles down, not on every single dart. X01 only (cricket's "remaining" doesn't
+  // apply); best-effort, never awaited/blocking, see pushLiveSnapshot's own doc comment.
+  useEffect(() => {
+    const link = tournamentLinkRef.current;
+    if (!link || phase !== "playing" || !game || game.isFinished || game.mode === "cricket") return;
+    const timer = window.setTimeout(() => {
+      void pushLiveSnapshot(link.tournamentId, link.matchId, {
+        remaining1: game.currentLeg.remaining[0],
+        remaining2: game.currentLeg.remaining[1],
+        legs1: game.legsWon[0] ?? 0,
+        legs2: game.legsWon[1] ?? 0,
+        updatedAt: new Date().toISOString(),
+      });
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [game?.currentLeg.remaining, game?.legsWon, game?.isFinished, game?.mode, phase]);
 
   // Fetches the current player's career checkout conversion rate on demand (once per
   // player per session) so CheckoutSuggestion can show "how often do I actually convert this".
@@ -379,7 +399,7 @@ const GamePage = () => {
 
     const requiresDoubleIn = game.players[idx].doubleIn ?? false;
     const alreadyStartedScoring = game.currentLeg.startedScoring?.[teamIdx] ?? true;
-    const isQualifyingDouble = mul === 2 || (baseValue === 25 && mul === 2);
+    const isQualifyingDouble = qualifyingDouble(mul);
     const justGotIn = requiresDoubleIn && !alreadyStartedScoring && isQualifyingDouble;
     const stillWaitingForDoubleIn = requiresDoubleIn && !alreadyStartedScoring && !isQualifyingDouble;
     // While still waiting to get in, a non-double dart contributes 0 to remaining/stats — it's
@@ -389,8 +409,7 @@ const GamePage = () => {
     const newRemaining = remaining - effectivePoints;
 
     const activeDoubleOut = game.players[idx].doubleOut ?? true;
-    const isBust = !stillWaitingForDoubleIn && (newRemaining < 0 || (newRemaining === 1 && activeDoubleOut) ||
-      (newRemaining === 0 && activeDoubleOut && mul !== 2 && !(baseValue === 25 && mul === 2)));
+    const isBust = !stillWaitingForDoubleIn && isBustThrow(remaining, effectivePoints, activeDoubleOut, isQualifyingDouble);
 
     if (isBust) {
       if (soundEnabled) playBustSound();
@@ -537,6 +556,17 @@ const GamePage = () => {
     const targetNumber = baseValue === 50 ? 25 : baseValue;
     const newDartsThisRound = dartsThisRound + 1;
 
+    // Snapshot against the pre-throw state so the caller can announce "just closed a number"
+    // right away, without waiting for the setGame update below to land.
+    const idx = game.currentPlayerIndex;
+    const n = game.players.length;
+    const teamIdx = teamIndexFor(game.teams, idx);
+    const cricketNumbers = game.cricketNumbers ?? CRICKET_NUMBERS;
+    const marksBefore = game.cricket![teamIdx].marks[targetNumber] || 0;
+    const isScoringNumber = (cricketNumbers as readonly number[]).includes(targetNumber) && targetNumber !== 0;
+    const hitsToAdd = isScoringNumber ? (baseValue === 50 ? 2 : mul) : 0;
+    const justClosedNumber = isScoringNumber && marksBefore < 3 && marksBefore + hitsToAdd >= 3;
+
     if (soundEnabled) playThrowSound();
 
     setGame((prev) => {
@@ -584,6 +614,16 @@ const GamePage = () => {
       setDartsThisRound(0);
     } else {
       setDartsThisRound(newDartsThisRound);
+    }
+
+    if (speechEnabled && (justClosedNumber || newDartsThisRound >= 3)) {
+      const nextIdx = (idx + 1) % n;
+      const { parts } = buildRoundAnnouncement({
+        roundTotal: 0, activePlayerName: game.players[idx].name, nextPlayerName: game.players[nextIdx].name,
+        isCricket: true, checkedOut: false, busted: false, matchWon: false,
+        cricketClosedLabel: justClosedNumber ? (targetNumber === 25 ? "Bull" : String(targetNumber)) : undefined,
+      });
+      window.setTimeout(() => speakSequence(parts), 150);
     }
   };
 
@@ -697,8 +737,7 @@ const GamePage = () => {
 
       const x01Dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points: effectivePoints, boardU: d.boardU, boardV: d.boardV };
       const activeDoubleOut = curGame.players[idx].doubleOut ?? true;
-      const isBust = !stillWaitingForDoubleIn && (newRemaining < 0 || (newRemaining === 1 && activeDoubleOut) ||
-        (newRemaining === 0 && activeDoubleOut && !isDoubleOut));
+      const isBust = !stillWaitingForDoubleIn && isBustThrow(remaining, effectivePoints, activeDoubleOut, isDoubleOut);
 
       if (isBust) {
         curGame.currentLeg.remaining[teamIdx] = curStart;
@@ -939,13 +978,22 @@ const GamePage = () => {
             score2: game.legsWon[1],
           });
         } catch (syncErr) {
-          // The game itself is safely saved either way — only the bracket write-back failed.
-          // Manual entry in the tournament view is always the fallback, so this never blocks the match.
-          console.error("recordMatchResult failed", syncErr);
+          // The game itself is safely saved either way — only the bracket write-back failed
+          // (a transient request drop, not a full offline outage). Queue it for automatic
+          // retry same as the offline case below, so this never falls back to manual entry
+          // unless the retry queue itself later fails too.
+          console.error("recordMatchResult failed, queuing for retry", syncErr);
+          await enqueueMatchResult({
+            id: `${pendingGameIdRef.current}-match`,
+            tournamentId: link.tournamentId,
+            matchId: link.matchId,
+            winnerName: game.winnerName!,
+            score1: game.legsWon[0],
+            score2: game.legsWon[1],
+          });
           toast({
-            title: "Turnier nicht aktualisiert",
-            description: "Ergebnis konnte nicht in den Turnierbaum übernommen werden — bitte dort manuell eintragen.",
-            variant: "destructive",
+            title: "Turnier wird nachgetragen",
+            description: "Ergebnis konnte gerade nicht in den Turnierbaum übernommen werden — wird automatisch nachgeholt.",
           });
         }
       }
@@ -954,14 +1002,24 @@ const GamePage = () => {
       // it's queued in IndexedDB and replayed automatically once the app is back online
       // (see offlineQueue.ts / App.tsx). The client-generated pendingGameIdRef keeps the
       // eventual insert idempotent even if this fires more than once. The tournament bracket
-      // write-back is NOT retried offline — it needs a live read of the bracket, so it's
-      // covered by the same "enter it manually" fallback as any other connectivity gap.
+      // write-back gets its own queue entry for the same reason — it needs a live read of the
+      // bracket, so it can't just be retried as part of the game-save replay.
       await enqueueGameSave({ id: pendingGameIdRef.current, game, userId: session?.user?.id, tournamentLink: link });
+      if (link) {
+        await enqueueMatchResult({
+          id: `${pendingGameIdRef.current}-match`,
+          tournamentId: link.tournamentId,
+          matchId: link.matchId,
+          winnerName: game.winnerName!,
+          score1: game.legsWon[0],
+          score2: game.legsWon[1],
+        });
+      }
       setQueuedOffline(true);
       toast({
         title: "Offline gespeichert",
         description: link
-          ? "Keine Verbindung — das Ergebnis bleibt auf diesem Gerät und synchronisiert automatisch, sobald wieder Netz da ist. Turnierbaum bitte manuell aktualisieren."
+          ? "Keine Verbindung — Ergebnis und Turnier-Eintrag bleiben auf diesem Gerät und synchronisieren automatisch, sobald wieder Netz da ist."
           : "Keine Verbindung — das Ergebnis bleibt auf diesem Gerät und synchronisiert automatisch, sobald wieder Netz da ist.",
       });
     }
@@ -972,6 +1030,22 @@ const GamePage = () => {
   useEffect(() => {
     if (game?.isFinished && !gameSaved && session?.user?.id) saveGame();
   }, [game?.isFinished]);
+
+  // Cricket match-win announcement — X01 already announces its own win inline (checkout +
+  // hype happen together there); cricket finishes on a mark, not a "checkout" moment, so it
+  // gets its own decoupled trigger here instead of threading it through handleCricketThrow.
+  const cricketWinAnnouncedRef = useRef(false);
+  useEffect(() => {
+    if (!game || game.mode !== "cricket") return;
+    if (!game.isFinished) { cricketWinAnnouncedRef.current = false; return; }
+    if (cricketWinAnnouncedRef.current || !speechEnabled) return;
+    cricketWinAnnouncedRef.current = true;
+    const { parts } = buildRoundAnnouncement({
+      roundTotal: 0, activePlayerName: "", nextPlayerName: "",
+      isCricket: true, checkedOut: false, busted: false, matchWon: true, winnerName: game.winnerName,
+    });
+    window.setTimeout(() => speakSequence(parts), 200);
+  }, [game?.isFinished, game?.mode, speechEnabled]);
 
   const postGameStats = useMemo(() => {
     if (!game || !game.isFinished) return null;

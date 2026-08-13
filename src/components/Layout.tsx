@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useOfflineGameQueue } from "@/hooks/useOfflineGameQueue";
+import { useOfflineMatchResultQueue } from "@/hooks/useOfflineMatchResultQueue";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
@@ -24,7 +25,10 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const { signOut, user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const { pendingCount, syncing } = useOfflineGameQueue();
+  const gameQueue = useOfflineGameQueue();
+  const matchResultQueue = useOfflineMatchResultQueue();
+  const pendingCount = gameQueue.pendingCount + matchResultQueue.pendingCount;
+  const syncing = gameQueue.syncing || matchResultQueue.syncing;
   const push = usePushSubscription(user?.id);
   const { resolvedTheme, setTheme } = useTheme();
 

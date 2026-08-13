@@ -45,6 +45,12 @@ export async function saveGameRecord(
   const { data: allDbPlayers, error: playersErr } = await supabase.from("players").select("id, name, elo_rating");
   if (playersErr) throw playersErr;
 
+  // Trim + case-insensitive: a name typed slightly differently from the stored club-player
+  // record (extra space, different casing) must not silently drop the player_id link — that
+  // would exclude the game from that player's stats/Elo without any visible error.
+  const normalizeName = (s: string) => s.trim().toLowerCase();
+  const findDbPlayer = (name: string) => allDbPlayers?.find((p) => normalizeName(p.name) === normalizeName(name));
+
   // Elo snapshot: every human participant's pre-game rating, captured once up front so a
   // multiplayer game's deltas are all computed against the SAME starting ratings regardless
   // of which player's DB row happens to get updated first below. Team games are excluded —
@@ -53,14 +59,14 @@ export async function saveGameRecord(
   if (!game.teams) {
     for (let i = 0; i < n; i++) {
       if (game.players[i].isBot) continue;
-      const match = allDbPlayers?.find((p) => p.name === game.players[i].name);
+      const match = findDbPlayer(game.players[i].name);
       if (!match) continue;
       eloParticipants.push({ id: match.id, rating: Number(match.elo_rating) || 1000, isWinner: game.winnerIndex === i });
     }
   }
   const eloDeltas = computeEloDeltas(eloParticipants);
-  const p1Match = allDbPlayers?.find((p) => p.name === game.players[top1].name);
-  const p2Match = top2 !== undefined ? allDbPlayers?.find((p) => p.name === game.players[top2].name) : undefined;
+  const p1Match = findDbPlayer(game.players[top1].name);
+  const p2Match = top2 !== undefined ? findDbPlayer(game.players[top2].name) : undefined;
   const winnerIdx = game.winnerIndex ?? top1;
   const winnerMatch = winnerIdx === top1 ? p1Match : p2Match;
   const player1Name = game.teams ? game.teams[0].name : game.players[top1].name;
@@ -75,7 +81,7 @@ export async function saveGameRecord(
     [20, 19, 18, 17, 16].forEach((n2) => {
       tripleHits[`t${n2}`] = throws.filter((t) => t.multiplier === 3 && t.baseValue === n2).length;
     });
-    const playerMatch = allDbPlayers?.find((p) => p.name === game.players[idx].name);
+    const playerMatch = findDbPlayer(game.players[idx].name);
     return {
       name: game.players[idx].name,
       player_id: playerMatch?.id || null,
@@ -115,7 +121,7 @@ export async function saveGameRecord(
         leg_number: leg.legNumber,
         player_index: i,
         player_name: p.name,
-        player_id: allDbPlayers?.find((dp) => dp.name === p.name)?.id || null,
+        player_id: findDbPlayer(p.name)?.id || null,
         starting_score: effectiveStartScore(game.startScore, game.players, i, game.teams),
         throws: leg.throws[i] ?? [],
         won: leg.winnerIndex === teamIndexFor(game.teams, i),
@@ -128,7 +134,7 @@ export async function saveGameRecord(
   }
 
   for (let i = 0; i < n; i++) {
-    const match = allDbPlayers?.find((p) => p.name === game.players[i].name);
+    const match = findDbPlayer(game.players[i].name);
     if (match && !game.players[i].isBot) {
       const { data: current, error: curErr } = await supabase.from("players").select("*").eq("id", match.id).single();
       if (curErr) throw curErr;

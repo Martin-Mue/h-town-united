@@ -179,6 +179,14 @@ const HYPE_BUST = [
   "Schade, Bust.",
 ] as const;
 
+/** Cricket: hit the 3rd (or more) mark on a number this visit — closes it if no one else still has it open. */
+const HYPE_CRICKET_CLOSE = [
+  "Zu!",
+  "Geschlossen!",
+  "Dicht gemacht!",
+  "Da ist sie zu!",
+] as const;
+
 const HYPE_OPTIONS: SpeechOptions = { pitch: 1.55, rate: 1.22, volume: 1 };
 const HIGH_TON_OPTIONS: SpeechOptions = { pitch: 1.4, rate: 1.18, volume: 1 };
 const TON_OPTIONS: SpeechOptions = { pitch: 1.28, rate: 1.14, volume: 1 };
@@ -195,6 +203,8 @@ export interface RoundAnnouncementParams {
   busted: boolean;
   matchWon: boolean;
   winnerName?: string;
+  /** Cricket only: label ("20", "Bull", …) of a number this dart just closed (3rd+ mark this visit). */
+  cricketClosedLabel?: string;
 }
 
 /**
@@ -227,6 +237,14 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
     };
   }
   if (p.isCricket) {
+    if (p.cricketClosedLabel) {
+      return {
+        parts: [
+          { text: `${pickRandom(HYPE_CRICKET_CLOSE)} Die ${p.cricketClosedLabel}!`, options: HYPE_OPTIONS },
+          { text: `${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
+        ],
+      };
+    }
     return {
       parts: [{ text: `${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS }],
     };

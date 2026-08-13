@@ -28,11 +28,28 @@ export interface Match {
    */
   feedsRound1Position?: number;
   feedsRound1Slot?: 1 | 2;
+  /** Best-effort live snapshot pushed periodically by a "Spiel starten" live game — spectator-only, never authoritative (the final result always comes through `winner`/`score1`/`score2`). Cleared once the match is decided. */
+  live?: LiveSnapshot;
+}
+
+export interface LiveSnapshot {
+  /** X01 remaining score, undefined for cricket. */
+  remaining1?: number;
+  remaining2?: number;
+  legs1: number;
+  legs2: number;
+  updatedAt: string;
 }
 
 export const BYE = "BYE";
 
 export const isRealPlayer = (name?: string) => !!name && name !== BYE;
+
+/** A live snapshot older than this is treated as stale (the device likely closed/crashed mid-game) and hidden. */
+export const LIVE_SNAPSHOT_STALE_MS = 60_000;
+
+export const isLiveSnapshotFresh = (live?: LiveSnapshot) =>
+  !!live && Date.now() - new Date(live.updatedAt).getTime() < LIVE_SNAPSHOT_STALE_MS;
 
 /**
  * Fully recomputes a KO bracket:
@@ -40,10 +57,23 @@ export const isRealPlayer = (name?: string) => !!name && name !== BYE;
  *  - propagates winners into every later round
  *  - cascades resets: a downstream winner that is no longer a participant is cleared
  */
-export function recomputeBracket(input: Match[]): Match[] {
+export function recomputeBracket(input: Match[], activePlayers?: string[]): Match[] {
   const work = input.map((m) => ({ ...m }));
   if (work.length === 0) return work;
   const totalRounds = Math.max(...work.map((m) => m.round));
+
+  // A player who withdrew mid-tournament (removed from `activePlayers`) may already be sitting
+  // in a later-round slot they were propagated into before withdrawing. Their PAST results stay
+  // untouched (history stays intact) — but once their next opponent's slot is known, award that
+  // opponent a walkover automatically instead of leaving the match stuck on a manual click.
+  const isWithdrawn = (name?: string) => !!activePlayers && isRealPlayer(name) && !activePlayers.includes(name!);
+  const resolveWithdrawn = (m: Match) => {
+    if (m.winner || !isRealPlayer(m.player1) || !isRealPlayer(m.player2)) return;
+    const p1Gone = isWithdrawn(m.player1);
+    const p2Gone = isWithdrawn(m.player2);
+    if (p1Gone && !p2Gone) m.winner = m.player2;
+    else if (p2Gone && !p1Gone) m.winner = m.player1;
+  };
 
   // Preliminary round (round 0): a small play-in stage for non-power-of-two player
   // counts. Resolved like any other round, but feeds its winners into specific
@@ -64,6 +94,7 @@ export function recomputeBracket(input: Match[]): Match[] {
         else if (bye2) m.winner = m.player1;
         else if (bye1) m.winner = m.player2;
       }
+      resolveWithdrawn(m);
       if (m.winner === BYE) {
         m.score1 = undefined;
         m.score2 = undefined;
@@ -99,6 +130,7 @@ export function recomputeBracket(input: Match[]): Match[] {
         else if (bye2) m.winner = m.player1;
         else if (bye1) m.winner = m.player2;
       }
+      resolveWithdrawn(m);
       if (m.winner === BYE) {
         m.score1 = undefined;
         m.score2 = undefined;
@@ -117,6 +149,19 @@ export function recomputeBracket(input: Match[]): Match[] {
   }
 
   return work;
+}
+
+/** Matches that just became playable (both players known, no winner yet) between two bracket
+ *  snapshots — the single source of truth for "fire a your-match-is-up-next notification
+ *  exactly once per match", shared by every code path that can advance the bracket (manual
+ *  edits and an auto-recorded live-game result alike). */
+export function newlyPlayableMatches(prevBracket: Match[], nextBracket: Match[]): Match[] {
+  return nextBracket.filter((m) => {
+    if (!isPlayable(m) || m.winner) return false;
+    const prev = prevBracket.find((p) => p.id === m.id);
+    const wasReady = prev && isPlayable(prev) && !prev.winner;
+    return !wasReady;
+  });
 }
 
 export function bracketChampion(matches: Match[]): string | null {
@@ -358,6 +403,7 @@ export interface RoundRobinMatch {
   player2: string;
   winner?: string;
   played: boolean;
+  live?: LiveSnapshot;
 }
 
 export interface RoundRobinStanding {
@@ -369,6 +415,10 @@ export interface RoundRobinStanding {
 }
 
 /** Round-robin table: 2 points per win, sorted by points then wins. No head-to-head/leg-diff tiebreaker. */
+/**
+ * Points/wins first; ties are then broken by head-to-head results among just the tied
+ * group (standard round-robin procedure) instead of falling back to arbitrary insertion order.
+ */
 export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] {
   const map: Record<string, RoundRobinStanding> = {};
   matches.forEach((m) => {
@@ -384,7 +434,33 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
       map[loser].lost++;
     }
   });
-  return Object.values(map).sort((a, b) => b.points - a.points || b.won - a.won);
+
+  const groups = new Map<string, RoundRobinStanding[]>();
+  Object.values(map).forEach((s) => {
+    const key = `${s.points}-${s.won}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(s);
+  });
+
+  const headToHeadRank = (group: RoundRobinStanding[]): RoundRobinStanding[] => {
+    if (group.length < 2) return group;
+    const names = new Set(group.map((s) => s.name));
+    const h2hPoints: Record<string, number> = {};
+    group.forEach((s) => (h2hPoints[s.name] = 0));
+    matches.forEach((m) => {
+      if (m.played && m.winner && names.has(m.player1) && names.has(m.player2)) {
+        h2hPoints[m.winner] += 2;
+      }
+    });
+    return [...group].sort((a, b) => h2hPoints[b.name] - h2hPoints[a.name]);
+  };
+
+  const groupOrder = [...groups.keys()].sort((ka, kb) => {
+    const [pointsA, wonA] = ka.split("-").map(Number);
+    const [pointsB, wonB] = kb.split("-").map(Number);
+    return pointsB - pointsA || wonB - wonA;
+  });
+
+  return groupOrder.flatMap((key) => headToHeadRank(groups.get(key)!));
 }
 
 export const roundLabelFor = (round: number, total: number) => {

@@ -1,5 +1,6 @@
 import type { BotLevel, DartThrow } from "@/types/game";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
+import { isBustThrow } from "@/utils/x01Rules";
 
 /**
  * Bot tuning. Targets roughly these 3-dart averages:
@@ -142,13 +143,11 @@ export function simulateBotVisit(remaining: number, doubleOut: boolean, level: B
       gotIn = true;
     }
 
-    const newRem = rem - dart.points;
-    const isBust = newRem < 0 || (newRem === 1 && doubleOut) ||
-      (newRem === 0 && doubleOut && !(dart.multiplier === 2 || (dart.baseValue === 25 && dart.multiplier === 2)));
+    const isBust = isBustThrow(rem, dart.points, doubleOut, dart.multiplier === 2);
 
     if (isBust) return { darts, bustedOnDartIndex: i, checkedOut: false };
 
-    rem = newRem;
+    rem -= dart.points;
     if (rem === 0) return { darts, bustedOnDartIndex: null, checkedOut: true };
   }
 

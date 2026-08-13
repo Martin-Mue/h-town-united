@@ -1,19 +1,16 @@
 import type { GameState } from "@/types/game";
 
 /**
- * Offline write queue for finished game results.
- *
- * The PWA app shell loads instantly even offline, and scoring itself is already
- * fully local (nothing is written to Supabase per-throw) — the one real network
- * dependency is the final save when a match finishes. This queue makes that save
- * durable: if it fails (no connection / flaky venue wifi), the finished game is
- * persisted to IndexedDB instead of lost, and gets replayed automatically once
- * the browser is back online.
+ * Offline write queues for anything that must reach Supabase after a match, but can't be
+ * dropped just because the club's wifi hiccups: finished game results, and (separately)
+ * tournament bracket write-backs for a "Spiel starten" live game. Two independent IndexedDB
+ * object stores, same durable enqueue → flush-on-reconnect shape.
  */
 
 const DB_NAME = "darts-offline-queue";
-const DB_VERSION = 1;
-const STORE = "pending_game_saves";
+const DB_VERSION = 2;
+const GAME_STORE = "pending_game_saves";
+const MATCH_RESULT_STORE = "pending_match_results";
 
 export interface QueuedGameSave {
   /** Same id used as the `games.id` primary key, so replays are idempotent. */
@@ -27,109 +24,134 @@ export interface QueuedGameSave {
   lastError?: string;
 }
 
+export interface QueuedMatchResult {
+  id: string;
+  tournamentId: string;
+  matchId: string;
+  winnerName: string;
+  score1?: number;
+  score2?: number;
+  createdAt: number;
+  attempts: number;
+  lastError?: string;
+}
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: "id" });
-      }
+      if (!db.objectStoreNames.contains(GAME_STORE)) db.createObjectStore(GAME_STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(MATCH_RESULT_STORE)) db.createObjectStore(MATCH_RESULT_STORE, { keyPath: "id" });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-async function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+async function withStore<T>(storeName: string, mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, mode);
-    const req = fn(tx.objectStore(STORE));
+    const tx = db.transaction(storeName, mode);
+    const req = fn(tx.objectStore(storeName));
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
     tx.oncomplete = () => db.close();
   });
 }
 
-export async function enqueueGameSave(item: Omit<QueuedGameSave, "createdAt" | "attempts">): Promise<void> {
-  await withStore("readwrite", (store) =>
-    store.put({ ...item, createdAt: Date.now(), attempts: 0 } satisfies QueuedGameSave)
-  );
-  notifyListeners();
+/** One IndexedDB-backed queue: enqueue, list, a live pending-count subscription, and a
+ *  flush-with-retry runner. Shared by the game-save queue and the match-result queue below
+ *  so neither has to reimplement the same store/transaction/attempt-tracking boilerplate. */
+function createQueue<T extends { id: string; createdAt: number; attempts: number; lastError?: string }>(storeName: string) {
+  const listeners = new Set<(count: number) => void>();
+
+  const list = async (): Promise<T[]> => {
+    try {
+      return await withStore<T[]>(storeName, "readonly", (store) => store.getAll());
+    } catch {
+      return [];
+    }
+  };
+
+  const count = async (): Promise<number> => (await list()).length;
+
+  const notify = () => {
+    count().then((c) => listeners.forEach((l) => l(c)));
+  };
+
+  const remove = async (id: string): Promise<void> => {
+    await withStore(storeName, "readwrite", (store) => store.delete(id));
+    notify();
+  };
+
+  const bumpAttempt = async (item: T, error: unknown): Promise<void> => {
+    await withStore(storeName, "readwrite", (store) => store.put({ ...item, attempts: item.attempts + 1, lastError: String(error) }));
+    notify();
+  };
+
+  let flushInFlight: Promise<{ synced: number; failed: number }> | null = null;
+
+  return {
+    enqueue: async (item: Omit<T, "createdAt" | "attempts">): Promise<void> => {
+      await withStore(storeName, "readwrite", (store) => store.put({ ...item, createdAt: Date.now(), attempts: 0 } as unknown as T));
+      notify();
+    },
+    list,
+    count,
+    subscribeCount: (listener: (count: number) => void): (() => void) => {
+      listeners.add(listener);
+      count().then(listener);
+      return () => listeners.delete(listener);
+    },
+    /** Replays every queued item. Safe to call opportunistically (app start, `online` event) — concurrent calls share one run. */
+    flush: async (replay: (item: T) => Promise<void>): Promise<{ synced: number; failed: number }> => {
+      if (flushInFlight) return flushInFlight;
+      flushInFlight = (async () => {
+        let synced = 0;
+        let failed = 0;
+        for (const item of await list()) {
+          try {
+            await replay(item);
+            await remove(item.id);
+            synced++;
+          } catch (err) {
+            await bumpAttempt(item, err);
+            failed++;
+          }
+        }
+        return { synced, failed };
+      })();
+      try {
+        return await flushInFlight;
+      } finally {
+        flushInFlight = null;
+      }
+    },
+  };
 }
 
-export async function listQueuedGameSaves(): Promise<QueuedGameSave[]> {
-  try {
-    return await withStore<QueuedGameSave[]>("readonly", (store) => store.getAll());
-  } catch {
-    return [];
-  }
-}
+const gameQueue = createQueue<QueuedGameSave>(GAME_STORE);
 
-async function removeQueuedGameSave(id: string): Promise<void> {
-  await withStore("readwrite", (store) => store.delete(id));
-  notifyListeners();
-}
+export const enqueueGameSave = gameQueue.enqueue;
+export const listQueuedGameSaves = gameQueue.list;
+export const subscribeQueueCount = gameQueue.subscribeCount;
+export const getQueueCount = gameQueue.count;
 
-async function bumpAttempt(item: QueuedGameSave, error: unknown): Promise<void> {
-  await withStore("readwrite", (store) =>
-    store.put({ ...item, attempts: item.attempts + 1, lastError: String(error) } satisfies QueuedGameSave)
-  );
-  notifyListeners();
-}
-
-export async function getQueueCount(): Promise<number> {
-  try {
-    const all = await listQueuedGameSaves();
-    return all.length;
-  } catch {
-    return 0;
-  }
-}
-
-type Listener = (count: number) => void;
-const listeners = new Set<Listener>();
-
-export function subscribeQueueCount(listener: Listener): () => void {
-  listeners.add(listener);
-  getQueueCount().then(listener);
-  return () => listeners.delete(listener);
-}
-
-function notifyListeners() {
-  getQueueCount().then((count) => listeners.forEach((l) => l(count)));
-}
-
-let flushInFlight: Promise<{ synced: number; failed: number }> | null = null;
-
-/**
- * Replays every queued game save against Supabase. Safe to call opportunistically
- * (app start, `online` event, manual retry button) — concurrent calls share one run.
- */
 export async function flushGameSaveQueue(
   replay: (game: GameState, userId: string | undefined, pendingGameId: string, tournamentLink?: { tournamentId: string; matchId: string }) => Promise<void>
 ): Promise<{ synced: number; failed: number }> {
-  if (flushInFlight) return flushInFlight;
-  flushInFlight = (async () => {
-    let synced = 0;
-    let failed = 0;
-    const items = await listQueuedGameSaves();
-    for (const item of items) {
-      try {
-        await replay(item.game, item.userId, item.id, item.tournamentLink);
-        await removeQueuedGameSave(item.id);
-        synced++;
-      } catch (err) {
-        await bumpAttempt(item, err);
-        failed++;
-      }
-    }
-    return { synced, failed };
-  })();
-  try {
-    return await flushInFlight;
-  } finally {
-    flushInFlight = null;
-  }
+  return gameQueue.flush((item) => replay(item.game, item.userId, item.id, item.tournamentLink));
+}
+
+const matchResultQueue = createQueue<QueuedMatchResult>(MATCH_RESULT_STORE);
+
+export const enqueueMatchResult = matchResultQueue.enqueue;
+export const listQueuedMatchResults = matchResultQueue.list;
+export const subscribeMatchResultQueueCount = matchResultQueue.subscribeCount;
+
+export async function flushMatchResultQueue(
+  replay: (tournamentId: string, matchId: string, result: { winnerName: string; score1?: number; score2?: number }) => Promise<void>
+): Promise<{ synced: number; failed: number }> {
+  return matchResultQueue.flush((item) => replay(item.tournamentId, item.matchId, { winnerName: item.winnerName, score1: item.score1, score2: item.score2 }));
 }
