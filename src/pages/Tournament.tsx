@@ -542,7 +542,14 @@ const TournamentPage = () => {
     const next = !(activeTournament.live_play_enabled ?? true);
     const { error } = await supabase.from("tournaments").update({ live_play_enabled: next }).eq("id", activeTournament.id);
     if (error) {
-      toast({ title: "Fehler", description: "Einstellung konnte nicht geändert werden.", variant: "destructive" });
+      const missingColumn = error.code === "42703" || String(error.message || "").includes("live_play_enabled");
+      toast({
+        title: "Fehler",
+        description: missingColumn
+          ? "Einstellung konnte nicht geändert werden — die Datenbank-Migration dafür fehlt noch."
+          : "Einstellung konnte nicht geändert werden.",
+        variant: "destructive",
+      });
       return;
     }
     setActiveTournament({ ...activeTournament, live_play_enabled: next });
@@ -772,6 +779,12 @@ const TournamentPage = () => {
     return shuffle(matches);
   };
 
+  /** `live_play_enabled` is a recently-added column — if a given Supabase project hasn't had
+   *  the migration applied yet, PostgREST rejects the whole write with a schema-cache error.
+   *  Retry once without that field rather than hard-failing the entire save on account of it. */
+  const missingLivePlayColumn = (error: any) =>
+    !!error && (error.code === "42703" || String(error.message || "").includes("live_play_enabled"));
+
   // ─── Start Tournament ──────────────────────────
   const startTournament = async () => {
     if (players.length < 2 || savingTournament) return;
@@ -780,7 +793,7 @@ const TournamentPage = () => {
     const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
 
     if (editingId) {
-      const { data: upd, error: updErr } = await supabase.from("tournaments").update({
+      const payload: Record<string, any> = {
         name: tournamentName || "Großevent",
         mode: tournamentMode,
         game_mode: gameMode,
@@ -793,7 +806,13 @@ const TournamentPage = () => {
         round_configs: roundConfigs as any,
         boards,
         live_play_enabled: livePlayEnabled,
-      }).eq("id", editingId).select().single();
+      };
+      let { data: upd, error: updErr } = await supabase.from("tournaments").update(payload).eq("id", editingId).select().single();
+      if (updErr && missingLivePlayColumn(updErr)) {
+        const { live_play_enabled, ...fallback } = payload;
+        ({ data: upd, error: updErr } = await supabase.from("tournaments").update(fallback).eq("id", editingId).select().single());
+        if (!updErr) toast({ title: "Hinweis", description: "„Live-Spiel“-Einstellung konnte nicht gespeichert werden (Datenbank-Migration fehlt noch).", variant: "destructive" });
+      }
       if (updErr || !upd) {
         toast({ title: "Fehler", description: "Turnier konnte nicht gespeichert werden.", variant: "destructive" });
         return;
@@ -810,7 +829,7 @@ const TournamentPage = () => {
       return;
     }
 
-    const { data, error } = await supabase.from("tournaments").insert({
+    const insertPayload: Record<string, any> = {
       name: tournamentName || "Großevent",
       mode: tournamentMode,
       game_mode: gameMode,
@@ -823,7 +842,12 @@ const TournamentPage = () => {
       round_configs: roundConfigs as any,
       boards,
       live_play_enabled: livePlayEnabled,
-    }).select().single();
+    };
+    let { data, error } = await supabase.from("tournaments").insert(insertPayload).select().single();
+    if (error && missingLivePlayColumn(error)) {
+      const { live_play_enabled, ...fallback } = insertPayload;
+      ({ data, error } = await supabase.from("tournaments").insert(fallback).select().single());
+    }
 
     if (error || !data) {
       toast({ title: "Fehler", description: "Turnier konnte nicht erstellt werden.", variant: "destructive" });
