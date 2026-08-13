@@ -391,6 +391,7 @@ export type Database = {
           created_at: string
           game_mode: string
           id: string
+          live_play_enabled: boolean
           max_rounds_x01: number | null
           mode: string
           name: string
@@ -411,6 +412,7 @@ export type Database = {
           created_at?: string
           game_mode?: string
           id?: string
+          live_play_enabled?: boolean
           max_rounds_x01?: number | null
           mode?: string
           name: string
@@ -431,6 +433,7 @@ export type Database = {
           created_at?: string
           game_mode?: string
           id?: string
+          live_play_enabled?: boolean
           max_rounds_x01?: number | null
           mode?: string
           name?: string

@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -59,6 +61,8 @@ interface TournamentRecord {
   public_view?: boolean;
   public_slug?: string | null;
   boards?: number;
+  /** Off = pure bracket display + manual result entry, no "Spiel starten" button anywhere. Defaults on. */
+  live_play_enabled?: boolean;
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
@@ -495,6 +499,7 @@ const TournamentPage = () => {
   const [drawMode, setDrawMode] = useState<"random" | "manual">("random");
   const [drawSeed, setDrawSeed] = useState(() => Math.floor(Math.random() * 1e9));
   const [boards, setBoards] = useState(2);
+  const [livePlayEnabled, setLivePlayEnabled] = useState(true);
   const [bracketView, setBracketView] = useState<"tree" | "schedule">("tree");
   const [editMatch, setEditMatch] = useState<Match | null>(null);
   const [editP1, setEditP1] = useState("");
@@ -532,6 +537,18 @@ const TournamentPage = () => {
     setPublicToggling(false);
   };
 
+  const toggleLivePlay = async () => {
+    if (!activeTournament) return;
+    const next = !(activeTournament.live_play_enabled ?? true);
+    const { error } = await supabase.from("tournaments").update({ live_play_enabled: next }).eq("id", activeTournament.id);
+    if (error) {
+      toast({ title: "Fehler", description: "Einstellung konnte nicht geändert werden.", variant: "destructive" });
+      return;
+    }
+    setActiveTournament({ ...activeTournament, live_play_enabled: next });
+    toast({ title: next ? "Live-Spiel erlaubt" : "Live-Spiel deaktiviert", description: next ? "„Spiel starten“ ist wieder auf spielbaren Partien verfügbar." : "Nur noch Turnierdarstellung — Ergebnisse bitte manuell eintragen." });
+  };
+
   const copyPublicLink = () => {
     if (!activeTournament?.public_slug) return;
     const url = `${window.location.origin}/live/${activeTournament.public_slug}`;
@@ -549,6 +566,7 @@ const TournamentPage = () => {
     public_view: (t as any).public_view || false,
     public_slug: (t as any).public_slug || null,
     boards: (t as any).boards ?? 2,
+    live_play_enabled: (t as any).live_play_enabled ?? true,
   });
 
   const fetchTournaments = useCallback(async () => {
@@ -774,12 +792,13 @@ const TournamentPage = () => {
         series_id: seriesId === "none" ? null : seriesId,
         round_configs: roundConfigs as any,
         boards,
+        live_play_enabled: livePlayEnabled,
       }).eq("id", editingId).select().single();
       if (updErr || !upd) {
         toast({ title: "Fehler", description: "Turnier konnte nicht gespeichert werden.", variant: "destructive" });
         return;
       }
-      const rec: TournamentRecord = { ...(upd as any), players: (upd as any).players, bracket: (upd as any).bracket, round_configs: (upd as any).round_configs || [], boards: (upd as any).boards ?? boards };
+      const rec: TournamentRecord = { ...(upd as any), players: (upd as any).players, bracket: (upd as any).bracket, round_configs: (upd as any).round_configs || [], boards: (upd as any).boards ?? boards, live_play_enabled: (upd as any).live_play_enabled ?? livePlayEnabled };
       setActiveTournament(rec);
       setEditingId(null);
       setBracketView(defaultBracketView(rec.bracket as Match[]));
@@ -803,6 +822,7 @@ const TournamentPage = () => {
       series_id: seriesId === "none" ? null : seriesId,
       round_configs: roundConfigs as any,
       boards,
+      live_play_enabled: livePlayEnabled,
     }).select().single();
 
     if (error || !data) {
@@ -810,7 +830,7 @@ const TournamentPage = () => {
       return;
     }
 
-    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [], boards: (data as any).boards ?? boards };
+    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [], boards: (data as any).boards ?? boards, live_play_enabled: (data as any).live_play_enabled ?? livePlayEnabled };
     setActiveTournament(record);
     setBracketView(defaultBracketView(record.bracket as Match[]));
     setPhase("bracket");
@@ -959,9 +979,10 @@ const TournamentPage = () => {
     return cfg?.mode || activeTournament?.game_mode || "501";
   };
 
-  /** "Extern" rounds are explicitly played outside the app (a different system/board) — no live-game option for those. */
+  /** "Extern" rounds are explicitly played outside the app (a different system/board) — no live-game option for those.
+   *  `live_play_enabled` is a per-tournament opt-out: pure bracket display + manual entry only. */
   const canStartLiveGame = (match: Match): boolean =>
-    isPlayable(match) && !match.winner && resolveRoundMode(match.round) !== "Extern";
+    (activeTournament?.live_play_enabled ?? true) && isPlayable(match) && !match.winner && resolveRoundMode(match.round) !== "Extern";
 
   /** Opens Game.tsx prefilled for this match — playing stays entirely optional, this is purely
    *  an additive shortcut next to the existing manual "tap winner" / "+1 leg" controls. */
@@ -1058,6 +1079,7 @@ const TournamentPage = () => {
     setSeriesId(t.series_id || "none");
     setRoundConfigs(t.round_configs || []);
     setBoards(t.boards || 2);
+    setLivePlayEnabled(t.live_play_enabled ?? true);
     setPlayers(t.players || []);
     setDrawMode("random");
     setDrawSeed(Math.floor(Math.random() * 1e9));
@@ -1077,7 +1099,7 @@ const TournamentPage = () => {
             <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
               <Layers className="w-3.5 h-3.5" /> Serien
             </Link>
-            <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
+            <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
               <Plus className="w-4 h-4" /> Neues Turnier
             </Button>
           </div>
@@ -1227,6 +1249,16 @@ const TournamentPage = () => {
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground mt-1">Bestimmt Spielplan-Reihenfolge und Schreiber-Einteilung.</p>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+            <div className="min-w-0">
+              <Label htmlFor="live-play-enabled" className="text-sm flex items-center gap-1"><Play className="w-3.5 h-3.5" /> Live-Spiel aus dem Turnierbaum</Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Erlaubt "Spiel starten" auf spielbaren Partien — öffnet die Live-Zählung direkt, auch auf mehreren Boards gleichzeitig. Aus = reine Turnierdarstellung, Ergebnisse werden ausschließlich manuell eingetragen.
+              </p>
+            </div>
+            <Switch id="live-play-enabled" checked={livePlayEnabled} onCheckedChange={setLivePlayEnabled} />
           </div>
 
           {tournamentMode !== "round-robin" && (
@@ -1504,6 +1536,16 @@ const TournamentPage = () => {
             <p className="text-xs text-muted-foreground">K.O.-System · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant={(activeTournament.live_play_enabled ?? true) ? "outline" : "secondary"}
+              size="sm"
+              onClick={toggleLivePlay}
+              className="gap-1"
+              title={(activeTournament.live_play_enabled ?? true) ? "Live-Spiel aus dem Turnierbaum deaktivieren" : "Live-Spiel aus dem Turnierbaum erlauben"}
+            >
+              <Play className="w-3.5 h-3.5" />
+              {(activeTournament.live_play_enabled ?? true) ? "Live-Spiel an" : "Live-Spiel aus"}
+            </Button>
             <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
               <Radio className={`w-3.5 h-3.5 ${activeTournament.public_view ? "animate-pulse" : ""}`} />
               {activeTournament.public_view ? "Live an" : "Live-Ansicht"}
@@ -1761,9 +1803,21 @@ const TournamentPage = () => {
           <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
           <p className="text-xs text-muted-foreground">Round Robin · {activeTournament.players.length} Spieler</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
-          ← Übersicht
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={(activeTournament.live_play_enabled ?? true) ? "outline" : "secondary"}
+            size="sm"
+            onClick={toggleLivePlay}
+            className="gap-1"
+            title={(activeTournament.live_play_enabled ?? true) ? "Live-Spiel aus dem Turnierbaum deaktivieren" : "Live-Spiel aus dem Turnierbaum erlauben"}
+          >
+            <Play className="w-3.5 h-3.5" />
+            {(activeTournament.live_play_enabled ?? true) ? "Live-Spiel an" : "Live-Spiel aus"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
+            ← Übersicht
+          </Button>
+        </div>
       </div>
 
       {activeTournament.champion && (
@@ -1811,7 +1865,7 @@ const TournamentPage = () => {
               <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2">
                 <span className="text-sm">{m.player1} <span className="text-muted-foreground">vs</span> {m.player2}</span>
                 <div className="flex gap-1">
-                  {activeTournament.game_mode !== "Extern" && (
+                  {(activeTournament.live_play_enabled ?? true) && activeTournament.game_mode !== "Extern" && (
                     <Button size="sm" variant="secondary" className="text-xs h-7 px-2 gap-1" onClick={() => startLiveGameRr(m)}>
                       <Play className="w-3 h-3" /> Spiel starten
                     </Button>
