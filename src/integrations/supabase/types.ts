@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           detail_stats: Json
           id: string
+          match_id: string | null
           mode: string
           played_at: string
           player1_average: number
@@ -47,6 +48,7 @@ export type Database = {
           created_at?: string
           detail_stats?: Json
           id?: string
+          match_id?: string | null
           mode?: string
           played_at?: string
           player1_average?: number
@@ -74,6 +76,7 @@ export type Database = {
           created_at?: string
           detail_stats?: Json
           id?: string
+          match_id?: string | null
           mode?: string
           played_at?: string
           player1_average?: number

@@ -15,8 +15,9 @@ import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, Play
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { recordMatchResult } from "@/lib/tournamentMatchSync";
 import { simulateBotVisit, simulateBotCricketDart } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
@@ -138,6 +139,10 @@ const GamePage = () => {
   const { session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  /** Set once on mount when this game was launched from a tournament bracket match ("Spiel starten") — used to tag the saved game and write the result back into the bracket on finish. */
+  const tournamentLinkRef = useRef<{ tournamentId: string; matchId: string; tournamentName?: string } | null>(null);
+  const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(null);
   const savingRef = useRef(false);
   const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
@@ -167,6 +172,40 @@ const GamePage = () => {
 
   useEffect(() => {
     fetchClubPlayers().then(setDbPlayers).catch((err) => console.error("fetchClubPlayers failed", err));
+  }, []);
+
+  // Prefill from "Spiel starten" on a tournament bracket match — reads the launch query
+  // string once on mount. Everything it sets stays a normal, editable setup value; only
+  // the tournament/match id link (kept in a ref, never rendered as form state) is fixed.
+  useEffect(() => {
+    const tid = searchParams.get("tid");
+    const mid = searchParams.get("mid");
+    if (!tid || !mid) return;
+    const tname = searchParams.get("tname") || undefined;
+    tournamentLinkRef.current = { tournamentId: tid, matchId: mid, tournamentName: tname };
+    setTournamentLinkName(tname || "Turnier");
+
+    const p1 = searchParams.get("p1");
+    const p2 = searchParams.get("p2");
+    if (p1 || p2) {
+      setPlayerNames((prev) => {
+        const next = [...prev];
+        if (p1) next[0] = p1;
+        if (p2) next[1] = p2;
+        return next;
+      });
+    }
+    setTeamMode(false);
+    setNumPlayers(2);
+
+    const qMode = searchParams.get("mode");
+    if (qMode === "501" || qMode === "301" || qMode === "cricket") setMode(qMode);
+
+    const qBestOf = parseInt(searchParams.get("bestOf") || "", 10);
+    if (Number.isFinite(qBestOf) && qBestOf > 0) setBestOfLegs(qBestOf);
+    // Only ever read once, right after mount — re-running on every searchParams identity
+    // change would clobber the scorekeeper's own edits to the setup form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fetches the current player's career checkout conversion rate on demand (once per
@@ -350,7 +389,7 @@ const GamePage = () => {
     const newRemaining = remaining - effectivePoints;
 
     const activeDoubleOut = game.players[idx].doubleOut ?? true;
-    const isBust = !stillWaitingForDoubleIn && (newRemaining < 0 || newRemaining === 1 ||
+    const isBust = !stillWaitingForDoubleIn && (newRemaining < 0 || (newRemaining === 1 && activeDoubleOut) ||
       (newRemaining === 0 && activeDoubleOut && mul !== 2 && !(baseValue === 25 && mul === 2)));
 
     if (isBust) {
@@ -634,7 +673,7 @@ const GamePage = () => {
 
       const x01Dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points: effectivePoints, boardU: d.boardU, boardV: d.boardV };
       const activeDoubleOut = curGame.players[idx].doubleOut ?? true;
-      const isBust = !stillWaitingForDoubleIn && (newRemaining < 0 || newRemaining === 1 ||
+      const isBust = !stillWaitingForDoubleIn && (newRemaining < 0 || (newRemaining === 1 && activeDoubleOut) ||
         (newRemaining === 0 && activeDoubleOut && !isDoubleOut));
 
       if (isBust) {
@@ -861,22 +900,45 @@ const GamePage = () => {
   const saveGame = async () => {
     if (!game || !game.isFinished || savingRef.current || gameSaved) return;
     savingRef.current = true;
+    const link = tournamentLinkRef.current ?? undefined;
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
-      await saveGameRecord(game, session?.user?.id, pendingGameIdRef.current);
+      await saveGameRecord(game, session?.user?.id, pendingGameIdRef.current, link);
       if (game.players.length > 2) {
         toast({ title: "Spiel gespeichert", description: "Alle Spieler wurden erfasst — der Turnierverlauf im Klassiker-Datensatz zeigt aber nur die Top 2." });
+      }
+      if (link) {
+        try {
+          await recordMatchResult(link.tournamentId, link.matchId, {
+            winnerName: game.winnerName!,
+            score1: game.legsWon[0],
+            score2: game.legsWon[1],
+          });
+        } catch (syncErr) {
+          // The game itself is safely saved either way — only the bracket write-back failed.
+          // Manual entry in the tournament view is always the fallback, so this never blocks the match.
+          console.error("recordMatchResult failed", syncErr);
+          toast({
+            title: "Turnier nicht aktualisiert",
+            description: "Ergebnis konnte nicht in den Turnierbaum übernommen werden — bitte dort manuell eintragen.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (err) {
       // No connection (or a mid-request drop) — the result is far too valuable to lose, so
       // it's queued in IndexedDB and replayed automatically once the app is back online
       // (see offlineQueue.ts / App.tsx). The client-generated pendingGameIdRef keeps the
-      // eventual insert idempotent even if this fires more than once.
-      await enqueueGameSave({ id: pendingGameIdRef.current, game, userId: session?.user?.id });
+      // eventual insert idempotent even if this fires more than once. The tournament bracket
+      // write-back is NOT retried offline — it needs a live read of the bracket, so it's
+      // covered by the same "enter it manually" fallback as any other connectivity gap.
+      await enqueueGameSave({ id: pendingGameIdRef.current, game, userId: session?.user?.id, tournamentLink: link });
       setQueuedOffline(true);
       toast({
         title: "Offline gespeichert",
-        description: "Keine Verbindung — das Ergebnis bleibt auf diesem Gerät und synchronisiert automatisch, sobald wieder Netz da ist.",
+        description: link
+          ? "Keine Verbindung — das Ergebnis bleibt auf diesem Gerät und synchronisiert automatisch, sobald wieder Netz da ist. Turnierbaum bitte manuell aktualisieren."
+          : "Keine Verbindung — das Ergebnis bleibt auf diesem Gerät und synchronisiert automatisch, sobald wieder Netz da ist.",
       });
     }
     setGameSaved(true);
@@ -913,7 +975,13 @@ const GamePage = () => {
     const activePlayerCount = numPlayers;
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
-        <h2 className="text-2xl font-display uppercase mb-6 text-center">Neues Spiel</h2>
+        <h2 className="text-2xl font-display uppercase mb-1 text-center">Neues Spiel</h2>
+        {tournamentLinkName && (
+          <p className="text-xs text-center text-primary mb-5">
+            Turnier-Match · {tournamentLinkName} — Ergebnis wird nach Spielende automatisch im Turnierbaum eingetragen.
+          </p>
+        )}
+        {!tournamentLinkName && <div className="mb-6" />}
         <div className="space-y-4">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">Spielmodus</label>
@@ -1386,7 +1454,11 @@ const GamePage = () => {
               <Button variant="outline" onClick={shareResult} disabled={sharingResult} className="gap-1.5 shrink-0">
                 <Share2 className="w-4 h-4" /> {sharingResult ? "…" : "Teilen"}
               </Button>
-              <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">Neues Spiel</Button>
+              {tournamentLinkName ? (
+                <Button onClick={() => navigate("/tournament")} className="flex-1 font-display uppercase">Zurück zum Turnier</Button>
+              ) : (
+                <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">Neues Spiel</Button>
+              )}
             </div>
             {gameSaved && (
               <p className="text-[10px] text-muted-foreground mt-2">
@@ -1528,7 +1600,7 @@ const GamePage = () => {
               outer window (and the page behind it) never scrolls while the camera is open. */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3">
             {doubleInBanner}
-            {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} /></div>}
+            {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} /></div>}
 
             {!currentPlayer?.isBot && (
               <LiveCamera
@@ -1642,7 +1714,7 @@ const GamePage = () => {
       ) : (
         <>
           {/* Checkout suggestion */}
-          {!isCricket && !currentPlayer?.isBot && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} /></div>}
+          {!isCricket && !currentPlayer?.isBot && (currentPlayer?.doubleOut ?? true) && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} /></div>}
 
           {/* Cricket scoreboard */}
           {cricketBoard}

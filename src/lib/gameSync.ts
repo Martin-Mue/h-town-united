@@ -17,7 +17,12 @@ import {
  * a queued save once the connection comes back (see offlineQueue.ts) — must throw
  * on any failure so the caller can decide to queue/retry rather than silently drop data.
  */
-export async function saveGameRecord(game: GameState, userId: string | undefined, pendingGameId: string): Promise<void> {
+export async function saveGameRecord(
+  game: GameState,
+  userId: string | undefined,
+  pendingGameId: string,
+  tournamentLink?: { tournamentId: string; matchId: string }
+): Promise<void> {
   const allLegs = [...game.completedLegs, game.currentLeg];
   const n = game.players.length;
   const throwsByPlayer = Array.from({ length: n }, (_, i) => allLegs.flatMap((l) => l.throws[i] ?? []));
@@ -95,6 +100,10 @@ export async function saveGameRecord(game: GameState, userId: string | undefined
     player1_total_throws: throwsByPlayer[top1].length, player2_total_throws: top2 !== undefined ? throwsByPlayer[top2].length : 0,
     winner_name: game.winnerName!, winner_id: winnerMatch?.id || null,
     detail_stats: { players: game.players.map((_, i) => detailFor(i)) } as any,
+    tournament_id: tournamentLink?.tournamentId ?? null,
+    // Only sent when actually tournament-linked, so a save never fails on this column
+    // before the `match_id` migration has been applied to a given environment.
+    ...(tournamentLink ? { match_id: tournamentLink.matchId } : {}),
   }).select("id").single();
   if (insertGameErr) throw insertGameErr;
 

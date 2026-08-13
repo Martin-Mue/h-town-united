@@ -2,7 +2,14 @@ import { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } fr
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw } from "lucide-react";
-import { roundLabelFor, currentBoardSchedule, type Match } from "@/utils/tournament";
+import {
+  roundLabelFor,
+  currentBoardSchedule,
+  calcStandings,
+  type Match,
+  type RoundRobinMatch,
+  type RoundRobinStanding,
+} from "@/utils/tournament";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
@@ -28,32 +35,6 @@ interface TournamentRow {
   game_mode?: string; best_of_legs?: number; boards?: number;
   round_configs?: { mode: string; bestOf: number }[];
 }
-
-interface RoundRobinMatch {
-  id: string; player1: string; player2: string; winner?: string; played: boolean;
-}
-
-interface RoundRobinStanding {
-  name: string; played: number; won: number; lost: number; points: number;
-}
-
-const calcStandings = (matches: RoundRobinMatch[]): RoundRobinStanding[] => {
-  const map: Record<string, RoundRobinStanding> = {};
-  matches.forEach((m) => {
-    [m.player1, m.player2].forEach((p) => {
-      if (!map[p]) map[p] = { name: p, played: 0, won: 0, lost: 0, points: 0 };
-    });
-    if (m.played && m.winner) {
-      map[m.player1].played++;
-      map[m.player2].played++;
-      map[m.winner].won++;
-      map[m.winner].points += 2;
-      const loser = m.winner === m.player1 ? m.player2 : m.player1;
-      map[loser].lost++;
-    }
-  });
-  return Object.values(map).sort((a, b) => b.points - a.points || b.won - a.won);
-};
 
 /** Read-only round-robin standings + match list — mirrors the admin Tabelle view. */
 const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {

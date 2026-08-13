@@ -143,7 +143,7 @@ export function simulateBotVisit(remaining: number, doubleOut: boolean, level: B
     }
 
     const newRem = rem - dart.points;
-    const isBust = newRem < 0 || newRem === 1 ||
+    const isBust = newRem < 0 || (newRem === 1 && doubleOut) ||
       (newRem === 0 && doubleOut && !(dart.multiplier === 2 || (dart.baseValue === 25 && dart.multiplier === 2)));
 
     if (isBust) return { darts, bustedOnDartIndex: i, checkedOut: false };

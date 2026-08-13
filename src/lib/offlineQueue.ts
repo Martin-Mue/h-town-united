@@ -20,6 +20,8 @@ export interface QueuedGameSave {
   id: string;
   game: GameState;
   userId: string | undefined;
+  /** Set when the game was started from a tournament bracket match, so the replay can still tag the saved row. */
+  tournamentLink?: { tournamentId: string; matchId: string };
   createdAt: number;
   attempts: number;
   lastError?: string;
@@ -106,7 +108,7 @@ let flushInFlight: Promise<{ synced: number; failed: number }> | null = null;
  * (app start, `online` event, manual retry button) — concurrent calls share one run.
  */
 export async function flushGameSaveQueue(
-  replay: (game: GameState, userId: string | undefined, pendingGameId: string) => Promise<void>
+  replay: (game: GameState, userId: string | undefined, pendingGameId: string, tournamentLink?: { tournamentId: string; matchId: string }) => Promise<void>
 ): Promise<{ synced: number; failed: number }> {
   if (flushInFlight) return flushInFlight;
   flushInFlight = (async () => {
@@ -115,7 +117,7 @@ export async function flushGameSaveQueue(
     const items = await listQueuedGameSaves();
     for (const item of items) {
       try {
-        await replay(item.game, item.userId, item.id);
+        await replay(item.game, item.userId, item.id, item.tournamentLink);
         await removeQueuedGameSave(item.id);
         synced++;
       } catch (err) {

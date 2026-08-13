@@ -16,9 +16,11 @@ import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import htuEmblem from "@/assets/club-emblem.png";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   type Match,
+  type RoundRobinMatch,
+  type RoundRobinStanding,
   BYE,
   isRealPlayer,
   isPlayable,
@@ -28,6 +30,7 @@ import {
   assignScorekeepers,
   roundLabelFor,
   scorekeeperLabel,
+  calcStandings,
 } from "@/utils/tournament";
 
 interface RoundConfig {
@@ -38,22 +41,6 @@ interface RoundConfig {
 interface SeriesRecord {
   id: string;
   name: string;
-}
-
-interface RoundRobinMatch {
-  id: string;
-  player1: string;
-  player2: string;
-  winner?: string;
-  played: boolean;
-}
-
-interface RoundRobinStanding {
-  name: string;
-  played: number;
-  won: number;
-  lost: number;
-  points: number;
 }
 
 interface TournamentRecord {
@@ -228,9 +215,12 @@ interface BracketViewportProps {
   setKoScore: (matchId: string, slot: 1 | 2) => void;
   resetKoMatch: (matchId: string) => void;
   onEditMatch?: (match: Match) => void;
+  /** undefined for a match round marked "Extern" (played outside the app) — no live-game option then. */
+  canStartLiveGame: (match: Match) => boolean;
+  onStartLiveGame: (match: Match) => void;
 }
 
-const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch }: BracketViewportProps) => {
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame }: BracketViewportProps) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState({ wrapW: 0, wrapH: 0, innerW: 0, innerH: 0 });
@@ -319,6 +309,13 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
         <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
           <span className="truncate">✍️ {scorekeeperLabel(match, matches) || "–"}</span>
           {match.board ? <span className="font-mono">Board {match.board}</span> : null}
+        </div>
+      )}
+      {canStartLiveGame(match) && (
+        <div className="border-t border-border/60">
+          <Button variant="secondary" size="sm" className="w-full rounded-none h-8 text-xs gap-1.5" onClick={() => onStartLiveGame(match)}>
+            <Play className="w-3.5 h-3.5" /> Spiel starten
+          </Button>
         </div>
       )}
       {(match.winner || match.score1 || match.score2 || onEditMatch) && (
@@ -513,6 +510,7 @@ const TournamentPage = () => {
 
   const { session } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const togglePublicView = async () => {
     if (!activeTournament) return;
@@ -540,24 +538,26 @@ const TournamentPage = () => {
     navigator.clipboard.writeText(url).then(() => toast({ title: "Link kopiert", description: url }));
   };
 
+  const mapTournamentRow = (t: any): TournamentRecord => ({
+    ...t,
+    players: (t.players as any) || [],
+    bracket: (t.bracket as any) || [],
+    game_mode: (t as any).game_mode || "501",
+    best_of_legs: (t as any).best_of_legs || 3,
+    series_id: (t as any).series_id || null,
+    round_configs: ((t as any).round_configs as RoundConfig[]) || [],
+    public_view: (t as any).public_view || false,
+    public_slug: (t as any).public_slug || null,
+    boards: (t as any).boards ?? 2,
+  });
+
   const fetchTournaments = useCallback(async () => {
     const { data } = await supabase
       .from("tournaments")
       .select("*")
       .order("created_at", { ascending: false });
     if (data) {
-      setTournaments(data.map(t => ({
-        ...t,
-        players: (t.players as any) || [],
-        bracket: (t.bracket as any) || [],
-        game_mode: (t as any).game_mode || "501",
-        best_of_legs: (t as any).best_of_legs || 3,
-        series_id: (t as any).series_id || null,
-        round_configs: ((t as any).round_configs as RoundConfig[]) || [],
-        public_view: (t as any).public_view || false,
-        public_slug: (t as any).public_slug || null,
-        boards: (t as any).boards ?? 2,
-      })) as TournamentRecord[]);
+      setTournaments(data.map(mapTournamentRow));
     }
     setLoading(false);
   }, []);
@@ -591,6 +591,34 @@ const TournamentPage = () => {
   }, []);
 
   useEffect(() => { fetchTournaments(); fetchDbPlayers(); fetchSeries(); }, [fetchTournaments, fetchDbPlayers, fetchSeries]);
+
+  // Keep the open bracket live across devices — a match started via "Spiel starten" on one
+  // board's tablet (or a plain manual edit on another) should show up here without a manual
+  // reload. Mirrors the public live view's realtime + polling fallback (PublicTournament.tsx).
+  useEffect(() => {
+    if (phase !== "bracket" || !activeTournament) return;
+    const id = activeTournament.id;
+    let cancelled = false;
+
+    const refresh = async () => {
+      const { data } = await supabase.from("tournaments").select("*").eq("id", id).maybeSingle();
+      if (cancelled || !data) return;
+      setActiveTournament((prev) => (prev && prev.id === id ? mapTournamentRow(data) : prev));
+    };
+
+    const interval = window.setInterval(refresh, 8000);
+    const channel = supabase
+      .channel(`tournament-edit-${id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tournaments", filter: `id=eq.${id}` }, refresh)
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, activeTournament?.id]);
 
   // Auto-generate round configs when target size or defaults change
   useEffect(() => {
@@ -795,10 +823,19 @@ const TournamentPage = () => {
   };
 
   // ─── KO: persist a recomputed bracket ──────────
-  const persistBracket = async (raw: Match[], opts: { reshuffleKeepers?: boolean } = {}) => {
+  // Takes a patch FUNCTION (not a precomputed array) and re-fetches the bracket fresh from
+  // Supabase right before applying it. Several boards/devices can edit the same tournament
+  // at once (manual taps on one screen while another board's live game auto-finishes) — a
+  // patch built against a locally-cached `activeTournament.bracket` would silently overwrite
+  // whichever other match got updated in between.
+  const persistBracket = async (patch: (fresh: Match[]) => Match[], opts: { reshuffleKeepers?: boolean } = {}) => {
     if (!activeTournament) return;
+    const { data: freshRow } = await supabase.from("tournaments").select("bracket, players").eq("id", activeTournament.id).single();
+    const freshBracket = (freshRow?.bracket as unknown as Match[] | undefined) ?? (activeTournament.bracket as Match[]);
+    const freshPlayers = (freshRow?.players as unknown as string[] | undefined) ?? activeTournament.players;
+    const raw = patch(freshBracket);
     const recomputed = recomputeBracket(raw);
-    const withKeepers = assignScorekeepers(recomputed, activeTournament.players, {
+    const withKeepers = assignScorekeepers(recomputed, freshPlayers, {
       boards: activeTournament.boards || 2,
       keepExisting: !opts.reshuffleKeepers,
     });
@@ -819,7 +856,7 @@ const TournamentPage = () => {
       champion,
       status: champion ? "finished" : "active",
     }).eq("id", activeTournament.id);
-    setActiveTournament({ ...activeTournament, bracket: withKeepers, champion, status: champion ? "finished" : "active" });
+    setActiveTournament({ ...activeTournament, bracket: withKeepers, players: freshPlayers, champion, status: champion ? "finished" : "active" });
     if (champion && seenCeremonyFor !== activeTournament.id) {
       setCeremonyChampion(champion);
       setSeenCeremonyFor(activeTournament.id);
@@ -828,35 +865,33 @@ const TournamentPage = () => {
 
   const setKoWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
     if (!activeTournament) return;
-    const updated = (activeTournament.bracket as Match[]).map(m =>
+    await persistBracket((fresh) => fresh.map(m =>
       m.id === matchId ? { ...m, winner, score1, score2 } : { ...m }
-    );
-    await persistBracket(updated);
+    ));
   };
 
   const setKoScore = async (matchId: string, slot: 1 | 2) => {
     if (!activeTournament) return;
     const match = (activeTournament.bracket as Match[]).find(m => m.id === matchId);
     if (!match || !isPlayable(match)) return;
-    const score1 = slot === 1 ? (match.score1 || 0) + 1 : (match.score1 || 0);
-    const score2 = slot === 2 ? (match.score2 || 0) + 1 : (match.score2 || 0);
     const cfg = (activeTournament.round_configs || [])[match.round - 1];
     const bestOf = cfg?.bestOf || activeTournament.best_of_legs || 1;
     const legsToWin = Math.ceil(bestOf / 2);
-    const winner = score1 >= legsToWin && score1 > score2 ? match.player1 : score2 >= legsToWin && score2 > score1 ? match.player2 : undefined;
-    const bracket = (activeTournament.bracket as Match[]).map(m =>
-      m.id === matchId ? { ...m, score1, score2, winner: winner ?? m.winner } : { ...m }
-    );
-    await persistBracket(bracket);
+    await persistBracket((fresh) => fresh.map(m => {
+      if (m.id !== matchId) return { ...m };
+      const score1 = slot === 1 ? (m.score1 || 0) + 1 : (m.score1 || 0);
+      const score2 = slot === 2 ? (m.score2 || 0) + 1 : (m.score2 || 0);
+      const winner = score1 >= legsToWin && score1 > score2 ? m.player1 : score2 >= legsToWin && score2 > score1 ? m.player2 : undefined;
+      return { ...m, score1, score2, winner: winner ?? m.winner };
+    }));
   };
 
   /** Resets a match AND every result that depended on it (cascade via recompute). */
   const resetKoMatch = async (matchId: string) => {
     if (!activeTournament) return;
-    const bracket = (activeTournament.bracket as Match[]).map(m =>
+    await persistBracket((fresh) => fresh.map(m =>
       m.id === matchId ? { ...m, winner: undefined, score1: undefined, score2: undefined } : { ...m }
-    );
-    await persistBracket(bracket);
+    ));
   };
 
   /** Replace the two participants of a first-round match (late changes, no-shows …). */
@@ -864,15 +899,16 @@ const TournamentPage = () => {
     if (!activeTournament || !editMatch) return;
     const p1 = editP1.trim() || BYE;
     const p2 = editP2.trim() || BYE;
-    const bracket = (activeTournament.bracket as Match[]).map(m =>
+    const patch = (fresh: Match[]) => fresh.map(m =>
       m.id === editMatch.id ? { ...m, player1: p1, player2: p2, winner: undefined, score1: undefined, score2: undefined } : { ...m }
     );
+    const preview = patch(activeTournament.bracket as Match[]);
     const nextPlayers = Array.from(new Set(
-      bracket.filter(m => m.round === 1).flatMap(m => [m.player1, m.player2]).filter(isRealPlayer) as string[]
+      preview.filter(m => m.round === 1).flatMap(m => [m.player1, m.player2]).filter(isRealPlayer) as string[]
     ));
     await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
     setActiveTournament({ ...activeTournament, players: nextPlayers });
-    await persistBracket(bracket);
+    await persistBracket(patch);
     setEditMatch(null);
     toast({ title: "Turnierbaum aktualisiert" });
   };
@@ -880,7 +916,7 @@ const TournamentPage = () => {
   /** Withdraw a player: only *unplayed* matches are adjusted, results stay untouched. */
   const withdrawPlayer = async (name: string) => {
     if (!activeTournament) return;
-    const bracket = (activeTournament.bracket as Match[]).map(m => {
+    const patch = (fresh: Match[]) => fresh.map(m => {
       const copy = { ...m };
       // already decided matches keep their result – history stays intact
       if (copy.winner) return copy;
@@ -897,33 +933,78 @@ const TournamentPage = () => {
     const nextPlayers = activeTournament.players.filter(p => p !== name);
     await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
     setActiveTournament({ ...activeTournament, players: nextPlayers });
-    await persistBracket(bracket);
+    await persistBracket(patch);
     toast({ title: `${name} zurückgezogen`, description: "Gespielte Partien bleiben erhalten, nur offene Stellen werden angepasst." });
   };
 
   /** Manually set (and lock) the scorekeeper of a single match. */
   const setMatchScorekeeper = async (matchId: string, keeper: string) => {
     if (!activeTournament) return;
-    const bracket = (activeTournament.bracket as Match[]).map(m =>
+    await persistBracket((fresh) => fresh.map(m =>
       m.id === matchId
         ? { ...m, scorekeeper: keeper === "__auto" ? undefined : keeper, scorekeeperLocked: keeper !== "__auto" }
         : { ...m }
-    );
-    await persistBracket(bracket);
+    ));
   };
 
   const reshuffleScorekeepers = async () => {
     if (!activeTournament) return;
-    await persistBracket([...(activeTournament.bracket as Match[])], { reshuffleKeepers: true });
+    await persistBracket((fresh) => [...fresh], { reshuffleKeepers: true });
     toast({ title: "Schreiber neu ausgelost" });
   };
 
+  /** "501" | "301" | "Cricket" | "Extern" — a round can override the tournament's default mode. */
+  const resolveRoundMode = (round: number): string => {
+    const cfg = (activeTournament?.round_configs || [])[round - 1];
+    return cfg?.mode || activeTournament?.game_mode || "501";
+  };
+
+  /** "Extern" rounds are explicitly played outside the app (a different system/board) — no live-game option for those. */
+  const canStartLiveGame = (match: Match): boolean =>
+    isPlayable(match) && !match.winner && resolveRoundMode(match.round) !== "Extern";
+
+  /** Opens Game.tsx prefilled for this match — playing stays entirely optional, this is purely
+   *  an additive shortcut next to the existing manual "tap winner" / "+1 leg" controls. */
+  const startLiveGame = (match: Match) => {
+    if (!activeTournament || !isRealPlayer(match.player1) || !isRealPlayer(match.player2)) return;
+    const roundMode = resolveRoundMode(match.round);
+    const bestOf = (activeTournament.round_configs || [])[match.round - 1]?.bestOf || activeTournament.best_of_legs || 1;
+    const params = new URLSearchParams({
+      tid: activeTournament.id,
+      mid: match.id,
+      p1: match.player1!,
+      p2: match.player2!,
+      mode: roundMode.toLowerCase(),
+      bestOf: String(bestOf),
+      tname: activeTournament.name,
+    });
+    navigate(`/game?${params.toString()}`);
+  };
+
+  const startLiveGameRr = (match: RoundRobinMatch) => {
+    if (!activeTournament) return;
+    const roundMode = activeTournament.game_mode || "501";
+    if (roundMode === "Extern") return;
+    const params = new URLSearchParams({
+      tid: activeTournament.id,
+      mid: match.id,
+      p1: match.player1,
+      p2: match.player2,
+      mode: roundMode.toLowerCase(),
+      bestOf: String(activeTournament.best_of_legs || 1),
+      tname: activeTournament.name,
+    });
+    navigate(`/game?${params.toString()}`);
+  };
+
   // ─── Round Robin: Set Winner ───────────────────
+  // Same fresh-fetch-then-merge approach as persistBracket above — round-robin ties (both
+  // manual taps and live-game auto-finishes) are just as race-prone across multiple boards.
   const setRrWinner = async (matchId: string, winner: string) => {
     if (!activeTournament) return;
-    const bracket = (activeTournament.bracket as RoundRobinMatch[]).map(m =>
-      m.id === matchId ? { ...m, winner, played: true } : m
-    );
+    const { data: freshRow } = await supabase.from("tournaments").select("bracket").eq("id", activeTournament.id).single();
+    const freshBracket = (freshRow?.bracket as unknown as RoundRobinMatch[] | undefined) ?? (activeTournament.bracket as RoundRobinMatch[]);
+    const bracket = freshBracket.map(m => m.id === matchId ? { ...m, winner, played: true } : m);
 
     const allPlayed = bracket.every(m => m.played);
     let champion: string | null = null;
@@ -943,24 +1024,6 @@ const TournamentPage = () => {
       setCeremonyChampion(champion);
       setSeenCeremonyFor(activeTournament.id);
     }
-  };
-
-  const calcStandings = (matches: RoundRobinMatch[]): RoundRobinStanding[] => {
-    const map: Record<string, RoundRobinStanding> = {};
-    matches.forEach(m => {
-      [m.player1, m.player2].forEach(p => {
-        if (!map[p]) map[p] = { name: p, played: 0, won: 0, lost: 0, points: 0 };
-      });
-      if (m.played && m.winner) {
-        map[m.player1].played++;
-        map[m.player2].played++;
-        map[m.winner].won++;
-        map[m.winner].points += 2;
-        const loser = m.winner === m.player1 ? m.player2 : m.player1;
-        map[loser].lost++;
-      }
-    });
-    return Object.values(map).sort((a, b) => b.points - a.points || b.won - a.won);
   };
 
   const openTournament = (t: TournamentRecord) => {
@@ -1558,6 +1621,8 @@ const TournamentPage = () => {
             setKoScore={setKoScore}
             resetKoMatch={resetKoMatch}
             onEditMatch={(m) => { setEditMatch(m); setEditP1(m.player1 === BYE ? "" : m.player1 || ""); setEditP2(m.player2 === BYE ? "" : m.player2 || ""); }}
+            canStartLiveGame={canStartLiveGame}
+            onStartLiveGame={startLiveGame}
           />
         ) : (
           <div className="container space-y-4">
@@ -1585,6 +1650,11 @@ const TournamentPage = () => {
                         <span className="flex-1 truncate uppercase tracking-wide">
                           <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
                         </span>
+                        {canStartLiveGame(e.match) && (
+                          <Button size="sm" variant="secondary" className="h-7 text-xs gap-1 shrink-0" onClick={() => startLiveGame(e.match)}>
+                            <Play className="w-3 h-3" /> Spiel starten
+                          </Button>
+                        )}
                         <div className="shrink-0 flex items-center gap-1">
                           <span className="text-xs">✍️</span>
                           <Select
@@ -1741,6 +1811,11 @@ const TournamentPage = () => {
               <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2">
                 <span className="text-sm">{m.player1} <span className="text-muted-foreground">vs</span> {m.player2}</span>
                 <div className="flex gap-1">
+                  {activeTournament.game_mode !== "Extern" && (
+                    <Button size="sm" variant="secondary" className="text-xs h-7 px-2 gap-1" onClick={() => startLiveGameRr(m)}>
+                      <Play className="w-3 h-3" /> Spiel starten
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player1)}>
                     {m.player1} ✓
                   </Button>

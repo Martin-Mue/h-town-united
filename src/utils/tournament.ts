@@ -352,6 +352,41 @@ export function currentBoardSchedule(matches: Match[], boards: number): CurrentB
   return { now, onDeck, queuedCount };
 }
 
+export interface RoundRobinMatch {
+  id: string;
+  player1: string;
+  player2: string;
+  winner?: string;
+  played: boolean;
+}
+
+export interface RoundRobinStanding {
+  name: string;
+  played: number;
+  won: number;
+  lost: number;
+  points: number;
+}
+
+/** Round-robin table: 2 points per win, sorted by points then wins. No head-to-head/leg-diff tiebreaker. */
+export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] {
+  const map: Record<string, RoundRobinStanding> = {};
+  matches.forEach((m) => {
+    [m.player1, m.player2].forEach((p) => {
+      if (!map[p]) map[p] = { name: p, played: 0, won: 0, lost: 0, points: 0 };
+    });
+    if (m.played && m.winner) {
+      map[m.player1].played++;
+      map[m.player2].played++;
+      map[m.winner].won++;
+      map[m.winner].points += 2;
+      const loser = m.winner === m.player1 ? m.player2 : m.player1;
+      map[loser].lost++;
+    }
+  });
+  return Object.values(map).sort((a, b) => b.points - a.points || b.won - a.won);
+}
+
 export const roundLabelFor = (round: number, total: number) => {
   if (round === 0) return "Preliminary Round";
   if (round === total) return "Final";
