@@ -327,15 +327,13 @@ export function assignScorekeepers(
     });
   });
 
-  // matches that are not playable keep no scorekeeper
+  // matches that are not playable keep no scorekeeper (finished matches keep theirs, for the record)
   byId.forEach((m) => {
-    if (!isPlayable(m) || m.winner) {
-      if (!isPlayable(m)) {
-        m.scorekeeper = undefined;
-        m.scorekeeperLocked = undefined;
-        m.scorekeeperRule = undefined;
-        m.scorekeeperFromMatchId = undefined;
-      }
+    if (!isPlayable(m)) {
+      m.scorekeeper = undefined;
+      m.scorekeeperLocked = undefined;
+      m.scorekeeperRule = undefined;
+      m.scorekeeperFromMatchId = undefined;
     }
   });
 

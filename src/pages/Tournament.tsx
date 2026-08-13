@@ -330,7 +330,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
               downloadName={`match-${match.id}`}
               trigger={
-                <button className="shrink-0 rounded-none border-l border-border/60 px-3 h-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="QR-Code für dieses Match">
+                <button className="shrink-0 rounded-none border-l border-border/60 px-3 h-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
                   <QrCode className="w-3.5 h-3.5" />
                 </button>
               }
@@ -1740,7 +1740,7 @@ const TournamentPage = () => {
                                 description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
                                 downloadName={`match-${e.match.id}`}
                                 trigger={
-                                  <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" title="QR-Code für dieses Match">
+                                  <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
                                     <QrCode className="w-3.5 h-3.5" />
                                   </Button>
                                 }
@@ -1928,7 +1928,7 @@ const TournamentPage = () => {
                           description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
                           downloadName={`match-${m.id}`}
                           trigger={
-                            <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" title="QR-Code für dieses Match">
+                            <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
                               <QrCode className="w-3.5 h-3.5" />
                             </Button>
                           }

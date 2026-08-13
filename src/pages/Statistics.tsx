@@ -90,9 +90,14 @@ const StatisticsPage = () => {
 
   const fetchData = useCallback(async () => {
     const [gamesRes, playersRes, legsRes, clipsRes] = await Promise.all([
-      supabase.from("games").select("*").order("played_at", { ascending: false }).limit(500),
+      supabase.from("games")
+        .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats")
+        .order("played_at", { ascending: false }).limit(500),
       supabase.from("players").select("id, name, games_played, games_won, average, high_score, double_rate, elo_rating, emoji").order("average", { ascending: false }),
-      supabase.from("game_legs").select("*").order("created_at", { ascending: false }).limit(4000),
+      // No user_id/created_at — only the dart-by-dart fields the stats views actually read.
+      // `throws` (per-dart JSON) still dominates the payload, but this at least skips the rest.
+      supabase.from("game_legs").select("id, game_id, leg_number, player_index, player_name, player_id, starting_score, throws, won")
+        .order("created_at", { ascending: false }).limit(4000),
       supabase.from("highlight_clips").select("*").order("created_at", { ascending: false }).limit(200),
     ]);
     if (gamesRes.data) setGames(gamesRes.data as GameRecord[]);

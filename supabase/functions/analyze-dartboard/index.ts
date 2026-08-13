@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,18 +15,55 @@ const emptyResult = {
   dartsDetected: 0,
 };
 
-const jsonResponse = (payload: Record<string, unknown>) =>
+const jsonResponse = (payload: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(payload), {
-    status: 200,
+    status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// This is the one AI-metered function a live camera session calls repeatedly (once per
+// detected round), so the cap is generous — it's a backstop against a runaway client loop
+// or outside abuse, not normal-usage throttling. Unlike generate-player-portrait/send-push,
+// this one had NO auth check at all until now — anyone who found the function URL could
+// burn through the shared AI credit balance without ever opening the app.
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 300;
+const RATE_WINDOW_MS = 60 * 60 * 1000;
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(userId);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(userId, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return false;
+  }
+  entry.count++;
+  return entry.count > RATE_LIMIT;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return jsonResponse({ ...emptyResult, error: "Authentication required", status: 401, retryable: false }, 401);
+    }
+    const anonClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(authHeader.replace("Bearer ", ""));
+    if (claimsError || !claimsData?.claims) {
+      return jsonResponse({ ...emptyResult, error: "Authentication required", status: 401, retryable: false }, 401);
+    }
+    const callerId = claimsData.claims.sub as string;
+    if (isRateLimited(callerId)) {
+      return jsonResponse({ ...emptyResult, error: "Rate limit exceeded. Please wait a moment.", status: 429, retryable: true }, 429);
+    }
+
     const { imageBase64, detectBoard = false } = await req.json().catch(() => ({}));
     if (!imageBase64) {
       return jsonResponse({ ...emptyResult, error: "No image provided", status: 400, retryable: false });
