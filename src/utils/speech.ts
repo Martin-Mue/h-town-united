@@ -48,6 +48,12 @@ function pickGermanVoice(): SpeechSynthesisVoice | undefined {
   return byQuality[0];
 }
 
+/** Nudges a value randomly within ±spread — real callers never hit the exact same pitch/rate
+ *  twice, and that tiny per-call variation reads as "alive" far more than a fixed tone would. */
+function jitter(base: number, spread: number) {
+  return base + (Math.random() * 2 - 1) * spread;
+}
+
 export function speakText(text: string, options: SpeechOptions = {}) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   if (!text.trim()) return;
@@ -57,8 +63,8 @@ export function speakText(text: string, options: SpeechOptions = {}) {
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = options.lang ?? "de-DE";
-  utterance.rate = options.rate ?? 1;
-  utterance.pitch = options.pitch ?? 1;
+  utterance.rate = jitter(options.rate ?? 1, 0.035);
+  utterance.pitch = jitter(options.pitch ?? 1, 0.045);
   utterance.volume = options.volume ?? 1;
   const voice = pickGermanVoice();
   if (voice) utterance.voice = voice;
@@ -84,8 +90,8 @@ export function speakSequence(parts: SpeechPart[], lang = "de-DE") {
     if (i === 0) synthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(part.text);
     utterance.lang = part.options?.lang ?? lang;
-    utterance.rate = part.options?.rate ?? 1;
-    utterance.pitch = part.options?.pitch ?? 1;
+    utterance.rate = jitter(part.options?.rate ?? 1, 0.035);
+    utterance.pitch = jitter(part.options?.pitch ?? 1, 0.045);
     utterance.volume = part.options?.volume ?? 1;
     if (voice) utterance.voice = voice;
     synthesis.speak(utterance);
@@ -114,6 +120,17 @@ const HYPE_180 = [
   "Maximum!",
   "Was für ein Wurf!",
   "Da ist er! Der Maximum-Wurf!",
+  "Unfassbar — Maximum!",
+  "Wahnsinn! Einhundertachtzig!",
+  "Volle Kanne — Maximum!",
+] as const;
+
+const HYPE_HIGH_TON = [
+  "Riesig!",
+  "Was für eine Runde!",
+  "Da geht die Post ab!",
+  "Fast das Maximum!",
+  "Stark, richtig stark!",
 ] as const;
 
 const HYPE_TON_PLUS = [
@@ -122,6 +139,9 @@ const HYPE_TON_PLUS = [
   "Sauber getroffen!",
   "Stark gepunktet!",
   "Richtig stark!",
+  "Sehr ordentlich!",
+  "Das sitzt!",
+  "Gut gepunktet!",
 ] as const;
 
 const HYPE_CHECKOUT = [
@@ -130,6 +150,16 @@ const HYPE_CHECKOUT = [
   "Das Leg ist durch!",
   "Perfekt ausgecheckt!",
   "Ins Schwarze getroffen!",
+  "Sauber ausgecheckt!",
+  "Da ist die Tür zu!",
+  "Punktgenau!",
+] as const;
+
+/** Occasionally names the player directly on the checkout hype line for variety — a real caller doesn't say the same generic phrase every single leg. */
+const HYPE_CHECKOUT_NAMED = (name: string) => [
+  `${name} macht das Leg klar!`,
+  `Da ist er, der Checkout von ${name}!`,
+  `${name} schließt sauber ab!`,
 ] as const;
 
 const HYPE_MATCH_WIN = [
@@ -137,15 +167,21 @@ const HYPE_MATCH_WIN = [
   "holt sich den Sieg!",
   "macht den Deckel drauf!",
   "krönt sich zum Sieger!",
+  "sichert sich den Sieg!",
+  "beendet die Partie!",
 ] as const;
 
 const HYPE_BUST = [
   "Autsch, daneben.",
   "Das sitzt nicht — Bust.",
   "Knapp vorbei — Bust.",
+  "Das war nichts — Bust.",
+  "Schade, Bust.",
 ] as const;
 
 const HYPE_OPTIONS: SpeechOptions = { pitch: 1.55, rate: 1.22, volume: 1 };
+const HIGH_TON_OPTIONS: SpeechOptions = { pitch: 1.4, rate: 1.18, volume: 1 };
+const TON_OPTIONS: SpeechOptions = { pitch: 1.28, rate: 1.14, volume: 1 };
 const CALM_OPTIONS: SpeechOptions = { pitch: 0.92, rate: 0.96, volume: 0.92 };
 const NORMAL_OPTIONS: SpeechOptions = { pitch: 1.02, rate: 1.03, volume: 1 };
 
@@ -176,9 +212,11 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
     };
   }
   if (p.checkedOut) {
+    // ~1 in 3 checkouts get the player named directly in the hype line instead of the generic pool.
+    const hype = Math.random() < 0.35 ? pickRandom(HYPE_CHECKOUT_NAMED(p.activePlayerName)) : pickRandom(HYPE_CHECKOUT);
     return {
       parts: [
-        { text: pickRandom(HYPE_CHECKOUT), options: HYPE_OPTIONS },
+        { text: hype, options: HYPE_OPTIONS },
         { text: `Leg an ${p.activePlayerName}! ${p.nextPlayerName} startet das nächste Leg.`, options: NORMAL_OPTIONS },
       ],
     };
@@ -196,11 +234,19 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
   if (p.roundTotal === 180) {
     return { parts: [{ text: pickRandom(HYPE_180), options: HYPE_OPTIONS }] };
   }
+  if (p.roundTotal >= 140) {
+    return {
+      parts: [
+        { text: `${p.roundTotal}!`, options: HIGH_TON_OPTIONS },
+        { text: pickRandom(HYPE_HIGH_TON), options: HIGH_TON_OPTIONS },
+      ],
+    };
+  }
   if (p.roundTotal >= 100) {
     return {
       parts: [
-        { text: `${p.roundTotal}!`, options: { pitch: 1.28, rate: 1.14, volume: 1 } },
-        { text: pickRandom(HYPE_TON_PLUS), options: { pitch: 1.28, rate: 1.14, volume: 1 } },
+        { text: `${p.roundTotal}!`, options: TON_OPTIONS },
+        { text: pickRandom(HYPE_TON_PLUS), options: TON_OPTIONS },
       ],
     };
   }

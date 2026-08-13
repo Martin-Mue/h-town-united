@@ -405,6 +405,13 @@ const GamePage = () => {
       setDartsThisRound(0);
       setTurnStartRemaining(game.currentLeg.remaining[teamIndexFor(game.teams, (idx + 1) % n)]);
       if (soundEnabled) setTimeout(() => playTurnSwitchSound(), 300);
+      if (speechEnabled) {
+        const { parts } = buildRoundAnnouncement({
+          roundTotal: 0, activePlayerName: game.players[idx].name, nextPlayerName: game.players[(idx + 1) % n].name,
+          isCricket: false, checkedOut: false, busted: true, matchWon: false,
+        });
+        window.setTimeout(() => speakSequence(parts), 380);
+      }
       return;
     }
 
@@ -479,13 +486,22 @@ const GamePage = () => {
       setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
       const legsWon = game.legsWon[teamIdx] + 1;
       const legsToWin = Math.ceil(game.bestOfLegs / 2);
+      const matchWon = legsWon >= legsToWin;
       triggerConfetti();
       if (soundEnabled) {
-        if (legsWon >= legsToWin) {
+        if (matchWon) {
           setTimeout(() => playVictorySound(), 200);
         } else {
           setTimeout(() => playCheckoutSound(), 100);
         }
+      }
+      if (speechEnabled) {
+        const winnerName = game.teams ? game.teams[teamIdx].name : game.players[idx].name;
+        const { parts } = buildRoundAnnouncement({
+          roundTotal: 0, activePlayerName: game.players[idx].name, nextPlayerName: game.players[nextStarter].name,
+          isCricket: false, checkedOut: true, busted: false, matchWon, winnerName: matchWon ? winnerName : undefined,
+        });
+        window.setTimeout(() => speakSequence(parts), matchWon ? 300 : 200);
       }
     } else if (newDartsThisRound >= 3) {
       const roundThrows = game.currentLeg.throws[idx].slice(-2);
@@ -497,7 +513,15 @@ const GamePage = () => {
         else setTimeout(() => playTurnSwitchSound(), 100);
       }
       setDartsThisRound(0);
-      setTurnStartRemaining(game.currentLeg.remaining[teamIndexFor(game.teams, (idx + 1) % game.players.length)]);
+      const nextIdx = (idx + 1) % game.players.length;
+      setTurnStartRemaining(game.currentLeg.remaining[teamIndexFor(game.teams, nextIdx)]);
+      if (speechEnabled) {
+        const { parts } = buildRoundAnnouncement({
+          roundTotal, activePlayerName: game.players[idx].name, nextPlayerName: game.players[nextIdx].name,
+          isCricket: false, checkedOut: false, busted: false, matchWon: false,
+        });
+        window.setTimeout(() => speakSequence(parts), 180);
+      }
     } else {
       setDartsThisRound(newDartsThisRound);
     }
