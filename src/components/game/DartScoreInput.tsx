@@ -13,38 +13,31 @@ const MULTIPLIER_OPTIONS = [
 const QUICK_ROUNDS = [180, 140, 121, 100, 85, 81, 60, 45, 41, 26, 0];
 
 interface DartScoreInputProps {
-  /** Currently selected base value */
-  selectedValue: number;
-  /** Currently selected multiplier */
+  /** Currently selected multiplier — sticky across throws (stays on "T" for a run of triples, etc.) */
   selectedMultiplier: number;
   /** Whether input is disabled (e.g., game finished) */
   isDisabled: boolean;
-  /** Callback when a base value is selected */
-  onValueSelect: (value: number) => void;
   /** Callback when a multiplier is selected */
   onMultiplierSelect: (multiplier: number) => void;
-  /** Callback to submit the throw */
-  onSubmit: () => void;
+  /** Tapping a number/target submits that single dart immediately at the current multiplier. */
+  onThrow: (value: number, multiplier: number) => void;
   /** Optional: submit a full 3-dart round at once with a total score */
   onQuickRound?: (total: number) => void;
 }
 
 /**
  * Score input component with number grid, multiplier selection, and special targets.
- * Reusable across different game modes for manual dart entry.
+ * One tap on a number registers that dart right away at whichever multiplier is currently
+ * selected — no separate "confirm" step. The multiplier stays selected across throws so a
+ * run of triples (e.g. T20, T20, T20) only takes one multiplier tap total.
  */
 const DartScoreInput = ({
-  selectedValue,
   selectedMultiplier,
   isDisabled,
-  onValueSelect,
   onMultiplierSelect,
-  onSubmit,
+  onThrow,
   onQuickRound,
 }: DartScoreInputProps) => {
-  const calculatedPoints = selectedValue === 0 ? 0 : selectedValue * selectedMultiplier;
-  const isInvalidCombo = selectedValue === 25 && selectedMultiplier === 3;
-
   return (
     <div className="bg-card rounded-xl border border-border p-4">
       {/* Quick 3-dart round scores */}
@@ -68,15 +61,19 @@ const DartScoreInput = ({
         </div>
       )}
 
-      {/* Multiplier selection */}
+      {/* Multiplier selection — sticky, applies to every number tap until changed */}
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground text-center mb-1.5">
+        1. Vervielfacher wählen (bleibt aktiv)
+      </div>
       <div className="flex gap-2 mb-3 justify-center">
         {MULTIPLIER_OPTIONS.map((m) => (
           <button
             key={m.value}
             onClick={() => onMultiplierSelect(m.value)}
-            className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${
+            disabled={isDisabled}
+            className={`flex-1 max-w-28 px-5 py-3 rounded-lg text-base font-bold transition-all disabled:opacity-40 ${
               selectedMultiplier === m.value
-                ? "bg-primary text-primary-foreground glow-cyan"
+                ? "bg-primary text-primary-foreground glow-cyan scale-105"
                 : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -85,62 +82,42 @@ const DartScoreInput = ({
         ))}
       </div>
 
-      {/* Number grid (1-20) */}
-      <div className="grid grid-cols-7 gap-1.5 mb-3">
+      {/* Number grid (1-20) — tapping submits the dart immediately */}
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground text-center mb-1.5">
+        2. Zahl antippen zum Eintragen
+      </div>
+      <div className="grid grid-cols-5 gap-1.5 mb-3">
         {BOARD_NUMBERS.map((v) => (
           <button
             key={v}
-            onClick={() => onValueSelect(v)}
-            className={`aspect-square rounded-lg text-sm font-bold transition-all ${
-              selectedValue === v
-                ? "bg-primary text-primary-foreground scale-110"
-                : "bg-muted text-foreground hover:bg-muted/80"
-            }`}
+            onClick={() => onThrow(v, selectedMultiplier)}
+            disabled={isDisabled}
+            className="aspect-square rounded-lg text-base font-bold transition-all bg-muted text-foreground hover:bg-primary/20 active:scale-90 active:bg-primary active:text-primary-foreground disabled:opacity-40"
           >
             {v}
           </button>
         ))}
       </div>
 
-      {/* Special targets: Miss, Bull, Bullseye */}
-      <div className="flex gap-2 mb-3 justify-center">
+      {/* Special targets: Miss, Bull, Bullseye — always submit immediately (fixed multiplier).
+          Bullseye uses baseValue 50 (not 25×2) to match the cricket/X01 scoring convention
+          used throughout Game.tsx (targetNumber = baseValue === 50 ? 25 : baseValue). */}
+      <div className="flex gap-2 justify-center">
         {[
-          { value: 0, label: "Miss" },
-          { value: 25, label: "Bull" },
-          { value: 50, label: "Bullseye" },
+          { value: 0, mul: 1 as const, label: "Miss" },
+          { value: 25, mul: 1 as const, label: "Bull (25)" },
+          { value: 50, mul: 1 as const, label: "Bullseye (50)" },
         ].map((target) => (
           <button
-            key={target.value}
-            onClick={() => {
-              onValueSelect(target.value);
-              if (target.value >= 25) onMultiplierSelect(1);
-            }}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-              selectedValue === target.value
-                ? "bg-accent text-accent-foreground"
-                : "bg-muted text-foreground hover:bg-muted/80"
-            }`}
+            key={target.label}
+            onClick={() => onThrow(target.value, target.mul)}
+            disabled={isDisabled}
+            className="flex-1 px-3 py-3 rounded-lg text-sm font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40"
           >
             {target.label}
           </button>
         ))}
       </div>
-
-      {/* Points preview */}
-      <div className="text-center mb-3">
-        <span className="text-3xl font-display text-primary">
-          {isInvalidCombo ? "—" : calculatedPoints}
-        </span>
-        <span className="text-sm text-muted-foreground ml-2">Punkte</span>
-      </div>
-
-      <Button
-        onClick={onSubmit}
-        className="w-full font-display uppercase text-lg py-5"
-        disabled={isDisabled || isInvalidCombo}
-      >
-        Wurf eintragen
-      </Button>
     </div>
   );
 };

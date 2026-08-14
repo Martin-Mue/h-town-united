@@ -130,7 +130,9 @@ const GamePage = () => {
     return raw ? raw !== "false" : true;
   });
   const [game, setGame] = useState<GameState | null>(null);
-  const [selectedScore, setSelectedScore] = useState(20);
+  // Fallback default for handleX01Throw/handleCricketThrow when called without an explicit
+  // dart (bot logic, camera detection) — DartScoreInput's buttons always pass an explicit value.
+  const selectedScore = 20;
   const [multiplier, setMultiplier] = useState(1);
   const [editingThrowIdx, setEditingThrowIdx] = useState<number | null>(null);
   const [showDetailedStats, setShowDetailedStats] = useState(false);
@@ -627,9 +629,10 @@ const GamePage = () => {
     }
   };
 
-  const throwDart = () => {
-    if (game?.mode === "cricket") handleCricketThrow();
-    else handleX01Throw();
+  /** Fired directly by DartScoreInput's number/target buttons — one tap registers the dart immediately. */
+  const throwDart = (base: number, mul: number) => {
+    if (game?.mode === "cricket") handleCricketThrow(base, mul as 1 | 2 | 3);
+    else handleX01Throw(base, mul as 1 | 2 | 3);
   };
 
   /** Uploads a captured highlight clip in the background — playback already uses the local blob URL, this just makes it browsable later. */
@@ -1052,12 +1055,18 @@ const GamePage = () => {
     const allLegs = [...game.completedLegs, game.currentLeg];
     return game.players.map((p, i) => {
       const throws = allLegs.flatMap(l => l.throws[i] ?? []);
+      // Checkout-Quote: tatsächliche Checkouts / Visits, in denen ein Checkout überhaupt
+      // möglich war (remaining <= 170) — pro Leg berechnet, da "remaining" bei jedem Leg neu
+      // beginnt (ein einzelner Wurf-Flatten über alle Legs würde den Rest-Score verfälschen).
+      const checkout = game.mode === "cricket"
+        ? { attempts: 0, hits: 0, percentage: 0, highestCheckout: 0 }
+        : combineCheckoutStats(allLegs.map((leg) => computeCheckoutStats(leg.throws[i] ?? [], effectiveStartScore(game.startScore, game.players, i, game.teams))));
       return {
         name: p.name,
         average: calculateAverage(throws),
         highscore: getHighest3DartRound(throws),
         totalThrows: throws.length,
-        doubles: throws.filter(t => t.multiplier === 2).length,
+        checkout,
         triples: throws.filter(t => t.multiplier === 3).length,
         tonPlus: countTonPlusRounds(throws),
         s180: count180s(throws),
@@ -1533,7 +1542,7 @@ const GamePage = () => {
                     { l: "First 9 Ø", v: (p: typeof postGameStats[number]) => p.first9.toFixed(1) },
                     { l: "Highscore", v: (p: typeof postGameStats[number]) => p.highscore },
                     { l: "Würfe", v: (p: typeof postGameStats[number]) => p.totalThrows },
-                    { l: "Doubles", v: (p: typeof postGameStats[number]) => p.doubles },
+                    { l: "Checkout-Quote", v: (p: typeof postGameStats[number]) => p.checkout.attempts > 0 ? `${p.checkout.hits}/${p.checkout.attempts} (${p.checkout.percentage.toFixed(0)}%)` : "–" },
                     { l: "Triples", v: (p: typeof postGameStats[number]) => p.triples },
                     { l: "100+", v: (p: typeof postGameStats[number]) => p.tonPlus },
                     { l: "180!", v: (p: typeof postGameStats[number]) => p.s180 },
@@ -1726,8 +1735,8 @@ const GamePage = () => {
 
             {showManualInput && (
               <>
-                <DartScoreInput selectedValue={selectedScore} selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
-                  onValueSelect={setSelectedScore} onMultiplierSelect={setMultiplier} onSubmit={throwDart}
+                <DartScoreInput selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
+                  onMultiplierSelect={setMultiplier} onThrow={throwDart}
                   onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
 
                 {currentThrows.length > 0 && (
@@ -1818,8 +1827,8 @@ const GamePage = () => {
           {cricketBoard}
 
           {/* Score input — disabled during a bot's turn */}
-          <DartScoreInput selectedValue={selectedScore} selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
-            onValueSelect={setSelectedScore} onMultiplierSelect={setMultiplier} onSubmit={throwDart}
+          <DartScoreInput selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
+            onMultiplierSelect={setMultiplier} onThrow={throwDart}
             onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
 
           {/* Undo & actions row */}

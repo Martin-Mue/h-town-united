@@ -93,7 +93,7 @@ export async function saveGameRecord(
     };
   };
 
-  const { data: insertedGame, error: insertGameErr } = await supabase.from("games").insert({
+  const gameInsertPayload: Record<string, any> = {
     id: pendingGameId,
     user_id: userId, mode: game.mode, start_score: game.startScore,
     best_of_legs: game.bestOfLegs,
@@ -107,10 +107,16 @@ export async function saveGameRecord(
     winner_name: game.winnerName!, winner_id: winnerMatch?.id || null,
     detail_stats: { players: game.players.map((_, i) => detailFor(i)) } as any,
     tournament_id: tournamentLink?.tournamentId ?? null,
-    // Only sent when actually tournament-linked, so a save never fails on this column
-    // before the `match_id` migration has been applied to a given environment.
     ...(tournamentLink ? { match_id: tournamentLink.matchId } : {}),
-  }).select("id").single();
+  };
+  let { data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(gameInsertPayload).select("id").single();
+  // If a given environment hasn't had the `match_id` migration applied yet, PostgREST rejects
+  // the whole insert with a schema-cache error — retry once without that field rather than
+  // losing the entire game (and silently skipping the tournament bracket write-back below).
+  if (insertGameErr && tournamentLink && (insertGameErr.code === "42703" || String(insertGameErr.message || "").includes("match_id"))) {
+    const { match_id, ...fallback } = gameInsertPayload;
+    ({ data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(fallback).select("id").single());
+  }
   if (insertGameErr) throw insertGameErr;
 
   if (insertedGame?.id) {

@@ -246,7 +246,6 @@ const TrainingPage = () => {
   const [selectedDrill, setSelectedDrill] = useState<TrainingDrill | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [drillState, setDrillState] = useState<DrillState | null>(null);
-  const [selectedScore, setSelectedScore] = useState(20);
   const [multiplier, setMultiplier] = useState(1);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [drillConfig, setDrillConfig] = useState<DrillConfig>({});
@@ -701,9 +700,9 @@ const TrainingPage = () => {
     });
   }, [selectedDrill]);
 
-  const handleDrillThrow = useCallback(() => {
-    processDart(selectedScore, multiplier);
-  }, [processDart, selectedScore, multiplier]);
+  const handleDrillThrow = useCallback((base: number, mul: number) => {
+    processDart(base, mul);
+  }, [processDart]);
 
   const handleCameraRound = useCallback((darts: DetectedDart[]) => {
     darts.forEach((d) => processDart(d.baseValue, d.multiplier));
@@ -997,12 +996,10 @@ const TrainingPage = () => {
 
             {/* Score input */}
             <DartScoreInput
-              selectedValue={selectedScore}
               selectedMultiplier={multiplier}
               isDisabled={drillState.finished}
-              onValueSelect={setSelectedScore}
               onMultiplierSelect={setMultiplier}
-              onSubmit={handleDrillThrow}
+              onThrow={handleDrillThrow}
             />
 
             {/* Camera toggle */}
