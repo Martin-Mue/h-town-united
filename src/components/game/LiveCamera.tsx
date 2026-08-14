@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { SEGMENTS_CLOCKWISE, RING } from "@/utils/dartboardGeometry";
+import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
 import {
   playDartDetectedSound,
   playRoundCommittedSound,
@@ -91,6 +92,17 @@ interface Calibration {
   zoom: number;
   taps?: { x: number; y: number }[]; // 4 reference points in normalized video coords: D20, D3, D11, D6
 }
+
+/** "local" runs the whole pipeline on-device (no network call, no AI credits — see
+ *  dartVision.ts); "cloud" keeps the original Gemini-vision-based detection as a fallback for
+ *  setups where local blob-diffing proves too unreliable (bad lighting, overlapping darts).
+ *  Device-wide, not per-board, since it reflects "does this tablet have/want a connection". */
+type DetectionMode = "local" | "cloud";
+const DETECTION_MODE_KEY = "dartcam-detection-mode";
+const loadDetectionMode = (): DetectionMode => {
+  if (typeof window === "undefined") return "local";
+  return window.localStorage.getItem(DETECTION_MODE_KEY) === "cloud" ? "cloud" : "local";
+};
 
 const CALIB_KEY = "dartcam-calibration-v5";
 const CALIB_LABELS = ["Doppel 20 (oben)", "Doppel 3 (unten)", "Doppel 11 (links)", "Doppel 6 (rechts)"] as const;
@@ -346,9 +358,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // Cached last stable frame captured WHILE darts were on the board.
   // Used to send to AI once the user pulls the darts.
   const preRemovalFrameRef = useRef<string | null>(null);
+  // Same two moments as above (empty baseline / just-before-pulled), but as raw pixel data
+  // for local diff-based detection instead of a JPEG string for the cloud AI — see dartVision.ts.
+  const emptyImageDataRef = useRef<ImageData | null>(null);
+  const preRemovalImageDataRef = useRef<ImageData | null>(null);
   // Visually observed throws in the current turn (motion → still while board non-empty)
   const throwsSeenRef = useRef(0);
   const [throwsSeen, setThrowsSeen] = useState(0);
+  const [detectionMode, setDetectionModeState] = useState<DetectionMode>(() => loadDetectionMode());
+  const setDetectionMode = (mode: DetectionMode) => {
+    if (typeof window !== "undefined") window.localStorage.setItem(DETECTION_MODE_KEY, mode);
+    setDetectionModeState(mode);
+  };
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -390,6 +411,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     scanLockRef.current = false;
     emptyConfirmRef.current = 0;
     preRemovalFrameRef.current = null;
+    preRemovalImageDataRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
   }, []);
@@ -573,6 +595,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     return c;
   };
 
+  /** Raw pixel snapshot of the current (circular-cropped) board view, for local diff-based
+   *  detection — same crop/zoom as drawToCanvas so an "empty" and a "with darts" capture line
+   *  up pixel-for-pixel. */
+  const grabImageData = (target: number = VISION_ANALYSIS_SIZE): ImageData | null => {
+    const c = drawToCanvas(target, true);
+    if (!c) return null;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    return ctx.getImageData(0, 0, target, target);
+  };
+
   const buildSignature = (): number[] | null => {
     const c = drawToCanvas(GRID, true);
     if (!c) return null;
@@ -725,6 +758,22 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       resetLoop();
       return;
     }
+    // Local mode has no cloud call to auto-frame the board with — the manual 4-point tap
+    // calibration below is required either way (it's what the actual scoring geometry uses),
+    // so this AI-only convenience step just gets skipped, no functional loss.
+    if (detectionMode === "local") {
+      resetLoop();
+      if (!calib.taps || calib.taps.length !== 4) {
+        setCalibStep(0);
+        setPendingTaps([]);
+        setPhase("calibrate");
+        setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
+      } else {
+        setPhase("live");
+        setStatus("Bereit – wirf deinen ersten Dart");
+      }
+      return;
+    }
     setPhase("detecting");
     setStatus("Suche Dartboard …");
     setAutoCalibrating(true);
@@ -823,6 +872,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setSelectedDeviceId(deviceId);
   };
 
+  /** Switching modes invalidates any in-flight baseline/pre-removal captures from the other
+   *  mode (they're different data shapes), so just reset the watcher loop and re-arm live. */
+  const changeDetectionMode = (mode: DetectionMode) => {
+    if (mode === detectionMode) return;
+    setDetectionMode(mode);
+    resetLoop();
+    emptyImageDataRef.current = null;
+    if (phase === "live" || phase === "scanning") {
+      setStatus("Stabilisiere Bild …");
+    }
+  };
+
   // ─── watcher loop ──────────────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -845,6 +906,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           stableSigRef.current = sig;
           setStatus("Bereit – wirf deine Darts, dann alle 3 ziehen");
           emptyBoardSigRef.current = sig;
+          if (detectionMode === "local") emptyImageDataRef.current = grabImageData();
         } else {
           setStatus("Stabilisiere Bild …");
         }
@@ -868,7 +930,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         changeSeenRef.current = false;
         stableSigRef.current = sig;
         if (boardEmpty) {
-          if (throwsSeenRef.current > 0 && preRemovalFrameRef.current) {
+          const hasPreRemovalCapture = detectionMode === "local" ? !!preRemovalImageDataRef.current : !!preRemovalFrameRef.current;
+          if (throwsSeenRef.current > 0 && hasPreRemovalCapture) {
             if (performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
               scanLockRef.current = true;
               void runPullScan();
@@ -876,10 +939,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             }
           }
           emptyBoardSigRef.current = sig;
+          // Refresh the local baseline too — lighting can drift over a session, and this is
+          // the moment we're most sure the board is genuinely empty.
+          if (detectionMode === "local") emptyImageDataRef.current = grabImageData();
           setStatus("Board leer · wirf deinen ersten Dart");
         } else {
-          const frame = captureFrame(1280, 0.9);
-          if (frame) preRemovalFrameRef.current = frame;
+          if (detectionMode === "local") {
+            preRemovalImageDataRef.current = grabImageData();
+          } else {
+            const frame = captureFrame(1280, 0.9);
+            if (frame) preRemovalFrameRef.current = frame;
+          }
           throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
           setThrowsSeen(throwsSeenRef.current);
           setStatus(
@@ -903,12 +973,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, phase, dartsRemaining]);
+  }, [enabled, phase, dartsRemaining, detectionMode]);
 
   // ─── scan: analyze the pre-removal frame after darts are pulled ─────
   const runPullScan = async () => {
+    const isLocal = detectionMode === "local";
     const img = preRemovalFrameRef.current;
-    if (!img) {
+    if (isLocal ? !preRemovalImageDataRef.current || !emptyImageDataRef.current : !img) {
       scanLockRef.current = false;
       return;
     }
@@ -920,34 +991,50 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setStatus("Erkenne Darts …");
 
     try {
-      const data = await analyzeFrame(img);
-      const overallConfidence = Number(data?.overallConfidence) || 0;
-      const aiDarts = refineWithCalibration(sanitizeAiDarts(data?.darts, Math.max(throwsSeenRef.current, 1)));
-      setLastConfidence(overallConfidence);
-      if (data?.board) void updateAutoCalibration(data.board as BoardDetection);
+      let candidateDarts: DetectedDart[];
+      let overallConfidence: number;
 
-      if (aiDarts.length === 0) {
-        // Diagnostic only — helps tell "AI genuinely saw nothing" apart from
+      if (isLocal) {
+        const result = detectDartTipsLocally(emptyImageDataRef.current!, preRemovalImageDataRef.current!, throwsSeenRef.current);
+        candidateDarts = refineWithCalibration(
+          result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
+        );
+        overallConfidence = result.darts.length > 0
+          ? result.darts.reduce((s, d) => s + d.confidence, 0) / result.darts.length
+          : 0;
+        // Blob count didn't match what we visually saw land (overlap, or noise got filtered
+        // out) — force manual review instead of trusting a guess the pipeline itself is unsure of.
+        if (result.uncertain) overallConfidence = Math.min(overallConfidence, AUTO_COMMIT_CONFIDENCE - 0.05);
+      } else {
+        const data = await analyzeFrame(img!);
+        overallConfidence = Number(data?.overallConfidence) || 0;
+        candidateDarts = refineWithCalibration(sanitizeAiDarts(data?.darts, Math.max(throwsSeenRef.current, 1)));
+        if (data?.board) void updateAutoCalibration(data.board as BoardDetection);
+      }
+      setLastConfidence(overallConfidence);
+
+      if (candidateDarts.length === 0) {
+        // Diagnostic only — helps tell "genuinely nothing found" apart from
         // "found darts but they got filtered out" when this happens in the field.
-        console.warn("[LiveCamera] scan found 0 darts. Raw AI response:", data);
+        console.warn("[LiveCamera] scan found 0 darts", { mode: detectionMode });
         setStatus("Keine Darts erkannt · bitte manuell erfassen");
         setScanFailed(true);
       } else {
-        setAccumulated(aiDarts);
-        aiDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
-        const allPositioned = aiDarts.every(hasPosition);
+        setAccumulated(candidateDarts);
+        candidateDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
+        const allPositioned = candidateDarts.every(hasPosition);
         const highConfidence = overallConfidence >= AUTO_COMMIT_CONFIDENCE && allPositioned;
         if (highConfidence) {
-          // Board is already confirmed empty (that's what triggered this scan) and the AI
+          // Board is already confirmed empty (that's what triggered this scan) and detection
           // is confident — safe to hand straight over to the next player.
           setNeedsReview(false);
-          setTimeout(() => commitRound(aiDarts), 250);
-          setStatus(`Runde erkannt: ${aiDarts.map(dartLabel).join(", ")}`);
+          setTimeout(() => commitRound(candidateDarts), 250);
+          setStatus(`Runde erkannt: ${candidateDarts.map(dartLabel).join(", ")}`);
         } else {
           // Unsure — wait for a manual Übernehmen/Verwerfen instead of guessing wrong
           // silently. The board is still empty either way, so nothing is lost by waiting.
           setNeedsReview(true);
-          setStatus(`Bitte prüfen: ${aiDarts.map(dartLabel).join(", ")}`);
+          setStatus(`Bitte prüfen: ${candidateDarts.map(dartLabel).join(", ")}`);
         }
       }
       setPhase("live");
@@ -960,6 +1047,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     } finally {
       scanLockRef.current = false;
       preRemovalFrameRef.current = null;
+      preRemovalImageDataRef.current = null;
     }
   };
 
@@ -992,8 +1080,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const manualScan = () => {
     if (!scanLockRef.current) {
-      const frame = captureFrame(1280, 0.9);
-      if (frame) preRemovalFrameRef.current = frame;
+      if (detectionMode === "local") {
+        preRemovalImageDataRef.current = grabImageData();
+      } else {
+        const frame = captureFrame(1280, 0.9);
+        if (frame) preRemovalFrameRef.current = frame;
+      }
       throwsSeenRef.current = Math.max(throwsSeenRef.current, dartsRemaining);
       scanLockRef.current = true;
       void runPullScan();
@@ -1051,6 +1143,27 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         <Button variant="ghost" size="icon" onClick={onClose} className="h-9 w-9" title="Kamera schließen" aria-label="Kamera schließen">
           <X className="h-4 w-4" />
         </Button>
+      </div>
+
+      <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1 text-[11px]">
+        <button
+          onClick={() => changeDetectionMode("local")}
+          className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
+            detectionMode === "local" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+          title="Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten, aber weniger robust bei dicht beieinanderliegenden Darts"
+        >
+          Lokal (offline)
+        </button>
+        <button
+          onClick={() => changeDetectionMode("cloud")}
+          className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
+            detectionMode === "cloud" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+          title="Erkennung per Cloud-KI — braucht Internet, verursacht laufende KI-Kosten, dafür robuster"
+        >
+          Cloud-KI
+        </button>
       </div>
 
       <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
@@ -1260,7 +1373,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <span>
             {accumulated.length}/{dartsRemaining}
             {lastConfidence > 0 && (
-              <span className="ml-2">KI {(lastConfidence * 100).toFixed(0)}%</span>
+              <span className="ml-2">{detectionMode === "local" ? "Lokal" : "KI"} {(lastConfidence * 100).toFixed(0)}%</span>
             )}
           </span>
         </div>
