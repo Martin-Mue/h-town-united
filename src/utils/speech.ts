@@ -1,3 +1,5 @@
+import { isCheckoutPossible } from "@/utils/checkoutTable";
+
 type SpeechOptions = {
   interrupt?: boolean;
   lang?: string;
@@ -249,24 +251,41 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
       parts: [{ text: `${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS }],
     };
   }
+  let parts: SpeechPart[];
   if (p.roundTotal === 180) {
-    return { parts: [{ text: pickRandom(HYPE_180), options: HYPE_OPTIONS }] };
+    parts = [{ text: pickRandom(HYPE_180), options: HYPE_OPTIONS }];
+  } else if (p.roundTotal >= 140) {
+    parts = [
+      { text: `${p.roundTotal}!`, options: HIGH_TON_OPTIONS },
+      { text: pickRandom(HYPE_HIGH_TON), options: HIGH_TON_OPTIONS },
+    ];
+  } else if (p.roundTotal >= 100) {
+    parts = [
+      { text: `${p.roundTotal}!`, options: TON_OPTIONS },
+      { text: pickRandom(HYPE_TON_PLUS), options: TON_OPTIONS },
+    ];
+  } else {
+    // No trailing period: German TTS reads "5." as the ordinal "fünfte" instead of "fünf".
+    parts = [{ text: `${p.roundTotal}`, options: NORMAL_OPTIONS }];
   }
-  if (p.roundTotal >= 140) {
-    return {
-      parts: [
-        { text: `${p.roundTotal}!`, options: HIGH_TON_OPTIONS },
-        { text: pickRandom(HYPE_HIGH_TON), options: HIGH_TON_OPTIONS },
-      ],
-    };
+  // The player just crossed into checkout range (or is still in it) — tell them their target,
+  // same as a real caller would ("Player needs 96"). Never fires on the checkout round itself
+  // (that's the p.checkedOut branch above, which already returns).
+  if (p.remaining !== undefined && isCheckoutPossible(p.remaining)) {
+    parts = [...parts, { text: checkoutRemainingAnnouncement(p.remaining, p.activePlayerName), options: NORMAL_OPTIONS }];
   }
-  if (p.roundTotal >= 100) {
-    return {
-      parts: [
-        { text: `${p.roundTotal}!`, options: TON_OPTIONS },
-        { text: pickRandom(HYPE_TON_PLUS), options: TON_OPTIONS },
-      ],
-    };
-  }
-  return { parts: [{ text: `${p.roundTotal}.`, options: NORMAL_OPTIONS }] };
+  return { parts };
+}
+
+/** A handful of well-known darts checkout nicknames — deliberately small (only ones that are
+ *  widely and reliably recognized in the sport) rather than guessing at slang. Extend freely. */
+const CHECKOUT_NICKNAMES: Record<number, string> = {
+  170: "Big Fish",
+};
+
+function checkoutRemainingAnnouncement(remaining: number, playerName: string): string {
+  const nickname = CHECKOUT_NICKNAMES[remaining];
+  return nickname
+    ? `${playerName} braucht noch ${remaining} — ${nickname}!`
+    : `${playerName} braucht noch ${remaining}`;
 }

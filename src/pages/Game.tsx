@@ -130,10 +130,10 @@ const GamePage = () => {
     return raw ? raw !== "false" : true;
   });
   const [game, setGame] = useState<GameState | null>(null);
-  // Fallback default for handleX01Throw/handleCricketThrow when called without an explicit
-  // dart (bot logic, camera detection) — DartScoreInput's buttons always pass an explicit value.
+  // Fallback defaults for handleX01Throw/handleCricketThrow when called without an explicit
+  // dart (bot logic, camera detection) — DartScoreInput's buttons always pass explicit values.
   const selectedScore = 20;
-  const [multiplier, setMultiplier] = useState(1);
+  const multiplier = 1;
   const [editingThrowIdx, setEditingThrowIdx] = useState<number | null>(null);
   const [showDetailedStats, setShowDetailedStats] = useState(false);
   const [sharingResult, setSharingResult] = useState(false);
@@ -172,6 +172,14 @@ const GamePage = () => {
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const botPlanRef = useRef<{ key: string; darts: DartThrow[]; applied: number } | null>(null);
   const [checkoutRates, setCheckoutRates] = useState<Record<string, number>>({});
+  // Briefly highlights a score slot's remaining number right when a round finishes (checkout,
+  // bust, 3rd dart, or a committed camera round) — { slot, key } so re-triggering the same
+  // slot twice in a row (e.g. two rounds without anyone else throwing) still re-plays the pulse.
+  const [scoreFlash, setScoreFlash] = useState<{ slot: number; key: number } | null>(null);
+  const flashScore = (slot: number) => {
+    setScoreFlash((prev) => ({ slot, key: (prev?.key ?? 0) + 1 }));
+    window.setTimeout(() => setScoreFlash((prev) => (prev?.slot === slot ? null : prev)), 900);
+  };
 
   useEffect(() => {
     fetchClubPlayers().then(setDbPlayers).catch((err) => console.error("fetchClubPlayers failed", err));
@@ -425,6 +433,7 @@ const GamePage = () => {
       });
       setDartsThisRound(0);
       setTurnStartRemaining(game.currentLeg.remaining[teamIndexFor(game.teams, (idx + 1) % n)]);
+      flashScore(teamIdx);
       if (soundEnabled) setTimeout(() => playTurnSwitchSound(), 300);
       if (speechEnabled) {
         const { parts } = buildRoundAnnouncement({
@@ -505,6 +514,7 @@ const GamePage = () => {
       setDartsThisRound(0);
       const nextStarter = (game.currentLeg.startingPlayerIndex + 1) % n;
       setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
+      flashScore(teamIdx);
       const legsWon = game.legsWon[teamIdx] + 1;
       const legsToWin = Math.ceil(game.bestOfLegs / 2);
       const matchWon = legsWon >= legsToWin;
@@ -536,9 +546,11 @@ const GamePage = () => {
       setDartsThisRound(0);
       const nextIdx = (idx + 1) % game.players.length;
       setTurnStartRemaining(game.currentLeg.remaining[teamIndexFor(game.teams, nextIdx)]);
+      flashScore(teamIdx);
       if (speechEnabled) {
         const { parts } = buildRoundAnnouncement({
           roundTotal, activePlayerName: game.players[idx].name, nextPlayerName: game.players[nextIdx].name,
+          remaining: newRemaining,
           isCricket: false, checkedOut: false, busted: false, matchWon: false,
         });
         window.setTimeout(() => speakSequence(parts), 180);
@@ -614,6 +626,7 @@ const GamePage = () => {
     if (newDartsThisRound >= 3) {
       if (soundEnabled) setTimeout(() => playTurnSwitchSound(), 100);
       setDartsThisRound(0);
+      flashScore(teamIdx);
     } else {
       setDartsThisRound(newDartsThisRound);
     }
@@ -794,11 +807,14 @@ const GamePage = () => {
     setDartsThisRound(curDarts);
     setTurnStartRemaining(curStart);
     setPendingCameraDarts([]);
+    flashScore(teamIndexFor(curGame.teams, startIdx));
 
     if (speechEnabled) {
       const activePlayerName = game.players[startIdx].name;
       const nextPlayerName = curGame.players[curGame.currentPlayerIndex].name;
-      const remaining = curGame.mode === "cricket" ? undefined : game.currentLeg.remaining[teamIndexFor(game.teams, startIdx)];
+      // curGame (post-round), not game (pre-round) — this is the player's NEW remaining after
+      // the round just applied, which is what should be announced/checked for checkout range.
+      const remaining = curGame.mode === "cricket" ? undefined : curGame.currentLeg.remaining[teamIndexFor(curGame.teams, startIdx)];
       const { parts } = buildRoundAnnouncement({
         roundTotal, activePlayerName, nextPlayerName, remaining,
         isCricket: curGame.mode === "cricket",
@@ -1608,6 +1624,13 @@ const GamePage = () => {
             ? Math.max(0, card.remaining - pendingTotal)
             : card.remaining;
           const showPreview = pendingTotal > 0 && !isCricket;
+          // Manual entry: hold the big number at the turn's starting score while darts are
+          // still landing (the small "this round" badges below already show what's been hit
+          // and the running total) — it only jumps to the true new value once the round ends,
+          // which is also the moment scoreFlash briefly highlights it.
+          const roundInProgress = isActive && !isCricket && !showPreview && dartsThisRound > 0;
+          const displayRemaining = roundInProgress ? turnStartRemaining : previewRemaining;
+          const isFlashing = scoreFlash?.slot === card.key;
           return (
             <div key={card.key}
               className={`bg-card rounded-xl p-4 border-2 transition-all text-center ${isActive ? "border-primary glow-cyan" : "border-border opacity-80"}`}>
@@ -1625,9 +1648,9 @@ const GamePage = () => {
                 <p className="text-sm font-display mt-1 text-secondary animate-pulse">Bot wirft…</p>
               ) : (
                 <p className={`text-4xl font-display mt-1 transition-colors ${
-                  showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
+                  isFlashing ? "text-accent animate-pulse-glow" : showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
                 }`}>
-                  <AnimatedScore value={isCricket ? card.cricketPoints : previewRemaining} />
+                  <AnimatedScore value={isCricket ? card.cricketPoints : displayRemaining} />
                 </p>
               )}
               {showPreview && (
@@ -1735,8 +1758,8 @@ const GamePage = () => {
 
             {showManualInput && (
               <>
-                <DartScoreInput selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
-                  onMultiplierSelect={setMultiplier} onThrow={throwDart}
+                <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot}
+                  onThrow={throwDart}
                   onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
 
                 {currentThrows.length > 0 && (
@@ -1827,8 +1850,8 @@ const GamePage = () => {
           {cricketBoard}
 
           {/* Score input — disabled during a bot's turn */}
-          <DartScoreInput selectedMultiplier={multiplier} isDisabled={game.isFinished || !!currentPlayer?.isBot}
-            onMultiplierSelect={setMultiplier} onThrow={throwDart}
+          <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot}
+            onThrow={throwDart}
             onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
 
           {/* Undo & actions row */}
@@ -1872,7 +1895,7 @@ const GamePage = () => {
                         return (
                           <div key={globalIdx} className="relative group">
                             <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
-                              t.multiplier === 3 ? "bg-destructive/20 text-destructive" :
+                              t.multiplier === 3 ? "bg-primary/20 text-primary" :
                               t.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
                             }`}>
                               {t.multiplier === 3 ? "T" : t.multiplier === 2 ? "D" : ""}{t.baseValue === 50 ? "Bull" : t.baseValue === 0 ? "Miss" : t.baseValue}

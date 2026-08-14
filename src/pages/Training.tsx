@@ -246,7 +246,6 @@ const TrainingPage = () => {
   const [selectedDrill, setSelectedDrill] = useState<TrainingDrill | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [drillState, setDrillState] = useState<DrillState | null>(null);
-  const [multiplier, setMultiplier] = useState(1);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [drillConfig, setDrillConfig] = useState<DrillConfig>({});
 
@@ -996,9 +995,7 @@ const TrainingPage = () => {
 
             {/* Score input */}
             <DartScoreInput
-              selectedMultiplier={multiplier}
               isDisabled={drillState.finished}
-              onMultiplierSelect={setMultiplier}
               onThrow={handleDrillThrow}
             />
 

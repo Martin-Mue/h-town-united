@@ -18,6 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { SEGMENTS_CLOCKWISE, RING } from "@/utils/dartboardGeometry";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
+import { detectBoardCircleLocally } from "@/utils/boardDetection";
 import {
   playDartDetectedSound,
   playRoundCommittedSound,
@@ -151,6 +152,11 @@ const STILL_AFTER_CHANGE = 4;
 const TICK_MS = 400;
 const SCAN_COOLDOWN_MS = 3200;
 const EMPTY_CONFIRM_SCANS = 2;
+// The local board-circle finder (boardDetection.ts) is a much cruder heuristic than the cloud
+// AI's board detection ever was — its own confidence score is uncalibrated against real data,
+// so this gate is intentionally stricter than the AI path's 0.4. Below this, the crop is just
+// left wherever it was rather than risk snapping to a confidently-wrong guess.
+const LOCAL_BOARD_CONFIDENCE_MIN = 0.5;
 // The client now derives the actual segment/ring geometrically from the tip
 // position (see refineWithCalibration below), so the AI's confidence is really
 // just "is this a real dart tip" — a lower bar than "did I classify it right".
@@ -697,6 +703,24 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     return c.toDataURL("image/jpeg", quality);
   };
 
+  /** Same framing as captureFullFrame (whole camera view, not the calibrated crop) but as raw
+   *  pixels for the local board-circle detector, which needs to search the entire view since
+   *  the board might not be anywhere near the current (possibly still-default) crop yet. */
+  const grabFullFrameImageData = (target = 480): ImageData | null => {
+    const v = videoRef.current;
+    const c = canvasRef.current;
+    if (!v || !c || !v.videoWidth || !v.videoHeight) return null;
+    const scale = target / v.videoWidth;
+    const height = Math.max(1, Math.round(v.videoHeight * scale));
+    c.width = target;
+    c.height = height;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.clearRect(0, 0, target, height);
+    ctx.drawImage(v, 0, 0, v.videoWidth, v.videoHeight, 0, 0, target, height);
+    return ctx.getImageData(0, 0, target, height);
+  };
+
   const isRetryable = (error: unknown) => {
     const status =
       typeof error === "object" && error !== null && "status" in error
@@ -758,10 +782,32 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       resetLoop();
       return;
     }
-    // Local mode has no cloud call to auto-frame the board with — the manual 4-point tap
-    // calibration below is required either way (it's what the actual scoring geometry uses),
-    // so this AI-only convenience step just gets skipped, no functional loss.
+    // Local mode: no cloud call, but still worth roughly auto-framing the board first (same as
+    // the cloud path always did) — the manual 4-point tap calibration below is required either
+    // way (it's what the actual scoring geometry uses), but tapping is far more accurate once
+    // the board is already reasonably centered/zoomed instead of wherever the camera happened
+    // to be pointed.
     if (detectionMode === "local") {
+      setPhase("detecting");
+      setStatus("Suche Dartboard (lokal) …");
+      setAutoCalibrating(true);
+      try {
+        const frame = grabFullFrameImageData(480);
+        const detection = frame ? detectBoardCircleLocally(frame) : null;
+        if (detection && detection.confidence >= LOCAL_BOARD_CONFIDENCE_MIN) {
+          // updateAutoCalibration blends 50/50 with the previous crop by design (meant for
+          // gradual per-scan drift correction, which local mode has no equivalent of) — call it
+          // twice so a first-ever detection actually converges close to the real reading
+          // instead of landing only halfway there.
+          const board = { cx: detection.cx, cy: detection.cy, size: detection.size, confidence: detection.confidence };
+          await updateAutoCalibration(board);
+          await updateAutoCalibration(board);
+        }
+      } catch (err) {
+        console.warn("local board detection failed", err);
+      } finally {
+        setAutoCalibrating(false);
+      }
       resetLoop();
       if (!calib.taps || calib.taps.length !== 4) {
         setCalibStep(0);

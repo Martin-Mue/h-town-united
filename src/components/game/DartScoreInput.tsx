@@ -3,41 +3,26 @@ import { Button } from "@/components/ui/button";
 /** Available base score values on a dartboard */
 const BOARD_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
-const MULTIPLIER_OPTIONS = [
-  { label: "S", fullLabel: "Single", value: 1 },
-  { label: "D", fullLabel: "Double", value: 2 },
-  { label: "T", fullLabel: "Triple", value: 3 },
-] as const;
-
 /** Common 3-dart round scores for one-tap entry */
 const QUICK_ROUNDS = [180, 140, 121, 100, 85, 81, 60, 45, 41, 26, 0];
 
 interface DartScoreInputProps {
-  /** Currently selected multiplier — sticky across throws (stays on "T" for a run of triples, etc.) */
-  selectedMultiplier: number;
   /** Whether input is disabled (e.g., game finished) */
   isDisabled: boolean;
-  /** Callback when a multiplier is selected */
-  onMultiplierSelect: (multiplier: number) => void;
-  /** Tapping a number/target submits that single dart immediately at the current multiplier. */
+  /** Tapping any field (S/D/T of a number, or a special target) submits that dart immediately. */
   onThrow: (value: number, multiplier: number) => void;
   /** Optional: submit a full 3-dart round at once with a total score */
   onQuickRound?: (total: number) => void;
 }
 
 /**
- * Score input component with number grid, multiplier selection, and special targets.
- * One tap on a number registers that dart right away at whichever multiplier is currently
- * selected — no separate "confirm" step. The multiplier stays selected across throws so a
- * run of triples (e.g. T20, T20, T20) only takes one multiplier tap total.
+ * Score input: every scorable field (Single/Double/Triple of every number, plus Miss/Bull/
+ * Bullseye) is its own directly-tappable button — no "pick a multiplier, then pick a number"
+ * two-step and no multiplier state that can be left selected from the previous dart. Each
+ * number gets a compact 3-row stack (T on top, big single in the middle since it's the most
+ * common hit, D on the bottom) so the whole board fits without a separate mode switch.
  */
-const DartScoreInput = ({
-  selectedMultiplier,
-  isDisabled,
-  onMultiplierSelect,
-  onThrow,
-  onQuickRound,
-}: DartScoreInputProps) => {
+const DartScoreInput = ({ isDisabled, onThrow, onQuickRound }: DartScoreInputProps) => {
   return (
     <div className="bg-card rounded-xl border border-border p-4">
       {/* Quick 3-dart round scores */}
@@ -61,41 +46,35 @@ const DartScoreInput = ({
         </div>
       )}
 
-      {/* Multiplier selection — sticky, applies to every number tap until changed */}
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground text-center mb-1.5">
-        1. Vervielfacher wählen (bleibt aktiv)
-      </div>
-      <div className="flex gap-2 mb-3 justify-center">
-        {MULTIPLIER_OPTIONS.map((m) => (
-          <button
-            key={m.value}
-            onClick={() => onMultiplierSelect(m.value)}
-            disabled={isDisabled}
-            className={`flex-1 max-w-28 px-5 py-3 rounded-lg text-base font-bold transition-all disabled:opacity-40 ${
-              selectedMultiplier === m.value
-                ? "bg-primary text-primary-foreground glow-cyan scale-105"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {m.fullLabel}
-          </button>
-        ))}
-      </div>
-
-      {/* Number grid (1-20) — tapping submits the dart immediately */}
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground text-center mb-1.5">
-        2. Zahl antippen zum Eintragen
-      </div>
-      <div className="grid grid-cols-5 gap-1.5 mb-3">
+      {/* Number grid (1-20) — each number is its own T/S/D button stack, tap = submit immediately */}
+      <div className="grid grid-cols-5 gap-1 mb-3">
         {BOARD_NUMBERS.map((v) => (
-          <button
-            key={v}
-            onClick={() => onThrow(v, selectedMultiplier)}
-            disabled={isDisabled}
-            className="aspect-square rounded-lg text-base font-bold transition-all bg-muted text-foreground hover:bg-primary/20 active:scale-90 active:bg-primary active:text-primary-foreground disabled:opacity-40"
-          >
-            {v}
-          </button>
+          <div key={v} className="flex flex-col gap-0.5">
+            <button
+              onClick={() => onThrow(v, 3)}
+              disabled={isDisabled}
+              title={`Dreifach ${v}`}
+              className="rounded-t-md py-1 text-[11px] font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-90 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+            >
+              T
+            </button>
+            <button
+              onClick={() => onThrow(v, 1)}
+              disabled={isDisabled}
+              title={`Einfach ${v}`}
+              className="py-2 text-base font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-90 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+            >
+              {v}
+            </button>
+            <button
+              onClick={() => onThrow(v, 2)}
+              disabled={isDisabled}
+              title={`Doppel ${v}`}
+              className="rounded-b-md py-1 text-[11px] font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-90 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
+            >
+              D
+            </button>
+          </div>
         ))}
       </div>
 
