@@ -299,9 +299,16 @@ interface DrillState {
   shanghaiMultsHit?: number[];
   shanghaiScore?: number;
   shanghaiWin?: boolean;
-  /** Shanghai Round the Clock: which of Single(1)/Triple(3) are done on the CURRENT number —
-   *  persists across turns (unlike Shanghai's per-round reset) until a qualifying Double advances it. */
+  /** Shanghai Round the Clock: which of Single(1)/Triple(3) were hit THIS TURN — resets whenever
+   *  a turn ends without hitting the finishing double (see rtcMissedAt below), so completing the
+   *  double always requires Single+Triple within the same 3-dart visit. Drives the UI pills and
+   *  the finishing-double gate check ONLY — never gates scoring, see rtcScoredMults. */
   rtcMultsHit?: number[];
+  /** Which of Single(1)/Triple(3) have ever been SCORED for the CURRENT number, persisting
+   *  across turns until the number is actually completed (only cleared on advance). Separate
+   *  from rtcMultsHit specifically so a reset-for-missing-the-finish turn can't let the same
+   *  Single/Triple pay out again next turn — that was scoring the same hit twice. */
+  rtcScoredMults?: number[];
   rtcScore?: number;
   rtcWin?: boolean;
   /** Increments every time progress on the current number becomes newly unrecoverable — a
@@ -463,6 +470,7 @@ const TrainingPage = () => {
         state.currentTarget = start;
         state.rtcScore = 0;
         state.rtcMultsHit = [];
+        state.rtcScoredMults = [];
         state.maxRounds = config.maxRounds;
         break;
       }
@@ -669,29 +677,38 @@ const TrainingPage = () => {
 
         case "shanghai-rtc": {
           const targetNum = prev.currentTarget;
-          // Only a hit that actually moves progress forward scores — camping on one number's
-          // Single forever used to keep padding the score even though it stopped meaning
-          // anything after the first hit. Each of Single/Triple scores once per number, and the
-          // Double only scores as the genuine finisher — never for an early/mistimed one. That
-          // keeps scores comparable between runs instead of rewarding spamming one field.
+          // Two separate trackers on purpose:
+          // - rtcMultsHit is TURN-scoped (resets whenever a turn ends without the finishing
+          //   double — see the reset check below) and only gates whether a double counts as the
+          //   finisher: Single+Triple must land within the same 3-dart visit as the Double.
+          // - rtcScoredMults is NUMBER-scoped and never resets on a missed turn (only on
+          //   advancing to the next number) — it's what actually gates scoring, so a Single that
+          //   already scored once for this number can't score again just because a later turn's
+          //   reset wiped rtcMultsHit. Without this split, camping on a number across MULTIPLE
+          //   turns re-inflates the score exactly the way a single turn used to.
           let scoreDelta = 0;
           if (baseValue === targetNum) {
             if (mul === 1 || mul === 3) {
-              const stHit = new Set(prev.rtcMultsHit ?? []);
-              if (!stHit.has(mul)) {
+              const turnHit = new Set(prev.rtcMultsHit ?? []);
+              turnHit.add(mul);
+              updated.rtcMultsHit = Array.from(turnHit);
+              const scored = new Set(prev.rtcScoredMults ?? []);
+              if (!scored.has(mul)) {
                 scoreDelta = points;
-                stHit.add(mul);
-                updated.rtcMultsHit = Array.from(stHit);
+                scored.add(mul);
+                updated.rtcScoredMults = Array.from(scored);
                 updated.hits = prev.hits + 1;
               }
             } else if (mul === 2) {
-              const stHit = new Set(prev.rtcMultsHit ?? []);
-              if (stHit.has(1) && stHit.has(3)) {
-                // Finishing double after both Single and Triple are done — advance right away,
-                // same immediate-advance-on-hit style as Around the Clock, not tied to a 3-dart turn.
+              const turnHit = new Set(prev.rtcMultsHit ?? []);
+              if (turnHit.has(1) && turnHit.has(3)) {
+                // Finishing double after both Single and Triple landed THIS turn — advance right
+                // away, same immediate-advance-on-hit style as Around the Clock, not tied to a
+                // 3-dart turn boundary.
                 scoreDelta = points;
                 updated.hits = prev.hits + 1;
                 updated.rtcMultsHit = [];
+                updated.rtcScoredMults = [];
                 const nextIdx = prev.targetIndex + 1;
                 if (nextIdx >= prev.targetList.length) {
                   updated.finished = true;
@@ -701,8 +718,8 @@ const TrainingPage = () => {
                   updated.currentTarget = prev.targetList[nextIdx];
                 }
               }
-              // Double hit before Single+Triple are both done doesn't count as the finisher —
-              // and doesn't score either, unlike before.
+              // Double hit before Single+Triple are both done this turn doesn't count as the
+              // finisher — and doesn't score either.
             }
           }
           updated.rtcScore = (prev.rtcScore ?? 0) + scoreDelta;
@@ -712,9 +729,11 @@ const TrainingPage = () => {
           // Single/Triple/the finishing Double — reset right away instead of waiting for the 3rd
           // dart. A 1st-dart miss already needs all 3 remaining darts it doesn't have; a miss
           // right after a Single already needs 2 (Triple + Double) with only 1 dart left, etc.
+          // Only rtcMultsHit (this turn's progress) resets here — rtcScoredMults (what's already
+          // been paid out for this number) is untouched, so retrying next turn can't double-score.
           if (!updated.finished && updated.targetIndex === prev.targetIndex) {
-            const stHit = updated.rtcMultsHit ?? [];
-            const stillNeeded = (stHit.includes(1) ? 0 : 1) + (stHit.includes(3) ? 0 : 1) + 1; // +1 for the finishing double itself
+            const turnHit = updated.rtcMultsHit ?? [];
+            const stillNeeded = (turnHit.includes(1) ? 0 : 1) + (turnHit.includes(3) ? 0 : 1) + 1; // +1 for the finishing double itself
             const dartsLeftThisTurn = 3 - newDartsThisRound;
             if (stillNeeded > dartsLeftThisTurn) {
               updated.rtcMultsHit = [];

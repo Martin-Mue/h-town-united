@@ -942,7 +942,11 @@ const TournamentPage = () => {
       return copy;
     });
     const nextPlayers = activeTournament.players.filter(p => p !== name);
-    await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
+    const { error } = await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
+    if (error) {
+      toast({ title: "Fehler", description: "Nur der Ersteller kann Teilnehmer zurückziehen.", variant: "destructive" });
+      return;
+    }
     setActiveTournament({ ...activeTournament, players: nextPlayers });
     await persistBracket(patch);
     toast({ title: `${name} zurückgezogen`, description: "Gespielte Partien bleiben erhalten, nur offene Stellen werden angepasst." });
@@ -1715,18 +1719,20 @@ const TournamentPage = () => {
               ));
             })()}
 
-            <div className="bg-card border border-border rounded-xl p-4">
-              <h3 className="font-display uppercase text-sm mb-2 flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> Teilnehmer verwalten</h3>
-              <p className="text-[11px] text-muted-foreground mb-2">Spieler, die nicht erscheinen oder aufgeben, hier zurückziehen – Baum, Spielplan und Schreiber werden neu berechnet.</p>
-              <div className="flex flex-wrap gap-2">
-                {activeTournament.players.map(p => (
-                  <button key={p} onClick={() => withdrawPlayer(p)}
-                    className="bg-muted border border-border rounded-lg px-3 py-1 text-xs hover:border-destructive hover:text-destructive transition-colors">
-                    {p} ×
-                  </button>
-                ))}
+            {isOwner && (
+              <div className="bg-card border border-border rounded-xl p-4">
+                <h3 className="font-display uppercase text-sm mb-2 flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> Teilnehmer verwalten</h3>
+                <p className="text-[11px] text-muted-foreground mb-2">Spieler, die nicht erscheinen oder aufgeben, hier zurückziehen – Baum, Spielplan und Schreiber werden neu berechnet.</p>
+                <div className="flex flex-wrap gap-2">
+                  {activeTournament.players.map(p => (
+                    <button key={p} onClick={() => withdrawPlayer(p)}
+                      className="bg-muted border border-border rounded-lg px-3 py-1 text-xs hover:border-destructive hover:text-destructive transition-colors">
+                      {p} ×
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 

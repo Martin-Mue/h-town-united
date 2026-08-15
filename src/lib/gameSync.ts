@@ -109,35 +109,62 @@ export async function saveGameRecord(
     tournament_id: tournamentLink?.tournamentId ?? null,
     ...(tournamentLink ? { match_id: tournamentLink.matchId } : {}),
   };
-  let { data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(gameInsertPayload).select("id").single();
-  // If a given environment hasn't had the `match_id` migration applied yet, PostgREST rejects
-  // the whole insert with a schema-cache error — retry once without that field rather than
-  // losing the entire game (and silently skipping the tournament bracket write-back below).
-  if (insertGameErr && tournamentLink && (insertGameErr.code === "42703" || String(insertGameErr.message || "").includes("match_id"))) {
-    const { match_id, ...fallback } = gameInsertPayload;
-    ({ data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(fallback).select("id").single());
-  }
-  if (insertGameErr) throw insertGameErr;
+  // Idempotency check: `pendingGameId` is the same client-generated id across retries
+  // specifically so a replay after a lost network ack doesn't create a duplicate game. But a
+  // plain INSERT still fails with a duplicate-key error on that replay if the FIRST attempt's
+  // insert actually committed server-side and only the response was lost — the caller then
+  // queues an unwinnable retry that fails identically forever, silently never running the
+  // game_legs insert or the player-stat updates below (they never got a chance to run on the
+  // first attempt either, since the client-side throw happened right after the insert call).
+  // Fix: check whether the row already exists before inserting, and skip straight to
+  // legs/stats (which — in exactly this failure mode — never ran) instead of re-inserting.
+  const { data: existingGame } = await supabase.from("games").select("id").eq("id", pendingGameId).maybeSingle();
+  let insertedGameId: string | null = existingGame?.id ?? null;
 
-  if (insertedGame?.id) {
-    const legRows = allLegs.flatMap((leg) =>
-      game.players.map((p, i) => ({
-        game_id: insertedGame.id,
-        user_id: userId,
-        leg_number: leg.legNumber,
-        player_index: i,
-        player_name: p.name,
-        player_id: findDbPlayer(p.name)?.id || null,
-        starting_score: effectiveStartScore(game.startScore, game.players, i, game.teams),
-        throws: leg.throws[i] ?? [],
-        won: leg.winnerIndex === teamIndexFor(game.teams, i),
-      }))
-    );
-    if (legRows.length > 0) {
-      const { error: legsErr } = await supabase.from("game_legs").insert(legRows as any);
-      if (legsErr) throw legsErr;
+  if (!insertedGameId) {
+    let { data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(gameInsertPayload).select("id").single();
+    // If a given environment hasn't had the `match_id` migration applied yet, PostgREST rejects
+    // the whole insert with a schema-cache error — retry once without that field rather than
+    // losing the entire game (and silently skipping the tournament bracket write-back below).
+    if (insertGameErr && tournamentLink && (insertGameErr.code === "42703" || String(insertGameErr.message || "").includes("match_id"))) {
+      const { match_id, ...fallback } = gameInsertPayload;
+      ({ data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(fallback).select("id").single());
+    }
+    if (insertGameErr) throw insertGameErr;
+    insertedGameId = insertedGame?.id ?? null;
+  }
+
+  // Same reasoning for game_legs: only insert if none exist yet for this game. If they do,
+  // this is (at earliest) a retry that got past the legs step before failing — the player-stat
+  // updates below are a read-modify-write (increments games_played/average/elo in place, not an
+  // upsert), so re-running them on a retry would double-count that game. Skipping both together
+  // when legs already exist favors "possibly miss one update" over "silently double-apply it" —
+  // the safer failure mode of the two.
+  let legsAlreadyExisted = false;
+  if (insertedGameId) {
+    const { count } = await supabase.from("game_legs").select("id", { count: "exact", head: true }).eq("game_id", insertedGameId);
+    legsAlreadyExisted = !!count && count > 0;
+    if (!legsAlreadyExisted) {
+      const legRows = allLegs.flatMap((leg) =>
+        game.players.map((p, i) => ({
+          game_id: insertedGameId,
+          user_id: userId,
+          leg_number: leg.legNumber,
+          player_index: i,
+          player_name: p.name,
+          player_id: findDbPlayer(p.name)?.id || null,
+          starting_score: effectiveStartScore(game.startScore, game.players, i, game.teams),
+          throws: leg.throws[i] ?? [],
+          won: leg.winnerIndex === teamIndexFor(game.teams, i),
+        }))
+      );
+      if (legRows.length > 0) {
+        const { error: legsErr } = await supabase.from("game_legs").insert(legRows as any);
+        if (legsErr) throw legsErr;
+      }
     }
   }
+  if (legsAlreadyExisted) return;
 
   for (let i = 0; i < n; i++) {
     const match = findDbPlayer(game.players[i].name);

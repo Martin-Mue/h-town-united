@@ -13,7 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -937,7 +937,7 @@ const PlayersPage = () => {
                       {player.bio && <p className="text-xs text-muted-foreground line-clamp-4 whitespace-pre-line">{player.bio}</p>}
                     </div>
                   )}
-                  {isAdmin && (
+                  {isAdmin && !player.user_id && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
@@ -946,14 +946,15 @@ const PlayersPage = () => {
                           className="mt-3 w-full justify-center gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           disabled={deletingId === player.id}
                         >
-                          <Trash2 className="w-3.5 h-3.5" /> Mitglied entfernen
+                          <Trash2 className="w-3.5 h-3.5" /> Profil entfernen
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>{player.name} entfernen?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Das Spielerprofil wird unwiderruflich aus dem Verein entfernt. Bereits gespielte Spiele und Statistiken bleiben erhalten.
+                            Das Spielerprofil und seine gesammelten Statistiken (Average, Highscore, Elo …) werden unwiderruflich gelöscht.
+                            Bereits gespielte Spiele bleiben mit Namen erhalten, verlieren dabei aber ihre Verknüpfung zu diesem Profil.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -964,6 +965,11 @@ const PlayersPage = () => {
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
+                  )}
+                  {isAdmin && player.user_id && (
+                    <p className="mt-3 text-[11px] text-muted-foreground text-center">
+                      Profil ist mit einem Account verknüpft — zum vollständigen Entfernen des Mitglieds (inkl. Account) die <Link to="/admin" className="text-primary underline">Mitgliederverwaltung</Link> nutzen.
+                    </p>
                   )}
                 </CollapsibleContent>
               </div>

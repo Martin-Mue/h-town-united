@@ -114,8 +114,6 @@ const GamePage = () => {
   const [warmupRemaining, setWarmupRemaining] = useState(0);
   const [warmupDarts, setWarmupDarts] = useState(0);
   const [warmupTotal, setWarmupTotal] = useState(0);
-  const [warmupValue, setWarmupValue] = useState(20);
-  const [warmupMultiplier, setWarmupMultiplier] = useState(1);
   const [playerIsBot, setPlayerIsBot] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
   const [playerBotLevel, setPlayerBotLevel] = useState<BotLevel[]>(Array(MAX_PLAYERS).fill("medium"));
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -344,8 +342,6 @@ const GamePage = () => {
       setWarmupRemaining(warmupSeconds);
       setWarmupDarts(0);
       setWarmupTotal(0);
-      setWarmupValue(20);
-      setWarmupMultiplier(1);
       setPhase("warmup");
     } else {
       enterMatch();
@@ -374,8 +370,8 @@ const GamePage = () => {
     return () => clearTimeout(t);
   }, [phase]);
 
-  const submitWarmupDart = () => {
-    const pts = warmupValue === 0 ? 0 : (warmupValue === 25 && warmupMultiplier === 3 ? 0 : warmupValue * warmupMultiplier);
+  const submitWarmupDart = (value: number, multiplier: number) => {
+    const pts = value === 0 ? 0 : (value === 25 && multiplier === 3 ? 0 : value * multiplier);
     setWarmupTotal((t) => t + pts);
     setWarmupDarts((d) => d + 1);
   };
@@ -1418,14 +1414,7 @@ const GamePage = () => {
           </div>
         </div>
 
-        <DartScoreInput
-          selectedValue={warmupValue}
-          selectedMultiplier={warmupMultiplier}
-          isDisabled={false}
-          onValueSelect={setWarmupValue}
-          onMultiplierSelect={setWarmupMultiplier}
-          onSubmit={submitWarmupDart}
-        />
+        <DartScoreInput isDisabled={false} onThrow={submitWarmupDart} />
 
         <Button onClick={enterMatch} className="w-full mt-4 font-display uppercase text-lg py-6">
           <Target className="w-5 h-5 mr-2" /> Los geht's
