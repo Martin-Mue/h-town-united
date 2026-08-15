@@ -66,8 +66,8 @@ const DashboardPage = () => {
               className="absolute top-0 left-1/2 -translate-x-1/2 w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
             />
             <div className="absolute left-1/2 -translate-x-1/2 top-[104px] sm:top-[115px] group">
-              <div className="absolute inset-0 rounded-full bg-accent/25 blur-xl scale-125" />
-              <div className="relative w-[92px] h-[92px] sm:w-[102px] sm:h-[102px] rounded-full border-2 border-accent/50 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-700 group-hover:-rotate-[6deg]">
+              <div className="absolute inset-0 rounded-full bg-primary/25 blur-xl scale-125" />
+              <div className="relative w-[92px] h-[92px] sm:w-[102px] sm:h-[102px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-700 group-hover:-rotate-[6deg]">
                 <img
                   src={htuLogo}
                   alt="H-Town United Darts Vereinswappen"
