@@ -18,6 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { SEGMENTS_CLOCKWISE, RING } from "@/utils/dartboardGeometry";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
+import { computeHomography, applyHomography, type Homography } from "@/utils/homography";
 import {
   playDartDetectedSound,
   playRoundCommittedSound,
@@ -213,33 +214,49 @@ const dartLabel = (d: DetectedDart) => {
 // of trusting the AI's own segment/multiplier guess.
 const MISS_TOLERANCE = 1.06; // calibration is never pixel-perfect — a little slack beyond the double edge
 
-interface BoardTransform { cx: number; cy: number; rx: number; ry: number }
+// Canonical board-space targets for the 4 calibration taps — top/bottom/left/right of the
+// double ring, mapped to a unit circle (radius 1 = double edge). Matches the angle convention
+// scoreFromBoardPoint already used (0° = top = D20, growing clockwise).
+const CANON_BOARD_POINTS = [
+  { x: 0, y: -1 }, // D20 (top)
+  { x: 0, y: 1 },  // D3 (bottom)
+  { x: -1, y: 0 }, // D11 (left)
+  { x: 1, y: 0 },  // D6 (right)
+];
 
 /**
- * `liveCenter`, when given, replaces the tap-derived center while keeping the tap-derived
- * radius — so a board that's drifted a few cm since calibration (bumped table, wobbly phone
- * mount) still scores correctly as long as it's still fully framed, instead of requiring a
- * pixel-perfect re-tap every time. Radius stays tap-derived since camera zoom is frozen once
- * real taps exist (see updateAutoCalibration), so it doesn't need live tracking too.
+ * Builds the perspective (homography) transform from the 4 raw calibration taps (video-frame
+ * coords) to canonical board space. A full homography — not just an ellipse fit from a center +
+ * two radii — correctly undoes camera *keystone* (an angled camera makes the board look like a
+ * trapezoid, not just a squashed circle); see homography.ts for why this matters.
+ *
+ * `liveCenter`, when given, shifts all 4 taps by the same vector before solving — approximating
+ * "the whole board drifted a few cm, camera angle unchanged" (bumped table, wobbly phone mount)
+ * so scoring stays correct without a pixel-perfect re-tap, same intent as the previous
+ * center-only tracking, just applied before the perspective solve instead of after.
  */
-const boardTransformFromTaps = (taps?: { x: number; y: number }[], liveCenter?: { x: number; y: number }): BoardTransform | null => {
+const boardTransformFromTaps = (taps?: { x: number; y: number }[], liveCenter?: { x: number; y: number }): Homography | null => {
   if (!taps || taps.length !== 4) return null;
   const [top, bottom, left, right] = taps; // D20, D3, D11, D6
-  const rx = (right.x - left.x) / 2;
-  const ry = (bottom.y - top.y) / 2;
-  if (!(rx > 0.01) || !(ry > 0.01)) return null;
-  const cx = liveCenter?.x ?? (left.x + right.x) / 2;
-  const cy = liveCenter?.y ?? (top.y + bottom.y) / 2;
-  return { cx, cy, rx, ry };
+  let src = taps;
+  if (liveCenter) {
+    const origCx = (left.x + right.x) / 2;
+    const origCy = (top.y + bottom.y) / 2;
+    const dx = liveCenter.x - origCx;
+    const dy = liveCenter.y - origCy;
+    if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) {
+      src = taps.map((t) => ({ x: t.x + dx, y: t.y + dy }));
+    }
+  }
+  return computeHomography(src, CANON_BOARD_POINTS);
 };
 
 // u/v are the tip position in board-relative unit coordinates (0,0 = bull center, radius
 // ~1.0 = the calibrated double-ring edge) — independent of camera framing/zoom, so unlike
 // the raw video-frame x/y they're safe to persist and compare across different games,
 // sessions and devices (see the per-player heatmap in Statistics).
-const scoreFromBoardPoint = (fx: number, fy: number, t: BoardTransform) => {
-  const u = (fx - t.cx) / t.rx;
-  const v = (fy - t.cy) / t.ry;
+const scoreFromBoardPoint = (fx: number, fy: number, H: Homography) => {
+  const { x: u, y: v } = applyHomography(H, { x: fx, y: fy });
   const radius = Math.hypot(u, v);
   let angleDeg = (Math.atan2(v, u) * 180) / Math.PI + 90; // 0° = top (D20), growing clockwise
   angleDeg = ((angleDeg % 360) + 360) % 360;
