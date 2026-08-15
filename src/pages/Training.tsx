@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered, Route } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
@@ -187,6 +187,67 @@ function randomCheckout(): number {
   return Math.floor(Math.random() * 169) + 2;
 }
 
+// ─── personal records ──────────────────────────────────────────────
+// Device-local (not synced to an account — training drills are practice reps, not recorded
+// games) best result per drill, so recurring practice has something to actually chase. Only
+// drills with a genuinely comparable single-number outcome get one (see computeRecordCandidate);
+// bull-control is inherently multiplayer/competitive and has no "your" record to speak of.
+interface RecordEntry {
+  value: number;
+  higherIsBetter: boolean;
+  label: string;
+  achievedAt: string;
+}
+
+const recordKey = (drillId: string) => `training-record-${drillId}`;
+
+function loadRecord(drillId: string): RecordEntry | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(recordKey(drillId));
+    return raw ? (JSON.parse(raw) as RecordEntry) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveRecord(drillId: string, entry: RecordEntry) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(recordKey(drillId), JSON.stringify(entry));
+}
+
+/** Given a FINISHED drill state, returns the comparable result for this run, or null if this
+ *  particular run doesn't produce one (e.g. a round-cappable drill cut short before actually
+ *  reaching the end — see `completedFully` — isn't a fair "how fast can you finish" data point). */
+function computeRecordCandidate(drillId: string, state: DrillState): Omit<RecordEntry, "achievedAt"> | null {
+  switch (drillId) {
+    case "around-the-clock":
+    case "doubles-only":
+    case "big-single-lock":
+      return state.completedFully ? { value: state.dartsThrown, higherIsBetter: false, label: "Darts bis zum Abschluss" } : null;
+    case "121-challenge":
+      return state.remaining === 0 ? { value: state.dartsThrown, higherIsBetter: false, label: "Darts bis zum Checkout" } : null;
+    case "pressure-training":
+    case "random-finish":
+      return { value: state.dartsThrown, higherIsBetter: false, label: "Darts für alle Checkouts" };
+    case "target-grind":
+    case "random-score":
+      return state.dartsThrown > 0
+        ? { value: Math.round((state.hits / state.dartsThrown) * 100), higherIsBetter: true, label: "Trefferquote %" }
+        : null;
+    case "shanghai":
+      return { value: state.shanghaiScore ?? 0, higherIsBetter: true, label: "Shanghai-Score" };
+    case "shanghai-rtc":
+      return { value: state.rtcScore ?? 0, higherIsBetter: true, label: "Score" };
+    case "halve-it":
+      return { value: state.remaining, higherIsBetter: true, label: "Endstand" };
+    case "bobs-27":
+      return { value: Math.max(0, state.remaining), higherIsBetter: true, label: "Endstand" };
+    default:
+      return null;
+  }
+}
+
 /** Generates a random random-score target: {base, mul, label} */
 function randomTarget(): { base: number; mul: number; label: string } {
   const roll = Math.random();
@@ -245,6 +306,11 @@ interface DrillState {
   rtcWin?: boolean;
   /** Halve It: points accumulated so far this round (reset each round; `remaining` is the running score) */
   hiRoundPoints?: number;
+  /** True only when a round-cappable drill (around-the-clock, doubles-only, big-single-lock)
+   *  actually reached the end of its target list — as opposed to `finished` becoming true because
+   *  the optional round limit ran out first. Personal-record tracking only counts the former;
+   *  a session cut short by the round cap isn't a comparable "how fast can you finish" result. */
+  completedFully?: boolean;
 }
 
 /** Pre-start configuration for a drill */
@@ -265,6 +331,34 @@ const TrainingPage = () => {
   const [drillState, setDrillState] = useState<DrillState | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [drillConfig, setDrillConfig] = useState<DrillConfig>({});
+  const [currentRecord, setCurrentRecord] = useState<RecordEntry | null>(null);
+  const [brokeRecord, setBrokeRecord] = useState(false);
+
+  // Load whatever's on record for this drill as soon as it's picked (needed on both the
+  // pre-start screen and the finished-summary screen).
+  useEffect(() => {
+    setCurrentRecord(selectedDrill ? loadRecord(selectedDrill.id) : null);
+  }, [selectedDrill]);
+
+  // Compare + persist the instant a run finishes.
+  useEffect(() => {
+    if (!selectedDrill || !drillState?.finished) return;
+    const candidate = computeRecordCandidate(selectedDrill.id, drillState);
+    if (!candidate) {
+      setBrokeRecord(false);
+      return;
+    }
+    const existing = loadRecord(selectedDrill.id);
+    const isNew = !existing || (candidate.higherIsBetter ? candidate.value > existing.value : candidate.value < existing.value);
+    if (isNew) {
+      const entry: RecordEntry = { ...candidate, achievedAt: new Date().toISOString() };
+      saveRecord(selectedDrill.id, entry);
+      setCurrentRecord(entry);
+      setBrokeRecord(true);
+    } else {
+      setBrokeRecord(false);
+    }
+  }, [drillState, selectedDrill]);
 
   const categories = [
     { key: "all", label: "Alle" },
@@ -280,6 +374,7 @@ const TrainingPage = () => {
 
   /** Start an active drill session */
   const startDrill = (drill: TrainingDrill, config: DrillConfig = drillConfig) => {
+    setBrokeRecord(false);
     let state: DrillState = {
       drillId: drill.id,
       dartsThrown: 0,
@@ -400,6 +495,7 @@ const TrainingPage = () => {
             const nextIdx = prev.targetIndex + 1;
             if (nextIdx >= prev.targetList.length) {
               updated.finished = true;
+              updated.completedFully = true;
             } else {
               updated.targetIndex = nextIdx;
               updated.currentTarget = prev.targetList[nextIdx];
@@ -415,6 +511,7 @@ const TrainingPage = () => {
             const nextIdx = prev.targetIndex + 1;
             if (nextIdx >= prev.targetList.length) {
               updated.finished = true;
+              updated.completedFully = true;
             } else {
               updated.targetIndex = nextIdx;
               updated.currentTarget = prev.targetList[nextIdx];
@@ -557,18 +654,27 @@ const TrainingPage = () => {
 
         case "shanghai-rtc": {
           const targetNum = prev.currentTarget;
+          // Only a hit that actually moves progress forward scores — camping on one number's
+          // Single forever used to keep padding the score even though it stopped meaning
+          // anything after the first hit. Each of Single/Triple scores once per number, and the
+          // Double only scores as the genuine finisher — never for an early/mistimed one. That
+          // keeps scores comparable between runs instead of rewarding spamming one field.
+          let scoreDelta = 0;
           if (baseValue === targetNum) {
-            updated.rtcScore = (prev.rtcScore ?? 0) + points;
             if (mul === 1 || mul === 3) {
               const stHit = new Set(prev.rtcMultsHit ?? []);
-              stHit.add(mul);
-              updated.rtcMultsHit = Array.from(stHit);
-              updated.hits = prev.hits + 1;
+              if (!stHit.has(mul)) {
+                scoreDelta = points;
+                stHit.add(mul);
+                updated.rtcMultsHit = Array.from(stHit);
+                updated.hits = prev.hits + 1;
+              }
             } else if (mul === 2) {
               const stHit = new Set(prev.rtcMultsHit ?? []);
               if (stHit.has(1) && stHit.has(3)) {
                 // Finishing double after both Single and Triple are done — advance right away,
                 // same immediate-advance-on-hit style as Around the Clock, not tied to a 3-dart turn.
+                scoreDelta = points;
                 updated.hits = prev.hits + 1;
                 updated.rtcMultsHit = [];
                 const nextIdx = prev.targetIndex + 1;
@@ -581,10 +687,11 @@ const TrainingPage = () => {
                 }
               }
               // Double hit before Single+Triple are both done doesn't count as the finisher —
-              // still scores above, just doesn't advance (has to come back and hit it again later).
+              // and doesn't score either, unlike before.
             }
           }
-          updated.roundScores = [...(prev.roundScores || []), baseValue === targetNum ? points : 0];
+          updated.rtcScore = (prev.rtcScore ?? 0) + scoreDelta;
+          updated.roundScores = [...(prev.roundScores || []), scoreDelta];
           // As soon as finishing this number within the current turn becomes mathematically
           // impossible — not enough darts left in this turn for whatever's still missing among
           // Single/Triple/the finishing Double — reset right away instead of waiting for the 3rd
@@ -677,11 +784,11 @@ const TrainingPage = () => {
             // Lock current, advance
             nextLocked = prev.targetIndex;
             nextIdx = Math.min(prev.targetIndex + 1, len - 1);
-            if (prev.targetIndex >= len - 1) updated.finished = true;
+            if (prev.targetIndex >= len - 1) { updated.finished = true; updated.completedFully = true; }
           } else if (hitsRound === 2) {
             // Advance without locking
             nextIdx = Math.min(prev.targetIndex + 1, len - 1);
-            if (prev.targetIndex >= len - 1) updated.finished = true;
+            if (prev.targetIndex >= len - 1) { updated.finished = true; updated.completedFully = true; }
           } else if (hitsRound <= 1) {
             // Fall back to last locked segment (or stay at start)
             nextIdx = locked >= 0 ? locked + 1 <= prev.targetIndex ? locked : prev.targetIndex : 0;
@@ -814,6 +921,15 @@ const TrainingPage = () => {
             <h3 className="text-2xl font-display uppercase mb-2">
               {drillState.shanghaiWin ? "SHANGHAI! 🎉" : drillState.rtcWin ? "Rund um die Uhr! 🎉" : bobsBusted ? "Konto leer 💸" : "Geschafft! 🎯"}
             </h3>
+            {brokeRecord ? (
+              <div className="mb-4 rounded-lg border border-accent bg-accent/15 px-3 py-2 text-accent font-display uppercase text-sm flex items-center justify-center gap-2 animate-pulse-glow">
+                <Trophy className="w-4 h-4" /> Neuer persönlicher Rekord!
+              </div>
+            ) : currentRecord ? (
+              <p className="text-xs text-muted-foreground mb-4">
+                Rekord: <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
+              </p>
+            ) : null}
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
               {selectedDrill.id === "shanghai" ? (
                 <div className="bg-muted/50 rounded-lg p-3 col-span-2">
@@ -1152,6 +1268,12 @@ const TrainingPage = () => {
               ~{selectedDrill.durationMinutes} Min
             </span>
           </div>
+
+          {currentRecord && (
+            <p className="text-xs text-muted-foreground mb-5 flex items-center justify-center gap-1.5">
+              <Trophy className="w-3.5 h-3.5 text-accent" /> Dein Rekord: <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
+            </p>
+          )}
 
           {isBullControl && (
             <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
