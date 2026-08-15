@@ -116,6 +116,7 @@ const PlayersPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isAdmin, setIsAdmin] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) { setIsAdmin(false); return; }
@@ -200,6 +201,12 @@ const PlayersPage = () => {
     } else {
       toast({ title: "Mitglied entfernt", description: `${player.name} wurde aus dem Verein entfernt.` });
       setPlayers((prev) => prev.filter((p) => p.id !== player.id));
+      // Avatar/AI-portrait uploads live under their own playerId-prefixed folder, unrelated to
+      // the row itself — list rather than guess exact filenames (extension varies jpg/png).
+      const { data: files } = await supabase.storage.from("player-avatars").list(player.id);
+      if (files && files.length > 0) {
+        await supabase.storage.from("player-avatars").remove(files.map((f) => `${player.id}/${f.name}`));
+      }
     }
     setDeletingId(null);
   };
@@ -234,6 +241,15 @@ const PlayersPage = () => {
   };
 
   const openCreateProfile = () => {
+    // The create form always links the new row to whoever is signed in (players.user_id, RLS-
+    // enforced as auth.uid() = user_id — there's no "create it for someone else" path here).
+    // Without this guard, clicking it a second time creates a second profile owned by the same
+    // account instead of editing the first.
+    if (ownPlayerProfile) {
+      toast({ title: "Du hast bereits ein Profil", description: `Bearbeite dein bestehendes Profil "${ownPlayerProfile.name}" stattdessen.` });
+      openEditProfile(ownPlayerProfile);
+      return;
+    }
     resetForm();
     if (user?.email) {
       const suggestedName = user.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -938,7 +954,7 @@ const PlayersPage = () => {
                     </div>
                   )}
                   {isAdmin && !player.user_id && (
-                    <AlertDialog>
+                    <AlertDialog open={confirmDeleteId === player.id} onOpenChange={(open) => setConfirmDeleteId(open ? player.id : null)}>
                       <AlertDialogTrigger asChild>
                         <Button
                           variant="ghost"
@@ -959,7 +975,18 @@ const PlayersPage = () => {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel disabled={deletingId === player.id}>Abbrechen</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => deletePlayer(player)} disabled={deletingId === player.id}>
+                          <AlertDialogAction
+                            onClick={async (e) => {
+                              // Radix closes the dialog synchronously on click by default — without
+                              // preventDefault the "Entfernt…" disabled state never gets a chance to
+                              // render, and a failed delete's error toast appears after the
+                              // confirmation dialog has already vanished.
+                              e.preventDefault();
+                              await deletePlayer(player);
+                              setConfirmDeleteId(null);
+                            }}
+                            disabled={deletingId === player.id}
+                          >
                             {deletingId === player.id ? "Entfernt…" : "Entfernen"}
                           </AlertDialogAction>
                         </AlertDialogFooter>

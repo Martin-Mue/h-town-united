@@ -199,21 +199,30 @@ interface RecordEntry {
   achievedAt: string;
 }
 
-const recordKey = (drillId: string) => `training-record-${drillId}`;
+/** Target Grind's round count is player-configurable, which makes its raw hit-rate % record
+ *  unfair to compare as one bucket — a lucky 5-round 100% shouldn't overwrite a much harder
+ *  sustained 30-round 93%. Segmenting the record by round count keeps each comparison apples-to-
+ *  apples; every other recordable drill is either fixed-length or gated by `completedFully`, so
+ *  no variant is needed for them. */
+function recordVariant(drillId: string, maxRounds: number | undefined): string | undefined {
+  return drillId === "target-grind" ? String(maxRounds ?? 10) : undefined;
+}
 
-function loadRecord(drillId: string): RecordEntry | null {
+const recordKey = (drillId: string, variant?: string) => `training-record-${drillId}${variant ? `:${variant}` : ""}`;
+
+function loadRecord(drillId: string, variant?: string): RecordEntry | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(recordKey(drillId));
+    const raw = window.localStorage.getItem(recordKey(drillId, variant));
     return raw ? (JSON.parse(raw) as RecordEntry) : null;
   } catch {
     return null;
   }
 }
 
-function saveRecord(drillId: string, entry: RecordEntry) {
+function saveRecord(drillId: string, entry: RecordEntry, variant?: string) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(recordKey(drillId), JSON.stringify(entry));
+  window.localStorage.setItem(recordKey(drillId, variant), JSON.stringify(entry));
 }
 
 /** Given a FINISHED drill state, returns the comparable result for this run, or null if this
@@ -356,10 +365,11 @@ const TrainingPage = () => {
   }, [drillState?.rtcMissedAt]);
 
   // Load whatever's on record for this drill as soon as it's picked (needed on both the
-  // pre-start screen and the finished-summary screen).
+  // pre-start screen and the finished-summary screen). Also reacts to the round-cap picker for
+  // Target Grind, so the shown record tracks whichever variant is currently selected.
   useEffect(() => {
-    setCurrentRecord(selectedDrill ? loadRecord(selectedDrill.id) : null);
-  }, [selectedDrill]);
+    setCurrentRecord(selectedDrill ? loadRecord(selectedDrill.id, recordVariant(selectedDrill.id, drillConfig.maxRounds)) : null);
+  }, [selectedDrill, drillConfig.maxRounds]);
 
   // Compare + persist the instant a run finishes.
   useEffect(() => {
@@ -369,11 +379,12 @@ const TrainingPage = () => {
       setBrokeRecord(false);
       return;
     }
-    const existing = loadRecord(selectedDrill.id);
+    const variant = recordVariant(selectedDrill.id, drillState.maxRounds);
+    const existing = loadRecord(selectedDrill.id, variant);
     const isNew = !existing || (candidate.higherIsBetter ? candidate.value > existing.value : candidate.value < existing.value);
     if (isNew) {
       const entry: RecordEntry = { ...candidate, achievedAt: new Date().toISOString() };
-      saveRecord(selectedDrill.id, entry);
+      saveRecord(selectedDrill.id, entry, variant);
       setCurrentRecord(entry);
       setBrokeRecord(true);
     } else {

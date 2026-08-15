@@ -31,6 +31,7 @@ const AdminPage = () => {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -177,7 +178,7 @@ const AdminPage = () => {
                           <Shield className="w-3.5 h-3.5" />
                         </Button>
                       )}
-                      <AlertDialog>
+                      <AlertDialog open={confirmDeleteId === u.user_id} onOpenChange={(open) => setConfirmDeleteId(open ? u.user_id : null)}>
                         <AlertDialogTrigger asChild>
                           <Button
                             size="sm"
@@ -198,7 +199,14 @@ const AdminPage = () => {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel disabled={busyId === u.user_id}>Abbrechen</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteUser(u)} disabled={busyId === u.user_id}>
+                            <AlertDialogAction
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                await deleteUser(u);
+                                setConfirmDeleteId(null);
+                              }}
+                              disabled={busyId === u.user_id}
+                            >
                               {busyId === u.user_id ? "Entfernt…" : "Entfernen"}
                             </AlertDialogAction>
                           </AlertDialogFooter>

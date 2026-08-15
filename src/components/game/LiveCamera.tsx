@@ -168,7 +168,6 @@ const STILL_AFTER_CHANGE = 4;
 // Tick interval of the watcher loop.
 const TICK_MS = 400;
 const SCAN_COOLDOWN_MS = 3200;
-const EMPTY_CONFIRM_SCANS = 2;
 // The client now derives the actual segment/ring geometrically from the tip
 // position (see refineWithCalibration below), so the AI's confidence is really
 // just "is this a real dart tip" — a lower bar than "did I classify it right".
@@ -391,8 +390,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const changeSeenRef = useRef(false);
   const scanLockRef = useRef(false);
   const lastScanAtRef = useRef(0);
-  // Track how many AI scans in a row report zero darts AFTER we had some.
-  const emptyConfirmRef = useRef(0);
   // Cached last stable frame captured WHILE darts were on the board.
   // Used to send to AI once the user pulls the darts.
   const preRemovalFrameRef = useRef<string | null>(null);
@@ -456,7 +453,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     stillFramesRef.current = 0;
     changeSeenRef.current = false;
     scanLockRef.current = false;
-    emptyConfirmRef.current = 0;
     preRemovalFrameRef.current = null;
     preRemovalImageDataRef.current = null;
     pendingTrainingCaptureRef.current = null;
