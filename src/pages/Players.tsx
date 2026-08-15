@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
-import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info } from "lucide-react";
+import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -110,6 +114,15 @@ const PlayersPage = () => {
   const { toast } = useToast();
   const { session, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) { setIsAdmin(false); return; }
+    supabase.from("user_roles").select("role").eq("user_id", user.id).then(({ data }) => {
+      setIsAdmin(!!data?.some((r) => r.role === "admin"));
+    });
+  }, [user]);
 
   const ownPlayerProfile = useMemo(
     () => players.find((player) => player.user_id === user?.id),
@@ -175,6 +188,21 @@ const PlayersPage = () => {
   useEffect(() => {
     fetchPlayers();
   }, [fetchPlayers]);
+
+  /** Admin-only: removes a player profile outright — the only way to get rid of ones created
+   *  directly here without a linked account (user_id is NULL, so the self-service delete policy
+   *  can never match them). Games/stats referencing this player_id are untouched. */
+  const deletePlayer = async (player: PlayerProfile) => {
+    setDeletingId(player.id);
+    const { error } = await supabase.from("players").delete().eq("id", player.id);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Mitglied entfernt", description: `${player.name} wurde aus dem Verein entfernt.` });
+      setPlayers((prev) => prev.filter((p) => p.id !== player.id));
+    }
+    setDeletingId(null);
+  };
 
   useEffect(() => {
     const stored = window.localStorage.getItem("players-profile-hint-dismissed");
@@ -908,6 +936,34 @@ const PlayersPage = () => {
                       {player.motto && <p className="font-display italic text-sm">“{player.motto}”</p>}
                       {player.bio && <p className="text-xs text-muted-foreground line-clamp-4 whitespace-pre-line">{player.bio}</p>}
                     </div>
+                  )}
+                  {isAdmin && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-3 w-full justify-center gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={deletingId === player.id}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Mitglied entfernen
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{player.name} entfernen?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Das Spielerprofil wird unwiderruflich aus dem Verein entfernt. Bereits gespielte Spiele und Statistiken bleiben erhalten.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={deletingId === player.id}>Abbrechen</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => deletePlayer(player)} disabled={deletingId === player.id}>
+                            {deletingId === player.id ? "Entfernt…" : "Entfernen"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   )}
                 </CollapsibleContent>
               </div>
