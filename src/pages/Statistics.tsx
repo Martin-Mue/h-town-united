@@ -782,11 +782,11 @@ const StatisticsPage = () => {
       </div>
 
       {/* Tab navigation */}
-      <div className="flex gap-1 mb-6 bg-card rounded-lg border border-border p-1">
+      <div className="flex gap-1 mb-6 bg-card rounded-lg border border-border p-1 overflow-x-auto">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all ${activeTab === t.key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-            <t.icon className="w-3.5 h-3.5" />{t.label}
+            className={`shrink-0 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-all ${activeTab === t.key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+            <t.icon className="w-3.5 h-3.5 shrink-0" />{t.label}
           </button>
         ))}
       </div>
