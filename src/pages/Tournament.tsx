@@ -1585,24 +1585,8 @@ const TournamentPage = () => {
               <Radio className={`w-3.5 h-3.5 ${activeTournament.public_view ? "animate-pulse" : ""}`} />
               {activeTournament.public_view ? "Live an" : "Live-Ansicht"}
             </Button>
-            {activeTournament.public_view && activeTournament.public_slug && (
-              <>
-                <Button variant="outline" size="sm" onClick={copyPublicLink} className="gap-1" title="Link kopieren">
-                  <Copy className="w-3.5 h-3.5" /> Link
-                </Button>
-                <QrCodeDialog
-                  url={`${window.location.origin}/live/${activeTournament.public_slug}`}
-                  title="Live-Ansicht"
-                  description="Scannen führt direkt zur öffentlichen Live-Ansicht — ohne Login oder Registrierung."
-                  downloadName={`live-${activeTournament.public_slug}`}
-                  trigger={
-                    <Button variant="outline" size="sm" className="gap-1" title="QR-Code anzeigen">
-                      <QrCode className="w-3.5 h-3.5" /> QR
-                    </Button>
-                  }
-                />
-              </>
-            )}
+            {/* Link/QR live here only, in the "Beamer-Link" banner below — having them here
+                too duplicated the exact same link/QR right on top of each other. */}
             {!hasStarted(activeTournament) && (
               <Button variant="outline" size="sm" onClick={() => editTournament(activeTournament)}>
                 Bearbeiten

@@ -706,6 +706,36 @@ const PublicTournamentPage = () => {
         )}
       </header>
 
+      {/* Always visible regardless of which view is active — previously this only rendered
+          inside the tree/list branch, so landing on (or switching to) Board-Übersicht had no
+          way back to the bracket at all. */}
+      <div className="px-4 pt-4">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-border overflow-hidden">
+            <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+              <Monitor className="w-3.5 h-3.5" /> Board-Übersicht
+            </button>
+            {isKo && (
+              <>
+                <button onClick={() => selectView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                  <Network className="w-3.5 h-3.5" /> Turnierbaum
+                </button>
+                <button onClick={() => selectView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                  <Rows3 className="w-3.5 h-3.5" /> Rundenliste
+                </button>
+              </>
+            )}
+          </div>
+          <button
+            onClick={toggleAutoRotate}
+            className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 ${autoRotate ? "border-secondary bg-secondary/15 text-secondary" : "border-border hover:bg-muted text-muted-foreground"}`}
+            title="Wechselt automatisch alle 15s zwischen Turnierbaum/Liste und Board-Übersicht — praktisch für einen Bildschirm, den niemand mehr bedient."
+          >
+            <RefreshCcw className={`w-3.5 h-3.5 ${autoRotate ? "animate-pulse" : ""}`} /> Automatisch wechseln
+          </button>
+        </div>
+      </div>
+
       {view === "boards" ? (
         <BoardOverview now={boardCardsNow} onDeck={boardCardsOnDeck} queuedCount={boardCardsQueued} totalRounds={totalRounds} />
       ) : (
@@ -729,30 +759,6 @@ const PublicTournamentPage = () => {
               </div>
             </div>
           )}
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg border border-border overflow-hidden">
-              <button onClick={() => selectView("boards")} className="px-3 py-1.5 text-xs flex items-center gap-1 hover:bg-muted text-muted-foreground">
-                <Monitor className="w-3.5 h-3.5" /> Board-Übersicht
-              </button>
-              {isKo && (
-                <>
-                  <button onClick={() => selectView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                    <Network className="w-3.5 h-3.5" /> Turnierbaum
-                  </button>
-                  <button onClick={() => selectView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                    <Rows3 className="w-3.5 h-3.5" /> Rundenliste
-                  </button>
-                </>
-              )}
-            </div>
-            <button
-              onClick={toggleAutoRotate}
-              className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 ${autoRotate ? "border-secondary bg-secondary/15 text-secondary" : "border-border hover:bg-muted text-muted-foreground"}`}
-              title="Wechselt automatisch alle 15s zwischen Turnierbaum/Liste und Board-Übersicht — praktisch für einen Bildschirm, den niemand mehr bedient."
-            >
-              <RefreshCcw className={`w-3.5 h-3.5 ${autoRotate ? "animate-pulse" : ""}`} /> Automatisch wechseln
-            </button>
-          </div>
           {isKo ? (
             view === "tree" ? (
               <LiveBracket

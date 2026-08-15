@@ -18,6 +18,12 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
+      // Registered manually in main.tsx instead of the plugin's auto-injected script — the
+      // default script has no update-handling logic at all, so a returning visitor's already-
+      // open tab kept showing the stale cached UI until a manual hard reload. main.tsx adds the
+      // one missing piece: reload once (and only once) when a newer service worker actually
+      // takes over an already-controlled page.
+      injectRegister: false,
       // Custom service worker (src/sw.ts) instead of the fully-generated one — same
       // app-shell-only precaching policy as before, but this lets the SW also handle Web
       // Push (`push`/`notificationclick`), which the generateSW strategy can't do.

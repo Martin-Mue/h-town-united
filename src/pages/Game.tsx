@@ -40,7 +40,7 @@ import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
   playVictorySound, playTonPlusSound, playTurnSwitchSound, playWalkonSound,
 } from "@/utils/sounds";
-import { speakSequence, buildRoundAnnouncement } from "@/utils/speech";
+import { speakSequence, buildRoundAnnouncement, getCallerVoice, setCallerVoice, type CallerVoice } from "@/utils/speech";
 import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
@@ -124,6 +124,11 @@ const GamePage = () => {
     const raw = window.localStorage.getItem(SPEECH_PREF_KEY);
     return raw ? raw !== "false" : true;
   });
+  const [callerVoice, setCallerVoiceState] = useState<CallerVoice>(() => getCallerVoice());
+  const changeCallerVoice = (v: CallerVoice) => {
+    setCallerVoice(v);
+    setCallerVoiceState(v);
+  };
   const [walkonEnabled, setWalkonEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
     const raw = window.localStorage.getItem(WALKON_PREF_KEY);
@@ -1320,6 +1325,29 @@ const GamePage = () => {
             </div>
             <Switch checked={speechEnabled} onCheckedChange={setSpeechEnabled} />
           </div>
+
+          {speechEnabled && (
+            <div className="bg-card rounded-lg border border-border px-4 py-3">
+              <Label className="text-sm font-medium mb-2 block">Caller-Stimme</Label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {([
+                  { value: "auto", label: "Männlich" },
+                  { value: "female", label: "Weiblich" },
+                  { value: "yoda", label: "Yoda" },
+                ] as { value: CallerVoice; label: string }[]).map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => changeCallerVoice(opt.value)}
+                    className={`py-2 rounded-lg text-xs font-semibold transition-all ${
+                      callerVoice === opt.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
             <div className="flex items-center justify-between gap-3">
