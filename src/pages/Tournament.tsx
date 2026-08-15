@@ -335,7 +335,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     <div className={wrapperClass}>
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 bg-background/80 backdrop-blur sticky top-0 z-10">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-          Zoom {(scale * 100).toFixed(0)}%
+          Zoom {(userZoom * 100).toFixed(0)}%
         </div>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.max(0.3, z - 0.15))} title="Verkleinern">
