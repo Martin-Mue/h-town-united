@@ -1528,10 +1528,10 @@ const TournamentPage = () => {
     const totalRounds = matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 0;
 
     return (
-      <div className="py-4 animate-slide-up">
-        <div className="container flex items-center justify-between mb-4">
+      <div className="py-2 animate-slide-up">
+        <div className="container flex items-center justify-between mb-2">
           <div>
-            <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
+            <h2 className="text-lg font-display uppercase leading-tight">{activeTournament.name}</h2>
             <p className="text-xs text-muted-foreground">K.O.-System · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -1558,10 +1558,10 @@ const TournamentPage = () => {
         </div>
 
         {activeTournament.public_view && activeTournament.public_slug && (
-          <div className="container mb-4">
-            <div className="bg-gradient-to-r from-secondary/10 via-primary/10 to-accent/10 border border-secondary/30 rounded-xl px-4 py-2 text-xs flex items-center gap-2">
-              <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" />
-              <span className="text-muted-foreground">Beamer-Link:</span>
+          <div className="container mb-2">
+            <div className="bg-gradient-to-r from-secondary/10 via-primary/10 to-accent/10 border border-secondary/30 rounded-xl px-4 py-1.5 text-xs flex items-center gap-2">
+              <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse shrink-0" />
+              <span className="text-muted-foreground shrink-0 hidden sm:inline">Beamer-Link:</span>
               <code className="font-mono text-secondary truncate">{window.location.origin}/live/{activeTournament.public_slug}</code>
               <div className="flex items-center gap-1.5 ml-auto shrink-0">
                 <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1" onClick={copyPublicLink}>
@@ -1574,24 +1574,18 @@ const TournamentPage = () => {
                   downloadName={`live-${activeTournament.public_slug}`}
                   trigger={
                     <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1">
-                      <QrCode className="w-3 h-3" /> QR-Code
+                      <QrCode className="w-3 h-3" /> QR
                     </Button>
                   }
                 />
-              </div>
-            </div>
-            <div className="mt-1.5 bg-card border border-border rounded-xl px-4 py-2 text-[11px] flex items-center gap-2 text-muted-foreground">
-              <RefreshCcw className="w-3 h-3 shrink-0" />
-              <span>Für einen Bildschirm, den niemand mehr bedient: dieser Link startet direkt im automatischen Wechsel zwischen Turnierbaum und Board-Übersicht.</span>
-              <div className="flex items-center gap-1.5 ml-auto shrink-0">
                 <QrCodeDialog
                   url={`${window.location.origin}/live/${activeTournament.public_slug}?view=auto`}
                   title="Bildschirm-Modus"
                   description="Startet direkt im automatischen Wechsel zwischen Turnierbaum/Liste und Board-Übersicht (alle 15s) — ideal für einen TV oder Beamer, den niemand mehr bedient."
                   downloadName={`live-auto-${activeTournament.public_slug}`}
                   trigger={
-                    <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1">
-                      <QrCode className="w-3 h-3" /> QR
+                    <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1" title="Für einen unbeaufsichtigten Bildschirm: automatischer Wechsel zwischen Turnierbaum und Board-Übersicht">
+                      <RefreshCcw className="w-3 h-3" /> Auto
                     </Button>
                   }
                 />
@@ -1601,20 +1595,19 @@ const TournamentPage = () => {
         )}
 
         {activeTournament.champion && (
-          <div className="container mb-4">
-            <div className="bg-card border-2 border-accent rounded-xl p-4 text-center glow-gold">
-              <Trophy className="w-8 h-8 text-accent mx-auto mb-1" />
-              <p className="font-display uppercase text-xl">{activeTournament.champion}</p>
-              <p className="text-accent text-sm font-display uppercase">Champion!</p>
-              <Button size="sm" variant="ghost" className="mt-2 text-xs" onClick={() => setCeremonyChampion(activeTournament.champion)}>
-                🏆 Pokal-Zeremonie zeigen
+          <div className="container mb-2">
+            <div className="bg-card border-2 border-accent rounded-xl px-4 py-2 text-center glow-gold flex items-center justify-center gap-2 flex-wrap">
+              <Trophy className="w-5 h-5 text-accent shrink-0" />
+              <p className="font-display uppercase text-sm">{activeTournament.champion} <span className="text-accent">· Champion!</span></p>
+              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setCeremonyChampion(activeTournament.champion)}>
+                🏆 Zeremonie
               </Button>
             </div>
           </div>
         )}
 
         {/* View switcher + tournament management */}
-        <div className="container mb-3 flex flex-wrap items-center gap-2">
+        <div className="container mb-2 flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border overflow-hidden">
             <button onClick={() => setBracketView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${bracketView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
               <Network className="w-3.5 h-3.5" /> Turnierbaum
