@@ -192,9 +192,13 @@ const loadCalib = (key: string = CALIB_KEY): Calibration => {
     const raw = window.localStorage.getItem(key);
     if (!raw) return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
     const p = JSON.parse(raw);
-    const taps = Array.isArray(p?.taps) && p.taps.length === 4
+    let taps = Array.isArray(p?.taps) && p.taps.length === 4
       ? p.taps.map((t: any) => ({ x: clamp(Number(t?.x) || 0.5, 0, 1), y: clamp(Number(t?.y) || 0.5, 0, 1) }))
       : undefined;
+    // A calibration saved before the tap-validation check existed (or corrupted localStorage)
+    // could be degenerate — silently scoring every dart as "Miss" forever if trusted as-is.
+    // Discard it here so the app falls back to "not calibrated" and prompts a fresh 4-point tap.
+    if (taps && !computeHomography(taps, CANON_BOARD_POINTS)) taps = undefined;
     return {
       x: clamp(Number(p?.x) || 0.5, 0.15, 0.85),
       y: clamp(Number(p?.y) || 0.5, 0.15, 0.85),
@@ -931,6 +935,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const cy = (next[0].y + next[1].y) / 2;
       const w = Math.abs(next[3].x - next[2].x);
       const h = Math.abs(next[1].y - next[0].y);
+      // A degenerate (near-collinear/duplicate) or badly-clustered set of taps would otherwise
+      // silently score every dart as "Miss" for the rest of the session with no visible error —
+      // reject it here instead of accepting a calibration that can't actually score anything.
+      const MIN_CALIB_SPREAD = 0.15;
+      if (!computeHomography(next, CANON_BOARD_POINTS) || w < MIN_CALIB_SPREAD || h < MIN_CALIB_SPREAD) {
+        setPendingTaps([]);
+        setActiveTap(null);
+        setCalibStep(0);
+        setStatus("Kalibrierung ungültig — Punkte zu nah beieinander oder auf einer Linie. Bitte die 4 Punkte nochmal genau auf die Doppel-Ring-Kanten tippen.");
+        return;
+      }
       const size = clamp(Math.max(w, h) * 1.06, MIN_ANALYSIS_SIZE, 0.98);
       setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next }));
       setCalibStep(0);
