@@ -29,6 +29,7 @@ import {
   recomputeBracket,
   bracketChampion,
   buildSchedule,
+  currentBoardSchedule,
   assignScorekeepers,
   roundLabelFor,
   scorekeeperLabel,
@@ -975,9 +976,20 @@ const TournamentPage = () => {
   };
 
   /** "Extern" rounds are explicitly played outside the app (a different system/board) — no live-game option for those.
-   *  `live_play_enabled` is a per-tournament opt-out: pure bracket display + manual entry only. */
-  const canStartLiveGame = (match: Match): boolean =>
-    (activeTournament?.live_play_enabled ?? true) && isPlayable(match) && !match.winner && resolveRoundMode(match.round) !== "Extern";
+   *  `live_play_enabled` is a per-tournament opt-out: pure bracket display + manual entry only.
+   *  Also restricted to whichever match is actually up next per the board schedule — with
+   *  several rounds simultaneously playable (normal once a bracket fills in), letting "Spiel
+   *  starten" fire for any of them out of order was reported as too error-prone in real use. */
+  const canStartLiveGame = (match: Match): boolean => {
+    if (!(activeTournament?.live_play_enabled ?? true) || !isPlayable(match) || !!match.winner || resolveRoundMode(match.round) === "Extern") {
+      return false;
+    }
+    if (activeTournament && activeTournament.mode !== "round-robin") {
+      const schedule = currentBoardSchedule(activeTournament.bracket as Match[], activeTournament.boards || 2);
+      return schedule.now.some((e) => e.match.id === match.id);
+    }
+    return true;
+  };
 
   /** Opens Game.tsx prefilled for this match — playing stays entirely optional, this is purely
    *  an additive shortcut next to the existing manual "tap winner" / "+1 leg" controls. */

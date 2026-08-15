@@ -271,6 +271,17 @@ export function assignScorekeepers(
       const m = byId.get(entry.match.id)!;
       m.board = entry.board;
       m.slot = entry.slot;
+      // A decided match's scorekeeper is history, not a live assignment — who actually wrote it
+      // down doesn't change just because they're no longer "definitelyFree" right now (they may
+      // still be alive elsewhere in the bracket). This call runs after EVERY new result anywhere
+      // in the tournament, and without this check every one of those calls re-evaluated every
+      // ALREADY-FINISHED match too, reassigning it away from whoever wrote it the moment that
+      // person became busy again — which visibly reshuffled the same small pool of "currently
+      // free" names onto match after match instead of leaving finished matches alone.
+      if (m.winner) {
+        if (m.scorekeeper) taken.add(m.scorekeeper);
+        return;
+      }
       if (m.scorekeeperLocked && m.scorekeeper) {
         taken.add(m.scorekeeper);
         return;
