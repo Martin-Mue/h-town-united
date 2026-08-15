@@ -2,13 +2,15 @@ import { isCheckoutPossible } from "@/utils/checkoutTable";
 
 /** "auto" keeps the previous default behavior (biased toward a deeper/male-sounding voice,
  *  since that's what most people expect from a darts caller). The character personas don't
- *  pick a different voice (no browser ships a "pirate" or "robot" voice) — each swaps in its
- *  own distinctive phrasing + delivery instead, which is what actually carries the character. */
-export type CallerVoice = "auto" | "male" | "female" | "yoda" | "pirate" | "herald" | "robot" | "kernasi" | "reporter" | "genz";
+ *  pick a different voice (no browser ships a "herald" voice) — each swaps in its own
+ *  distinctive phrasing + delivery instead, which is what actually carries the character. */
+export type CallerVoice = "auto" | "male" | "female" | "yoda" | "herald" | "kernasi" | "reporter" | "genz";
 const CALLER_VOICE_KEY = "dart-caller-voice";
 
 let callerVoice: CallerVoice = "auto";
-const VALID_CALLER_VOICES: readonly CallerVoice[] = ["male", "female", "yoda", "pirate", "herald", "robot", "kernasi", "reporter", "genz"];
+// "pirate"/"robot" removed (Aug 2026) — kept out of this list on purpose so a device that
+// still has one saved in localStorage falls through to "auto" below instead of crashing.
+const VALID_CALLER_VOICES: readonly CallerVoice[] = ["male", "female", "yoda", "herald", "kernasi", "reporter", "genz"];
 if (typeof window !== "undefined") {
   const raw = window.localStorage.getItem(CALLER_VOICE_KEY);
   if ((VALID_CALLER_VOICES as readonly string[]).includes(raw ?? "")) callerVoice = raw as CallerVoice;
@@ -150,7 +152,7 @@ function pickRandom<T>(arr: readonly T[]): T {
 // Remembers the last line spoken per announcement "slot" (180, checkout, bust, plain round,
 // …) so the very next pick for that same slot never repeats it verbatim — the actual fix for
 // "I keep hearing the same line back to back". Keyed by a short category name shared across
-// every persona (a Yoda line and a Pirate line never collide as strings, so this stays correct
+// every persona (a Yoda line and a Herald line never collide as strings, so this stays correct
 // even though the category key doesn't encode which persona is currently selected).
 const lastPicks = new Map<string, string>();
 function pickRandomNoRepeat<T extends string>(arr: readonly T[], category: string): T {
@@ -282,8 +284,8 @@ const HYPE_CRICKET_CLOSE = [
 // ton-plus, checkout, checkout-named, match win, bust, cricket-close, next-turn, plain round,
 // checkout-remaining) so buildRoundAnnouncement can dispatch through one shared path below
 // instead of a bespoke branch per character. Fictional archetypes only (a wizened mentor, a
-// pirate captain, a medieval herald, a monotone robot) — recognizable by their manner of
-// speech, not modeled on any specific real person.
+// medieval herald, a cocky hype-man, a breathless radio reporter, an over-the-top Gen-Z
+// announcer) — recognizable by their manner of speech, not modeled on any specific real person.
 interface PersonaPack {
   options: SpeechOptions;
   hypeOptions: SpeechOptions;
@@ -304,24 +306,33 @@ interface PersonaPack {
 const YODA_PACK: PersonaPack = {
   options: { pitch: 0.5, rate: 0.82, volume: 1 },
   hypeOptions: { pitch: 0.55, rate: 0.78, volume: 1 },
+  // No "Mmmh"/"Hmmm" interjections — not real German words, so some TTS voices spell them out
+  // letter by letter instead of reading them as a sound. Real words only, however short.
   hype180: [
     "Stark getroffen, du hast! Einhundertachtzig, das ist!",
     "Das Maximum, erreicht du hast!",
     "Beeindruckend. Höher, die Punktzahl nicht geht.",
-    "Mmmh. Die Kraft der Dreifachfelder, stark in dir ist.",
+    "Die Kraft der Dreifachfelder, stark in dir ist.",
     "Perfekt, dieser Wurf war. Viel zu lernen, du hast nicht mehr.",
     "Versuchen? Nein. Getroffen, du hast!",
+    "Meister dieses Wurfes, du bist.",
+    "Die Macht, stark mit dir heute ist.",
+    "Größer als dieser Wurf, nichts ist.",
   ],
   hypeHighTon: [
     "Gewaltig, diese Runde war!",
     "Stark im Kraft der Dreifachfelder, du bist.",
     "Groß ist die Kraft deines Wurfarms, spüre ich.",
+    "Beeindruckt, ich bin.",
+    "Große Fortschritte, du machst.",
   ],
   hypeTonPlus: [
     "Gut getroffen, das war.",
     "Stark, dieser Wurf war.",
     "Sauber, das gesessen hat.",
-    "Mmmh. Fortschritte, du machst.",
+    "Fortschritte, du machst.",
+    "Solide, dieser Wurf war.",
+    "Zufrieden, ich bin.",
   ],
   hypeCheckout: [
     "Ausgecheckt, du hast!",
@@ -330,119 +341,63 @@ const YODA_PACK: PersonaPack = {
     "Präzise, dieser letzte Wurf war.",
     "Der dunklen Seite des Bustens, widerstanden du hast!",
     "Fürchte den Rest nicht, du musstest — gemeistert, du ihn hast.",
+    "Der Weg zum Sieg, gefunden du hast!",
+    "Wie ein Meister, ausgecheckt du hast!",
   ],
   hypeCheckoutNamed: (name) => [
     `Das Leg, ${name} sich geholt hat!`,
     `Sauber abgeschlossen, ${name} hat!`,
     `Stolz auf ${name}, in diesem Moment ich bin!`,
+    `Die Weisheit des Meisters, ${name} gezeigt hat!`,
   ],
   hypeMatchWin: (name) => [
     `${name} gewonnen hat! Stolz auf dich, bin ich.`,
     `${name} den Sieg sich geholt hat! Stark, du warst.`,
     `${name} die Partie beendet hat! Gut gespielt, du hast.`,
     `Ein Meister der Darts, ${name} nun ist!`,
+    `Belohnt, deine Geduld nun wird, ${name}!`,
   ],
   hypeBust: [
     "Daneben, das ging. Nicht verzagen, du darfst.",
     "Kein Glück, heute du hast. Am dran, nächster ist.",
     "Bust, das war. Üben, du musst.",
     "Fehler, das war — doch daraus lernen, du wirst.",
+    "Ungeduldig, du warst. Ruhe finden, du musst.",
+    "Zu weit gezielt, du hast.",
   ],
   hypeCricketClose: [
     "Geschlossen, die ist!",
     "Zu, diese Zahl nun ist.",
-    "Verschlossen, wie ein Jedi-Tempel, sie ist.",
+    "Verschlossen, wie ein Tempel, sie ist.",
+    "Ein Feld weniger, zu erobern es gibt.",
   ],
   nextTurn: (name) => pickRandomNoRepeat([
     `${name}, dran nun ist.`,
     `Am Zug, ${name} jetzt ist.`,
     `Bereit machen, ${name} muss.`,
     `Die Macht, ${name} nun einsetzen muss.`,
+    `Bereit für dich, das Spielfeld ist, ${name}.`,
   ], "nextTurn"),
   plainRound: (total) => pickRandomNoRepeat([
     germanNumberWords(total),
     `${germanNumberWords(total)}. Genügend, das ist.`,
-    `${germanNumberWords(total)}, geworfen wurde.`,
-    `Hmmm. ${germanNumberWords(total)}.`,
+    `${germanNumberWords(total)}, geworfen du hast.`,
+    `Nicht schlecht, ${germanNumberWords(total)}.`,
+    `${germanNumberWords(total)}. Weitermachen, du musst.`,
   ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${words}, ${name} noch braucht — der ${nickname}, das ist!`
-      : pickRandomNoRepeat([`${words}, ${name} noch braucht.`, `Übrig, ${words} für ${name} sind.`], "checkoutRemaining");
+      : pickRandomNoRepeat([`${words}, ${name} noch braucht.`, `Übrig, ${words} für ${name} sind.`, `${words} zum Sieg, ${name} noch braucht.`], "checkoutRemaining");
   },
-  legWonNextLeg: (winner, next) => `Das Leg, ${winner} gewonnen hat! ${next}, das nächste beginnt.`,
+  legWonNextLeg: (winner, next) => pickRandomNoRepeat([
+    `Das Leg, ${winner} gewonnen hat! ${next}, das nächste beginnt.`,
+    `Gewonnen, das Leg von ${winner} ist! Bereit, ${next} nun sein muss.`,
+  ], "legWonNextLeg"),
 };
 
-const PIRATE_PACK: PersonaPack = {
-  options: { pitch: 0.62, rate: 0.98, volume: 1 },
-  hypeOptions: { pitch: 0.68, rate: 1.08, volume: 1 },
-  hype180: [
-    "Arrr, volle Breitseite! Einhundertachtzig!",
-    "Ahoy! Das Maximum, geentert!",
-    "Klar Schiff! Einhundertachtzig Punkte, Landratte!",
-    "Ein Volltreffer wie aus der Kanone, arrr!",
-  ],
-  hypeHighTon: [
-    "Arrr, das sitzt wie ein Kanonenschuss!",
-    "Ahoy, ordentlich Fahrt aufgenommen!",
-    "Volle Segel voraus, dieser Wurf!",
-  ],
-  hypeTonPlus: [
-    "Arrr, sauber getroffen!",
-    "Das nenn ich Seemannskunst!",
-    "Klare Kante, Landratte!",
-    "Feste Hand am Ruder, arrr!",
-  ],
-  hypeCheckout: [
-    "Klar Schiff — das Leg geentert!",
-    "Arrr, ins Ziel gesegelt!",
-    "Volltreffer, versenkt!",
-    "Die Schatzkiste, geknackt!",
-    "Sicher im Hafen, dieses Leg!",
-  ],
-  hypeCheckoutNamed: (name) => [
-    `${name} entert das Leg!`,
-    `Käpt'n ${name} bringt das Schiff sicher in den Hafen!`,
-    `Arrr, ${name} hisst die Leg-Flagge!`,
-  ],
-  hypeMatchWin: (name) => [
-    `${name} hisst die Siegesflagge! Arrr!`,
-    `${name} holt sich den ganzen Schatz!`,
-    `Ahoy, ${name} gewinnt die Schlacht!`,
-    `Käpt'n ${name}, Herrscher der sieben Dartsmeere!`,
-  ],
-  hypeBust: [
-    "Arrr, Klippen voraus — daneben!",
-    "Das war Landgang, keine Meisterleistung.",
-    "Schiffbruch, diese Runde.",
-    "Kentert, dieser Wurf ist.",
-  ],
-  hypeCricketClose: [
-    "Arrr, dicht wie ein Schiffsrumpf!",
-    "Klar zu — die Luke ist zu!",
-  ],
-  nextTurn: (name) => pickRandomNoRepeat([
-    `Ahoy, ${name} übernimmt das Ruder.`,
-    `${name} ist am Ruder, Landratte.`,
-    `Klar zum Wurf, ${name}!`,
-    `${name}, entere die Planke!`,
-  ], "nextTurn"),
-  plainRound: (total) => pickRandomNoRepeat([
-    `${germanNumberWords(total)}, Landratte.`,
-    `${germanNumberWords(total)} Punkte im Frachtraum.`,
-    `Arrr, ${germanNumberWords(total)}.`,
-    `${germanNumberWords(total)}, verstaut im Laderaum.`,
-  ], "plainRound"),
-  checkoutRemaining: (remaining, name, nickname) => {
-    const words = germanNumberWords(remaining);
-    return nickname
-      ? `${name} braucht noch ${words} — der ${nickname}, Ahoy!`
-      : pickRandomNoRepeat([`${name} braucht noch ${words}, um den Hafen zu erreichen.`, `Noch ${words} bis zur Landung, ${name}.`], "checkoutRemaining");
-  },
-  legWonNextLeg: (winner, next) => `Leg geentert von ${winner}! ${next} sticht als Nächstes in See.`,
-};
-
+// Formal, archaic medieval-herald German: "Fürwahr", "Wohlan", "Höret, höret", "edler Recke".
 const HERALD_PACK: PersonaPack = {
   options: { pitch: 0.85, rate: 0.85, volume: 1 },
   hypeOptions: { pitch: 0.92, rate: 0.9, volume: 1 },
@@ -451,124 +406,88 @@ const HERALD_PACK: PersonaPack = {
     "Fürwahr, ein Wurf für die Geschichtsbücher!",
     "Einhundertachtzig! Ruhm und Ehre diesem Recken!",
     "Man höre und staune — die Höchstzahl ist gefallen!",
+    "Ein Wurf von königlicher Präzision!",
+    "Die Chronisten werden dies festhalten — einhundertachtzig!",
+    "Fürwahr, dies ist die Krone jeden Wurfes!",
+    "Kein Zweifel bleibt — ein wahrer Meister wirft heute!",
   ],
   hypeHighTon: [
     "Wohlan, eine gewaltige Runde!",
     "Fürwahr stark getroffen!",
     "Eine Runde von großer Wucht, in der Tat!",
+    "Wacker gekämpft in dieser Runde!",
+    "Von großer Stärke zeugt dieser Wurf!",
+    "Ein wahrhaft eindrucksvolles Schauspiel!",
   ],
   hypeTonPlus: [
     "Wacker getroffen, edler Recke!",
     "Ein Treffer von großer Güte!",
     "Fürwahr, das sitzt!",
     "Wohlgezielt, dieser Wurf!",
+    "Von feiner Hand, dieser Treffer!",
+    "Ein Wurf von Format!",
   ],
   hypeCheckout: [
     "Das Leg ist vollbracht!",
     "Höret, höret — der Sieg dieser Runde!",
     "Fürwahr, ein Treffer von großer Präzision!",
     "Das Tor zum Sieg, weit geöffnet!",
+    "Mit eiserner Hand, das Leg vollendet!",
+    "Ein würdiger Abschluss, fürwahr!",
+    "Die Fahne des Sieges, gehisst!",
+    "Vollbracht — mit Ruhm und Ehre!",
   ],
   hypeCheckoutNamed: (name) => [
     `${name} vollbringt das Leg mit Bravour!`,
     `Preiset ${name}, den Meister dieser Runde!`,
+    `${name}, wackerer Streiter, vollendet die Runde!`,
+    `Man neige das Haupt vor ${name}s Können!`,
   ],
   hypeMatchWin: (name) => [
     `Höret, höret! ${name} trägt den Sieg davon!`,
     `${name}, wackerer Champion dieser Partie!`,
     `Ruhm und Ehre gebühren ${name}!`,
+    `${name} erhebt sich als wahrer Meister dieser Halle!`,
+    `Die Krone des Abends, ${name} gebührt!`,
   ],
   hypeBust: [
     "Ein Fehltritt, fürwahr.",
     "Das Glück, es war dem Recken heut nicht hold.",
     "Verfehlt, doch die nächste Runde winkt.",
+    "Selbst die Tapfersten straucheln bisweilen.",
+    "Ein Rückschlag nur, kein Untergang.",
+    "Die Ehre bleibt unangetastet, trotz Fehlwurfs.",
   ],
   hypeCricketClose: [
     "Verschlossen, wie ein Burgtor!",
     "Fürwahr, geschlossen!",
+    "Dieses Feld, erobert und verriegelt!",
+    "Kein Zutritt mehr — verwehrt!",
   ],
   nextTurn: (name) => pickRandomNoRepeat([
     `Wohlan, ${name} ist nun am Zuge.`,
     `Man höre: ${name} ist an der Reihe.`,
     `${name}, tritt vor und wirf!`,
     `Nun trete vor, ${name}!`,
+    `${name}, die Bühne gehört nun dir.`,
   ], "nextTurn"),
   plainRound: (total) => pickRandomNoRepeat([
     `${germanNumberWords(total)} Punkte, wohlan.`,
     `Fürwahr, ${germanNumberWords(total)} Punkte.`,
     `${germanNumberWords(total)}, so steht es geschrieben.`,
     `Vermerkt: ${germanNumberWords(total)} Punkte.`,
+    `${germanNumberWords(total)} Punkte, in die Chronik eingetragen.`,
   ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name} bedarf noch ${words} — dem ${nickname}!`
-      : pickRandomNoRepeat([`${name} bedarf noch ${words} zum Siege.`, `Noch ${words} trennen ${name} vom Ruhme.`], "checkoutRemaining");
+      : pickRandomNoRepeat([`${name} bedarf noch ${words} zum Siege.`, `Noch ${words} trennen ${name} vom Ruhme.`, `${words} noch, bis ${name} den Sieg erringt.`], "checkoutRemaining");
   },
-  legWonNextLeg: (winner, next) => `Das Leg, an ${winner} vergeben! ${next} eröffnet die nächste Runde.`,
-};
-
-const ROBOT_PACK: PersonaPack = {
-  options: { pitch: 0.75, rate: 0.92, volume: 1 },
-  hypeOptions: { pitch: 0.8, rate: 1, volume: 1 },
-  hype180: [
-    "Analyse abgeschlossen. Maximalwert erreicht. Einhundertachtzig.",
-    "Systemmeldung: Perfekter Wurf registriert.",
-    "Höchstwert bestätigt. Effizienz: einhundert Prozent.",
-  ],
-  hypeHighTon: [
-    "Hohe Punktzahl registriert.",
-    "Effizienz: optimal.",
-    "Datensatz aktualisiert. Wurfqualität: sehr hoch.",
-  ],
-  hypeTonPlus: [
-    "Treffer bestätigt.",
-    "Wurfqualität: hoch.",
-    "Daten gespeichert. Guter Wurf.",
-  ],
-  hypeCheckout: [
-    "Checkout bestätigt.",
-    "Leg abgeschlossen. Berechnung erfolgreich.",
-    "Zielerreichung: einhundert Prozent.",
-    "Prozess abgeschlossen. Leg gewonnen.",
-  ],
-  hypeCheckoutNamed: (name) => [
-    `Sieger dieser Runde: ${name}.`,
-    `${name}. Checkout erfolgreich verarbeitet.`,
-  ],
-  hypeMatchWin: (name) => [
-    `Endergebnis berechnet. Sieger: ${name}.`,
-    `Match beendet. Gewinner: ${name}.`,
-    `Analyse final. ${name} als Sieger identifiziert.`,
-  ],
-  hypeBust: [
-    "Fehler erkannt. Wurf ungültig.",
-    "Berechnung fehlgeschlagen. Bust registriert.",
-    "Warnung. Zielwert unterschritten.",
-  ],
-  hypeCricketClose: [
-    "Zahl geschlossen. Bestätigt.",
-    "Feld deaktiviert.",
-  ],
-  nextTurn: (name) => pickRandomNoRepeat([
-    `Nächster Spieler: ${name}.`,
-    `Aktiver Spieler: ${name}.`,
-    `Warte auf Eingabe von ${name}.`,
-    `Zug übergeben an: ${name}.`,
-  ], "nextTurn"),
-  plainRound: (total) => pickRandomNoRepeat([
-    `Punktzahl: ${germanNumberWords(total)}.`,
-    `Wurf verarbeitet. Wert: ${germanNumberWords(total)}.`,
-    `${germanNumberWords(total)} Punkte registriert.`,
-    `Berechnung abgeschlossen: ${germanNumberWords(total)}.`,
-  ], "plainRound"),
-  checkoutRemaining: (remaining, name, nickname) => {
-    const words = germanNumberWords(remaining);
-    return nickname
-      ? `${name}. Restwert: ${words}. Bekannt als: ${nickname}.`
-      : pickRandomNoRepeat([`${name}. Restwert: ${words}.`, `Verbleibend für ${name}: ${words}.`], "checkoutRemaining");
-  },
-  legWonNextLeg: (winner, next) => `Leg-Gewinner: ${winner}. Nächste Runde: ${next}.`,
+  legWonNextLeg: (winner, next) => pickRandomNoRepeat([
+    `Das Leg, an ${winner} vergeben! ${next} eröffnet die nächste Runde.`,
+    `${winner} trägt dieses Leg davon! Bereit stehe nun ${next}.`,
+  ], "legWonNextLeg"),
 };
 
 // Fully original — a loud, cocky, street-slang-heavy hype-man who trash-talks and teases hard,
@@ -584,6 +503,8 @@ const KERNASI_PACK: PersonaPack = {
     "Junge Junge Junge, das war der Hammer schlechthin!",
     "Alter, mach die Bude zu, mehr geht heut nicht mehr!",
     "Ischwöre auf alles, das war Weltklasse pur!",
+    "Digga, das war einfach nur unverschämt gut!",
+    "Bratan, schreib das auf — Legende gerade geboren!",
   ],
   hypeHighTon: [
     "Ischwöre, das war fett!",
@@ -591,6 +512,7 @@ const KERNASI_PACK: PersonaPack = {
     "Krass, Alter, richtig stark!",
     "Digga, da guckst du, oder?",
     "Bratan, das war mal ne Ansage!",
+    "Alter, sowas seh ich nicht jeden Tag!",
   ],
   hypeTonPlus: [
     "Ischwöre, passt!",
@@ -598,6 +520,7 @@ const KERNASI_PACK: PersonaPack = {
     "Joa, geht klar!",
     "Bisschen Sahne obendrauf, nice!",
     "Solide, Digga, solide!",
+    "Passt scho, Alter!",
   ],
   hypeCheckout: [
     "PENG, Alter, weg is er!",
@@ -607,11 +530,14 @@ const KERNASI_PACK: PersonaPack = {
     "Bratan, das war chirurgische Präzision!",
     "Aufgeräumt wie beim Frühjahrsputz, Alter!",
     "Digga, Tür zu, Licht aus, fertig!",
+    "Sauber, Alter, richtig sauber!",
   ],
   hypeCheckoutNamed: (name) => [
     `${name}, du Vollprofi, Alter!`,
     `Ischwöre, ${name} ist einfach nur Boss!`,
     `${name} macht hier einfach kurzen Prozess, Bratan!`,
+    `Digga, ${name} zeigt hier grad, wie's geht!`,
+    `${name}, Respekt, Alter, wirklich Respekt!`,
   ],
   hypeMatchWin: (name) => [
     `${name} räumt hier komplett ab, Alter, Wahnsinn!`,
@@ -619,6 +545,7 @@ const KERNASI_PACK: PersonaPack = {
     `${name} hat hier keinem eine Chance gelassen, Bratan!`,
     `Absoluter Ehrenmensch — ${name} gewinnt, Digga!`,
     `Alter, ${name} hat die ganze Bude abgeräumt!`,
+    `${name}, Legende des Abends, Bratan, ganz klar!`,
   ],
   hypeBust: [
     "Ohhh nein, Alter, das war nix!",
@@ -633,6 +560,7 @@ const KERNASI_PACK: PersonaPack = {
     "Zu, Alter, fix und fertig!",
     "Dicht wie meine Bude nach zwölf!",
     "Digga, Deckel drauf, nächste!",
+    "Alter, das Feld gehört jetzt dir!",
   ],
   nextTurn: (name) => pickRandomNoRepeat([
     `Los, ${name}, zeig, was du drauf hast, Alter!`,
@@ -640,6 +568,7 @@ const KERNASI_PACK: PersonaPack = {
     `Auf geht's, ${name}, zeig's ihnen, Bratan!`,
     `${name} ist dran — Digga, keinen Druck, nur Ehre.`,
     `${name}, ran an die Kiste!`,
+    `Alter, jetzt liegt's an dir, ${name}!`,
   ], "nextTurn"),
   plainRound: (total) => pickRandomNoRepeat([
     `${germanNumberWords(total)}, Alter, geht klar.`,
@@ -653,9 +582,12 @@ const KERNASI_PACK: PersonaPack = {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name} braucht noch ${words} — na los, der ${nickname} wartet, Alter!`
-      : pickRandomNoRepeat([`${name} braucht noch ${words}, pack's an, Digga!`, `Noch ${words} für ${name}, Bratan, das schaffst du!`], "checkoutRemaining");
+      : pickRandomNoRepeat([`${name} braucht noch ${words}, pack's an, Digga!`, `Noch ${words} für ${name}, Bratan, das schaffst du!`, `${words} noch, Alter, keine Panik!`], "checkoutRemaining");
   },
-  legWonNextLeg: (winner, next) => `Leg geht an ${winner}, Alter! ${next}, zeig, was du kannst!`,
+  legWonNextLeg: (winner, next) => pickRandomNoRepeat([
+    `Leg geht an ${winner}, Alter! ${next}, zeig, was du kannst!`,
+    `Digga, ${winner} macht das Leg klar! ${next}, du bist dran!`,
+  ], "legWonNextLeg"),
 };
 
 // Classic breathless radio-commentary energy (escalating exclamations, "meine Damen und
@@ -669,58 +601,83 @@ const REPORTER_PACK: PersonaPack = {
     "Und das ist... EINHUNDERTACHTZIG! Was für ein Wurf, meine Damen und Herren!",
     "Da ist er, der Maximum-Treffer! Unfassbar, was hier gerade passiert!",
     "Ganz Heiligenhaus wird das sehen wollen — einhundertachtzig!",
+    "Ich fasse es nicht — einhundertachtzig, meine Damen und Herren!",
+    "Was für ein Abend, was für ein Wurf! Maximum!",
+    "Die Halle explodiert — einhundertachtzig!",
+    "Das schreiben wir uns hinter die Ohren — Maximum-Wurf!",
   ],
   hypeHighTon: [
     "Und das sitzt! Was für eine Runde!",
     "Die Halle tobt — starke Punktzahl!",
+    "Was für eine Vorstellung heute Abend!",
+    "Da bleibt einem die Spucke weg!",
+    "Meine Damen und Herren, das war stark!",
   ],
   hypeTonPlus: [
     "Sauber, sauber, sauber!",
     "Da ist Klasse zu sehen!",
+    "Ordentlich, muss man sagen!",
+    "Das nenne ich abgezockt!",
   ],
   hypeCheckout: [
     "Uuuund AUS! Das Leg ist durch!",
     "Er macht den Deckel drauf — herausragend!",
     "Da ist die Tür zu, meine Damen und Herren!",
     "Was für ein Nervenspiel — und gewonnen!",
+    "Eiskalt ausgespielt — Checkout!",
+    "Die Nerven behalten und eingelocht — großartig!",
+    "Da ist er, der entscheidende Wurf!",
   ],
   hypeCheckoutNamed: (name) => [
     `${name} mit der ganz großen Nervenstärke!`,
     `${name} macht das Leg klar — Wahnsinn!`,
+    `Was für ein Auftritt von ${name}!`,
+    `${name} zeigt hier meisterhafte Klasse!`,
   ],
   hypeMatchWin: (name) => [
     `${name} ist Sieger dieser großartigen Partie!`,
     `Und ${name} jubelt — verdienter Sieg!`,
     `${name} krönt eine starke Leistung mit dem Matchgewinn!`,
+    `Was für ein Match — ${name} gewinnt verdient!`,
+    `${name}, der Held des heutigen Abends!`,
   ],
   hypeBust: [
     "Oh, das sitzt nicht — bitter für ihn.",
     "Da war der Druck wohl zu groß.",
     "Schade, so nah dran und doch daneben.",
+    "Das wird ihn ärgern, keine Frage.",
+    "Bitter für ihn, so kurz vor dem Ziel.",
   ],
   hypeCricketClose: [
     "Geschlossen — und wie!",
     "Da ist sie zu, sauber gemacht!",
+    "Dieses Feld ist Geschichte!",
+    "Sauber verriegelt, meine Damen und Herren!",
   ],
   nextTurn: (name) => pickRandomNoRepeat([
     `Und jetzt ist ${name} am Zug.`,
     `Der Blick geht zu ${name}.`,
     `${name} übernimmt.`,
     `Alle Augen auf ${name}.`,
+    `Die Bühne gehört jetzt ${name}.`,
   ], "nextTurn"),
   plainRound: (total) => pickRandomNoRepeat([
     `${germanNumberWords(total)} Punkte.`,
     `Und weiter geht's mit ${germanNumberWords(total)}.`,
     `${germanNumberWords(total)}, notiert.`,
     `Solide ${germanNumberWords(total)}.`,
+    `${germanNumberWords(total)} — weiter im Programm.`,
   ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name} braucht noch ${words} — der große ${nickname}!`
-      : pickRandomNoRepeat([`${name} braucht noch ${words} zum Sieg.`, `Noch ${words} trennen ${name} vom Triumph.`], "checkoutRemaining");
+      : pickRandomNoRepeat([`${name} braucht noch ${words} zum Sieg.`, `Noch ${words} trennen ${name} vom Triumph.`, `${words} noch für ${name} bis zum Matchball.`], "checkoutRemaining");
   },
-  legWonNextLeg: (winner, next) => `Das Leg geht an ${winner}! Gleich geht's weiter mit ${next}.`,
+  legWonNextLeg: (winner, next) => pickRandomNoRepeat([
+    `Das Leg geht an ${winner}! Gleich geht's weiter mit ${next}.`,
+    `${winner} sichert sich dieses Leg! Als Nächstes: ${next}.`,
+  ], "legWonNextLeg"),
 };
 
 // Intentionally over-the-top/cringe — an adult announcer badly overusing current youth slang
@@ -737,18 +694,22 @@ const GENZ_PACK: PersonaPack = {
     "Das war main character energy, ganz ehrlich!",
     "180?! Bro hat grad alle zu NPCs gemacht, fr fr!",
     "Kein Cap, das war so ein riesen dubs-Moment!",
+    "Digga, das geht direkt in die Highlight-Reel!",
+    "Bro ist grad offiziell zur Legende geworden, no cap!",
   ],
   hypeHighTon: [
     "Das ist lowkey schon final boss energy!",
     "Digga das ist giving Profi-Vibes!",
     "Mega Aura, du bist grad am cooken!",
     "Bro, das war nicht mid, das war goated!",
+    "Das war ehrlich richtig clean, digga!",
   ],
   hypeTonPlus: [
     "Passt, ist safe kein L!",
     "Solide, nicht mid!",
     "Bisschen slay, ehrlich gesagt!",
     "Fr fr nicht schlecht, digga!",
+    "Ist okay-based, würd ich sagen!",
   ],
   hypeCheckout: [
     "GECHECKT! Das ist ein core memory, digga!",
@@ -757,17 +718,20 @@ const GENZ_PACK: PersonaPack = {
     "Ehre! Main-Character-Moment, digga!",
     "Das ist so ein W, bro — delulu is not the solulu, aber DAS hier ist real!",
     "Sheesh, einfach eingetütet, ist safe!",
+    "Digga, das war ein Statement-W!",
   ],
   hypeCheckoutNamed: (name) => [
     `${name} ist grad main character, digga!`,
     `${name} cookt einfach nur, bro!`,
     `${name} mit dem fetten W, no cap!`,
+    `${name} ist grad einfach nur built different!`,
   ],
   hypeMatchWin: (name) => [
     `${name} ist der Final Boss, digga, no cap!`,
     `${name} hat hier einfach nur GG gesagt, bro!`,
     `${name} ist grad literally goated, kein Cap!`,
     `${name} zieht den ganzen Match-W ein, fr fr!`,
+    `${name}, offiziell die Aura des Abends, digga!`,
   ],
   hypeBust: [
     "Bro das ist ein riesen L, ehrlich.",
@@ -781,6 +745,7 @@ const GENZ_PACK: PersonaPack = {
     "Zu, digga, easy W.",
     "Dicht, ist safe.",
     "Ehre, das Feld ist Geschichte.",
+    "Bro hat das Feld grad geclosed, no cap.",
   ],
   nextTurn: (name) => pickRandomNoRepeat([
     `${name}, du bist dran, zeig main character energy, digga!`,
@@ -800,16 +765,17 @@ const GENZ_PACK: PersonaPack = {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name} braucht noch ${words} — der ${nickname}, digga, das wird mega!`
-      : pickRandomNoRepeat([`${name} braucht noch ${words}, geh drauf, digga!`, `Noch ${words} für ${name}, bro, du schaffst das, no cap!`], "checkoutRemaining");
+      : pickRandomNoRepeat([`${name} braucht noch ${words}, geh drauf, digga!`, `Noch ${words} für ${name}, bro, du schaffst das, no cap!`, `${words} noch, digga, lock in!`], "checkoutRemaining");
   },
-  legWonNextLeg: (winner, next) => `Leg-W für ${winner}, digga! ${next}, du bist dran!`,
+  legWonNextLeg: (winner, next) => pickRandomNoRepeat([
+    `Leg-W für ${winner}, digga! ${next}, du bist dran!`,
+    `${winner} cookt sich das Leg, bro! ${next}, deine Zeit!`,
+  ], "legWonNextLeg"),
 };
 
 const PERSONA_PACKS: Partial<Record<CallerVoice, PersonaPack>> = {
   yoda: YODA_PACK,
-  pirate: PIRATE_PACK,
   herald: HERALD_PACK,
-  robot: ROBOT_PACK,
   kernasi: KERNASI_PACK,
   reporter: REPORTER_PACK,
   genz: GENZ_PACK,
@@ -965,4 +931,3 @@ function checkoutRemainingAnnouncement(remaining: number, playerName: string): s
     ? `${playerName} braucht noch ${words} — ${nickname}!`
     : `${playerName} braucht noch ${words}`;
 }
-
