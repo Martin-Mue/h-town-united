@@ -152,14 +152,16 @@ const Layout = ({ children }: { children: ReactNode }) => {
 
       <main className="flex-1 pb-20 md:pb-6">{children}</main>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-md border-t border-border flex justify-around py-2 z-50">
-        {NAV_ITEMS.map((item) => {
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-md border-t border-border flex justify-around py-2 z-50 overflow-x-auto">
+        {/* Admin never had an entry here — it only ever existed in the "hidden md:flex" desktop
+            nav above, so any admin on mobile had no way to reach it at all. */}
+        {[...NAV_ITEMS, ...(isAdmin ? [{ to: "/admin", icon: UserCog, label: "Admin" }] : [])].map((item) => {
           const isActive = location.pathname === item.to;
           return (
             <Link
               key={item.to}
               to={item.to}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs transition-colors ${
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs transition-colors shrink-0 ${
                 isActive ? "text-primary" : "text-muted-foreground"
               }`}
             >

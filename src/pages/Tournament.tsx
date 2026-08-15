@@ -48,6 +48,7 @@ interface SeriesRecord {
 
 interface TournamentRecord {
   id: string;
+  user_id?: string;
   name: string;
   mode: string;
   status: string;
@@ -225,9 +226,14 @@ interface BracketViewportProps {
   onStartLiveGame: (match: Match) => void;
   /** Absolute URL for the QR code — null when the match isn't in a live-startable state. */
   getLiveGameUrl: (match: Match) => string | null;
+  /** Only the tournament's creator gets manual tap/edit/reset controls — the DB itself only
+   *  allows non-owners to write bracket/champion/status (needed for "Spiel starten" results to
+   *  land regardless of who plays), everyone else edits nothing manually, on purpose (see
+   *  20260815170000 migration). "Spiel starten" itself stays available to everyone below. */
+  isOwner: boolean;
 }
 
-const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl }: BracketViewportProps) => {
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, isOwner }: BracketViewportProps) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState({ wrapW: 0, wrapH: 0, innerW: 0, innerH: 0 });
@@ -304,10 +310,12 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
             idx === 0 ? "border-b border-border" : ""
           } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === BYE ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-          <button disabled={!player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left uppercase tracking-wide disabled:cursor-not-allowed">{player || "TBD"}</button>
-          <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
-            <Plus className="w-4 h-4" />
-          </Button>
+          <button disabled={!isOwner || !player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left uppercase tracking-wide disabled:cursor-not-allowed">{player || "TBD"}</button>
+          {isOwner && (
+            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
+              <Plus className="w-4 h-4" />
+            </Button>
+          )}
           <span className="w-6 text-center font-display text-base">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
           {match.winner === player && <Check className="w-4 h-4 text-secondary" />}
         </div>
@@ -338,7 +346,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           )}
         </div>
       )}
-      {(match.winner || match.score1 || match.score2 || onEditMatch) && (
+      {isOwner && (match.winner || match.score1 || match.score2 || onEditMatch) && (
         <div className="flex border-t border-border/60">
           {(match.winner || match.score1 || match.score2) && (
             <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}>
@@ -532,6 +540,12 @@ const TournamentPage = () => {
   const { session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  /** Manual bracket edits (tap winner, +1 leg, reset, edit players, delete, settings) are for
+   *  the creator only — the DB enforces this too (see 20260815170000 migration), this just
+   *  keeps the UI from showing controls that would fail. `isOwnerOf` for the list view (many
+   *  tournaments at once), `isOwner` for whichever one is currently open. */
+  const isOwnerOf = (t: TournamentRecord) => !!session?.user?.id && t.user_id === session.user.id;
+  const isOwner = activeTournament ? isOwnerOf(activeTournament) : false;
 
   const togglePublicView = async () => {
     if (!activeTournament) return;
@@ -1146,11 +1160,12 @@ const TournamentPage = () => {
                   </div>
                   {t.champion && <p className="text-xs text-accent mt-1">🏆 {t.champion}</p>}
                 </button>
-                {!hasStarted(t) && (
+                {!hasStarted(t) && isOwnerOf(t) && (
                   <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); editTournament(t); }} className="text-xs">
                     Bearbeiten
                   </Button>
                 )}
+                {isOwnerOf(t) && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()} title="Turnier löschen" aria-label="Turnier löschen">
@@ -1170,6 +1185,7 @@ const TournamentPage = () => {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
+                )}
               </div>
             ))}
           </div>
@@ -1553,14 +1569,17 @@ const TournamentPage = () => {
           </div>
           <div className="flex items-center gap-2">
             {/* Live-Spiel an/aus lives in the tournament edit form only now — a per-tournament
-                setting, not something toggled casually from the bracket toolbar. */}
-            <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
-              <Radio className={`w-3.5 h-3.5 ${activeTournament.public_view ? "animate-pulse" : ""}`} />
-              {activeTournament.public_view ? "Live an" : "Live-Ansicht"}
-            </Button>
+                setting, not something toggled casually from the bracket toolbar. Both this and
+                Bearbeiten change tournament settings, which only the creator may (DB-enforced). */}
+            {isOwner && (
+              <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
+                <Radio className={`w-3.5 h-3.5 ${activeTournament.public_view ? "animate-pulse" : ""}`} />
+                {activeTournament.public_view ? "Live an" : "Live-Ansicht"}
+              </Button>
+            )}
             {/* Link/QR live here only, in the "Beamer-Link" banner below — having them here
                 too duplicated the exact same link/QR right on top of each other. */}
-            {!hasStarted(activeTournament) && (
+            {!hasStarted(activeTournament) && isOwner && (
               <Button variant="outline" size="sm" onClick={() => editTournament(activeTournament)}>
                 Bearbeiten
               </Button>
@@ -1637,9 +1656,11 @@ const TournamentPage = () => {
               <ListOrdered className="w-3.5 h-3.5" /> Spielplan &amp; Schreiber
             </button>
           </div>
-          <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={reshuffleScorekeepers}>
-            <Shuffle className="w-3.5 h-3.5" /> Schreiber neu auslosen
-          </Button>
+          {isOwner && (
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={reshuffleScorekeepers}>
+              <Shuffle className="w-3.5 h-3.5" /> Schreiber neu auslosen
+            </Button>
+          )}
           <span className="text-[11px] text-muted-foreground flex items-center gap-1">
             <Monitor className="w-3.5 h-3.5" /> {activeTournament.boards || 2} Boards
           </span>
@@ -1658,6 +1679,7 @@ const TournamentPage = () => {
             canStartLiveGame={canStartLiveGame}
             onStartLiveGame={startLiveGame}
             getLiveGameUrl={(m) => { const p = koLiveGamePath(m); return p ? `${window.location.origin}${p}` : null; }}
+            isOwner={isOwner}
           />
         ) : (
           <div className="container space-y-4">
@@ -1883,12 +1905,16 @@ const TournamentPage = () => {
                       )}
                     </>
                   )}
-                  <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player1)}>
-                    {m.player1} ✓
-                  </Button>
-                  <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player2)}>
-                    {m.player2} ✓
-                  </Button>
+                  {isOwner && (
+                    <>
+                      <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player1)}>
+                        {m.player1} ✓
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player2)}>
+                        {m.player2} ✓
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
