@@ -61,58 +61,54 @@ const DashboardPage = () => {
   };
 
   return (
-    <div className="container py-6 animate-slide-up">
-      {/* Hero with prominent logo */}
-      <div className="gradient-hero rounded-2xl p-6 md:p-10 mb-6 border border-border relative overflow-hidden">
-        {/* Background watermark logo */}
+    <div className="container py-4 animate-slide-up">
+      {/* Hero — compact horizontal layout so the quick-access cards below are reachable
+          without scrolling; the previous version stacked a big centered logo, heading, a
+          second full-width emblem block and a large motto, which pushed everything useful
+          well below the fold. */}
+      <div className="gradient-hero rounded-2xl p-4 sm:p-5 mb-4 border border-border relative overflow-hidden">
         <img
           src={htuLogo}
           alt=""
           aria-hidden
-          className="absolute -right-16 -top-16 w-[420px] h-[420px] object-contain opacity-[0.06] pointer-events-none select-none mix-blend-screen"
+          className="absolute -right-12 -top-12 w-56 h-56 object-contain opacity-[0.06] pointer-events-none select-none mix-blend-screen"
         />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(185_85%_48%/0.08),transparent_60%)]" />
-        <div className="relative flex flex-col items-center text-center">
-          {/* Big centered logo with cyan glow ring */}
-          <div className="relative mb-4 group">
-            <div className="absolute inset-0 rounded-full bg-primary/20 blur-2xl scale-110 group-hover:scale-125 transition-transform duration-700" />
-            <div className="absolute inset-0 rounded-full border border-primary/30 animate-pulse" />
+        <div className="relative flex items-center gap-3.5">
+          <div className="relative shrink-0 group">
+            <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl scale-110 group-hover:scale-125 transition-transform duration-700" />
             <img
               src={htuLogo}
               alt="H-Town United e.V. Darts Logo"
-              className="relative w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-2 border-primary/40 glow-cyan transition-transform duration-700 group-hover:rotate-[8deg]"
+              className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-primary/40 glow-cyan transition-transform duration-700 group-hover:rotate-[8deg]"
             />
           </div>
-          <h1 className="text-4xl md:text-5xl font-display uppercase leading-none">
-            H-Town <span className="text-primary">United</span>
-            <span className="text-muted-foreground text-base md:text-lg ml-2 align-middle">e.V.</span>
-          </h1>
-          <p className="text-xs md:text-sm uppercase tracking-[0.4em] text-muted-foreground font-display mt-2">
-            Darts · Verein · Gemeinschaft
-          </p>
-          {/* Vereinsmotto – bewusst laut, wie ein Graffiti-Tag auf der Wand */}
-          <div className="relative mt-8 pt-6 border-t border-dashed border-primary/25 w-full flex flex-col items-center gap-3">
-            <div className="relative group">
-              <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl scale-125" />
-              <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full bg-background/40 border-2 border-primary/40 glow-cyan flex items-center justify-center p-3.5 transition-transform duration-700 group-hover:rotate-[8deg]">
-                <img
-                  src={htuEmblem}
-                  alt="H-Town United e.V. Vereinsemblem"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            </div>
-            <p className="font-graffiti text-2xl sm:text-3xl md:text-4xl leading-tight text-center -rotate-2 select-none text-primary drop-shadow-[0_0_18px_hsl(185_85%_48%/0.45)]">
-              Von Heiligenhausern,
-              <br />
-              für Heiligenhaus
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-display uppercase leading-none truncate">
+              H-Town <span className="text-primary">United</span>
+              <span className="text-muted-foreground text-xs sm:text-sm ml-1.5 align-middle">e.V.</span>
+            </h1>
+            <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.3em] text-muted-foreground font-display mt-1 truncate">
+              Darts · Verein · Gemeinschaft
             </p>
           </div>
+        </div>
+        {/* Vereinsmotto — kept, just folded into a slim inline strip instead of its own
+            full-height centered block with a second big emblem circle. */}
+        <div className="relative mt-3 pt-3 border-t border-dashed border-primary/25 flex items-center gap-2.5">
+          <img
+            src={htuEmblem}
+            alt="H-Town United e.V. Vereinsemblem"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-background/40 border border-primary/40 object-contain p-1 shrink-0"
+          />
+          <p className="font-graffiti text-sm sm:text-base leading-tight truncate select-none text-primary drop-shadow-[0_0_10px_hsl(185_85%_48%/0.4)]">
+            Von Heiligenhausern, für Heiligenhaus
+          </p>
         </div>
       </div>
 
       {/* Statistics overview */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-3 gap-3 mb-5">
         {DASHBOARD_STATS.map((stat) => (
           <div key={stat.label} className="bg-card rounded-xl p-3 md:p-4 border border-border text-center">
             <stat.icon className={`w-5 h-5 ${stat.colorClass} mx-auto mb-1`} />
