@@ -1,14 +1,7 @@
 import { useState } from "react";
-import { RotateCcw } from "lucide-react";
 
 /** Available base score values on a dartboard */
 const BOARD_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
-
-const MULTIPLIER_OPTIONS = [
-  { label: "Single", short: "S", value: 1 },
-  { label: "Double", short: "D", value: 2 },
-  { label: "Triple", short: "T", value: 3 },
-] as const;
 
 /** Common 3-dart round scores for one-tap entry — tucked behind a toggle by default so the
  *  per-dart flow (the 95% case) isn't competing with it for attention. */
@@ -22,91 +15,57 @@ interface DartScoreInputProps {
   onQuickRound?: (total: number) => void;
 }
 
-const dartLabel = (value: number, mul: number) => {
-  if (value === 0) return "Miss";
-  if (value === 25) return mul === 2 ? "Bullseye" : "Bull";
-  return `${mul === 3 ? "T" : mul === 2 ? "D" : ""}${value}`;
-};
-
 /**
- * Score input, v3: a big Single/Double/Triple selector up top (auto-resets to Single after
- * every dart — see below), a big 5-wide number grid, and a "letzten Wurf wiederholen" button
- * for fast repeats without needing the multiplier to stay sticky. Earlier versions tried (a)
- * a sticky multiplier + big grid, which caused mis-scored darts when the multiplier was left on
- * D/T from the previous throw, and (b) a 60-button dense S/D/T-per-number grid, which fixed
- * that but became too cramped to tap accurately and hard to scan at a glance. This combines the
- * bigger/clearer layout of (a) with a safe default (always resets to Single) and adds a
- * dedicated repeat button so a run of the same shot (e.g. T20, T20, T20) is still one tap each.
+ * Score input, v4: back to "every field is its own button" (v2's approach) — a multiplier
+ * selector, even one that resets automatically (v3), was still reported as too error-prone in
+ * real play. This time each number is a wider, taller card (4 columns instead of 5, so each
+ * cell is noticeably bigger) with the Single hit as the dominant tap target and Double/Triple
+ * as clearly separate, still-comfortably-sized buttons below it — rather than 3 equally-thin
+ * stacked slivers, which was the actual problem with v2, not the one-button-per-field idea itself.
  */
 const DartScoreInput = ({ isDisabled, onThrow, onQuickRound }: DartScoreInputProps) => {
-  const [multiplier, setMultiplier] = useState(1);
-  const [lastDart, setLastDart] = useState<{ value: number; multiplier: number } | null>(null);
-  const [justReset, setJustReset] = useState(false);
   const [showQuickRound, setShowQuickRound] = useState(false);
-
-  const submit = (value: number, mul: number) => {
-    onThrow(value, mul);
-    setLastDart({ value, multiplier: mul });
-    if (mul !== 1) {
-      setMultiplier(1);
-      setJustReset(true);
-      window.setTimeout(() => setJustReset(false), 500);
-    }
-  };
 
   return (
     <div className="bg-card rounded-xl border border-border p-4">
-      {/* Repeat-last-dart — the fast path for a run of the same shot, without the multiplier
-          having to stay selected (and risk being forgotten) between taps. */}
-      {lastDart && (
-        <button
-          onClick={() => submit(lastDart.value, lastDart.multiplier)}
-          disabled={isDisabled}
-          className="w-full mb-3 py-2.5 rounded-lg text-sm font-bold bg-accent/15 text-accent hover:bg-accent/25 active:scale-[0.98] transition-all disabled:opacity-40 flex items-center justify-center gap-2"
-        >
-          <RotateCcw className="w-4 h-4" /> {dartLabel(lastDart.value, lastDart.multiplier)} wiederholen
-        </button>
-      )}
-
-      {/* Multiplier — big, obvious, and always snaps back to Single right after use (flashes
-          briefly so the reset itself is visible, not just inferred). */}
-      <div className="flex gap-2 mb-3">
-        {MULTIPLIER_OPTIONS.map((m) => (
-          <button
-            key={m.value}
-            onClick={() => setMultiplier(m.value)}
-            disabled={isDisabled}
-            className={`flex-1 py-4 rounded-xl text-base font-bold transition-all disabled:opacity-40 ${
-              multiplier === m.value
-                ? "bg-primary text-primary-foreground glow-cyan scale-[1.03]"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            } ${justReset && m.value === 1 ? "ring-2 ring-accent" : ""}`}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-      {multiplier !== 1 && (
-        <p className="text-center text-[11px] text-accent uppercase tracking-wider -mt-1.5 mb-2.5 font-semibold">
-          {multiplier === 3 ? "Triple" : "Double"} aktiv — als nächstes eine Zahl antippen
-        </p>
-      )}
-
-      {/* Number grid — one tap submits at the multiplier selected above. */}
-      <div className="grid grid-cols-5 gap-2 mb-3">
+      {/* Number grid — 4 wide so each card has real room; Single dominates, Double/Triple sit
+          below as their own full-width-of-card buttons. One tap anywhere submits immediately. */}
+      <div className="grid grid-cols-4 gap-2 mb-3">
         {BOARD_NUMBERS.map((v) => (
-          <button
-            key={v}
-            onClick={() => submit(v, multiplier)}
-            disabled={isDisabled}
-            className="aspect-square rounded-xl text-lg font-bold transition-all bg-muted text-foreground hover:bg-primary/20 active:scale-90 active:bg-primary active:text-primary-foreground disabled:opacity-40"
-          >
-            {v}
-          </button>
+          <div key={v} className="rounded-xl overflow-hidden border border-border/60">
+            <button
+              onClick={() => onThrow(v, 1)}
+              disabled={isDisabled}
+              title={`Einfach ${v}`}
+              className="w-full py-3 text-xl font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+            >
+              {v}
+            </button>
+            <div className="grid grid-cols-2 gap-px bg-border/60">
+              <button
+                onClick={() => onThrow(v, 3)}
+                disabled={isDisabled}
+                title={`Dreifach ${v}`}
+                className="py-2 text-sm font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+              >
+                T
+              </button>
+              <button
+                onClick={() => onThrow(v, 2)}
+                disabled={isDisabled}
+                title={`Doppel ${v}`}
+                className="py-2 text-sm font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
+              >
+                D
+              </button>
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* Special targets — always their own fixed value, ignore the multiplier selector. */}
+      {/* Special targets: Miss, Bull, Bullseye — always submit immediately (fixed multiplier).
+          Bullseye uses baseValue 50 (not 25×2) to match the cricket/X01 scoring convention
+          used throughout Game.tsx (targetNumber = baseValue === 50 ? 25 : baseValue). */}
       <div className="flex gap-2 mb-3">
         {[
           { value: 0, mul: 1 as const, label: "Miss" },
@@ -115,7 +74,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound }: DartScoreInputPro
         ].map((target) => (
           <button
             key={target.label}
-            onClick={() => submit(target.value, target.mul)}
+            onClick={() => onThrow(target.value, target.mul)}
             disabled={isDisabled}
             className="flex-1 px-3 py-3 rounded-lg text-sm font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40"
           >

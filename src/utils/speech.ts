@@ -1,16 +1,17 @@
 import { isCheckoutPossible } from "@/utils/checkoutTable";
 
 /** "auto" keeps the previous default behavior (biased toward a deeper/male-sounding voice,
- *  since that's what most people expect from a darts caller). "yoda" doesn't pick a different
- *  voice (no browser ships one) — it swaps in inverted-word-order phrasing and a slower,
- *  more deliberate delivery instead, which is what actually carries the character. */
-export type CallerVoice = "auto" | "male" | "female" | "yoda";
+ *  since that's what most people expect from a darts caller). The character personas don't
+ *  pick a different voice (no browser ships a "pirate" or "robot" voice) — each swaps in its
+ *  own distinctive phrasing + delivery instead, which is what actually carries the character. */
+export type CallerVoice = "auto" | "male" | "female" | "yoda" | "pirate" | "herald" | "robot" | "kernasi" | "reporter" | "genz";
 const CALLER_VOICE_KEY = "dart-caller-voice";
 
 let callerVoice: CallerVoice = "auto";
+const VALID_CALLER_VOICES: readonly CallerVoice[] = ["male", "female", "yoda", "pirate", "herald", "robot", "kernasi", "reporter", "genz"];
 if (typeof window !== "undefined") {
   const raw = window.localStorage.getItem(CALLER_VOICE_KEY);
-  if (raw === "male" || raw === "female" || raw === "yoda") callerVoice = raw;
+  if ((VALID_CALLER_VOICES as readonly string[]).includes(raw ?? "")) callerVoice = raw as CallerVoice;
 }
 
 export function getCallerVoice(): CallerVoice {
@@ -66,8 +67,8 @@ function pickGermanVoice(): SpeechSynthesisVoice | undefined {
   // female voices most engines ship as their first option).
   const MALE_NAME_HINTS = ["stefan", "conrad", "ralf", "klaus", "male", "markus", "florian"];
   const FEMALE_NAME_HINTS = ["katja", "hedda", "petra", "anna", "vicki", "marlene", "helena", "female"];
-  const wantsMale = callerVoice === "male" || callerVoice === "auto" || callerVoice === "yoda";
   const wantsFemale = callerVoice === "female";
+  const wantsMale = !wantsFemale;
   const byQuality = [...pool].sort((a, b) => {
     const score = (v: SpeechSynthesisVoice) => {
       const name = v.name.toLowerCase();
@@ -259,60 +260,446 @@ const HYPE_CRICKET_CLOSE = [
   "Da ist sie zu!",
 ] as const;
 
-// ─── Yoda persona ─────────────────────────────────────────────────────
-// Hand-written, not algorithmically reordered — a generic word-order-swap over arbitrary
-// German text produces nonsense/wrong-sounding results far too often to trust; these mirror
-// the same beats as the default pools above (own each moment: 180, ton+, checkout, bust,
-// match win, cricket) but in Yoda's classic object-first inverted phrasing.
-const YODA_180 = [
-  "Stark getroffen, du hast! Einhundertachtzig, das ist!",
-  "Das Maximum, erreicht du hast!",
-  "Beeindruckend. Höher, die Punktzahl nicht geht.",
-] as const;
+// ─── Character personas ──────────────────────────────────────────────
+// Hand-written per persona, not algorithmically transformed — a generic rule (reorder words,
+// substitute vocabulary) over arbitrary German text produces nonsense/wrong-sounding results
+// far too often to trust. Each pack owns every beat the default pool does (180, high-ton,
+// ton-plus, checkout, checkout-named, match win, bust, cricket-close, next-turn, plain round,
+// checkout-remaining) so buildRoundAnnouncement can dispatch through one shared path below
+// instead of a bespoke branch per character. Fictional archetypes only (a wizened mentor, a
+// pirate captain, a medieval herald, a monotone robot) — recognizable by their manner of
+// speech, not modeled on any specific real person.
+interface PersonaPack {
+  options: SpeechOptions;
+  hypeOptions: SpeechOptions;
+  hype180: readonly string[];
+  hypeHighTon: readonly string[];
+  hypeTonPlus: readonly string[];
+  hypeCheckout: readonly string[];
+  hypeCheckoutNamed: (name: string) => readonly string[];
+  hypeMatchWin: (winnerName: string) => readonly string[];
+  hypeBust: readonly string[];
+  hypeCricketClose: readonly string[];
+  nextTurn: (name: string) => string;
+  plainRound: (total: number) => string;
+  checkoutRemaining: (remaining: number, name: string, nickname?: string) => string;
+  legWonNextLeg: (winner: string, next: string) => string;
+}
 
-const YODA_HIGH_TON = [
-  "Gewaltig, diese Runde war!",
-  "Stark im Kraft der Dreifachfelder, du bist.",
-] as const;
+const YODA_PACK: PersonaPack = {
+  options: { pitch: 0.5, rate: 0.82, volume: 1 },
+  hypeOptions: { pitch: 0.55, rate: 0.78, volume: 1 },
+  hype180: [
+    "Stark getroffen, du hast! Einhundertachtzig, das ist!",
+    "Das Maximum, erreicht du hast!",
+    "Beeindruckend. Höher, die Punktzahl nicht geht.",
+    "Mmmh. Die Kraft der Dreifachfelder, stark in dir ist.",
+    "Perfekt, dieser Wurf war. Viel zu lernen, du hast nicht mehr.",
+    "Versuchen? Nein. Getroffen, du hast!",
+  ],
+  hypeHighTon: [
+    "Gewaltig, diese Runde war!",
+    "Stark im Kraft der Dreifachfelder, du bist.",
+    "Groß ist die Kraft deines Wurfarms, spüre ich.",
+  ],
+  hypeTonPlus: [
+    "Gut getroffen, das war.",
+    "Stark, dieser Wurf war.",
+    "Sauber, das gesessen hat.",
+    "Mmmh. Fortschritte, du machst.",
+  ],
+  hypeCheckout: [
+    "Ausgecheckt, du hast!",
+    "Das Leg, gewonnen du hast!",
+    "Geschlossen, die Tür ist.",
+    "Präzise, dieser letzte Wurf war.",
+    "Der dunklen Seite des Bustens, widerstanden du hast!",
+    "Fürchte den Rest nicht, du musstest — gemeistert, du ihn hast.",
+  ],
+  hypeCheckoutNamed: (name) => [
+    `Das Leg, ${name} sich geholt hat!`,
+    `Sauber abgeschlossen, ${name} hat!`,
+    `Stolz auf ${name}, in diesem Moment ich bin!`,
+  ],
+  hypeMatchWin: (name) => [
+    `${name} gewonnen hat! Stolz auf dich, bin ich.`,
+    `${name} den Sieg sich geholt hat! Stark, du warst.`,
+    `${name} die Partie beendet hat! Gut gespielt, du hast.`,
+    `Ein Meister der Darts, ${name} nun ist!`,
+  ],
+  hypeBust: [
+    "Daneben, das ging. Nicht verzagen, du darfst.",
+    "Kein Glück, heute du hast. Am dran, nächster ist.",
+    "Bust, das war. Üben, du musst.",
+    "Fehler, das war — doch daraus lernen, du wirst.",
+  ],
+  hypeCricketClose: [
+    "Geschlossen, die ist!",
+    "Zu, diese Zahl nun ist.",
+    "Verschlossen, wie ein Jedi-Tempel, sie ist.",
+  ],
+  nextTurn: (name) => `${name}, dran nun ist.`,
+  plainRound: (total) => germanNumberWords(total),
+  checkoutRemaining: (remaining, name, nickname) => {
+    const words = germanNumberWords(remaining);
+    return nickname
+      ? `${words}, ${name} noch braucht — der ${nickname}, das ist!`
+      : `${words}, ${name} noch braucht.`;
+  },
+  legWonNextLeg: (winner, next) => `Das Leg, ${winner} gewonnen hat! ${next}, das nächste beginnt.`,
+};
 
-const YODA_TON_PLUS = [
-  "Gut getroffen, das war.",
-  "Stark, dieser Wurf war.",
-  "Sauber, das gesessen hat.",
-] as const;
+const PIRATE_PACK: PersonaPack = {
+  options: { pitch: 0.62, rate: 0.98, volume: 1 },
+  hypeOptions: { pitch: 0.68, rate: 1.08, volume: 1 },
+  hype180: [
+    "Arrr, volle Breitseite! Einhundertachtzig!",
+    "Ahoy! Das Maximum, geentert!",
+    "Klar Schiff! Einhundertachtzig Punkte, Landratte!",
+    "Ein Volltreffer wie aus der Kanone, arrr!",
+  ],
+  hypeHighTon: [
+    "Arrr, das sitzt wie ein Kanonenschuss!",
+    "Ahoy, ordentlich Fahrt aufgenommen!",
+    "Volle Segel voraus, dieser Wurf!",
+  ],
+  hypeTonPlus: [
+    "Arrr, sauber getroffen!",
+    "Das nenn ich Seemannskunst!",
+    "Klare Kante, Landratte!",
+    "Feste Hand am Ruder, arrr!",
+  ],
+  hypeCheckout: [
+    "Klar Schiff — das Leg geentert!",
+    "Arrr, ins Ziel gesegelt!",
+    "Volltreffer, versenkt!",
+    "Die Schatzkiste, geknackt!",
+    "Sicher im Hafen, dieses Leg!",
+  ],
+  hypeCheckoutNamed: (name) => [
+    `${name} entert das Leg!`,
+    `Käpt'n ${name} bringt das Schiff sicher in den Hafen!`,
+    `Arrr, ${name} hisst die Leg-Flagge!`,
+  ],
+  hypeMatchWin: (name) => [
+    `${name} hisst die Siegesflagge! Arrr!`,
+    `${name} holt sich den ganzen Schatz!`,
+    `Ahoy, ${name} gewinnt die Schlacht!`,
+    `Käpt'n ${name}, Herrscher der sieben Dartsmeere!`,
+  ],
+  hypeBust: [
+    "Arrr, Klippen voraus — daneben!",
+    "Das war Landgang, keine Meisterleistung.",
+    "Schiffbruch, diese Runde.",
+    "Kentert, dieser Wurf ist.",
+  ],
+  hypeCricketClose: [
+    "Arrr, dicht wie ein Schiffsrumpf!",
+    "Klar zu — die Luke ist zu!",
+  ],
+  nextTurn: (name) => `Ahoy, ${name} übernimmt das Ruder.`,
+  plainRound: (total) => `${germanNumberWords(total)}, Landratte.`,
+  checkoutRemaining: (remaining, name, nickname) => {
+    const words = germanNumberWords(remaining);
+    return nickname
+      ? `${name} braucht noch ${words} — der ${nickname}, Ahoy!`
+      : `${name} braucht noch ${words}, um den Hafen zu erreichen.`;
+  },
+  legWonNextLeg: (winner, next) => `Leg geentert von ${winner}! ${next} sticht als Nächstes in See.`,
+};
 
-const YODA_CHECKOUT = [
-  "Ausgecheckt, du hast!",
-  "Das Leg, gewonnen du hast!",
-  "Geschlossen, die Tür ist.",
-  "Präzise, dieser letzte Wurf war.",
-] as const;
+const HERALD_PACK: PersonaPack = {
+  options: { pitch: 0.85, rate: 0.85, volume: 1 },
+  hypeOptions: { pitch: 0.92, rate: 0.9, volume: 1 },
+  hype180: [
+    "Höret, höret! Das Maximum ist vollbracht!",
+    "Fürwahr, ein Wurf für die Geschichtsbücher!",
+    "Einhundertachtzig! Ruhm und Ehre diesem Recken!",
+    "Man höre und staune — die Höchstzahl ist gefallen!",
+  ],
+  hypeHighTon: [
+    "Wohlan, eine gewaltige Runde!",
+    "Fürwahr stark getroffen!",
+    "Eine Runde von großer Wucht, in der Tat!",
+  ],
+  hypeTonPlus: [
+    "Wacker getroffen, edler Recke!",
+    "Ein Treffer von großer Güte!",
+    "Fürwahr, das sitzt!",
+    "Wohlgezielt, dieser Wurf!",
+  ],
+  hypeCheckout: [
+    "Das Leg ist vollbracht!",
+    "Höret, höret — der Sieg dieser Runde!",
+    "Fürwahr, ein Treffer von großer Präzision!",
+    "Das Tor zum Sieg, weit geöffnet!",
+  ],
+  hypeCheckoutNamed: (name) => [
+    `${name} vollbringt das Leg mit Bravour!`,
+    `Preiset ${name}, den Meister dieser Runde!`,
+  ],
+  hypeMatchWin: (name) => [
+    `Höret, höret! ${name} trägt den Sieg davon!`,
+    `${name}, wackerer Champion dieser Partie!`,
+    `Ruhm und Ehre gebühren ${name}!`,
+  ],
+  hypeBust: [
+    "Ein Fehltritt, fürwahr.",
+    "Das Glück, es war dem Recken heut nicht hold.",
+    "Verfehlt, doch die nächste Runde winkt.",
+  ],
+  hypeCricketClose: [
+    "Verschlossen, wie ein Burgtor!",
+    "Fürwahr, geschlossen!",
+  ],
+  nextTurn: (name) => `Wohlan, ${name} ist nun am Zuge.`,
+  plainRound: (total) => `${germanNumberWords(total)} Punkte, wohlan.`,
+  checkoutRemaining: (remaining, name, nickname) => {
+    const words = germanNumberWords(remaining);
+    return nickname
+      ? `${name} bedarf noch ${words} — dem ${nickname}!`
+      : `${name} bedarf noch ${words} zum Siege.`;
+  },
+  legWonNextLeg: (winner, next) => `Das Leg, an ${winner} vergeben! ${next} eröffnet die nächste Runde.`,
+};
 
-const YODA_CHECKOUT_NAMED = (name: string) => [
-  `Das Leg, ${name} sich geholt hat!`,
-  `Sauber abgeschlossen, ${name} hat!`,
-] as const;
+const ROBOT_PACK: PersonaPack = {
+  options: { pitch: 0.75, rate: 0.92, volume: 1 },
+  hypeOptions: { pitch: 0.8, rate: 1, volume: 1 },
+  hype180: [
+    "Analyse abgeschlossen. Maximalwert erreicht. Einhundertachtzig.",
+    "Systemmeldung: Perfekter Wurf registriert.",
+    "Höchstwert bestätigt. Effizienz: einhundert Prozent.",
+  ],
+  hypeHighTon: [
+    "Hohe Punktzahl registriert.",
+    "Effizienz: optimal.",
+    "Datensatz aktualisiert. Wurfqualität: sehr hoch.",
+  ],
+  hypeTonPlus: [
+    "Treffer bestätigt.",
+    "Wurfqualität: hoch.",
+    "Daten gespeichert. Guter Wurf.",
+  ],
+  hypeCheckout: [
+    "Checkout bestätigt.",
+    "Leg abgeschlossen. Berechnung erfolgreich.",
+    "Zielerreichung: einhundert Prozent.",
+    "Prozess abgeschlossen. Leg gewonnen.",
+  ],
+  hypeCheckoutNamed: (name) => [
+    `Sieger dieser Runde: ${name}.`,
+    `${name}. Checkout erfolgreich verarbeitet.`,
+  ],
+  hypeMatchWin: (name) => [
+    `Endergebnis berechnet. Sieger: ${name}.`,
+    `Match beendet. Gewinner: ${name}.`,
+    `Analyse final. ${name} als Sieger identifiziert.`,
+  ],
+  hypeBust: [
+    "Fehler erkannt. Wurf ungültig.",
+    "Berechnung fehlgeschlagen. Bust registriert.",
+    "Warnung. Zielwert unterschritten.",
+  ],
+  hypeCricketClose: [
+    "Zahl geschlossen. Bestätigt.",
+    "Feld deaktiviert.",
+  ],
+  nextTurn: (name) => `Nächster Spieler: ${name}.`,
+  plainRound: (total) => `Punktzahl: ${germanNumberWords(total)}.`,
+  checkoutRemaining: (remaining, name, nickname) => {
+    const words = germanNumberWords(remaining);
+    return nickname
+      ? `${name}. Restwert: ${words}. Bekannt als: ${nickname}.`
+      : `${name}. Restwert: ${words}.`;
+  },
+  legWonNextLeg: (winner, next) => `Leg-Gewinner: ${winner}. Nächste Runde: ${next}.`,
+};
 
-const YODA_MATCH_WIN = [
-  "gewonnen hat! Stolz auf dich, bin ich.",
-  "den Sieg sich geholt hat! Stark, du warst.",
-  "die Partie beendet hat! Gut gespielt, du hast.",
-] as const;
+// Fully original — a cocky, chatty hype-man who trash-talks and teases a little, but stays
+// likeable about it (ribbing, not actually mean). Casual, informal address throughout.
+const KERNASI_PACK: PersonaPack = {
+  options: { pitch: 0.95, rate: 1.1, volume: 1 },
+  hypeOptions: { pitch: 1.05, rate: 1.22, volume: 1 },
+  hype180: [
+    "Alter, einhundertachtzig! Zeig mir noch einen, der das kann!",
+    "Boah, sauber! Das war Weltklasse!",
+    "Einhundertachtzig! Mehr geht nicht, mehr braucht's nicht!",
+    "Na also, geht doch! Volle Kanne!",
+  ],
+  hypeHighTon: [
+    "Ey, das saß!",
+    "Nicht schlecht, nicht schlecht!",
+    "Da guckst du, was?",
+    "Respekt, das war stark!",
+  ],
+  hypeTonPlus: [
+    "Ordentlich!",
+    "Passt schon!",
+    "Nicht übel für den Anfang!",
+    "Geht klar, weiter so!",
+  ],
+  hypeCheckout: [
+    "Boom, weg ist er!",
+    "Sauber ausgeputzt!",
+    "Da war nix mehr zu holen für den Gegner!",
+    "Genau so macht man das!",
+    "Aufgeräumt, wie's sein soll!",
+  ],
+  hypeCheckoutNamed: (name) => [
+    `${name}, du Maschine!`,
+    `${name} zeigt's allen!`,
+    `Na, wer ist hier der Checker? Genau — ${name}!`,
+  ],
+  hypeMatchWin: (name) => [
+    `${name} räumt hier alles ab!`,
+    `${name}, der Checker des Abends!`,
+    `Kein Land für die Konkurrenz — ${name} gewinnt!`,
+    `Hab ich's nicht gesagt? ${name} macht das klar!`,
+  ],
+  hypeBust: [
+    "Oh oh, das war nix!",
+    "Alter, das ging daneben!",
+    "Nicht so ganz, was?",
+    "Hab ich doch gesagt — üben!",
+    "Autsch, das tat sogar mir weh.",
+  ],
+  hypeCricketClose: [
+    "Zu, fertig, aus!",
+    "Dicht wie eine Faust!",
+  ],
+  nextTurn: (name) => `Los, ${name}, zeig, was du drauf hast!`,
+  plainRound: (total) => `${germanNumberWords(total)}, geht klar.`,
+  checkoutRemaining: (remaining, name, nickname) => {
+    const words = germanNumberWords(remaining);
+    return nickname
+      ? `${name} braucht noch ${words} — na los, der ${nickname} wartet!`
+      : `${name} braucht noch ${words}, pack's an!`;
+  },
+  legWonNextLeg: (winner, next) => `Leg geht an ${winner}! ${next}, zeig, was du kannst!`,
+};
 
-const YODA_BUST = [
-  "Daneben, das ging. Nicht verzagen, du darfst.",
-  "Kein Glück, heute du hast. Am dran, nächster ist.",
-  "Bust, das war. Üben, du musst.",
-] as const;
+// Classic breathless radio-commentary energy (escalating exclamations, "meine Damen und
+// Herren") — generic to the genre, not modeled on any specific real commentator's signature
+// lines (see chat: declined to reproduce e.g. Herbert Zimmermann's or Trapattoni's actual
+// famous quotes, which are tied to real, identifiable people).
+const REPORTER_PACK: PersonaPack = {
+  options: { pitch: 1, rate: 1.05, volume: 1 },
+  hypeOptions: { pitch: 1.2, rate: 1.35, volume: 1 },
+  hype180: [
+    "Und das ist... EINHUNDERTACHTZIG! Was für ein Wurf, meine Damen und Herren!",
+    "Da ist er, der Maximum-Treffer! Unfassbar, was hier gerade passiert!",
+    "Ganz Heiligenhaus wird das sehen wollen — einhundertachtzig!",
+  ],
+  hypeHighTon: [
+    "Und das sitzt! Was für eine Runde!",
+    "Die Halle tobt — starke Punktzahl!",
+  ],
+  hypeTonPlus: [
+    "Sauber, sauber, sauber!",
+    "Da ist Klasse zu sehen!",
+  ],
+  hypeCheckout: [
+    "Uuuund AUS! Das Leg ist durch!",
+    "Er macht den Deckel drauf — herausragend!",
+    "Da ist die Tür zu, meine Damen und Herren!",
+    "Was für ein Nervenspiel — und gewonnen!",
+  ],
+  hypeCheckoutNamed: (name) => [
+    `${name} mit der ganz großen Nervenstärke!`,
+    `${name} macht das Leg klar — Wahnsinn!`,
+  ],
+  hypeMatchWin: (name) => [
+    `${name} ist Sieger dieser großartigen Partie!`,
+    `Und ${name} jubelt — verdienter Sieg!`,
+    `${name} krönt eine starke Leistung mit dem Matchgewinn!`,
+  ],
+  hypeBust: [
+    "Oh, das sitzt nicht — bitter für ihn.",
+    "Da war der Druck wohl zu groß.",
+    "Schade, so nah dran und doch daneben.",
+  ],
+  hypeCricketClose: [
+    "Geschlossen — und wie!",
+    "Da ist sie zu, sauber gemacht!",
+  ],
+  nextTurn: (name) => `Und jetzt ist ${name} am Zug.`,
+  plainRound: (total) => `${germanNumberWords(total)} Punkte.`,
+  checkoutRemaining: (remaining, name, nickname) => {
+    const words = germanNumberWords(remaining);
+    return nickname
+      ? `${name} braucht noch ${words} — der große ${nickname}!`
+      : `${name} braucht noch ${words} zum Sieg.`;
+  },
+  legWonNextLeg: (winner, next) => `Das Leg geht an ${winner}! Gleich geht's weiter mit ${next}.`,
+};
 
-const YODA_CRICKET_CLOSE = [
-  "Geschlossen, die ist!",
-  "Zu, diese Zahl nun ist.",
-] as const;
+// Intentionally over-the-top/cringe — an adult announcer badly overusing current youth slang
+// is the whole joke, not a genuine attempt to sound authentically "cool".
+const GENZ_PACK: PersonaPack = {
+  options: { pitch: 1.05, rate: 1.15, volume: 1 },
+  hypeOptions: { pitch: 1.15, rate: 1.3, volume: 1 },
+  hype180: [
+    "Digga, EINHUNDERTACHTZIG, das ist so ein W!",
+    "No cap, das war mega sheesh!",
+    "Bro das ist zu krass, kein Cap!",
+    "180, ist safe die geilste Runde ever!",
+  ],
+  hypeHighTon: [
+    "Digga das war schon fast broken!",
+    "Mega Aura für diesen Wurf, fr fr!",
+    "Das ist ja richtig sus stark!",
+  ],
+  hypeTonPlus: [
+    "Ist safe ne gute Runde!",
+    "Läuft bei dir, digga!",
+    "Nicht ehrenlos, passt!",
+  ],
+  hypeCheckout: [
+    "Digga, GECHECKT, das ist ein riesen W!",
+    "No cap, sauber ausgecheckt!",
+    "Sheesh, einfach eingetütet!",
+    "Ehre! Voll die Kante gemacht!",
+  ],
+  hypeCheckoutNamed: (name) => [
+    `${name} mit dem fetten W!`,
+    `${name}, du bist einfach nur based!`,
+  ],
+  hypeMatchWin: (name) => [
+    `${name} zieht den ganzen Match-W ein, digga!`,
+    `${name} hat einfach nur Aura ohne Ende!`,
+    `Kein Cap, ${name} ist einfach nur goated!`,
+  ],
+  hypeBust: [
+    "Digga, das ist so ein L.",
+    "Bro, das war ehrenlos.",
+    "Sus, komplett daneben.",
+    "Aua, Aura-Verlust, das.",
+  ],
+  hypeCricketClose: [
+    "Zu, easy, digga.",
+    "Dicht, safe.",
+  ],
+  nextTurn: (name) => `${name}, du bist dran, zeig mal deine Skills, digga!`,
+  plainRound: (total) => `${germanNumberWords(total)}, ist okay, digga.`,
+  checkoutRemaining: (remaining, name, nickname) => {
+    const words = germanNumberWords(remaining);
+    return nickname
+      ? `${name} braucht noch ${words} — der ${nickname}, digga, das wird mega!`
+      : `${name} braucht noch ${words}, geh drauf, digga!`;
+  },
+  legWonNextLeg: (winner, next) => `Leg-W für ${winner}, digga! ${next}, du bist dran!`,
+};
 
-const YODA_OPTIONS: SpeechOptions = { pitch: 0.55, rate: 0.78, volume: 1 };
-const YODA_NORMAL_OPTIONS: SpeechOptions = { pitch: 0.5, rate: 0.82, volume: 1 };
-const yodaNextTurn = (name: string) => `${name}, dran nun ist.`;
+const PERSONA_PACKS: Partial<Record<CallerVoice, PersonaPack>> = {
+  yoda: YODA_PACK,
+  pirate: PIRATE_PACK,
+  herald: HERALD_PACK,
+  robot: ROBOT_PACK,
+  kernasi: KERNASI_PACK,
+  reporter: REPORTER_PACK,
+  genz: GENZ_PACK,
+};
 
 // Pitch baseline lowered across the board (was 0.92-1.55) — the old range read as too high/
 // shrill on most default TTS voices. Relative contrast between hype/calm tiers is kept so
@@ -343,28 +730,62 @@ export interface RoundAnnouncementParams {
  * state actually changed (checkout, bust, match win).
  */
 export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: SpeechPart[] } {
-  const yoda = getCallerVoice() === "yoda";
+  const pack = PERSONA_PACKS[getCallerVoice()];
+  const nickname = p.remaining !== undefined ? CHECKOUT_NICKNAMES[p.remaining] : undefined;
 
-  if (p.matchWon) {
-    return yoda
-      ? { parts: [{ text: `${p.winnerName} ${pickRandom(YODA_MATCH_WIN)}`, options: YODA_OPTIONS }] }
-      : {
-          parts: [
-            { text: pickRandom(HYPE_CHECKOUT), options: HYPE_OPTIONS },
-            { text: `${p.winnerName} ${pickRandom(HYPE_MATCH_WIN)} Herzlichen Glückwunsch!`, options: { ...HYPE_OPTIONS, rate: 1.1 } },
-          ],
-        };
-  }
-  if (p.checkedOut) {
-    if (yoda) {
-      const hype = Math.random() < 0.35 ? pickRandom(YODA_CHECKOUT_NAMED(p.activePlayerName)) : pickRandom(YODA_CHECKOUT);
+  if (pack) {
+    if (p.matchWon) {
+      return { parts: [{ text: pickRandom(pack.hypeMatchWin(p.winnerName ?? "")), options: pack.hypeOptions }] };
+    }
+    if (p.checkedOut) {
+      const hype = Math.random() < 0.35 ? pickRandom(pack.hypeCheckoutNamed(p.activePlayerName)) : pickRandom(pack.hypeCheckout);
       return {
         parts: [
-          { text: hype, options: YODA_OPTIONS },
-          { text: `${p.nextPlayerName}, das nächste Leg beginnt.`, options: YODA_NORMAL_OPTIONS },
+          { text: hype, options: pack.hypeOptions },
+          { text: pack.legWonNextLeg(p.activePlayerName, p.nextPlayerName), options: pack.options },
         ],
       };
     }
+    if (p.busted) {
+      return { parts: [{ text: `${pickRandom(pack.hypeBust)} ${pack.nextTurn(p.nextPlayerName)}`, options: pack.options }] };
+    }
+    if (p.isCricket) {
+      if (p.cricketClosedLabel) {
+        return {
+          parts: [
+            { text: `${pickRandom(pack.hypeCricketClose)} Die ${p.cricketClosedLabel}!`, options: pack.hypeOptions },
+            { text: pack.nextTurn(p.nextPlayerName), options: pack.options },
+          ],
+        };
+      }
+      return { parts: [{ text: pack.nextTurn(p.nextPlayerName), options: pack.options }] };
+    }
+    let parts: SpeechPart[];
+    if (p.roundTotal === 180) {
+      parts = [{ text: pickRandom(pack.hype180), options: pack.hypeOptions }];
+    } else if (p.roundTotal >= 140) {
+      parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandom(pack.hypeHighTon)}`, options: pack.hypeOptions }];
+    } else if (p.roundTotal >= 100) {
+      parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandom(pack.hypeTonPlus)}`, options: pack.hypeOptions }];
+    } else {
+      parts = [{ text: pack.plainRound(p.roundTotal), options: pack.options }];
+    }
+    if (p.remaining !== undefined && isCheckoutPossible(p.remaining)) {
+      parts = [...parts, { text: pack.checkoutRemaining(p.remaining, p.activePlayerName, nickname), options: pack.options }];
+    }
+    return { parts };
+  }
+
+  // Default (auto/male/female) — same phrasing, only the underlying voice selection differs.
+  if (p.matchWon) {
+    return {
+      parts: [
+        { text: pickRandom(HYPE_CHECKOUT), options: HYPE_OPTIONS },
+        { text: `${p.winnerName} ${pickRandom(HYPE_MATCH_WIN)} Herzlichen Glückwunsch!`, options: { ...HYPE_OPTIONS, rate: 1.1 } },
+      ],
+    };
+  }
+  if (p.checkedOut) {
     // ~1 in 3 checkouts get the player named directly in the hype line instead of the generic pool.
     const hype = Math.random() < 0.35 ? pickRandom(HYPE_CHECKOUT_NAMED(p.activePlayerName)) : pickRandom(HYPE_CHECKOUT);
     return {
@@ -375,46 +796,20 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
     };
   }
   if (p.busted) {
-    return yoda
-      ? { parts: [{ text: `${pickRandom(YODA_BUST)} ${yodaNextTurn(p.nextPlayerName)}`, options: YODA_OPTIONS }] }
-      : { parts: [{ text: `${pickRandom(HYPE_BUST)} ${p.nextPlayerName} ist dran.`, options: CALM_OPTIONS }] };
+    return { parts: [{ text: `${pickRandom(HYPE_BUST)} ${p.nextPlayerName} ist dran.`, options: CALM_OPTIONS }] };
   }
   if (p.isCricket) {
     if (p.cricketClosedLabel) {
-      return yoda
-        ? {
-            parts: [
-              { text: `${pickRandom(YODA_CRICKET_CLOSE)} Die ${p.cricketClosedLabel}!`, options: YODA_OPTIONS },
-              { text: yodaNextTurn(p.nextPlayerName), options: YODA_NORMAL_OPTIONS },
-            ],
-          }
-        : {
-            parts: [
-              { text: `${pickRandom(HYPE_CRICKET_CLOSE)} Die ${p.cricketClosedLabel}!`, options: HYPE_OPTIONS },
-              { text: `${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
-            ],
-          };
+      return {
+        parts: [
+          { text: `${pickRandom(HYPE_CRICKET_CLOSE)} Die ${p.cricketClosedLabel}!`, options: HYPE_OPTIONS },
+          { text: `${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
+        ],
+      };
     }
-    return yoda
-      ? { parts: [{ text: yodaNextTurn(p.nextPlayerName), options: YODA_NORMAL_OPTIONS }] }
-      : { parts: [{ text: `${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS }] };
+    return { parts: [{ text: `${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS }] };
   }
   let parts: SpeechPart[];
-  if (yoda) {
-    if (p.roundTotal === 180) {
-      parts = [{ text: pickRandom(YODA_180), options: YODA_OPTIONS }];
-    } else if (p.roundTotal >= 140) {
-      parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandom(YODA_HIGH_TON)}`, options: YODA_OPTIONS }];
-    } else if (p.roundTotal >= 100) {
-      parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandom(YODA_TON_PLUS)}`, options: YODA_OPTIONS }];
-    } else {
-      parts = [{ text: germanNumberWords(p.roundTotal), options: YODA_NORMAL_OPTIONS }];
-    }
-    if (p.remaining !== undefined && isCheckoutPossible(p.remaining)) {
-      parts = [...parts, { text: yodaCheckoutRemainingAnnouncement(p.remaining, p.activePlayerName), options: YODA_NORMAL_OPTIONS }];
-    }
-    return { parts };
-  }
   if (p.roundTotal === 180) {
     parts = [{ text: pickRandom(HYPE_180), options: HYPE_OPTIONS }];
   } else if (p.roundTotal >= 140) {

@@ -1329,11 +1329,17 @@ const GamePage = () => {
           {speechEnabled && (
             <div className="bg-card rounded-lg border border-border px-4 py-3">
               <Label className="text-sm font-medium mb-2 block">Caller-Stimme</Label>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-4 gap-1.5">
                 {([
                   { value: "auto", label: "Männlich" },
                   { value: "female", label: "Weiblich" },
                   { value: "yoda", label: "Yoda" },
+                  { value: "pirate", label: "Pirat" },
+                  { value: "herald", label: "Herold" },
+                  { value: "robot", label: "Roboter" },
+                  { value: "kernasi", label: "Kernasi" },
+                  { value: "reporter", label: "Reporter" },
+                  { value: "genz", label: "Gen Z" },
                 ] as { value: CallerVoice; label: string }[]).map((opt) => (
                   <button
                     key={opt.value}

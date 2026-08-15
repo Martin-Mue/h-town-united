@@ -553,25 +553,6 @@ const TournamentPage = () => {
     setPublicToggling(false);
   };
 
-  const toggleLivePlay = async () => {
-    if (!activeTournament) return;
-    const next = !(activeTournament.live_play_enabled ?? true);
-    const { error } = await supabase.from("tournaments").update({ live_play_enabled: next }).eq("id", activeTournament.id);
-    if (error) {
-      const missingColumn = error.code === "42703" || String(error.message || "").includes("live_play_enabled");
-      toast({
-        title: "Fehler",
-        description: missingColumn
-          ? "Einstellung konnte nicht geändert werden — die Datenbank-Migration dafür fehlt noch."
-          : "Einstellung konnte nicht geändert werden.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setActiveTournament({ ...activeTournament, live_play_enabled: next });
-    toast({ title: next ? "Live-Spiel erlaubt" : "Live-Spiel deaktiviert", description: next ? "„Spiel starten“ ist wieder auf spielbaren Partien verfügbar." : "Nur noch Turnierdarstellung — Ergebnisse bitte manuell eintragen." });
-  };
-
   const copyPublicLink = () => {
     if (!activeTournament?.public_slug) return;
     const url = `${window.location.origin}/live/${activeTournament.public_slug}`;
@@ -1571,16 +1552,8 @@ const TournamentPage = () => {
             <p className="text-xs text-muted-foreground">K.O.-System · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant={(activeTournament.live_play_enabled ?? true) ? "outline" : "secondary"}
-              size="sm"
-              onClick={toggleLivePlay}
-              className="gap-1"
-              title={(activeTournament.live_play_enabled ?? true) ? "Live-Spiel aus dem Turnierbaum deaktivieren" : "Live-Spiel aus dem Turnierbaum erlauben"}
-            >
-              <Play className="w-3.5 h-3.5" />
-              {(activeTournament.live_play_enabled ?? true) ? "Live-Spiel an" : "Live-Spiel aus"}
-            </Button>
+            {/* Live-Spiel an/aus lives in the tournament edit form only now — a per-tournament
+                setting, not something toggled casually from the bracket toolbar. */}
             <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
               <Radio className={`w-3.5 h-3.5 ${activeTournament.public_view ? "animate-pulse" : ""}`} />
               {activeTournament.public_view ? "Live an" : "Live-Ansicht"}
@@ -1839,16 +1812,6 @@ const TournamentPage = () => {
           <p className="text-xs text-muted-foreground">Round Robin · {activeTournament.players.length} Spieler</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant={(activeTournament.live_play_enabled ?? true) ? "outline" : "secondary"}
-            size="sm"
-            onClick={toggleLivePlay}
-            className="gap-1"
-            title={(activeTournament.live_play_enabled ?? true) ? "Live-Spiel aus dem Turnierbaum deaktivieren" : "Live-Spiel aus dem Turnierbaum erlauben"}
-          >
-            <Play className="w-3.5 h-3.5" />
-            {(activeTournament.live_play_enabled ?? true) ? "Live-Spiel an" : "Live-Spiel aus"}
-          </Button>
           <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
             ← Übersicht
           </Button>
