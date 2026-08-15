@@ -45,7 +45,7 @@ interface DetailStat {
 interface PlayerStats {
   id: string; name: string; games_played: number; games_won: number;
   average: number; high_score: number; double_rate: number; emoji: string;
-  elo_rating?: number;
+  elo_rating?: number; user_id?: string | null;
 }
 
 interface GameLegRecord {
@@ -80,6 +80,14 @@ const StatisticsPage = () => {
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"overview" | "players" | "h2h" | "history" | "highlights">("overview");
+  const [viewScope, setViewScope] = useState<"club" | "personal">(() => {
+    if (typeof window === "undefined") return "club";
+    return window.localStorage.getItem("stats-view-scope") === "personal" ? "personal" : "club";
+  });
+  const setScope = (scope: "club" | "personal") => {
+    if (typeof window !== "undefined") window.localStorage.setItem("stats-view-scope", scope);
+    setViewScope(scope);
+  };
   const [expandedGameId, setExpandedGameId] = useState<string | null>(null);
   const [filterTime, setFilterTime] = useState<"all" | "today" | "week" | "month" | "year">("all");
   const [filterMode, setFilterMode] = useState<string>("all");
@@ -93,7 +101,7 @@ const StatisticsPage = () => {
       supabase.from("games")
         .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats")
         .order("played_at", { ascending: false }).limit(500),
-      supabase.from("players").select("id, name, games_played, games_won, average, high_score, double_rate, elo_rating, emoji").order("average", { ascending: false }),
+      supabase.from("players").select("id, name, games_played, games_won, average, high_score, double_rate, elo_rating, emoji, user_id").order("average", { ascending: false }),
       // No user_id/created_at — only the dart-by-dart fields the stats views actually read.
       // `throws` (per-dart JSON) still dominates the payload, but this at least skips the rest.
       supabase.from("game_legs").select("id, game_id, leg_number, player_index, player_name, player_id, starting_score, throws, won")
@@ -543,7 +551,26 @@ const StatisticsPage = () => {
     };
   }, [compareP1, compareP2, players, filteredGames]);
 
-  const recentGames = filteredGames.slice(0, 20);
+  // The player profile linked to the logged-in account (see Players.tsx's own user_id linkage) —
+  // drives the entire "Ich" (personal) scope below. A member can play without ever linking a
+  // profile, so this can legitimately be undefined.
+  const myPlayer = useMemo(() => players.find((p) => p.user_id === session?.user?.id), [players, session]);
+
+  const personalGames = useMemo(
+    () => (myPlayer ? filteredGames.filter((g) => g.player1_id === myPlayer.id || g.player2_id === myPlayer.id) : []),
+    [filteredGames, myPlayer],
+  );
+
+  // Jumping into personal scope locks the existing player-detail view (see the "players" tab
+  // below) onto the logged-in member's own profile instead of leaving it on whatever was last
+  // manually selected, and lands on a tab that's actually meaningful without club-wide context.
+  useEffect(() => {
+    if (viewScope !== "personal" || !myPlayer) return;
+    setSelectedPlayerId(myPlayer.id);
+    setActiveTab((prev) => (prev === "overview" || prev === "h2h" ? "players" : prev));
+  }, [viewScope, myPlayer]);
+
+  const recentGames = (viewScope === "personal" ? personalGames : filteredGames).slice(0, 20);
 
   // Leg-by-leg breakdown per game, from the dart-by-dart game_legs data.
   const legsByGame = useMemo(() => {
@@ -591,10 +618,11 @@ const StatisticsPage = () => {
     else if (filterTime === "year") cutoff = now - 365 * dayMs;
     return highlightClips.filter((c) => {
       if (cutoff > 0 && new Date(c.created_at).getTime() < cutoff) return false;
+      if (viewScope === "personal") return c.player_id === myPlayer?.id;
       if (filterPlayerId !== "all" && c.player_id !== filterPlayerId) return false;
       return true;
     });
-  }, [highlightClips, filterTime, filterPlayerId]);
+  }, [highlightClips, filterTime, filterPlayerId, viewScope, myPlayer]);
 
   const clipUrl = (path: string) => supabase.storage.from("dart-clips").getPublicUrl(path).data.publicUrl;
 
@@ -647,21 +675,51 @@ const StatisticsPage = () => {
     return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
 
-  const tabs = [
+  const clubTabs = [
     { key: "overview" as const, label: "Übersicht", icon: BarChart3 },
     { key: "players" as const, label: "Spieler", icon: Users },
     { key: "h2h" as const, label: "H2H", icon: Crosshair },
     { key: "history" as const, label: "Spiele", icon: Target },
     { key: "highlights" as const, label: "Highlights", icon: Video },
   ];
+  const personalTabs = [
+    { key: "players" as const, label: "Meine Stats", icon: Users },
+    { key: "history" as const, label: "Meine Spiele", icon: Target },
+    { key: "highlights" as const, label: "Meine Highlights", icon: Video },
+  ];
+  const tabs = viewScope === "personal" ? personalTabs : clubTabs;
 
   return (
     <div className="container py-6 animate-slide-up">
-      <div className="flex items-center gap-3 mb-4">
-        <BarChart3 className="w-6 h-6 text-primary" />
-        <h2 className="text-2xl font-display uppercase">Statistiken</h2>
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <BarChart3 className="w-6 h-6 text-primary" />
+          <h2 className="text-2xl font-display uppercase">Statistiken</h2>
+        </div>
+        <div className="flex gap-1 bg-card rounded-lg border border-border p-1">
+          <button onClick={() => setScope("club")}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewScope === "club" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+            Verein
+          </button>
+          <button onClick={() => setScope("personal")}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewScope === "personal" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+            Ich
+          </button>
+        </div>
       </div>
 
+      {viewScope === "personal" && !myPlayer && (
+        <div className="bg-card rounded-xl border border-border p-6 text-center mb-4">
+          <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground mb-3">
+            Kein Spielerprofil mit deinem Account verknüpft — persönliche Statistiken brauchen diese Verknüpfung.
+          </p>
+          <Button asChild size="sm"><Link to="/players">Zu den Spielern</Link></Button>
+        </div>
+      )}
+
+      {(viewScope === "club" || myPlayer) && (
+      <>
       {/* Filter bar */}
       <div className="bg-card rounded-xl border border-border p-3 mb-4">
         <div className="flex items-center justify-between mb-2">
@@ -704,13 +762,15 @@ const StatisticsPage = () => {
               {availableModes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={filterPlayerId} onValueChange={setFilterPlayerId}>
-            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Spieler" /></SelectTrigger>
-            <SelectContent className="bg-card border-border">
-              <SelectItem value="all">Alle Spieler</SelectItem>
-              {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          {viewScope === "club" && (
+            <Select value={filterPlayerId} onValueChange={setFilterPlayerId}>
+              <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Spieler" /></SelectTrigger>
+              <SelectContent className="bg-card border-border">
+                <SelectItem value="all">Alle Spieler</SelectItem>
+                {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={filterBestOf} onValueChange={setFilterBestOf}>
             <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Best of" /></SelectTrigger>
             <SelectContent className="bg-card border-border">
@@ -927,14 +987,18 @@ const StatisticsPage = () => {
       {/* PLAYERS TAB */}
       {activeTab === "players" && (
         <>
-          <div className="mb-4">
-            <Select value={selectedPlayerId} onValueChange={setSelectedPlayerId}>
-              <SelectTrigger className="bg-card border-border"><SelectValue placeholder="Spieler wählen..." /></SelectTrigger>
-              <SelectContent className="bg-card border-border">
-                {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          {viewScope === "club" ? (
+            <div className="mb-4">
+              <Select value={selectedPlayerId} onValueChange={setSelectedPlayerId}>
+                <SelectTrigger className="bg-card border-border"><SelectValue placeholder="Spieler wählen..." /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground mb-4">Deine persönliche Statistik</p>
+          )}
 
           {playerDetailStats ? (
             <>
@@ -1325,7 +1389,7 @@ const StatisticsPage = () => {
             <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
               <Video className="w-4 h-4" /> Highlight-Clips
             </h3>
-            {highlightClips.length > 0 && (
+            {viewScope === "club" && highlightClips.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <Select value={cleanupDays} onValueChange={setCleanupDays}>
                   <SelectTrigger className="h-7 w-[110px] text-[11px] bg-background border-border"><SelectValue /></SelectTrigger>
@@ -1390,6 +1454,8 @@ const StatisticsPage = () => {
             </div>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered } from "lucide-react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered, Route } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
@@ -131,6 +131,16 @@ const TRAINING_DRILLS: TrainingDrill[] = [
     durationMinutes: 15,
     category: "doubles",
   },
+  {
+    id: "shanghai-rtc",
+    name: "Shanghai Round the Clock",
+    description:
+      "Der Reihe nach von deiner Startzahl bis 20: Triff Single UND Triple derselben Zahl (Reihenfolge egal) und schließe dann mit dem Doppel ab, um zur nächsten Zahl zu kommen. Wählbare Startzahl, optional rundenbegrenzt.",
+    icon: Route,
+    difficulty: "Profi",
+    durationMinutes: 20,
+    category: "pressure",
+  },
 ];
 
 interface HalveItRound {
@@ -228,6 +238,11 @@ interface DrillState {
   shanghaiMultsHit?: number[];
   shanghaiScore?: number;
   shanghaiWin?: boolean;
+  /** Shanghai Round the Clock: which of Single(1)/Triple(3) are done on the CURRENT number —
+   *  persists across turns (unlike Shanghai's per-round reset) until a qualifying Double advances it. */
+  rtcMultsHit?: number[];
+  rtcScore?: number;
+  rtcWin?: boolean;
   /** Halve It: points accumulated so far this round (reset each round; `remaining` is the running score) */
   hiRoundPoints?: number;
 }
@@ -240,6 +255,8 @@ interface DrillConfig {
   bcPlayerNames?: string[];
   bcNumber?: number;
   bcStart?: number;
+  /** Shanghai Round the Clock: which number (1-20) to start the sequence at. */
+  rtcStart?: number;
 }
 
 const TrainingPage = () => {
@@ -330,6 +347,15 @@ const TrainingPage = () => {
         state.shanghaiScore = 0;
         state.shanghaiMultsHit = [];
         break;
+      case "shanghai-rtc": {
+        const start = Math.min(20, Math.max(1, config.rtcStart ?? 1));
+        state.targetList = Array.from({ length: 20 - start + 1 }, (_, i) => start + i);
+        state.currentTarget = start;
+        state.rtcScore = 0;
+        state.rtcMultsHit = [];
+        state.maxRounds = config.maxRounds;
+        break;
+      }
       case "halve-it":
         state.remaining = HALVE_IT_START;
         state.hiRoundPoints = 0;
@@ -534,6 +560,39 @@ const TrainingPage = () => {
           break;
         }
 
+        case "shanghai-rtc": {
+          const targetNum = prev.currentTarget;
+          if (baseValue === targetNum) {
+            updated.rtcScore = (prev.rtcScore ?? 0) + points;
+            if (mul === 1 || mul === 3) {
+              const stHit = new Set(prev.rtcMultsHit ?? []);
+              stHit.add(mul);
+              updated.rtcMultsHit = Array.from(stHit);
+              updated.hits = prev.hits + 1;
+            } else if (mul === 2) {
+              const stHit = new Set(prev.rtcMultsHit ?? []);
+              if (stHit.has(1) && stHit.has(3)) {
+                // Finishing double after both Single and Triple are done — advance right away,
+                // same immediate-advance-on-hit style as Around the Clock, not tied to a 3-dart turn.
+                updated.hits = prev.hits + 1;
+                updated.rtcMultsHit = [];
+                const nextIdx = prev.targetIndex + 1;
+                if (nextIdx >= prev.targetList.length) {
+                  updated.finished = true;
+                  updated.rtcWin = true;
+                } else {
+                  updated.targetIndex = nextIdx;
+                  updated.currentTarget = prev.targetList[nextIdx];
+                }
+              }
+              // Double hit before Single+Triple are both done doesn't count as the finisher —
+              // still scores above, just doesn't advance (has to come back and hit it again later).
+            }
+          }
+          updated.roundScores = [...(prev.roundScores || []), baseValue === targetNum ? points : 0];
+          break;
+        }
+
         case "halve-it": {
           const round = HALVE_IT_ROUNDS[prev.targetIndex] ?? HALVE_IT_ROUNDS[0];
           const matches = round.kind === "number" ? baseValue === round.number
@@ -689,7 +748,7 @@ const TrainingPage = () => {
           !updated.finished &&
           prev.maxRounds &&
           (updated.roundsPlayed ?? 0) >= prev.maxRounds &&
-          ["around-the-clock", "doubles-only", "big-single-lock"].includes(selectedDrill.id)
+          ["around-the-clock", "doubles-only", "big-single-lock", "shanghai-rtc"].includes(selectedDrill.id)
         ) {
           updated.finished = true;
         }
@@ -736,7 +795,7 @@ const TrainingPage = () => {
           const bobsBusted = selectedDrill.id === "bobs-27" && drillState.remaining <= 0;
           return (
           <div className="bg-card border border-primary/30 rounded-2xl p-6 text-center mb-4 glow-cyan animate-scale-in">
-            {drillState.shanghaiWin ? (
+            {drillState.shanghaiWin || drillState.rtcWin ? (
               <PartyPopper className="w-12 h-12 text-accent mx-auto mb-3" />
             ) : bobsBusted ? (
               <RotateCcw className="w-12 h-12 text-destructive mx-auto mb-3" />
@@ -744,7 +803,7 @@ const TrainingPage = () => {
               <CheckCircle className="w-12 h-12 text-secondary mx-auto mb-3" />
             )}
             <h3 className="text-2xl font-display uppercase mb-2">
-              {drillState.shanghaiWin ? "SHANGHAI! 🎉" : bobsBusted ? "Konto leer 💸" : "Geschafft! 🎯"}
+              {drillState.shanghaiWin ? "SHANGHAI! 🎉" : drillState.rtcWin ? "Rund um die Uhr! 🎉" : bobsBusted ? "Konto leer 💸" : "Geschafft! 🎯"}
             </h3>
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
               {selectedDrill.id === "shanghai" ? (
@@ -752,6 +811,15 @@ const TrainingPage = () => {
                   <p className="text-2xl font-display">{drillState.shanghaiScore ?? 0}</p>
                   <p className="text-xs text-muted-foreground">
                     {drillState.shanghaiWin ? `Shanghai auf der ${drillState.currentTarget}, Runde ${drillState.targetIndex + 1}!` : "Score nach 20 Runden"}
+                  </p>
+                </div>
+              ) : selectedDrill.id === "shanghai-rtc" ? (
+                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                  <p className="text-2xl font-display">{drillState.rtcWin ? "Zahl 20" : drillState.currentTarget}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {drillState.rtcWin
+                      ? `Alle Zahlen bis 20 geschafft — Score ${drillState.rtcScore ?? 0}`
+                      : `Rundenlimit erreicht bei Zahl ${drillState.currentTarget} · Score ${drillState.rtcScore ?? 0}`}
                   </p>
                 </div>
               ) : selectedDrill.id === "halve-it" ? (
@@ -902,6 +970,40 @@ const TrainingPage = () => {
                   <p className="text-xs text-muted-foreground mt-2">Score: <span className="text-foreground font-bold">{drillState.shanghaiScore ?? 0}</span></p>
                 </div>
               )}
+              {selectedDrill.id === "shanghai-rtc" && (() => {
+                const stDone = (drillState.rtcMultsHit ?? []).includes(1) && (drillState.rtcMultsHit ?? []).includes(3);
+                return (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      Zahl {drillState.targetIndex + 1} / {drillState.targetList.length}
+                    </p>
+                    <p className="text-5xl font-display text-primary">{drillState.currentTarget}</p>
+                    <div className="flex justify-center gap-2 mt-2">
+                      {[1, 3].map((m) => (
+                        <span key={m} className={`text-xs font-display px-2.5 py-1 rounded-full border transition-colors ${
+                          (drillState.rtcMultsHit ?? []).includes(m)
+                            ? "bg-secondary/20 border-secondary text-secondary"
+                            : "border-border text-muted-foreground"
+                        }`}>
+                          {m === 1 ? "S" : "T"}
+                        </span>
+                      ))}
+                      <span className={`text-xs font-display px-2.5 py-1 rounded-full border transition-colors ${
+                        stDone ? "bg-accent/20 border-accent text-accent animate-pulse-glow" : "border-border text-muted-foreground"
+                      }`}>
+                        D
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {stDone ? <span className="text-accent font-bold">Jetzt Doppel zum Weiterkommen!</span> : "Single + Triple in beliebiger Reihenfolge"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Score: <span className="text-foreground font-bold">{drillState.rtcScore ?? 0}</span>
+                      {drillState.maxRounds ? <> · Runde {(drillState.roundsPlayed ?? 0) + 1}/{drillState.maxRounds}</> : null}
+                    </p>
+                  </div>
+                );
+              })()}
               {selectedDrill.id === "halve-it" && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">
@@ -1017,9 +1119,10 @@ const TrainingPage = () => {
 
   // ─── DRILL SELECTION (pre-start) ──────────────────
   if (selectedDrill && !drillState) {
-    const supportsRoundLimit = ["around-the-clock", "doubles-only", "big-single-lock", "target-grind"].includes(selectedDrill.id);
+    const supportsRoundLimit = ["around-the-clock", "doubles-only", "big-single-lock", "target-grind", "shanghai-rtc"].includes(selectedDrill.id);
     const isTargetGrind = selectedDrill.id === "target-grind";
     const isBullControl = selectedDrill.id === "bull-control";
+    const isShanghaiRtc = selectedDrill.id === "shanghai-rtc";
     const bcNames = drillConfig.bcPlayerNames ?? ["Spieler 1", "Spieler 2"];
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
@@ -1096,6 +1199,21 @@ const TrainingPage = () => {
               <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
                 <Settings2 className="w-3.5 h-3.5" /> Einstellungen
               </div>
+
+              {isShanghaiRtc && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Startzahl</p>
+                  <select
+                    className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm"
+                    value={drillConfig.rtcStart ?? 1}
+                    onChange={(e) => setDrillConfig((c) => ({ ...c, rtcStart: Number(e.target.value) }))}
+                  >
+                    {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {isTargetGrind && (
                 <div className="space-y-2">
