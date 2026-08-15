@@ -456,6 +456,39 @@ export type Database = {
           },
         ]
       }
+      training_samples: {
+        Row: {
+          after_path: string
+          before_path: string
+          board: string
+          created_at: string
+          id: string
+          image_size: number
+          labels: Json
+          user_id: string
+        }
+        Insert: {
+          after_path: string
+          before_path: string
+          board?: string
+          created_at?: string
+          id?: string
+          image_size?: number
+          labels?: Json
+          user_id: string
+        }
+        Update: {
+          after_path?: string
+          before_path?: string
+          board?: string
+          created_at?: string
+          id?: string
+          image_size?: number
+          labels?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

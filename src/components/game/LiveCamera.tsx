@@ -105,6 +105,23 @@ const loadDetectionMode = (): DetectionMode => {
   return window.localStorage.getItem(DETECTION_MODE_KEY) === "cloud" ? "cloud" : "local";
 };
 
+/**
+ * Opt-in, per-device: every local-mode scan already captures a matched "empty board" /
+ * "darts stuck in" image pair (see dartVision.ts), and every manual correction the player makes
+ * in the review UI (see accumulated/adjustDart/removeDart below) is a real, free label for that
+ * pair. When enabled, a committed round's final (possibly player-corrected) dart positions get
+ * uploaded alongside the image pair to the `dart-training` bucket / `training_samples` table —
+ * so a labeled dataset for a real from-scratch model (see the dart-sense research) builds itself
+ * from normal club play instead of needing a dedicated data-collection effort. Default ON since
+ * that's the whole point, but stays a visible, per-device toggle (see the advanced panel) since
+ * the captured frame is a live board photo, not something to upload silently without a way to opt out.
+ */
+const TRAINING_DATA_KEY = "dartcam-training-data-enabled";
+const loadTrainingDataEnabled = (): boolean => {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(TRAINING_DATA_KEY) !== "off";
+};
+
 const CALIB_KEY = "dartcam-calibration-v5";
 const CALIB_LABELS = ["Doppel 20 (oben)", "Doppel 3 (unten)", "Doppel 11 (links)", "Doppel 6 (rechts)"] as const;
 const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
@@ -387,6 +404,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (typeof window !== "undefined") window.localStorage.setItem(DETECTION_MODE_KEY, mode);
     setDetectionModeState(mode);
   };
+  const [trainingDataEnabled, setTrainingDataEnabledState] = useState<boolean>(() => loadTrainingDataEnabled());
+  const setTrainingDataEnabled = (enabled: boolean) => {
+    if (typeof window !== "undefined") window.localStorage.setItem(TRAINING_DATA_KEY, enabled ? "on" : "off");
+    setTrainingDataEnabledState(enabled);
+  };
+  // Snapshot of the image pair a scan was just run on, held onto until the round is committed
+  // (by then `preRemovalImageDataRef`/`emptyImageDataRef` have already been cleared/overwritten
+  // for the next throw) — see uploadTrainingSample.
+  const pendingTrainingCaptureRef = useRef<{ before: ImageData; after: ImageData } | null>(null);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -429,6 +455,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     emptyConfirmRef.current = 0;
     preRemovalFrameRef.current = null;
     preRemovalImageDataRef.current = null;
+    pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
   }, []);
@@ -740,6 +767,58 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     return err;
   };
 
+  /** Re-draws raw pixel data onto a scratch canvas to get a compressed, uploadable JPEG blob —
+   *  ImageData itself can't be uploaded directly. */
+  const imageDataToBlob = (img: ImageData, quality = 0.85): Promise<Blob | null> => {
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return Promise.resolve(null);
+    ctx.putImageData(img, 0, 0);
+    return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", quality));
+  };
+
+  /** Best-effort background upload of one training sample (see TRAINING_DATA_KEY doc comment) —
+   *  never throws into the caller and never blocks/slows down the actual scoring flow it hangs
+   *  off of. `darts` is the FINAL, possibly player-corrected list at the moment of commit, which
+   *  is exactly the free label this whole feature exists to capture. */
+  const uploadTrainingSample = async (
+    capture: { before: ImageData; after: ImageData },
+    darts: DetectedDart[],
+  ) => {
+    try {
+      const labels = darts
+        .filter(hasPosition)
+        .map((d) => ({ x: d.x, y: d.y, baseValue: d.baseValue, multiplier: d.multiplier, boardU: d.boardU, boardV: d.boardV }));
+      if (labels.length === 0) return;
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) return;
+      const [beforeBlob, afterBlob] = await Promise.all([
+        imageDataToBlob(capture.before),
+        imageDataToBlob(capture.after),
+      ]);
+      if (!beforeBlob || !afterBlob) return;
+      const prefix = `${userId}/${crypto.randomUUID()}`;
+      const [beforeUp, afterUp] = await Promise.all([
+        supabase.storage.from("dart-training").upload(`${prefix}/before.jpg`, beforeBlob, { contentType: "image/jpeg" }),
+        supabase.storage.from("dart-training").upload(`${prefix}/after.jpg`, afterBlob, { contentType: "image/jpeg" }),
+      ]);
+      if (beforeUp.error || afterUp.error) return;
+      await supabase.from("training_samples").insert({
+        user_id: userId,
+        board: activeBoard,
+        before_path: `${prefix}/before.jpg`,
+        after_path: `${prefix}/after.jpg`,
+        image_size: VISION_ANALYSIS_SIZE,
+        labels,
+      });
+    } catch (err) {
+      console.warn("[LiveCamera] training sample upload skipped", err);
+    }
+  };
+
   const analyzeFrame = async (imageBase64: string, detectBoard = false) => {
     const maxAttempts = 3;
     let lastError: unknown = null;
@@ -1015,6 +1094,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       let overallConfidence: number;
 
       if (isLocal) {
+        if (trainingDataEnabled) {
+          // Stash the reference (not a copy) before the finally block below nulls these refs —
+          // consumed at commit time with whatever the player ends up confirming/correcting.
+          pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current!, after: preRemovalImageDataRef.current! };
+        }
         const result = detectDartTipsLocally(emptyImageDataRef.current!, preRemovalImageDataRef.current!, throwsSeenRef.current);
         candidateDarts = refineWithCalibration(
           result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
@@ -1075,6 +1159,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   };
 
   const commitRound = (darts: DetectedDart[]) => {
+    if (pendingTrainingCaptureRef.current) {
+      void uploadTrainingSample(pendingTrainingCaptureRef.current, darts);
+    }
     onRoundCommit(darts.slice(0, dartsRemaining));
     playRoundCommittedSound();
     setAccumulated([]);
@@ -1188,6 +1275,19 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           Cloud-KI
         </button>
       </div>
+
+      {detectionMode === "local" && (
+        <button
+          onClick={() => setTrainingDataEnabled(!trainingDataEnabled)}
+          className="flex w-full items-center justify-between rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-[11px]"
+          title="Speichert bei jeder übernommenen Runde das Board-Bildpaar plus die (ggf. korrigierten) Dart-Positionen als Trainingsdaten für ein späteres, echtes Erkennungsmodell — nur der Board-Ausschnitt, kein weiteres Kamerabild."
+        >
+          <span className="text-muted-foreground">Trainingsdaten sammeln (für späteres eigenes Modell)</span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${trainingDataEnabled ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
+            {trainingDataEnabled ? "An" : "Aus"}
+          </span>
+        </button>
+      )}
 
       <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
         <video
