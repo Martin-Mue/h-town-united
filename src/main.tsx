@@ -18,6 +18,22 @@ if ("serviceWorker" in navigator) {
     window.location.reload();
   });
   import("virtual:pwa-register").then(({ registerSW }) => registerSW({ immediate: true }));
+
+  // Browsers only check the server for a new sw.js roughly once every 24h by default (per
+  // spec) — a tab/installed app left open, or just reopened before that window elapses, can
+  // sit on a stale worker far longer than the gap between deploys. Forcing a check on load and
+  // every time the app becomes visible again (the actual PWA usage pattern — installed apps
+  // mostly get reopened from the background, not freshly loaded) closes that gap without
+  // waiting on the browser's own timing.
+  const forceUpdateCheck = () => {
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => reg.update().catch(() => {}));
+    });
+  };
+  window.addEventListener("load", forceUpdateCheck);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") forceUpdateCheck();
+  });
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
