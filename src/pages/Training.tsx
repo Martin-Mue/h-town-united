@@ -697,6 +697,14 @@ const TrainingPage = () => {
           }
         }
 
+        // Shanghai Round the Clock: an incomplete turn wipes Single/Triple progress on the
+        // current number — you don't carry it into the next turn — but you don't lose the
+        // number itself either (targetIndex only moves via the qualifying-double branch above,
+        // so if it's unchanged here the turn ended without finishing this number).
+        if (selectedDrill.id === "shanghai-rtc" && !updated.finished && updated.targetIndex === prev.targetIndex) {
+          updated.rtcMultsHit = [];
+        }
+
         // Halve It: no hit this round → halve the running score; otherwise add it. Advance
         // through the 10 fixed rounds, ending the drill after the last one.
         if (selectedDrill.id === "halve-it") {
