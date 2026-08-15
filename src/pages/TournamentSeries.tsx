@@ -251,11 +251,17 @@ interface Standing { name: string; points: number; champions: number; tournament
 
 function computeStandings(tourneys: TournamentLite[], scoring: Scoring): Standing[] {
   const map: Record<string, Standing> = {};
+  // Key by a normalized name so "Max", "max", and "Max " (trailing space) — all easy to hit given
+  // free-text player entry across separate tournaments — don't silently split one person's points
+  // across multiple rows. Display keeps the first-seen exact casing/spacing, only grouping is normalized.
+  const normalize = (s: string) => s.trim().toLowerCase();
   const add = (name: string, pts: number, isChamp = false) => {
     if (!name || name === "BYE") return;
-    if (!map[name]) map[name] = { name, points: 0, champions: 0, tournaments: 0 };
-    map[name].points += pts;
-    if (isChamp) map[name].champions++;
+    const key = normalize(name);
+    if (!key) return;
+    if (!map[key]) map[key] = { name: name.trim(), points: 0, champions: 0, tournaments: 0 };
+    map[key].points += pts;
+    if (isChamp) map[key].champions++;
   };
 
   for (const t of tourneys) {

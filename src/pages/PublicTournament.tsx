@@ -611,7 +611,7 @@ const PublicTournamentPage = () => {
     const interval = window.setInterval(load, 8000);
     const channel = supabase
       .channel(`public-tournament-${slug}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tournaments" }, load)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tournaments", filter: `public_slug=eq.${slug}` }, load)
       .subscribe();
 
     return () => {

@@ -568,6 +568,10 @@ const StatisticsPage = () => {
     if (viewScope !== "personal" || !myPlayer) return;
     setSelectedPlayerId(myPlayer.id);
     setActiveTab((prev) => (prev === "overview" || prev === "h2h" ? "players" : prev));
+    // A player filter left over from club scope would otherwise silently narrow "Ich" down to
+    // only games also involving whoever was filtered — e.g. everything looks empty with no
+    // visible explanation, since the dropdown that set it is hidden in personal scope.
+    setFilterPlayerId("all");
   }, [viewScope, myPlayer]);
 
   const recentGames = (viewScope === "personal" ? personalGames : filteredGames).slice(0, 20);

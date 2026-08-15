@@ -150,6 +150,12 @@ const GamePage = () => {
   const tournamentLinkRef = useRef<{ tournamentId: string; matchId: string; tournamentName?: string } | null>(null);
   const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(null);
   const savingRef = useRef(false);
+  // Mirrors game.currentLeg.remaining, updated synchronously the instant a throw is processed —
+  // not just on the next render. handleX01Throw reads from this instead of the `game` closure
+  // specifically so two throws landing before React re-renders (a fast double-tap on two number
+  // buttons, or a touchscreen double-touch) each see the OTHER's update instead of both computing
+  // from the same stale remaining value and one silently clobbering the other's subtraction.
+  const remainingRef = useRef<number[]>([]);
   const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
@@ -292,7 +298,10 @@ const GamePage = () => {
   const currentRoundScores = useMemo(() => {
     if (!game) return [];
     const throws = game.currentLeg.throws[currentIdx] ?? [];
-    return throws.slice(-dartsThisRound);
+    // slice(-0) behaves like slice(0) (the whole array), not an empty slice — without the
+    // guard, the moment it becomes a player's turn (before their first new dart this round),
+    // this showed their ENTIRE leg history as "this round".
+    return dartsThisRound > 0 ? throws.slice(-dartsThisRound) : [];
   }, [game, dartsThisRound, currentIdx]);
 
   const currentRoundTotal = currentRoundScores.reduce((s, t) => s + t.points, 0);
@@ -376,6 +385,10 @@ const GamePage = () => {
     setWarmupDarts((d) => d + 1);
   };
 
+  useEffect(() => {
+    if (game) remainingRef.current = [...game.currentLeg.remaining];
+  }, [game]);
+
   /** Save undo snapshot before each throw */
   const saveUndo = () => {
     if (!game) return;
@@ -405,7 +418,7 @@ const GamePage = () => {
     const idx = game.currentPlayerIndex;
     const n = game.players.length;
     const teamIdx = teamIndexFor(game.teams, idx);
-    const remaining = game.currentLeg.remaining[teamIdx];
+    const remaining = remainingRef.current[teamIdx] ?? game.currentLeg.remaining[teamIdx];
     const newDartsThisRound = dartsThisRound + 1;
 
     const requiresDoubleIn = game.players[idx].doubleIn ?? false;
@@ -424,6 +437,7 @@ const GamePage = () => {
 
     if (isBust) {
       if (soundEnabled) playBustSound();
+      remainingRef.current[teamIdx] = turnStartRemaining;
       setGame((prev) => {
         if (!prev) return prev;
         const updatedLeg: LegState = { ...prev.currentLeg, remaining: [...prev.currentLeg.remaining], throws: prev.currentLeg.throws.map(t => [...t]) };
@@ -448,6 +462,7 @@ const GamePage = () => {
 
     if (soundEnabled) playThrowSound();
 
+    remainingRef.current[teamIdx] = newRemaining;
     setGame((prev) => {
       if (!prev) return prev;
       const updatedLeg: LegState = { ...prev.currentLeg, remaining: [...prev.currentLeg.remaining], throws: prev.currentLeg.throws.map(t => [...t]) };
@@ -868,15 +883,22 @@ const GamePage = () => {
   };
 
   const deleteThrow = (playerIdx: number, throwIndex: number) => {
+    // If the deleted dart belonged to the current player's still-open round (one of the last
+    // `dartsThisRound` entries), the round's dart counter must shrink with it — otherwise the
+    // 3-dot counter and the "this round" scorecard chip stay one dart ahead of what's actually
+    // left, and the next thrown dart lands at the wrong position in the round.
+    let isCurrentRoundThrow = false;
     setGame((prev) => {
       if (!prev) return prev;
       const throws = [...prev.currentLeg.throws[playerIdx]];
+      isCurrentRoundThrow = playerIdx === prev.currentPlayerIndex && throwIndex >= throws.length - dartsThisRound;
       const removed = throws.splice(throwIndex, 1)[0];
       const updatedLeg: LegState = { ...prev.currentLeg, throws: [...prev.currentLeg.throws], remaining: [...prev.currentLeg.remaining] };
       updatedLeg.throws[playerIdx] = throws;
       updatedLeg.remaining[teamIndexFor(prev.teams, playerIdx)] += removed.points;
       return { ...prev, currentLeg: updatedLeg };
     });
+    if (isCurrentRoundThrow) setDartsThisRound((d) => Math.max(0, d - 1));
     setEditingThrowIdx(null);
   };
 

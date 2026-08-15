@@ -920,6 +920,10 @@ const TrainingPage = () => {
   const exitDrill = () => {
     setDrillState(null);
     setSelectedDrill(null);
+    // Otherwise a later drill quick-started from CoachingPlan (which skips the pre-start config
+    // screen entirely) silently inherits whatever config an unrelated earlier drill left behind —
+    // e.g. a round cap the player never set for the drill they're actually about to play.
+    setDrillConfig({});
   };
 
   const restartDrill = () => {

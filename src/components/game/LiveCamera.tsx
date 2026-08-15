@@ -979,6 +979,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setPendingTaps([]);
     setActiveTap(null);
     setCalibStep(0);
+    // A pending/unreviewed round from the board being left behind must not survive the switch —
+    // otherwise tapping "Übernehmen" afterwards attributes board A's darts to whatever game is
+    // active for board B, since onRoundCommit only knows the darts, not which board they're from.
+    setScanFailed(false);
+    setNeedsReview(false);
+    setAccumulated([]);
+    accumulatedRef.current = [];
+    setError(null);
+    setLastConfidence(0);
+    resetLoop();
   };
 
   const switchCamera = (deviceId: string | null) => {
@@ -1045,7 +1055,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         stableSigRef.current = sig;
         if (boardEmpty) {
           const hasPreRemovalCapture = detectionMode === "local" ? !!preRemovalImageDataRef.current : !!preRemovalFrameRef.current;
-          if (throwsSeenRef.current > 0 && hasPreRemovalCapture) {
+          // A still-unreviewed round (accumulated darts awaiting Übernehmen/Verwerfen) must not
+          // be silently overwritten by a new scan — if the player throws/pulls a second round
+          // before acting on the first, this used to replace the pending darts with no trace of
+          // the first round ever having been detected.
+          if (throwsSeenRef.current > 0 && hasPreRemovalCapture && accumulatedRef.current.length === 0) {
             if (performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
               scanLockRef.current = true;
               void runPullScan();
@@ -1204,7 +1218,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   };
 
   const manualScan = () => {
-    if (!scanLockRef.current) {
+    if (!scanLockRef.current && accumulatedRef.current.length === 0) {
       if (detectionMode === "local") {
         preRemovalImageDataRef.current = grabImageData();
       } else {
