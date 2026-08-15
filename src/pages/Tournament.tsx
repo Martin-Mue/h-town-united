@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw } from "lucide-react";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import { Button } from "@/components/ui/button";
@@ -234,58 +234,25 @@ interface BracketViewportProps {
 }
 
 const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, isOwner }: BracketViewportProps) => {
+  // v2 — no continuous auto-measurement (see PublicTournament.tsx's LiveBracket for the same
+  // change + full rationale): fixed, always-legible scale by default, native scroll for
+  // overflow, manual zoom, and "fit to screen" as a one-time on-demand measurement instead of
+  // a background process that could render at the wrong scale depending on layout timing.
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const [sizes, setSizes] = useState({ wrapW: 0, wrapH: 0, innerW: 0, innerH: 0 });
   const [userZoom, setUserZoom] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
 
-  const measure = useCallback(() => {
-    if (!wrapRef.current || !innerRef.current) return;
-    const wrap = wrapRef.current.getBoundingClientRect();
-    // measure at scale 1
-    const prevTransform = innerRef.current.style.transform;
-    innerRef.current.style.transform = "none";
-    const inner = innerRef.current.getBoundingClientRect();
-    innerRef.current.style.transform = prevTransform;
-    if (!wrap.width || !wrap.height || !inner.width || !inner.height) return;
-    setSizes({ wrapW: wrap.width, wrapH: wrap.height, innerW: inner.width, innerH: inner.height });
-  }, []);
+  const fitToScreen = () => {
+    const wrap = wrapRef.current?.getBoundingClientRect();
+    const inner = innerRef.current?.getBoundingClientRect();
+    if (!wrap?.width || !wrap.height || !inner?.width || !inner.height) return;
+    const trueW = inner.width / userZoom;
+    const trueH = inner.height / userZoom;
+    if (!trueW || !trueH) return;
+    setUserZoom(+Math.max(0.4, Math.min(wrap.width / trueW, wrap.height / trueH, 2.5)).toFixed(2));
+  };
 
-  // Fit the whole tree when it reasonably can; below a legible floor, stop shrinking
-  // and let it scroll/pan instead — the "Spielplan & Schreiber" list view is the
-  // always-legible fallback for large brackets, and zoom/fullscreen cover close-up taps.
-  const fitScale = sizes.wrapW && sizes.innerW
-    ? Math.max(0.55, Math.min(sizes.wrapW / sizes.innerW, sizes.wrapH / sizes.innerH, 1))
-    : 1;
-  const scale = fitScale * userZoom;
-  const scaledW = sizes.innerW * scale;
-  const scaledH = sizes.innerH * scale;
-  // Center the tree in the viewport when it fits; anchor at the origin (scrollable) when it doesn't,
-  // so the watermark logo behind it is always visually centered on the actual bracket.
-  const offsetX = sizes.wrapW && scaledW <= sizes.wrapW ? (sizes.wrapW - scaledW) / 2 : 0;
-  const offsetY = sizes.wrapH && scaledH <= sizes.wrapH ? (sizes.wrapH - scaledH) / 2 : 0;
-  // CSS transforms don't shrink an element's scrollable area — a scaled-down box that
-  // visually fits would still report a giant unscaled scrollWidth/Height and trigger a
-  // (redundant, nested-feeling) scrollbar. So only allow scrolling once the content
-  // genuinely overflows the box (i.e. the user zoomed in past the auto-fit).
-  const overflowing = sizes.wrapW > 0 && (scaledW > sizes.wrapW + 0.5 || scaledH > sizes.wrapH + 0.5);
-
-  useLayoutEffect(() => { measure(); }, [measure, totalRounds, matches.length, fullscreen]);
-  useEffect(() => {
-    // Re-fit after fonts/layout settle and on orientation change
-    const ro = new ResizeObserver(() => measure());
-    if (wrapRef.current) ro.observe(wrapRef.current);
-    window.addEventListener("resize", measure);
-    window.addEventListener("orientationchange", measure);
-    const t = window.setTimeout(measure, 120);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("orientationchange", measure);
-      window.clearTimeout(t);
-    };
-  }, [measure]);
   useEffect(() => {
     if (!fullscreen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
@@ -374,7 +341,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.max(0.3, z - 0.15))} title="Verkleinern">
             <ZoomOut className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(1)} title="Auf Bildschirm einpassen">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={fitToScreen} title="Auf Bildschirm einpassen">
             <Maximize2 className="w-4 h-4" />
           </Button>
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.min(3, z + 0.15))} title="Vergrößern">
@@ -400,14 +367,14 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
       <div className="relative flex-1">
       <div
         ref={wrapRef}
-        className={`relative z-10 ${overflowing ? "overflow-auto" : "overflow-hidden"}`}
-        style={{ height: fullscreen ? "calc(100dvh - 44px)" : "min(78dvh, 900px)" }}
+        className="relative z-10 overflow-auto"
+        style={{ height: fullscreen ? "calc(100dvh - 44px)" : "min(78dvh, 900px)", touchAction: "pan-x pan-y pinch-zoom" }}
       >
         <div
           ref={innerRef}
           className="relative"
           style={{
-            transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
+            transform: `scale(${userZoom})`,
             transformOrigin: "top left",
             width: "max-content",
           }}

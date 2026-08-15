@@ -147,6 +147,21 @@ function pickRandom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// Remembers the last line spoken per announcement "slot" (180, checkout, bust, plain round,
+// …) so the very next pick for that same slot never repeats it verbatim — the actual fix for
+// "I keep hearing the same line back to back". Keyed by a short category name shared across
+// every persona (a Yoda line and a Pirate line never collide as strings, so this stays correct
+// even though the category key doesn't encode which persona is currently selected).
+const lastPicks = new Map<string, string>();
+function pickRandomNoRepeat<T extends string>(arr: readonly T[], category: string): T {
+  if (arr.length <= 1) return arr[0];
+  const last = lastPicks.get(category);
+  const pool = last === undefined ? arr : arr.filter((v) => v !== last);
+  const choice = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : arr[Math.floor(Math.random() * arr.length)];
+  lastPicks.set(category, choice);
+  return choice;
+}
+
 // Spelling numbers out as German words instead of handing bare digits to the browser's TTS
 // normalizer: different voices/engines are inconsistent about digit-string pronunciation in
 // German (reports of e.g. "29" coming out as a garbled ordinal-like "29zigste" instead of
@@ -338,21 +353,23 @@ const YODA_PACK: PersonaPack = {
     "Zu, diese Zahl nun ist.",
     "Verschlossen, wie ein Jedi-Tempel, sie ist.",
   ],
-  nextTurn: (name) => pickRandom([
+  nextTurn: (name) => pickRandomNoRepeat([
     `${name}, dran nun ist.`,
     `Am Zug, ${name} jetzt ist.`,
     `Bereit machen, ${name} muss.`,
-  ]),
-  plainRound: (total) => pickRandom([
+    `Die Macht, ${name} nun einsetzen muss.`,
+  ], "nextTurn"),
+  plainRound: (total) => pickRandomNoRepeat([
     germanNumberWords(total),
     `${germanNumberWords(total)}. Genügend, das ist.`,
     `${germanNumberWords(total)}, geworfen wurde.`,
-  ]),
+    `Hmmm. ${germanNumberWords(total)}.`,
+  ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${words}, ${name} noch braucht — der ${nickname}, das ist!`
-      : pickRandom([`${words}, ${name} noch braucht.`, `Übrig, ${words} für ${name} sind.`]);
+      : pickRandomNoRepeat([`${words}, ${name} noch braucht.`, `Übrig, ${words} für ${name} sind.`], "checkoutRemaining");
   },
   legWonNextLeg: (winner, next) => `Das Leg, ${winner} gewonnen hat! ${next}, das nächste beginnt.`,
 };
@@ -405,21 +422,23 @@ const PIRATE_PACK: PersonaPack = {
     "Arrr, dicht wie ein Schiffsrumpf!",
     "Klar zu — die Luke ist zu!",
   ],
-  nextTurn: (name) => pickRandom([
+  nextTurn: (name) => pickRandomNoRepeat([
     `Ahoy, ${name} übernimmt das Ruder.`,
     `${name} ist am Ruder, Landratte.`,
     `Klar zum Wurf, ${name}!`,
-  ]),
-  plainRound: (total) => pickRandom([
+    `${name}, entere die Planke!`,
+  ], "nextTurn"),
+  plainRound: (total) => pickRandomNoRepeat([
     `${germanNumberWords(total)}, Landratte.`,
     `${germanNumberWords(total)} Punkte im Frachtraum.`,
     `Arrr, ${germanNumberWords(total)}.`,
-  ]),
+    `${germanNumberWords(total)}, verstaut im Laderaum.`,
+  ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name} braucht noch ${words} — der ${nickname}, Ahoy!`
-      : pickRandom([`${name} braucht noch ${words}, um den Hafen zu erreichen.`, `Noch ${words} bis zur Landung, ${name}.`]);
+      : pickRandomNoRepeat([`${name} braucht noch ${words}, um den Hafen zu erreichen.`, `Noch ${words} bis zur Landung, ${name}.`], "checkoutRemaining");
   },
   legWonNextLeg: (winner, next) => `Leg geentert von ${winner}! ${next} sticht als Nächstes in See.`,
 };
@@ -468,21 +487,23 @@ const HERALD_PACK: PersonaPack = {
     "Verschlossen, wie ein Burgtor!",
     "Fürwahr, geschlossen!",
   ],
-  nextTurn: (name) => pickRandom([
+  nextTurn: (name) => pickRandomNoRepeat([
     `Wohlan, ${name} ist nun am Zuge.`,
     `Man höre: ${name} ist an der Reihe.`,
     `${name}, tritt vor und wirf!`,
-  ]),
-  plainRound: (total) => pickRandom([
+    `Nun trete vor, ${name}!`,
+  ], "nextTurn"),
+  plainRound: (total) => pickRandomNoRepeat([
     `${germanNumberWords(total)} Punkte, wohlan.`,
     `Fürwahr, ${germanNumberWords(total)} Punkte.`,
     `${germanNumberWords(total)}, so steht es geschrieben.`,
-  ]),
+    `Vermerkt: ${germanNumberWords(total)} Punkte.`,
+  ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name} bedarf noch ${words} — dem ${nickname}!`
-      : pickRandom([`${name} bedarf noch ${words} zum Siege.`, `Noch ${words} trennen ${name} vom Ruhme.`]);
+      : pickRandomNoRepeat([`${name} bedarf noch ${words} zum Siege.`, `Noch ${words} trennen ${name} vom Ruhme.`], "checkoutRemaining");
   },
   legWonNextLeg: (winner, next) => `Das Leg, an ${winner} vergeben! ${next} eröffnet die nächste Runde.`,
 };
@@ -529,21 +550,23 @@ const ROBOT_PACK: PersonaPack = {
     "Zahl geschlossen. Bestätigt.",
     "Feld deaktiviert.",
   ],
-  nextTurn: (name) => pickRandom([
+  nextTurn: (name) => pickRandomNoRepeat([
     `Nächster Spieler: ${name}.`,
     `Aktiver Spieler: ${name}.`,
     `Warte auf Eingabe von ${name}.`,
-  ]),
-  plainRound: (total) => pickRandom([
+    `Zug übergeben an: ${name}.`,
+  ], "nextTurn"),
+  plainRound: (total) => pickRandomNoRepeat([
     `Punktzahl: ${germanNumberWords(total)}.`,
     `Wurf verarbeitet. Wert: ${germanNumberWords(total)}.`,
     `${germanNumberWords(total)} Punkte registriert.`,
-  ]),
+    `Berechnung abgeschlossen: ${germanNumberWords(total)}.`,
+  ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name}. Restwert: ${words}. Bekannt als: ${nickname}.`
-      : pickRandom([`${name}. Restwert: ${words}.`, `Verbleibend für ${name}: ${words}.`]);
+      : pickRandomNoRepeat([`${name}. Restwert: ${words}.`, `Verbleibend für ${name}: ${words}.`], "checkoutRemaining");
   },
   legWonNextLeg: (winner, next) => `Leg-Gewinner: ${winner}. Nächste Runde: ${next}.`,
 };
@@ -611,24 +634,26 @@ const KERNASI_PACK: PersonaPack = {
     "Dicht wie meine Bude nach zwölf!",
     "Digga, Deckel drauf, nächste!",
   ],
-  nextTurn: (name) => pickRandom([
+  nextTurn: (name) => pickRandomNoRepeat([
     `Los, ${name}, zeig, was du drauf hast, Alter!`,
     `${name}, jetzt du, mach kein Terror!`,
     `Auf geht's, ${name}, zeig's ihnen, Bratan!`,
     `${name} ist dran — Digga, keinen Druck, nur Ehre.`,
-  ]),
-  plainRound: (total) => pickRandom([
+    `${name}, ran an die Kiste!`,
+  ], "nextTurn"),
+  plainRound: (total) => pickRandomNoRepeat([
     `${germanNumberWords(total)}, Alter, geht klar.`,
     `${germanNumberWords(total)}, ischwöre, passt scho.`,
     `${germanNumberWords(total)}, nicht der Bringer, aber okay, Digga.`,
     `${germanNumberWords(total)}, Bratan, weiter im Text.`,
-    `${germanNumberWords(total)}.`,
-  ]),
+    `${germanNumberWords(total)}, Alter.`,
+    `Solala, ${germanNumberWords(total)}, Digga.`,
+  ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name} braucht noch ${words} — na los, der ${nickname} wartet, Alter!`
-      : pickRandom([`${name} braucht noch ${words}, pack's an, Digga!`, `Noch ${words} für ${name}, Bratan, das schaffst du!`]);
+      : pickRandomNoRepeat([`${name} braucht noch ${words}, pack's an, Digga!`, `Noch ${words} für ${name}, Bratan, das schaffst du!`], "checkoutRemaining");
   },
   legWonNextLeg: (winner, next) => `Leg geht an ${winner}, Alter! ${next}, zeig, was du kannst!`,
 };
@@ -677,21 +702,23 @@ const REPORTER_PACK: PersonaPack = {
     "Geschlossen — und wie!",
     "Da ist sie zu, sauber gemacht!",
   ],
-  nextTurn: (name) => pickRandom([
+  nextTurn: (name) => pickRandomNoRepeat([
     `Und jetzt ist ${name} am Zug.`,
     `Der Blick geht zu ${name}.`,
     `${name} übernimmt.`,
-  ]),
-  plainRound: (total) => pickRandom([
+    `Alle Augen auf ${name}.`,
+  ], "nextTurn"),
+  plainRound: (total) => pickRandomNoRepeat([
     `${germanNumberWords(total)} Punkte.`,
     `Und weiter geht's mit ${germanNumberWords(total)}.`,
     `${germanNumberWords(total)}, notiert.`,
-  ]),
+    `Solide ${germanNumberWords(total)}.`,
+  ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name} braucht noch ${words} — der große ${nickname}!`
-      : pickRandom([`${name} braucht noch ${words} zum Sieg.`, `Noch ${words} trennen ${name} vom Triumph.`]);
+      : pickRandomNoRepeat([`${name} braucht noch ${words} zum Sieg.`, `Noch ${words} trennen ${name} vom Triumph.`], "checkoutRemaining");
   },
   legWonNextLeg: (winner, next) => `Das Leg geht an ${winner}! Gleich geht's weiter mit ${next}.`,
 };
@@ -755,24 +782,25 @@ const GENZ_PACK: PersonaPack = {
     "Dicht, ist safe.",
     "Ehre, das Feld ist Geschichte.",
   ],
-  nextTurn: (name) => pickRandom([
+  nextTurn: (name) => pickRandomNoRepeat([
     `${name}, du bist dran, zeig main character energy, digga!`,
     `${name}, deine Zeit zu cooken, bro!`,
     `Los ${name}, keine NPC-Vibes bitte!`,
     `${name} ist on the clock, digga, kein Druck.`,
-  ]),
-  plainRound: (total) => pickRandom([
+    `${name}, dein Moment, lock in!`,
+  ], "nextTurn"),
+  plainRound: (total) => pickRandomNoRepeat([
     `${germanNumberWords(total)}, ist mid, aber okay, digga.`,
     `${germanNumberWords(total)}, safe kein W aber auch kein L.`,
     `${germanNumberWords(total)}, passt scho, digga.`,
     `${germanNumberWords(total)}, fr fr.`,
-    `${germanNumberWords(total)}.`,
-  ]),
+    `${germanNumberWords(total)}, lowkey solide.`,
+  ], "plainRound"),
   checkoutRemaining: (remaining, name, nickname) => {
     const words = germanNumberWords(remaining);
     return nickname
       ? `${name} braucht noch ${words} — der ${nickname}, digga, das wird mega!`
-      : pickRandom([`${name} braucht noch ${words}, geh drauf, digga!`, `Noch ${words} für ${name}, bro, du schaffst das, no cap!`]);
+      : pickRandomNoRepeat([`${name} braucht noch ${words}, geh drauf, digga!`, `Noch ${words} für ${name}, bro, du schaffst das, no cap!`], "checkoutRemaining");
   },
   legWonNextLeg: (winner, next) => `Leg-W für ${winner}, digga! ${next}, du bist dran!`,
 };
@@ -821,10 +849,12 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
 
   if (pack) {
     if (p.matchWon) {
-      return { parts: [{ text: pickRandom(pack.hypeMatchWin(p.winnerName ?? "")), options: pack.hypeOptions }] };
+      return { parts: [{ text: pickRandomNoRepeat(pack.hypeMatchWin(p.winnerName ?? ""), "matchWin"), options: pack.hypeOptions }] };
     }
     if (p.checkedOut) {
-      const hype = Math.random() < 0.35 ? pickRandom(pack.hypeCheckoutNamed(p.activePlayerName)) : pickRandom(pack.hypeCheckout);
+      const hype = Math.random() < 0.35
+        ? pickRandomNoRepeat(pack.hypeCheckoutNamed(p.activePlayerName), "checkoutNamed")
+        : pickRandomNoRepeat(pack.hypeCheckout, "checkout");
       return {
         parts: [
           { text: hype, options: pack.hypeOptions },
@@ -833,13 +863,13 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
       };
     }
     if (p.busted) {
-      return { parts: [{ text: `${pickRandom(pack.hypeBust)} ${pack.nextTurn(p.nextPlayerName)}`, options: pack.options }] };
+      return { parts: [{ text: `${pickRandomNoRepeat(pack.hypeBust, "bust")} ${pack.nextTurn(p.nextPlayerName)}`, options: pack.options }] };
     }
     if (p.isCricket) {
       if (p.cricketClosedLabel) {
         return {
           parts: [
-            { text: `${pickRandom(pack.hypeCricketClose)} Die ${p.cricketClosedLabel}!`, options: pack.hypeOptions },
+            { text: `${pickRandomNoRepeat(pack.hypeCricketClose, "cricketClose")} Die ${p.cricketClosedLabel}!`, options: pack.hypeOptions },
             { text: pack.nextTurn(p.nextPlayerName), options: pack.options },
           ],
         };
@@ -848,11 +878,11 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
     }
     let parts: SpeechPart[];
     if (p.roundTotal === 180) {
-      parts = [{ text: pickRandom(pack.hype180), options: pack.hypeOptions }];
+      parts = [{ text: pickRandomNoRepeat(pack.hype180, "180"), options: pack.hypeOptions }];
     } else if (p.roundTotal >= 140) {
-      parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandom(pack.hypeHighTon)}`, options: pack.hypeOptions }];
+      parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandomNoRepeat(pack.hypeHighTon, "highTon")}`, options: pack.hypeOptions }];
     } else if (p.roundTotal >= 100) {
-      parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandom(pack.hypeTonPlus)}`, options: pack.hypeOptions }];
+      parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandomNoRepeat(pack.hypeTonPlus, "tonPlus")}`, options: pack.hypeOptions }];
     } else {
       parts = [{ text: pack.plainRound(p.roundTotal), options: pack.options }];
     }
@@ -866,14 +896,16 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
   if (p.matchWon) {
     return {
       parts: [
-        { text: pickRandom(HYPE_CHECKOUT), options: HYPE_OPTIONS },
-        { text: `${p.winnerName} ${pickRandom(HYPE_MATCH_WIN)} Herzlichen Glückwunsch!`, options: { ...HYPE_OPTIONS, rate: 1.1 } },
+        { text: pickRandomNoRepeat(HYPE_CHECKOUT, "checkout"), options: HYPE_OPTIONS },
+        { text: `${p.winnerName} ${pickRandomNoRepeat(HYPE_MATCH_WIN, "matchWin")} Herzlichen Glückwunsch!`, options: { ...HYPE_OPTIONS, rate: 1.1 } },
       ],
     };
   }
   if (p.checkedOut) {
     // ~1 in 3 checkouts get the player named directly in the hype line instead of the generic pool.
-    const hype = Math.random() < 0.35 ? pickRandom(HYPE_CHECKOUT_NAMED(p.activePlayerName)) : pickRandom(HYPE_CHECKOUT);
+    const hype = Math.random() < 0.35
+      ? pickRandomNoRepeat(HYPE_CHECKOUT_NAMED(p.activePlayerName), "checkoutNamed")
+      : pickRandomNoRepeat(HYPE_CHECKOUT, "checkout");
     return {
       parts: [
         { text: hype, options: HYPE_OPTIONS },
@@ -882,13 +914,13 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
     };
   }
   if (p.busted) {
-    return { parts: [{ text: `${pickRandom(HYPE_BUST)} ${p.nextPlayerName} ist dran.`, options: CALM_OPTIONS }] };
+    return { parts: [{ text: `${pickRandomNoRepeat(HYPE_BUST, "bust")} ${p.nextPlayerName} ist dran.`, options: CALM_OPTIONS }] };
   }
   if (p.isCricket) {
     if (p.cricketClosedLabel) {
       return {
         parts: [
-          { text: `${pickRandom(HYPE_CRICKET_CLOSE)} Die ${p.cricketClosedLabel}!`, options: HYPE_OPTIONS },
+          { text: `${pickRandomNoRepeat(HYPE_CRICKET_CLOSE, "cricketClose")} Die ${p.cricketClosedLabel}!`, options: HYPE_OPTIONS },
           { text: `${p.nextPlayerName} ist dran.`, options: NORMAL_OPTIONS },
         ],
       };
@@ -897,16 +929,16 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
   }
   let parts: SpeechPart[];
   if (p.roundTotal === 180) {
-    parts = [{ text: pickRandom(HYPE_180), options: HYPE_OPTIONS }];
+    parts = [{ text: pickRandomNoRepeat(HYPE_180, "180"), options: HYPE_OPTIONS }];
   } else if (p.roundTotal >= 140) {
     parts = [
       { text: `${germanNumberWords(p.roundTotal)}!`, options: HIGH_TON_OPTIONS },
-      { text: pickRandom(HYPE_HIGH_TON), options: HIGH_TON_OPTIONS },
+      { text: pickRandomNoRepeat(HYPE_HIGH_TON, "highTon"), options: HIGH_TON_OPTIONS },
     ];
   } else if (p.roundTotal >= 100) {
     parts = [
       { text: `${germanNumberWords(p.roundTotal)}!`, options: TON_OPTIONS },
-      { text: pickRandom(HYPE_TON_PLUS), options: TON_OPTIONS },
+      { text: pickRandomNoRepeat(HYPE_TON_PLUS, "tonPlus"), options: TON_OPTIONS },
     ];
   } else {
     parts = [{ text: germanNumberWords(p.roundTotal), options: NORMAL_OPTIONS }];
