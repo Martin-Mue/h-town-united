@@ -50,28 +50,24 @@ const DashboardPage = () => {
 
   return (
     <div className="container py-4 animate-slide-up">
-      {/* Hero, v4 — both emblems back, side by side: the community tree (club identity) and
-          the H-Town United DARTS badge (sport identity). Was one badge only after the earlier
-          simplification pass, which lost the "two round marks together" look this is restoring.
-          Club name/tagline text stays dropped — the nav bar already shows it — this spot is for
-          the marks themselves plus the motto. */}
-      <div className="gradient-hero rounded-2xl p-5 sm:p-6 mb-4 border border-border relative overflow-hidden text-center">
+      {/* Hero, v6 — "grown from the root": the club tree emblem sits large and muted up top
+          with its full canopy visible (that's the recognizable shape — a smaller/blurrier tree
+          read as unrecognizable in earlier passes), and the Darts badge — sharp, saturated —
+          overlaps only the tree's lower trunk area, like it grew out of it. Picked over a
+          concentric layering (badge centered over the tree) specifically because that hid too
+          much of the tree behind the badge to read as a tree at all. */}
+      <div className="gradient-hero rounded-2xl p-5 sm:p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(185_85%_48%/0.1),transparent_65%)]" />
         <div className="relative flex flex-col items-center">
-          <div className="flex items-center justify-center gap-4 mb-3">
-            <div className="relative group">
-              <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl scale-125" />
-              <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-background/40 border-2 border-primary/40 glow-cyan flex items-center justify-center p-2 transition-transform duration-700 group-hover:rotate-[8deg]">
-                <img
-                  src={htuEmblem}
-                  alt="H-Town United e.V. Vereinsemblem"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            </div>
-            <div className="relative group">
-              <div className="absolute inset-0 rounded-full bg-accent/20 blur-xl scale-125" />
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-accent/40 glow-cyan overflow-hidden transition-transform duration-700 group-hover:-rotate-[8deg]">
+          <div className="relative mb-2 h-[196px] sm:h-[220px] w-full">
+            <img
+              src={htuEmblem}
+              alt="H-Town United e.V. Vereinsemblem"
+              className="absolute top-0 left-1/2 -translate-x-1/2 w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
+            />
+            <div className="absolute left-1/2 -translate-x-1/2 top-[104px] sm:top-[115px] group">
+              <div className="absolute inset-0 rounded-full bg-accent/25 blur-xl scale-125" />
+              <div className="relative w-[92px] h-[92px] sm:w-[102px] sm:h-[102px] rounded-full border-2 border-accent/50 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-700 group-hover:-rotate-[6deg]">
                 <img
                   src={htuLogo}
                   alt="H-Town United Darts Vereinswappen"
