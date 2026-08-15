@@ -426,11 +426,10 @@ const TrainingPage = () => {
         case "121-challenge": {
           const newRemaining = prev.remaining - points;
           if (newRemaining < 0 || newRemaining === 1) {
-            // Bust - reset round, move to next round of 3
-            if (newDartsThisRound >= 3) {
-              updated.dartsThisRound = 0;
-              updated.remaining = prev.remaining; // keep same (bust resets)
-            }
+            // Bust — already certain this visit can't check out, reset right away instead of
+            // making the player throw out the rest of a visit that no longer matters.
+            updated.dartsThisRound = 0;
+            updated.remaining = prev.remaining;
           } else if (newRemaining === 0) {
             updated.remaining = 0;
             updated.finished = true;
@@ -456,11 +455,9 @@ const TrainingPage = () => {
             }
             updated.dartsThisRound = 0;
           } else if (newRemaining < 0 || newRemaining === 1) {
-            // Bust - reset to start of this checkout after 3 darts
-            if (newDartsThisRound >= 3) {
-              updated.remaining = prev.targetList[prev.targetIndex];
-              updated.dartsThisRound = 0;
-            }
+            // Bust — already certain, reset right away instead of waiting out the rest of this visit
+            updated.remaining = prev.targetList[prev.targetIndex];
+            updated.dartsThisRound = 0;
           } else {
             updated.remaining = newRemaining;
             if (newDartsThisRound >= 3) {
@@ -486,13 +483,11 @@ const TrainingPage = () => {
               updated.finished = true;
             }
           } else if (newRemaining < 0 || newRemaining === 1) {
-            if (newDartsThisRound >= 3) {
-              // Reset this checkout
-              const next = randomCheckout();
-              updated.remaining = next;
-              updated.currentTarget = next;
-              updated.dartsThisRound = 0;
-            }
+            // Bust — already certain, reset right away instead of waiting out the rest of this visit
+            const next = randomCheckout();
+            updated.remaining = next;
+            updated.currentTarget = next;
+            updated.dartsThisRound = 0;
           } else {
             updated.remaining = newRemaining;
             if (newDartsThisRound >= 3) {
@@ -590,6 +585,19 @@ const TrainingPage = () => {
             }
           }
           updated.roundScores = [...(prev.roundScores || []), baseValue === targetNum ? points : 0];
+          // As soon as finishing this number within the current turn becomes mathematically
+          // impossible — not enough darts left in this turn for whatever's still missing among
+          // Single/Triple/the finishing Double — reset right away instead of waiting for the 3rd
+          // dart. A 1st-dart miss already needs all 3 remaining darts it doesn't have; a miss
+          // right after a Single already needs 2 (Triple + Double) with only 1 dart left, etc.
+          if (!updated.finished && updated.targetIndex === prev.targetIndex) {
+            const stHit = updated.rtcMultsHit ?? [];
+            const stillNeeded = (stHit.includes(1) ? 0 : 1) + (stHit.includes(3) ? 0 : 1) + 1; // +1 for the finishing double itself
+            const dartsLeftThisTurn = 3 - newDartsThisRound;
+            if (stillNeeded > dartsLeftThisTurn) {
+              updated.rtcMultsHit = [];
+            }
+          }
           break;
         }
 
@@ -697,13 +705,6 @@ const TrainingPage = () => {
           }
         }
 
-        // Shanghai Round the Clock: an incomplete turn wipes Single/Triple progress on the
-        // current number — you don't carry it into the next turn — but you don't lose the
-        // number itself either (targetIndex only moves via the qualifying-double branch above,
-        // so if it's unchanged here the turn ended without finishing this number).
-        if (selectedDrill.id === "shanghai-rtc" && !updated.finished && updated.targetIndex === prev.targetIndex) {
-          updated.rtcMultsHit = [];
-        }
 
         // Halve It: no hit this round → halve the running score; otherwise add it. Advance
         // through the 10 fixed rounds, ending the drill after the last one.
