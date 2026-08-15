@@ -304,6 +304,10 @@ interface DrillState {
   rtcMultsHit?: number[];
   rtcScore?: number;
   rtcWin?: boolean;
+  /** Increments every time progress on the current number becomes newly unrecoverable — a
+   *  counter (not a boolean) so the UI can key an animation off it and re-flash even if it fires
+   *  on back-to-back turns. */
+  rtcMissedAt?: number;
   /** Halve It: points accumulated so far this round (reset each round; `remaining` is the running score) */
   hiRoundPoints?: number;
   /** True only when a round-cappable drill (around-the-clock, doubles-only, big-single-lock)
@@ -333,6 +337,16 @@ const TrainingPage = () => {
   const [drillConfig, setDrillConfig] = useState<DrillConfig>({});
   const [currentRecord, setCurrentRecord] = useState<RecordEntry | null>(null);
   const [brokeRecord, setBrokeRecord] = useState(false);
+  const [rtcFlash, setRtcFlash] = useState(false);
+
+  // Shanghai Round the Clock: brief visible feedback the instant progress becomes unrecoverable,
+  // instead of only a silent state reset the player might not notice until the next dart.
+  useEffect(() => {
+    if (!drillState?.rtcMissedAt) return;
+    setRtcFlash(true);
+    const t = window.setTimeout(() => setRtcFlash(false), 700);
+    return () => window.clearTimeout(t);
+  }, [drillState?.rtcMissedAt]);
 
   // Load whatever's on record for this drill as soon as it's picked (needed on both the
   // pre-start screen and the finished-summary screen).
@@ -375,6 +389,7 @@ const TrainingPage = () => {
   /** Start an active drill session */
   const startDrill = (drill: TrainingDrill, config: DrillConfig = drillConfig) => {
     setBrokeRecord(false);
+    setRtcFlash(false);
     let state: DrillState = {
       drillId: drill.id,
       dartsThrown: 0,
@@ -703,6 +718,7 @@ const TrainingPage = () => {
             const dartsLeftThisTurn = 3 - newDartsThisRound;
             if (stillNeeded > dartsLeftThisTurn) {
               updated.rtcMultsHit = [];
+              updated.rtcMissedAt = (prev.rtcMissedAt ?? 0) + 1;
             }
           }
           break;
@@ -1102,7 +1118,7 @@ const TrainingPage = () => {
                     <p className="text-xs text-muted-foreground mb-1">
                       Zahl {drillState.targetIndex + 1} / {drillState.targetList.length}
                     </p>
-                    <p className="text-5xl font-display text-primary">{drillState.currentTarget}</p>
+                    <p className={`text-5xl font-display transition-colors ${rtcFlash ? "text-destructive" : "text-primary"}`}>{drillState.currentTarget}</p>
                     <div className="flex justify-center gap-2 mt-2">
                       {[1, 3].map((m) => (
                         <span key={m} className={`text-xs font-display px-2.5 py-1 rounded-full border transition-colors ${
@@ -1119,8 +1135,14 @@ const TrainingPage = () => {
                         D
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {stDone ? <span className="text-accent font-bold">Jetzt Doppel zum Weiterkommen!</span> : "Single + Triple in beliebiger Reihenfolge"}
+                    <p className="text-xs mt-2">
+                      {rtcFlash ? (
+                        <span className="text-destructive font-bold animate-scale-in">Vertan — nochmal!</span>
+                      ) : stDone ? (
+                        <span className="text-accent font-bold">Jetzt Doppel zum Weiterkommen!</span>
+                      ) : (
+                        <span className="text-muted-foreground">Single + Triple in beliebiger Reihenfolge</span>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Score: <span className="text-foreground font-bold">{drillState.rtcScore ?? 0}</span>
