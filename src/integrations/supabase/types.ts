@@ -461,6 +461,8 @@ export type Database = {
           after_path: string
           before_path: string
           board: string
+          calib_taps: Json | null
+          camera_zoom: number | null
           created_at: string
           id: string
           image_size: number
@@ -471,6 +473,8 @@ export type Database = {
           after_path: string
           before_path: string
           board?: string
+          calib_taps?: Json | null
+          camera_zoom?: number | null
           created_at?: string
           id?: string
           image_size?: number
@@ -481,6 +485,8 @@ export type Database = {
           after_path?: string
           before_path?: string
           board?: string
+          calib_taps?: Json | null
+          camera_zoom?: number | null
           created_at?: string
           id?: string
           image_size?: number

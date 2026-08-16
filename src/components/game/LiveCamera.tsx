@@ -878,6 +878,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         after_path: `${prefix}/after.jpg`,
         image_size: VISION_ANALYSIS_SIZE,
         labels,
+        // Read live off `calib` right here at commit time (not a value captured back when the
+        // scan started) — lets the set later be evaluated/stratified by zoom level and camera
+        // angle instead of accumulating blind to how skewed its coverage is toward one setup.
+        camera_zoom: calib.zoom,
+        calib_taps: calib.taps ?? null,
       });
     } catch (err) {
       console.warn("[LiveCamera] training sample upload skipped", err);
