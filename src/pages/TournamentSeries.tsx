@@ -267,7 +267,15 @@ function computeStandings(tourneys: TournamentLite[], scoring: Scoring): Standin
   for (const t of tourneys) {
     if (t.status !== "finished") continue;
     const played = new Set<string>();
-    (t.players || []).forEach((p) => { if (p && p !== "BYE") { played.add(p); add(p, scoring.participation); } });
+    (t.players || []).forEach((p) => {
+      if (!p || p === "BYE") return;
+      played.add(p);
+      add(p, scoring.participation);
+      // Exactly once per player per tournament — add() itself is called again below for
+      // champion/runner-up/semi/quarter bonuses, which would over-count if tallied there instead.
+      const key = normalize(p);
+      if (map[key]) map[key].tournaments++;
+    });
 
     if (t.mode !== "round-robin" && Array.isArray(t.bracket)) {
       const matches = t.bracket as Match[];

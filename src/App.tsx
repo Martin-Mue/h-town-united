@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Layout from "./components/Layout";
 import Auth from "./pages/Auth";
@@ -32,8 +32,12 @@ const RouteFallback = () => (
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <RouteFallback />;
-  if (!user) return <Navigate to="/auth" replace />;
+  // Carries the original URL (e.g. a "Spiel starten" QR link's /game?tid=...&mid=...) through
+  // the login detour — without this, scanning that QR while logged out silently dropped straight
+  // to the homepage after signing in, losing which match it was meant to prefill.
+  if (!user) return <Navigate to="/auth" replace state={{ from: `${location.pathname}${location.search}` }} />;
   return <>{children}</>;
 };
 

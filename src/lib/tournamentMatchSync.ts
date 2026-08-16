@@ -48,15 +48,20 @@ async function notifyMatchesReady(matches: Match[]): Promise<void> {
  * never authoritative. Every failure is swallowed: this must never interrupt or slow down an
  * in-progress game, and there's no retry queue for it (unlike the final result), since a late
  * live snapshot has no value once the game has moved on.
+ *
+ * Fires every ~1.2s per active linked game (see the caller), so with several boards live at once
+ * this hits the same tournament row often. Patches the match's `live` field via a single atomic
+ * server-side UPDATE (see the update_match_live_snapshot migration) instead of a client-side
+ * SELECT-then-UPDATE — the old read-modify-write had a real window for a concurrent write
+ * (another board finishing, an owner's manual edit) to land in between and get silently reverted.
  */
 export async function pushLiveSnapshot(tournamentId: string, matchId: string, snapshot: LiveSnapshot): Promise<void> {
   try {
-    const { data: tournament, error } = await supabase.from("tournaments").select("bracket").eq("id", tournamentId).single();
-    if (error || !tournament) return;
-    const bracket = ((tournament.bracket as unknown as (Match | RoundRobinMatch)[]) || []).map((m) =>
-      m.id === matchId ? { ...m, live: snapshot } : m
-    );
-    await supabase.from("tournaments").update({ bracket: bracket as any }).eq("id", tournamentId);
+    await supabase.rpc("update_match_live_snapshot", {
+      p_tournament_id: tournamentId,
+      p_match_id: matchId,
+      p_snapshot: snapshot as any,
+    });
   } catch {
     // best-effort — see doc comment
   }
@@ -78,7 +83,13 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
   if (!tournament) throw new Error("Tournament not found");
 
   if (tournament.mode === "round-robin") {
-    const bracket = ((tournament.bracket as unknown as RoundRobinMatch[]) || []).map((m) =>
+    const rrBracket = (tournament.bracket as unknown as RoundRobinMatch[]) || [];
+    // Someone else's write already decided this match (two devices finishing the same match
+    // close together, or a manual correction landing first) — don't clobber a real result with
+    // whatever this call happened to compute. Not an error to retry: the underlying game row is
+    // saved regardless (see the caller), only this specific bracket write-back is a no-op.
+    if (rrBracket.find((m) => m.id === matchId)?.played) return;
+    const bracket = rrBracket.map((m) =>
       m.id === matchId ? { ...m, winner: result.winnerName, played: true, live: undefined } : m
     );
     const allPlayed = bracket.length > 0 && bracket.every((m) => m.played);
@@ -92,7 +103,12 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
     return;
   }
 
-  const raw = ((tournament.bracket as unknown as Match[]) || []).map((m) =>
+  const koBracket = (tournament.bracket as unknown as Match[]) || [];
+  // Same reasoning as the round-robin branch above — already decided by another write, skip
+  // rather than overwrite (and never throw here: the caller queues a thrown error for retry,
+  // which would just fail identically forever once a match is genuinely already decided).
+  if (koBracket.find((m) => m.id === matchId)?.winner) return;
+  const raw = koBracket.map((m) =>
     m.id === matchId ? { ...m, winner: result.winnerName, score1: result.score1, score2: result.score2, live: undefined } : m
   );
   const activePlayers = (tournament.players as unknown as string[]) || [];

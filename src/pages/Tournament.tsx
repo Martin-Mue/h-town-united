@@ -30,6 +30,7 @@ import {
   bracketChampion,
   buildSchedule,
   currentBoardSchedule,
+  isLiveSnapshotFresh,
   assignScorekeepers,
   roundLabelFor,
   scorekeeperLabel,
@@ -1021,12 +1022,24 @@ const TournamentPage = () => {
     return liveGamePath(match.id, match.player1, match.player2, roundMode, activeTournament.best_of_legs || 1);
   };
 
+  // No server-side "claim" exists for a match — two people scanning the same QR (or one person
+  // tapping it twice) each get an independent live-game session, both saved as separate games
+  // and racing on the bracket write-back. The `live` snapshot every active linked game already
+  // pushes every ~1.2s is the only signal available that a session might already be running, so
+  // a plain confirm() (no existing AlertDialog wraps this button, and this only fires on the
+  // rare actual collision) is a pragmatic guard rather than silently starting a duplicate.
   const startLiveGame = (match: Match) => {
+    if (isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} scheint gerade schon auf einem anderen Gerät zu laufen. Trotzdem ein neues Spiel starten?`)) {
+      return;
+    }
     const path = koLiveGamePath(match);
     if (path) navigate(path);
   };
 
   const startLiveGameRr = (match: RoundRobinMatch) => {
+    if (isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} scheint gerade schon auf einem anderen Gerät zu laufen. Trotzdem ein neues Spiel starten?`)) {
+      return;
+    }
     const path = rrLiveGamePath(match);
     if (path) navigate(path);
   };
@@ -1715,7 +1728,11 @@ const TournamentPage = () => {
                             <SelectContent className="bg-card border-border max-h-64">
                               <SelectItem value="__auto">Automatisch (Turnier-Regel)</SelectItem>
                               {activeTournament.players
-                                .filter(p => p !== e.match.player1 && p !== e.match.player2)
+                                // Not just this match's own two players — anyone playing ANY match
+                                // in this same slot is unavailable too (matches assignScorekeepers'
+                                // own "busy" rule; the dropdown previously let you pick someone
+                                // who's actually mid-match on a different board at the same time).
+                                .filter(p => !open.some(oe => oe.slot === slot && (oe.match.player1 === p || oe.match.player2 === p)))
                                 .map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                             </SelectContent>
                           </Select>
