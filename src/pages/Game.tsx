@@ -95,8 +95,42 @@ interface UndoSnapshot {
 
 const DEFAULT_NAMES = Array.from({ length: MAX_PLAYERS }, (_, i) => `Spieler ${i + 1}`);
 
+/**
+ * Crash-recovery for an in-progress match — a page reload (pull-to-refresh triggered by
+ * accident, a PWA update taking over, the tab getting killed) used to lose the whole game with
+ * no way back. GameState is fully self-contained (players/scores/legs/throws/mode), so the
+ * whole thing can just be mirrored to localStorage while playing and restored on next load —
+ * no server round-trip needed, and it's already gone the moment the leg finishes (see
+ * clearActiveGameSnapshot), since a finished game is the existing save/offline-queue path's job
+ * to protect, not this one's.
+ */
+const ACTIVE_GAME_KEY = "dartcam-active-game-v1";
+function loadActiveGameSnapshot(): GameState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_GAME_KEY);
+    return raw ? (JSON.parse(raw) as GameState) : null;
+  } catch {
+    return null;
+  }
+}
+function saveActiveGameSnapshot(game: GameState) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(game));
+  } catch {
+    /* storage full/unavailable — not fatal, just no crash-recovery this session */
+  }
+}
+function clearActiveGameSnapshot() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ACTIVE_GAME_KEY);
+}
+
 const GamePage = () => {
-  const [phase, setPhase] = useState<"setup" | "warmup" | "walkon" | "playing" | "postGame">("setup");
+  const [phase, setPhase] = useState<"setup" | "warmup" | "walkon" | "playing" | "postGame">(() =>
+    loadActiveGameSnapshot() ? "playing" : "setup"
+  );
   const [mode, setMode] = useState<GameMode>("501");
   const [bestOfLegs, setBestOfLegs] = useState(1);
   const [maxRoundsX01, setMaxRoundsX01] = useState<number>(0); // 0 = unlimited
@@ -132,7 +166,7 @@ const GamePage = () => {
     const raw = window.localStorage.getItem(WALKON_PREF_KEY);
     return raw ? raw !== "false" : true;
   });
-  const [game, setGame] = useState<GameState | null>(null);
+  const [game, setGame] = useState<GameState | null>(() => loadActiveGameSnapshot());
   // Fallback defaults for handleX01Throw/handleCricketThrow when called without an explicit
   // dart (bot logic, camera detection) — DartScoreInput's buttons always pass explicit values.
   const selectedScore = 20;
@@ -146,6 +180,25 @@ const GamePage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
+  // Computed once at mount (before any reset/finish can clear the snapshot) — whether this
+  // page load recovered an in-progress game rather than starting fresh at "setup".
+  const restoredFromSnapshotRef = useRef(phase === "playing" && !!game);
+  useEffect(() => {
+    if (restoredFromSnapshotRef.current) {
+      toast({ title: "Spiel wiederhergestellt", description: "Nach einem Neuladen an der letzten Stelle weitergemacht." });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Mirror the in-progress game to localStorage on every change — see loadActiveGameSnapshot's
+  // doc comment. Cleared once the leg is decided (below) or on an explicit new-game reset
+  // (resetGame), since a finished game's durability is the existing save/offline-queue path's
+  // job, not this snapshot's.
+  useEffect(() => {
+    if (phase === "playing" && game && !game.isFinished) saveActiveGameSnapshot(game);
+  }, [game, phase]);
+  useEffect(() => {
+    if (game?.isFinished) clearActiveGameSnapshot();
+  }, [game?.isFinished]);
   /** Set once on mount when this game was launched from a tournament bracket match ("Spiel starten") — used to tag the saved game and write the result back into the bracket on finish. */
   const tournamentLinkRef = useRef<{ tournamentId: string; matchId: string; tournamentName?: string } | null>(null);
   const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(null);
@@ -952,6 +1005,7 @@ const GamePage = () => {
   const resetGame = () => {
     if (botTimerRef.current) { clearTimeout(botTimerRef.current); botTimerRef.current = null; }
     botPlanRef.current = null;
+    clearActiveGameSnapshot();
     setPhase("setup"); setGame(null); setGameSaved(false); setShowDetailedStats(false);
     setDartsThisRound(0); setUndoStack([]);
   };
