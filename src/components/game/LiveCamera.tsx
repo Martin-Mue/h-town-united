@@ -441,6 +441,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(() => loadDeviceId(loadActiveBoard()));
   const [autoCalibrating, setAutoCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // On-device visual check for the calibration, no browser devtools needed — many testers only
+  // have the phone itself in hand. Shows exactly where the app thinks D20/D3/D11/D6 are, right
+  // on top of the live feed, so a wrong calibration is visible at a glance instead of requiring
+  // a console log from a machine that isn't there.
+  const [showCalibDebug, setShowCalibDebug] = useState(false);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
   const [calibStep, setCalibStep] = useState(0);
   const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
@@ -1613,6 +1618,23 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
         )}
 
+        {/* Calibration-point debug overlay — where the app thinks D20/D3/D11/D6 actually are,
+            right on the live feed. Toggle via "Kalibrierpunkte anzeigen" below; the only way to
+            sanity-check a calibration on a phone with no devtools access. Same left/top-percent
+            placement the tracking ring already uses for calib.x/y. */}
+        {showCalibDebug && (calib.taps?.length ?? 0) === 4 && (phase === "live" || phase === "scanning") && (
+          <div className="pointer-events-none absolute inset-0">
+            {calib.taps!.map((t, i) => (
+              <div key={i} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%` }}>
+                <div className="h-3.5 w-3.5 rounded-full bg-yellow-400 ring-2 ring-background" />
+                <span className="absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded bg-yellow-400 px-1 py-0.5 text-[9px] font-display text-background">
+                  {CALIB_KEYS[i]}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Detected-dart markers — shows exactly what the AI saw, at the tip position it used. */}
         {accumulated.length > 0 && (
           <div className="pointer-events-none absolute inset-0">
@@ -1696,13 +1718,24 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       )}
 
       {detectionMode === "local" && (phase === "live" || phase === "scanning") && (
-        <button
-          onClick={restartCalibration}
-          className="w-full rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
-          title="Löscht die aktuelle Kalibrierung und versucht sie neu — erst automatisch per KI-Modell, sonst per manuellem 4-Punkt-Tap."
-        >
-          <Target className="h-3.5 w-3.5" /> Erkennung falsch? Kalibrierung neu starten
-        </button>
+        <div className="flex gap-1.5">
+          <button
+            onClick={restartCalibration}
+            className="flex-1 rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
+            title="Löscht die aktuelle Kalibrierung und versucht sie neu — erst automatisch per KI-Modell, sonst per manuellem 4-Punkt-Tap."
+          >
+            <Target className="h-3.5 w-3.5" /> Kalibrierung neu starten
+          </button>
+          <button
+            onClick={() => setShowCalibDebug((v) => !v)}
+            className={`shrink-0 rounded-md border px-3 py-1.5 text-[11px] flex items-center justify-center gap-1.5 ${
+              showCalibDebug ? "border-accent bg-accent/15 text-accent" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+            title="Zeigt direkt im Kamerabild, wo die App D20/D3/D11/D6 verortet — kein Konsolen-Zugriff nötig, einfach mit dem echten Board vergleichen."
+          >
+            {showCalibDebug ? "Punkte ausblenden" : "D20/D3/D11/D6 zeigen"}
+          </button>
+        </div>
       )}
 
       {scanFailed && onRequestManualEntry && (
