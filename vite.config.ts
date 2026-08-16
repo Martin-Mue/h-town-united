@@ -8,12 +8,31 @@ import { VitePWA } from "vite-plugin-pwa";
 // Captured once, at build time (whatever machine/CI actually runs `npm run build`) — lets the
 // running app show which commit it was built from, so an installed PWA's version can be checked
 // against the repo instead of just trusting the service-worker update plumbing worked.
+//
+// `git rev-parse` alone worked fine building locally all session, but came back empty the first
+// time a build actually went through Lovable's own cloud pipeline instead — that environment
+// apparently doesn't have `.git` (or `git` itself) available. Try common CI-injected commit-SHA
+// env vars first (covers the usual naming across Vercel/Netlify/Cloudflare Pages/GitHub Actions,
+// on the chance Lovable's build environment sets one of these), then fall back to asking git
+// directly for local/dev builds, and only give up to "unknown" if neither works.
 const commitSha = (() => {
+  const fromEnv = [
+    process.env.VITE_GIT_COMMIT_SHA,
+    process.env.COMMIT_SHA,
+    process.env.GIT_COMMIT,
+    process.env.SOURCE_VERSION,
+    process.env.VERCEL_GIT_COMMIT_SHA,
+    process.env.CF_PAGES_COMMIT_SHA,
+    process.env.GITHUB_SHA,
+  ].find((v) => v && v.trim());
+  if (fromEnv) return fromEnv.trim().slice(0, 7);
   try {
-    return execSync("git rev-parse --short HEAD").toString().trim();
+    const sha = execSync("git rev-parse --short HEAD").toString().trim();
+    if (sha) return sha;
   } catch {
-    return "unknown";
+    /* no git available in this build environment either */
   }
+  return "unknown";
 })();
 const buildTime = new Date().toISOString();
 
