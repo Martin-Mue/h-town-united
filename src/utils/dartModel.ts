@@ -43,13 +43,20 @@ const CAL_LABELS = CLASS_NAMES.slice(1) as CalLabel[];
 const DART_CLASS_INDEX = 0;
 const NUM_CLASSES = CLASS_NAMES.length;
 
-// The Colab validation metrics (mAP50 ~0.99) are against images from the SAME distribution as
-// training — a real club board/camera/lighting is a different distribution, and real-world
-// confidence commonly comes in well below validation-set confidence for exactly that reason.
-// Kept low deliberately: local mode never auto-commits regardless (see LiveCamera.tsx), so a
-// low-confidence hit still just becomes "please review", which is strictly better than silently
-// finding nothing and falling back to the older, less accurate motion-diff heuristic.
-const DART_SCORE_THRESHOLD = 0.15;
+// Raised back up after checking real saved training_samples from a field test (see
+// LiveCamera.tsx's uploadTrainingSample): recomputing the board angle from the stored
+// boardU/boardV of darts the player had to manually correct showed errors of 74-188 degrees —
+// not a small offset, and not the SAME offset twice (one dart in the same throw was exact,
+// the other two were wrong by very different amounts). That's not a coordinate/calibration bug
+// (which would misplace every dart by the same amount) — it's the model's raw dart-class boxes
+// genuinely landing in the wrong place on this specific camera/lighting setup, despite good
+// Colab validation metrics (a real-world domain-shift problem, not something a threshold can
+// fix). A low bar was making things WORSE, not better: a low-confidence "detection" here is
+// often simply wrong, not just less certain, so letting more of them through just produced more
+// confidently-wrong guesses instead of a clean "nothing found -> manual entry". Back to a more
+// conservative bar until the model has been fine-tuned on this camera's own conditions (the
+// training-sample pipeline is already collecting exactly that data for a future fine-tune).
+const DART_SCORE_THRESHOLD = 0.4;
 // Calibration is higher-stakes than a single dart — a wrong corner miscalibrates the WHOLE
 // session, not just one throw — so this stays conservative; a low-confidence calibration attempt
 // just falls back to manual tapping instead of committing to a shaky guess. Raised from 0.45

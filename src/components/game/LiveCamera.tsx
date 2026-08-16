@@ -831,9 +831,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     darts: DetectedDart[],
   ) => {
     try {
+      // confidence is the ORIGINAL detector's score for the position, kept even though baseValue
+      // may since have been player-corrected — needed to tell apart "wrong but the model was
+      // sure" from "wrong and the model was already unsure", which matters a lot when tuning
+      // DART_SCORE_THRESHOLD against this data later.
       const labels = darts
         .filter(hasPosition)
-        .map((d) => ({ x: d.x, y: d.y, baseValue: d.baseValue, multiplier: d.multiplier, boardU: d.boardU, boardV: d.boardV }));
+        .map((d) => ({ x: d.x, y: d.y, baseValue: d.baseValue, multiplier: d.multiplier, boardU: d.boardU, boardV: d.boardV, confidence: d.confidence }));
       if (labels.length === 0) return;
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
