@@ -1895,12 +1895,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             </div>
 
             {repositionDraft && (
+              // The outer div's own -translate-x/y-1/2 already centers this whole marker on the
+              // tap point (standard "left/top % + self-transform" centering, same pattern used
+              // correctly everywhere else in this file). The ring below used to ALSO apply its
+              // own -translate-x/y-1/2 on top of that — a redundant second shift by half of ITS
+              // OWN size (28px at h-14/w-14) — and the dot sat at the wrapper's corner (left-0
+              // top-0) instead of its center. Together that put the whole marker a fixed ~28px
+              // up-and-left of wherever you actually tapped, however precisely you tapped it —
+              // exactly the "impossible to place precisely" bug reported after testing this live.
               <div
                 className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${repositionDraft.fx * 100}%`, top: `${repositionDraft.fy * 100}%` }}
               >
-                <div className="h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent shadow-lg glow-gold" />
-                <div className="absolute left-0 top-0 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background" />
+                <div className="h-14 w-14 rounded-full border-2 border-accent shadow-lg glow-gold" />
+                <div className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background" />
               </div>
             )}
 
