@@ -348,11 +348,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   onRequestManualEntry,
 }, ref) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  // The always-mounted box the <video> is object-cover-fit into — needed to convert between
-  // "where the user tapped on screen" and "a fraction of the native video buffer" (see
-  // screenFractionToVideoFraction below). Separate from calibOverlayRef, which only exists
-  // during phase === "calibrate".
-  const videoBoxRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const zoomCapsRef = useRef<ZoomCapability | null>(null);
@@ -605,8 +600,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   // ─── helpers ────────────────────────────────────────────────────────
   // Thin wrappers around the pure functions in @/utils/cameraGeometry — this component's job is
-  // just to supply the live videoRef/videoBoxRef/calib values; the actual math (and its tests)
-  // live there. See that file's header for what "screen", "video" and "crop" fraction mean.
+  // just to supply the live videoRef/calib values; the actual math (and its tests) live there.
+  // See that file's header for what "screen", "video" and "crop" fraction mean.
   const cropRect = () => {
     const v = videoRef.current;
     if (!v) return null;
@@ -615,10 +610,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const videoVisibleWindow = () => {
     const v = videoRef.current;
-    const box = videoBoxRef.current;
-    if (!v || !box) return null;
-    const boxRect = box.getBoundingClientRect();
-    return computeVisibleWindow(v.videoWidth, v.videoHeight, boxRect.width, boxRect.height);
+    if (!v) return null;
+    // Measure the <video> element's own box, not its (bordered) parent container's —
+    // getBoundingClientRect() includes the border, but absolutely-positioned overlay children
+    // (the tap-catchers, the markers) and the video's own object-cover content all render
+    // relative to the padding box, inside that border. A 1px mismatch is small, but it's a
+    // real, avoidable systematic offset — measure the exact box that's actually relevant.
+    const videoRect = v.getBoundingClientRect();
+    return computeVisibleWindow(v.videoWidth, v.videoHeight, videoRect.width, videoRect.height);
   };
 
   /** On-screen tap (fraction of the displayed video box, 0-1) -> fraction of the native video
@@ -1646,7 +1645,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </div>
       )}
 
-      <div ref={videoBoxRef} className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
+      <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
         <video
           ref={videoRef}
           playsInline
