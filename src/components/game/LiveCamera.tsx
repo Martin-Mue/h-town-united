@@ -18,7 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { SEGMENTS_CLOCKWISE, RING } from "@/utils/dartboardGeometry";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
-import { detectDartsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
+import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
 import { computeHomography, applyHomography, type Homography } from "@/utils/homography";
 import {
   playDartDetectedSound,
@@ -126,6 +126,8 @@ const loadTrainingDataEnabled = (): boolean => {
 const CALIB_KEY = "dartcam-calibration-v5";
 const CALIB_LABELS = ["Doppel 20 (oben)", "Doppel 3 (unten)", "Doppel 11 (links)", "Doppel 6 (rechts)"] as const;
 const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
+// Just needs all 4 present — identity doesn't matter, see tryAutoCalibrate's geometric assignment.
+const CAL_LABELS_ORDER = ["cal_1", "cal_2", "cal_3", "cal_4"] as const;
 
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
 // remembers which physical board it's pointed at, and calibration + camera-device choice are
@@ -620,16 +622,26 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     return { sx, sy, side };
   };
 
+  // A point relative to the cropped/zoomed analysis frame (0-1) -> the full video frame (the
+  // same space calibration taps and the live overlay both use). Shared by dart positions
+  // (toFullFrameXY below) AND the model's auto-detected calibration corners (see
+  // tryAutoCalibrate) — using the identical formula for both is what makes auto-calibration
+  // self-consistent with dart scoring without needing to know how manual taps relate to it.
+  const cropXYToFullFrame = (x: number, y: number): { fx: number; fy: number } | null => {
+    const v = videoRef.current;
+    const rect = cropRect();
+    if (!v || !rect || !v.videoWidth || !v.videoHeight) return null;
+    return {
+      fx: (rect.sx + x * rect.side) / v.videoWidth,
+      fy: (rect.sy + y * rect.side) / v.videoHeight,
+    };
+  };
+
   // Dart x/y come back relative to the cropped/zoomed analysis frame — map to the full
   // video frame (the same space calibration taps and the live overlay both use).
   const toFullFrameXY = (d: DetectedDart): { fx: number; fy: number } | null => {
-    const v = videoRef.current;
-    const rect = cropRect();
-    if (!hasPosition(d) || !v || !rect || !v.videoWidth || !v.videoHeight) return null;
-    return {
-      fx: (rect.sx + (d.x ?? 0) * rect.side) / v.videoWidth,
-      fy: (rect.sy + (d.y ?? 0) * rect.side) / v.videoHeight,
-    };
+    if (!hasPosition(d)) return null;
+    return cropXYToFullFrame(d.x ?? 0, d.y ?? 0);
   };
 
   // Recompute each dart's segment/multiplier from its tip pixel via the 4-point
@@ -886,15 +898,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // a local heuristic board-circle finder here and let it drive the crop/physical camera
     // zoom automatically — pulled back out after real-world testing found it made calibration
     // worse, not better (an unvalidated guess was moving the physical zoom to a bad spot before
-    // the user even started tapping). Going straight to manual calibration is the reliable path:
-    // the 4-point taps read directly off the live video feed, unaffected by crop/zoom state.
+    // the user even started tapping). Digital crop/zoom is left alone here; only the 4
+    // calibration points are attempted automatically (via the trained model), with manual
+    // tapping as the always-available fallback/override.
     if (detectionMode === "local") {
       resetLoop();
       if (!calib.taps || calib.taps.length !== 4) {
-        setCalibStep(0);
-        setPendingTaps([]);
-        setPhase("calibrate");
-        setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
+        await runLocalCalibrationFlow();
       } else {
         setPhase("live");
         setStatus("Bereit – wirf deinen ersten Dart");
@@ -949,29 +959,41 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       : { x: 0.5, y: 0.5 });
   };
 
+  /** Validates and commits 4 [D20,D3,D11,D6] points as the board calibration — shared by the
+   *  manual 4-tap flow and the model-based auto-calibration below, so both go through the exact
+   *  same degenerate-calibration rejection and crop-framing math. Returns false (and leaves
+   *  `calib` untouched) if the 4 points don't form a usable calibration. */
+  const applyCalibrationTaps = (next: { x: number; y: number }[]): boolean => {
+    if (next.length !== 4) return false;
+    const cx = (next[2].x + next[3].x) / 2;
+    const cy = (next[0].y + next[1].y) / 2;
+    const w = Math.abs(next[3].x - next[2].x);
+    const h = Math.abs(next[1].y - next[0].y);
+    // A degenerate (near-collinear/duplicate) or badly-clustered set of points would otherwise
+    // silently score every dart as "Miss" for the rest of the session with no visible error —
+    // reject it here instead of accepting a calibration that can't actually score anything.
+    const MIN_CALIB_SPREAD = 0.15;
+    if (!computeHomography(next, CANON_BOARD_POINTS) || w < MIN_CALIB_SPREAD || h < MIN_CALIB_SPREAD) {
+      return false;
+    }
+    const size = clamp(Math.max(w, h) * 1.06, MIN_ANALYSIS_SIZE, 0.98);
+    setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next }));
+    return true;
+  };
+
   const confirmActiveTap = () => {
     const tap = activeTap ?? { x: 0.5, y: 0.5 };
     const next = [...pendingTaps, tap];
     setPendingTaps(next);
     setActiveTap(null);
     if (next.length >= 4) {
-      const cx = (next[2].x + next[3].x) / 2;
-      const cy = (next[0].y + next[1].y) / 2;
-      const w = Math.abs(next[3].x - next[2].x);
-      const h = Math.abs(next[1].y - next[0].y);
-      // A degenerate (near-collinear/duplicate) or badly-clustered set of taps would otherwise
-      // silently score every dart as "Miss" for the rest of the session with no visible error —
-      // reject it here instead of accepting a calibration that can't actually score anything.
-      const MIN_CALIB_SPREAD = 0.15;
-      if (!computeHomography(next, CANON_BOARD_POINTS) || w < MIN_CALIB_SPREAD || h < MIN_CALIB_SPREAD) {
+      if (!applyCalibrationTaps(next)) {
         setPendingTaps([]);
         setActiveTap(null);
         setCalibStep(0);
         setStatus("Kalibrierung ungültig — Punkte zu nah beieinander oder auf einer Linie. Bitte die 4 Punkte nochmal genau auf die Doppel-Ring-Kanten tippen.");
         return;
       }
-      const size = clamp(Math.max(w, h) * 1.06, MIN_ANALYSIS_SIZE, 0.98);
-      setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next }));
       setCalibStep(0);
       setPendingTaps([]);
       resetLoop();
@@ -983,12 +1005,78 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     }
   };
 
+  /**
+   * One-shot calibration via the trained model's cal_1..cal_4 classes (see dartModel.ts).
+   * Point IDENTITY isn't trusted (no documented convention for which numeric cal_x is which
+   * physical corner) — instead the 4 detected points are assigned to D20/D3/D11/D6 purely by
+   * geometry (topmost/bottommost/leftmost/rightmost), the same fixed orientation the manual
+   * flow's labels already assume ("Doppel 20 (oben)" etc.). Requires all 4 classes confidently
+   * detected AND cleanly separable by role; anything less falls back to manual tapping.
+   */
+  const tryAutoCalibrate = async (): Promise<boolean> => {
+    const frame = grabImageData(MODEL_INPUT_SIZE, false);
+    if (!frame) return false;
+    const result = await detectCalibrationPointsWithModel(frame);
+    if (result.unavailable) return false;
+    const cropPoints = CAL_LABELS_ORDER.map((k) => result.points[k]).filter(
+      (p): p is { x: number; y: number; score: number } => !!p
+    );
+    if (cropPoints.length !== 4) return false;
+    const full = cropPoints
+      .map((p) => cropXYToFullFrame(p.x, p.y))
+      .filter((p): p is { fx: number; fy: number } => !!p);
+    if (full.length !== 4) return false;
+    const byY = [...full].sort((a, b) => a.fy - b.fy);
+    const byX = [...full].sort((a, b) => a.fx - b.fx);
+    const top = byY[0], bottom = byY[byY.length - 1];
+    const left = byX[0], right = byX[byX.length - 1];
+    // Couldn't cleanly separate all 4 roles (e.g. a point is simultaneously the topmost AND
+    // leftmost) — a rotated/skewed camera angle confusing the geometric sort. Safer to fall
+    // back to manual tapping than to guess a role assignment.
+    if (new Set([top, bottom, left, right]).size < 4) return false;
+    return applyCalibrationTaps([
+      { x: top.fx, y: top.fy },
+      { x: bottom.fx, y: bottom.fy },
+      { x: left.fx, y: left.fy },
+      { x: right.fx, y: right.fy },
+    ]);
+  };
+
+  /** Clears any existing calibration and re-runs "try the model first, else manual taps" — used
+   *  both right after the camera starts (autoDetectBoard) and by the manual "Kalibrierung neu
+   *  starten" button, so a bad calibration (auto- or manually-derived) can always be redone
+   *  without restarting the whole camera. */
+  const runLocalCalibrationFlow = async () => {
+    resetLoop();
+    // Wait for the model to actually finish loading (idempotent — instant if already loaded)
+    // before deciding whether auto-calibration is even possible. Just checking modelReadyRef
+    // immediately would almost always lose the race: the model (12MB+ WASM compile) rarely
+    // finishes within the ~600ms autoDetectBoard runs after camera start, so auto-calibration
+    // would silently never fire in practice.
+    setPhase("detecting");
+    setStatus("KI-Modell lädt – suche Kalibrierpunkte …");
+    const modelOk = await preloadDartModel();
+    modelReadyRef.current = modelOk;
+    setModelReady(modelOk);
+    const autoOk = modelOk && (await tryAutoCalibrate());
+    resetLoop();
+    if (autoOk) {
+      setPhase("live");
+      setStatus("Automatisch kalibriert (KI-Modell) · bereit – wirf deinen ersten Dart. Stimmt die Lage nicht, unten „Kalibrierung neu starten“ tippen.");
+    } else {
+      setCalibStep(0);
+      setPendingTaps([]);
+      setPhase("calibrate");
+      setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
+    }
+  };
+
+  // Previously dead code — nothing in the UI called this, so once a device had a saved
+  // calibration there was no way to redo it short of clearing localStorage by hand. Now wired
+  // to the "Kalibrierung neu starten" button in the advanced panel (local mode only), and reuses
+  // the same "try the model, else manual" flow the very first calibration goes through.
   const restartCalibration = () => {
-    setPendingTaps([]);
-    setActiveTap(null);
-    setCalibStep(0);
-    setPhase("calibrate");
-    setStatus(`Kalibrierung 1/4: ${CALIB_LABELS[0]}`);
+    void runLocalCalibrationFlow();
   };
 
   /** Switches which physical board this device is scoring — reloads that board's own saved
@@ -1186,6 +1274,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         } else {
           // Model not loaded yet / inference failed / found nothing — the older motion-diff
           // heuristic is still here as a safety net so auto-scoring never just stops working.
+          if (modelResult && !modelResult.unavailable) {
+            // Diagnostic only — if the model ran but found nothing, the raw top score (even
+            // below threshold) tells us whether it's "almost detecting" (real-world confidence
+            // just runs lower than the Colab validation set) or "not detecting at all" (crop
+            // framing / preprocessing mismatch) — very different problems to chase.
+            console.warn("[LiveCamera] model found 0 darts, max raw score seen:", modelResult.maxDartScore);
+          }
           setLastDetectionSource("diff");
           const fallback = runDiffFallback();
           candidateDarts = fallback.darts;
@@ -1503,7 +1598,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         {(phase === "starting" || phase === "detecting") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 px-4 text-center text-xs text-foreground">
             <Loader2 className="mb-2 h-5 w-5 animate-spin" />
-            {phase === "starting" ? "Kamera startet…" : "Board wird automatisch erkannt…"}
+            {phase === "starting"
+              ? "Kamera startet…"
+              : detectionMode === "local"
+                ? status
+                : "Board wird automatisch erkannt…"}
           </div>
         )}
         {phase === "scanning" && (
@@ -1780,6 +1879,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           >
             <RotateCcw className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> {phase === "detecting" ? "Erkenne Board…" : "Board neu auto-erkennen"}
           </Button>
+          {detectionMode === "local" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={restartCalibration}
+              disabled={phase === "detecting"}
+              className="w-full gap-1"
+              title="Löscht die aktuelle Kalibrierung und versucht sie neu — erst automatisch per KI-Modell, sonst per manuellem 4-Punkt-Tap. Sinnvoll, wenn Darts zuletzt falsch bewertet wurden."
+            >
+              <Target className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> Kalibrierung neu starten
+            </Button>
+          )}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
               <span>Horizontal</span>
