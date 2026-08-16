@@ -452,6 +452,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // original (possibly wrong) position paired with the right label, which would teach a future
   // fine-tune the wrong position/label association instead of fixing it.
   const [repositioningIndex, setRepositioningIndex] = useState<number | null>(null);
+  // Pending tap position while repositioning — kept separate from committing immediately so a
+  // mis-tap can just be tapped again (or nudged) without leaving the mode, no scrolling back
+  // down to the review list to re-arm it required.
+  const [repositionDraft, setRepositionDraft] = useState<{ fx: number; fy: number } | null>(null);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
   const [calibStep, setCalibStep] = useState(0);
   const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
@@ -1002,7 +1006,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (!computeHomography(next, CANON_BOARD_POINTS) || w < MIN_CALIB_SPREAD || h < MIN_CALIB_SPREAD) {
       return false;
     }
-    const size = clamp(Math.max(w, h) * 1.06, MIN_ANALYSIS_SIZE, 0.98);
+    // 1.18 (was 1.06): the training_samples data showed several manually-repositioned darts
+    // clamped to the crop's exact edge (y=0) — real single-band darts near the top of the board
+    // that the analysis crop wasn't wide enough to actually reach, since fullFrameXYToCropXY
+    // can't place a point outside the region the model actually saw. More margin here reduces
+    // how often a real dart near the double ring falls outside the captured frame entirely.
+    const size = clamp(Math.max(w, h) * 1.18, MIN_ANALYSIS_SIZE, 0.98);
     setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next }));
     return true;
   };
@@ -1468,15 +1477,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   /**
    * Tap-to-place correction for a mis-detected dart's TIP POSITION (not just its scored value —
-   * see adjustDart, which only ever fixed the label). Moves the marker to wherever the user taps
-   * and re-scores it through the exact same calibration math live detections use, so a
-   * repositioned dart is indistinguishable from a well-detected one downstream — both to the
-   * player (correct score) and to the training-sample upload (a geometrically trustworthy label
-   * instead of a corrected value sitting on the model's original, possibly wrong, position).
+   * see adjustDart, which only ever fixed the label). Every tap just moves a DRAFT marker —
+   * nothing commits until confirmReposition, so a mis-tap is fixed by tapping again right there,
+   * not by leaving the mode and scrolling back down to the review list to re-arm it.
    */
   const handleRepositionTap = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     if (repositioningIndex === null) return;
-    const idx = repositioningIndex;
     const target = e.currentTarget as HTMLDivElement;
     const rect = target.getBoundingClientRect();
     const point = "touches" in e ? (e.touches[0] || e.changedTouches[0]) : (e as React.MouseEvent<HTMLDivElement>);
@@ -1484,8 +1490,27 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const clientY = (point as { clientY: number }).clientY;
     const fx = clamp((clientX - rect.left) / rect.width, 0, 1);
     const fy = clamp((clientY - rect.top) / rect.height, 0, 1);
-    const cropXY = fullFrameXYToCropXY(fx, fy);
+    setRepositionDraft({ fx, fy });
+  };
+
+  /** Nudges the draft marker by a small fraction of the frame — same idea as the calibration
+   *  tap's nudge buttons, for getting the last bit of precision without needing a pixel-perfect tap. */
+  const nudgeRepositionDraft = (dx: number, dy: number) => {
+    setRepositionDraft((prev) => {
+      const base = prev ?? { fx: 0.5, fy: 0.5 };
+      return { fx: clamp(base.fx + dx, 0, 1), fy: clamp(base.fy + dy, 0, 1) };
+    });
+  };
+
+  /** Commits the draft position, re-scoring through the exact same calibration math live
+   *  detections use — so a repositioned dart is indistinguishable from a well-detected one
+   *  downstream, both for the player's score and for the training-sample upload. */
+  const confirmReposition = () => {
+    if (repositioningIndex === null || !repositionDraft) return;
+    const idx = repositioningIndex;
+    const cropXY = fullFrameXYToCropXY(repositionDraft.fx, repositionDraft.fy);
     setRepositioningIndex(null);
+    setRepositionDraft(null);
     if (!cropXY) return;
     const transform = boardTransformFromTaps(calib.taps, { x: calib.x, y: calib.y });
     const full = cropXYToFullFrame(cropXY.x, cropXY.y);
@@ -1509,6 +1534,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       next[idx] = updated;
       return next;
     });
+  };
+
+  const cancelReposition = () => {
+    setRepositioningIndex(null);
+    setRepositionDraft(null);
   };
 
   const roundTotal = accumulated.reduce((s, d) => s + d.points, 0);
@@ -1760,20 +1790,40 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           >
             <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
               <span className="rounded-full bg-accent px-3 py-1 text-[11px] font-display uppercase text-accent-foreground shadow">
-                Tippe auf die echte Stelle von Dart {repositioningIndex + 1} ({dartLabel(accumulated[repositioningIndex])})
+                Dart {repositioningIndex + 1} ({dartLabel(accumulated[repositioningIndex])}) — tippen zum Setzen, dann bestätigen
               </span>
             </div>
-            <button
-              type="button"
-              className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 text-foreground shadow"
-              onClick={(e) => {
-                e.stopPropagation();
-                setRepositioningIndex(null);
-              }}
-              title="Abbrechen"
+
+            {repositionDraft && (
+              <div
+                className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${repositionDraft.fx * 100}%`, top: `${repositionDraft.fy * 100}%` }}
+              >
+                <div className="h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent shadow-lg glow-gold" />
+                <div className="absolute left-0 top-0 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background" />
+              </div>
+            )}
+
+            {/* Confirm/cancel/nudge docked at the bottom of the video itself — reachable without
+                scrolling, which was the whole point: a mis-tap used to mean scrolling back down
+                to the review list just to arm the mode again. */}
+            <div
+              className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-border bg-background/95 p-2 shadow-lg"
+              onClick={(e) => e.stopPropagation()}
             >
-              <X className="h-4 w-4" />
-            </button>
+              <div className="flex items-center justify-center gap-1">
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, -0.01)}>▲</Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(-0.01, 0)}>◀</Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0.01, 0)}>▶</Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, 0.01)}>▼</Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={cancelReposition} title="Abbrechen">
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button size="sm" className="h-8 flex-1 gap-1 font-display uppercase" onClick={confirmReposition} disabled={!repositionDraft}>
+                  <Check className="h-4 w-4" /> Übernehmen
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -1946,7 +1996,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 variant="ghost"
                 size="icon"
                 className={`h-9 w-9 ${repositioningIndex === i ? "text-accent" : ""}`}
-                onClick={() => setRepositioningIndex(repositioningIndex === i ? null : i)}
+                onClick={() => {
+                  if (repositioningIndex === i) {
+                    cancelReposition();
+                    return;
+                  }
+                  setRepositioningIndex(i);
+                  // Pre-seed the draft at the dart's current position so there's already a
+                  // visible marker to nudge/re-tap from, instead of starting from nothing.
+                  setRepositionDraft(hasPosition(dart) ? toFullFrameXY(dart) : null);
+                }}
                 title="Position korrigieren — auf die echte Stelle im Kamerabild tippen"
               >
                 <Target className="h-3.5 w-3.5" />
