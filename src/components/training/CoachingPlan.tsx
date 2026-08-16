@@ -73,7 +73,7 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     });
   } else if (s.avg < 60) {
     recs.push({
-      drillId: "t20-grind",
+      drillId: "target-grind",
       title: "T20 Grind",
       reason: `Schnitt von ${s.avg.toFixed(1)} – konstantere Triple-20-Treffer heben dich auf das nächste Level.`,
       metric: `Ø ${s.avg.toFixed(1)}`,
@@ -103,7 +103,7 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     });
   } else if (s.highscore < 100) {
     recs.push({
-      drillId: "t20-grind",
+      drillId: "target-grind",
       title: "T20 Grind",
       reason: `Höchster 3-Dart-Score bisher: ${s.highscore}. Triple-20 ist der direkteste Weg über 100.`,
       metric: `HS ${s.highscore}`,

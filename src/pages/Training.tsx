@@ -204,8 +204,13 @@ interface RecordEntry {
  *  sustained 30-round 93%. Segmenting the record by round count keeps each comparison apples-to-
  *  apples; every other recordable drill is either fixed-length or gated by `completedFully`, so
  *  no variant is needed for them. */
-function recordVariant(drillId: string, maxRounds: number | undefined): string | undefined {
-  return drillId === "target-grind" ? String(maxRounds ?? 10) : undefined;
+function recordVariant(drillId: string, ctx: { maxRounds?: number; rtcStart?: number }): string | undefined {
+  if (drillId === "target-grind") return String(ctx.maxRounds ?? 10);
+  // Shanghai RTC's difficulty depends on BOTH where it starts (fewer numbers left from 20) and
+  // whether a round cap is set — a 5-round-capped run starting at 19 (just 2 numbers) isn't a
+  // fair comparison against an uncapped full run from 1, so both go into the variant key.
+  if (drillId === "shanghai-rtc") return `${ctx.rtcStart ?? 1}-${ctx.maxRounds ?? "open"}`;
+  return undefined;
 }
 
 const recordKey = (drillId: string, variant?: string) => `training-record-${drillId}${variant ? `:${variant}` : ""}`;
@@ -368,8 +373,9 @@ const TrainingPage = () => {
   // pre-start screen and the finished-summary screen). Also reacts to the round-cap picker for
   // Target Grind, so the shown record tracks whichever variant is currently selected.
   useEffect(() => {
-    setCurrentRecord(selectedDrill ? loadRecord(selectedDrill.id, recordVariant(selectedDrill.id, drillConfig.maxRounds)) : null);
-  }, [selectedDrill, drillConfig.maxRounds]);
+    const variant = selectedDrill ? recordVariant(selectedDrill.id, { maxRounds: drillConfig.maxRounds, rtcStart: drillConfig.rtcStart }) : undefined;
+    setCurrentRecord(selectedDrill ? loadRecord(selectedDrill.id, variant) : null);
+  }, [selectedDrill, drillConfig.maxRounds, drillConfig.rtcStart]);
 
   // Compare + persist the instant a run finishes.
   useEffect(() => {
@@ -379,7 +385,7 @@ const TrainingPage = () => {
       setBrokeRecord(false);
       return;
     }
-    const variant = recordVariant(selectedDrill.id, drillState.maxRounds);
+    const variant = recordVariant(selectedDrill.id, { maxRounds: drillState.maxRounds, rtcStart: drillState.targetList?.[0] });
     const existing = loadRecord(selectedDrill.id, variant);
     const isNew = !existing || (candidate.higherIsBetter ? candidate.value > existing.value : candidate.value < existing.value);
     if (isNew) {
@@ -568,6 +574,12 @@ const TrainingPage = () => {
           } else {
             updated.remaining = newRemaining;
             updated.currentTarget = newRemaining;
+            // Unlike a bust, surviving a visit without checking out isn't an error — this is a
+            // continuous countdown, so `remaining` keeps counting down for real. But the per-visit
+            // dart counter still needs to reset at the 3-dart boundary like every other drill's,
+            // or it grows unbounded across visits (breaks the 3-dot counter display and the
+            // camera's dartsRemaining tracking, which derives from it).
+            if (newDartsThisRound >= 3) updated.dartsThisRound = 0;
           }
           break;
         }
@@ -837,7 +849,6 @@ const TrainingPage = () => {
             if (prev.targetIndex >= len - 1) { updated.finished = true; updated.completedFully = true; }
           } else if (hitsRound <= 1) {
             // Fall back to last locked segment (or stay at start)
-            nextIdx = locked >= 0 ? locked + 1 <= prev.targetIndex ? locked : prev.targetIndex : 0;
             nextIdx = locked >= 0 ? locked : 0;
           }
           updated.targetIndex = nextIdx;
@@ -1009,6 +1020,19 @@ const TrainingPage = () => {
                     {bobsBusted ? `Pleite in Runde ${drillState.targetIndex + 1}` : "Endstand nach 20 Runden"}
                   </p>
                 </div>
+              ) : selectedDrill.id === "bull-control" ? (
+                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                  <p className="text-2xl font-display text-secondary">{drillState.bcWinner ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground mb-2">Gewinner</p>
+                  <div className="space-y-1 text-left">
+                    {(drillState.bcPlayers ?? []).map((p) => (
+                      <div key={p.name} className="flex items-center justify-between text-xs">
+                        <span className={p.name === drillState.bcWinner ? "text-secondary font-semibold" : ""}>{p.name}</span>
+                        <span className="font-mono">{p.remaining}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <>
                   <div className="bg-muted/50 rounded-lg p-3">
@@ -1086,11 +1110,6 @@ const TrainingPage = () => {
                       Geschafft: {drillState.hits} / 10
                     </p>
                   )}
-                </div>
-              )}
-              {selectedDrill.id === "t20-grind" && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Legacy</p>
                 </div>
               )}
               {selectedDrill.id === "target-grind" && (
