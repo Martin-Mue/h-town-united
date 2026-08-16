@@ -244,6 +244,10 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
   const innerRef = useRef<HTMLDivElement>(null);
   const [userZoom, setUserZoom] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
+  // "zurücksetzen" cascades through recomputeBracket — resetting an early match can silently
+  // undo every later result (and un-crown a champion) that depended on it. One un-confirmed tap
+  // used to be enough; guard it the same way Players.tsx confirms a player deletion.
+  const [confirmResetId, setConfirmResetId] = useState<string | null>(null);
 
   const fitToScreen = () => {
     const wrap = wrapRef.current?.getBoundingClientRect();
@@ -319,7 +323,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === BYE ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
           <button disabled={!isOwner || !player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left uppercase tracking-wide disabled:cursor-not-allowed">{player || "TBD"}</button>
           {isOwner && (
-            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen">
+            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen" aria-label={`Leg für ${player || "Spieler"} gewonnen`}>
               <Plus className="w-4 h-4" />
             </Button>
           )}
@@ -356,9 +360,25 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
       {isOwner && (match.winner || match.score1 || match.score2 || onEditMatch) && (
         <div className="flex border-t border-border/60">
           {(match.winner || match.score1 || match.score2) && (
-            <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => resetKoMatch(match.id)}>
-              <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
-            </Button>
+            <AlertDialog open={confirmResetId === match.id} onOpenChange={(open) => setConfirmResetId(open ? match.id : null)}>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={(e) => e.stopPropagation()}>
+                  <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Match zurücksetzen?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {match.player1} vs. {match.player2}: Ergebnis wird gelöscht. Falls spätere Runden bereits auf diesem Ergebnis aufbauen, werden auch deren Ergebnisse zurückgesetzt.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => resetKoMatch(match.id)}>Zurücksetzen</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
           {onEditMatch && match.round === 1 && (
             <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => onEditMatch(match)}>
@@ -378,13 +398,13 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           Zoom {(userZoom * 100).toFixed(0)}%
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.max(0.3, z - 0.15))} title="Verkleinern">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.max(0.3, z - 0.15))} title="Verkleinern" aria-label="Verkleinern">
             <ZoomOut className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={fitToScreen} title="Auf Bildschirm einpassen">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={fitToScreen} title="Auf Bildschirm einpassen" aria-label="Auf Bildschirm einpassen">
             <Maximize2 className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.min(3, z + 0.15))} title="Vergrößern">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.min(3, z + 0.15))} title="Vergrößern" aria-label="Vergrößern">
             <ZoomIn className="w-4 h-4" />
           </Button>
           <Button variant={fullscreen ? "default" : "outline"} size="sm" className="h-8 gap-1 ml-1" onClick={() => setFullscreen(f => !f)}>
@@ -535,6 +555,10 @@ const TournamentPage = () => {
   const [editMatch, setEditMatch] = useState<Match | null>(null);
   const [editP1, setEditP1] = useState("");
   const [editP2, setEditP2] = useState("");
+  // Confirm before withdrawing a player mid-tournament — unlike removing a typo'd name during
+  // setup (harmless, pre-draw), this forfeits every remaining match for a real participant,
+  // often live at the venue. Same chip-based UI as setup made the two easy to confuse.
+  const [confirmWithdraw, setConfirmWithdraw] = useState<string | null>(null);
   const [playerInput, setPlayerInput] = useState("");
   const [nicknameInput, setNicknameInput] = useState("");
   const [guestCount, setGuestCount] = useState(8);
@@ -920,8 +944,11 @@ const TournamentPage = () => {
 
   const setKoWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
     if (!activeTournament) return;
+    // score1/score2 are optional overrides — when omitted (the only way the UI actually calls
+    // this today: tapping a player's name declares them the winner directly), keep whatever legs
+    // were already tallied via the "+1" button (setKoScore) instead of wiping them to blank.
     await persistBracket((fresh) => fresh.map(m =>
-      m.id === matchId ? { ...m, winner, score1, score2 } : { ...m }
+      m.id === matchId ? { ...m, winner, score1: score1 ?? m.score1, score2: score2 ?? m.score2 } : { ...m }
     ));
   };
 
@@ -1792,10 +1819,25 @@ const TournamentPage = () => {
                 <p className="text-[11px] text-muted-foreground mb-2">Spieler, die nicht erscheinen oder aufgeben, hier zurückziehen – Baum, Spielplan und Schreiber werden neu berechnet.</p>
                 <div className="flex flex-wrap gap-2">
                   {activeTournament.players.map(p => (
-                    <button key={p} onClick={() => withdrawPlayer(p)}
-                      className="bg-muted border border-border rounded-lg px-3 py-1 text-xs hover:border-destructive hover:text-destructive transition-colors">
-                      {p} ×
-                    </button>
+                    <AlertDialog key={p} open={confirmWithdraw === p} onOpenChange={(open) => setConfirmWithdraw(open ? p : null)}>
+                      <AlertDialogTrigger asChild>
+                        <button className="bg-muted border border-border rounded-lg px-3 py-1 text-xs hover:border-destructive hover:text-destructive transition-colors">
+                          {p} ×
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{p} zurückziehen?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Alle noch offenen Matches von {p} werden als Aufgabe gewertet, Baum, Spielplan und Schreiber neu berechnet. Bereits gespielte Ergebnisse bleiben erhalten.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => withdrawPlayer(p)}>Zurückziehen</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   ))}
                 </div>
               </div>

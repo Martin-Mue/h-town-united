@@ -473,12 +473,12 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
 }
 
 export const roundLabelFor = (round: number, total: number) => {
-  if (round === 0) return "Preliminary Round";
-  if (round === total) return "Final";
-  if (round === total - 1) return "Semifinal";
-  if (round === total - 2) return "Quarterfinal";
-  if (round === total - 3) return "Round of 16";
-  if (round === total - 4) return "Round of 32";
-  if (round === total - 5) return "Round of 64";
-  return `Round ${round}`;
+  if (round === 0) return "Vorrunde";
+  if (round === total) return "Finale";
+  if (round === total - 1) return "Halbfinale";
+  if (round === total - 2) return "Viertelfinale";
+  if (round === total - 3) return "Achtelfinale";
+  if (round === total - 4) return "Sechzehntelfinale";
+  if (round === total - 5) return "Zweiunddreißigstelfinale";
+  return `Runde ${round}`;
 };

@@ -706,7 +706,15 @@ const PublicTournamentPage = () => {
             <h1 className="font-display text-[clamp(1.1rem,2.4vw,2rem)] uppercase tracking-widest truncate">{t.name}</h1>
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="inline-flex items-center gap-2 shrink-0">
-                <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" /> Live
+                {t.champion ? (
+                  <>
+                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground" /> Beendet
+                  </>
+                ) : (
+                  <>
+                    <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" /> Live
+                  </>
+                )}
               </span>
               <span>{t.players.length} Spieler · {t.game_mode} BO{t.best_of_legs} · {boardsCount} Board{boardsCount > 1 ? "s" : ""}</span>
             </p>
