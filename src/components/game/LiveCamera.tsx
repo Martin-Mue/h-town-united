@@ -16,10 +16,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
-import { SEGMENTS_CLOCKWISE, RING } from "@/utils/dartboardGeometry";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
 import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
-import { computeHomography, applyHomography, type Homography } from "@/utils/homography";
+import { computeHomography } from "@/utils/homography";
+import {
+  boardTransformFromTaps,
+  scoreFromBoardPoint,
+  computeVisibleWindow,
+  screenToVideoFraction,
+  videoToScreenFraction,
+  computeCropRect,
+  cropToVideoFraction,
+  videoFractionToCrop,
+  CANON_BOARD_POINTS,
+} from "@/utils/cameraGeometry";
 import {
   playDartDetectedSound,
   playRoundCommittedSound,
@@ -225,71 +235,6 @@ const dartLabel = (d: DetectedDart) => {
   if (d.baseValue === 25) return d.multiplier === 2 ? "Bull 50" : "Bull 25";
   const prefix = d.multiplier === 2 ? "D" : d.multiplier === 3 ? "T" : "";
   return `${prefix}${d.baseValue}`;
-};
-
-// ─── calibration-based scoring ──────────────────────────────────────
-// The AI is good at pointing at a pixel, but unreliable at eyeballing which of
-// 82 thin wedges that pixel falls in. Since every session already collects a
-// precise 4-point calibration (D20/D3/D11/D6 outer-double-edge taps), we use
-// that known geometry to compute the segment/ring deterministically instead
-// of trusting the AI's own segment/multiplier guess.
-const MISS_TOLERANCE = 1.06; // calibration is never pixel-perfect — a little slack beyond the double edge
-
-// Canonical board-space targets for the 4 calibration taps — top/bottom/left/right of the
-// double ring, mapped to a unit circle (radius 1 = double edge). Matches the angle convention
-// scoreFromBoardPoint already used (0° = top = D20, growing clockwise).
-const CANON_BOARD_POINTS = [
-  { x: 0, y: -1 }, // D20 (top)
-  { x: 0, y: 1 },  // D3 (bottom)
-  { x: -1, y: 0 }, // D11 (left)
-  { x: 1, y: 0 },  // D6 (right)
-];
-
-/**
- * Builds the perspective (homography) transform from the 4 raw calibration taps (video-frame
- * coords) to canonical board space. A full homography — not just an ellipse fit from a center +
- * two radii — correctly undoes camera *keystone* (an angled camera makes the board look like a
- * trapezoid, not just a squashed circle); see homography.ts for why this matters.
- *
- * `liveCenter`, when given, shifts all 4 taps by the same vector before solving — approximating
- * "the whole board drifted a few cm, camera angle unchanged" (bumped table, wobbly phone mount)
- * so scoring stays correct without a pixel-perfect re-tap, same intent as the previous
- * center-only tracking, just applied before the perspective solve instead of after.
- */
-const boardTransformFromTaps = (taps?: { x: number; y: number }[], liveCenter?: { x: number; y: number }): Homography | null => {
-  if (!taps || taps.length !== 4) return null;
-  const [top, bottom, left, right] = taps; // D20, D3, D11, D6
-  let src = taps;
-  if (liveCenter) {
-    const origCx = (left.x + right.x) / 2;
-    const origCy = (top.y + bottom.y) / 2;
-    const dx = liveCenter.x - origCx;
-    const dy = liveCenter.y - origCy;
-    if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) {
-      src = taps.map((t) => ({ x: t.x + dx, y: t.y + dy }));
-    }
-  }
-  return computeHomography(src, CANON_BOARD_POINTS);
-};
-
-// u/v are the tip position in board-relative unit coordinates (0,0 = bull center, radius
-// ~1.0 = the calibrated double-ring edge) — independent of camera framing/zoom, so unlike
-// the raw video-frame x/y they're safe to persist and compare across different games,
-// sessions and devices (see the per-player heatmap in Statistics).
-const scoreFromBoardPoint = (fx: number, fy: number, H: Homography) => {
-  const { x: u, y: v } = applyHomography(H, { x: fx, y: fy });
-  const radius = Math.hypot(u, v);
-  let angleDeg = (Math.atan2(v, u) * 180) / Math.PI + 90; // 0° = top (D20), growing clockwise
-  angleDeg = ((angleDeg % 360) + 360) % 360;
-  const baseValue = SEGMENTS_CLOCKWISE[Math.round(angleDeg / 18) % 20];
-
-  if (radius <= RING.bullInner) return { baseValue: 25, multiplier: 2 as const, points: 50, u, v };
-  if (radius <= RING.bullOuter) return { baseValue: 25, multiplier: 1 as const, points: 25, u, v };
-  if (radius <= RING.trebleInner) return { baseValue, multiplier: 1 as const, points: baseValue, u, v };
-  if (radius <= RING.trebleOuter) return { baseValue, multiplier: 3 as const, points: baseValue * 3, u, v };
-  if (radius <= RING.doubleInner) return { baseValue, multiplier: 1 as const, points: baseValue, u, v };
-  if (radius <= MISS_TOLERANCE) return { baseValue, multiplier: 2 as const, points: baseValue * 2, u, v };
-  return { baseValue: 0, multiplier: 1 as const, points: 0, u, v };
 };
 
 const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
@@ -628,49 +573,21 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   }, [enabled, selectedDeviceId, activeBoard]);
 
   // ─── helpers ────────────────────────────────────────────────────────
+  // Thin wrappers around the pure functions in @/utils/cameraGeometry — this component's job is
+  // just to supply the live videoRef/videoBoxRef/calib values; the actual math (and its tests)
+  // live there. See that file's header for what "screen", "video" and "crop" fraction mean.
   const cropRect = () => {
     const v = videoRef.current;
-    if (!v || !v.videoWidth) return null;
-    const minSide = Math.min(v.videoWidth, v.videoHeight);
-    const side = clamp(minSide * calib.size, minSide * 0.4, minSide * 0.98);
-    const cx = v.videoWidth * calib.x;
-    const cy = v.videoHeight * calib.y;
-    const sx = clamp(cx - side / 2, 0, v.videoWidth - side);
-    const sy = clamp(cy - side / 2, 0, v.videoHeight - side);
-    return { sx, sy, side };
+    if (!v) return null;
+    return computeCropRect(v.videoWidth, v.videoHeight, calib.x, calib.y, calib.size);
   };
 
-  /**
-   * The <video> is CSS `object-cover`-fit into `videoBoxRef` (see the JSX below), and that box
-   * is NOT generally the same aspect ratio as the camera's native stream (the box is forced
-   * square; real camera streams are ~16:9 or 4:3) — object-cover crops whichever axis overflows
-   * rather than stretching, so the on-screen box only ever shows a centered sub-window of the
-   * full native frame. Returns that sub-window as a fraction of the native frame: (ox,oy) is its
-   * top-left, (sw,sh) its size. When the aspect ratios match this is just {0,0,1,1} (no crop).
-   *
-   * Every coordinate that crosses between "a tap/marker position on screen" and "a fraction of
-   * the native video buffer" (what cropRect/canvas readback/the model all actually operate on,
-   * via videoWidth/videoHeight) MUST go through this, or the two spaces silently diverge away
-   * from the center — which is exactly what made manual calibration taps and the tap-to-
-   * reposition feature score wrong while looking fine on screen (the on-screen rendering used
-   * the same convention consistently, so it never LOOKED broken; only the geometry math did).
-   */
-  const videoVisibleWindow = (): { ox: number; oy: number; sw: number; sh: number } | null => {
+  const videoVisibleWindow = () => {
     const v = videoRef.current;
     const box = videoBoxRef.current;
-    if (!v || !box || !v.videoWidth || !v.videoHeight) return null;
+    if (!v || !box) return null;
     const boxRect = box.getBoundingClientRect();
-    if (!boxRect.width || !boxRect.height) return null;
-    const videoAspect = v.videoWidth / v.videoHeight;
-    const boxAspect = boxRect.width / boxRect.height;
-    if (videoAspect > boxAspect) {
-      // Video relatively wider than the box -> object-cover crops the left/right edges.
-      const sw = boxAspect / videoAspect;
-      return { ox: (1 - sw) / 2, oy: 0, sw, sh: 1 };
-    }
-    // Video relatively taller than the box -> object-cover crops the top/bottom edges.
-    const sh = videoAspect / boxAspect;
-    return { ox: 0, oy: (1 - sh) / 2, sw: 1, sh };
+    return computeVisibleWindow(v.videoWidth, v.videoHeight, boxRect.width, boxRect.height);
   };
 
   /** On-screen tap (fraction of the displayed video box, 0-1) -> fraction of the native video
@@ -678,16 +595,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    *  of that on-screen box and must be converted before use in any board-geometry math. */
   const screenFractionToVideoFraction = (nx: number, ny: number): { x: number; y: number } | null => {
     const win = videoVisibleWindow();
-    if (!win) return null;
-    return { x: clamp(win.ox + nx * win.sw, 0, 1), y: clamp(win.oy + ny * win.sh, 0, 1) };
+    return win ? screenToVideoFraction(nx, ny, win) : null;
   };
 
   /** Inverse of the above — a fraction of the native video frame -> where that point actually
    *  renders within the on-screen (possibly cropped) video box, for drawing markers/rings/dots. */
   const videoFractionToScreenFraction = (fx: number, fy: number): { x: number; y: number } | null => {
     const win = videoVisibleWindow();
-    if (!win || !win.sw || !win.sh) return null;
-    return { x: clamp((fx - win.ox) / win.sw, 0, 1), y: clamp((fy - win.oy) / win.sh, 0, 1) };
+    return win ? videoToScreenFraction(fx, fy, win) : null;
   };
 
   // A point relative to the cropped/zoomed analysis frame (0-1) -> the full video frame (the
@@ -698,11 +613,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const cropXYToFullFrame = (x: number, y: number): { fx: number; fy: number } | null => {
     const v = videoRef.current;
     const rect = cropRect();
-    if (!v || !rect || !v.videoWidth || !v.videoHeight) return null;
-    return {
-      fx: (rect.sx + x * rect.side) / v.videoWidth,
-      fy: (rect.sy + y * rect.side) / v.videoHeight,
-    };
+    if (!v || !rect) return null;
+    const p = cropToVideoFraction(x, y, v.videoWidth, v.videoHeight, rect);
+    return p ? { fx: p.x, fy: p.y } : null;
   };
 
   // Inverse of the above — a tap on the displayed video (full-frame-relative, same convention
@@ -711,11 +624,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const fullFrameXYToCropXY = (fx: number, fy: number): { x: number; y: number } | null => {
     const v = videoRef.current;
     const rect = cropRect();
-    if (!v || !rect || !v.videoWidth || !v.videoHeight || !rect.side) return null;
-    return {
-      x: clamp((fx * v.videoWidth - rect.sx) / rect.side, 0, 1),
-      y: clamp((fy * v.videoHeight - rect.sy) / rect.side, 0, 1),
-    };
+    if (!v || !rect) return null;
+    return videoFractionToCrop(fx, fy, v.videoWidth, v.videoHeight, rect);
   };
 
   // Dart x/y come back relative to the cropped/zoomed analysis frame — map to the full
