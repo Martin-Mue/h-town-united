@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import {
@@ -67,6 +68,7 @@ const CHART_COLORS = [
 const TOOLTIP_STYLE = { background: "hsl(222 25% 9%)", border: "1px solid hsl(222 18% 14%)", borderRadius: 8, fontSize: 12 };
 
 const StatisticsPage = () => {
+  const { toast } = useToast();
   const [games, setGames] = useState<GameRecord[]>([]);
   const [players, setPlayers] = useState<PlayerStats[]>([]);
   const [gameLegs, setGameLegs] = useState<GameLegRecord[]>([]);
@@ -701,7 +703,7 @@ const StatisticsPage = () => {
   };
 
   if (loading) {
-    return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+    return <div role="status" aria-label="Lädt Statistiken" className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
 
   const clubTabs = [
@@ -810,14 +812,20 @@ const StatisticsPage = () => {
         </div>
       </div>
 
-      {/* Tab navigation */}
-      <div className="flex gap-1 mb-6 bg-card rounded-lg border border-border p-1 overflow-x-auto">
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`shrink-0 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-all ${activeTab === t.key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-            <t.icon className="w-3.5 h-3.5 shrink-0" />{t.label}
-          </button>
-        ))}
+      {/* Tab navigation — on a narrow phone this can genuinely overflow (5 tabs with icon+label
+          in club scope), with nothing before to hint it's scrollable. Edge fades give that hint
+          without needing to track scroll position in JS. */}
+      <div className="relative mb-6">
+        <div className="flex gap-1 bg-card rounded-lg border border-border p-1 overflow-x-auto">
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              className={`shrink-0 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-all ${activeTab === t.key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+              <t.icon className="w-3.5 h-3.5 shrink-0" />{t.label}
+            </button>
+          ))}
+        </div>
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-6 rounded-l-lg bg-gradient-to-r from-card to-transparent sm:hidden" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-6 rounded-r-lg bg-gradient-to-l from-card to-transparent sm:hidden" />
       </div>
 
       {/* OVERVIEW TAB */}
@@ -907,9 +915,12 @@ const StatisticsPage = () => {
               {trebleStats.perPlayer.length > 1 && (
                 <div className="mt-3 space-y-1">
                   {trebleStats.perPlayer.slice(0, 8).map((p) => (
-                    <div key={p.name} className="flex items-center justify-between text-xs">
-                      <span className="truncate">{p.name}</span>
-                      <span className="text-muted-foreground font-mono">
+                    <div key={p.name} className="flex items-center justify-between gap-2 text-xs">
+                      {/* min-w-0 is required for truncate to actually take effect on a flex
+                          child — without it the browser's default auto min-width keeps the
+                          item at its full content width regardless of the overflow-hidden. */}
+                      <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                      <span className="shrink-0 text-muted-foreground font-mono">
                         {((p.trebleless / Math.max(1, p.visits)) * 100).toFixed(1)}% trebleless · {p.triples} Triples
                       </span>
                     </div>
@@ -1066,25 +1077,30 @@ const StatisticsPage = () => {
                   </h3>
                   <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     {playerAchievements.map((a) => (
-                      <div key={a.title} title={a.desc}
+                      // title alone never surfaces on touch — tap shows the same text via toast,
+                      // which matters most here since locked badges need their unlock condition.
+                      <button key={a.title} type="button" title={a.desc}
+                        onClick={() => toast({ title: `${a.icon} ${a.title}`, description: a.desc })}
                         className={`rounded-lg border p-2 text-center transition-opacity ${a.unlocked ? "border-accent/40 bg-accent/10" : "border-border bg-muted/20 opacity-40"}`}>
                         <p className="text-xl">{a.icon}</p>
                         <p className="text-[9px] mt-0.5 leading-tight">{a.title}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Best/worst game */}
+              {/* Best/worst game — bestGameAvg/worstGameAvg both default to 0 when there are no
+                  games in the current filter, which is indistinguishable from "averaged exactly
+                  0" if rendered unconditionally like every other stat here guards for. */}
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="bg-card rounded-xl border border-border p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-1">Bester Game-Ø</p>
-                  <p className="text-2xl font-display text-secondary">{playerDetailStats.bestGameAvg.toFixed(1)}</p>
+                  <p className="text-2xl font-display text-secondary">{playerDetailStats.totalGames > 0 ? playerDetailStats.bestGameAvg.toFixed(1) : "–"}</p>
                 </div>
                 <div className="bg-card rounded-xl border border-border p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-1">Schlechtester Game-Ø</p>
-                  <p className="text-2xl font-display text-destructive">{playerDetailStats.worstGameAvg.toFixed(1)}</p>
+                  <p className="text-2xl font-display text-destructive">{playerDetailStats.totalGames > 0 ? playerDetailStats.worstGameAvg.toFixed(1) : "–"}</p>
                 </div>
               </div>
 
@@ -1181,11 +1197,11 @@ const StatisticsPage = () => {
                   </div>
                   <div className="space-y-1">
                     {playerDetailStats.recentForm.map((f, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs px-2 py-1 rounded bg-muted/30">
-                        <span className={`font-bold ${f.won ? "text-secondary" : "text-destructive"}`}>{f.won ? "Sieg" : "Ndl."}</span>
-                        <span className="text-muted-foreground">vs {f.opponent}</span>
-                        <span className="font-display">Ø {f.avg.toFixed(1)}</span>
-                        <span className="text-muted-foreground">{f.date}</span>
+                      <div key={i} className="flex items-center justify-between gap-2 text-xs px-2 py-1 rounded bg-muted/30">
+                        <span className={`shrink-0 font-bold ${f.won ? "text-secondary" : "text-destructive"}`}>{f.won ? "Sieg" : "Ndl."}</span>
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">vs {f.opponent}</span>
+                        <span className="shrink-0 font-display">Ø {f.avg.toFixed(1)}</span>
+                        <span className="shrink-0 text-muted-foreground">{f.date}</span>
                       </div>
                     ))}
                   </div>
@@ -1224,9 +1240,9 @@ const StatisticsPage = () => {
                     {Object.entries(playerDetailStats.opponents)
                       .sort(([, a], [, b]) => (b.wins + b.losses) - (a.wins + a.losses))
                       .map(([name, record]) => (
-                        <div key={name} className="flex items-center justify-between px-2 py-1.5 rounded bg-muted/30">
-                          <span className="text-sm">{name}</span>
-                          <div className="flex items-center gap-2 text-xs">
+                        <div key={name} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-muted/30">
+                          <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+                          <div className="flex shrink-0 items-center gap-2 text-xs">
                             <span className="text-secondary font-bold">{record.wins}W</span>
                             <span className="text-muted-foreground">-</span>
                             <span className="text-destructive font-bold">{record.losses}L</span>

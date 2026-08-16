@@ -39,7 +39,7 @@ const DartboardHeatmap = ({ points }: DartboardHeatmapProps) => {
   const segAngle = 360 / 20;
 
   return (
-    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full h-auto max-w-sm mx-auto">
+    <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full h-auto max-w-sm mx-auto" role="img" aria-label={`Trefferkarte auf dem Dartboard, ${points.length} eingezeichnete Würfe`}>
       <circle cx={CENTER} cy={CENTER} r={BOARD_RADIUS + 2} fill="hsl(222 20% 12%)" />
       {SEGMENTS_CLOCKWISE.map((num, i) => {
         const start = i * segAngle - segAngle / 2;
