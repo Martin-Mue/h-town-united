@@ -1548,8 +1548,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                   style={{ left: `${activeTap.x * 100}%`, top: `${activeTap.y * 100}%` }} />
               </>
             )}
-            <div className="absolute inset-x-0 top-0 bg-accent px-2 py-1.5 text-center text-xs font-display uppercase text-accent-foreground">
-              {calibStep + 1}/4 · {CALIB_LABELS[calibStep]}
+            {/* Compact pill instead of a full-width bar — was covering a meaningful strip of the
+                board at the top of the frame, exactly where D20 usually needs to be tapped. */}
+            <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
+              <span className="rounded-full bg-accent px-3 py-1 text-[11px] font-display uppercase text-accent-foreground shadow">
+                {calibStep + 1}/4 · {CALIB_LABELS[calibStep]}
+              </span>
             </div>
             {!activeTap && (
               <div className="pointer-events-none absolute inset-x-0 bottom-14 flex justify-center">
@@ -1559,12 +1563,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               </div>
             )}
             {activeTap && (
-              // Anchored opposite whichever half the tap is in — pinned to the bottom
-              // unconditionally used to bury exactly the area a D3/D6-ish (lower-half) tap
-              // needs to stay visible for, which is most of the board on a tilted/rotated
-              // camera mount (see tryAutoCalibrate's doc comment on in-frame rotation).
+              // Positioned in the quadrant FARTHEST from the tap on both axes (not just
+              // top/bottom) and narrower than the full frame width — a full-width bar flipped
+              // only vertically still buried points near the frame's vertical middle (exactly
+              // where D6 tends to land on a rotated board), since the panel's own height still
+              // reached that far even after flipping.
               <div
-                className={`absolute inset-x-2 z-30 rounded-lg border border-border bg-background/95 p-2 shadow-lg ${activeTap.y > 0.5 ? "top-2" : "bottom-2"}`}
+                className={`absolute z-30 w-44 rounded-lg border border-border bg-background/95 p-2 shadow-lg ${
+                  activeTap.y > 0.5 ? "top-2" : "bottom-2"
+                } ${activeTap.x > 0.5 ? "left-2" : "right-2"}`}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
