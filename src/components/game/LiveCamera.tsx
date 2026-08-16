@@ -237,6 +237,37 @@ const dartLabel = (d: DetectedDart) => {
   return `${prefix}${d.baseValue}`;
 };
 
+/**
+ * Centers arbitrary content at (fx,fy) — a fraction (0-1) of the nearest positioned ancestor —
+ * via the one correct "left/top % + transform: translate(-50%,-50%)" pattern every on-screen
+ * marker in this file needs. Render plain, un-transformed content as children; if a child needs
+ * to be independently centered on the SAME point (e.g. a small dot inside a bigger ring), give
+ * it `left-1/2 top-1/2` (not left/top set again as a %) plus its own -translate-x/y-1/2 — that
+ * positions it at the wrapper's own center, since the wrapper is already sized to its content
+ * and already landed on the target point.
+ *
+ * This exists because a marker that instead re-applied its OWN "center on the target point"
+ * transform on top of this wrapper's — instead of just being positioned relative to the
+ * wrapper's already-correct center — silently rendered a fixed distance away from wherever was
+ * actually tapped, however precisely (see the 2026-08-16 fix). Doing the centering exactly once,
+ * in exactly one place, makes that class of bug impossible to reintroduce by copy-paste.
+ */
+const MapMarker = ({ fx, fy, className, children }: { fx: number; fy: number; className?: string; children?: React.ReactNode }) => (
+  <div className={`absolute -translate-x-1/2 -translate-y-1/2 ${className ?? ""}`} style={{ left: `${fx * 100}%`, top: `${fy * 100}%` }}>
+    {children}
+  </div>
+);
+
+/** The gold "magnifier" ring + center dot used wherever a tap needs precise placement
+ *  (calibration taps, dart-reposition taps) — a target big enough to see clearly, with a small
+ *  dot pinpointing the exact tapped pixel. */
+const TapMagnifier = ({ fx, fy }: { fx: number; fy: number }) => (
+  <MapMarker fx={fx} fy={fy} className="pointer-events-none">
+    <div className="h-14 w-14 rounded-full border-2 border-accent shadow-lg glow-gold" />
+    <div className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background" />
+  </MapMarker>
+);
+
 const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
 
 const hasPosition = (d: DetectedDart) =>
@@ -1632,12 +1663,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           >
             {/* already confirmed taps */}
             {pendingTaps.map((t, i) => (
-              <div key={i} className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-secondary ring-2 ring-background"
-                style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%` }}>
+              <MapMarker key={i} fx={t.x} fy={t.y} className="pointer-events-none h-3 w-3 rounded-full bg-secondary ring-2 ring-background">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded bg-secondary/90 px-1 text-[9px] font-mono text-secondary-foreground">
                   {CALIB_KEYS[i]}
                 </span>
-              </div>
+              </MapMarker>
             ))}
             {/* active draggable marker */}
             {activeTap && (
@@ -1645,11 +1675,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 {/* crosshair lines through active point */}
                 <div className="pointer-events-none absolute left-0 right-0 h-px bg-accent/60" style={{ top: `${activeTap.y * 100}%` }} />
                 <div className="pointer-events-none absolute top-0 bottom-0 w-px bg-accent/60" style={{ left: `${activeTap.x * 100}%` }} />
-                {/* magnifier ring */}
-                <div className="pointer-events-none absolute h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent shadow-lg glow-gold"
-                  style={{ left: `${activeTap.x * 100}%`, top: `${activeTap.y * 100}%` }} />
-                <div className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background"
-                  style={{ left: `${activeTap.x * 100}%`, top: `${activeTap.y * 100}%` }} />
+                <TapMagnifier fx={activeTap.x} fy={activeTap.y} />
               </>
             )}
             {/* Compact pill instead of a full-width bar — was covering a meaningful strip of the
@@ -1738,12 +1764,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             {calib.taps!.map((t, i) => {
               const screenPos = videoFractionToScreenFraction(t.x, t.y) ?? t;
               return (
-                <div key={i} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${screenPos.x * 100}%`, top: `${screenPos.y * 100}%` }}>
+                <MapMarker key={i} fx={screenPos.x} fy={screenPos.y}>
                   <div className="h-3.5 w-3.5 rounded-full bg-yellow-400 ring-2 ring-background" />
                   <span className="absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded bg-yellow-400 px-1 py-0.5 text-[9px] font-display text-background">
                     {CALIB_KEYS[i]}
                   </span>
-                </div>
+                </MapMarker>
               );
             })}
           </div>
@@ -1757,16 +1783,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               const screenPos = full ? videoFractionToScreenFraction(full.fx, full.fy) : null;
               if (!screenPos) return null;
               return (
-                <div
-                  key={i}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 animate-scale-in"
-                  style={{ left: `${screenPos.x * 100}%`, top: `${screenPos.y * 100}%` }}
-                >
+                <MapMarker key={i} fx={screenPos.x} fy={screenPos.y} className="animate-scale-in">
                   <div className={`h-3.5 w-3.5 rounded-full ring-2 ring-background ${needsReview ? "bg-accent" : "bg-secondary"}`} />
                   <span className={`absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded px-1 py-0.5 text-[9px] font-display text-background ${needsReview ? "bg-accent" : "bg-secondary"}`}>
                     {dartLabel(d)}
                   </span>
-                </div>
+                </MapMarker>
               );
             })}
           </div>
@@ -1804,23 +1826,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               </span>
             </div>
 
-            {repositionDraft && (
-              // The outer div's own -translate-x/y-1/2 already centers this whole marker on the
-              // tap point (standard "left/top % + self-transform" centering, same pattern used
-              // correctly everywhere else in this file). The ring below used to ALSO apply its
-              // own -translate-x/y-1/2 on top of that — a redundant second shift by half of ITS
-              // OWN size (28px at h-14/w-14) — and the dot sat at the wrapper's corner (left-0
-              // top-0) instead of its center. Together that put the whole marker a fixed ~28px
-              // up-and-left of wherever you actually tapped, however precisely you tapped it —
-              // exactly the "impossible to place precisely" bug reported after testing this live.
-              <div
-                className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${repositionDraft.fx * 100}%`, top: `${repositionDraft.fy * 100}%` }}
-              >
-                <div className="h-14 w-14 rounded-full border-2 border-accent shadow-lg glow-gold" />
-                <div className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background" />
-              </div>
-            )}
+            {repositionDraft && <TapMagnifier fx={repositionDraft.fx} fy={repositionDraft.fy} />}
 
             {/* Confirm/cancel/nudge docked at the bottom of the video itself — reachable without
                 scrolling, which was the whole point: a mis-tap used to mean scrolling back down
