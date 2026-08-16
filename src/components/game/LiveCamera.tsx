@@ -372,6 +372,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   onRequestManualEntry,
 }, ref) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // The always-mounted box the <video> is object-cover-fit into — needed to convert between
+  // "where the user tapped on screen" and "a fraction of the native video buffer" (see
+  // screenFractionToVideoFraction below). Separate from calibOverlayRef, which only exists
+  // during phase === "calibrate".
+  const videoBoxRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const zoomCapsRef = useRef<ZoomCapability | null>(null);
@@ -633,6 +638,56 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const sx = clamp(cx - side / 2, 0, v.videoWidth - side);
     const sy = clamp(cy - side / 2, 0, v.videoHeight - side);
     return { sx, sy, side };
+  };
+
+  /**
+   * The <video> is CSS `object-cover`-fit into `videoBoxRef` (see the JSX below), and that box
+   * is NOT generally the same aspect ratio as the camera's native stream (the box is forced
+   * square; real camera streams are ~16:9 or 4:3) — object-cover crops whichever axis overflows
+   * rather than stretching, so the on-screen box only ever shows a centered sub-window of the
+   * full native frame. Returns that sub-window as a fraction of the native frame: (ox,oy) is its
+   * top-left, (sw,sh) its size. When the aspect ratios match this is just {0,0,1,1} (no crop).
+   *
+   * Every coordinate that crosses between "a tap/marker position on screen" and "a fraction of
+   * the native video buffer" (what cropRect/canvas readback/the model all actually operate on,
+   * via videoWidth/videoHeight) MUST go through this, or the two spaces silently diverge away
+   * from the center — which is exactly what made manual calibration taps and the tap-to-
+   * reposition feature score wrong while looking fine on screen (the on-screen rendering used
+   * the same convention consistently, so it never LOOKED broken; only the geometry math did).
+   */
+  const videoVisibleWindow = (): { ox: number; oy: number; sw: number; sh: number } | null => {
+    const v = videoRef.current;
+    const box = videoBoxRef.current;
+    if (!v || !box || !v.videoWidth || !v.videoHeight) return null;
+    const boxRect = box.getBoundingClientRect();
+    if (!boxRect.width || !boxRect.height) return null;
+    const videoAspect = v.videoWidth / v.videoHeight;
+    const boxAspect = boxRect.width / boxRect.height;
+    if (videoAspect > boxAspect) {
+      // Video relatively wider than the box -> object-cover crops the left/right edges.
+      const sw = boxAspect / videoAspect;
+      return { ox: (1 - sw) / 2, oy: 0, sw, sh: 1 };
+    }
+    // Video relatively taller than the box -> object-cover crops the top/bottom edges.
+    const sh = videoAspect / boxAspect;
+    return { ox: 0, oy: (1 - sh) / 2, sw: 1, sh };
+  };
+
+  /** On-screen tap (fraction of the displayed video box, 0-1) -> fraction of the native video
+   *  frame — for calibration taps and reposition taps, which are captured via getBoundingClientRect
+   *  of that on-screen box and must be converted before use in any board-geometry math. */
+  const screenFractionToVideoFraction = (nx: number, ny: number): { x: number; y: number } | null => {
+    const win = videoVisibleWindow();
+    if (!win) return null;
+    return { x: clamp(win.ox + nx * win.sw, 0, 1), y: clamp(win.oy + ny * win.sh, 0, 1) };
+  };
+
+  /** Inverse of the above — a fraction of the native video frame -> where that point actually
+   *  renders within the on-screen (possibly cropped) video box, for drawing markers/rings/dots. */
+  const videoFractionToScreenFraction = (fx: number, fy: number): { x: number; y: number } | null => {
+    const win = videoVisibleWindow();
+    if (!win || !win.sw || !win.sh) return null;
+    return { x: clamp((fx - win.ox) / win.sw, 0, 1), y: clamp((fy - win.oy) / win.sh, 0, 1) };
   };
 
   // A point relative to the cropped/zoomed analysis frame (0-1) -> the full video frame (the
@@ -1026,7 +1081,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setPendingTaps(next);
     setActiveTap(null);
     if (next.length >= 4) {
-      if (!applyCalibrationTaps(next)) {
+      // `next` is in on-screen box-fraction space (that's what handleCalibTap/nudgeActive record,
+      // and what the crosshair/dot markers above render directly) — but applyCalibrationTaps
+      // feeds boardTransformFromTaps/cropRect, which both work in native-video-frame fraction
+      // space (same convention tryAutoCalibrate's model-derived taps already use via
+      // cropXYToFullFrame). Convert here, once, at the commit point, instead of carrying two
+      // different coordinate conventions through the rest of the calibration state.
+      const videoSpace = next.map((t) => screenFractionToVideoFraction(t.x, t.y) ?? t);
+      if (!applyCalibrationTaps(videoSpace)) {
         setPendingTaps([]);
         setActiveTap(null);
         setCalibStep(0);
@@ -1512,7 +1574,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const confirmReposition = () => {
     if (repositioningIndex === null || !repositionDraft) return;
     const idx = repositioningIndex;
-    const cropXY = fullFrameXYToCropXY(repositionDraft.fx, repositionDraft.fy);
+    // repositionDraft is on-screen box-fraction (see handleRepositionTap) — convert to
+    // native-video-frame fraction before handing it to fullFrameXYToCropXY, which (like
+    // boardTransformFromTaps) expects that space. Without this the draft marker could look
+    // right on screen right up until confirming, then score against the wrong geometry —
+    // the "value resets to something wrong" bug.
+    const videoXY = screenFractionToVideoFraction(repositionDraft.fx, repositionDraft.fy);
+    const cropXY = videoXY ? fullFrameXYToCropXY(videoXY.x, videoXY.y) : null;
     setRepositioningIndex(null);
     setRepositionDraft(null);
     if (!cropXY) return;
@@ -1560,6 +1628,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     : 0;
   const trackingStatus: "uncalibrated" | "ok" | "warn" = !hasCalibration ? "uncalibrated" : driftFraction > 0.15 ? "warn" : "ok";
   const ringColorClass = trackingStatus === "ok" ? "border-secondary" : trackingStatus === "warn" ? "border-accent" : "border-primary/80";
+
+  // calib.x/y/size and calib.taps live in native-video-frame fraction space (see
+  // screenFractionToVideoFraction) — convert back to on-screen box fractions for rendering, so
+  // the tracking ring and debug dots land where the board actually appears on screen instead of
+  // silently drifting off it whenever the video's native aspect ratio isn't square.
+  const screenWin = videoVisibleWindow();
+  const ringScreenCenter = videoFractionToScreenFraction(calib.x, calib.y) ?? { x: calib.x, y: calib.y };
+  const ringScreenWidthPct = (screenWin ? calib.size / screenWin.sw : calib.size) * 100;
+  const ringScreenHeightPct = (screenWin ? calib.size / screenWin.sh : calib.size) * 100;
 
   return (
     <div className="mb-3 space-y-2 rounded-xl border border-border bg-card p-3">
@@ -1613,7 +1690,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </button>
       )}
 
-      <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
+      <div ref={videoBoxRef} className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
         <video
           ref={videoRef}
           playsInline
@@ -1707,10 +1784,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 phase === "scanning" ? "border-accent animate-pulse-glow" : ringColorClass
               }`}
               style={{
-                width: `${calib.size * 100}%`,
-                height: `${calib.size * 100}%`,
-                left: `${calib.x * 100}%`,
-                top: `${calib.y * 100}%`,
+                width: `${ringScreenWidthPct}%`,
+                height: `${ringScreenHeightPct}%`,
+                left: `${ringScreenCenter.x * 100}%`,
+                top: `${ringScreenCenter.y * 100}%`,
                 transform: "translate(-50%, -50%)",
               }}
             >
@@ -1733,14 +1810,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             placement the tracking ring already uses for calib.x/y. */}
         {showCalibDebug && (calib.taps?.length ?? 0) === 4 && (phase === "live" || phase === "scanning") && (
           <div className="pointer-events-none absolute inset-0">
-            {calib.taps!.map((t, i) => (
-              <div key={i} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${t.x * 100}%`, top: `${t.y * 100}%` }}>
-                <div className="h-3.5 w-3.5 rounded-full bg-yellow-400 ring-2 ring-background" />
-                <span className="absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded bg-yellow-400 px-1 py-0.5 text-[9px] font-display text-background">
-                  {CALIB_KEYS[i]}
-                </span>
-              </div>
-            ))}
+            {calib.taps!.map((t, i) => {
+              const screenPos = videoFractionToScreenFraction(t.x, t.y) ?? t;
+              return (
+                <div key={i} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${screenPos.x * 100}%`, top: `${screenPos.y * 100}%` }}>
+                  <div className="h-3.5 w-3.5 rounded-full bg-yellow-400 ring-2 ring-background" />
+                  <span className="absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded bg-yellow-400 px-1 py-0.5 text-[9px] font-display text-background">
+                    {CALIB_KEYS[i]}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -1749,12 +1829,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <div className="pointer-events-none absolute inset-0">
             {accumulated.map((d, i) => {
               const full = toFullFrameXY(d);
-              if (!full) return null;
+              const screenPos = full ? videoFractionToScreenFraction(full.fx, full.fy) : null;
+              if (!screenPos) return null;
               return (
                 <div
                   key={i}
                   className="absolute -translate-x-1/2 -translate-y-1/2 animate-scale-in"
-                  style={{ left: `${full.fx * 100}%`, top: `${full.fy * 100}%` }}
+                  style={{ left: `${screenPos.x * 100}%`, top: `${screenPos.y * 100}%` }}
                 >
                   <div className={`h-3.5 w-3.5 rounded-full ring-2 ring-background ${needsReview ? "bg-accent" : "bg-secondary"}`} />
                   <span className={`absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded px-1 py-0.5 text-[9px] font-display text-background ${needsReview ? "bg-accent" : "bg-secondary"}`}>
