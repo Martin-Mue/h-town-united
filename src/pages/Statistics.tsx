@@ -71,6 +71,10 @@ const StatisticsPage = () => {
   const [players, setPlayers] = useState<PlayerStats[]>([]);
   const [gameLegs, setGameLegs] = useState<GameLegRecord[]>([]);
   const [highlightClips, setHighlightClips] = useState<HighlightClipRecord[]>([]);
+  // storage_path -> short-lived signed URL. The dart-clips bucket is private (see migration
+  // 20260816090000_security_advisor_fixes), so plain getPublicUrl() no longer resolves to
+  // anything playable — every clip needs a signed URL fetched under the viewer's own auth.
+  const [clipSignedUrls, setClipSignedUrls] = useState<Record<string, string>>({});
   const [cleanupDays, setCleanupDays] = useState("90");
   const [cleaningUpClips, setCleaningUpClips] = useState(false);
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
@@ -628,7 +632,28 @@ const StatisticsPage = () => {
     });
   }, [highlightClips, filterTime, filterPlayerId, viewScope, myPlayer]);
 
-  const clipUrl = (path: string) => supabase.storage.from("dart-clips").getPublicUrl(path).data.publicUrl;
+  // Batch-fetch signed URLs for whatever's currently visible — one request for the whole page
+  // of clips instead of one per <video>. Re-runs whenever the filtered set changes (new clip
+  // lands, filters change); already-fetched URLs are kept around rather than re-requested.
+  useEffect(() => {
+    const missing = filteredClips.map((c) => c.storage_path).filter((p) => !clipSignedUrls[p]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    supabase.storage.from("dart-clips").createSignedUrls(missing, 3600).then(({ data }) => {
+      if (cancelled || !data) return;
+      setClipSignedUrls((prev) => {
+        const next = { ...prev };
+        for (const d of data) {
+          if (d.signedUrl && d.path) next[d.path] = d.signedUrl;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredClips]);
 
   const deleteClip = async (clip: HighlightClipRecord) => {
     if (deletingClipId) return;
@@ -1435,7 +1460,7 @@ const StatisticsPage = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredClips.map((clip) => (
                 <div key={clip.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
-                  <video src={clipUrl(clip.storage_path)} controls playsInline className="w-full aspect-video bg-black" preload="metadata" />
+                  <video src={clipSignedUrls[clip.storage_path]} controls playsInline className="w-full aspect-video bg-black" preload="metadata" />
                   <div className="p-2.5">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-display uppercase truncate">{clip.player_name}</span>
