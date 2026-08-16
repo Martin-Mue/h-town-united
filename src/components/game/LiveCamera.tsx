@@ -1013,6 +1013,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // how often a real dart near the double ring falls outside the captured frame entirely.
     const size = clamp(Math.max(w, h) * 1.18, MIN_ANALYSIS_SIZE, 0.98);
     setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next }));
+    // Show the D20/D3/D11/D6 check by default right after (re)calibrating instead of requiring
+    // an extra manual tap to verify — the whole point of that overlay is catching a bad
+    // calibration immediately, so it should be the default view of a fresh one, not opt-in.
+    setShowCalibDebug(true);
     return true;
   };
 
