@@ -156,6 +156,46 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     return () => window.clearTimeout(t);
   }, [currentRound]);
 
+  // Auto-fit once, the first time there's real content to measure — deliberately NOT the old
+  // v1 behaviour (see the comment atop this component) of re-measuring on every resize and
+  // multiplying a computed scale into the existing zoom, which is what made the tree render at
+  // the wrong scale unpredictably. This is a single absolute computation (same fitToScreen the
+  // manual button uses), gated by autoFittedRef so it never fights a zoom a viewer has since set
+  // themselves. Waits for web fonts — card text width depends on them, and a fit measured
+  // against the fallback font before they load lands slightly wrong. Spectators open this link
+  // cold on whatever device they have (phone in portrait, tablet, desktop) with no chance to
+  // discover the manual zoom controls first, so getting the first paint right matters most here.
+  const autoFittedRef = useRef(false);
+  useEffect(() => {
+    if (autoFittedRef.current || matches.length === 0) return;
+    autoFittedRef.current = true;
+    let cancelled = false;
+    const runFit = () => {
+      if (cancelled) return;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (!cancelled) fitToScreen();
+      }));
+    };
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(runFit);
+    } else {
+      runFit();
+    }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches.length]);
+
+  // Re-fit once after an orientation change (not a generic `resize` listener — that fires
+  // continuously on mobile from address-bar show/hide while scrolling, exactly the flakiness
+  // the v1 approach ran into). A rotation genuinely changes which scale fits, so this
+  // deliberately overrides any zoom the viewer had set for the old orientation.
+  useEffect(() => {
+    const onOrientation = () => { window.setTimeout(fitToScreen, 200); };
+    window.addEventListener("orientationchange", onOrientation);
+    return () => window.removeEventListener("orientationchange", onOrientation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const renderMatch = (m: Match, side: "left" | "right" | "center", isLast: boolean) => {
     const live = !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE";
     return (

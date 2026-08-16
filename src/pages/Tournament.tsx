@@ -262,6 +262,44 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     return () => window.removeEventListener("keydown", onKey);
   }, [fullscreen]);
 
+  // Auto-fit once, the first time there's real content to measure — deliberately NOT the old
+  // v1 behaviour (see the comment atop this component) of re-measuring on every resize and
+  // multiplying a computed scale into the existing zoom, which is what made the tree render at
+  // the wrong scale unpredictably. This is a single absolute computation (same fitToScreen used
+  // by the manual button), gated by autoFittedRef so it never fights a zoom level the player
+  // has since set themselves. Waits for web fonts — card text width depends on them, and a fit
+  // measured against the fallback font before they load lands slightly wrong.
+  const autoFittedRef = useRef(false);
+  useEffect(() => {
+    if (autoFittedRef.current || matches.length === 0) return;
+    autoFittedRef.current = true;
+    let cancelled = false;
+    const runFit = () => {
+      if (cancelled) return;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (!cancelled) fitToScreen();
+      }));
+    };
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(runFit);
+    } else {
+      runFit();
+    }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches.length]);
+
+  // Re-fit once after an orientation change (not a generic `resize` listener — that fires
+  // continuously on mobile from address-bar show/hide while scrolling, exactly the flakiness
+  // the v1 approach ran into). A rotation genuinely changes which scale fits, so this
+  // deliberately overrides any zoom the player had set for the old orientation.
+  useEffect(() => {
+    const onOrientation = () => { window.setTimeout(fitToScreen, 200); };
+    window.addEventListener("orientationchange", onOrientation);
+    return () => window.removeEventListener("orientationchange", onOrientation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const wrapperClass = fullscreen
     ? "fixed inset-0 z-50 bg-background flex flex-col"
     : "relative w-full";
