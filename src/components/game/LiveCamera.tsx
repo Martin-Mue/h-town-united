@@ -126,8 +126,6 @@ const loadTrainingDataEnabled = (): boolean => {
 const CALIB_KEY = "dartcam-calibration-v5";
 const CALIB_LABELS = ["Doppel 20 (oben)", "Doppel 3 (unten)", "Doppel 11 (links)", "Doppel 6 (rechts)"] as const;
 const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
-// Just needs all 4 present — identity doesn't matter, see tryAutoCalibrate's geometric assignment.
-const CAL_LABELS_ORDER = ["cal_1", "cal_2", "cal_3", "cal_4"] as const;
 
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
 // remembers which physical board it's pointed at, and calibration + camera-device choice are
@@ -1007,59 +1005,65 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   /**
    * One-shot calibration via the trained model's cal_1..cal_4 classes (see dartModel.ts).
-   * Point IDENTITY isn't trusted (no documented convention for which numeric cal_x is which
-   * physical corner) — instead the 4 detected points are assigned to D20/D3/D11/D6 purely by
-   * geometry (topmost/bottommost/leftmost/rightmost), the same fixed orientation the manual
-   * flow's labels already assume ("Doppel 20 (oben)" etc.). Requires all 4 classes confidently
-   * detected AND cleanly separable by role; anything less falls back to manual tapping.
+   *
+   * Uses class IDENTITY (which numeric cal_x is which physical corner), NOT geometric position
+   * (topmost/bottommost/etc.) — a real field test showed the camera can be mounted at a genuine
+   * IN-FRAME ROTATION relative to the board (D20 wasn't at the top of the frame at all), which
+   * breaks any "topmost point = D20" assumption. Only class identity is rotation-invariant.
+   *
+   * The exact cal_1..cal_4 -> physical-corner mapping isn't documented anywhere available here;
+   * this uses the DeepDarts-style convention referenced while designing this model ("upper-left
+   * corner of the double-ring segments for 20, 6, 3, and 11" — see the dart-sense research notes)
+   * as the best available guess: cal_1=D20, cal_2=D6, cal_3=D3, cal_4=D11. NOT verified against
+   * this specific training run's actual label order. If a future test scores every dart at a
+   * CONSISTENT wrong segment (not scattered) — e.g. everything comes out looking rotated by a
+   * fixed amount — that means this mapping is off by a fixed permutation, not that detection
+   * itself is broken; check the console's role-assignment log and reorder CAL_ROLE_MAP below.
    */
+  const CAL_ROLE_MAP = { D20: "cal_1", D3: "cal_3", D11: "cal_4", D6: "cal_2" } as const;
   const tryAutoCalibrate = async (): Promise<boolean> => {
     const frame = grabImageData(MODEL_INPUT_SIZE, false);
     if (!frame) return false;
     const result = await detectCalibrationPointsWithModel(frame);
     // Always log the raw per-class detections — success or fail — this is the one place a bad
-    // calibration actually originates, and without real numbers every threshold tweak here is
-    // just another guess. See dartModel.ts's CAL_SCORE_THRESHOLD for the cutoff these were
-    // measured against.
+    // calibration actually originates, and without real numbers every mapping/threshold tweak
+    // here is just another guess.
     console.info("[LiveCamera] auto-calibration raw candidates", result.points);
     if (result.unavailable) return false;
-    const cropPoints = CAL_LABELS_ORDER.map((k) => result.points[k]).filter(
-      (p): p is { x: number; y: number; score: number } => !!p
-    );
-    if (cropPoints.length !== 4) return false;
-    const full = cropPoints
-      .map((p) => cropXYToFullFrame(p.x, p.y))
-      .filter((p): p is { fx: number; fy: number } => !!p);
-    if (full.length !== 4) return false;
-    const byY = [...full].sort((a, b) => a.fy - b.fy);
-    const byX = [...full].sort((a, b) => a.fx - b.fx);
-    const top = byY[0], bottom = byY[byY.length - 1];
-    const left = byX[0], right = byX[byX.length - 1];
-    // Couldn't cleanly separate all 4 roles (e.g. a point is simultaneously the topmost AND
-    // leftmost) — a rotated/skewed camera angle confusing the geometric sort. Safer to fall
-    // back to manual tapping than to guess a role assignment.
-    if (new Set([top, bottom, left, right]).size < 4) {
-      console.warn("[LiveCamera] auto-calibration rejected: couldn't separate 4 distinct roles", full);
-      return false;
-    }
+    const byRole = {
+      D20: result.points[CAL_ROLE_MAP.D20],
+      D3: result.points[CAL_ROLE_MAP.D3],
+      D11: result.points[CAL_ROLE_MAP.D11],
+      D6: result.points[CAL_ROLE_MAP.D6],
+    };
+    if (!byRole.D20 || !byRole.D3 || !byRole.D11 || !byRole.D6) return false;
+    const full = {
+      D20: cropXYToFullFrame(byRole.D20.x, byRole.D20.y),
+      D3: cropXYToFullFrame(byRole.D3.x, byRole.D3.y),
+      D11: cropXYToFullFrame(byRole.D11.x, byRole.D11.y),
+      D6: cropXYToFullFrame(byRole.D6.x, byRole.D6.y),
+    };
+    if (!full.D20 || !full.D3 || !full.D11 || !full.D6) return false;
+    console.info("[LiveCamera] auto-calibration role assignment (full-frame coords)", full);
     // Sanity check: cropRect() is centered on calib.x/calib.y at auto-calibration time (no taps
     // yet, so it's still the default 0.5/0.5 center-ish crop) — the board's own center should
     // therefore land reasonably close to frame-center too. A wildly off-center result means the
-    // model mis-detected at least one corner rather than genuinely finding a very off-center
-    // board, and a bad corner here silently wrecks every score for the rest of the session — far
-    // worse than one bad dart read, which the review UI can catch. Reject rather than trust it.
-    const centerFx = (left.fx + right.fx) / 2;
-    const centerFy = (top.fy + bottom.fy) / 2;
+    // model mis-detected at least one corner (or the role mapping above is wrong) rather than
+    // genuinely finding a very off-center board, and a bad corner here silently wrecks every
+    // score for the rest of the session — far worse than one bad dart read, which the review UI
+    // can catch. Reject rather than trust it.
+    const centerFx = (full.D11.fx + full.D6.fx) / 2;
+    const centerFy = (full.D20.fy + full.D3.fy) / 2;
     const MAX_CENTER_OFFSET = 0.3;
     if (Math.abs(centerFx - 0.5) > MAX_CENTER_OFFSET || Math.abs(centerFy - 0.5) > MAX_CENTER_OFFSET) {
-      console.warn("[LiveCamera] auto-calibration rejected: implausible center", { centerFx, centerFy, top, bottom, left, right });
+      console.warn("[LiveCamera] auto-calibration rejected: implausible center", { centerFx, centerFy, full });
       return false;
     }
     const taps = [
-      { x: top.fx, y: top.fy },
-      { x: bottom.fx, y: bottom.fy },
-      { x: left.fx, y: left.fy },
-      { x: right.fx, y: right.fy },
+      { x: full.D20.fx, y: full.D20.fy },
+      { x: full.D3.fx, y: full.D3.fy },
+      { x: full.D11.fx, y: full.D11.fy },
+      { x: full.D6.fx, y: full.D6.fy },
     ];
     const applied = applyCalibrationTaps(taps);
     console.info("[LiveCamera] auto-calibration", applied ? "applied" : "rejected by applyCalibrationTaps (degenerate spread)", taps);
@@ -1550,7 +1554,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               </div>
             )}
             {activeTap && (
-              <div className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-border bg-background/95 p-2 shadow-lg" onClick={(e) => e.stopPropagation()}>
+              // Anchored opposite whichever half the tap is in — pinned to the bottom
+              // unconditionally used to bury exactly the area a D3/D6-ish (lower-half) tap
+              // needs to stay visible for, which is most of the board on a tilted/rotated
+              // camera mount (see tryAutoCalibrate's doc comment on in-frame rotation).
+              <div
+                className={`absolute inset-x-2 z-30 rounded-lg border border-border bg-background/95 p-2 shadow-lg ${activeTap.y > 0.5 ? "top-2" : "bottom-2"}`}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
                   Fein justieren – dann bestätigen
                 </div>
