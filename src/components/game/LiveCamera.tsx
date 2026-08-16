@@ -446,6 +446,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // on top of the live feed, so a wrong calibration is visible at a glance instead of requiring
   // a console log from a machine that isn't there.
   const [showCalibDebug, setShowCalibDebug] = useState(false);
+  // Index into `accumulated` currently being manually repositioned (tap-to-place), or null.
+  // Exists because the review UI's dropdowns only ever corrected the SEGMENT value, never the
+  // detected TIP POSITION — so a training sample "corrected" that way still stored the model's
+  // original (possibly wrong) position paired with the right label, which would teach a future
+  // fine-tune the wrong position/label association instead of fixing it.
+  const [repositioningIndex, setRepositioningIndex] = useState<number | null>(null);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
   const [calibStep, setCalibStep] = useState(0);
   const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
@@ -637,6 +643,19 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     return {
       fx: (rect.sx + x * rect.side) / v.videoWidth,
       fy: (rect.sy + y * rect.side) / v.videoHeight,
+    };
+  };
+
+  // Inverse of the above — a tap on the displayed video (full-frame-relative, same convention
+  // the overlay markers already render at) back to crop-relative coordinates, for manually
+  // repositioning a mis-detected dart. See repositioningIndex.
+  const fullFrameXYToCropXY = (fx: number, fy: number): { x: number; y: number } | null => {
+    const v = videoRef.current;
+    const rect = cropRect();
+    if (!v || !rect || !v.videoWidth || !v.videoHeight || !rect.side) return null;
+    return {
+      x: clamp((fx * v.videoWidth - rect.sx) / rect.side, 0, 1),
+      y: clamp((fy * v.videoHeight - rect.sy) / rect.side, 0, 1),
     };
   };
 
@@ -1447,6 +1466,51 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     });
   };
 
+  /**
+   * Tap-to-place correction for a mis-detected dart's TIP POSITION (not just its scored value —
+   * see adjustDart, which only ever fixed the label). Moves the marker to wherever the user taps
+   * and re-scores it through the exact same calibration math live detections use, so a
+   * repositioned dart is indistinguishable from a well-detected one downstream — both to the
+   * player (correct score) and to the training-sample upload (a geometrically trustworthy label
+   * instead of a corrected value sitting on the model's original, possibly wrong, position).
+   */
+  const handleRepositionTap = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (repositioningIndex === null) return;
+    const idx = repositioningIndex;
+    const target = e.currentTarget as HTMLDivElement;
+    const rect = target.getBoundingClientRect();
+    const point = "touches" in e ? (e.touches[0] || e.changedTouches[0]) : (e as React.MouseEvent<HTMLDivElement>);
+    const clientX = (point as { clientX: number }).clientX;
+    const clientY = (point as { clientY: number }).clientY;
+    const fx = clamp((clientX - rect.left) / rect.width, 0, 1);
+    const fy = clamp((clientY - rect.top) / rect.height, 0, 1);
+    const cropXY = fullFrameXYToCropXY(fx, fy);
+    setRepositioningIndex(null);
+    if (!cropXY) return;
+    const transform = boardTransformFromTaps(calib.taps, { x: calib.x, y: calib.y });
+    const full = cropXYToFullFrame(cropXY.x, cropXY.y);
+    setAccumulated((prev) => {
+      const next = [...prev];
+      const d = next[idx];
+      if (!d) return prev;
+      // confidence: 1 — a human just pointed at it, this is now ground truth, not a guess.
+      let updated: DetectedDart = { ...d, x: cropXY.x, y: cropXY.y, confidence: 1 };
+      if (transform && full) {
+        const scored = scoreFromBoardPoint(full.fx, full.fy, transform);
+        updated = {
+          ...updated,
+          baseValue: scored.baseValue,
+          multiplier: scored.multiplier,
+          points: scored.points,
+          boardU: scored.u,
+          boardV: scored.v,
+        };
+      }
+      next[idx] = updated;
+      return next;
+    });
+  };
+
   const roundTotal = accumulated.reduce((s, d) => s + d.points, 0);
 
   // Tracking-health ring: green once calibrated and the live-tracked board center hasn't
@@ -1688,6 +1752,30 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             {error}
           </div>
         )}
+
+        {repositioningIndex !== null && accumulated[repositioningIndex] && (
+          <div
+            className="absolute inset-0 z-40 cursor-crosshair select-none bg-background/40"
+            onClick={handleRepositionTap}
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
+              <span className="rounded-full bg-accent px-3 py-1 text-[11px] font-display uppercase text-accent-foreground shadow">
+                Tippe auf die echte Stelle von Dart {repositioningIndex + 1} ({dartLabel(accumulated[repositioningIndex])})
+              </span>
+            </div>
+            <button
+              type="button"
+              className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 text-foreground shadow"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRepositioningIndex(null);
+              }}
+              title="Abbrechen"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
@@ -1854,6 +1942,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 <option value={25}>Bull (25/50)</option>
               </select>
               <span className="w-10 text-right font-display text-primary">{dart.points}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-9 w-9 ${repositioningIndex === i ? "text-accent" : ""}`}
+                onClick={() => setRepositioningIndex(repositioningIndex === i ? null : i)}
+                title="Position korrigieren — auf die echte Stelle im Kamerabild tippen"
+              >
+                <Target className="h-3.5 w-3.5" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
