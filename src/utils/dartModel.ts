@@ -52,8 +52,10 @@ const NUM_CLASSES = CLASS_NAMES.length;
 const DART_SCORE_THRESHOLD = 0.15;
 // Calibration is higher-stakes than a single dart — a wrong corner miscalibrates the WHOLE
 // session, not just one throw — so this stays conservative; a low-confidence calibration attempt
-// just falls back to manual tapping instead of committing to a shaky guess.
-const CAL_SCORE_THRESHOLD = 0.45;
+// just falls back to manual tapping instead of committing to a shaky guess. Raised from 0.45
+// after a real-world test produced a confidently-wrong calibration (see LiveCamera.tsx's
+// tryAutoCalibrate console logging for the numbers next time this is tuned).
+const CAL_SCORE_THRESHOLD = 0.6;
 const NMS_IOU_THRESHOLD = 0.5;
 
 let sessionPromise: Promise<ort.InferenceSession> | null = null;

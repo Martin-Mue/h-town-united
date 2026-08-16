@@ -1017,6 +1017,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const frame = grabImageData(MODEL_INPUT_SIZE, false);
     if (!frame) return false;
     const result = await detectCalibrationPointsWithModel(frame);
+    // Always log the raw per-class detections — success or fail — this is the one place a bad
+    // calibration actually originates, and without real numbers every threshold tweak here is
+    // just another guess. See dartModel.ts's CAL_SCORE_THRESHOLD for the cutoff these were
+    // measured against.
+    console.info("[LiveCamera] auto-calibration raw candidates", result.points);
     if (result.unavailable) return false;
     const cropPoints = CAL_LABELS_ORDER.map((k) => result.points[k]).filter(
       (p): p is { x: number; y: number; score: number } => !!p
@@ -1033,13 +1038,32 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // Couldn't cleanly separate all 4 roles (e.g. a point is simultaneously the topmost AND
     // leftmost) — a rotated/skewed camera angle confusing the geometric sort. Safer to fall
     // back to manual tapping than to guess a role assignment.
-    if (new Set([top, bottom, left, right]).size < 4) return false;
-    return applyCalibrationTaps([
+    if (new Set([top, bottom, left, right]).size < 4) {
+      console.warn("[LiveCamera] auto-calibration rejected: couldn't separate 4 distinct roles", full);
+      return false;
+    }
+    // Sanity check: cropRect() is centered on calib.x/calib.y at auto-calibration time (no taps
+    // yet, so it's still the default 0.5/0.5 center-ish crop) — the board's own center should
+    // therefore land reasonably close to frame-center too. A wildly off-center result means the
+    // model mis-detected at least one corner rather than genuinely finding a very off-center
+    // board, and a bad corner here silently wrecks every score for the rest of the session — far
+    // worse than one bad dart read, which the review UI can catch. Reject rather than trust it.
+    const centerFx = (left.fx + right.fx) / 2;
+    const centerFy = (top.fy + bottom.fy) / 2;
+    const MAX_CENTER_OFFSET = 0.3;
+    if (Math.abs(centerFx - 0.5) > MAX_CENTER_OFFSET || Math.abs(centerFy - 0.5) > MAX_CENTER_OFFSET) {
+      console.warn("[LiveCamera] auto-calibration rejected: implausible center", { centerFx, centerFy, top, bottom, left, right });
+      return false;
+    }
+    const taps = [
       { x: top.fx, y: top.fy },
       { x: bottom.fx, y: bottom.fy },
       { x: left.fx, y: left.fy },
       { x: right.fx, y: right.fy },
-    ]);
+    ];
+    const applied = applyCalibrationTaps(taps);
+    console.info("[LiveCamera] auto-calibration", applied ? "applied" : "rejected by applyCalibrationTaps (degenerate spread)", taps);
+    return applied;
   };
 
   /** Clears any existing calibration and re-runs "try the model first, else manual taps" — used
@@ -1261,9 +1285,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           : null;
         if (modelResult && !modelResult.unavailable && modelResult.darts.length > 0) {
           setLastDetectionSource("model");
+          // Raw crop-space positions BEFORE calibration turns them into segments — if a report
+          // ever again says "detection looks wrong", these numbers are what separate "the model
+          // found the wrong spot" from "the model was right but calibration scored it wrong".
+          console.info("[LiveCamera] model dart detections (crop-relative x/y, 0-1)", modelResult.darts);
           candidateDarts = refineWithCalibration(
             modelResult.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
           );
+          console.info("[LiveCamera] scored darts after calibration", candidateDarts);
           overallConfidence = modelResult.darts.reduce((s, d) => s + d.confidence, 0) / modelResult.darts.length;
           // Model found a different dart count than what we visually saw land (occlusion, or a
           // spurious low-confidence extra box) — force manual review instead of trusting the
@@ -1653,6 +1682,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         <div className="rounded-md border border-accent/30 bg-accent/5 px-3 py-1.5 text-[11px] text-accent">
           Auto-Kalibrierung läuft – Zoom & Board-Lage werden angepasst.
         </div>
+      )}
+
+      {detectionMode === "local" && (phase === "live" || phase === "scanning") && (
+        <button
+          onClick={restartCalibration}
+          className="w-full rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
+          title="Löscht die aktuelle Kalibrierung und versucht sie neu — erst automatisch per KI-Modell, sonst per manuellem 4-Punkt-Tap."
+        >
+          <Target className="h-3.5 w-3.5" /> Erkennung falsch? Kalibrierung neu starten
+        </button>
       )}
 
       {scanFailed && onRequestManualEntry && (
