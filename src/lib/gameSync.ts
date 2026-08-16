@@ -93,7 +93,7 @@ export async function saveGameRecord(
     };
   };
 
-  const gameInsertPayload: Record<string, any> = {
+  const gameInsertPayload = {
     id: pendingGameId,
     user_id: userId, mode: game.mode, start_score: game.startScore,
     best_of_legs: game.bestOfLegs,

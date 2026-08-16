@@ -18,6 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { SEGMENTS_CLOCKWISE, RING } from "@/utils/dartboardGeometry";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
+import { detectDartsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
 import { computeHomography, applyHomography, type Homography } from "@/utils/homography";
 import {
   playDartDetectedSound,
@@ -397,10 +398,19 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // for local diff-based detection instead of a JPEG string for the cloud AI — see dartVision.ts.
   const emptyImageDataRef = useRef<ImageData | null>(null);
   const preRemovalImageDataRef = useRef<ImageData | null>(null);
+  // Unclipped MODEL_INPUT_SIZE-square capture of the same "darts stuck in" moment, for the
+  // trained ONNX model (see dartModel.ts) — separate from preRemovalImageDataRef above because
+  // that one is circular-cropped at VISION_ANALYSIS_SIZE for the pixel-diff fallback/training
+  // upload, a different framing than what the model was trained on. Only populated once the
+  // model has actually finished loading (see modelReadyRef).
+  const preRemovalModelFrameRef = useRef<ImageData | null>(null);
+  const modelReadyRef = useRef(false);
   // Visually observed throws in the current turn (motion → still while board non-empty)
   const throwsSeenRef = useRef(0);
   const [throwsSeen, setThrowsSeen] = useState(0);
   const [detectionMode, setDetectionModeState] = useState<DetectionMode>(() => loadDetectionMode());
+  const [modelReady, setModelReady] = useState(false);
+  const [lastDetectionSource, setLastDetectionSource] = useState<"model" | "diff" | "cloud" | null>(null);
   const setDetectionMode = (mode: DetectionMode) => {
     if (typeof window !== "undefined") window.localStorage.setItem(DETECTION_MODE_KEY, mode);
     setDetectionModeState(mode);
@@ -447,6 +457,23 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     window.localStorage.setItem(calibKeyFor(activeBoard), JSON.stringify(calib));
   }, [calib, activeBoard]);
 
+  // Background-load the trained model once the camera panel is actually open — no point
+  // fetching a 12MB model if the player never opens auto-scoring. A ref (not just state) tracks
+  // readiness so the watcher-loop interval closure (set up once per phase, see below) always
+  // reads the current value instead of whatever it was when that interval started.
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    void preloadDartModel().then((ok) => {
+      if (cancelled) return;
+      modelReadyRef.current = ok;
+      setModelReady(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
   const resetLoop = useCallback(() => {
     prevSigRef.current = null;
     stableSigRef.current = null;
@@ -455,6 +482,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     scanLockRef.current = false;
     preRemovalFrameRef.current = null;
     preRemovalImageDataRef.current = null;
+    preRemovalModelFrameRef.current = null;
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
@@ -642,8 +670,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   /** Raw pixel snapshot of the current (circular-cropped) board view, for local diff-based
    *  detection — same crop/zoom as drawToCanvas so an "empty" and a "with darts" capture line
    *  up pixel-for-pixel. */
-  const grabImageData = (target: number = VISION_ANALYSIS_SIZE): ImageData | null => {
-    const c = drawToCanvas(target, true);
+  const grabImageData = (target: number = VISION_ANALYSIS_SIZE, circular = true): ImageData | null => {
+    const c = drawToCanvas(target, circular);
     if (!c) return null;
     const ctx = c.getContext("2d");
     if (!ctx) return null;
@@ -1070,6 +1098,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         } else {
           if (detectionMode === "local") {
             preRemovalImageDataRef.current = grabImageData();
+            if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
           } else {
             const frame = captureFrame(1280, 0.9);
             if (frame) preRemovalFrameRef.current = frame;
@@ -1118,23 +1147,52 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       let candidateDarts: DetectedDart[];
       let overallConfidence: number;
 
+      const runDiffFallback = () => {
+        const result = detectDartTipsLocally(emptyImageDataRef.current!, preRemovalImageDataRef.current!, throwsSeenRef.current);
+        const darts = refineWithCalibration(
+          result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
+        );
+        let confidence = result.darts.length > 0
+          ? result.darts.reduce((s, d) => s + d.confidence, 0) / result.darts.length
+          : 0;
+        // Blob count didn't match what we visually saw land (overlap, or noise got filtered
+        // out) — force manual review instead of trusting a guess the pipeline itself is unsure of.
+        if (result.uncertain) confidence = Math.min(confidence, AUTO_COMMIT_CONFIDENCE - 0.05);
+        return { darts, confidence };
+      };
+
       if (isLocal) {
         if (trainingDataEnabled) {
           // Stash the reference (not a copy) before the finally block below nulls these refs —
           // consumed at commit time with whatever the player ends up confirming/correcting.
           pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current!, after: preRemovalImageDataRef.current! };
         }
-        const result = detectDartTipsLocally(emptyImageDataRef.current!, preRemovalImageDataRef.current!, throwsSeenRef.current);
-        candidateDarts = refineWithCalibration(
-          result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
-        );
-        overallConfidence = result.darts.length > 0
-          ? result.darts.reduce((s, d) => s + d.confidence, 0) / result.darts.length
-          : 0;
-        // Blob count didn't match what we visually saw land (overlap, or noise got filtered
-        // out) — force manual review instead of trusting a guess the pipeline itself is unsure of.
-        if (result.uncertain) overallConfidence = Math.min(overallConfidence, AUTO_COMMIT_CONFIDENCE - 0.05);
+        const modelFrame = preRemovalModelFrameRef.current;
+        const modelResult = modelReadyRef.current && modelFrame
+          ? await detectDartsWithModel(modelFrame, throwsSeenRef.current)
+          : null;
+        if (modelResult && !modelResult.unavailable && modelResult.darts.length > 0) {
+          setLastDetectionSource("model");
+          candidateDarts = refineWithCalibration(
+            modelResult.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
+          );
+          overallConfidence = modelResult.darts.reduce((s, d) => s + d.confidence, 0) / modelResult.darts.length;
+          // Model found a different dart count than what we visually saw land (occlusion, or a
+          // spurious low-confidence extra box) — force manual review instead of trusting the
+          // count blindly.
+          if (modelResult.darts.length !== throwsSeenRef.current) {
+            overallConfidence = Math.min(overallConfidence, AUTO_COMMIT_CONFIDENCE - 0.05);
+          }
+        } else {
+          // Model not loaded yet / inference failed / found nothing — the older motion-diff
+          // heuristic is still here as a safety net so auto-scoring never just stops working.
+          setLastDetectionSource("diff");
+          const fallback = runDiffFallback();
+          candidateDarts = fallback.darts;
+          overallConfidence = fallback.confidence;
+        }
       } else {
+        setLastDetectionSource("cloud");
         const data = await analyzeFrame(img!);
         overallConfidence = Number(data?.overallConfidence) || 0;
         candidateDarts = refineWithCalibration(sanitizeAiDarts(data?.darts, Math.max(throwsSeenRef.current, 1)));
@@ -1180,6 +1238,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       scanLockRef.current = false;
       preRemovalFrameRef.current = null;
       preRemovalImageDataRef.current = null;
+      preRemovalModelFrameRef.current = null;
     }
   };
 
@@ -1217,6 +1276,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (!scanLockRef.current && accumulatedRef.current.length === 0) {
       if (detectionMode === "local") {
         preRemovalImageDataRef.current = grabImageData();
+        if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
       } else {
         const frame = captureFrame(1280, 0.9);
         if (frame) preRemovalFrameRef.current = frame;
@@ -1286,7 +1346,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
             detectionMode === "local" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
           }`}
-          title="Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten, aber weniger robust bei dicht beieinanderliegenden Darts"
+          title={
+            modelReady
+              ? "Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten. Nutzt das trainierte KI-Modell, mit Bewegungserkennung als Rückfallebene."
+              : "Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten. KI-Modell lädt im Hintergrund; bis dahin läuft die Bewegungserkennung."
+          }
         >
           Lokal (offline)
         </button>
@@ -1521,7 +1585,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <span>
             {accumulated.length}/{dartsRemaining}
             {lastConfidence > 0 && (
-              <span className="ml-2">{detectionMode === "local" ? "Lokal" : "KI"} {(lastConfidence * 100).toFixed(0)}%</span>
+              <span className="ml-2">
+                {lastDetectionSource === "model" ? "KI-Modell" : lastDetectionSource === "diff" ? "Bewegung" : "Cloud-KI"}{" "}
+                {(lastConfidence * 100).toFixed(0)}%
+              </span>
             )}
           </span>
         </div>
