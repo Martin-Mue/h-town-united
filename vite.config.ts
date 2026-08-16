@@ -1,8 +1,21 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { execSync } from "child_process";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
+
+// Captured once, at build time (whatever machine/CI actually runs `npm run build`) — lets the
+// running app show which commit it was built from, so an installed PWA's version can be checked
+// against the repo instead of just trusting the service-worker update plumbing worked.
+const commitSha = (() => {
+  try {
+    return execSync("git rev-parse --short HEAD").toString().trim();
+  } catch {
+    return "unknown";
+  }
+})();
+const buildTime = new Date().toISOString();
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -12,6 +25,10 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(commitSha),
+    __BUILD_TIME__: JSON.stringify(buildTime),
   },
   plugins: [
     react(),

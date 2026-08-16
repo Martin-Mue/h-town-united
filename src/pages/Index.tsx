@@ -122,6 +122,14 @@ const DashboardPage = () => {
           ))}
         </div>
       )}
+
+      {/* Lets a returning visitor check what's actually installed on their device against the
+          repo — the service worker (see main.tsx) already force-checks for updates every time
+          the app comes back to the foreground and auto-reloads once a newer one takes over, but
+          this gives a way to *confirm* that happened instead of just trusting it silently did. */}
+      <p className="mt-6 text-center text-[10px] text-muted-foreground/60">
+        Build {__APP_VERSION__} · {new Date(__BUILD_TIME__).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+      </p>
     </div>
   );
 };
