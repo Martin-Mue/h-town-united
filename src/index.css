@@ -115,14 +115,6 @@
     @apply border-border;
   }
 
-  html, body {
-    /* Contains overscroll to this page instead of letting it bubble to the browser/PWA chrome —
-       without this, pulling down past the top of a scrolled page (easy to do by accident while
-       tapping around the live-camera view) triggers the mobile browser's native pull-to-refresh,
-       which reloads the whole app and silently kills whatever game was in progress. */
-    overscroll-behavior-y: contain;
-  }
-
   body {
     @apply bg-background text-foreground font-body antialiased;
   }
