@@ -212,6 +212,10 @@ const GamePage = () => {
   const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  // Whether a human actually wants the camera on — distinct from cameraEnabled itself, which
+  // the bot-auto-play effect below force-closes for bot turns. Lets the camera come back on its
+  // own once play returns to a human, instead of the player having to re-tap "Cam" every turn.
+  const cameraWantedRef = useRef(false);
   const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
   const liveCameraRef = useRef<LiveCameraHandle>(null);
   const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
@@ -490,6 +494,10 @@ const GamePage = () => {
 
     if (isBust) {
       if (soundEnabled) playBustSound();
+      // The only feedback a bust used to get was this sound (plus optional TTS) — with sound
+      // off, or in a loud room, a player just sees their score silently hold and has no idea
+      // why, which is exactly the kind of thing that causes a mid-match dispute later.
+      toast({ title: "Überworfen!", description: `${game.players[idx].name} — Rest bleibt bei ${turnStartRemaining}.`, variant: "destructive" });
       remainingRef.current[teamIdx] = turnStartRemaining;
       setGame((prev) => {
         if (!prev) return prev;
@@ -878,6 +886,12 @@ const GamePage = () => {
     setPendingCameraDarts([]);
     flashScore(teamIndexFor(curGame.teams, startIdx));
 
+    // Same "give the player something to actually see" fix as the manual-entry bust path —
+    // the camera flow used to rely on playBustSound()/TTS alone too.
+    if (busted) {
+      toast({ title: "Überworfen!", description: `${game.players[startIdx].name} — Rest bleibt bei ${curStart}.`, variant: "destructive" });
+    }
+
     if (speechEnabled) {
       const activePlayerName = game.players[startIdx].name;
       const nextPlayerName = curGame.players[curGame.currentPlayerIndex].name;
@@ -1016,8 +1030,14 @@ const GamePage = () => {
     if (!game || game.isFinished || phase !== "playing") { setBotThinking(false); return; }
     const idx = game.currentPlayerIndex;
     const player = game.players[idx];
-    if (!player?.isBot) { setBotThinking(false); return; }
-    if (cameraEnabled) setCameraEnabled(false); // bots never trigger the camera
+    if (!player?.isBot) {
+      setBotThinking(false);
+      // Play returned to a human — restore the camera if it was only closed because a bot's
+      // turn started, not because the human closed it themselves (see cameraWantedRef).
+      if (cameraWantedRef.current && !cameraEnabled) setCameraEnabled(true);
+      return;
+    }
+    if (cameraEnabled) setCameraEnabled(false); // bots never trigger the camera (preference remembered in cameraWantedRef)
 
     setBotThinking(true);
     const level = player.botLevel ?? "medium";
@@ -1833,7 +1853,7 @@ const GamePage = () => {
               <LiveCamera
                 ref={liveCameraRef}
                 enabled={cameraEnabled}
-                onClose={() => { setCameraEnabled(false); setPendingCameraDarts([]); }}
+                onClose={() => { cameraWantedRef.current = false; setCameraEnabled(false); setPendingCameraDarts([]); }}
                 onRoundCommit={submitDetectedRound}
                 onPendingChange={setPendingCameraDarts}
                 dartsRemaining={Math.max(1, 3 - dartsThisRound)}
@@ -1927,11 +1947,11 @@ const GamePage = () => {
             </Button>
             <Button
               variant="default"
-              onClick={() => setCameraEnabled(false)}
+              onClick={() => { cameraWantedRef.current = false; setCameraEnabled(false); }}
               className="gap-1"
               title="Kamera schließen"
             >
-              <Camera className="w-4 h-4" /> Cam an
+              <Camera className="w-4 h-4" /> Cam aus
             </Button>
             <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? "Sound ausschalten" : "Sound einschalten"} aria-label={soundEnabled ? "Sound ausschalten" : "Sound einschalten"}>
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
@@ -1958,7 +1978,7 @@ const GamePage = () => {
             </Button>
             <Button
               variant="outline"
-              onClick={() => setCameraEnabled(true)}
+              onClick={() => { cameraWantedRef.current = true; setCameraEnabled(true); }}
               disabled={!!currentPlayer?.isBot}
               className="gap-1"
               title="Live-Kamera-Scoring"

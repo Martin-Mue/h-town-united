@@ -1676,18 +1676,33 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           Cloud-KI
         </button>
       </div>
+      {/* The mode explanations above only lived in a hover `title` — invisible on a touch-only
+          phone. Always show the currently-selected mode's own explanation instead. */}
+      <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
+        {detectionMode === "local"
+          ? (modelReady
+              ? "Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten. Nutzt das trainierte KI-Modell, mit Bewegungserkennung als Rückfallebene."
+              : "Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten. KI-Modell lädt im Hintergrund; bis dahin läuft die Bewegungserkennung.")
+          : "Erkennung per Cloud-KI — braucht Internet, verursacht laufende KI-Kosten, dafür robuster."}
+      </p>
 
       {detectionMode === "local" && (
-        <button
-          onClick={() => setTrainingDataEnabled(!trainingDataEnabled)}
-          className="flex w-full items-center justify-between rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-[11px]"
-          title="Speichert bei jeder übernommenen Runde das Board-Bildpaar plus die (ggf. korrigierten) Dart-Positionen als Trainingsdaten für ein späteres, echtes Erkennungsmodell — nur der Board-Ausschnitt, kein weiteres Kamerabild."
-        >
-          <span className="text-muted-foreground">Trainingsdaten sammeln (für späteres eigenes Modell)</span>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${trainingDataEnabled ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
-            {trainingDataEnabled ? "An" : "Aus"}
-          </span>
-        </button>
+        <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
+          <button
+            onClick={() => setTrainingDataEnabled(!trainingDataEnabled)}
+            className="flex w-full items-center justify-between text-[11px]"
+          >
+            <span className="text-muted-foreground">Trainingsdaten sammeln (für späteres eigenes Modell)</span>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${trainingDataEnabled ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
+              {trainingDataEnabled ? "An" : "Aus"}
+            </span>
+          </button>
+          {/* Same reasoning as above — this is the privacy-relevant one (uploads a real board
+              photo) and defaults on, so its explanation can't be hover-only. */}
+          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+            Speichert bei jeder übernommenen Runde das Board-Bildpaar plus die (ggf. korrigierten) Dart-Positionen als Trainingsdaten für ein späteres, echtes Erkennungsmodell — nur der Board-Ausschnitt, kein weiteres Kamerabild.
+          </p>
+        </div>
       )}
 
       <div ref={videoBoxRef} className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
@@ -1939,10 +1954,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             <p className="truncate text-muted-foreground">{status}</p>
           </div>
         </div>
-        <div className="ml-3 shrink-0 space-y-0.5 text-right text-[10px] uppercase tracking-wider text-muted-foreground">
-          <div>Bew {(motion * 100).toFixed(0)}%</div>
-          <div>Δ {(changeDelta * 100).toFixed(0)}%</div>
-        </div>
+        {showAdvanced && (
+          <div className="ml-3 shrink-0 space-y-0.5 text-right text-[10px] uppercase tracking-wider text-muted-foreground" title="Bewegung / Bild-Differenz zum leeren Board — Rohwerte für die Erkennungs-Abstimmung, nicht relevant für normales Spielen.">
+            <div>Bew {(motion * 100).toFixed(0)}%</div>
+            <div>Δ {(changeDelta * 100).toFixed(0)}%</div>
+          </div>
+        )}
       </div>
 
       {autoCalibrating && (
