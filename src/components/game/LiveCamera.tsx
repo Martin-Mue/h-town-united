@@ -1618,12 +1618,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setAccumulated((prev) => {
       const next = [...prev];
       const d = { ...next[i], [field]: value };
-      d.points =
-        d.baseValue === 25
-          ? d.multiplier === 2
-            ? 50
-            : 25
-          : d.baseValue * d.multiplier;
+      // Bull has no triple ring — if a stale "T" selection from before baseValue was changed to
+      // 25 (or vice versa) slips through, fall back to single rather than silently scoring 0.
+      if (d.baseValue === 25 && d.multiplier === 3) d.multiplier = 1;
+      d.points = pointsFor(d.baseValue, d.multiplier);
       next[i] = d;
       return next;
     });
@@ -2139,7 +2137,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               >
                 <option value={1}>S</option>
                 <option value={2}>D</option>
-                <option value={3}>T</option>
+                {/* No triple ring in the bull — offering it there just invites picking a
+                    combination that can't correspond to a real dart. */}
+                <option value={3} disabled={dart.baseValue === 25}>T</option>
               </select>
               <select
                 value={dart.baseValue}
