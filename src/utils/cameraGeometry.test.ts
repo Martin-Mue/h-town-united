@@ -6,6 +6,7 @@ import {
   computeCropRect,
   cropToVideoFraction,
   videoFractionToCrop,
+  computeCropScreenRect,
   boardTransformFromTaps,
   scoreFromBoardPoint,
   CANON_BOARD_POINTS,
@@ -129,6 +130,42 @@ describe("cropToVideoFraction / videoFractionToCrop round-trip", () => {
     const center = cropToVideoFraction(0.5, 0.5, 1280, 720, rect)!;
     expect(center.x).toBeCloseTo(0.5, 10);
     expect(center.y).toBeCloseTo(0.5, 10);
+  });
+});
+
+describe("computeCropScreenRect (the live tracking ring)", () => {
+  // The square box itself (LiveCamera.tsx's video container is `aspect-square`) — a correct
+  // crop-to-screen conversion must render as a true square regardless of the camera stream's
+  // own aspect ratio, since object-cover scales the video uniformly (no x/y stretch).
+  it("renders as a true square for a landscape 16:9 stream (the 2026-08-17 wide-oval report)", () => {
+    const win = computeVisibleWindow(1280, 720, 400, 400)!;
+    const rect = computeCropScreenRect(1280, 720, 0.5, 0.5, 0.7, win)!;
+    expect(rect.width).toBeCloseTo(rect.height, 10);
+  });
+
+  it("renders as a true square for a portrait 9:16 stream (the reported tall/vertical oval)", () => {
+    const win = computeVisibleWindow(720, 1280, 400, 400)!;
+    const rect = computeCropScreenRect(720, 1280, 0.5, 0.5, 0.7, win)!;
+    expect(rect.width).toBeCloseTo(rect.height, 10);
+  });
+
+  it("matches calib.size directly when the stream is already square (sanity check)", () => {
+    const win = computeVisibleWindow(400, 400, 400, 400)!;
+    const rect = computeCropScreenRect(400, 400, 0.5, 0.5, 0.6, win)!;
+    expect(rect.width).toBeCloseTo(0.6, 10);
+    expect(rect.height).toBeCloseTo(0.6, 10);
+  });
+
+  it("stays centered on calib.x/y when no edge-clamping is in play", () => {
+    const win = computeVisibleWindow(1280, 720, 400, 400)!;
+    const rect = computeCropScreenRect(1280, 720, 0.5, 0.5, 0.5, win)!;
+    expect(rect.x + rect.width / 2).toBeCloseTo(0.5, 10);
+    expect(rect.y + rect.height / 2).toBeCloseTo(0.5, 10);
+  });
+
+  it("returns null without valid video dimensions", () => {
+    const win = computeVisibleWindow(1280, 720, 400, 400)!;
+    expect(computeCropScreenRect(0, 0, 0.5, 0.5, 0.7, win)).toBeNull();
   });
 });
 

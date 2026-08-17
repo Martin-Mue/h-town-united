@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
-import { isBustThrow, isQualifyingDouble as qualifyingDouble } from "@/utils/x01Rules";
+import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit } from "@/utils/x01Rules";
 import { simulateBotVisit, simulateBotCricketDart } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
@@ -217,6 +217,13 @@ const GamePage = () => {
   // own once play returns to a human, instead of the player having to re-tap "Cam" every turn.
   const cameraWantedRef = useRef(false);
   const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
+  // Set when a camera-detected round's total lands exactly on a finish under double-out AND the
+  // visit mixes at least one double with at least one non-double dart — genuinely ambiguous from
+  // a single end-of-visit photo (see resolveX01Visit's doc comment): it could be a valid checkout
+  // (double thrown last) or a bust (a non-double landed on it last), and nothing in the unordered
+  // detected set can tell those apart. Blocks further camera scanning (see the `enabled` prop
+  // below) until the player says which dart actually finished it.
+  const [pendingCheckoutChoice, setPendingCheckoutChoice] = useState<{ darts: DetectedDart[]; doubleIndexes: number[] } | null>(null);
   const liveCameraRef = useRef<LiveCameraHandle>(null);
   const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
   const [confettiKey, setConfettiKey] = useState<number | null>(null);
@@ -757,9 +764,62 @@ const GamePage = () => {
   /**
    * Atomically commit a full round of camera-detected darts.
    */
-  const submitDetectedRound = (darts: DetectedDart[]) => {
+  const submitDetectedRound = (
+    darts: DetectedDart[],
+    forced?: { kind: "checkout"; finisherIndex: number } | { kind: "bust" },
+    // Quick-round entry ("just type the total") synthesizes plausible-looking darts purely to
+    // make the math add up (see splitQuickRound) — they're invented, not what was really thrown,
+    // so asking "which of these fabricated darts finished it" would be nonsensical. The player
+    // typed a total that matches remaining exactly, so trust that as a deliberate, valid checkout
+    // instead of surfacing the disambiguation prompt built for genuine (camera-sourced) ambiguity.
+    autoResolveAmbiguousAsCheckout = false,
+  ) => {
     if (!game || game.isFinished || darts.length === 0) return;
     if (currentPlayer?.isBot) return; // bots never use the camera
+
+    const dartsToApply = darts.slice(0, 3);
+    const startIdx = game.currentPlayerIndex;
+
+    // X01 only (cricket marks accumulate order-independently within one visit — see
+    // resolveX01Visit's doc comment for why X01 specifically needs this and cricket doesn't):
+    // camera detection only ever sees the board once, after every dart in the visit is already
+    // stuck in, so it has no way to know the real throw order. Resolve (or consume an
+    // already-forced resolution coming back from the disambiguation prompt below) BEFORE
+    // touching any game state or the undo stack, so a still-ambiguous round doesn't push a no-op
+    // undo entry.
+    let x01Outcome: ReturnType<typeof resolveX01Visit> | null = null;
+    let x01VisitDarts: { points: number; isDouble: boolean }[] = [];
+    let x01JustGotIn = false;
+    if (game.mode !== "cricket") {
+      const teamIdx = teamIndexFor(game.teams, startIdx);
+      const player = game.players[startIdx];
+      const remaining = game.currentLeg.remaining[teamIdx];
+      const requiresDoubleIn = player.doubleIn ?? false;
+      const alreadyStartedScoring = game.currentLeg.startedScoring?.[teamIdx] ?? true;
+      const activeDoubleOut = player.doubleOut ?? true;
+      // Simplification: with double-in still pending, if ANY dart this visit is a qualifying
+      // double, treat the player as in for the WHOLE visit (every dart counts at face value)
+      // rather than working out exactly which dart got them in — same "vision can't see order"
+      // limitation as the bust/checkout ambiguity below, but lower-stakes (miscounts a few
+      // points at most, never flips a match outcome), so this stays a documented approximation
+      // instead of a second disambiguation prompt.
+      const hasQualifyingDartThisVisit = dartsToApply.some((d) => d.multiplier === 2);
+      x01JustGotIn = requiresDoubleIn && !alreadyStartedScoring && hasQualifyingDartThisVisit;
+      const stillNotIn = requiresDoubleIn && !alreadyStartedScoring && !hasQualifyingDartThisVisit;
+      x01VisitDarts = dartsToApply.map((d) => {
+        const points = d.baseValue === 25 && d.multiplier === 3 ? 0 : d.baseValue * d.multiplier;
+        return { points: stillNotIn ? 0 : points, isDouble: d.multiplier === 2 };
+      });
+      x01Outcome = forced ?? resolveX01Visit(remaining, activeDoubleOut, x01VisitDarts);
+      if (x01Outcome.kind === "ambiguous") {
+        if (autoResolveAmbiguousAsCheckout) {
+          x01Outcome = { kind: "checkout" };
+        } else {
+          setPendingCheckoutChoice({ darts: dartsToApply, doubleIndexes: x01Outcome.doubleIndexes });
+          return;
+        }
+      }
+    }
 
     setUndoStack(prev => [...prev, {
       game: JSON.parse(JSON.stringify(game)),
@@ -774,18 +834,19 @@ const GamePage = () => {
     let checkedOut = false;
     let roundTotal = 0;
     const n = curGame.players.length;
+    // Set when a checkout already picked the next leg's starting player directly (below) — the
+    // generic "advance to the next player" step further down must then be skipped, or it would
+    // silently advance PAST that player and skip them for the whole new leg.
+    let playerAlreadyAdvanced = false;
 
-    const dartsToApply = darts.slice(0, 3);
-    const startIdx = curGame.currentPlayerIndex;
+    if (curGame.mode === "cricket") {
+      for (const d of dartsToApply) {
+        if (curGame.isFinished) break;
+        const idx = curGame.currentPlayerIndex;
+        const teamIdx = teamIndexFor(curGame.teams, idx);
+        const points = d.baseValue === 25 && d.multiplier === 3 ? 0 : d.baseValue * d.multiplier;
+        const dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points, boardU: d.boardU, boardV: d.boardV };
 
-    for (const d of dartsToApply) {
-      if (curGame.isFinished) break;
-      const idx = curGame.currentPlayerIndex;
-      const teamIdx = teamIndexFor(curGame.teams, idx);
-      const points = d.baseValue === 25 && d.multiplier === 3 ? 0 : d.baseValue * d.multiplier;
-      const dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points, boardU: d.boardU, boardV: d.boardV };
-
-      if (curGame.mode === "cricket") {
         const cricketNumbers = curGame.cricketNumbers ?? CRICKET_NUMBERS;
         const myState = curGame.cricket![teamIdx];
         const others = curGame.cricket!.filter((_, j) => j !== teamIdx);
@@ -812,68 +873,67 @@ const GamePage = () => {
           checkedOut = true;
         }
         curDarts += 1;
-        continue;
       }
+    } else {
+      // X01 — apply the already-resolved outcome (computed above, before the undo push) to the
+      // WHOLE visit at once instead of dart-by-dart, since there's no real per-dart throw order
+      // to walk through here.
+      const idx = curGame.currentPlayerIndex;
+      const teamIdx = teamIndexFor(curGame.teams, idx);
+      const outcome = x01Outcome!;
 
-      // X01 modes
-      const remaining = curGame.currentLeg.remaining[teamIdx];
-      const newDartsThisRound = curDarts + 1;
-      const mul: number = d.multiplier;
-      const isDoubleOut = mul === 2;
-
-      const requiresDoubleIn = curGame.players[idx].doubleIn ?? false;
-      const alreadyStartedScoring = curGame.currentLeg.startedScoring?.[teamIdx] ?? true;
-      const justGotIn = requiresDoubleIn && !alreadyStartedScoring && isDoubleOut;
-      const stillWaitingForDoubleIn = requiresDoubleIn && !alreadyStartedScoring && !isDoubleOut;
-      const effectivePoints = stillWaitingForDoubleIn ? 0 : points;
-      const newRemaining = remaining - effectivePoints;
-
-      const x01Dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points: effectivePoints, boardU: d.boardU, boardV: d.boardV };
-      const activeDoubleOut = curGame.players[idx].doubleOut ?? true;
-      const isBust = !stillWaitingForDoubleIn && isBustThrow(remaining, effectivePoints, activeDoubleOut, isDoubleOut);
-
-      if (isBust) {
-        curGame.currentLeg.remaining[teamIdx] = curStart;
-        curGame.currentLeg.throws[idx] = curGame.currentLeg.throws[idx].slice(
-          0, curGame.currentLeg.throws[idx].length - (newDartsThisRound - 1)
-        );
-        busted = true;
-        break;
-      }
-
-      curGame.currentLeg.remaining[teamIdx] = newRemaining;
-      curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], x01Dart];
-      if (justGotIn) {
-        curGame.currentLeg.startedScoring = (curGame.currentLeg.startedScoring ?? curGame.players.map(() => true)).map((v, i) => i === teamIdx ? true : v);
-      }
-      curDarts = newDartsThisRound;
-      roundTotal += effectivePoints;
-
-      if (newRemaining === 0) {
-        curGame.currentLeg.winnerIndex = teamIdx;
-        curGame.legsWon[teamIdx] += 1;
-        const legsToWin = Math.ceil(curGame.bestOfLegs / 2);
-        if (curGame.legsWon[teamIdx] >= legsToWin) {
-          curGame.isFinished = true;
-          curGame.winnerName = curGame.teams ? curGame.teams[teamIdx].name : curGame.players[idx].name;
-          curGame.winnerIndex = teamIdx;
-        } else {
-          curGame.completedLegs = [...curGame.completedLegs, curGame.currentLeg];
-          const nextStarter = (curGame.currentLeg.startingPlayerIndex + 1) % n;
-          curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter, curGame.players, curGame.teams);
-          curGame.currentPlayerIndex = nextStarter;
+      if (outcome.kind === "bust") {
+        busted = true; // no throws recorded for a busted visit — matches the manual-entry convention
+      } else {
+        let orderedPairs = dartsToApply.map((d, i) => ({ d, points: x01VisitDarts[i].points }));
+        if (outcome.kind === "checkout" && forced?.kind === "checkout") {
+          // Cosmetic only (the ruling itself is already decided) — put the dart the player
+          // actually confirmed as the finisher last in the recorded history, so anything
+          // reading throw history later (highlight clips, the leg's throw list) shows a
+          // sensible finish instead of an arbitrary detection order.
+          const i = forced.finisherIndex;
+          orderedPairs = [...orderedPairs.slice(0, i), ...orderedPairs.slice(i + 1), orderedPairs[i]];
         }
-        checkedOut = true;
-        break;
+        roundTotal = x01VisitDarts.reduce((s, d) => s + d.points, 0);
+        const dartThrows: DartThrow[] = orderedPairs.map(({ d, points }) => ({
+          baseValue: d.baseValue, multiplier: d.multiplier, points, boardU: d.boardU, boardV: d.boardV,
+        }));
+        curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], ...dartThrows];
+        curGame.currentLeg.remaining[teamIdx] = curGame.currentLeg.remaining[teamIdx] - roundTotal;
+        if (x01JustGotIn) {
+          curGame.currentLeg.startedScoring = (curGame.currentLeg.startedScoring ?? curGame.players.map(() => true)).map((v, i) => i === teamIdx ? true : v);
+        }
+        curDarts += dartsToApply.length;
+
+        if (outcome.kind === "checkout") {
+          curGame.currentLeg.winnerIndex = teamIdx;
+          curGame.legsWon[teamIdx] += 1;
+          const legsToWin = Math.ceil(curGame.bestOfLegs / 2);
+          if (curGame.legsWon[teamIdx] >= legsToWin) {
+            curGame.isFinished = true;
+            curGame.winnerName = curGame.teams ? curGame.teams[teamIdx].name : curGame.players[idx].name;
+            curGame.winnerIndex = teamIdx;
+          } else {
+            curGame.completedLegs = [...curGame.completedLegs, curGame.currentLeg];
+            const nextStarter = (curGame.currentLeg.startingPlayerIndex + 1) % n;
+            curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter, curGame.players, curGame.teams);
+            curGame.currentPlayerIndex = nextStarter;
+            curStart = curGame.currentLeg.remaining[teamIndexFor(curGame.teams, nextStarter)];
+            playerAlreadyAdvanced = true;
+          }
+          checkedOut = true;
+        }
       }
     }
 
     if (!curGame.isFinished) {
-      if (busted || curDarts >= 1) {
+      if (!playerAlreadyAdvanced && (busted || curDarts >= 1)) {
         const idx = curGame.currentPlayerIndex;
         const nextIdx = (idx + 1) % n;
         curGame.currentPlayerIndex = nextIdx;
         curStart = curGame.currentLeg.remaining[teamIndexFor(curGame.teams, nextIdx)];
+        curDarts = 0;
+      } else if (playerAlreadyAdvanced) {
         curDarts = 0;
       }
     } else {
@@ -949,6 +1009,22 @@ const GamePage = () => {
     }
   };
 
+  /** Answers the "which dart finished it" prompt raised by submitDetectedRound when a
+   *  camera-detected visit's total lands exactly on a finish under double-out with a genuine mix
+   *  of doubles and non-doubles (see resolveX01Visit) — re-enters submitDetectedRound with the
+   *  player's choice forced, so the actual game-state mutation goes through the exact same path
+   *  a normal round would. */
+  const resolveCheckoutChoice = (choice: number | "bust") => {
+    const pending = pendingCheckoutChoice;
+    if (!pending) return;
+    setPendingCheckoutChoice(null);
+    if (choice === "bust") {
+      submitDetectedRound(pending.darts, { kind: "bust" });
+    } else {
+      submitDetectedRound(pending.darts, { kind: "checkout", finisherIndex: choice });
+    }
+  };
+
   const deleteThrow = (playerIdx: number, throwIndex: number) => {
     // If the deleted dart belonged to the current player's still-open round (one of the last
     // `dartsThisRound` entries), the round's dart counter must shrink with it — otherwise the
@@ -995,7 +1071,7 @@ const GamePage = () => {
   const handleQuickRound = (total: number) => {
     if (!game || game.isFinished) return;
     if (game.mode === "cricket") return;
-    submitDetectedRound(splitQuickRound(total));
+    submitDetectedRound(splitQuickRound(total), undefined, true);
   };
 
   const shareResult = async () => {
@@ -1847,12 +1923,41 @@ const GamePage = () => {
               outer window (and the page behind it) never scrolls while the camera is open. */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3">
             {doubleInBanner}
+            {pendingCheckoutChoice && (
+              <div className="mb-3 rounded-lg border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
+                <p className="font-display text-sm uppercase tracking-wide text-accent">Mögliches Finish erkannt</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Welcher Dart war der letzte? (Musste ein Doppel sein, sonst überworfen.)
+                </p>
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+                  {pendingCheckoutChoice.darts.map((t, idx) => (
+                    <span key={idx} className={`rounded px-1.5 py-0.5 text-[10px] font-display ring-1 ${
+                      pendingCheckoutChoice.doubleIndexes.includes(idx)
+                        ? "bg-accent/20 text-accent ring-accent/40"
+                        : "bg-muted text-muted-foreground ring-border"
+                    }`}>
+                      {dartLabel(t)}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                  {pendingCheckoutChoice.doubleIndexes.map((idx) => (
+                    <Button key={idx} size="sm" onClick={() => resolveCheckoutChoice(idx)} className="gap-1">
+                      Fertig mit {dartLabel(pendingCheckoutChoice.darts[idx])}
+                    </Button>
+                  ))}
+                  <Button size="sm" variant="outline" onClick={() => resolveCheckoutChoice("bust")}>
+                    Kein Finish – überworfen
+                  </Button>
+                </div>
+              </div>
+            )}
             {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} /></div>}
 
             {!currentPlayer?.isBot && (
               <LiveCamera
                 ref={liveCameraRef}
-                enabled={cameraEnabled}
+                enabled={cameraEnabled && !pendingCheckoutChoice}
                 onClose={() => { cameraWantedRef.current = false; setCameraEnabled(false); setPendingCameraDarts([]); }}
                 onRoundCommit={submitDetectedRound}
                 onPendingChange={setPendingCameraDarts}

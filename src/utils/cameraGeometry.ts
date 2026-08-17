@@ -98,6 +98,39 @@ export const videoFractionToCrop = (
   };
 };
 
+export interface ScreenRect { x: number; y: number; width: number; height: number }
+
+/**
+ * Where the analysis crop (computeCropRect) actually renders on screen, as a fraction of the
+ * displayed video box (x/y = top-left corner) — for the live tracking ring and any other overlay
+ * that needs to draw "the board's crop area" on top of the video.
+ *
+ * Composing the existing crop/screen conversion helpers here (rather than scaling calib.size
+ * directly by a visible-window fraction) is what makes this come out as a true square on screen.
+ * calib.size is a fraction of minSide(videoWidth, videoHeight) — a DIFFERENT quantity from a
+ * fraction of the on-screen box's own width or height — so a naive `calib.size / win.sw` /
+ * `calib.size / win.sh` skips the video's own aspect ratio and silently stretches the result into
+ * an oval whenever the camera stream isn't square (i.e. always: a landscape 16:9 stream renders a
+ * wide oval, a portrait stream a tall one — see the 2026-08-17 field report of a visibly
+ * non-circular calibration ring). Routing through computeCropRect + cropToVideoFraction +
+ * videoToScreenFraction also automatically inherits computeCropRect's own edge clamping (the crop
+ * can't run off the frame), which a direct formula would have to duplicate to stay correct near
+ * calib.x/y's extremes.
+ */
+export const computeCropScreenRect = (
+  videoWidth: number, videoHeight: number, calibX: number, calibY: number, calibSize: number, win: VisibleWindow,
+): ScreenRect | null => {
+  const rect = computeCropRect(videoWidth, videoHeight, calibX, calibY, calibSize);
+  if (!rect) return null;
+  const topLeftVideo = cropToVideoFraction(0, 0, videoWidth, videoHeight, rect);
+  const bottomRightVideo = cropToVideoFraction(1, 1, videoWidth, videoHeight, rect);
+  if (!topLeftVideo || !bottomRightVideo) return null;
+  const topLeft = videoToScreenFraction(topLeftVideo.x, topLeftVideo.y, win);
+  const bottomRight = videoToScreenFraction(bottomRightVideo.x, bottomRightVideo.y, win);
+  if (!topLeft || !bottomRight) return null;
+  return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
+};
+
 // ─── calibration-based board scoring ─────────────────────────────────
 // The AI is good at pointing at a pixel, but unreliable at eyeballing which of 82 thin wedges
 // that pixel falls in. Since every session already collects a precise 4-point calibration

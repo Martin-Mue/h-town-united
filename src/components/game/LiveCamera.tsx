@@ -28,6 +28,7 @@ import {
   computeCropRect,
   cropToVideoFraction,
   videoFractionToCrop,
+  computeCropScreenRect,
   CANON_BOARD_POINTS,
 } from "@/utils/cameraGeometry";
 import {
@@ -433,7 +434,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // down to the review list to re-arm it required.
   const [repositionDraft, setRepositionDraft] = useState<{ fx: number; fy: number } | null>(null);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
-  const [calibStep, setCalibStep] = useState(0);
   const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
   const [activeTap, setActiveTap] = useState<{ x: number; y: number } | null>(null);
   const calibOverlayRef = useRef<HTMLDivElement | null>(null);
@@ -633,6 +633,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const videoFractionToScreenFraction = (fx: number, fy: number): { x: number; y: number } | null => {
     const win = videoVisibleWindow();
     return win ? videoToScreenFraction(fx, fy, win) : null;
+  };
+
+  /** Where the analysis crop actually renders on screen (top-left + size, as a fraction of the
+   *  video box) — for the tracking ring. See computeCropScreenRect's doc comment for why this
+   *  has to go through the real crop rect instead of scaling calib.size by the screen window. */
+  const cropScreenRect = () => {
+    const v = videoRef.current;
+    const win = videoVisibleWindow();
+    if (!v || !win) return null;
+    return computeCropScreenRect(v.videoWidth, v.videoHeight, calib.x, calib.y, calib.size, win);
   };
 
   // A point relative to the cropped/zoomed analysis frame (0-1) -> the full video frame (the
@@ -959,7 +969,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     resetLoop();
     // Prompt user to 4-point calibrate once per session/device
     if (!calib.taps || calib.taps.length !== 4) {
-      setCalibStep(0);
       setPendingTaps([]);
       setPhase("calibrate");
       setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
@@ -1036,17 +1045,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (!applyCalibrationTaps(videoSpace)) {
         setPendingTaps([]);
         setActiveTap(null);
-        setCalibStep(0);
         setStatus("Kalibrierung ungültig — Punkte zu nah beieinander oder auf einer Linie. Bitte die 4 Punkte nochmal genau auf die Doppel-Ring-Kanten tippen.");
         return;
       }
-      setCalibStep(0);
       setPendingTaps([]);
       resetLoop();
       setPhase("live");
       setStatus("Kalibriert · bereit – wirf deinen ersten Dart");
     } else {
-      setCalibStep(next.length);
       setStatus(`Kalibrierung ${next.length + 1}/4: ${CALIB_LABELS[next.length]}`);
     }
   };
@@ -1140,7 +1146,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setPhase("live");
       setStatus("Automatisch kalibriert (KI-Modell) · bereit – wirf deinen ersten Dart. Stimmt die Lage nicht, unten „Kalibrierung neu starten“ tippen.");
     } else {
-      setCalibStep(0);
       setPendingTaps([]);
       setPhase("calibrate");
       setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
@@ -1166,7 +1171,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setSelectedDeviceId(loadDeviceId(board));
     setPendingTaps([]);
     setActiveTap(null);
-    setCalibStep(0);
     // A pending/unreviewed round from the board being left behind must not survive the switch —
     // otherwise tapping "Übernehmen" afterwards attributes board A's darts to whatever game is
     // active for board B, since onRoundCommit only knows the darts, not which board they're from.
@@ -1578,10 +1582,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // screenFractionToVideoFraction) — convert back to on-screen box fractions for rendering, so
   // the tracking ring and debug dots land where the board actually appears on screen instead of
   // silently drifting off it whenever the video's native aspect ratio isn't square.
-  const screenWin = videoVisibleWindow();
-  const ringScreenCenter = videoFractionToScreenFraction(calib.x, calib.y) ?? { x: calib.x, y: calib.y };
-  const ringScreenWidthPct = (screenWin ? calib.size / screenWin.sw : calib.size) * 100;
-  const ringScreenHeightPct = (screenWin ? calib.size / screenWin.sh : calib.size) * 100;
+  const ringRect = cropScreenRect();
 
   return (
     <div className="mb-3 space-y-2 rounded-xl border border-border bg-card p-3">
@@ -1665,6 +1666,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             className="absolute inset-0 z-20 cursor-crosshair select-none bg-background/30"
             onClick={handleCalibTap}
           >
+            {/* Only the tap surface and geometry-pinned markers live on top of the video itself —
+                step instructions and the fine-tune controls render below the video instead (see
+                the status bar and the "Fein justieren" panel further down), so they can never
+                cover the exact board spot the player needs to see and tap. What used to be a
+                fixed top-of-frame pill was a real problem here specifically: D20's real tap
+                target is ALSO at the top of the frame. */}
             {/* already confirmed taps */}
             {pendingTaps.map((t, i) => (
               <MapMarker key={i} fx={t.x} fy={t.y} className="pointer-events-none h-3 w-3 rounded-full bg-secondary ring-2 ring-background">
@@ -1682,80 +1689,25 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 <TapMagnifier fx={activeTap.x} fy={activeTap.y} />
               </>
             )}
-            {/* Compact pill instead of a full-width bar — was covering a meaningful strip of the
-                board at the top of the frame, exactly where D20 usually needs to be tapped. */}
-            <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
-              <span className="rounded-full bg-accent px-3 py-1 text-[11px] font-display uppercase text-accent-foreground shadow">
-                {calibStep + 1}/4 · {CALIB_LABELS[calibStep]}
-              </span>
-            </div>
-            {!activeTap && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-14 flex justify-center">
-                <span className="rounded-md bg-background/80 px-3 py-1 text-[11px] text-foreground">
-                  Tippe grob auf {CALIB_LABELS[calibStep]} – dann fein justieren
-                </span>
-              </div>
-            )}
-            {activeTap && (
-              // Positioned in the quadrant FARTHEST from the tap on both axes (not just
-              // top/bottom) and narrower than the full frame width — a full-width bar flipped
-              // only vertically still buried points near the frame's vertical middle (exactly
-              // where D6 tends to land on a rotated board), since the panel's own height still
-              // reached that far even after flipping.
-              <div
-                className={`absolute z-30 w-44 rounded-lg border border-border bg-background/95 p-2 shadow-lg ${
-                  activeTap.y > 0.5 ? "top-2" : "bottom-2"
-                } ${activeTap.x > 0.5 ? "left-2" : "right-2"}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
-                  Fein justieren – dann bestätigen
-                </div>
-                <div className="mx-auto grid w-32 grid-cols-3 gap-1">
-                  <div />
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, -0.005)}>▲</Button>
-                  <div />
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(-0.005, 0)}>◀</Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setActiveTap(null)} title="Neu setzen">
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0.005, 0)}>▶</Button>
-                  <div />
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, 0.005)}>▼</Button>
-                  <div />
-                </div>
-                <Button size="sm" className="mt-2 w-full gap-1 font-display uppercase" onClick={confirmActiveTap}>
-                  <Check className="h-4 w-4" /> Punkt bestätigen
-                </Button>
-              </div>
-            )}
           </div>
         )}
 
-        {(phase === "live" || phase === "scanning" || phase === "detecting") && (
+        {(phase === "live" || phase === "scanning" || phase === "detecting") && ringRect && (
           <div className="pointer-events-none absolute inset-0">
             <div
               className={`absolute rounded-full border-2 transition-colors duration-500 ${
                 phase === "scanning" ? "border-accent animate-pulse-glow" : ringColorClass
               }`}
               style={{
-                width: `${ringScreenWidthPct}%`,
-                height: `${ringScreenHeightPct}%`,
-                left: `${ringScreenCenter.x * 100}%`,
-                top: `${ringScreenCenter.y * 100}%`,
-                transform: "translate(-50%, -50%)",
+                width: `${ringRect.width * 100}%`,
+                height: `${ringRect.height * 100}%`,
+                left: `${ringRect.x * 100}%`,
+                top: `${ringRect.y * 100}%`,
               }}
             >
               <div className="absolute inset-[35%] rounded-full border border-current opacity-40" />
               <div className="absolute inset-[48%] rounded-full bg-current opacity-70" />
             </div>
-            {phase === "live" && trackingStatus === "warn" && (
-              <div className="absolute inset-x-0 bottom-2 flex justify-center">
-                <span className="rounded-md bg-accent/90 px-2.5 py-1 text-[10px] font-medium text-accent-foreground shadow">
-                  Board hat sich verschoben — bei Bedarf neu kalibrieren
-                </span>
-              </div>
-            )}
           </div>
         )}
 
@@ -1824,37 +1776,66 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             className="absolute inset-0 z-40 cursor-crosshair select-none bg-background/40"
             onClick={handleRepositionTap}
           >
-            <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
-              <span className="rounded-full bg-accent px-3 py-1 text-[11px] font-display uppercase text-accent-foreground shadow">
-                Dart {repositioningIndex + 1} ({dartLabel(accumulated[repositioningIndex])}) — tippen zum Setzen, dann bestätigen
-              </span>
-            </div>
-
             {repositionDraft && <TapMagnifier fx={repositionDraft.fx} fy={repositionDraft.fy} />}
-
-            {/* Confirm/cancel/nudge docked at the bottom of the video itself — reachable without
-                scrolling, which was the whole point: a mis-tap used to mean scrolling back down
-                to the review list just to arm the mode again. */}
-            <div
-              className="absolute inset-x-2 bottom-2 z-30 rounded-lg border border-border bg-background/95 p-2 shadow-lg"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-center gap-1">
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, -0.01)}>▲</Button>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(-0.01, 0)}>◀</Button>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0.01, 0)}>▶</Button>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, 0.01)}>▼</Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={cancelReposition} title="Abbrechen">
-                  <X className="h-4 w-4" />
-                </Button>
-                <Button size="sm" className="h-8 flex-1 gap-1 font-display uppercase" onClick={confirmReposition} disabled={!repositionDraft}>
-                  <Check className="h-4 w-4" /> Übernehmen
-                </Button>
-              </div>
-            </div>
           </div>
         )}
       </div>
+
+      {/* Board drifted warning, calibration fine-tune controls, and the reposition confirm bar
+          all render here, below the video, instead of overlaid on it — depending on zoom/crop
+          they could otherwise land right on top of the exact spot the player needs to see (the
+          old calibration step pill sat at the top of the frame, exactly where D20 needs
+          tapping). Keeping this docked immediately below the video (not down in the review list)
+          still means no scrolling to reach it. */}
+      {phase === "live" && trackingStatus === "warn" && (
+        <div className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-center text-[11px] font-medium text-accent">
+          Board hat sich verschoben — bei Bedarf neu kalibrieren
+        </div>
+      )}
+
+      {phase === "calibrate" && activeTap && (
+        <div className="rounded-lg border border-border bg-card p-2 shadow-sm">
+          <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
+            Fein justieren – dann bestätigen
+          </div>
+          <div className="mx-auto grid w-32 grid-cols-3 gap-1">
+            <div />
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, -0.005)}>▲</Button>
+            <div />
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(-0.005, 0)}>◀</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setActiveTap(null)} title="Neu setzen">
+              <RotateCcw className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0.005, 0)}>▶</Button>
+            <div />
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, 0.005)}>▼</Button>
+            <div />
+          </div>
+          <Button size="sm" className="mt-2 w-full gap-1 font-display uppercase" onClick={confirmActiveTap}>
+            <Check className="h-4 w-4" /> Punkt bestätigen
+          </Button>
+        </div>
+      )}
+
+      {repositioningIndex !== null && accumulated[repositioningIndex] && (
+        <div className="rounded-lg border border-border bg-card p-2 shadow-sm">
+          <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
+            Dart {repositioningIndex + 1} ({dartLabel(accumulated[repositioningIndex])}) — im Bild antippen, dann bestätigen
+          </div>
+          <div className="flex items-center justify-center gap-1">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, -0.01)}>▲</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(-0.01, 0)}>◀</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0.01, 0)}>▶</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, 0.01)}>▼</Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={cancelReposition} title="Abbrechen">
+              <X className="h-4 w-4" />
+            </Button>
+            <Button size="sm" className="h-8 flex-1 gap-1 font-display uppercase" onClick={confirmReposition} disabled={!repositionDraft}>
+              <Check className="h-4 w-4" /> Übernehmen
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
         <div className="flex min-w-0 items-center gap-2">
