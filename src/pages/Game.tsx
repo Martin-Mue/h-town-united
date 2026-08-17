@@ -46,7 +46,7 @@ import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
-import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
+import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const WALKON_PREF_KEY = "dart-walkon-enabled";
@@ -216,6 +216,11 @@ const GamePage = () => {
   // from the same stale remaining value and one silently clobbering the other's subtraction.
   const remainingRef = useRef<number[]>([]);
   const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
+  // Head-to-head record for the walk-on screen — null while unresolved (no fetch fired yet,
+  // or one of the two isn't a real roster player), { total: 0, ... } once fetched but this is
+  // their first-ever meeting. Fetched once per game start (see startGame), not derived from
+  // dbPlayers, since it needs the actual `games` history, not just roster totals.
+  const [walkonH2H, setWalkonH2H] = useState<{ aWins: number; bWins: number; total: number } | null>(null);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   // Whether a human actually wants the camera on — distinct from cameraEnabled itself, which
@@ -387,6 +392,26 @@ const GamePage = () => {
     return parseInt(mode);
   };
 
+  // Fired once per match start (not a useEffect keyed on `game`, which changes on every dart) —
+  // resolves both sides against the roster and pulls their head-to-head record for the walk-on
+  // screen. Only meaningful for an individual 1v1: team games rank by one representative player
+  // per team (see gameSync.ts's `ranking`), which isn't a stable "these two people's H2H".
+  const loadWalkonH2H = async (players: PlayerSlot[], teams?: TeamSlot[]) => {
+    setWalkonH2H(null);
+    if (teams || players.length !== 2 || players[0].isBot || players[1].isBot) return;
+    const a = matchClubPlayer(dbPlayers, players[0].name);
+    const b = matchClubPlayer(dbPlayers, players[1].name);
+    if (!a || !b || a.id === b.id) return;
+    const { data, error } = await supabase.from("games").select("winner_id")
+      .or(`and(player1_id.eq.${a.id},player2_id.eq.${b.id}),and(player1_id.eq.${b.id},player2_id.eq.${a.id})`);
+    if (error || !data) return;
+    setWalkonH2H({
+      aWins: data.filter((g) => g.winner_id === a.id).length,
+      bWins: data.filter((g) => g.winner_id === b.id).length,
+      total: data.length,
+    });
+  };
+
   const startGame = () => {
     const startScore = getStartScore();
     const n = numPlayers;
@@ -420,6 +445,7 @@ const GamePage = () => {
       newGame.cricket = Array.from({ length: scoreSlots }, () => createCricketState(cricketNumbers));
     }
     setGame(newGame);
+    void loadWalkonH2H(players, teams);
     setDartsThisRound(0);
     // Must read the CHOSEN starter's own slot, not always slot 0 — with per-player handicaps
     // (or asymmetric team scores) these differ, and turnStartRemaining is exactly what a bust
@@ -1739,6 +1765,18 @@ const GamePage = () => {
   if (phase === "walkon" && game) {
     const names = game.teams ? game.teams.map((t) => t.name) : game.players.map((p) => p.name);
     const isDuel = names.length === 2;
+    // Only real roster players carry a stat line — bots and freely-typed guest names (the
+    // "Spieler 1"/"Spieler 2" defaults) have no club history to show and are silently skipped.
+    const walkonStat = (name: string) => {
+      const p = matchClubPlayer(dbPlayers, name);
+      if (!p) return null;
+      const winRate = p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
+      return (
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          Ø {Number(p.average).toFixed(1)} · {winRate}% Siege · Elo {Math.round(p.elo_rating)}
+        </p>
+      );
+    };
     return (
       <div
         onClick={() => setPhase("playing")}
@@ -1750,28 +1788,43 @@ const GamePage = () => {
         </p>
         {isDuel ? (
           <div className="relative flex flex-col items-center gap-3 w-full max-w-md">
-            <h2 className="font-display text-4xl sm:text-5xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full">
-              {names[0]}
-            </h2>
+            <div className="flex flex-col items-center gap-1">
+              <h2 className="font-display text-4xl sm:text-5xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full">
+                {names[0]}
+              </h2>
+              {walkonStat(names[0])}
+            </div>
             <span className="font-display text-lg text-accent animate-scale-in" style={{ animationDelay: "150ms" }}>VS</span>
-            <h2
-              className="font-display text-4xl sm:text-5xl uppercase text-secondary text-center glow-green animate-scale-in truncate max-w-full"
-              style={{ animationDelay: "300ms" }}
-            >
-              {names[1]}
-            </h2>
+            <div className="flex flex-col items-center gap-1">
+              <h2
+                className="font-display text-4xl sm:text-5xl uppercase text-secondary text-center glow-green animate-scale-in truncate max-w-full"
+                style={{ animationDelay: "300ms" }}
+              >
+                {names[1]}
+              </h2>
+              {walkonStat(names[1])}
+            </div>
+            {walkonH2H && (
+              <p className="relative text-xs uppercase tracking-widest text-accent mt-1 animate-slide-up">
+                {walkonH2H.total > 0
+                  ? `Bisher gegeneinander: ${walkonH2H.aWins} : ${walkonH2H.bWins} (${walkonH2H.total} Spiele)`
+                  : "Erstes Aufeinandertreffen"}
+              </p>
+            )}
           </div>
         ) : (
           <div className="relative flex flex-col items-center gap-2 w-full max-w-md">
             <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Es spielen</p>
             {names.map((name, i) => (
-              <h2
-                key={i}
-                className="font-display text-2xl sm:text-3xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full"
-                style={{ animationDelay: `${i * 120}ms` }}
-              >
-                {name}
-              </h2>
+              <div key={i} className="flex flex-col items-center gap-0.5">
+                <h2
+                  className="font-display text-2xl sm:text-3xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full"
+                  style={{ animationDelay: `${i * 120}ms` }}
+                >
+                  {name}
+                </h2>
+                {walkonStat(name)}
+              </div>
             ))}
           </div>
         )}
