@@ -138,6 +138,12 @@ const GamePage = () => {
   const [numPlayers, setNumPlayers] = useState(2);
   const [customCricket, setCustomCricket] = useState(false);
   const [teamMode, setTeamMode] = useState(false);
+  // Who throws first in the match — a raw player index normally, but effectively a team choice
+  // in team mode (0/1 pick each team's first member, matching the [TeamA-1, TeamB-1, TeamA-2,
+  // TeamB-2, ...] interleaving createLegState/teamIndexFor already assume). Defaults to 0 (today's
+  // fixed "player 1 starts"); the "Ausbullen" picker in setup just lets the group record who
+  // actually won the bull-off instead.
+  const [starterIndex, setStarterIndex] = useState(0);
   const [teamNames, setTeamNames] = useState<[string, string]>(["Team 1", "Team 2"]);
   const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
   const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(Array(MAX_PLAYERS).fill(true));
@@ -224,6 +230,11 @@ const GamePage = () => {
   // detected set can tell those apart. Blocks further camera scanning (see the `enabled` prop
   // below) until the player says which dart actually finished it.
   const [pendingCheckoutChoice, setPendingCheckoutChoice] = useState<{ darts: DetectedDart[]; doubleIndexes: number[] } | null>(null);
+  // Set when a leg hits its maxRoundsX01 cap tied on lowest remaining — there's no rule to break
+  // that automatically, so ask who won the bull-off instead of leaving the leg stuck (see
+  // handleX01Throw's cap-check and resolveTiebreak). tiedIndexes are score-slot indexes (team
+  // index in team mode, player index otherwise) — same space as GameState.currentLeg.remaining.
+  const [pendingTiebreak, setPendingTiebreak] = useState<{ tiedIndexes: number[] } | null>(null);
   const liveCameraRef = useRef<LiveCameraHandle>(null);
   const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
   const [confettiKey, setConfettiKey] = useState<number | null>(null);
@@ -391,11 +402,15 @@ const GamePage = () => {
     }));
     const teams = teamMode ? [{ name: teamNames[0].trim() || "Team 1" }, { name: teamNames[1].trim() || "Team 2" }] : undefined;
     const scoreSlots = teams?.length ?? n;
+    // Team mode only ever offers a choice of 2 (which team starts, via each team's first
+    // member); clamp defensively either way in case the player count shrank after picking a
+    // starter further back in the list.
+    const starter = teamMode ? (starterIndex % 2 === 0 ? 0 : 1) : Math.min(starterIndex, n - 1);
     const newGame: GameState = {
       mode, startScore, bestOfLegs, players,
       legsWon: Array(scoreSlots).fill(0),
-      currentLeg: createLegState(1, startScore, 0, players, teams), completedLegs: [],
-      currentPlayerIndex: 0, isFinished: false,
+      currentLeg: createLegState(1, startScore, starter, players, teams), completedLegs: [],
+      currentPlayerIndex: starter, isFinished: false,
       maxRoundsX01: mode !== "cricket" && maxRoundsX01 > 0 ? maxRoundsX01 : undefined,
       teams,
     };
@@ -462,6 +477,10 @@ const GamePage = () => {
   /** Undo the last dart throw */
   const undoLastDart = () => {
     if (undoStack.length === 0) return;
+    // Both prompts point at darts/indexes from the round that's about to disappear underneath
+    // them — undoing past it without clearing them first would leave a stale prompt on screen
+    // whose answer would then reapply a round that no longer exists.
+    if (pendingCheckoutChoice || pendingTiebreak) return;
     if (botTimerRef.current) { clearTimeout(botTimerRef.current); botTimerRef.current = null; }
     botPlanRef.current = null;
     const last = undoStack[undoStack.length - 1];
@@ -639,8 +658,64 @@ const GamePage = () => {
         });
         window.setTimeout(() => speakSequence(parts), 180);
       }
+
+      // Round-limit tiebreak: mirrors the setGame updater's own cap-check just above (same
+      // inputs, computed again out here since raising a bull-off prompt is a side effect, not
+      // state a pure updater should trigger). Only the tied case needs handling here — a unique
+      // winner is already fully resolved inside the updater.
+      const cap = game.maxRoundsX01;
+      if (cap && cap > 0) {
+        const throwsAfter = game.players.map((_, i) => (i === idx ? game.currentLeg.throws[i].length + 1 : game.currentLeg.throws[i].length));
+        const roundsPerPlayer = throwsAfter.map((len) => Math.ceil(len / 3));
+        const remainingAfter = game.currentLeg.remaining.map((r, si) => (si === teamIdx ? newRemaining : r));
+        const scoreSlotRounds = remainingAfter.map((_, si) => Math.max(...roundsPerPlayer.filter((_, i) => teamIndexFor(game.teams, i) === si)));
+        if (scoreSlotRounds.every((r) => r >= cap)) {
+          const minRemaining = Math.min(...remainingAfter);
+          const tied = remainingAfter.reduce<number[]>((acc, r, i) => (r === minRemaining ? [...acc, i] : acc), []);
+          if (tied.length > 1) setPendingTiebreak({ tiedIndexes: tied });
+        }
+      }
     } else {
       setDartsThisRound(newDartsThisRound);
+    }
+  };
+
+  /** Answers the bull-off prompt raised above when a round-limited leg ends tied — applies the
+   *  chosen score slot as the leg winner through the same "leg won" transition every other path
+   *  (checkout, cap reached with a unique winner) already uses. */
+  const resolveTiebreak = (winnerIndex: number) => {
+    if (!pendingTiebreak || !game) return;
+    setPendingTiebreak(null);
+    const n = game.players.length;
+    const legsWon = game.legsWon[winnerIndex] + 1;
+    const legsToWin = Math.ceil(game.bestOfLegs / 2);
+    const matchWon = legsWon >= legsToWin;
+    const winnerName = game.teams ? game.teams[winnerIndex].name : game.players[winnerIndex].name;
+    setGame((prev) => {
+      if (!prev) return prev;
+      const updatedLeg: LegState = { ...prev.currentLeg, winnerIndex };
+      const nextLegsWon = [...prev.legsWon];
+      nextLegsWon[winnerIndex] += 1;
+      if (nextLegsWon[winnerIndex] >= legsToWin) {
+        return { ...prev, currentLeg: updatedLeg, legsWon: nextLegsWon, isFinished: true, winnerName, winnerIndex };
+      }
+      const nextStarter = (winnerIndex + 1) % n;
+      return {
+        ...prev,
+        legsWon: nextLegsWon,
+        completedLegs: [...prev.completedLegs, updatedLeg],
+        currentLeg: createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams),
+        currentPlayerIndex: nextStarter,
+      };
+    });
+    setDartsThisRound(0);
+    flashScore(winnerIndex);
+    triggerConfetti();
+    toast({ title: "Ausgebullt!", description: `${winnerName} gewinnt das Leg per Ausbullen.` });
+    if (soundEnabled) setTimeout(() => (matchWon ? playVictorySound() : playCheckoutSound()), 100);
+    if (speechEnabled) {
+      const text = matchWon ? `${winnerName} gewinnt das Ausbullen und die Partie!` : `${winnerName} gewinnt das Ausbullen und damit das Leg!`;
+      window.setTimeout(() => speakSequence([{ text }]), 200);
     }
   };
 
@@ -1104,6 +1179,7 @@ const GamePage = () => {
   useEffect(() => {
     if (botTimerRef.current) { clearTimeout(botTimerRef.current); botTimerRef.current = null; }
     if (!game || game.isFinished || phase !== "playing") { setBotThinking(false); return; }
+    if (pendingTiebreak) { setBotThinking(false); return; } // frozen until the bull-off prompt is answered
     const idx = game.currentPlayerIndex;
     const player = game.players[idx];
     if (!player?.isBot) {
@@ -1150,7 +1226,7 @@ const GamePage = () => {
       if (botTimerRef.current) clearTimeout(botTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.currentPlayerIndex, game?.currentLeg.legNumber, dartsThisRound, game?.isFinished, phase]);
+  }, [game?.currentPlayerIndex, game?.currentLeg.legNumber, dartsThisRound, game?.isFinished, phase, pendingTiebreak]);
 
   const saveGame = async () => {
     if (!game || !game.isFinished || savingRef.current || gameSaved) return;
@@ -1522,6 +1598,33 @@ const GamePage = () => {
           )}
 
           <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
+            <Label className="text-sm">Anwurf — wer beginnt?</Label>
+            <p className="text-[10px] text-muted-foreground -mt-1">Ausbullen entscheidet üblicherweise, wer eröffnet — einfach den Sieger antippen.</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(teamMode
+                ? [0, 1]
+                : Array.from({ length: activePlayerCount }, (_, i) => i)
+              ).map((i) => {
+                const label = teamMode
+                  ? (i === 0 ? (teamNames[0].trim() || "Team 1") : (teamNames[1].trim() || "Team 2"))
+                  : (playerIsBot[i] ? BOT_PROFILES[playerBotLevel[i]].name : (playerNames[i]?.trim() || `Spieler ${i + 1}`));
+                const isChosen = teamMode ? (starterIndex % 2 === i) : starterIndex === i;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setStarterIndex(i)}
+                    className={`truncate rounded-lg border px-3 py-2 text-sm font-display transition-colors ${
+                      isChosen ? "bg-primary/15 border-primary text-primary" : "bg-background border-border text-muted-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <Label htmlFor="warmup-mode" className="text-sm">Aufwärmen vor dem Match</Label>
@@ -1851,8 +1954,13 @@ const GamePage = () => {
                   ({card.remaining} − {pendingTotal} live)
                 </p>
               )}
-              {isActive && cameraEnabled && pendingCameraDarts.length > 0 && (
-                <div className="mt-1 flex items-center justify-center gap-1 flex-wrap">
+              {/* min-h reserves this row's space even before the first dart of the round lands —
+                  it used to only exist once pendingCameraDarts/activeRound had content, so the
+                  card grew taller the instant the first dart registered, shoving everything below
+                  (the number pad, mid-tap) down and forcing a scroll. Reserving the space up
+                  front keeps the layout stable across the whole round instead of just after it starts. */}
+              {isActive && cameraEnabled && (
+                <div className="mt-1 flex min-h-6 items-center justify-center gap-1 flex-wrap">
                   {pendingCameraDarts.map((t, idx) => (
                     <span key={idx} className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-display text-accent ring-1 ring-accent/40">
                       {dartLabel(t)}
@@ -1860,14 +1968,14 @@ const GamePage = () => {
                   ))}
                 </div>
               )}
-              {isActive && activeRound.length > 0 && (
-                <div className="mt-1 flex items-center justify-center gap-1 flex-wrap">
+              {isActive && (
+                <div className="mt-1 flex min-h-6 items-center justify-center gap-1 flex-wrap">
                   {activeRound.map((t, idx) => (
                     <span key={idx} className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-display text-primary">
                       {dartLabel(t)}
                     </span>
                   ))}
-                  <span className="ml-1 text-[10px] font-display text-accent">+{currentRoundTotal}</span>
+                  {activeRound.length > 0 && <span className="ml-1 text-[10px] font-display text-accent">+{currentRoundTotal}</span>}
                 </div>
               )}
               <div className="flex justify-center flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
@@ -1908,6 +2016,22 @@ const GamePage = () => {
         </div>
       </div>
       </div>
+
+      {pendingTiebreak && (
+        <div className="mx-4 mb-3 rounded-lg border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
+          <p className="font-display text-sm uppercase tracking-wide text-accent">Rundenlimit erreicht — Gleichstand</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {pendingTiebreak.tiedIndexes.map((i) => scoreLabels[i]).join(" vs. ")} liegen gleichauf. Wer hat das Ausbullen gewonnen?
+          </p>
+          <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+            {pendingTiebreak.tiedIndexes.map((i) => (
+              <Button key={i} size="sm" onClick={() => resolveTiebreak(i)}>
+                {scoreLabels[i]}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <ThrowClipDialog
         popup={clipPopup}
@@ -1957,7 +2081,8 @@ const GamePage = () => {
             {!currentPlayer?.isBot && (
               <LiveCamera
                 ref={liveCameraRef}
-                enabled={cameraEnabled && !pendingCheckoutChoice}
+                enabled={cameraEnabled}
+                paused={!!pendingCheckoutChoice || !!pendingTiebreak}
                 onClose={() => { cameraWantedRef.current = false; setCameraEnabled(false); setPendingCameraDarts([]); }}
                 onRoundCommit={submitDetectedRound}
                 onPendingChange={setPendingCameraDarts}
@@ -1979,57 +2104,60 @@ const GamePage = () => {
             </button>
 
             {showManualInput && (
-              <>
-                <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot}
-                  onThrow={throwDart}
-                  onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
+              <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak}
+                onThrow={throwDart}
+                onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
+            )}
 
-                {currentThrows.length > 0 && (
-                  <div className="mt-3 bg-card rounded-xl border border-border p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs text-muted-foreground uppercase font-display">Würfe · {currentPlayerName}</p>
-                      <button onClick={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)} className="text-xs text-primary flex items-center gap-1">
-                        <Edit2 className="w-3 h-3" /> Bearbeiten
-                      </button>
-                    </div>
-                    <div className="space-y-1">
-                      {Array.from({ length: Math.ceil(currentThrows.length / 3) }, (_, roundIdx) => {
-                        const roundThrows = currentThrows.slice(roundIdx * 3, roundIdx * 3 + 3);
-                        const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0);
-                        const is180 = roundTotal === 180 && roundThrows.length === 3;
-                        return (
-                          <div key={roundIdx} className={`flex items-center gap-1.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
-                            <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
-                            {roundThrows.map((t, i) => {
-                              const globalIdx = roundIdx * 3 + i;
-                              return (
-                                <div key={globalIdx} className="relative group">
-                                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
-                                    t.multiplier === 3 ? "bg-primary/20 text-primary" :
-                                    t.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
-                                  }`}>
-                                    {t.multiplier === 3 ? "T" : t.multiplier === 2 ? "D" : ""}{t.baseValue === 50 ? "Bull" : t.baseValue === 0 ? "Miss" : t.baseValue}
-                                  </span>
-                                  {editingThrowIdx !== null && (
-                                    <button onClick={() => deleteThrow(activeIdx, globalIdx)}
-                                      title="Wurf löschen" aria-label="Wurf löschen"
-                                      className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
-                                      <X className="w-2.5 h-2.5 text-destructive-foreground" />
-                                    </button>
-                                  )}
-                                </div>
-                              );
-                            })}
-                            <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
-                              {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </>
+            {/* Correcting a mis-tap used to require opening "Manuelle Eingabe" first, then
+                finding this section inside it — two collapsed layers deep, easy to miss
+                especially while scoring with the camera (this doesn't need the number pad open
+                at all, just the ability to review/delete a wrong throw). Now always visible
+                whenever there's something to correct, independent of that toggle. */}
+            {currentThrows.length > 0 && (
+              <div className="mt-3 bg-card rounded-xl border border-border p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-muted-foreground uppercase font-display">Würfe · {currentPlayerName}</p>
+                  <button onClick={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)} className="text-xs text-primary flex items-center gap-1">
+                    <Edit2 className="w-3 h-3" /> Bearbeiten
+                  </button>
+                </div>
+                <div className="space-y-1">
+                  {Array.from({ length: Math.ceil(currentThrows.length / 3) }, (_, roundIdx) => {
+                    const roundThrows = currentThrows.slice(roundIdx * 3, roundIdx * 3 + 3);
+                    const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0);
+                    const is180 = roundTotal === 180 && roundThrows.length === 3;
+                    return (
+                      <div key={roundIdx} className={`flex items-center gap-1.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
+                        <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
+                        {roundThrows.map((t, i) => {
+                          const globalIdx = roundIdx * 3 + i;
+                          return (
+                            <div key={globalIdx} className="relative group">
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
+                                t.multiplier === 3 ? "bg-primary/20 text-primary" :
+                                t.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
+                              }`}>
+                                {t.multiplier === 3 ? "T" : t.multiplier === 2 ? "D" : ""}{t.baseValue === 50 ? "Bull" : t.baseValue === 0 ? "Miss" : t.baseValue}
+                              </span>
+                              {editingThrowIdx !== null && (
+                                <button onClick={() => deleteThrow(activeIdx, globalIdx)}
+                                  title="Wurf löschen" aria-label="Wurf löschen"
+                                  className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
+                                  <X className="w-2.5 h-2.5 text-destructive-foreground" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
+                          {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
             <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
@@ -2039,7 +2167,7 @@ const GamePage = () => {
 
           {/* Compact bottom bar — always reachable, no matter how tall the camera/manual-input content gets. */}
           <div className="shrink-0 border-t border-border bg-background/95 backdrop-blur px-4 py-2.5 flex gap-2">
-            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
+            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak} className="flex-1 gap-1">
               <Undo2 className="w-4 h-4" /> Rückgängig
             </Button>
             <Button
@@ -2072,13 +2200,13 @@ const GamePage = () => {
           {cricketBoard}
 
           {/* Score input — disabled during a bot's turn */}
-          <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot}
+          <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak}
             onThrow={throwDart}
             onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
 
           {/* Undo & actions row */}
           <div className="flex gap-2 mt-3">
-            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
+            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak} className="flex-1 gap-1">
               <Undo2 className="w-4 h-4" /> Rückgängig
             </Button>
             <Button

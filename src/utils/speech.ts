@@ -120,19 +120,50 @@ export interface SpeechPart {
  * what actually reads as "dynamic delivery" instead of one flat sentence at a single pitch.
  * Only the first part clears any currently-queued speech; the rest just play in order.
  */
+// How many whole announcements are allowed to sit queued up behind whatever's currently
+// speaking. The Web Speech API queues by default (speak() while something is already speaking
+// just appends, it doesn't interrupt) — speakSequence used to defeat that on every single call
+// by cancel()-ing unconditionally, which is what cut announcements off mid-sentence the moment a
+// second one fired shortly after (reported 2026-08-18: bot turns following right behind a human
+// round). Letting the natural queue do its job fixes that; this cap only exists so a fast burst
+// of rounds (several bot turns in a row) can't leave the caller narrating further and further
+// behind live play — once too much has piled up, jump the queue instead of drifting later and
+// later out of sync.
+const MAX_QUEUED_SEQUENCES = 1;
+let pendingSequenceCount = 0;
+
 export function speakSequence(parts: SpeechPart[], lang = "de-DE") {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   const synthesis = window.speechSynthesis;
+  const nonEmptyParts = parts.filter((part) => part.text.trim());
+  if (nonEmptyParts.length === 0) return;
+
+  if (pendingSequenceCount > MAX_QUEUED_SEQUENCES) {
+    synthesis.cancel();
+    pendingSequenceCount = 0;
+  }
+
   const voice = pickGermanVoice();
-  parts.forEach((part, i) => {
-    if (!part.text.trim()) return;
-    if (i === 0) synthesis.cancel();
+  pendingSequenceCount += 1;
+  let settled = false;
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    pendingSequenceCount = Math.max(0, pendingSequenceCount - 1);
+  };
+  nonEmptyParts.forEach((part, i) => {
     const utterance = new SpeechSynthesisUtterance(part.text);
     utterance.lang = part.options?.lang ?? lang;
     utterance.rate = jitter(part.options?.rate ?? 1, 0.035);
     utterance.pitch = jitter(part.options?.pitch ?? 1, 0.045);
     utterance.volume = part.options?.volume ?? 1;
     if (voice) utterance.voice = voice;
+    // Only the LAST utterance's end/error settles the count — an earlier part ending just means
+    // the sequence moved on to its next line, not that the whole announcement is done.
+    if (i === nonEmptyParts.length - 1) {
+      utterance.onend = settle;
+      utterance.onerror = settle;
+    }
     synthesis.speak(utterance);
   });
 }
@@ -269,6 +300,18 @@ const HYPE_BUST = [
   "Schade, Bust.",
 ] as const;
 
+// A weak (but not bust) round previously got zero commentary — just the bare number, unlike
+// every other outcome. The "kritische Sätze" requested for the common case of a merely-mediocre
+// round, not just full busts.
+const HYPE_LOW_SCORE = [
+  "Das ging auch schon besser.",
+  "Heute nicht der beste Wurfarm.",
+  "Da war noch Luft nach oben.",
+  "Schwacher Start in die Runde.",
+  "Das war eher bescheiden.",
+  "Na, das war wohl nicht der Plan.",
+] as const;
+
 /** Cricket: hit the 3rd (or more) mark on a number this visit — closes it if no one else still has it open. */
 const HYPE_CRICKET_CLOSE = [
   "Zu!",
@@ -292,6 +335,10 @@ interface PersonaPack {
   hype180: readonly string[];
   hypeHighTon: readonly string[];
   hypeTonPlus: readonly string[];
+  /** A weak (but not bust) round — the "kritische Sätze" the caller was missing for the common
+   *  case of a merely-mediocre round, which previously got zero commentary (just the bare
+   *  number), unlike every other outcome (180/high/ton/checkout/bust all already had color). */
+  hypeLowScore: readonly string[];
   hypeCheckout: readonly string[];
   hypeCheckoutNamed: (name: string) => readonly string[];
   hypeMatchWin: (winnerName: string) => readonly string[];
@@ -333,6 +380,13 @@ const YODA_PACK: PersonaPack = {
     "Fortschritte, du machst.",
     "Solide, dieser Wurf war.",
     "Zufrieden, ich bin.",
+  ],
+  hypeLowScore: [
+    "Schwach, dieser Wurf war.",
+    "Enttäuscht, ich bin — ein wenig.",
+    "Mehr Übung, du brauchst.",
+    "Nicht der Weg des Meisters, das war.",
+    "Verloren, deine Konzentration war.",
   ],
   hypeCheckout: [
     "Ausgecheckt, du hast!",
@@ -426,6 +480,13 @@ const HERALD_PACK: PersonaPack = {
     "Wohlgezielt, dieser Wurf!",
     "Von feiner Hand, dieser Treffer!",
     "Ein Wurf von Format!",
+  ],
+  hypeLowScore: [
+    "Ein schwacher Wurf, fürwahr.",
+    "Nicht die Stunde des Ruhmes, diese war.",
+    "Selbst wackere Recken haben schwache Tage.",
+    "Mehr Übung vonnöten, wie es scheint.",
+    "Kein Glanzstück, das muss man sagen.",
   ],
   hypeCheckout: [
     "Das Leg ist vollbracht!",
@@ -521,6 +582,13 @@ const KERNASI_PACK: PersonaPack = {
     "Bisschen Sahne obendrauf, nice!",
     "Solide, Digga, solide!",
     "Passt scho, Alter!",
+  ],
+  hypeLowScore: [
+    "Alter, das war jetzt nicht so der Bringer.",
+    "Ischwöre, da geht mehr, Digga.",
+    "Bratan, das war eher mau.",
+    "Puh, Alter, schwacher Tag heute?",
+    "Digga, das hat wehgetan zuzuschauen.",
   ],
   hypeCheckout: [
     "PENG, Alter, weg is er!",
@@ -619,6 +687,13 @@ const REPORTER_PACK: PersonaPack = {
     "Ordentlich, muss man sagen!",
     "Das nenne ich abgezockt!",
   ],
+  hypeLowScore: [
+    "Das war schon eine schwächere Runde.",
+    "Da geht sicher noch mehr.",
+    "Kein Ruhmesblatt, diese Runde.",
+    "Die Form heute lässt zu wünschen übrig.",
+    "Bitter, so wenig aus drei Darts zu holen.",
+  ],
   hypeCheckout: [
     "Uuuund AUS! Das Leg ist durch!",
     "Er macht den Deckel drauf — herausragend!",
@@ -710,6 +785,13 @@ const GENZ_PACK: PersonaPack = {
     "Bisschen slay, ehrlich gesagt!",
     "Fr fr nicht schlecht, digga!",
     "Ist okay-based, würd ich sagen!",
+  ],
+  hypeLowScore: [
+    "Digga, das war ehrlich mid.",
+    "Bro, safe kein Highlight.",
+    "Das war NPC-Energie, ehrlich gesagt.",
+    "Lowkey schwache Runde, digga.",
+    "Bro braucht ein Reset, fr fr.",
   ],
   hypeCheckout: [
     "GECHECKT! Das ist ein core memory, digga!",
@@ -849,6 +931,8 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
       parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandomNoRepeat(pack.hypeHighTon, "highTon")}`, options: pack.hypeOptions }];
     } else if (p.roundTotal >= 100) {
       parts = [{ text: `${germanNumberWords(p.roundTotal)}! ${pickRandomNoRepeat(pack.hypeTonPlus, "tonPlus")}`, options: pack.hypeOptions }];
+    } else if (p.roundTotal < 26) {
+      parts = [{ text: `${germanNumberWords(p.roundTotal)}. ${pickRandomNoRepeat(pack.hypeLowScore, "lowScore")}`, options: pack.options }];
     } else {
       parts = [{ text: pack.plainRound(p.roundTotal), options: pack.options }];
     }
@@ -906,6 +990,8 @@ export function buildRoundAnnouncement(p: RoundAnnouncementParams): { parts: Spe
       { text: `${germanNumberWords(p.roundTotal)}!`, options: TON_OPTIONS },
       { text: pickRandomNoRepeat(HYPE_TON_PLUS, "tonPlus"), options: TON_OPTIONS },
     ];
+  } else if (p.roundTotal < 26) {
+    parts = [{ text: `${germanNumberWords(p.roundTotal)}. ${pickRandomNoRepeat(HYPE_LOW_SCORE, "lowScore")}`, options: NORMAL_OPTIONS }];
   } else {
     parts = [{ text: germanNumberWords(p.roundTotal), options: NORMAL_OPTIONS }];
   }

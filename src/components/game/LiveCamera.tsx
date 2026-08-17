@@ -73,6 +73,14 @@ interface LiveCameraProps {
   playerName?: string;
   /** Called when the player wants to give up on auto-scoring and switch to manual entry after a failed/empty scan. */
   onRequestManualEntry?: () => void;
+  /** Freezes the watcher loop (no new scans start) without tearing down the camera stream — for
+   *  a brief "waiting on the player to answer something outside this component" moment (e.g. the
+   *  ambiguous-checkout prompt in Game.tsx). Deliberately NOT implemented via `enabled=false`:
+   *  that tears down and re-acquires getUserMedia, which a 2026-08-17 field report tied directly
+   *  to the camera going black and staying black after a checkout — re-requesting a camera stream
+   *  moments after stopping the previous one isn't reliable on every device. Pausing just leaves
+   *  the existing stream running and skips processing ticks instead. */
+  paused?: boolean;
 }
 
 /** Imperative handle so the parent can pull a just-recorded clip when a highlight happens. */
@@ -347,6 +355,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   dartsRemaining = 3,
   playerName,
   onRequestManualEntry,
+  paused = false,
 }, ref) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -1206,6 +1215,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (phase !== "live") return;
 
     const id = window.setInterval(() => {
+      if (paused) return; // camera stream stays live — see the `paused` prop's doc comment
       const sig = buildSignature();
       if (!sig) return;
 
@@ -1294,7 +1304,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, phase, dartsRemaining, detectionMode]);
+  }, [enabled, phase, dartsRemaining, detectionMode, paused]);
 
   // ─── scan: analyze the pre-removal frame after darts are pulled ─────
   const runPullScan = async () => {
@@ -1750,6 +1760,19 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
         )}
 
+        {/* Video stream stays live and visible here on purpose — only a light translucent hint,
+            not an opaque cover — since this fires while the player answers the "which dart
+            finished it" prompt elsewhere on the page (see the `paused` prop). Tearing the camera
+            down for this used to be handled via `enabled`, which a field report tied directly to
+            the camera going black and staying black afterward. */}
+        {paused && phase === "live" && (
+          <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
+            <span className="rounded-full bg-background/85 px-3 py-1 text-[11px] text-foreground shadow">
+              Pausiert · erst die Frage oben beantworten
+            </span>
+          </div>
+        )}
+
         {(phase === "starting" || phase === "detecting") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 px-4 text-center text-xs text-foreground">
             <Loader2 className="mb-2 h-5 w-5 animate-spin" />
@@ -2048,7 +2071,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           className="flex-1 gap-2 font-display uppercase"
           size="sm"
           variant="outline"
-          disabled={phase !== "live"}
+          disabled={phase !== "live" || paused}
         >
           <ScanLine className="h-4 w-4" /> Jetzt scannen
         </Button>
