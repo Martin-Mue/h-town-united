@@ -1,6 +1,6 @@
 import type { BotLevel, DartThrow } from "@/types/game";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
-import { isBustThrow } from "@/utils/x01Rules";
+import { isBustThrow, pointsFor } from "@/utils/x01Rules";
 
 /**
  * Bot tuning. Targets roughly these 3-dart averages:
@@ -40,10 +40,6 @@ function parseRouteSegment(seg: string): { baseValue: number; multiplier: 1 | 2 
   if (mulChar === "D") return { baseValue: parseInt(seg.slice(1), 10), multiplier: 2 };
   if (mulChar === "S") return { baseValue: parseInt(seg.slice(1), 10), multiplier: 1 };
   return { baseValue: parseInt(seg, 10) || 0, multiplier: 1 };
-}
-
-function pointsFor(baseValue: number, multiplier: number): number {
-  return baseValue === 25 && multiplier === 3 ? 0 : baseValue * multiplier;
 }
 
 const miss = (): DartThrow => ({ baseValue: 0, multiplier: 1, points: 0 });

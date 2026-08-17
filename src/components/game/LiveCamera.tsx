@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
 import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
 import { computeHomography } from "@/utils/homography";
+import { pointsFor } from "@/utils/x01Rules";
 import {
   boardTransformFromTaps,
   scoreFromBoardPoint,
@@ -316,7 +317,7 @@ const sanitizeAiDarts = (raw: unknown, max: number): DetectedDart[] => {
       const multiplier = ([1, 2, 3].includes(Number(dart.multiplier))
         ? Number(dart.multiplier)
         : 1) as 1 | 2 | 3;
-      const fallbackPoints = baseValue === 25 ? (multiplier === 2 ? 50 : 25) : baseValue * multiplier;
+      const fallbackPoints = pointsFor(baseValue, multiplier);
       const x = Number(dart.x);
       const y = Number(dart.y);
       // Tips near the double ring legitimately land close to the crop edge — clamp a

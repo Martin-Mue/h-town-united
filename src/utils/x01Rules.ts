@@ -6,6 +6,21 @@ export function isQualifyingDouble(multiplier: number): boolean {
 }
 
 /**
+ * Points scored by one dart. baseValue 25 + multiplier 3 ("triple bull") isn't a real dartboard
+ * outcome — there's no triple ring in the bull — so it scores 0 rather than the nonsensical 75;
+ * this only matters as a defensive case for bad detection data, real throws never produce it.
+ *
+ * This formula was independently copy-pasted at every dart-scoring call site (manual X01/Cricket
+ * entry, camera-detected rounds, the bot player) — already-observed drift: one camera-path copy
+ * (LiveCamera.tsx) used a differently-shaped formula that omitted this triple-bull case entirely.
+ * Shared here (alongside isQualifyingDouble/isBustThrow, which this file already exists to keep
+ * in sync across those exact same call sites) instead of reimplemented again next time.
+ */
+export function pointsFor(baseValue: number, multiplier: number): number {
+  return baseValue === 25 && multiplier === 3 ? 0 : baseValue * multiplier;
+}
+
+/**
  * Standard X01 bust rule, shared by manual entry, camera-detected scoring, and the bot player
  * so the three can never drift out of sync again:
  *  - going below zero always busts

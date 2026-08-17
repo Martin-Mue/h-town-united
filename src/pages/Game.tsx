@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
-import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit } from "@/utils/x01Rules";
+import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor } from "@/utils/x01Rules";
 import { simulateBotVisit, simulateBotCricketDart } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
@@ -464,7 +464,7 @@ const GamePage = () => {
   }, [phase]);
 
   const submitWarmupDart = (value: number, multiplier: number) => {
-    const pts = value === 0 ? 0 : (value === 25 && multiplier === 3 ? 0 : value * multiplier);
+    const pts = pointsFor(value, multiplier);
     setWarmupTotal((t) => t + pts);
     setWarmupDarts((d) => d + 1);
   };
@@ -502,7 +502,7 @@ const GamePage = () => {
 
     const baseValue = overrideBase ?? selectedScore;
     const mul = overrideMul ?? multiplier;
-    const points = baseValue === 25 && mul === 3 ? 0 : baseValue * mul;
+    const points = pointsFor(baseValue, mul);
     const idx = game.currentPlayerIndex;
     const n = game.players.length;
     const teamIdx = teamIndexFor(game.teams, idx);
@@ -729,7 +729,7 @@ const GamePage = () => {
     saveUndo();
     const baseValue = overrideBase ?? selectedScore;
     const mul = overrideMul ?? multiplier;
-    const points = baseValue === 25 && mul === 3 ? 0 : baseValue * mul;
+    const points = pointsFor(baseValue, mul);
     const dart: DartThrow = { baseValue, multiplier: mul, points };
     const targetNumber = baseValue === 50 ? 25 : baseValue;
     const newDartsThisRound = dartsThisRound + 1;
@@ -887,7 +887,7 @@ const GamePage = () => {
       x01JustGotIn = requiresDoubleIn && !alreadyStartedScoring && hasQualifyingDartThisVisit;
       const stillNotIn = requiresDoubleIn && !alreadyStartedScoring && !hasQualifyingDartThisVisit;
       x01VisitDarts = dartsToApply.map((d) => {
-        const points = d.baseValue === 25 && d.multiplier === 3 ? 0 : d.baseValue * d.multiplier;
+        const points = pointsFor(d.baseValue, d.multiplier);
         return { points: stillNotIn ? 0 : points, isDouble: d.multiplier === 2 };
       });
       x01Outcome = forced ?? resolveX01Visit(remaining, activeDoubleOut, x01VisitDarts);
@@ -924,7 +924,7 @@ const GamePage = () => {
         if (curGame.isFinished) break;
         const idx = curGame.currentPlayerIndex;
         const teamIdx = teamIndexFor(curGame.teams, idx);
-        const points = d.baseValue === 25 && d.multiplier === 3 ? 0 : d.baseValue * d.multiplier;
+        const points = pointsFor(d.baseValue, d.multiplier);
         const dart: DartThrow = { baseValue: d.baseValue, multiplier: d.multiplier, points, boardU: d.boardU, boardV: d.boardV };
 
         const cricketNumbers = curGame.cricketNumbers ?? CRICKET_NUMBERS;
