@@ -287,8 +287,15 @@ export function assignScorekeepers(
         return;
       }
       if (m.scorekeeperLocked && m.scorekeeper) {
-        taken.add(m.scorekeeper);
-        return;
+        if (pool.includes(m.scorekeeper)) {
+          taken.add(m.scorekeeper);
+          return;
+        }
+        // The locked scorekeeper is no longer an active participant (e.g. withdrew after being
+        // pinned to a match they aren't even playing in) — don't keep them stuck there forever;
+        // clear the lock and fall through to normal (re-)assignment below.
+        m.scorekeeperLocked = undefined;
+        m.scorekeeper = undefined;
       }
       m.scorekeeperRule = undefined;
       m.scorekeeperFromMatchId = undefined;
