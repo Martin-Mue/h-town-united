@@ -618,6 +618,28 @@ const GamePage = () => {
       return { ...prev, currentLeg: updatedLeg };
     });
 
+    // Round-cap resolution, computed once here for the side effects below — mirrors the setGame
+    // updater's own cap-check above (same inputs; a pure updater shouldn't itself decide what to
+    // announce). Previously only the TIED case was computed out here (for the bull-off prompt);
+    // the unique-winner case fell through to the generic "round continues" branch below, which
+    // played the wrong sound, announced "not checked out" via speech, skipped confetti, and read
+    // turnStartRemaining from the discarded old leg with the wrong next-player index.
+    let capOutcome: { kind: "tied"; tiedIndexes: number[] } | { kind: "winner"; legWinner: number } | null = null;
+    if (newRemaining !== 0 && newDartsThisRound >= 3) {
+      const cap = game.maxRoundsX01;
+      if (cap && cap > 0) {
+        const throwsAfter = game.players.map((_, i) => (i === idx ? game.currentLeg.throws[i].length + 1 : game.currentLeg.throws[i].length));
+        const roundsPerPlayer = throwsAfter.map((len) => Math.ceil(len / 3));
+        const remainingAfter = game.currentLeg.remaining.map((r, si) => (si === teamIdx ? newRemaining : r));
+        const scoreSlotRounds = remainingAfter.map((_, si) => Math.max(...roundsPerPlayer.filter((_, i) => teamIndexFor(game.teams, i) === si)));
+        if (scoreSlotRounds.every((r) => r >= cap)) {
+          const minRemaining = Math.min(...remainingAfter);
+          const tied = remainingAfter.reduce<number[]>((acc, r, i) => (r === minRemaining ? [...acc, i] : acc), []);
+          capOutcome = tied.length > 1 ? { kind: "tied", tiedIndexes: tied } : { kind: "winner", legWinner: tied[0] };
+        }
+      }
+    }
+
     if (newRemaining === 0) {
       setDartsThisRound(0);
       const nextStarter = (game.currentLeg.startingPlayerIndex + 1) % n;
@@ -638,6 +660,32 @@ const GamePage = () => {
         const winnerName = game.teams ? game.teams[teamIdx].name : game.players[idx].name;
         const { parts } = buildRoundAnnouncement({
           roundTotal: 0, activePlayerName: game.players[idx].name, nextPlayerName: game.players[nextStarter].name,
+          isCricket: false, checkedOut: true, busted: false, matchWon, winnerName: matchWon ? winnerName : undefined,
+        });
+        window.setTimeout(() => speakSequence(parts), matchWon ? 300 : 200);
+      }
+    } else if (capOutcome?.kind === "winner") {
+      // Leg (or match) decided by the round cap with a single lowest-remaining winner — the same
+      // "leg won" side effects a normal checkout gets above, just keyed to the cap's winner
+      // instead of whoever happened to throw the dart that reached the cap (rarely the same
+      // player: the cap resolves for everyone at once, on whichever throw happens to complete it).
+      const legWinner = capOutcome.legWinner;
+      setDartsThisRound(0);
+      const legsWon = game.legsWon[legWinner] + 1;
+      const legsToWin = Math.ceil(game.bestOfLegs / 2);
+      const matchWon = legsWon >= legsToWin;
+      const nextStarter = (legWinner + 1) % n;
+      setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
+      flashScore(legWinner);
+      triggerConfetti();
+      if (soundEnabled) {
+        if (matchWon) setTimeout(() => playVictorySound(), 200);
+        else setTimeout(() => playCheckoutSound(), 100);
+      }
+      if (speechEnabled) {
+        const winnerName = game.teams ? game.teams[legWinner].name : game.players[legWinner].name;
+        const { parts } = buildRoundAnnouncement({
+          roundTotal: 0, activePlayerName: winnerName, nextPlayerName: game.players[nextStarter].name,
           isCricket: false, checkedOut: true, busted: false, matchWon, winnerName: matchWon ? winnerName : undefined,
         });
         window.setTimeout(() => speakSequence(parts), matchWon ? 300 : 200);
@@ -663,23 +711,7 @@ const GamePage = () => {
         });
         window.setTimeout(() => speakSequence(parts), 180);
       }
-
-      // Round-limit tiebreak: mirrors the setGame updater's own cap-check just above (same
-      // inputs, computed again out here since raising a bull-off prompt is a side effect, not
-      // state a pure updater should trigger). Only the tied case needs handling here — a unique
-      // winner is already fully resolved inside the updater.
-      const cap = game.maxRoundsX01;
-      if (cap && cap > 0) {
-        const throwsAfter = game.players.map((_, i) => (i === idx ? game.currentLeg.throws[i].length + 1 : game.currentLeg.throws[i].length));
-        const roundsPerPlayer = throwsAfter.map((len) => Math.ceil(len / 3));
-        const remainingAfter = game.currentLeg.remaining.map((r, si) => (si === teamIdx ? newRemaining : r));
-        const scoreSlotRounds = remainingAfter.map((_, si) => Math.max(...roundsPerPlayer.filter((_, i) => teamIndexFor(game.teams, i) === si)));
-        if (scoreSlotRounds.every((r) => r >= cap)) {
-          const minRemaining = Math.min(...remainingAfter);
-          const tied = remainingAfter.reduce<number[]>((acc, r, i) => (r === minRemaining ? [...acc, i] : acc), []);
-          if (tied.length > 1) setPendingTiebreak({ tiedIndexes: tied });
-        }
-      }
+      if (capOutcome?.kind === "tied") setPendingTiebreak({ tiedIndexes: capOutcome.tiedIndexes });
     } else {
       setDartsThisRound(newDartsThisRound);
     }
