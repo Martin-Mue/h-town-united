@@ -44,8 +44,18 @@ import {
  *   1. Camera starts, AI single-shot board detection → automatic crop / zoom.
  *   2. Frame-difference loop (no manual baseline calibration needed).
  *      When the picture *changes* (dart lands or is pulled) and then
- *      *settles*, we send one frame to the AI which returns ALL darts
- *      currently stuck in the board.
+ *      *settles*, the trained model runs on that one frame and — as of
+ *      2026-08-18 — is diffed against the darts already known this visit
+ *      (see scoreNewlyLandedDart) to identify JUST the dart that landed,
+ *      the moment it lands, in true throw order. This is what actually
+ *      backs step 3 below; earlier versions only ever identified darts in
+ *      one full batch at step 4, with no order information at all — the
+ *      root cause of the "ambiguous checkout" resolver/prompt in
+ *      Game.tsx's submitDetectedRound, which now stays as a safety net for
+ *      whenever this still can't confidently isolate one new dart
+ *      (occlusion, two darts landing the same tick, model not loaded yet —
+ *      in any of those cases runPullScan's own end-of-visit batch pass
+ *      picks up whatever wasn't identified incrementally, same as before).
  *   3. Delta against last known darts → new darts get appended (+sound).
  *   4. When the board is empty again (darts pulled), the round commits
  *      automatically and the rolling video clip is forwarded.
@@ -418,6 +428,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [status, setStatus] = useState("Kamera startet …");
   const [scanFailed, setScanFailed] = useState(false);
   const [needsReview, setNeedsReview] = useState(false);
+  // Mirrors needsReview into a ref for the watcher-loop interval closure (same reason
+  // accumulatedRef mirrors accumulated below) — used to tell "this visit's darts are still
+  // being incrementally identified as they land" apart from "a fully-scanned round is already
+  // sitting there awaiting Übernehmen/Verwerfen", which the interval must NOT overwrite with a
+  // fresh scan if the player starts a second round before reviewing the first.
+  const needsReviewRef = useRef(false);
+  useEffect(() => { needsReviewRef.current = needsReview; }, [needsReview]);
+  // Guards against overlapping per-throw identification attempts (scoreNewlyLandedDart is async
+  // — ONNX inference isn't instant) the same way scanLockRef guards the end-of-visit batch scan.
+  const perThrowLockRef = useRef(false);
   const [motion, setMotion] = useState(0);
   const [changeDelta, setChangeDelta] = useState(0);
   const [lastConfidence, setLastConfidence] = useState(0);
@@ -1209,6 +1229,71 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     }
   };
 
+  /**
+   * Identifies and scores exactly the dart that just landed — called from the watcher loop the
+   * moment a throw event is detected (motion settled, board non-empty), instead of only ever
+   * identifying darts as one unordered batch after all of them are pulled (see runPullScan).
+   * This is what actually fixes the root cause behind the ambiguous-checkout prompt in
+   * Game.tsx: with darts identified in true chronological order as they land, its resolver
+   * hits the genuinely-ambiguous case far less often — that prompt stays in place as the
+   * fallback for whenever this still can't confidently isolate one specific new dart.
+   *
+   * Model-only by design: the diff-based fallback (dartVision.ts) has no real-world track
+   * record and is explicitly a safety net for when the model isn't available at all — running
+   * it incrementally too would add real complexity (a rolling before/after baseline, on top of
+   * the existing empty-board one) for a path that's already the less-trusted one. When the
+   * model isn't loaded, this simply does nothing and the pipeline behaves exactly as before:
+   * darts still get identified as a batch once the board goes empty.
+   *
+   * Deliberately additive-only and best-effort: if it can't confidently identify a new dart
+   * this tick, it leaves `accumulated` exactly as it was and returns — there's no failure mode
+   * here worse than "try again next tick, or let the end-of-visit batch scan catch it instead",
+   * which is the ENTIRE existing pipeline, unchanged as a fallback (see runPullScan's own
+   * "already identified everything incrementally" fast path for how the two connect).
+   */
+  const scoreNewlyLandedDart = async () => {
+    if (!modelReadyRef.current) return;
+    const already = accumulatedRef.current;
+    if (already.length >= dartsRemaining) return;
+
+    const modelFrame = grabImageData(MODEL_INPUT_SIZE, false);
+    if (!modelFrame) return;
+    // Request the full remaining budget (not just already.length + 1) — a tighter budget risks
+    // an already-known dart getting crowded out of the top-N by a coincidental confidence blip,
+    // which would then misread as "new" once diffed below.
+    const result = await detectDartsWithModel(modelFrame, dartsRemaining);
+    if (result.unavailable || result.darts.length === 0) return;
+
+    const scored = refineWithCalibration(
+      result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
+    );
+    const newOnes = diffNewDarts(already, scored);
+    if (newOnes.length === 0) return; // nothing distinguishable as new yet — try again next tick
+
+    // Exactly one new dart is expected; if more came back (e.g. two darts landed the same
+    // tick), take the highest-confidence one and let the next tick pick up the rest.
+    const newDart = newOnes.length > 1 ? [...newOnes].sort((a, b) => b.confidence - a.confidence)[0] : newOnes[0];
+
+    setLastDetectionSource("model");
+    let appendedAt = -1;
+    setAccumulated((prev) => {
+      // Reference-equality check against the snapshot taken before the (async) model call —
+      // catches BOTH "filled up while this was in flight" and "reset out from under this"
+      // (Verwerfen/Übernehmen/another per-throw append all reassign accumulated to a new array).
+      // A plain length check alone would miss the reset case: a discarded round's fresh empty
+      // array also has length 0, well under dartsRemaining, so it would wrongly pass a
+      // `prev.length >= dartsRemaining` guard and get this stale detection appended onto it.
+      if (prev !== already) return prev;
+      appendedAt = prev.length;
+      return [...prev, newDart];
+    });
+    if (appendedAt >= 0) {
+      playDartDetectedSound(appendedAt);
+      setJustAddedIndex(appendedAt);
+      window.setTimeout(() => setJustAddedIndex((cur) => (cur === appendedAt ? null : cur)), 900);
+    }
+  };
+
   // ─── watcher loop ──────────────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -1260,8 +1345,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           // A still-unreviewed round (accumulated darts awaiting Übernehmen/Verwerfen) must not
           // be silently overwritten by a new scan — if the player throws/pulls a second round
           // before acting on the first, this used to replace the pending darts with no trace of
-          // the first round ever having been detected.
-          if (throwsSeenRef.current > 0 && hasPreRemovalCapture && accumulatedRef.current.length === 0) {
+          // the first round ever having been detected. Checking needsReview specifically (not
+          // accumulated.length) is what makes this still correct now that accumulated legitimately
+          // fills up incrementally WHILE a visit is still in progress, before it's actually done —
+          // that in-progress state must still let this fire, only an already-finished, still-
+          // pending-review round should block it.
+          if (throwsSeenRef.current > 0 && hasPreRemovalCapture && !needsReviewRef.current) {
             if (performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
               scanLockRef.current = true;
               void runPullScan();
@@ -1288,6 +1377,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               ? `${throwsSeenRef.current} Darts auf dem Board · jetzt ziehen`
               : `${throwsSeenRef.current}/${dartsRemaining} auf dem Board · nächsten werfen oder ziehen`,
           );
+          // Try to identify THIS dart right now, in true throw order — see
+          // scoreNewlyLandedDart's doc comment. Best-effort: if it can't, the status text above
+          // still holds and the existing end-of-visit batch scan picks up the slack later.
+          if (detectionMode === "local" && !perThrowLockRef.current) {
+            perThrowLockRef.current = true;
+            void scoreNewlyLandedDart().finally(() => { perThrowLockRef.current = false; });
+          }
         }
         return;
       }
@@ -1309,6 +1405,35 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // ─── scan: analyze the pre-removal frame after darts are pulled ─────
   const runPullScan = async () => {
     const isLocal = detectionMode === "local";
+
+    // Every dart in this visit was already identified incrementally, in true chronological
+    // order, as it landed (see scoreNewlyLandedDart) — nothing left to batch-detect, and
+    // re-running detection now would only risk REPLACING a correctly-ordered result with a
+    // fresh, unordered one. Skip straight to the same review stance the batch path below
+    // reaches at its own end (local mode always reviews — see its own comment further down).
+    const alreadyIdentified = accumulatedRef.current;
+    if (isLocal && throwsSeenRef.current > 0 && alreadyIdentified.length >= throwsSeenRef.current) {
+      setPhase("scanning");
+      lastScanAtRef.current = performance.now();
+      setError(null);
+      setScanFailed(false);
+      playScanStartSound();
+      if (trainingDataEnabled && emptyImageDataRef.current && preRemovalImageDataRef.current) {
+        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current, after: preRemovalImageDataRef.current };
+      }
+      const overallConfidence = alreadyIdentified.reduce((s, d) => s + d.confidence, 0) / alreadyIdentified.length;
+      setLastConfidence(overallConfidence);
+      setLastDetectionSource("model");
+      setNeedsReview(true);
+      setStatus(`Bitte prüfen: ${alreadyIdentified.map(dartLabel).join(", ")}`);
+      setPhase("live");
+      scanLockRef.current = false;
+      preRemovalFrameRef.current = null;
+      preRemovalImageDataRef.current = null;
+      preRemovalModelFrameRef.current = null;
+      return;
+    }
+
     const img = preRemovalFrameRef.current;
     if (isLocal ? !preRemovalImageDataRef.current || !emptyImageDataRef.current : !img) {
       scanLockRef.current = false;
@@ -1463,7 +1588,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   };
 
   const manualScan = () => {
-    if (!scanLockRef.current && accumulatedRef.current.length === 0) {
+    // Was gated on accumulated being empty — no longer a meaningful signal now that it fills up
+    // incrementally mid-visit (see scoreNewlyLandedDart); needsReview (an already-finished round
+    // sitting there awaiting Übernehmen/Verwerfen) is the actual thing this must not disturb.
+    if (!scanLockRef.current && !needsReviewRef.current) {
       if (detectionMode === "local") {
         preRemovalImageDataRef.current = grabImageData();
         if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
@@ -2086,7 +2214,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             <RotateCcw className="h-4 w-4" /> Verwerfen
           </Button>
         )}
-        {accumulated.length > 0 && (
+        {/* Gated on a complete round, not just accumulated.length > 0 — darts now fill in
+            incrementally as they're thrown (see scoreNewlyLandedDart), so accumulated can be
+            legitimately non-empty while the player is still mid-visit. Committing early would
+            hand a short round to Game.tsx and wrongly advance the turn. */}
+        {accumulated.length >= dartsRemaining && (
           <Button
             size="sm"
             onClick={() => commitRound(accumulated)}
