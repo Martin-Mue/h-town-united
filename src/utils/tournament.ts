@@ -86,6 +86,8 @@ export function recomputeBracket(input: Match[], activePlayers?: string[]): Matc
         m.winner = undefined;
         m.score1 = undefined;
         m.score2 = undefined;
+        m.live = undefined; // stale winner means the players changed under this match — a live
+        // snapshot captured against the OLD pairing must not keep displaying on the new one.
       }
       if (!m.winner && m.player1 && m.player2) {
         const bye1 = m.player1 === BYE;
@@ -116,11 +118,13 @@ export function recomputeBracket(input: Match[], activePlayers?: string[]): Matc
         m.winner = undefined;
         m.score1 = undefined;
         m.score2 = undefined;
+        m.live = undefined; // see the identical comment in the preliminary-round block above
       }
       if (!m.player1 && !m.player2) {
         m.score1 = undefined;
         m.score2 = undefined;
         m.scorekeeper = undefined;
+        m.live = undefined;
       }
       // auto-resolve byes once both slots are decided
       if (!m.winner && m.player1 && m.player2) {
