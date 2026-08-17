@@ -316,13 +316,17 @@ const StatisticsPage = () => {
     const bestHighscore = players.reduce((best, p) => p.high_score > best.val ? { name: p.name, val: p.high_score, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const mostGames = players.reduce((best, p) => p.games_played > best.val ? { name: p.name, val: p.games_played, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const totalDarts = filteredGames.reduce((s, g) => s + g.player1_total_throws + g.player2_total_throws, 0);
+    // Each side is only a record CANDIDATE if it's actually linked to a roster player — a
+    // freely-typed guest name (the "Spieler 1"/"Spieler 2" defaults) has no club history and
+    // must not be able to set a club record just because that game's row happens to carry a
+    // high average. The opponent side of the SAME game is unaffected: a real member's own
+    // average from that game is still fully eligible either way.
     const highestGameAvg = filteredGames.reduce((best, g) => {
-      const max = Math.max(g.player1_average, g.player2_average);
-      if (max > best.val) {
-        const name = g.player1_average > g.player2_average ? g.player1_name : g.player2_name;
-        return { name, val: max };
-      }
-      return best;
+      const candidates = [
+        { name: g.player1_name, id: g.player1_id, val: g.player1_average },
+        { name: g.player2_name, id: g.player2_id, val: g.player2_average },
+      ];
+      return candidates.reduce((b, c) => (c.id && c.val > b.val ? { name: c.name, val: c.val } : b), best);
     }, { name: "-", val: 0 });
     const mostWins = players.reduce((best, p) => p.games_won > best.val ? { name: p.name, val: p.games_won, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     return { totalGames, totalPlayers, avgOfAverages, bestAvg, bestHighscore, mostGames, totalDarts, highestGameAvg, mostWins };
