@@ -927,8 +927,11 @@ const TournamentPage = () => {
     });
     const champion = bracketChampion(withKeepers);
 
-    // "Your match is up next" — only for matches that just BECAME playable, so this fires once per match.
-    newlyPlayableMatches(activeTournament.bracket as Match[], withKeepers).forEach(notifyMatchReady);
+    // "Your match is up next" — only for matches that just BECAME playable, so this fires once per
+    // match. Diffs against freshBracket (not the stale local activeTournament.bracket) — another
+    // board can have already advanced+notified this same match while this client hadn't re-polled
+    // yet, and diffing against the stale copy would make it look "newly playable" again here too.
+    newlyPlayableMatches(freshBracket, withKeepers).forEach(notifyMatchReady);
 
     await supabase.from("tournaments").update({
       bracket: withKeepers as any,
