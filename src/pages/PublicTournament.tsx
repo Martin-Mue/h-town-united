@@ -8,6 +8,8 @@ import {
   calcStandings,
   isLiveSnapshotFresh,
   scorekeeperLabel as keeperLabel,
+  isRealPlayer,
+  isPlayable,
   type Match,
   type RoundRobinMatch,
   type RoundRobinStanding,
@@ -115,7 +117,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   // Earliest round that still has an undecided, playable match — used to auto-scroll
   // the tree to the action instead of dropping the viewer on round 1.
   const currentRound = useMemo(() => {
-    const open = matches.filter(m => !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE");
+    const open = matches.filter(m => !m.winner && isPlayable(m));
     if (open.length === 0) return null;
     return Math.min(...open.map(m => m.round));
   }, [matches]);
@@ -183,13 +185,13 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   }, []);
 
   const renderMatch = (m: Match, side: "left" | "right" | "center", isLast: boolean) => {
-    const live = !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE";
+    const live = !m.winner && isPlayable(m);
     return (
       <div key={m.id} className={`bg-card border rounded-xl overflow-hidden relative ${m.winner ? "border-border" : live ? "border-primary/60 glow-cyan" : "border-border/50"}`}>
         {!isLast && side === "left" && <span aria-hidden className="absolute top-1/2 -right-4 w-4 h-px bg-border" />}
         {!isLast && side === "right" && <span aria-hidden className="absolute top-1/2 -left-4 w-4 h-px bg-border" />}
         {[m.player1, m.player2].map((player, idx) => (
-          <div key={idx} className={`${compact ? "px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"} flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : player === "BYE" ? "text-muted-foreground/40" : !player ? "text-muted-foreground/40" : ""}`}>
+          <div key={idx} className={`${compact ? "px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"} flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
             <span className="truncate uppercase tracking-wide">{player || "TBD"}</span>
             <span className={`font-display ${compact ? "text-sm" : "text-base"}`}>{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
           </div>
@@ -334,11 +336,11 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
             </div>
             <div className="divide-y divide-border">
               {list.map(m => {
-                const live = !m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE";
+                const live = !m.winner && isPlayable(m);
                 return (
                   <div key={m.id} className={`px-4 py-2.5 flex items-center gap-3 text-sm ${live ? "bg-primary/5" : ""}`}>
                     {[m.player1, m.player2].map((player, idx) => (
-                      <span key={idx} className={`flex-1 min-w-0 truncate uppercase tracking-wide ${m.winner === player ? "text-secondary font-semibold" : player === "BYE" || !player ? "text-muted-foreground/40" : ""}`}>
+                      <span key={idx} className={`flex-1 min-w-0 truncate uppercase tracking-wide ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
                         {player || "TBD"}
                       </span>
                     ))}
@@ -601,7 +603,7 @@ const PublicTournamentPage = () => {
 
   useEffect(() => {
     if (!t) return;
-    const done = (t.bracket || []).filter(m => m.winner && m.winner !== "BYE" && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE");
+    const done = (t.bracket || []).filter(m => isRealPlayer(m.winner) && isPlayable(m));
     const ids = new Set(done.map(m => `${m.id}:${m.winner}:${m.score1 ?? 0}:${m.score2 ?? 0}`));
     if (seenResults.current === null) { seenResults.current = ids; return; }
     const fresh = done.find(m => !seenResults.current!.has(`${m.id}:${m.winner}:${m.score1 ?? 0}:${m.score2 ?? 0}`));
@@ -667,7 +669,7 @@ const PublicTournamentPage = () => {
   const isKo = t.mode !== "round-robin";
   const matches = t.bracket as Match[];
   const totalRounds = isKo && matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 0;
-  const completed = matches.filter(m => m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE").slice(-8).reverse();
+  const completed = matches.filter(m => m.winner && isPlayable(m)).slice(-8).reverse();
   const boardsCount = t.boards ?? 2;
 
   // Board-aware look-ahead — single source of truth shared by the "Jetzt am Board"
