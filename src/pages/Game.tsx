@@ -421,7 +421,12 @@ const GamePage = () => {
     }
     setGame(newGame);
     setDartsThisRound(0);
-    setTurnStartRemaining(newGame.currentLeg.remaining[0] ?? startScore);
+    // Must read the CHOSEN starter's own slot, not always slot 0 — with per-player handicaps
+    // (or asymmetric team scores) these differ, and turnStartRemaining is exactly what a bust
+    // on the opening throw reverts to (see handleX01Throw's bust branch). Reading slot 0
+    // unconditionally silently corrupted a non-player-0 starter's score by the handicap gap
+    // the moment they busted their very first visit.
+    setTurnStartRemaining(newGame.currentLeg.remaining[starter] ?? startScore);
     setUndoStack([]);
     botPlanRef.current = null;
     pendingGameIdRef.current = crypto.randomUUID();
@@ -2104,7 +2109,7 @@ const GamePage = () => {
             </button>
 
             {showManualInput && (
-              <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak}
+              <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
                 onThrow={throwDart}
                 onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
             )}
@@ -2200,7 +2205,7 @@ const GamePage = () => {
           {cricketBoard}
 
           {/* Score input — disabled during a bot's turn */}
-          <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak}
+          <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
             onThrow={throwDart}
             onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
 

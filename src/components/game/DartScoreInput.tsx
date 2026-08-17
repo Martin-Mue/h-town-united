@@ -64,13 +64,18 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound }: DartScoreInputPro
       </div>
 
       {/* Special targets: Miss, Bull, Bullseye — always submit immediately (fixed multiplier).
-          Bullseye uses baseValue 50 (not 25×2) to match the cricket/X01 scoring convention
-          used throughout Game.tsx (targetNumber = baseValue === 50 ? 25 : baseValue). */}
+          Bullseye is baseValue 25 + multiplier 2 (NOT baseValue 50 — that encoding silently
+          broke every double-out/double-in check in x01Rules.ts, which only ever looks at
+          multiplier === 2; a double-out finish on the bullseye was wrongly scored as a bust).
+          25×2 is the same convention every other dart source (LiveCamera.tsx, botPlayer.ts)
+          already uses, and cricket's own targetNumber/hitsToAdd math already special-cased
+          baseValue===50 to behave identically to 25×2 — so this doesn't change cricket scoring,
+          it just makes that special-case dead code (points: 25*2=50, targetNumber: 25 either way). */}
       <div className="flex gap-2 mb-3">
         {[
           { value: 0, mul: 1 as const, label: "Miss" },
           { value: 25, mul: 1 as const, label: "Bull (25)" },
-          { value: 50, mul: 1 as const, label: "Bullseye (50)" },
+          { value: 25, mul: 2 as const, label: "Bullseye (50)" },
         ].map((target) => (
           <button
             key={target.label}
