@@ -7,6 +7,7 @@ import {
   currentBoardSchedule,
   calcStandings,
   isLiveSnapshotFresh,
+  scorekeeperLabel as keeperLabel,
   type Match,
   type RoundRobinMatch,
   type RoundRobinStanding,
@@ -15,21 +16,6 @@ import {
 import QrCodeDialog from "@/components/QrCodeDialog";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
-
-/** name of the scorekeeper – or the rule "loser of match X" while it is not decided yet */
-const keeperLabel = (m: Match, all: Match[]): string | null => {
-  if (m.scorekeeper) return m.scorekeeper;
-  if (m.scorekeeperRule === "prev-loser" && m.scorekeeperFromMatchId) {
-    const src = all.find((x) => x.id === m.scorekeeperFromMatchId);
-    if (!src) return null;
-    if (src.winner && src.winner !== "BYE") {
-      const loser = src.winner === src.player1 ? src.player2 : src.player1;
-      if (loser && loser !== "BYE") return loser;
-    }
-    return `Verlierer ${src.player1 || "?"} / ${src.player2 || "?"}`;
-  }
-  return null;
-};
 
 interface TournamentRow {
   id: string; name: string; mode: string; status: string;
