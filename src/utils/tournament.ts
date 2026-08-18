@@ -60,7 +60,7 @@ export const isLiveSnapshotFresh = (live?: LiveSnapshot) =>
 export function recomputeBracket(input: Match[], activePlayers?: string[]): Match[] {
   const work = input.map((m) => ({ ...m }));
   if (work.length === 0) return work;
-  const totalRounds = Math.max(...work.map((m) => m.round));
+  const totalRounds = totalRoundsOf(work);
 
   // A player who withdrew mid-tournament (removed from `activePlayers`) may already be sitting
   // in a later-round slot they were propagated into before withdrawing. Their PAST results stay
@@ -170,7 +170,7 @@ export function newlyPlayableMatches(prevBracket: Match[], nextBracket: Match[])
 
 export function bracketChampion(matches: Match[]): string | null {
   if (matches.length === 0) return null;
-  const totalRounds = Math.max(...matches.map((m) => m.round));
+  const totalRounds = totalRoundsOf(matches);
   const final = matches.find((m) => m.round === totalRounds);
   return final?.winner && final.winner !== BYE ? final.winner : null;
 }
@@ -185,6 +185,17 @@ export interface ScheduleEntry {
 /** Playable = both slots known, both real players, no winner yet. */
 export const isPlayable = (m: Match) => isRealPlayer(m.player1) && isRealPlayer(m.player2);
 
+/** How many rounds an EXISTING bracket actually has (the highest round number present) —
+ *  independently reimplemented at 6 call sites across this file, Tournament.tsx, and
+ *  PublicTournament.tsx, all doing the identical `Math.max(...matches.map(m => m.round))` with
+ *  a slightly different empty-array guard each time. Distinct from — and NOT a replacement for —
+ *  the unrelated "how many rounds SHOULD a fresh bracket of N players need" computation
+ *  (Math.log2 of the bracket size) used when GENERATING a new bracket: that's a different
+ *  question about a size, not a fact read off matches that already exist. */
+export function totalRoundsOf(matches: Match[]): number {
+  return matches.length ? Math.max(...matches.map((m) => m.round)) : 0;
+}
+
 /**
  * Builds a board-aware playing order. Matches of a round are distributed over
  * the available boards; every "slot" is a set of concurrently played matches.
@@ -192,7 +203,7 @@ export const isPlayable = (m: Match) => isRealPlayer(m.player1) && isRealPlayer(
 export function buildSchedule(matches: Match[], boards: number): ScheduleEntry[] {
   const b = Math.max(1, boards);
   const entries: ScheduleEntry[] = [];
-  const totalRounds = matches.length ? Math.max(...matches.map((m) => m.round)) : 0;
+  const totalRounds = totalRoundsOf(matches);
   const hasPrelim = matches.some((m) => m.round === 0);
   let slotCursor = 0;
 

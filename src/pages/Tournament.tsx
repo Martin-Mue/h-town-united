@@ -29,6 +29,7 @@ import {
   recomputeBracket,
   bracketChampion,
   buildSchedule,
+  totalRoundsOf,
   currentBoardSchedule,
   isLiveSnapshotFresh,
   assignScorekeepers,
@@ -102,7 +103,7 @@ const chooseAutoMainSize = (count: number): number => {
 // default those straight to the always-readable "Spielplan" list instead of the tree.
 const defaultBracketView = (bracket: Match[] | undefined): "tree" | "schedule" => {
   if (!bracket || bracket.length === 0) return "tree";
-  const totalRounds = Math.max(...bracket.map(m => m.round));
+  const totalRounds = totalRoundsOf(bracket);
   return totalRounds >= 5 ? "schedule" : "tree";
 };
 
@@ -1622,7 +1623,7 @@ const TournamentPage = () => {
 
   if (isKo) {
     const matches = activeTournament.bracket as Match[];
-    const totalRounds = matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 0;
+    const totalRounds = totalRoundsOf(matches);
 
     return (
       <div className="py-2 animate-slide-up">

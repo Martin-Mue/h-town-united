@@ -10,6 +10,7 @@ import {
   scorekeeperLabel as keeperLabel,
   isRealPlayer,
   isPlayable,
+  totalRoundsOf,
   type Match,
   type RoundRobinMatch,
   type RoundRobinStanding,
@@ -668,7 +669,7 @@ const PublicTournamentPage = () => {
 
   const isKo = t.mode !== "round-robin";
   const matches = t.bracket as Match[];
-  const totalRounds = isKo && matches.length > 0 ? Math.max(...matches.map(m => m.round)) : 0;
+  const totalRounds = isKo ? totalRoundsOf(matches) : 0;
   const completed = matches.filter(m => m.winner && isPlayable(m)).slice(-8).reverse();
   const boardsCount = t.boards ?? 2;
 
