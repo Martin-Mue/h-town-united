@@ -1,3 +1,5 @@
+import { isCheckoutPossible } from "@/utils/checkoutTable";
+
 export interface DartThrow {
   baseValue: number;
   multiplier: number;
@@ -62,7 +64,11 @@ export function computeCheckoutStats(throws: DartThrow[], startingScore: number)
   let hits = 0;
   let highestCheckout = 0;
   for (const v of visits(throws)) {
-    const isAttempt = remaining > 1 && remaining <= 170;
+    // A visit only counts as a checkout ATTEMPT if the score it started on is actually
+    // achievable in 3 darts ending on a double — 162/163/165/166/168/169 aren't (no combination
+    // of darts reaches them under double-out), so counting them here silently deflated every
+    // player's checkout % by padding the denominator with attempts that could never succeed.
+    const isAttempt = isCheckoutPossible(remaining);
     if (isAttempt) attempts++;
     const visitPoints = v.reduce((s, t) => s + t.points, 0);
     remaining -= visitPoints;

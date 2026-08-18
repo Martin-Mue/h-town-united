@@ -5,6 +5,7 @@ import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import CoachingPlan from "@/components/training/CoachingPlan";
 import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
+import { CHECKOUT_ROUTES } from "@/utils/checkoutTable";
 
 /** Training drill definition */
 interface TrainingDrill {
@@ -182,9 +183,15 @@ const PRESSURE_CHECKOUTS = [32, 40, 16, 36, 24, 8, 20, 50, 64, 80];
 
 const BULL_CONTROL_MAX_PLAYERS = 8;
 
-/** Generates a random checkout between 2 and 170 */
+/** Every remaining score actually achievable in 3 darts ending on a double — a uniform 2-170
+ *  random pick (the previous implementation) hands out 162/163/165/166/168/169 as often as any
+ *  real target, but none of those are checkoutable at all under double-out, so a "random finish"
+ *  drill could assign an unwinnable practice target. */
+const VALID_CHECKOUTS = Object.keys(CHECKOUT_ROUTES).map(Number);
+
+/** Generates a random checkout that's actually achievable in 3 darts. */
 function randomCheckout(): number {
-  return Math.floor(Math.random() * 169) + 2;
+  return VALID_CHECKOUTS[Math.floor(Math.random() * VALID_CHECKOUTS.length)];
 }
 
 // ─── personal records ──────────────────────────────────────────────
