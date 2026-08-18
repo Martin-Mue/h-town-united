@@ -2003,7 +2003,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <div className="min-w-0">
             <p className="truncate font-medium text-foreground">
               {playerName ?? "Auto-Scoring"}
-              {accumulated.length < dartsRemaining && (
+              {accumulated.length < dartsRemaining && !needsReview && (
                 <span className="ml-1 text-muted-foreground">
                   · noch {dartsRemaining - accumulated.length} Dart
                   {dartsRemaining - accumulated.length === 1 ? "" : "s"}
@@ -2215,11 +2215,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             <RotateCcw className="h-4 w-4" /> Verwerfen
           </Button>
         )}
-        {/* Gated on a complete round, not just accumulated.length > 0 — darts now fill in
-            incrementally as they're thrown (see scoreNewlyLandedDart), so accumulated can be
-            legitimately non-empty while the player is still mid-visit. Committing early would
-            hand a short round to Game.tsx and wrongly advance the turn. */}
-        {accumulated.length >= dartsRemaining && (
+        {/* Gated on a complete round OR a confirmed end-of-visit, not just accumulated.length > 0
+            — darts fill in incrementally as they're thrown (see scoreNewlyLandedDart), so
+            accumulated can be legitimately non-empty while the player is still mid-visit, and
+            committing early on that alone would hand a short round to Game.tsx and wrongly
+            advance the turn. But a checkout (or a bust the player doesn't play out) can validly
+            end a visit in 1 or 2 darts — accumulated.length never reaches dartsRemaining (3) in
+            that case, and needsReview is exactly the signal that runPullScan already saw the
+            board go empty and isn't expecting more. Without it, a real checkout left this button
+            permanently hidden — detected correctly, nothing to tap to confirm it. */}
+        {(accumulated.length >= dartsRemaining || needsReview) && (
           <Button
             size="sm"
             onClick={() => commitRound(accumulated)}
