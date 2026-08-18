@@ -106,7 +106,16 @@ export interface LiveCameraHandle {
 // chunk of a session carries the container header, so chunks can't be dropped
 // from the front and reassembled into a valid clip. Short fixed segments avoid
 // that entirely while still giving a no-manual-recording "it just captured it" feel.
-const CLIP_SEGMENT_MS = 6000;
+//
+// Segment boundaries are realigned to actual visit boundaries (see restartClipSegment,
+// called whenever the board goes empty) so a segment always starts right as a visit begins
+// and gets cut right as it ends — this timer is now only a safety cap for the degenerate
+// case of a visit that never gets pulled (camera left running, no one throws), not the
+// primary trigger. It used to be: back when segments were purely time-boxed with no
+// relationship to when darts actually landed, a highlight clip could just as easily capture
+// a few seconds of a static, already-finished board as it could the actual throws — visually
+// indistinguishable from a photo, which is exactly what got reported.
+const CLIP_SEGMENT_MS = 20000;
 const pickClipMimeType = (): string => {
   const candidates = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
   for (const type of candidates) {
@@ -554,6 +563,25 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (clipRecorderRef.current === recorder && recorder.state !== "inactive") recorder.stop();
     }, CLIP_SEGMENT_MS);
   }, []);
+
+  /** Ends the current clip segment right now and starts a fresh one — called whenever the board
+   *  goes empty (see the watcher loop below), which is exactly both "a visit just ended" and "the
+   *  next one is about to begin". Stopping here (not via stopClipRecorder, which deliberately
+   *  suppresses the auto-chain for a real shutdown) lets the recorder's own onstop finalize this
+   *  segment into lastClipRef and immediately start the next one, so segment boundaries track
+   *  actual visit boundaries instead of an arbitrary fixed interval. */
+  const restartClipSegment = useCallback(() => {
+    if (clipSegmentTimerRef.current) {
+      window.clearTimeout(clipSegmentTimerRef.current);
+      clipSegmentTimerRef.current = null;
+    }
+    const rec = clipRecorderRef.current;
+    if (rec && rec.state !== "inactive") {
+      try { rec.stop(); } catch { startClipSegment(); }
+    } else {
+      startClipSegment();
+    }
+  }, [startClipSegment]);
 
   useImperativeHandle(ref, () => ({
     getRecentClip: () => {
@@ -1342,6 +1370,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         changeSeenRef.current = false;
         stableSigRef.current = sig;
         if (boardEmpty) {
+          // The board just went empty — whether that's "a visit just finished and got pulled"
+          // (about to trigger runPullScan below) or "still idle, nothing thrown yet", either way
+          // a new visit starts from here. Cut the clip segment here so its footage lines up with
+          // real throws instead of an arbitrary timer (see restartClipSegment/CLIP_SEGMENT_MS).
+          restartClipSegment();
           const hasPreRemovalCapture = detectionMode === "local" ? !!preRemovalImageDataRef.current : !!preRemovalFrameRef.current;
           // A still-unreviewed round (accumulated darts awaiting Übernehmen/Verwerfen) must not
           // be silently overwritten by a new scan — if the player throws/pulls a second round
