@@ -1949,6 +1949,141 @@ const GamePage = () => {
     </div>
   ) : null;
 
+  // Scoreboard — extracted so it can render in two different DOM positions depending on mode
+  // (see the PLAYING PHASE return below) while staying sticky to whichever region actually
+  // scrolls: the page itself in manual mode, or the camera window's own scrollable content area
+  // in camera mode. It used to sit OUTSIDE that scrollable area entirely in camera mode (a
+  // `shrink-0` flex sibling above it, not sticky within it) — visually indistinguishable from
+  // "sticky", but reported as the numbers scrolling separately from the rest of the page, since
+  // the camera window itself is a fixed, non-page-scrolling overlay.
+  const scoreboardBlock = (
+    <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 landscape:pt-1.5 landscape:pb-1 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40">
+      <div className={`grid ${numCols} gap-3 landscape:gap-1.5`}>
+        {(game.teams
+          ? game.teams.map((t, ti) => {
+              const memberIdxs = game.players.map((_, pi) => pi).filter((pi) => teamIndexFor(game.teams, pi) === ti);
+              const throws = memberIdxs.flatMap((pi) => game.currentLeg.throws[pi]);
+              return {
+                key: ti, label: t.name, subLabel: memberIdxs.map((pi) => game.players[pi].name).join(" & "),
+                isBot: false, remaining: game.currentLeg.remaining[ti], cricketPoints: game.cricket?.[ti]?.points ?? 0,
+                avg: calculateAverage(throws), p180: count180s(throws), legsWon: game.legsWon[ti],
+                isActive: activeTeamIdx === ti,
+              };
+            })
+          : game.players.map((p, i) => ({
+              key: i, label: p.name, subLabel: undefined as string | undefined,
+              isBot: p.isBot, remaining: game.currentLeg.remaining[i], cricketPoints: game.cricket?.[i]?.points ?? 0,
+              avg: calculateAverage(game.currentLeg.throws[i]), p180: count180s(game.currentLeg.throws[i]),
+              legsWon: game.legsWon[i], isActive: activeIdx === i,
+            }))
+        ).map((card) => {
+          const isActive = card.isActive;
+          const activeRound = isActive ? currentRoundScores : [];
+          const pendingTotal = isActive && cameraEnabled
+            ? pendingCameraDarts.reduce((s, d) => s + d.points, 0)
+            : 0;
+          const previewRemaining = !isCricket && pendingTotal > 0
+            ? Math.max(0, card.remaining - pendingTotal)
+            : card.remaining;
+          const showPreview = pendingTotal > 0 && !isCricket;
+          // Manual entry: hold the big number at the turn's starting score while darts are
+          // still landing (the small "this round" badges below already show what's been hit
+          // and the running total) — it only jumps to the true new value once the round ends,
+          // which is also the moment scoreFlash briefly highlights it.
+          const roundInProgress = isActive && !isCricket && !showPreview && dartsThisRound > 0;
+          const displayRemaining = roundInProgress ? turnStartRemaining : previewRemaining;
+          const isFlashing = scoreFlash?.slot === card.key;
+          return (
+            <div key={card.key}
+              className={`bg-card rounded-xl p-4 landscape:p-2 border-2 transition-all text-center ${isActive ? "border-primary glow-cyan" : "border-border opacity-80"}`}>
+              <div className="flex items-center justify-center gap-1.5">
+                {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse-glow" />}
+                {card.isBot && <Bot className="w-3 h-3 text-secondary shrink-0" />}
+                <p className={`text-sm truncate ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>{card.label}</p>
+              </div>
+              {card.subLabel && (
+                <p className={`text-[10px] truncate ${isActive ? "text-primary/70" : "text-muted-foreground/70"}`}>
+                  {card.subLabel}{isActive ? ` · dran: ${currentPlayerName}` : ""}
+                </p>
+              )}
+              {isActive && card.isBot && botThinking ? (
+                <p className="text-sm font-display mt-1 text-secondary animate-pulse">Bot wirft…</p>
+              ) : (
+                <p className={`text-4xl landscape:text-2xl font-display mt-1 landscape:mt-0 transition-colors ${
+                  isFlashing ? "text-accent animate-pulse-glow" : showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
+                }`}>
+                  <AnimatedScore value={isCricket ? card.cricketPoints : displayRemaining} />
+                </p>
+              )}
+              {showPreview && (
+                <p className="text-[10px] text-muted-foreground -mt-1">
+                  ({card.remaining} − {pendingTotal} live)
+                </p>
+              )}
+              {/* min-h reserves this row's space even before the first dart of the round lands —
+                  it used to only exist once pendingCameraDarts/activeRound had content, so the
+                  card grew taller the instant the first dart registered, shoving everything below
+                  (the number pad, mid-tap) down and forcing a scroll. Reserving the space up
+                  front keeps the layout stable across the whole round instead of just after it starts. */}
+              {isActive && cameraEnabled && (
+                <div className="mt-1 flex min-h-6 items-center justify-center gap-1 flex-wrap">
+                  {pendingCameraDarts.map((t, idx) => (
+                    <span key={idx} className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-display text-accent ring-1 ring-accent/40">
+                      {dartLabel(t)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {isActive && (
+                <div className="mt-1 flex min-h-6 items-center justify-center gap-1 flex-wrap">
+                  {activeRound.map((t, idx) => (
+                    <span key={idx} className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-display text-primary">
+                      {dartLabel(t)}
+                    </span>
+                  ))}
+                  {activeRound.length > 0 && <span className="ml-1 text-[10px] font-display text-accent">+{currentRoundTotal}</span>}
+                </div>
+              )}
+              <div className="flex justify-center flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
+                <span>Ø {card.avg.toFixed(1)}</span>
+                {game.bestOfLegs > 1 && <span className="text-primary font-bold">{card.legsWon} Legs</span>}
+                {card.p180 > 0 && <span className="text-accent font-bold">🎯{card.p180}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Leg info bar */}
+      {game.bestOfLegs > 1 && (
+        <div className="text-center text-xs landscape:text-[10px] text-muted-foreground mt-2 landscape:mt-1">
+          Leg {game.currentLeg.legNumber} · {game.players[game.currentLeg.startingPlayerIndex].name} fängt an
+        </div>
+      )}
+
+      {/* Current player indicator with dart counter + round score */}
+      <div className="text-center mt-2 landscape:mt-1">
+        <span className="text-sm text-primary font-medium">
+          {currentPlayer?.isBot && botThinking ? `${currentPlayerName} (Bot) wirft…` : `${currentPlayerName} wirft`}
+        </span>
+        {mode !== "cricket" && !(currentPlayer?.doubleOut ?? true) && (
+          <span className="text-[10px] text-muted-foreground ml-2">(Single Out)</span>
+        )}
+        <div className="flex justify-center gap-1 mt-1 landscape:mt-0.5">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className={`w-3 h-3 landscape:w-2 landscape:h-2 rounded-full transition-all ${i < dartsThisRound ? "bg-primary" : "bg-muted"}`} />
+          ))}
+        </div>
+        <div className="flex items-center justify-center gap-2 mt-1 landscape:mt-0.5">
+          <span className="text-[10px] text-muted-foreground">Dart {dartsThisRound + 1} / 3</span>
+          {dartsThisRound > 0 && (
+            <span className="text-xs font-display text-primary">+{currentRoundTotal}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   // ─── PLAYING PHASE ─────────────────────────────────
   return (
     <div className={cameraEnabled
@@ -2030,134 +2165,10 @@ const GamePage = () => {
         </div>
       )}
 
-      {/* Scoreboard (sticky in the scrolling layout; a fixed top bar in the camera window) */}
-      <div className={cameraEnabled
-        ? "shrink-0 px-4 pt-3 pb-2 bg-background/95 backdrop-blur border-b border-border/40"
-        : "sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40"}>
-      <div className={`grid ${numCols} gap-3`}>
-        {(game.teams
-          ? game.teams.map((t, ti) => {
-              const memberIdxs = game.players.map((_, pi) => pi).filter((pi) => teamIndexFor(game.teams, pi) === ti);
-              const throws = memberIdxs.flatMap((pi) => game.currentLeg.throws[pi]);
-              return {
-                key: ti, label: t.name, subLabel: memberIdxs.map((pi) => game.players[pi].name).join(" & "),
-                isBot: false, remaining: game.currentLeg.remaining[ti], cricketPoints: game.cricket?.[ti]?.points ?? 0,
-                avg: calculateAverage(throws), p180: count180s(throws), legsWon: game.legsWon[ti],
-                isActive: activeTeamIdx === ti,
-              };
-            })
-          : game.players.map((p, i) => ({
-              key: i, label: p.name, subLabel: undefined as string | undefined,
-              isBot: p.isBot, remaining: game.currentLeg.remaining[i], cricketPoints: game.cricket?.[i]?.points ?? 0,
-              avg: calculateAverage(game.currentLeg.throws[i]), p180: count180s(game.currentLeg.throws[i]),
-              legsWon: game.legsWon[i], isActive: activeIdx === i,
-            }))
-        ).map((card) => {
-          const isActive = card.isActive;
-          const activeRound = isActive ? currentRoundScores : [];
-          const pendingTotal = isActive && cameraEnabled
-            ? pendingCameraDarts.reduce((s, d) => s + d.points, 0)
-            : 0;
-          const previewRemaining = !isCricket && pendingTotal > 0
-            ? Math.max(0, card.remaining - pendingTotal)
-            : card.remaining;
-          const showPreview = pendingTotal > 0 && !isCricket;
-          // Manual entry: hold the big number at the turn's starting score while darts are
-          // still landing (the small "this round" badges below already show what's been hit
-          // and the running total) — it only jumps to the true new value once the round ends,
-          // which is also the moment scoreFlash briefly highlights it.
-          const roundInProgress = isActive && !isCricket && !showPreview && dartsThisRound > 0;
-          const displayRemaining = roundInProgress ? turnStartRemaining : previewRemaining;
-          const isFlashing = scoreFlash?.slot === card.key;
-          return (
-            <div key={card.key}
-              className={`bg-card rounded-xl p-4 border-2 transition-all text-center ${isActive ? "border-primary glow-cyan" : "border-border opacity-80"}`}>
-              <div className="flex items-center justify-center gap-1.5">
-                {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse-glow" />}
-                {card.isBot && <Bot className="w-3 h-3 text-secondary shrink-0" />}
-                <p className={`text-sm truncate ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>{card.label}</p>
-              </div>
-              {card.subLabel && (
-                <p className={`text-[10px] truncate ${isActive ? "text-primary/70" : "text-muted-foreground/70"}`}>
-                  {card.subLabel}{isActive ? ` · dran: ${currentPlayerName}` : ""}
-                </p>
-              )}
-              {isActive && card.isBot && botThinking ? (
-                <p className="text-sm font-display mt-1 text-secondary animate-pulse">Bot wirft…</p>
-              ) : (
-                <p className={`text-4xl font-display mt-1 transition-colors ${
-                  isFlashing ? "text-accent animate-pulse-glow" : showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
-                }`}>
-                  <AnimatedScore value={isCricket ? card.cricketPoints : displayRemaining} />
-                </p>
-              )}
-              {showPreview && (
-                <p className="text-[10px] text-muted-foreground -mt-1">
-                  ({card.remaining} − {pendingTotal} live)
-                </p>
-              )}
-              {/* min-h reserves this row's space even before the first dart of the round lands —
-                  it used to only exist once pendingCameraDarts/activeRound had content, so the
-                  card grew taller the instant the first dart registered, shoving everything below
-                  (the number pad, mid-tap) down and forcing a scroll. Reserving the space up
-                  front keeps the layout stable across the whole round instead of just after it starts. */}
-              {isActive && cameraEnabled && (
-                <div className="mt-1 flex min-h-6 items-center justify-center gap-1 flex-wrap">
-                  {pendingCameraDarts.map((t, idx) => (
-                    <span key={idx} className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-display text-accent ring-1 ring-accent/40">
-                      {dartLabel(t)}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {isActive && (
-                <div className="mt-1 flex min-h-6 items-center justify-center gap-1 flex-wrap">
-                  {activeRound.map((t, idx) => (
-                    <span key={idx} className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-display text-primary">
-                      {dartLabel(t)}
-                    </span>
-                  ))}
-                  {activeRound.length > 0 && <span className="ml-1 text-[10px] font-display text-accent">+{currentRoundTotal}</span>}
-                </div>
-              )}
-              <div className="flex justify-center flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
-                <span>Ø {card.avg.toFixed(1)}</span>
-                {game.bestOfLegs > 1 && <span className="text-primary font-bold">{card.legsWon} Legs</span>}
-                {card.p180 > 0 && <span className="text-accent font-bold">🎯{card.p180}</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Leg info bar */}
-      {game.bestOfLegs > 1 && (
-        <div className="text-center text-xs text-muted-foreground mt-2">
-          Leg {game.currentLeg.legNumber} · {game.players[game.currentLeg.startingPlayerIndex].name} fängt an
-        </div>
-      )}
-
-      {/* Current player indicator with dart counter + round score */}
-      <div className="text-center mt-2">
-        <span className="text-sm text-primary font-medium">
-          {currentPlayer?.isBot && botThinking ? `${currentPlayerName} (Bot) wirft…` : `${currentPlayerName} wirft`}
-        </span>
-        {mode !== "cricket" && !(currentPlayer?.doubleOut ?? true) && (
-          <span className="text-[10px] text-muted-foreground ml-2">(Single Out)</span>
-        )}
-        <div className="flex justify-center gap-1 mt-1">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className={`w-3 h-3 rounded-full transition-all ${i < dartsThisRound ? "bg-primary" : "bg-muted"}`} />
-          ))}
-        </div>
-        <div className="flex items-center justify-center gap-2 mt-1">
-          <span className="text-[10px] text-muted-foreground">Dart {dartsThisRound + 1} / 3</span>
-          {dartsThisRound > 0 && (
-            <span className="text-xs font-display text-primary">+{currentRoundTotal}</span>
-          )}
-        </div>
-      </div>
-      </div>
+      {/* Non-camera mode: scoreboard renders here, sticky to the page's own scroll. Camera mode
+          renders it inside the scrollable content area below instead (see cameraEnabled branch) —
+          see scoreboardBlock's own comment for why. */}
+      {!cameraEnabled && scoreboardBlock}
 
       {pendingTiebreak && (
         <div className="mx-4 mb-3 rounded-lg border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
@@ -2185,9 +2196,11 @@ const GamePage = () => {
 
       {cameraEnabled ? (
         <>
-          {/* Everything below the scoreboard scrolls WITHIN this region only — the
-              outer window (and the page behind it) never scrolls while the camera is open. */}
+          {/* The scoreboard now scrolls WITH everything else in this region (sticky to ITS top,
+              not fixed above it) — the outer window (and the page behind it) still never scrolls
+              while the camera is open, only this one region does. */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3">
+            {scoreboardBlock}
             {doubleInBanner}
             {pendingCheckoutChoice && (
               <div className="mb-3 rounded-lg border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
