@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -326,6 +326,12 @@ const GamePage = () => {
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const botPlanRef = useRef<{ key: string; darts: DartThrow[]; applied: number } | null>(null);
   const [checkoutRates, setCheckoutRates] = useState<Record<string, number>>({});
+  // Mirrors checkoutRates for the "already fetched this player" guard below — read via the ref
+  // (not the checkoutRates closure) specifically so that effect doesn't need checkoutRates in its
+  // own dependency array, which would re-fire it every time ANY player's rate gets cached, not
+  // just when the active player/mode actually changes.
+  const checkoutRatesRef = useRef(checkoutRates);
+  checkoutRatesRef.current = checkoutRates;
   // Briefly highlights a score slot's remaining number right when a round finishes (checkout,
   // bust, 3rd dart, or a committed camera round) — { slot, key } so re-triggering the same
   // slot twice in a row (e.g. two rounds without anyone else throwing) still re-plays the pulse.
@@ -390,6 +396,11 @@ const GamePage = () => {
       });
     }, 1200);
     return () => window.clearTimeout(timer);
+    // Deliberately depends on these specific fields, not `game` itself — adding the whole object
+    // would re-arm the debounce timer on every dart thrown (game's identity changes on ANY
+    // update, including fields this push doesn't care about, e.g. currentPlayerIndex/throws),
+    // defeating the "wait for scoring to settle" point of debouncing in the first place.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game?.currentLeg.remaining, game?.legsWon, game?.isFinished, game?.mode, phase]);
 
   // Fetches the current player's career checkout conversion rate on demand (once per
@@ -397,7 +408,7 @@ const GamePage = () => {
   useEffect(() => {
     if (!game || game.mode === "cricket" || phase !== "playing") return;
     const player = game.players[game.currentPlayerIndex];
-    if (!player || player.isBot || checkoutRates[player.name] !== undefined) return;
+    if (!player || player.isBot || checkoutRatesRef.current[player.name] !== undefined) return;
     const match = dbPlayers.find((p) => p.name === player.name);
     if (!match) return;
     supabase
@@ -411,7 +422,7 @@ const GamePage = () => {
         );
         if (combined.attempts > 0) setCheckoutRates((prev) => ({ ...prev, [player.name]: combined.percentage }));
       });
-  }, [game?.currentPlayerIndex, game?.mode, phase, dbPlayers]);
+  }, [game, phase, dbPlayers]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -491,10 +502,14 @@ const GamePage = () => {
   // anything worth showing — a real (non-team) 1v1 where at least one side matches a roster
   // player. Bot games, guest-vs-guest test rounds, and team matches skip straight from the
   // walk-on card to play, same as before this screen existed.
-  const walkonHasStats = (g: GameState | null): boolean => {
+  // useCallback (not a plain function) so its identity is stable across renders unless dbPlayers
+  // itself changes — `game` is passed in as a parameter rather than read via closure specifically
+  // so this doesn't also need to depend on it, letting the walk-on effect below list this as a
+  // dependency without re-running on every unrelated render.
+  const walkonHasStats = useCallback((g: GameState | null): boolean => {
     if (!g || g.teams || g.players.length !== 2) return false;
     return !!matchClubPlayer(dbPlayers, g.players[0].name) || !!matchClubPlayer(dbPlayers, g.players[1].name);
-  };
+  }, [dbPlayers]);
 
   const startGame = () => {
     const startScore = getStartScore();
@@ -551,8 +566,11 @@ const GamePage = () => {
     }
   };
 
-  /** Goes from setup/warm-up into the actual match — via the walk-on intro if enabled. */
-  const enterMatch = () => setPhase(walkonEnabled ? "walkon" : "playing");
+  /** Goes from setup/warm-up into the actual match — via the walk-on intro if enabled. Wrapped in
+   *  useCallback so its identity only changes when walkonEnabled does — a plain function here
+   *  would get a new reference every render, and the effect below needs a STABLE one to depend
+   *  on without re-running (and re-triggering setPhase) on every unrelated re-render. */
+  const enterMatch = useCallback(() => setPhase(walkonEnabled ? "walkon" : "playing"), [walkonEnabled]);
 
   // ─── warm-up (pre-match, doesn't touch game/stats) ──────────────────
   useEffect(() => {
@@ -563,7 +581,7 @@ const GamePage = () => {
 
   useEffect(() => {
     if (phase === "warmup" && warmupRemaining <= 0) enterMatch();
-  }, [phase, warmupRemaining]);
+  }, [phase, warmupRemaining, enterMatch]);
 
   // ─── walk-on intro (pre-match, doesn't touch game/stats) ────────────
   useEffect(() => {
@@ -571,7 +589,7 @@ const GamePage = () => {
     if (soundEnabled) playWalkonSound();
     const t = setTimeout(() => setPhase(walkonHasStats(game) ? "stats" : "playing"), WALKON_DURATION_MS);
     return () => clearTimeout(t);
-  }, [phase]);
+  }, [phase, game, soundEnabled, walkonHasStats]);
 
   // ─── stat-comparison screen (second walk-on beat) ────────────────────
   useEffect(() => {
@@ -1441,7 +1459,11 @@ const GamePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game?.currentPlayerIndex, game?.currentLeg.legNumber, dartsThisRound, game?.isFinished, phase, pendingTiebreak]);
 
-  const saveGame = async () => {
+  // useCallback with an honest dependency list (rather than a plain function) so the triggering
+  // effect below can depend on this directly instead of needing its own eslint-disable — the
+  // internal savingRef/gameSaved guards already make a redundant call harmless either way, this
+  // is about the dependency array actually being correct, not a behavior change.
+  const saveGame = useCallback(async () => {
     if (!game || !game.isFinished || savingRef.current || gameSaved) return;
     savingRef.current = true;
     const link = tournamentLinkRef.current ?? undefined;
@@ -1506,11 +1528,11 @@ const GamePage = () => {
     }
     setGameSaved(true);
     savingRef.current = false;
-  };
+  }, [game, gameSaved, session, toast]);
 
   useEffect(() => {
     if (game?.isFinished && !gameSaved && session?.user?.id) saveGame();
-  }, [game?.isFinished]);
+  }, [game?.isFinished, gameSaved, session?.user?.id, saveGame]);
 
   // Cricket match-win announcement — X01 already announces its own win inline (checkout +
   // hype happen together there); cricket finishes on a mark, not a "checkout" moment, so it
@@ -1526,7 +1548,9 @@ const GamePage = () => {
       isCricket: true, checkedOut: false, busted: false, matchWon: true, winnerName: game.winnerName,
     });
     window.setTimeout(() => speakSequence(parts), 200);
-  }, [game?.isFinished, game?.mode, speechEnabled]);
+    // cricketWinAnnouncedRef makes any extra re-run (e.g. `game` also changing on every dart
+    // thrown before the match ends) a harmless no-op — it only actually announces once.
+  }, [game, speechEnabled]);
 
   const postGameStats = useMemo(() => {
     if (!game || !game.isFinished) return null;
@@ -1553,7 +1577,9 @@ const GamePage = () => {
         legs: game.legsWon[teamIndexFor(game.teams, i)],
       };
     });
-  }, [game?.isFinished]);
+    // No code path calls setGame again once isFinished is true (every scoring handler guards on
+    // `!game.isFinished`), so depending on `game` recomputes exactly once, same as today.
+  }, [game]);
 
   // ─── SETUP PHASE ───────────────────────────────
   if (phase === "setup") {
