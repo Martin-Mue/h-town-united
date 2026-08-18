@@ -11,6 +11,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { type Match, isRealPlayer, totalRoundsOf } from "@/utils/tournament";
 
 interface Scoring {
   champion: number;
@@ -256,7 +257,7 @@ function computeStandings(tourneys: TournamentLite[], scoring: Scoring): Standin
   // across multiple rows. Display keeps the first-seen exact casing/spacing, only grouping is normalized.
   const normalize = (s: string) => s.trim().toLowerCase();
   const add = (name: string, pts: number, isChamp = false) => {
-    if (!name || name === "BYE") return;
+    if (!isRealPlayer(name)) return;
     const key = normalize(name);
     if (!key) return;
     if (!map[key]) map[key] = { name: name.trim(), points: 0, champions: 0, tournaments: 0 };
@@ -268,7 +269,7 @@ function computeStandings(tourneys: TournamentLite[], scoring: Scoring): Standin
     if (t.status !== "finished") continue;
     const played = new Set<string>();
     (t.players || []).forEach((p) => {
-      if (!p || p === "BYE") return;
+      if (!isRealPlayer(p)) return;
       played.add(p);
       add(p, scoring.participation);
       // Exactly once per player per tournament — add() itself is called again below for
@@ -280,22 +281,22 @@ function computeStandings(tourneys: TournamentLite[], scoring: Scoring): Standin
     if (t.mode !== "round-robin" && Array.isArray(t.bracket)) {
       const matches = t.bracket as Match[];
       if (matches.length > 0) {
-        const totalRounds = Math.max(...matches.map((m) => m.round));
+        const totalRounds = totalRoundsOf(matches);
         const finalM = matches.find((m) => m.round === totalRounds);
         if (finalM?.winner) add(finalM.winner, scoring.champion - scoring.participation, true);
         const runnerUp = finalM && finalM.winner ? (finalM.winner === finalM.player1 ? finalM.player2 : finalM.player1) : undefined;
-        if (runnerUp && runnerUp !== "BYE") add(runnerUp, scoring.runnerUp - scoring.participation);
+        if (isRealPlayer(runnerUp)) add(runnerUp, scoring.runnerUp - scoring.participation);
         // Semifinal losers
         if (totalRounds >= 2) {
           matches.filter((m) => m.round === totalRounds - 1 && m.winner).forEach((m) => {
             const loser = m.winner === m.player1 ? m.player2 : m.player1;
-            if (loser && loser !== "BYE" && loser !== finalM?.winner && loser !== runnerUp) add(loser, scoring.semi - scoring.participation);
+            if (isRealPlayer(loser) && loser !== finalM?.winner && loser !== runnerUp) add(loser, scoring.semi - scoring.participation);
           });
         }
         if (totalRounds >= 3) {
           matches.filter((m) => m.round === totalRounds - 2 && m.winner).forEach((m) => {
             const loser = m.winner === m.player1 ? m.player2 : m.player1;
-            if (loser && loser !== "BYE") add(loser, scoring.quarter - scoring.participation);
+            if (isRealPlayer(loser)) add(loser, scoring.quarter - scoring.participation);
           });
         }
       }
@@ -306,7 +307,5 @@ function computeStandings(tourneys: TournamentLite[], scoring: Scoring): Standin
 
   return Object.values(map).sort((a, b) => b.points - a.points);
 }
-
-interface Match { round: number; winner?: string; player1?: string; player2?: string; }
 
 export default TournamentSeriesPage;
