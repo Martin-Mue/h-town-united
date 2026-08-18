@@ -222,8 +222,11 @@ const GamePage = () => {
   // Head-to-head record for the walk-on screen — null while unresolved (no fetch fired yet,
   // or one of the two isn't a real roster player), { total: 0, ... } once fetched but this is
   // their first-ever meeting. Fetched once per game start (see startGame), not derived from
-  // dbPlayers, since it needs the actual `games` history, not just roster totals.
-  const [walkonH2H, setWalkonH2H] = useState<{ aWins: number; bWins: number; total: number } | null>(null);
+  // dbPlayers, since it needs the actual `games` history, not just roster totals. aAvg/bAvg are
+  // each side's average SPECIFICALLY across these head-to-head games — deliberately separate
+  // from their lifetime average (already shown from dbPlayers), since how someone plays against
+  // this one specific opponent is its own, genuinely different number.
+  const [walkonH2H, setWalkonH2H] = useState<{ aWins: number; bWins: number; total: number; aAvg: number; bAvg: number } | null>(null);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   // Whether a human actually wants the camera on — distinct from cameraEnabled itself, which
@@ -405,13 +408,23 @@ const GamePage = () => {
     const a = matchClubPlayer(dbPlayers, players[0].name);
     const b = matchClubPlayer(dbPlayers, players[1].name);
     if (!a || !b || a.id === b.id) return;
-    const { data, error } = await supabase.from("games").select("winner_id")
+    const { data, error } = await supabase.from("games")
+      .select("winner_id, player1_id, player1_average, player2_average")
       .or(`and(player1_id.eq.${a.id},player2_id.eq.${b.id}),and(player1_id.eq.${b.id},player2_id.eq.${a.id})`);
     if (error || !data) return;
+    let aAvgSum = 0;
+    let bAvgSum = 0;
+    data.forEach((g) => {
+      const aIsP1 = g.player1_id === a.id;
+      aAvgSum += Number(aIsP1 ? g.player1_average : g.player2_average);
+      bAvgSum += Number(aIsP1 ? g.player2_average : g.player1_average);
+    });
     setWalkonH2H({
       aWins: data.filter((g) => g.winner_id === a.id).length,
       bWins: data.filter((g) => g.winner_id === b.id).length,
       total: data.length,
+      aAvg: data.length > 0 ? aAvgSum / data.length : 0,
+      bAvg: data.length > 0 ? bAvgSum / data.length : 0,
     });
   };
 
@@ -1850,6 +1863,7 @@ const GamePage = () => {
             {statRow("Average", Number(p.average).toFixed(1))}
             {statRow("Siege", `${p.games_won}/${p.games_played}`)}
             {statRow("Elo", String(Math.round(p.elo_rating)))}
+            {statRow("Highscore", String(p.high_score))}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">Kein Profil</p>
@@ -1878,6 +1892,13 @@ const GamePage = () => {
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
               {walkonH2H.total > 0 ? `Bisher gegeneinander · ${walkonH2H.total} Spiele` : "Erstes Aufeinandertreffen"}
             </p>
+            {/* Average specifically FROM these head-to-head games — a genuinely different number
+                from the lifetime average shown per player above, not a duplicate of it. */}
+            {walkonH2H.total > 0 && (
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
+                Ø im Duell: {walkonH2H.aAvg.toFixed(1)} : {walkonH2H.bAvg.toFixed(1)}
+              </p>
+            )}
           </div>
         )}
         <p className="relative text-[10px] uppercase tracking-widest text-muted-foreground mt-10 animate-slide-up">
