@@ -14,6 +14,7 @@ import AnimatedScore from "@/components/AnimatedScore";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, TeamSlot, BotLevel } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -406,7 +407,7 @@ const GamePage = () => {
       .then(({ data }) => {
         if (!data || data.length === 0) return;
         const combined = combineCheckoutStats(
-          (data as any[]).map((leg) => computeCheckoutStats(leg.throws as DartThrow[], leg.starting_score))
+          data.map((leg) => computeCheckoutStats(leg.throws as unknown as DartThrow[], leg.starting_score))
         );
         if (combined.attempts > 0) setCheckoutRates((prev) => ({ ...prev, [player.name]: combined.percentage }));
       });
@@ -979,7 +980,7 @@ const GamePage = () => {
         player_name: params.playerName,
         kind: params.kind,
         points: params.points,
-        darts: params.darts as any,
+        darts: params.darts as unknown as Json,
         storage_path: path,
         mime: params.mime,
       });
