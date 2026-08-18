@@ -18,7 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
-import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor } from "@/utils/x01Rules";
+import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
 import { simulateBotVisit, simulateBotCricketDart } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
@@ -84,10 +84,6 @@ function generateRandomCricketNumbers(): number[] {
   }
   return [...pool.slice(0, 6), 25];
 }
-function dartLabel(t: DartThrow): string {
-  return t.baseValue === 0 ? "M" : t.baseValue === 25 ? (t.multiplier === 2 ? "BULL" : "25") : `${t.multiplier === 2 ? "D" : t.multiplier === 3 ? "T" : ""}${t.baseValue}`;
-}
-
 
 /** Undo snapshot for reverting last dart */
 interface UndoSnapshot {

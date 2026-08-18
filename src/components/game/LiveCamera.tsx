@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
 import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
 import { computeHomography } from "@/utils/homography";
-import { pointsFor } from "@/utils/x01Rules";
+import { pointsFor, dartLabel } from "@/utils/x01Rules";
 import {
   boardTransformFromTaps,
   scoreFromBoardPoint,
@@ -258,13 +258,6 @@ type BoardDetection = {
 };
 
 type ZoomCapability = { min: number; max: number; step: number };
-
-const dartLabel = (d: DetectedDart) => {
-  if (d.baseValue === 0) return "Miss";
-  if (d.baseValue === 25) return d.multiplier === 2 ? "Bull 50" : "Bull 25";
-  const prefix = d.multiplier === 2 ? "D" : d.multiplier === 3 ? "T" : "";
-  return `${prefix}${d.baseValue}`;
-};
 
 /**
  * Centers arbitrary content at (fx,fy) — a fraction (0-1) of the nearest positioned ancestor —

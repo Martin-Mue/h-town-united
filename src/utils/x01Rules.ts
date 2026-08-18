@@ -21,6 +21,24 @@ export function pointsFor(baseValue: number, multiplier: number): number {
 }
 
 /**
+ * Short display label for one dart ("D20", "T20", "Bull 25", "Bull 50", "Miss") — independently
+ * reworded at every display site (Game.tsx used "M"/"25"/"BULL"; LiveCamera.tsx used "Miss"/
+ * "Bull 25"/"Bull 50"; ThrowClipDialog.tsx used "Miss"/"25"/"Bull 50", inconsistent even with
+ * itself, a single-25 hit reading as just "25" while a bullseye correctly said "Bull 50"). Settled
+ * on LiveCamera.tsx's wording as canonical (unambiguous either way a dart can land in the bull,
+ * and matches DartScoreInput's own "Miss" button label) rather than picking arbitrarily — this
+ * also means a manually-entered dart and a camera-detected one now read identically everywhere.
+ * Takes a minimal structural shape (not DartThrow or DetectedDart specifically) since both already
+ * satisfy it and neither type belongs to this module.
+ */
+export function dartLabel(d: { baseValue: number; multiplier: number }): string {
+  if (d.baseValue === 0) return "Miss";
+  if (d.baseValue === 25) return d.multiplier === 2 ? "Bull 50" : "Bull 25";
+  const prefix = d.multiplier === 2 ? "D" : d.multiplier === 3 ? "T" : "";
+  return `${prefix}${d.baseValue}`;
+}
+
+/**
  * Standard X01 bust rule, shared by manual entry, camera-detected scoring, and the bot player
  * so the three can never drift out of sync again:
  *  - going below zero always busts

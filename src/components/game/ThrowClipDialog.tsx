@@ -3,6 +3,7 @@ import { Download, Sparkles, Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { DetectedDart } from "@/components/game/LiveCamera";
+import { dartLabel } from "@/utils/x01Rules";
 
 export interface ThrowClipPopup {
   url: string;
@@ -15,13 +16,6 @@ export interface ThrowClipPopup {
   darts: DetectedDart[];
   ts: number;
 }
-
-const dartLabel = (d: DetectedDart) => {
-  if (d.baseValue === 0) return "Miss";
-  if (d.baseValue === 25) return d.multiplier === 2 ? "Bull 50" : "25";
-  const prefix = d.multiplier === 2 ? "D" : d.multiplier === 3 ? "T" : "";
-  return `${prefix}${d.baseValue}`;
-};
 
 interface Props {
   popup: ThrowClipPopup | null;
