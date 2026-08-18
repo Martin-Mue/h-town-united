@@ -30,6 +30,8 @@ import {
   bracketChampion,
   buildSchedule,
   totalRoundsOf,
+  resolveMatchUserIds,
+  buildMatchReadyPush,
   currentBoardSchedule,
   isLiveSnapshotFresh,
   assignScorekeepers,
@@ -638,18 +640,10 @@ const TournamentPage = () => {
    *  own club profile (players.user_id) and opted into notifications — most club members
    *  play under a shared/organizer login, so this silently no-ops for anyone who hasn't. */
   const notifyMatchReady = useCallback((match: Match) => {
-    const userIds = [match.player1, match.player2]
-      .map((name) => dbPlayers.find((p) => p.name === name)?.user_id)
-      .filter((id): id is string => !!id);
+    const userIds = resolveMatchUserIds(match, dbPlayers);
     if (userIds.length === 0) return;
-    const boardLabel = match.board ? ` (Board ${match.board})` : "";
     supabase.functions.invoke("send-push", {
-      body: {
-        userIds,
-        title: "Dein Match ist bereit",
-        body: `${match.player1} vs. ${match.player2}${boardLabel} — ihr seid dran.`,
-        url: "/tournament",
-      },
+      body: { userIds, ...buildMatchReadyPush(match) },
     }).catch((err) => console.error("notifyMatchReady failed", err));
   }, [dbPlayers]);
 

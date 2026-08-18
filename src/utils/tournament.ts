@@ -185,6 +185,30 @@ export interface ScheduleEntry {
 /** Playable = both slots known, both real players, no winner yet. */
 export const isPlayable = (m: Match) => isRealPlayer(m.player1) && isRealPlayer(m.player2);
 
+/** Which of a match's two players have a linked account, resolved from any roster-shaped list
+ *  (the full name→user_id shape, not just ClubPlayer specifically — Tournament.tsx passes its
+ *  already-loaded dbPlayers state, tournamentMatchSync.ts passes a batch-fetched query result,
+ *  since it runs outside a component with no pre-loaded roster to reuse). Was reimplemented
+ *  identically in both places instead of shared. */
+export function resolveMatchUserIds(match: Match, roster: { name: string; user_id: string | null }[]): string[] {
+  return [match.player1, match.player2]
+    .map((name) => roster.find((p) => p.name === name)?.user_id)
+    .filter((id): id is string => !!id);
+}
+
+/** "Your match is up next" push payload for a newly-playable match — the exact title/body/url
+ *  Tournament.tsx's notifyMatchReady and tournamentMatchSync.ts's notifyMatchesReady each built
+ *  independently (identically, so far — but exactly the kind of copy that's drifted everywhere
+ *  else in this codebase the moment one call site's needs changed and the other's didn't). */
+export function buildMatchReadyPush(match: Match): { title: string; body: string; url: string } {
+  const boardLabel = match.board ? ` (Board ${match.board})` : "";
+  return {
+    title: "Dein Match ist bereit",
+    body: `${match.player1} vs. ${match.player2}${boardLabel} — ihr seid dran.`,
+    url: "/tournament",
+  };
+}
+
 /** How many rounds an EXISTING bracket actually has (the highest round number present) —
  *  independently reimplemented at 6 call sites across this file, Tournament.tsx, and
  *  PublicTournament.tsx, all doing the identical `Math.max(...matches.map(m => m.round))` with

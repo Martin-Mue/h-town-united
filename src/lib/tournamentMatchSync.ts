@@ -8,6 +8,8 @@ import {
   bracketChampion,
   calcStandings,
   newlyPlayableMatches,
+  resolveMatchUserIds,
+  buildMatchReadyPush,
 } from "@/utils/tournament";
 
 export interface MatchResultInput {
@@ -29,13 +31,10 @@ async function notifyMatchesReady(matches: Match[]): Promise<void> {
     if (names.length === 0) return;
     const { data: players } = await supabase.from("players").select("user_id, name").in("name", names);
     for (const m of matches) {
-      const userIds = [m.player1, m.player2]
-        .map((name) => players?.find((p) => p.name === name)?.user_id)
-        .filter((id): id is string => !!id);
+      const userIds = resolveMatchUserIds(m, players ?? []);
       if (userIds.length === 0) continue;
-      const boardLabel = m.board ? ` (Board ${m.board})` : "";
       await supabase.functions.invoke("send-push", {
-        body: { userIds, title: "Dein Match ist bereit", body: `${m.player1} vs. ${m.player2}${boardLabel} — ihr seid dran.`, url: "/tournament" },
+        body: { userIds, ...buildMatchReadyPush(m) },
       });
     }
   } catch (err) {
