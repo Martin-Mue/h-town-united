@@ -64,8 +64,16 @@ const Layout = ({ children }: { children: ReactNode }) => {
           overscroll-behavior on html/body breaks position:fixed for any descendant (a WebKit bug),
           which was making the bottom nav below scroll away with the page instead of staying pinned.
           Containing it here instead still stops an accidental pull-to-refresh (e.g. while tapping
-          around the live-camera view) from reloading the app mid-game. */}
-      <div className="flex-1 flex flex-col overflow-y-auto overscroll-y-contain">
+          around the live-camera view) from reloading the app mid-game.
+          min-h-0 is required, not decorative — a flex item defaults to min-height:auto, which lets
+          it grow to fit its content instead of respecting flex-1's share of the parent's height.
+          Without it, THIS div never actually became short enough for its own overflow-y-auto to
+          engage — page content just grew past the viewport and something further up (ultimately
+          whatever the browser falls back to) ended up owning the scroll instead, which is also
+          exactly what breaks any `sticky` element inside here: sticky only sticks relative to ITS
+          nearest actually-scrolling ancestor, and if this div never becomes that, a `sticky
+          top-0` scoreboard inside a page has nothing correct to stick to. */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overscroll-y-contain">
         <header className="border-b border-border px-4 py-3 flex items-center justify-between bg-background/80 backdrop-blur-sm relative z-10 shrink-0">
           <Link to="/" className="flex items-center gap-3">
             <img
