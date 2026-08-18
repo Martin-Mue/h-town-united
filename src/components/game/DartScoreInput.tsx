@@ -27,17 +27,21 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound }: DartScoreInputPro
   const [showQuickRound, setShowQuickRound] = useState(false);
 
   return (
-    <div className="bg-card rounded-xl border border-border p-4">
+    <div className="bg-card rounded-xl border border-border p-3">
       {/* Number grid — 4 wide so each card has real room; Single dominates, Double/Triple sit
-          below as their own full-width-of-card buttons. One tap anywhere submits immediately. */}
-      <div className="grid grid-cols-4 gap-2 mb-3">
+          below as their own full-width-of-card buttons. One tap anywhere submits immediately.
+          Padding/font sizes trimmed from the original v4 pass (still clearly the same dominant-
+          Single-over-smaller-T/D shape, just less of it) after reports of needing to scroll to
+          see every field — the column count and stacked-not-side-by-side shape stay untouched,
+          since those are what fixed the actual mis-tap problem in v2/v3 (see the comment above). */}
+      <div className="grid grid-cols-4 gap-1.5 mb-2">
         {BOARD_NUMBERS.map((v) => (
           <div key={v} className="rounded-xl overflow-hidden border border-border/60">
             <button
               onClick={() => onThrow(v, 1)}
               disabled={isDisabled}
               title={`Einfach ${v}`}
-              className="w-full py-3 text-xl font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+              className="w-full py-2 text-lg font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
             >
               {v}
             </button>
@@ -46,7 +50,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound }: DartScoreInputPro
                 onClick={() => onThrow(v, 3)}
                 disabled={isDisabled}
                 title={`Dreifach ${v}`}
-                className="py-2 text-sm font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+                className="py-1.5 text-xs font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
               >
                 T
               </button>
@@ -54,7 +58,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound }: DartScoreInputPro
                 onClick={() => onThrow(v, 2)}
                 disabled={isDisabled}
                 title={`Doppel ${v}`}
-                className="py-2 text-sm font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
+                className="py-1.5 text-xs font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
               >
                 D
               </button>
@@ -71,7 +75,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound }: DartScoreInputPro
           already uses, and cricket's own targetNumber/hitsToAdd math already special-cased
           baseValue===50 to behave identically to 25×2 — so this doesn't change cricket scoring,
           it just makes that special-case dead code (points: 25*2=50, targetNumber: 25 either way). */}
-      <div className="flex gap-2 mb-3">
+      <div className="flex gap-1.5 mb-2">
         {[
           { value: 0, mul: 1 as const, label: "Miss" },
           { value: 25, mul: 1 as const, label: "Bull (25)" },
@@ -81,7 +85,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound }: DartScoreInputPro
             key={target.label}
             onClick={() => onThrow(target.value, target.mul)}
             disabled={isDisabled}
-            className="flex-1 px-3 py-3 rounded-lg text-sm font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40"
+            className="flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40"
           >
             {target.label}
           </button>
