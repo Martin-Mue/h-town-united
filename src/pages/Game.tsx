@@ -1092,6 +1092,52 @@ const GamePage = () => {
       }
     }
 
+    // Round-cap check (X01 only) — mirrors handleX01Throw's own capOutcome computation exactly.
+    // The camera/quick-round path never checked maxRoundsX01 at all: a round-limited leg played
+    // via camera just silently continued past its cap forever, since only manual entry had this.
+    // Skipped once a real checkout or the match itself already decided things above — the cap is
+    // moot once a leg has already ended some other way this same round.
+    let capOutcome: { kind: "tied"; tiedIndexes: number[] } | { kind: "winner"; legWinner: number } | null = null;
+    if (curGame.mode !== "cricket" && !busted && !checkedOut && !curGame.isFinished) {
+      const cap = curGame.maxRoundsX01;
+      if (cap && cap > 0) {
+        const roundsPerPlayer = curGame.players.map((_, i) => Math.ceil(curGame.currentLeg.throws[i].length / 3));
+        const scoreSlotRounds = curGame.currentLeg.remaining.map((_, si) =>
+          Math.max(...roundsPerPlayer.filter((_, i) => teamIndexFor(curGame.teams, i) === si))
+        );
+        if (scoreSlotRounds.every((r) => r >= cap)) {
+          const minRemaining = Math.min(...curGame.currentLeg.remaining);
+          const tied = curGame.currentLeg.remaining.reduce<number[]>((acc, r, i) => (r === minRemaining ? [...acc, i] : acc), []);
+          capOutcome = tied.length > 1 ? { kind: "tied", tiedIndexes: tied } : { kind: "winner", legWinner: tied[0] };
+        }
+      }
+    }
+
+    if (capOutcome?.kind === "winner") {
+      // Same "leg won" treatment the checkout branch above gets, just keyed to the cap's unique
+      // lowest-remaining winner instead of whoever threw the round that happened to reach the cap.
+      const legWinner = capOutcome.legWinner;
+      curGame.currentLeg.winnerIndex = legWinner;
+      curGame.legsWon[legWinner] += 1;
+      const legsToWin = Math.ceil(curGame.bestOfLegs / 2);
+      if (curGame.legsWon[legWinner] >= legsToWin) {
+        curGame.isFinished = true;
+        curGame.winnerName = curGame.teams ? curGame.teams[legWinner].name : curGame.players[legWinner].name;
+        curGame.winnerIndex = legWinner;
+      } else {
+        curGame.completedLegs = [...curGame.completedLegs, curGame.currentLeg];
+        const nextStarter = (curGame.currentLeg.startingPlayerIndex + 1) % n;
+        curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter, curGame.players, curGame.teams);
+        curGame.currentPlayerIndex = nextStarter;
+        curStart = curGame.currentLeg.remaining[teamIndexFor(curGame.teams, nextStarter)];
+        playerAlreadyAdvanced = true;
+      }
+      // Reusing checkedOut (rather than inventing a parallel flag) is deliberate: it's exactly
+      // what drives the "leg just ended" sound/speech/confetti/highlight-clip side effects below,
+      // and handleX01Throw's own cap-winner branch announces itself as checkedOut:true too.
+      checkedOut = true;
+    }
+
     if (!curGame.isFinished) {
       if (!playerAlreadyAdvanced && (busted || curDarts >= 1)) {
         const idx = curGame.currentPlayerIndex;
@@ -1111,6 +1157,10 @@ const GamePage = () => {
     setTurnStartRemaining(curStart);
     setPendingCameraDarts([]);
     flashScore(teamIndexFor(curGame.teams, startIdx));
+    // Cap reached but tied on lowest remaining — same bull-off prompt handleX01Throw raises,
+    // doesn't block the normal player-advance above (matches its behavior: the tie is a
+    // separate blocking prompt, not a reason to leave the turn on the player who just threw).
+    if (capOutcome?.kind === "tied") setPendingTiebreak({ tiedIndexes: capOutcome.tiedIndexes });
 
     // Same "give the player something to actually see" fix as the manual-entry bust path —
     // the camera flow used to rely on playBustSound()/TTS alone too.
