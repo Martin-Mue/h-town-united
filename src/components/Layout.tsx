@@ -1,13 +1,13 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3, UserCog, CloudOff, RefreshCw, Bell, BellOff, Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { useOfflineGameQueue } from "@/hooks/useOfflineGameQueue";
 import { useOfflineMatchResultQueue } from "@/hooks/useOfflineMatchResultQueue";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
 
@@ -23,7 +23,7 @@ const NAV_ITEMS = [
 const Layout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
   const { signOut, user } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const isAdmin = useIsAdmin(user?.id);
   const [signingOut, setSigningOut] = useState(false);
   const gameQueue = useOfflineGameQueue();
   const matchResultQueue = useOfflineMatchResultQueue();
@@ -41,17 +41,6 @@ const Layout = ({ children }: { children: ReactNode }) => {
       setSigningOut(false);
     }
   };
-
-  useEffect(() => {
-    if (!user) return setIsAdmin(false);
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle()
-      .then(({ data }) => setIsAdmin(!!data));
-  }, [user]);
 
   return (
     <div className="h-[100dvh] bg-background flex flex-col relative overflow-hidden">

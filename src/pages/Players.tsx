@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { experienceScore } from "@/utils/dartStats";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -114,16 +116,9 @@ const PlayersPage = () => {
   const { toast } = useToast();
   const { session, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const isAdmin = useIsAdmin(user?.id);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!user) { setIsAdmin(false); return; }
-    supabase.from("user_roles").select("role").eq("user_id", user.id).then(({ data }) => {
-      setIsAdmin(!!data?.some((r) => r.role === "admin"));
-    });
-  }, [user]);
 
   const ownPlayerProfile = useMemo(
     () => players.find((player) => player.user_id === user?.id),
@@ -502,7 +497,7 @@ const PlayersPage = () => {
       { skill: "Average", value: Math.min(Number(selectedPlayer.average), 100) },
       { skill: "Highscore", value: (selectedPlayer.high_score / 180) * 100 },
       { skill: "Siegquote", value: winRate },
-      { skill: "Erfahrung", value: Math.min(selectedPlayer.games_played * 2, 100) },
+      { skill: "Erfahrung", value: experienceScore(selectedPlayer.games_played) },
       { skill: "Doppelquote", value: Number(selectedPlayer.double_rate) },
     ];
 

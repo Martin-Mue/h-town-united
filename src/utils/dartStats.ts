@@ -1,5 +1,15 @@
 import { isCheckoutPossible } from "@/utils/checkoutTable";
 
+/** "Erfahrung" (experience) skill value for a 0-100 radar chart — Players.tsx's own player-
+ *  detail radar and Statistics.tsx's H2H comparison radar independently picked different
+ *  saturation points for the same skill (`*2`, maxing out at 50 games, vs `*5`, at 20), so the
+ *  same player could show a different "Erfahrung" value depending which page you're on. Settled
+ *  on the *2/50-games saturation point — a more meaningful "very experienced" bar for a casual
+ *  club than 20 games, which a regular player reaches within a few weeks. */
+export function experienceScore(gamesPlayed: number): number {
+  return Math.min(gamesPlayed * 2, 100);
+}
+
 export interface DartThrow {
   baseValue: number;
   multiplier: number;

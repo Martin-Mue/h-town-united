@@ -19,9 +19,10 @@ import { Loader2 } from "lucide-react";
 import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import {
   first9Average, average, highestVisit, count180s, computeCheckoutStats, combineCheckoutStats,
-  computeCricketStats, combineCricketStats,
+  computeCricketStats, combineCricketStats, experienceScore,
   type DartThrow, type CheckoutStats, type CricketStats,
 } from "@/utils/dartStats";
+import { highlightKindLabel } from "@/utils/x01Rules";
 import { generateSeasonReportPdf } from "@/utils/seasonReport";
 
 interface GameRecord {
@@ -571,7 +572,7 @@ const StatisticsPage = () => {
         { skill: "Average", p1: Math.min(Number(p1.average), 100), p2: Math.min(Number(p2.average), 100) },
         { skill: "Highscore", p1: (p1.high_score / 180) * 100, p2: (p2.high_score / 180) * 100 },
         { skill: "Siegquote", p1: winRate(p1), p2: winRate(p2) },
-        { skill: "Erfahrung", p1: Math.min(p1.games_played * 5, 100), p2: Math.min(p2.games_played * 5, 100) },
+        { skill: "Erfahrung", p1: experienceScore(p1.games_played), p2: experienceScore(p2.games_played) },
         { skill: "Doppel %", p1: Number(p1.double_rate), p2: Number(p2.double_rate) },
       ],
     };
@@ -689,7 +690,7 @@ const StatisticsPage = () => {
     }
   };
 
-  const clipKindLabel = (kind: string) => kind === "180" ? "🎯 180" : kind === "checkout" ? "🏆 Checkout" : "🔥 Ton+";
+  const clipKindLabel = highlightKindLabel;
 
   const oldClips = useMemo(() => {
     const cutoff = Date.now() - Number(cleanupDays) * 86_400_000;

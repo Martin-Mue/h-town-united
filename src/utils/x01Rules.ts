@@ -38,6 +38,18 @@ export function dartLabel(d: { baseValue: number; multiplier: number }): string 
   return `${prefix}${d.baseValue}`;
 }
 
+/** Emoji+word for a highlight-clip kind — shared between Statistics.tsx's compact history badge
+ *  and ThrowClipDialog.tsx's live celebration banner, which previously worded this independently
+ *  (mismatched punctuation, and a generic "Ton+" where the live banner actually has the real point
+ *  total available and showed it). The 180/checkout wording is now identical either way; ton_plus
+ *  still takes an optional `points` for the live-banner case, where showing the actual number is
+ *  more useful than a generic label — a deliberate difference, not drift. */
+export function highlightKindLabel(kind: string, points?: number): string {
+  if (kind === "180") return "🎯 180";
+  if (kind === "checkout") return "🏆 Checkout";
+  return points !== undefined ? `🔥 ${points} Punkte` : "🔥 Ton+";
+}
+
 /**
  * Standard X01 bust rule, shared by manual entry, camera-detected scoring, and the bot player
  * so the three can never drift out of sync again:

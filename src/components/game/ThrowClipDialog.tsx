@@ -3,7 +3,7 @@ import { Download, Sparkles, Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { DetectedDart } from "@/components/game/LiveCamera";
-import { dartLabel } from "@/utils/x01Rules";
+import { dartLabel, highlightKindLabel } from "@/utils/x01Rules";
 
 export interface ThrowClipPopup {
   url: string;
@@ -55,7 +55,9 @@ const ThrowClipDialog = ({ popup, onClose }: Props) => {
 
         {isHighlight && (
           <div className="mx-4 -mt-1 mb-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-center text-xs font-display uppercase tracking-wider text-accent">
-            {popup.is180 ? "🎯 180!" : popup.isCheckout ? "🏆 Checkout!" : `🔥 ${popup.total} Punkte`}
+            {popup.is180 || popup.isCheckout
+              ? `${highlightKindLabel(popup.is180 ? "180" : "checkout")}!`
+              : highlightKindLabel("ton_plus", popup.total)}
           </div>
         )}
 
