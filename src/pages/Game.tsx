@@ -75,6 +75,68 @@ function createCricketState(numbers: readonly number[] = CRICKET_NUMBERS): Crick
   numbers.forEach((n) => (marks[n] = 0));
   return { marks, points: 0 };
 }
+
+/**
+ * Rebuilds Cricket marks/points from scratch by replaying a leg's throws in true chronological
+ * order. Needed because — unlike X01's `remaining`, a simple running total that reverses cleanly
+ * with `+= removed.points` — Cricket scoring is order-dependent ACROSS players: whether a hit
+ * still scores points depends on whether every opponent has already closed that number, which
+ * depends on the true interleaved throw order, not just this one player's own sequence. deleting
+ * a single throw and only patching that one player's marks/points (the way X01 patches
+ * `remaining`) can't correctly account for numbers that were open when the deleted throw happened
+ * but have since closed, or vice versa.
+ *
+ * `currentLeg.throws` doesn't store a shared timestamp/sequence number across players, but turns
+ * strictly alternate in up-to-3-dart visits starting from `startingPlayerIndex` (see
+ * `currentPlayerIndex`'s own `(idx + 1) % n` advance elsewhere in this file) — enough structure to
+ * reconstruct the true interleaving purely from each player's own already-ordered array: take up
+ * to 3 darts from whoever's turn it is, advance, repeat, skipping (not looping forever on) a
+ * player who's already exhausted their recorded throws for this leg.
+ */
+function replayCricketState(
+  throwsByPlayer: DartThrow[][],
+  startingPlayerIndex: number,
+  teams: TeamSlot[] | undefined,
+  cricketNumbers: readonly number[]
+): CricketPlayerState[] {
+  const n = throwsByPlayer.length;
+  const scoreSlots = teams?.length ?? n;
+  const cricket = Array.from({ length: scoreSlots }, () => createCricketState(cricketNumbers));
+  const cursors = new Array(n).fill(0);
+  let active = startingPlayerIndex;
+  let exhaustedStreak = 0;
+  while (exhaustedStreak < n) {
+    const arr = throwsByPlayer[active];
+    if (cursors[active] >= arr.length) {
+      exhaustedStreak++;
+      active = (active + 1) % n;
+      continue;
+    }
+    exhaustedStreak = 0;
+    const take = Math.min(3, arr.length - cursors[active]);
+    const teamIdx = teamIndexFor(teams, active);
+    const myState = cricket[teamIdx];
+    for (let i = 0; i < take; i++) {
+      const d = arr[cursors[active] + i];
+      const others = cricket.filter((_, j) => j !== teamIdx);
+      const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
+      if ((cricketNumbers as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
+        const hitsToAdd = d.baseValue === 50 ? 2 : d.multiplier;
+        const currentMarks = myState.marks[targetNumber] || 0;
+        const newMarks = currentMarks + hitsToAdd;
+        myState.marks = { ...myState.marks, [targetNumber]: newMarks };
+        const stillOpenForSomeoneElse = others.some((o) => (o.marks[targetNumber] || 0) < 3);
+        if (newMarks > 3 && stillOpenForSomeoneElse) {
+          const scorableHits = newMarks - Math.max(currentMarks, 3);
+          myState.points += targetNumber * scorableHits;
+        }
+      }
+    }
+    cursors[active] += take;
+    active = (active + 1) % n;
+  }
+  return cricket;
+}
 /** 6 unique random numbers (1-20) plus Bull, freshly rolled — never memoized/cached across games. */
 function generateRandomCricketNumbers(): number[] {
   const pool = Array.from({ length: 20 }, (_, i) => i + 1);
@@ -1254,6 +1316,15 @@ const GamePage = () => {
       const removed = throws.splice(throwIndex, 1)[0];
       const updatedLeg: LegState = { ...prev.currentLeg, throws: [...prev.currentLeg.throws], remaining: [...prev.currentLeg.remaining] };
       updatedLeg.throws[playerIdx] = throws;
+      if (prev.mode === "cricket") {
+        // Cricket's marks/points can't be patched incrementally the way X01's remaining is
+        // below — whether a hit still scored points depended on whether every opponent had
+        // already closed that number AT THE TIME, which a simple point reversal can't undo
+        // correctly. Replay the whole leg from scratch instead — see replayCricketState's own
+        // comment for why this is a correctness requirement, not just thoroughness.
+        const cricket = replayCricketState(updatedLeg.throws, prev.currentLeg.startingPlayerIndex, prev.teams, prev.cricketNumbers ?? CRICKET_NUMBERS);
+        return { ...prev, currentLeg: updatedLeg, cricket };
+      }
       updatedLeg.remaining[teamIndexFor(prev.teams, playerIdx)] += removed.points;
       return { ...prev, currentLeg: updatedLeg };
     });
