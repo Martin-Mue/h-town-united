@@ -236,36 +236,52 @@ const StatisticsPage = () => {
   // Season/filter-aware leaderboard stats — built from game_legs (covers every player,
   // not just the top-2 tracked on the `games` row) so a season/year filter actually
   // changes the leaderboard instead of always showing lifetime totals.
+  //
+  // Two bugs fixed here: (1) missing the same "skip Cricket" guard advancedByPlayer has just
+  // above — Cricket has no checkout, and gameSync.ts deliberately zeroes double_rate for it, so
+  // pooling Cricket legs into a checkout/average stat was always wrong, not a design choice.
+  // (2) average/double_rate were pooling every dart across EVERY game a player has, which
+  // implicitly weights the result by how many darts/legs each game happened to take — different
+  // from (and generally disagreeing with) the lifetime players.average/double_rate convention
+  // (gameSync.ts's incremental update), which is a MEAN of each game's own average, every game
+  // counted equally. That mismatch meant a player's displayed Average/Doppel% could visibly jump
+  // the instant any filter went from "off" (lifetime figures) to "on" (this computation) — a
+  // pure formula swap, not a reflection of the underlying games actually changing. Now grouped
+  // by game first (pooling only WITHIN a game's own legs, same as gameSync.ts does), then
+  // averaged across games, so both paths agree.
   const filteredPlayerStats = useMemo(() => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const modeById = new Map(games.map((g) => [g.id, g.mode]));
     const winsByPlayer: Record<string, number> = {};
     filteredGames.forEach((g) => { if (g.winner_id) winsByPlayer[g.winner_id] = (winsByPlayer[g.winner_id] || 0) + 1; });
-    const byPlayer: Record<string, { name: string; gameIds: Set<string>; throws: DartThrow[]; highScore: number; checkouts: CheckoutStats[] }> = {};
+    const byPlayer: Record<string, { name: string; gameThrows: Record<string, DartThrow[]>; highScore: number; gameCheckouts: Record<string, CheckoutStats[]> }> = {};
     gameLegs.forEach((leg) => {
       if (!filteredIds.has(leg.game_id) || !leg.player_id || !Array.isArray(leg.throws)) return;
-      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, gameIds: new Set(), throws: [], highScore: 0, checkouts: [] });
-      bucket.gameIds.add(leg.game_id);
-      bucket.throws.push(...leg.throws);
+      if (modeById.get(leg.game_id) === "cricket") return;
+      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, gameThrows: {}, highScore: 0, gameCheckouts: {} });
+      (bucket.gameThrows[leg.game_id] ||= []).push(...leg.throws);
       bucket.highScore = Math.max(bucket.highScore, highestVisit(leg.throws));
-      bucket.checkouts.push(computeCheckoutStats(leg.throws, leg.starting_score));
+      (bucket.gameCheckouts[leg.game_id] ||= []).push(computeCheckoutStats(leg.throws, leg.starting_score));
     });
+    const mean = (nums: number[]) => (nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0);
     const result: Record<string, PlayerStats> = {};
     Object.entries(byPlayer).forEach(([id, v]) => {
       const club = players.find((p) => p.id === id);
+      const gameIds = Object.keys(v.gameThrows);
       result[id] = {
         id, name: v.name, emoji: club?.emoji || "🎯",
-        games_played: v.gameIds.size,
+        games_played: gameIds.length,
         games_won: winsByPlayer[id] || 0,
-        average: average(v.throws),
+        average: mean(gameIds.map((gid) => average(v.gameThrows[gid]))),
         high_score: v.highScore,
-        double_rate: combineCheckoutStats(v.checkouts).percentage,
+        double_rate: mean(gameIds.map((gid) => combineCheckoutStats(v.gameCheckouts[gid]).percentage)),
         // Elo is a running lifetime rating, not something meaningful to recompute for a
         // filtered date range, so filtered leaderboards still show the current rating.
         elo_rating: club?.elo_rating,
       };
     });
     return result;
-  }, [gameLegs, filteredGames, players]);
+  }, [gameLegs, filteredGames, games, players]);
 
   const bestCheckoutRate = useMemo(() => {
     return Object.values(advancedByPlayer)
