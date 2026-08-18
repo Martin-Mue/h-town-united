@@ -53,6 +53,9 @@ const WALKON_PREF_KEY = "dart-walkon-enabled";
 /** How long the walk-on intro stays up before auto-advancing (ms) — also the window
  *  during which a tap skips straight to the match. */
 const WALKON_DURATION_MS = 3200;
+/** How long the follow-up stat-comparison screen stays up (ms) — longer than the walk-on
+ *  card itself since there's actually something to read this time. */
+const STATS_DURATION_MS = 4500;
 const MAX_PLAYERS = 8;
 
 function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, players: PlayerSlot[], teams?: TeamSlot[]): LegState {
@@ -128,7 +131,7 @@ function clearActiveGameSnapshot() {
 }
 
 const GamePage = () => {
-  const [phase, setPhase] = useState<"setup" | "warmup" | "walkon" | "playing" | "postGame">(() =>
+  const [phase, setPhase] = useState<"setup" | "warmup" | "walkon" | "stats" | "playing" | "postGame">(() =>
     loadActiveGameSnapshot() ? "playing" : "setup"
   );
   const [mode, setMode] = useState<GameMode>("501");
@@ -412,6 +415,15 @@ const GamePage = () => {
     });
   };
 
+  // Whether the follow-up stat-comparison screen (see the "stats" phase render below) has
+  // anything worth showing — a real (non-team) 1v1 where at least one side matches a roster
+  // player. Bot games, guest-vs-guest test rounds, and team matches skip straight from the
+  // walk-on card to play, same as before this screen existed.
+  const walkonHasStats = (g: GameState | null): boolean => {
+    if (!g || g.teams || g.players.length !== 2) return false;
+    return !!matchClubPlayer(dbPlayers, g.players[0].name) || !!matchClubPlayer(dbPlayers, g.players[1].name);
+  };
+
   const startGame = () => {
     const startScore = getStartScore();
     const n = numPlayers;
@@ -485,7 +497,14 @@ const GamePage = () => {
   useEffect(() => {
     if (phase !== "walkon") return;
     if (soundEnabled) playWalkonSound();
-    const t = setTimeout(() => setPhase("playing"), WALKON_DURATION_MS);
+    const t = setTimeout(() => setPhase(walkonHasStats(game) ? "stats" : "playing"), WALKON_DURATION_MS);
+    return () => clearTimeout(t);
+  }, [phase]);
+
+  // ─── stat-comparison screen (second walk-on beat) ────────────────────
+  useEffect(() => {
+    if (phase !== "stats") return;
+    const t = setTimeout(() => setPhase("playing"), STATS_DURATION_MS);
     return () => clearTimeout(t);
   }, [phase]);
 
@@ -1765,21 +1784,9 @@ const GamePage = () => {
   if (phase === "walkon" && game) {
     const names = game.teams ? game.teams.map((t) => t.name) : game.players.map((p) => p.name);
     const isDuel = names.length === 2;
-    // Only real roster players carry a stat line — bots and freely-typed guest names (the
-    // "Spieler 1"/"Spieler 2" defaults) have no club history to show and are silently skipped.
-    const walkonStat = (name: string) => {
-      const p = matchClubPlayer(dbPlayers, name);
-      if (!p) return null;
-      const winRate = p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
-      return (
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-          Ø {Number(p.average).toFixed(1)} · {winRate}% Siege · Elo {Math.round(p.elo_rating)}
-        </p>
-      );
-    };
     return (
       <div
-        onClick={() => setPhase("playing")}
+        onClick={() => setPhase(walkonHasStats(game) ? "stats" : "playing")}
         className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-6 cursor-pointer overflow-hidden"
       >
         <div className="absolute inset-0 gradient-hero" />
@@ -1788,48 +1795,93 @@ const GamePage = () => {
         </p>
         {isDuel ? (
           <div className="relative flex flex-col items-center gap-3 w-full max-w-md">
-            <div className="flex flex-col items-center gap-1">
-              <h2 className="font-display text-4xl sm:text-5xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full">
-                {names[0]}
-              </h2>
-              {walkonStat(names[0])}
-            </div>
+            <h2 className="font-display text-4xl sm:text-5xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full">
+              {names[0]}
+            </h2>
             <span className="font-display text-lg text-accent animate-scale-in" style={{ animationDelay: "150ms" }}>VS</span>
-            <div className="flex flex-col items-center gap-1">
-              <h2
-                className="font-display text-4xl sm:text-5xl uppercase text-secondary text-center glow-green animate-scale-in truncate max-w-full"
-                style={{ animationDelay: "300ms" }}
-              >
-                {names[1]}
-              </h2>
-              {walkonStat(names[1])}
-            </div>
-            {walkonH2H && (
-              <p className="relative text-xs uppercase tracking-widest text-accent mt-1 animate-slide-up">
-                {walkonH2H.total > 0
-                  ? `Bisher gegeneinander: ${walkonH2H.aWins} : ${walkonH2H.bWins} (${walkonH2H.total} Spiele)`
-                  : "Erstes Aufeinandertreffen"}
-              </p>
-            )}
+            <h2
+              className="font-display text-4xl sm:text-5xl uppercase text-secondary text-center glow-green animate-scale-in truncate max-w-full"
+              style={{ animationDelay: "300ms" }}
+            >
+              {names[1]}
+            </h2>
           </div>
         ) : (
           <div className="relative flex flex-col items-center gap-2 w-full max-w-md">
             <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Es spielen</p>
             {names.map((name, i) => (
-              <div key={i} className="flex flex-col items-center gap-0.5">
-                <h2
-                  className="font-display text-2xl sm:text-3xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full"
-                  style={{ animationDelay: `${i * 120}ms` }}
-                >
-                  {name}
-                </h2>
-                {walkonStat(name)}
-              </div>
+              <h2
+                key={i}
+                className="font-display text-2xl sm:text-3xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full"
+                style={{ animationDelay: `${i * 120}ms` }}
+              >
+                {name}
+              </h2>
             ))}
           </div>
         )}
         <p className="relative text-[10px] uppercase tracking-widest text-muted-foreground mt-8 animate-slide-up" style={{ animationDelay: "400ms" }}>
           Antippen zum Überspringen
+        </p>
+      </div>
+    );
+  }
+
+  // Second walk-on beat, right after the name/VS card — only for a real (non-team) 1v1 where at
+  // least one side has club history to show (see walkonHasStats). Big, high-contrast, explicitly
+  // labeled per player instead of the easy-to-miss caption this replaced (see commit history):
+  // a screen meant to be glanced at from across a table needs numbers you can read at a glance,
+  // not a footnote.
+  if (phase === "stats" && game) {
+    const names = game.players.map((p) => p.name);
+    const a = matchClubPlayer(dbPlayers, names[0]);
+    const b = matchClubPlayer(dbPlayers, names[1]);
+    const statRow = (label: string, value: string) => (
+      <div className="flex flex-col items-center">
+        <p className="font-display text-3xl sm:text-4xl">{value}</p>
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
+      </div>
+    );
+    const playerColumn = (name: string, p: ClubPlayer | undefined, nameClass: string) => (
+      <div className="flex-1 flex flex-col items-center gap-5 min-w-0">
+        <h3 className={`font-display text-lg sm:text-2xl uppercase text-center truncate max-w-full ${nameClass}`}>{name}</h3>
+        {p ? (
+          <div className="flex flex-col gap-5 w-full items-center">
+            {statRow("Average", Number(p.average).toFixed(1))}
+            {statRow("Siege", `${p.games_won}/${p.games_played}`)}
+            {statRow("Elo", String(Math.round(p.elo_rating)))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">Kein Profil</p>
+        )}
+      </div>
+    );
+    return (
+      <div
+        onClick={() => setPhase("playing")}
+        className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-4 cursor-pointer overflow-hidden"
+      >
+        <div className="absolute inset-0 gradient-hero" />
+        <p className="relative text-[11px] uppercase tracking-[0.4em] text-muted-foreground mb-8 animate-slide-up">
+          Statistik-Vergleich
+        </p>
+        <div className="relative flex items-start justify-center gap-4 sm:gap-10 w-full max-w-lg animate-scale-in">
+          {playerColumn(names[0], a, "text-primary glow-cyan")}
+          <span className="font-display text-xl text-accent pt-1">VS</span>
+          {playerColumn(names[1], b, "text-secondary glow-green")}
+        </div>
+        {walkonH2H && (
+          <div className="relative mt-10 text-center animate-slide-up">
+            <p className="font-display text-3xl uppercase text-accent">
+              {walkonH2H.total > 0 ? `${walkonH2H.aWins} : ${walkonH2H.bWins}` : "Erstes Mal"}
+            </p>
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
+              {walkonH2H.total > 0 ? `Bisher gegeneinander · ${walkonH2H.total} Spiele` : "Erstes Aufeinandertreffen"}
+            </p>
+          </div>
+        )}
+        <p className="relative text-[10px] uppercase tracking-widest text-muted-foreground mt-10 animate-slide-up">
+          Antippen zum Start
         </p>
       </div>
     );
