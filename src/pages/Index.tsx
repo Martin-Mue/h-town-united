@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Target, Users, Trophy, Medal, Dumbbell, BarChart3 } from "lucide-react";
+import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, Crosshair } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { computeClubActivity, type ActivityEvent, type ActivityLegRow } from "@/utils/clubActivity";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem-color.png";
+
+const EVENT_ICON: Record<ActivityEvent["type"], typeof Target> = {
+  "180": Target,
+  pb_average: TrendingUp,
+  pb_checkout: Crosshair,
+  win_streak: Flame,
+};
 
 const QUICK_ACTIONS = [
   { to: "/game", label: "Neues Spiel", desc: "501 · 301 · Cricket", icon: Target },
@@ -25,6 +33,7 @@ interface RecentGame {
 
 const DashboardPage = () => {
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -36,6 +45,21 @@ const DashboardPage = () => {
       if (data) setRecentGames(data);
     };
     load();
+
+    // Club activity feed: processes the whole game/leg history chronologically (to track each
+    // player's real personal bests correctly) but only ever DISPLAYS the recent window — see
+    // computeClubActivity's own doc comment. Small club, small data (tens of games/legs total),
+    // so fetching everything here is simpler and fast enough rather than a windowed query.
+    const loadActivity = async () => {
+      const [{ data: games }, { data: legs }] = await Promise.all([
+        supabase.from("games").select("id, player1_id, player2_id, player1_name, player2_name, player1_average, player2_average, winner_id, played_at"),
+        supabase.from("game_legs").select("game_id, player_id, player_name, throws, starting_score, won"),
+      ]);
+      if (games && legs) {
+        setActivity(computeClubActivity(games, legs as unknown as ActivityLegRow[], 14).slice(0, 8));
+      }
+    };
+    loadActivity();
   }, []);
 
   const formatDate = (iso: string) => {
@@ -97,6 +121,34 @@ const DashboardPage = () => {
           </Link>
         ))}
       </div>
+
+      {/* Club activity feed — notable moments (180s, personal bests, win streaks) from the last
+          14 days, derived from data that already exists (see clubActivity.ts). Only shown once
+          there's something to show — an empty feed would just be noise between the quick
+          actions and the always-present recent-games list below. */}
+      {activity.length > 0 && (
+        <>
+          <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
+            <Flame className="w-3.5 h-3.5 text-accent" /> Was war los?
+          </h2>
+          <div className="space-y-2 mb-6">
+            {activity.map((e) => {
+              const Icon = EVENT_ICON[e.type];
+              return (
+                <div key={e.id} className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm truncate"><span className="font-semibold">{e.playerName}</span> · {e.detail}</p>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{formatDate(e.playedAt)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* Recent games feed */}
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">Letzte Spiele</h2>
