@@ -103,7 +103,7 @@ export async function generateSeasonReportPdf(data: SeasonReportData): Promise<v
   autoTable(doc, {
     startY: 64,
     margin: { left: margin, right: margin },
-    head: [["#", "Name", "Spiele", "Siege", "Punkte", "Elo", "Ø Average", "Highscore", "Doppel %"]],
+    head: [["#", "Name", "Spiele", "Siege", "Punkte", "Elo", "Ø Average", "Highscore", "Checkout %"]],
     body: data.leaderboard.map((r) => [
       String(r.rank), r.name, String(r.gamesPlayed), String(r.gamesWon), String(r.points),
       String(r.elo), r.average.toFixed(1), String(r.highScore), `${r.doubleRate.toFixed(0)}%`,

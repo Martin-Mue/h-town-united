@@ -82,7 +82,7 @@ const StatisticsPage = () => {
   const [cleaningUpClips, setCleaningUpClips] = useState(false);
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "double_rate" | "win_rate" | "checkout" | "points" | "elo">("average");
+  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo">("average");
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
@@ -366,16 +366,15 @@ const StatisticsPage = () => {
         return (advancedByPlayer[b.id]?.checkout.percentage ?? 0) - (advancedByPlayer[a.id]?.checkout.percentage ?? 0);
       }
       if (sortBy === "points") return b.games_won * 2 - a.games_won * 2;
-      if (sortBy === "elo") return (b.elo_rating ?? 1000) - (a.elo_rating ?? 1000);
-      return Number(b.double_rate) - Number(a.double_rate);
+      return (b.elo_rating ?? 1000) - (a.elo_rating ?? 1000); // sortBy === "elo", the only remaining case
     });
   }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive]);
 
   const exportLeaderboardCsv = () => {
-    const header = ["Platz", "Name", "Spiele", "Siege", "Punkte", "Elo", "Average", "Highscore", "Doppel %"];
+    const header = ["Platz", "Name", "Spiele", "Siege", "Punkte", "Elo", "Average", "Highscore", "Checkout %"];
     const rows = leaderboard.map((p, i) => [
       i + 1, p.name, p.games_played, p.games_won, p.games_won * 2, p.elo_rating ?? 1000,
-      Number(p.average).toFixed(1), p.high_score, Number(p.double_rate).toFixed(0),
+      Number(p.average).toFixed(1), p.high_score, (advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0),
     ]);
     const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
     const blob = new Blob([String.fromCharCode(0xFEFF) + csv], { type: "text/csv;charset=utf-8" });
@@ -409,7 +408,8 @@ const StatisticsPage = () => {
       leaderboard: leaderboard.map((p, i) => ({
         rank: i + 1, name: p.name, gamesPlayed: p.games_played, gamesWon: p.games_won,
         points: p.games_won * 2, elo: Math.round(p.elo_rating ?? 1000),
-        average: Number(p.average), highScore: p.high_score, doubleRate: Number(p.double_rate),
+        average: Number(p.average), highScore: p.high_score,
+        doubleRate: advancedByPlayer[p.id]?.checkout.percentage ?? 0,
       })),
     });
   };
@@ -573,7 +573,7 @@ const StatisticsPage = () => {
         { skill: "Highscore", p1: (p1.high_score / 180) * 100, p2: (p2.high_score / 180) * 100 },
         { skill: "Siegquote", p1: winRate(p1), p2: winRate(p2) },
         { skill: "Erfahrung", p1: experienceScore(p1.games_played), p2: experienceScore(p2.games_played) },
-        { skill: "Doppel %", p1: Number(p1.double_rate), p2: Number(p2.double_rate) },
+        { skill: "Checkout %", p1: Number(p1.double_rate), p2: Number(p2.double_rate) },
       ],
     };
   }, [compareP1, compareP2, players, filteredGames]);
@@ -997,7 +997,6 @@ const StatisticsPage = () => {
                     <SelectItem value="games_won">Siege</SelectItem>
                     <SelectItem value="win_rate">Siegquote %</SelectItem>
                     <SelectItem value="high_score">Highscore</SelectItem>
-                    <SelectItem value="double_rate">Doppel %</SelectItem>
                     <SelectItem value="checkout">Checkout %</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1022,8 +1021,7 @@ const StatisticsPage = () => {
                     sortBy === "win_rate" ? `${winRate}%` :
                     sortBy === "checkout" ? `${(advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0)}%` :
                     sortBy === "points" ? `${p.games_won * 2} Pkt` :
-                    sortBy === "elo" ? Math.round(p.elo_rating ?? 1000) :
-                    `${Number(p.double_rate).toFixed(0)}%`;
+                    Math.round(p.elo_rating ?? 1000); // sortBy === "elo", the only remaining case
                   return (
                     <button key={p.id} onClick={() => { setSelectedPlayerId(p.id); setActiveTab("players"); }}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-muted/80 ${i < 3 ? "bg-muted/50" : ""}`}>
@@ -1338,7 +1336,7 @@ const StatisticsPage = () => {
                       { label: "Highscore", v1: h2hRecords.p1.high_score, v2: h2hRecords.p2.high_score },
                       { label: "Beste Game-Ø", v1: h2hRecords.p1HighestAvg, v2: h2hRecords.p2HighestAvg },
                       { label: "Siege", v1: h2hRecords.p1.games_won, v2: h2hRecords.p2.games_won },
-                      { label: "Doppel %", v1: `${Number(h2hRecords.p1.double_rate).toFixed(0)}%`, v2: `${Number(h2hRecords.p2.double_rate).toFixed(0)}%` },
+                      { label: "Checkout %", v1: `${Number(h2hRecords.p1.double_rate).toFixed(0)}%`, v2: `${Number(h2hRecords.p2.double_rate).toFixed(0)}%` },
                     ].map(row => (
                       <React.Fragment key={row.label}>
                         <div className="font-display text-sm">{row.v1}</div>
