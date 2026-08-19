@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, Crosshair } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { computeClubActivity, type ActivityEvent, type ActivityLegRow } from "@/utils/clubActivity";
+import { computeClubActivity, type ActivityEvent, type ActivityLegRow, type ActivityTranslator } from "@/utils/clubActivity";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { usePagedList } from "@/hooks/usePagedList";
@@ -57,17 +57,30 @@ const DashboardPage = () => {
     // player's real personal bests correctly) but only ever DISPLAYS the recent window — see
     // computeClubActivity's own doc comment. Small club, small data (tens of games/legs total),
     // so fetching everything here is simpler and fast enough rather than a windowed query.
+    // `detail` strings come back already formatted in the active language (see the translator
+    // built below) — re-running this on a language change is what keeps them in sync; there's no
+    // separate re-render path for text baked into already-fetched state like this.
+    const translator: ActivityTranslator = {
+      oneEighty: (count) => (count > 1 ? `${count}${t("activity.oneEightyMulti")}` : t("activity.oneEighty")),
+      newAverageRecord: (avg) => `${t("activity.newAverageRecord")} ${avg}`,
+      newBestFinish: (checkout) => `${t("activity.newBestFinish")} ${checkout}`,
+      winStreak: (streak) => `${streak} ${t("activity.winStreak")}`,
+    };
     const loadActivity = async () => {
       const [{ data: games }, { data: legs }] = await Promise.all([
         supabase.from("games").select("id, player1_id, player2_id, player1_name, player2_name, player1_average, player2_average, winner_id, played_at"),
         supabase.from("game_legs").select("game_id, player_id, player_name, throws, starting_score, won"),
       ]);
       if (games && legs) {
-        setActivity(computeClubActivity(games, legs as unknown as ActivityLegRow[], 14));
+        setActivity(computeClubActivity(games, legs as unknown as ActivityLegRow[], 14, translator));
       }
     };
     loadActivity();
-  }, []);
+    // `language` (not `t`) is the real dependency — `t` is a fresh closure every render (see
+    // LanguageContext), so listing it would refetch on every render instead of only when the
+    // language actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);

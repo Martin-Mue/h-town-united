@@ -34,6 +34,24 @@ export interface ActivityEvent {
 const MIN_GAMES_FOR_PB = 3;
 const STREAK_MILESTONES = [3, 5, 7, 10, 15, 20];
 
+/** Builds the fixed wording of each event's `detail` string — defaults to the original German
+ *  text (kept as the default so existing callers/tests don't need to pass anything), but
+ *  Index.tsx passes one built from useLanguage()'s t() so the feed matches the active language.
+ *  Numbers stay interpolated the same way regardless of which translator is used. */
+export interface ActivityTranslator {
+  oneEighty: (count: number) => string;
+  newAverageRecord: (avg: string) => string;
+  newBestFinish: (checkout: number) => string;
+  winStreak: (streak: number) => string;
+}
+
+const DEFAULT_TRANSLATOR: ActivityTranslator = {
+  oneEighty: (count) => (count > 1 ? `${count}× 180!` : "180!"),
+  newAverageRecord: (avg) => `Neue Bestmarke: Ø ${avg}`,
+  newBestFinish: (checkout) => `Neues bestes Finish: ${checkout}`,
+  winStreak: (streak) => `${streak} Siege in Folge!`,
+};
+
 /**
  * Derives a recency-ordered feed of club-wide notable moments (180s, new personal-best average
  * or checkout, win-streak milestones) purely from data that already exists — no new table, no
@@ -42,7 +60,12 @@ const STREAK_MILESTONES = [3, 5, 7, 10, 15, 20];
  * within `windowDays` of now, so a player's very first-ever "personal best" (there being no prior
  * game to compare against) never shows up as a fake milestone.
  */
-export function computeClubActivity(games: ActivityGameRow[], legs: ActivityLegRow[], windowDays = 14): ActivityEvent[] {
+export function computeClubActivity(
+  games: ActivityGameRow[],
+  legs: ActivityLegRow[],
+  windowDays = 14,
+  translator: ActivityTranslator = DEFAULT_TRANSLATOR,
+): ActivityEvent[] {
   const events: ActivityEvent[] = [];
   const sortedGames = [...games].sort((a, b) => new Date(a.played_at).getTime() - new Date(b.played_at).getTime());
   const cutoff = Date.now() - windowDays * 86_400_000;
@@ -74,7 +97,7 @@ export function computeClubActivity(games: ActivityGameRow[], legs: ActivityLegR
       const isNewBestAvg = prevBest === undefined || side.avg > prevBest;
       if (isNewBestAvg) {
         if (isRecent && prevBest !== undefined && gp > MIN_GAMES_FOR_PB) {
-          events.push({ id: `pb-avg-${g.id}-${side.id}`, type: "pb_average", playerName: side.name, playedAt: g.played_at, detail: `Neue Bestmarke: Ø ${side.avg.toFixed(1)}` });
+          events.push({ id: `pb-avg-${g.id}-${side.id}`, type: "pb_average", playerName: side.name, playedAt: g.played_at, detail: translator.newAverageRecord(side.avg.toFixed(1)) });
         }
         bestAvg.set(side.id, side.avg);
       }
@@ -83,7 +106,7 @@ export function computeClubActivity(games: ActivityGameRow[], legs: ActivityLegR
       const streak = won ? (currentStreak.get(side.id) ?? 0) + 1 : 0;
       currentStreak.set(side.id, streak);
       if (isRecent && won && STREAK_MILESTONES.includes(streak)) {
-        events.push({ id: `streak-${g.id}-${side.id}`, type: "win_streak", playerName: side.name, playedAt: g.played_at, detail: `${streak} Siege in Folge!` });
+        events.push({ id: `streak-${g.id}-${side.id}`, type: "win_streak", playerName: side.name, playedAt: g.played_at, detail: translator.winStreak(streak) });
       }
     }
 
@@ -99,7 +122,7 @@ export function computeClubActivity(games: ActivityGameRow[], legs: ActivityLegR
           type: "180",
           playerName: leg.player_name,
           playedAt: g.played_at,
-          detail: n180 > 1 ? `${n180}× 180!` : "180!",
+          detail: translator.oneEighty(n180),
         });
       }
 
@@ -109,7 +132,7 @@ export function computeClubActivity(games: ActivityGameRow[], legs: ActivityLegR
         const isNewBestCo = checkout > 0 && (prevBestCo === undefined || checkout > prevBestCo);
         if (isNewBestCo) {
           if (isRecent && prevBestCo !== undefined && prevBestCo > 0) {
-            events.push({ id: `pb-co-${g.id}-${leg.player_id}`, type: "pb_checkout", playerName: leg.player_name, playedAt: g.played_at, detail: `Neues bestes Finish: ${checkout}` });
+            events.push({ id: `pb-co-${g.id}-${leg.player_id}`, type: "pb_checkout", playerName: leg.player_name, playedAt: g.played_at, detail: translator.newBestFinish(checkout) });
           }
           bestCheckout.set(leg.player_id, checkout);
         }
