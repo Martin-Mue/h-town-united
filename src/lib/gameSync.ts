@@ -55,15 +55,37 @@ export async function saveGameRecord(
   // multiplayer game's deltas are all computed against the SAME starting ratings regardless
   // of which player's DB row happens to get updated first below. Team games are excluded —
   // see computeEloDeltas.
-  const eloParticipants: EloParticipant[] = [];
+  //
+  // Ranked by legsWon (the real signal across multi-leg matches) first, then a same-leg
+  // tiebreak for whoever's still tied — which in practice is almost everyone whenever
+  // bestOfLegs is 1, since every non-winner then sits at legsWon=0 with nothing else to go on.
+  // X01 tiebreaks by how close to zero they got (currentLeg.remaining); Cricket has no
+  // "remaining" so uses points instead (higher = better, hence the negation to sort ascending
+  // like the X01 case). Bots and unmatched guest names are filtered out BEFORE ranking, not
+  // just before scoring — a human placing behind a bot still ranks #1 among the humans, since
+  // Elo only ever measures human-vs-human standing, same as the old isWinner-only model did.
+  const eloTiebreak = (i: number) =>
+    game.mode === "cricket" ? -(game.cricket?.[i]?.points ?? 0) : (game.currentLeg.remaining[i] ?? Infinity);
+  const eloCandidates: { i: number; id: string; rating: number }[] = [];
   if (!game.teams) {
     for (let i = 0; i < n; i++) {
       if (game.players[i].isBot) continue;
       const match = findDbPlayer(game.players[i].name);
       if (!match) continue;
-      eloParticipants.push({ id: match.id, rating: Number(match.elo_rating) || 1000, isWinner: game.winnerIndex === i });
+      eloCandidates.push({ i, id: match.id, rating: Number(match.elo_rating) || 1000 });
     }
   }
+  eloCandidates.sort((a, b) => game.legsWon[b.i] - game.legsWon[a.i] || eloTiebreak(a.i) - eloTiebreak(b.i));
+  const eloParticipants: EloParticipant[] = [];
+  let eloRank = 1;
+  eloCandidates.forEach((c, k) => {
+    if (k > 0) {
+      const prev = eloCandidates[k - 1];
+      const tied = game.legsWon[prev.i] === game.legsWon[c.i] && eloTiebreak(prev.i) === eloTiebreak(c.i);
+      if (!tied) eloRank = k + 1;
+    }
+    eloParticipants.push({ id: c.id, rating: c.rating, rank: eloRank });
+  });
   const eloDeltas = computeEloDeltas(eloParticipants);
   const p1Match = findDbPlayer(game.players[top1].name);
   const p2Match = top2 !== undefined ? findDbPlayer(game.players[top2].name) : undefined;
