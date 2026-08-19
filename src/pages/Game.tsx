@@ -78,6 +78,66 @@ function createCricketState(numbers: readonly number[] = CRICKET_NUMBERS): Crick
 }
 
 /**
+ * Applies a decided leg win (`winnerIndex`, a score-slot index — teamIdx-space, matching
+ * `legsWon`/`currentLeg.remaining`) on top of `base` — either finishes the match (bestOfLegs
+ * reached) or archives the leg and starts the next one via createLegState. `updatedLeg` is the
+ * caller's own already-prepared current leg (with the deciding dart/state applied, if any);
+ * `base` and `prev` are usually the same object — `base` only needs to differ when a caller has
+ * its own extra fields to preserve in the non-finished branch (e.g. handleX01Throw's round-cap
+ * path, which pre-sets a default `currentPlayerIndex` before knowing whether the cap ended the
+ * leg). Shared by every place an X01 leg can end: a checkout, the maxRoundsX01 cap resolving to a
+ * unique winner, and a bull-off tiebreak resolving a cap-tied leg — previously reimplemented at
+ * each site (Game.tsx's own duplication tracking flagged this as the likely next source of a
+ * fixed-in-one-path-forgotten-in-the-other bug).
+ */
+function applyLegWin(base: GameState, prev: GameState, updatedLeg: LegState, winnerIndex: number): GameState {
+  const n = prev.players.length;
+  const legsWon = [...prev.legsWon];
+  legsWon[winnerIndex] += 1;
+  const legsToWin = Math.ceil(prev.bestOfLegs / 2);
+  const finishedLeg: LegState = { ...updatedLeg, winnerIndex };
+  if (legsWon[winnerIndex] >= legsToWin) {
+    return {
+      ...base,
+      currentLeg: finishedLeg,
+      legsWon,
+      isFinished: true,
+      winnerName: prev.teams ? prev.teams[winnerIndex].name : prev.players[winnerIndex].name,
+      winnerIndex,
+    };
+  }
+  const nextStarter = (finishedLeg.startingPlayerIndex + 1) % n;
+  return {
+    ...base,
+    legsWon,
+    completedLegs: [...prev.completedLegs, finishedLeg],
+    currentLeg: createLegState(finishedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams),
+    currentPlayerIndex: nextStarter,
+  };
+}
+
+/**
+ * Applies one Cricket dart's marks/points to `myState` (the throwing player/team's own
+ * CricketPlayerState) in place — mutates `myState.marks`/`myState.points` directly, matching the
+ * "already-cloned, safe to mutate" convention every call site already uses for its own working
+ * copy. Shared by the three places a Cricket dart's marks get computed: a live manual/bot throw,
+ * a camera-detected round, and replaying a whole leg from scratch after a mid-leg delete —
+ * previously reimplemented identically at each site.
+ */
+function applyCricketDart(myState: CricketPlayerState, others: CricketPlayerState[], cricketNumbers: readonly number[], targetNumber: number, baseValue: number, multiplier: number): void {
+  if (!cricketNumbers.includes(targetNumber) || targetNumber === 0) return;
+  const hitsToAdd = baseValue === 50 ? 2 : multiplier;
+  const currentMarks = myState.marks[targetNumber] || 0;
+  const newMarks = currentMarks + hitsToAdd;
+  myState.marks = { ...myState.marks, [targetNumber]: newMarks };
+  const stillOpenForSomeoneElse = others.some((o) => (o.marks[targetNumber] || 0) < 3);
+  if (newMarks > 3 && stillOpenForSomeoneElse) {
+    const scorableHits = newMarks - Math.max(currentMarks, 3);
+    myState.points += targetNumber * scorableHits;
+  }
+}
+
+/**
  * Rebuilds Cricket marks/points from scratch by replaying a leg's throws in true chronological
  * order. Needed because — unlike X01's `remaining`, a simple running total that reverses cleanly
  * with `+= removed.points` — Cricket scoring is order-dependent ACROSS players: whether a hit
@@ -121,17 +181,7 @@ function replayCricketState(
       const d = arr[cursors[active] + i];
       const others = cricket.filter((_, j) => j !== teamIdx);
       const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
-      if ((cricketNumbers as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
-        const hitsToAdd = d.baseValue === 50 ? 2 : d.multiplier;
-        const currentMarks = myState.marks[targetNumber] || 0;
-        const newMarks = currentMarks + hitsToAdd;
-        myState.marks = { ...myState.marks, [targetNumber]: newMarks };
-        const stillOpenForSomeoneElse = others.some((o) => (o.marks[targetNumber] || 0) < 3);
-        if (newMarks > 3 && stillOpenForSomeoneElse) {
-          const scorableHits = newMarks - Math.max(currentMarks, 3);
-          myState.points += targetNumber * scorableHits;
-        }
-      }
+      applyCricketDart(myState, others, cricketNumbers, targetNumber, d.baseValue, d.multiplier);
     }
     cursors[active] += take;
     active = (active + 1) % n;
@@ -701,23 +751,7 @@ const GamePage = () => {
 
       // Checkout
       if (newRemaining === 0) {
-        updatedLeg.winnerIndex = teamIdx;
-        const legsWon = [...prev.legsWon];
-        legsWon[teamIdx] += 1;
-        const legsToWin = Math.ceil(prev.bestOfLegs / 2);
-        const updated: GameState = { ...prev, currentLeg: updatedLeg, legsWon };
-
-        if (legsWon[teamIdx] >= legsToWin) {
-          updated.isFinished = true;
-          updated.winnerName = prev.teams ? prev.teams[teamIdx].name : prev.players[idx].name;
-          updated.winnerIndex = teamIdx;
-        } else {
-          updated.completedLegs = [...prev.completedLegs, updatedLeg];
-          const nextStarter = (updatedLeg.startingPlayerIndex + 1) % n;
-          updated.currentLeg = createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams);
-          updated.currentPlayerIndex = nextStarter;
-        }
-        return updated;
+        return applyLegWin(prev, prev, updatedLeg, teamIdx);
       }
 
       // After 3 darts → switch
@@ -732,18 +766,7 @@ const GamePage = () => {
             const minRemaining = Math.min(...updatedLeg.remaining);
             const winners = updatedLeg.remaining.reduce<number[]>((acc, r, i) => (r === minRemaining ? [...acc, i] : acc), []);
             if (winners.length === 1) {
-              const legWinner = winners[0];
-              updatedLeg.winnerIndex = legWinner;
-              const legsWon = [...prev.legsWon];
-              legsWon[legWinner] += 1;
-              const legsToWin = Math.ceil(prev.bestOfLegs / 2);
-              const finished = legsWon[legWinner] >= legsToWin;
-              const winnerName = prev.teams ? prev.teams[legWinner].name : prev.players[legWinner].name;
-              if (finished) {
-                return { ...next, currentLeg: updatedLeg, legsWon, isFinished: true, winnerName, winnerIndex: legWinner };
-              }
-              const nextStarter = (legWinner + 1) % n;
-              return { ...next, completedLegs: [...prev.completedLegs, updatedLeg], legsWon, currentLeg: createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams), currentPlayerIndex: nextStarter };
+              return applyLegWin(next, prev, updatedLeg, winners[0]);
             }
           }
         }
@@ -858,27 +881,13 @@ const GamePage = () => {
   const resolveTiebreak = (winnerIndex: number) => {
     if (!pendingTiebreak || !game) return;
     setPendingTiebreak(null);
-    const n = game.players.length;
     const legsWon = game.legsWon[winnerIndex] + 1;
     const legsToWin = Math.ceil(game.bestOfLegs / 2);
     const matchWon = legsWon >= legsToWin;
     const winnerName = game.teams ? game.teams[winnerIndex].name : game.players[winnerIndex].name;
     setGame((prev) => {
       if (!prev) return prev;
-      const updatedLeg: LegState = { ...prev.currentLeg, winnerIndex };
-      const nextLegsWon = [...prev.legsWon];
-      nextLegsWon[winnerIndex] += 1;
-      if (nextLegsWon[winnerIndex] >= legsToWin) {
-        return { ...prev, currentLeg: updatedLeg, legsWon: nextLegsWon, isFinished: true, winnerName, winnerIndex };
-      }
-      const nextStarter = (winnerIndex + 1) % n;
-      return {
-        ...prev,
-        legsWon: nextLegsWon,
-        completedLegs: [...prev.completedLegs, updatedLeg],
-        currentLeg: createLegState(updatedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams),
-        currentPlayerIndex: nextStarter,
-      };
+      return applyLegWin(prev, prev, prev.currentLeg, winnerIndex);
     });
     setDartsThisRound(0);
     flashScore(winnerIndex);
@@ -924,17 +933,7 @@ const GamePage = () => {
       const myState = cricket[teamIdx];
       const others = cricket.filter((_, j) => j !== teamIdx);
 
-      if ((cricketNumbers as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
-        const hitsToAdd = baseValue === 50 ? 2 : mul;
-        const currentMarks = myState.marks[targetNumber] || 0;
-        const newMarks = currentMarks + hitsToAdd;
-        myState.marks[targetNumber] = newMarks;
-        const stillOpenForSomeoneElse = others.some(o => (o.marks[targetNumber] || 0) < 3);
-        if (newMarks > 3 && stillOpenForSomeoneElse) {
-          const scorableHits = newMarks - Math.max(currentMarks, 3);
-          myState.points += targetNumber * scorableHits;
-        }
-      }
+      applyCricketDart(myState, others, cricketNumbers as readonly number[], targetNumber, baseValue, mul);
 
       const updatedLeg: LegState = { ...prev.currentLeg, throws: prev.currentLeg.throws.map(t => [...t]) };
       updatedLeg.throws[idx] = [...updatedLeg.throws[idx], dart];
@@ -1098,17 +1097,7 @@ const GamePage = () => {
         const myState = curGame.cricket![teamIdx];
         const others = curGame.cricket!.filter((_, j) => j !== teamIdx);
         const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
-        if ((cricketNumbers as readonly number[]).includes(targetNumber) && targetNumber !== 0) {
-          const hitsToAdd = d.baseValue === 50 ? 2 : d.multiplier;
-          const currentMarks = myState.marks[targetNumber] || 0;
-          const newMarks = currentMarks + hitsToAdd;
-          myState.marks = { ...myState.marks, [targetNumber]: newMarks };
-          const stillOpenForSomeoneElse = others.some(o => (o.marks[targetNumber] || 0) < 3);
-          if (newMarks > 3 && stillOpenForSomeoneElse) {
-            const scorableHits = newMarks - Math.max(currentMarks, 3);
-            myState.points += targetNumber * scorableHits;
-          }
-        }
+        applyCricketDart(myState, others, cricketNumbers as readonly number[], targetNumber, d.baseValue, d.multiplier);
         curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], dart];
         const allClosed = cricketNumbers.every((num) => (myState.marks[num] || 0) >= 3);
         const hasHighestPoints = others.every(o => myState.points >= o.points);
@@ -1153,19 +1142,9 @@ const GamePage = () => {
         curDarts += dartsToApply.length;
 
         if (outcome.kind === "checkout") {
-          curGame.currentLeg.winnerIndex = teamIdx;
-          curGame.legsWon[teamIdx] += 1;
-          const legsToWin = Math.ceil(curGame.bestOfLegs / 2);
-          if (curGame.legsWon[teamIdx] >= legsToWin) {
-            curGame.isFinished = true;
-            curGame.winnerName = curGame.teams ? curGame.teams[teamIdx].name : curGame.players[idx].name;
-            curGame.winnerIndex = teamIdx;
-          } else {
-            curGame.completedLegs = [...curGame.completedLegs, curGame.currentLeg];
-            const nextStarter = (curGame.currentLeg.startingPlayerIndex + 1) % n;
-            curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter, curGame.players, curGame.teams);
-            curGame.currentPlayerIndex = nextStarter;
-            curStart = curGame.currentLeg.remaining[teamIndexFor(curGame.teams, nextStarter)];
+          Object.assign(curGame, applyLegWin(curGame, curGame, curGame.currentLeg, teamIdx));
+          if (!curGame.isFinished) {
+            curStart = curGame.currentLeg.remaining[teamIndexFor(curGame.teams, curGame.currentPlayerIndex)];
             playerAlreadyAdvanced = true;
           }
           checkedOut = true;
@@ -1198,19 +1177,9 @@ const GamePage = () => {
       // Same "leg won" treatment the checkout branch above gets, just keyed to the cap's unique
       // lowest-remaining winner instead of whoever threw the round that happened to reach the cap.
       const legWinner = capOutcome.legWinner;
-      curGame.currentLeg.winnerIndex = legWinner;
-      curGame.legsWon[legWinner] += 1;
-      const legsToWin = Math.ceil(curGame.bestOfLegs / 2);
-      if (curGame.legsWon[legWinner] >= legsToWin) {
-        curGame.isFinished = true;
-        curGame.winnerName = curGame.teams ? curGame.teams[legWinner].name : curGame.players[legWinner].name;
-        curGame.winnerIndex = legWinner;
-      } else {
-        curGame.completedLegs = [...curGame.completedLegs, curGame.currentLeg];
-        const nextStarter = (curGame.currentLeg.startingPlayerIndex + 1) % n;
-        curGame.currentLeg = createLegState(curGame.currentLeg.legNumber + 1, curGame.startScore, nextStarter, curGame.players, curGame.teams);
-        curGame.currentPlayerIndex = nextStarter;
-        curStart = curGame.currentLeg.remaining[teamIndexFor(curGame.teams, nextStarter)];
+      Object.assign(curGame, applyLegWin(curGame, curGame, curGame.currentLeg, legWinner));
+      if (!curGame.isFinished) {
+        curStart = curGame.currentLeg.remaining[teamIndexFor(curGame.teams, curGame.currentPlayerIndex)];
         playerAlreadyAdvanced = true;
       }
       // Reusing checkedOut (rather than inventing a parallel flag) is deliberate: it's exactly
@@ -2008,6 +1977,7 @@ const GamePage = () => {
             {statRow("Siege", `${p.games_won}/${p.games_played}`)}
             {statRow("Elo", String(Math.round(p.elo_rating)))}
             {statRow("Highscore", String(p.high_score))}
+            {statRow("Checkout", `${Number(p.double_rate).toFixed(0)}%`)}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">Kein Profil</p>
@@ -2122,7 +2092,11 @@ const GamePage = () => {
   // "sticky", but reported as the numbers scrolling separately from the rest of the page, since
   // the camera window itself is a fixed, non-page-scrolling overlay.
   const scoreboardBlock = (
-    <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 landscape:pt-1.5 landscape:pb-1 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40">
+    // will-change-transform forces this sticky element onto its own compositing layer up front,
+    // instead of leaving that decision to the browser's heuristics — sticky + backdrop-filter is
+    // a known combination that some Android Chrome/WebView versions composite inconsistently
+    // (sticky silently stops tracking scroll), and this is the standard low-risk mitigation.
+    <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 landscape:pt-1.5 landscape:pb-1 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 will-change-transform">
       <div className={`grid ${numCols} gap-3 landscape:gap-1.5`}>
         {(game.teams
           ? game.teams.map((t, ti) => {
