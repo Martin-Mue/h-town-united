@@ -244,6 +244,45 @@ export type Database = {
           },
         ]
       }
+      impressum: {
+        Row: {
+          address: string
+          city: string
+          club_name: string
+          email: string
+          id: string
+          phone: string
+          register_info: string
+          represented_by: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          address?: string
+          city?: string
+          club_name?: string
+          email?: string
+          id?: string
+          phone?: string
+          register_info?: string
+          represented_by?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          address?: string
+          city?: string
+          club_name?: string
+          email?: string
+          id?: string
+          phone?: string
+          register_info?: string
+          represented_by?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       manual_180_entries: {
         Row: {
           count: number
