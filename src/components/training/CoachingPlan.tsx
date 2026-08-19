@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Sparkles, Loader2, Play, TrendingUp, Target, Crosshair, Zap, RotateCw, Trophy } from "lucide-react";
+import { Sparkles, Loader2, Play, TrendingUp, Target, Crosshair, Zap, RotateCw, Trophy, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { computeAimBias, describeAimTip, type AimBiasResult, type CoordDart } from "@/utils/aimBias";
 
 /** Public shape so the parent (Training page) can map ids back to drills. */
 export interface CoachRecommendation {
@@ -22,7 +23,13 @@ interface PlayerStats {
   doubleRate: number;
   highscore: number;
   recentAvg: number;
+  /** null = not enough camera-scored darts yet for a reliable reading — see aimBias.ts. */
+  aimBias: AimBiasResult | null;
 }
+
+/** Same negligible-offset threshold aimBias.ts's own describeAimTip uses, so this recommendation
+ *  and that card's own advice can never disagree about whether there's something worth fixing. */
+const AIM_BIAS_NEGLIGIBLE_MM = 0.5;
 
 interface CoachingPlanProps {
   onStartDrill: (drillId: string) => void;
@@ -58,6 +65,21 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
       metric: `Doppel ${Math.round(s.doubleRate)} %`,
       priority: 1,
       icon: Zap,
+    });
+  }
+
+  // Aim-bias correction — the one recommendation actually informed by WHERE darts land, not
+  // just what they scored (needs camera-tracked tip positions; see aimBias.ts). Only fires once
+  // there's a real, non-negligible reading to act on — same threshold describeAimTip itself uses,
+  // so this card and the Statistics aim-bias card are always telling the same story.
+  if (s.aimBias && (Math.abs(s.aimBias.radialOffsetMm) > AIM_BIAS_NEGLIGIBLE_MM || Math.abs(s.aimBias.tangentialOffsetMm) > AIM_BIAS_NEGLIGIBLE_MM)) {
+    recs.push({
+      drillId: "around-the-clock",
+      title: "Around the Clock",
+      reason: `Deine Wurf-Tendenz (Statistik-Seite) zeigt einen klaren Versatz: ${describeAimTip(s.aimBias)} Dieser Drill trainiert Genauigkeit über das ganze Board, ideal um die Korrektur einzuüben.`,
+      metric: "Wurf-Tendenz",
+      priority: 2,
+      icon: Compass,
     });
   }
 
@@ -184,6 +206,15 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
           if (idx < 5) { recentSum += avg; recentCount += 1; }
         });
 
+        // Aim-bias needs actual tip coordinates, only available from camera-scored legs — a
+        // separate query since `games` (above) never carried dart-by-dart detail.
+        const { data: legs } = await supabase
+          .from("game_legs")
+          .select("throws")
+          .eq("player_id", player.id);
+        const darts: CoordDart[] = (legs ?? []).flatMap((l) => (l.throws as unknown as CoordDart[]) ?? []);
+        const aimBias = computeAimBias(darts);
+
         if (!cancelled) {
           setStats({
             name: player.name,
@@ -193,6 +224,7 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
             doubleRate: count ? drSum / count : 0,
             highscore: hs,
             recentAvg: recentCount ? recentSum / recentCount : 0,
+            aimBias,
           });
           setLoading(false);
         }
