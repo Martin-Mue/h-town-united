@@ -48,6 +48,7 @@ import { effectiveStartScore } from "@/utils/handicap";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
+import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const WALKON_PREF_KEY = "dart-walkon-enabled";
@@ -284,6 +285,11 @@ const GamePage = () => {
     const raw = window.localStorage.getItem(WALKON_PREF_KEY);
     return raw ? raw !== "false" : true;
   });
+  const [ghostModeEnabled, setGhostModeEnabled] = useState(false);
+  // Index-aligned with players — each entry is that player's own best-ever WON leg at this
+  // start score (fewest darts), turned into a running remaining-per-dart sequence via
+  // ghostRemainingSequence. null = no qualifying past leg (or ghost mode off / not X01 / bot).
+  const [ghostSequences, setGhostSequences] = useState<(number[] | null)[]>([]);
   const [game, setGame] = useState<GameState | null>(() => loadActiveGameSnapshot());
   // Fallback defaults for handleX01Throw/handleCricketThrow when called without an explicit
   // dart (bot logic, camera detection) — DartScoreInput's buttons always pass explicit values.
@@ -548,6 +554,38 @@ const GamePage = () => {
     });
   };
 
+  // Fired once per match start, same pattern as loadWalkonH2H above. For each non-bot player
+  // with a club profile, finds their own best-ever WON leg at this exact start score (fewest
+  // darts) and turns it into a per-dart running-remaining sequence for live pace comparison
+  // during play. X01 only (Cricket's "best leg" isn't a dart-count race the same way) and
+  // individual only (team games don't have a single person's "own" leg to race). Small data
+  // volumes here (a club's total leg count, not the whole games table) — picking the shortest
+  // client-side rather than needing a jsonb-array-length order clause PostgREST can't express directly.
+  const loadGhostSequences = async (players: PlayerSlot[], startScore: number, teams?: TeamSlot[]) => {
+    if (!ghostModeEnabled || teams || mode === "cricket") {
+      setGhostSequences(players.map(() => null));
+      return;
+    }
+    const results = await Promise.all(players.map(async (p): Promise<number[] | null> => {
+      if (p.isBot) return null;
+      const match = matchClubPlayer(dbPlayers, p.name);
+      if (!match) return null;
+      const { data } = await supabase.from("game_legs")
+        .select("throws")
+        .eq("player_id", match.id)
+        .eq("starting_score", startScore)
+        .eq("won", true);
+      if (!data || data.length === 0) return null;
+      let best: DartThrow[] | null = null;
+      for (const row of data) {
+        const throws = row.throws as unknown as DartThrow[];
+        if (!best || throws.length < best.length) best = throws;
+      }
+      return best ? ghostRemainingSequence(best, startScore) : null;
+    }));
+    setGhostSequences(results);
+  };
+
   // Whether the follow-up stat-comparison screen (see the "stats" phase render below) has
   // anything worth showing — a real (non-team) 1v1 where at least one side matches a roster
   // player. Bot games, guest-vs-guest test rounds, and team matches skip straight from the
@@ -595,6 +633,7 @@ const GamePage = () => {
     }
     setGame(newGame);
     void loadWalkonH2H(players, teams);
+    void loadGhostSequences(players, startScore, teams);
     setDartsThisRound(0);
     // Must read the CHOSEN starter's own slot, not always slot 0 — with per-player handicaps
     // (or asymmetric team scores) these differ, and turnStartRemaining is exactly what a bust
@@ -1865,6 +1904,16 @@ const GamePage = () => {
             <Switch id="walkon-mode" checked={walkonEnabled} onCheckedChange={setWalkonEnabled} />
           </div>
 
+          {mode !== "cricket" && !teamMode && (
+            <div className="flex items-center justify-between gap-3 bg-card rounded-lg border border-border px-4 py-3">
+              <div className="min-w-0">
+                <Label htmlFor="ghost-mode" className="text-sm">👻 Geist-Modus</Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Live-Vergleich gegen dein eigenes bestes Leg bei diesem Startscore.</p>
+              </div>
+              <Switch id="ghost-mode" checked={ghostModeEnabled} onCheckedChange={setGhostModeEnabled} />
+            </div>
+          )}
+
           <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
             <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? "Aufwärmen starten" : "Spiel starten"}
           </Button>
@@ -2221,6 +2270,18 @@ const GamePage = () => {
             <span className="text-xs font-display text-primary">+{currentRoundTotal}</span>
           )}
         </div>
+        {/* Ghost-mode live pace comparison — see ghostMode.ts. Only for the actively-throwing
+            player; showing every player's ghost status at once would be scoreboard clutter. */}
+        {game && !currentPlayer?.isBot && ghostSequences[currentIdx] && (() => {
+          const teamIdx = teamIndexFor(game.teams, currentIdx);
+          const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);
+          if (!cmp) return null;
+          return (
+            <p className={`text-[10px] mt-1 font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
+              👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} Punkte vor deinem Rekordtempo!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} Punkte hinter deinem Rekordtempo` : "genau im Rekordtempo"}
+            </p>
+          );
+        })()}
       </div>
     </div>
   );
