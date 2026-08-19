@@ -9,7 +9,12 @@ export interface PagedList<T> {
   setPage: (page: number) => void;
   showingAll: boolean;
   isPaginated: boolean;
+  /** True only when there's an actual shorter view to collapse back to — false for a list short
+   *  enough that it always renders in full, so a "weniger anzeigen" button never appears with
+   *  nothing to hide. */
+  canCollapse: boolean;
   expand: () => void;
+  collapse: () => void;
 }
 
 /**
@@ -20,7 +25,9 @@ export interface PagedList<T> {
  *  - `totalCount <= collapseAt`: everything renders, no controls at all — most lists in a
  *    single-club install never leave this tier.
  *  - `collapseAt < totalCount < paginateAt`: an initial `collapseAt`-sized slice plus a
- *    "mehr anzeigen" button that reveals the rest (up to `paginateAt - 1` items) in one go.
+ *    "mehr anzeigen" button that reveals the rest (up to `paginateAt - 1` items) in one go —
+ *    and, once expanded, a "weniger anzeigen" button to collapse back. Anything that can be
+ *    opened needs to be closeable again, not a one-way trip.
  *  - `totalCount >= paginateAt`: real paged navigation (`pageSize` per page) instead of "show
  *    everything", since that would mean rendering hundreds of rows/cards/videos at once.
  * `page` is clamped against the current page count on every render, so a filter that shrinks
@@ -40,12 +47,19 @@ export function usePagedList<T>(
     const totalCount = items.length;
 
     if (totalCount <= collapseAt) {
-      return { visible: items, totalCount, visibleCount: totalCount, page: 1, pageCount: 1, setPage: () => {}, showingAll: true, isPaginated: false, expand: () => {} };
+      return {
+        visible: items, totalCount, visibleCount: totalCount, page: 1, pageCount: 1, setPage: () => {},
+        showingAll: true, isPaginated: false, canCollapse: false, expand: () => {}, collapse: () => {},
+      };
     }
 
     if (totalCount < paginateAt) {
       const visible = expanded ? items : items.slice(0, collapseAt);
-      return { visible, totalCount, visibleCount: visible.length, page: 1, pageCount: 1, setPage: () => {}, showingAll: expanded, isPaginated: false, expand: () => setExpanded(true) };
+      return {
+        visible, totalCount, visibleCount: visible.length, page: 1, pageCount: 1, setPage: () => {},
+        showingAll: expanded, isPaginated: false, canCollapse: true,
+        expand: () => setExpanded(true), collapse: () => setExpanded(false),
+      };
     }
 
     const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -54,7 +68,7 @@ export function usePagedList<T>(
     return {
       visible, totalCount, visibleCount: visible.length, page: clampedPage, pageCount,
       setPage: (p: number) => setPageState(Math.min(Math.max(1, p), pageCount)),
-      showingAll: false, isPaginated: true, expand: () => {},
+      showingAll: false, isPaginated: true, canCollapse: false, expand: () => {}, collapse: () => {},
     };
   }, [items, expanded, page, collapseAt, paginateAt, pageSize]);
 }

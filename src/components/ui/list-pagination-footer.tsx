@@ -2,20 +2,20 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PagedList } from "@/hooks/usePagedList";
 
-/** Renders whatever control (if any) a usePagedList result currently needs — nothing once
- *  everything's already showing, a "mehr anzeigen" button in the collapsed tier, or prev/next
- *  paging once the list is large enough to have switched to real pagination. One shared footer
- *  so every long list in the app gets the same look instead of a bespoke control per page. */
+/** Renders whatever control (if any) a usePagedList result currently needs — nothing for a list
+ *  short enough to always show in full, a "mehr anzeigen"/"weniger anzeigen" toggle in the
+ *  collapsible tier (whichever direction is currently available — anything that can be opened
+ *  must stay closeable too), or prev/next paging once the list is large enough to have switched
+ *  to real pagination. One shared footer so every long list in the app gets the same look. */
 export function ListPaginationFooter<T>({ list }: { list: PagedList<T> }) {
-  if (list.showingAll && !list.isPaginated) return null;
-
   if (!list.isPaginated) {
+    if (!list.canCollapse) return null;
     return (
       <button
-        onClick={list.expand}
+        onClick={list.showingAll ? list.collapse : list.expand}
         className="w-full text-xs text-muted-foreground hover:text-foreground text-center py-2 transition-colors"
       >
-        {list.visibleCount} von {list.totalCount} · mehr anzeigen ▾
+        {list.showingAll ? "weniger anzeigen ▴" : `${list.visibleCount} von ${list.totalCount} · mehr anzeigen ▾`}
       </button>
     );
   }

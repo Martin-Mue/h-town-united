@@ -3,24 +3,32 @@ import { renderHook, act } from "@testing-library/react";
 import { usePagedList } from "./usePagedList";
 
 describe("usePagedList", () => {
-  it("shows everything with no controls under the collapse threshold", () => {
+  it("shows everything with no controls (and nothing to collapse) under the collapse threshold", () => {
     const items = Array.from({ length: 5 }, (_, i) => i);
     const { result } = renderHook(() => usePagedList(items, { collapseAt: 8, paginateAt: 60 }));
     expect(result.current.visible).toEqual(items);
     expect(result.current.showingAll).toBe(true);
     expect(result.current.isPaginated).toBe(false);
+    expect(result.current.canCollapse).toBe(false);
   });
 
-  it("collapses to the initial slice and expands on demand between the two thresholds", () => {
+  it("collapses to the initial slice, expands on demand, and can collapse back again", () => {
     const items = Array.from({ length: 20 }, (_, i) => i);
     const { result } = renderHook(() => usePagedList(items, { collapseAt: 8, paginateAt: 60 }));
     expect(result.current.visible).toEqual(items.slice(0, 8));
     expect(result.current.showingAll).toBe(false);
     expect(result.current.isPaginated).toBe(false);
+    expect(result.current.canCollapse).toBe(true);
 
     act(() => result.current.expand());
     expect(result.current.visible).toEqual(items);
     expect(result.current.showingAll).toBe(true);
+    expect(result.current.canCollapse).toBe(true);
+
+    // Anything that can be opened must stay closeable — not a one-way trip.
+    act(() => result.current.collapse());
+    expect(result.current.visible).toEqual(items.slice(0, 8));
+    expect(result.current.showingAll).toBe(false);
   });
 
   it("switches to real pagination at/above the paginate threshold", () => {
