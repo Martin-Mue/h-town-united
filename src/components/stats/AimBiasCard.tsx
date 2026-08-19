@@ -30,6 +30,11 @@ function project(radial: number, tangential: number) {
 
 const fmtMm = (mm: number) => `${Math.abs(mm) < 0.5 ? "~0" : (mm > 0 ? "+" : "") + mm.toFixed(1)} mm`;
 
+/** Rough, unverified descriptive bands for the grouping radius — not a measured benchmark
+ *  against real player data, just something more readable than a bare millimeter figure. A
+ *  treble bed is only ~6mm wide, which is the intuition behind the "eng" cutoff. */
+const groupingWord = (mm: number) => (mm < 8 ? "eng gruppiert" : mm < 18 ? "normal gestreut" : "weit gestreut");
+
 /** Shows a player's pooled aim bias (see aimBias.ts) as one arrow on a reference board, from
  *  where a dart aimed at Treble 20 should land to where this player's darts land on average —
  *  exaggerated for visibility — plus the real, unscaled offset in millimeters. */
@@ -64,11 +69,15 @@ const AimBiasCard = ({ bias }: AimBiasCardProps) => {
           </defs>
           <circle cx={ix} cy={iy} r={3} fill="hsl(185 85% 48%)" />
           <line x1={ix} y1={iy} x2={ax} y2={ay} stroke="hsl(0 75% 58%)" strokeWidth={2} markerEnd="url(#aimArrow)" />
+          {/* Grouping radius — same MAGNIFY scale as the arrow, so the circle and the offset it's
+              drawn around stay visually consistent with each other. */}
+          <circle cx={ax} cy={ay} r={bias.groupingRadius * MAGNIFY * BOARD_RADIUS} fill="hsl(45 100% 58%)" fillOpacity={0.12} stroke="hsl(45 100% 58%)" strokeOpacity={0.6} strokeWidth={1} strokeDasharray="3 2" />
         </svg>
         <div className="flex-1 space-y-1.5 text-xs">
           <p><span className="text-muted-foreground">Radial: </span><span className="font-semibold">{fmtMm(bias.radialOffsetMm)}</span> <span className="text-muted-foreground">({radialWord})</span></p>
           <p><span className="text-muted-foreground">Seitlich: </span><span className="font-semibold">{fmtMm(bias.tangentialOffsetMm)}</span> <span className="text-muted-foreground">({tangentialWord})</span></p>
-          <p className="text-[10px] text-muted-foreground pt-1">Bezogen auf ein Ziel oben am Board (z. B. T20) — bei Zielen weiter unten am Board dreht sich die seitliche Richtung entsprechend mit.</p>
+          <p><span className="text-muted-foreground">Gruppierung: </span><span className="font-semibold">±{bias.groupingRadiusMm.toFixed(1)} mm</span> <span className="text-muted-foreground">({groupingWord(bias.groupingRadiusMm)})</span></p>
+          <p className="text-[10px] text-muted-foreground pt-1">Bezogen auf ein Ziel oben am Board (z. B. T20) — bei Zielen weiter unten am Board dreht sich die seitliche Richtung entsprechend mit. Die gestrichelte Fläche zeigt, wie eng deine Darts um deinen eigenen Schnitt streuen, unabhängig von der Tendenz.</p>
         </div>
       </div>
       <div className="mt-3 pt-3 border-t border-border/60 flex items-start gap-2">

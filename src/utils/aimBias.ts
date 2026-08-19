@@ -18,6 +18,13 @@ export interface AimBiasResult {
    *  radius (170mm) — much more concrete to show a player than a unitless fraction. */
   radialOffsetMm: number;
   tangentialOffsetMm: number;
+  /** RMS distance of each dart from THIS PLAYER'S OWN average landing point (not from the true
+   *  target) — precision/grouping tightness, independent of bias. Two players can share the same
+   *  average offset while one groups tightly (a small, fixable aim correction) and the other
+   *  scatters widely (a different, technique-level problem) — this is the number that tells them
+   *  apart. Board-relative units; see groupingRadiusMm for the real-world figure. */
+  groupingRadius: number;
+  groupingRadiusMm: number;
 }
 
 const DOUBLE_EDGE_MM = 170;
@@ -72,9 +79,7 @@ function idealPointFor(baseValue: number, multiplier: number, actualR: number): 
  * in raw x/y depends on which side of the board you were aiming at).
  */
 export function computeAimBias(darts: CoordDart[]): AimBiasResult | null {
-  let sumRadial = 0;
-  let sumTangential = 0;
-  let n = 0;
+  const offsets: { radial: number; tangential: number }[] = [];
   for (const d of darts) {
     if (d.baseValue < 1 || d.baseValue > 20) continue; // excludes miss (0) and bull/bullseye (25/50)
     if (d.multiplier !== 1 && d.multiplier !== 2 && d.multiplier !== 3) continue;
@@ -85,19 +90,28 @@ export function computeAimBias(darts: CoordDart[]): AimBiasResult | null {
     const radial = actualR - ideal.r;
     const angleDiff = (((actualDeg - ideal.deg + 180) % 360) + 360) % 360 - 180; // normalize to (-180, 180]
     const tangential = (angleDiff * Math.PI) / 180 * ideal.r; // arc-length approximation (valid for the small offsets this is meant to catch)
-    sumRadial += radial;
-    sumTangential += tangential;
-    n++;
+    offsets.push({ radial, tangential });
   }
+  const n = offsets.length;
   if (n < MIN_SAMPLE) return null;
-  const avgRadialOffset = sumRadial / n;
-  const avgTangentialOffset = sumTangential / n;
+  const avgRadialOffset = offsets.reduce((s, o) => s + o.radial, 0) / n;
+  const avgTangentialOffset = offsets.reduce((s, o) => s + o.tangential, 0) / n;
+  // Grouping radius: RMS distance of each dart from the average landing point computed just
+  // above — a SECOND pass, deliberately, since this is a deviation from the player's own mean,
+  // not from the ideal target (that's what avgRadialOffset/avgTangentialOffset already capture).
+  const meanSquaredDeviation = offsets.reduce(
+    (s, o) => s + (o.radial - avgRadialOffset) ** 2 + (o.tangential - avgTangentialOffset) ** 2,
+    0
+  ) / n;
+  const groupingRadius = Math.sqrt(meanSquaredDeviation);
   return {
     sampleSize: n,
     avgRadialOffset,
     avgTangentialOffset,
     radialOffsetMm: avgRadialOffset * DOUBLE_EDGE_MM,
     tangentialOffsetMm: avgTangentialOffset * DOUBLE_EDGE_MM,
+    groupingRadius,
+    groupingRadiusMm: groupingRadius * DOUBLE_EDGE_MM,
   };
 }
 

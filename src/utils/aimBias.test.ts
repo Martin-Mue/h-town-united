@@ -72,6 +72,39 @@ describe("computeAimBias", () => {
     expect(result.radialOffsetMm).toBeCloseTo(0.03 * 170, 3);
   });
 
+  it("reports ~zero grouping radius when every dart lands at the identical offset", () => {
+    // Perfectly consistent (even though biased) — precision is independent of accuracy.
+    const darts = Array.from({ length: 25 }, () => perturbedDart(20, 3, 0.02, 0.01));
+    const result = computeAimBias(darts)!;
+    expect(result.groupingRadius).toBeCloseTo(0, 6);
+  });
+
+  it("recovers a known grouping radius from darts alternating around their own mean", () => {
+    // Half at +0.02 radial, half at -0.02 radial, same tangential — mean radial is exactly 0,
+    // and both halves deviate from that mean by exactly 0.02, so the RMS deviation (= grouping
+    // radius) is exactly 0.02, hand-computable, not just "some positive number".
+    const darts = [
+      ...Array.from({ length: 15 }, () => perturbedDart(20, 3, 0.02, 0)),
+      ...Array.from({ length: 15 }, () => perturbedDart(20, 3, -0.02, 0)),
+    ];
+    const result = computeAimBias(darts)!;
+    expect(result.avgRadialOffset).toBeCloseTo(0, 6);
+    expect(result.groupingRadius).toBeCloseTo(0.02, 3);
+  });
+
+  it("gives a tightly-grouped-but-biased player a smaller grouping radius than a scattered one", () => {
+    // The whole point of the metric: two players can share an average offset while one is far
+    // more consistent than the other — grouping radius, not avgRadialOffset, is what tells them apart.
+    // 26, not 25 — an even count so the alternating +/-0.05 splits perfectly 13/13 and the two
+    // groups' mean radial offset comes out identical, not just approximately so.
+    const tight = Array.from({ length: 26 }, () => perturbedDart(20, 3, 0.02, 0));
+    const scattered = Array.from({ length: 26 }, (_, i) => perturbedDart(20, 3, 0.02 + (i % 2 === 0 ? 0.05 : -0.05), 0));
+    const tightResult = computeAimBias(tight)!;
+    const scatteredResult = computeAimBias(scattered)!;
+    expect(tightResult.avgRadialOffset).toBeCloseTo(scatteredResult.avgRadialOffset, 3); // same bias
+    expect(tightResult.groupingRadius).toBeLessThan(scatteredResult.groupingRadius); // different precision
+  });
+
   it("ignores misses and bullseye/bull throws (no wedge angle to measure against)", () => {
     const real = Array.from({ length: AIM_BIAS_MIN_SAMPLE }, () => perturbedDart(20, 3, 0, 0));
     const noise: CoordDart[] = [
@@ -94,6 +127,7 @@ describe("computeAimBias", () => {
 describe("describeAimTip", () => {
   const withOffsets = (radialOffsetMm: number, tangentialOffsetMm: number): AimBiasResult => ({
     sampleSize: 30, avgRadialOffset: 0, avgTangentialOffset: 0, radialOffsetMm, tangentialOffsetMm,
+    groupingRadius: 0, groupingRadiusMm: 0,
   });
 
   it("matches the real case that prompted this feature: landing left → correct right", () => {
