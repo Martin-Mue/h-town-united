@@ -237,9 +237,11 @@ interface BracketViewportProps {
    *  land regardless of who plays), everyone else edits nothing manually, on purpose (see
    *  20260815170000 migration). "Spiel starten" itself stays available to everyone below. */
   isOwner: boolean;
+  /** Opens the round-mode editor for this round header (owner only, see roundHeader below). */
+  onEditRoundMode: (round: number) => void;
 }
 
-const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, isOwner }: BracketViewportProps) => {
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, isOwner, onEditRoundMode }: BracketViewportProps) => {
   // v2 — no continuous auto-measurement (see PublicTournament.tsx's LiveBracket for the same
   // change + full rationale): fixed, always-legible scale by default, native scroll for
   // overflow, manual zoom, and "fit to screen" as a one-time on-demand measurement instead of
@@ -463,10 +465,28 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               const cfg = (activeTournament.round_configs || [])[round - 1];
               const roundMode = cfg?.mode || activeTournament.game_mode;
               const roundBestOf = cfg?.bestOf || activeTournament.best_of_legs;
+              // Editable only before this round has a real decided match — once a match is
+              // played, its own `games` row is durable and no longer reads round_configs at
+              // all, but changing the round's mode after some matches in it already finished
+              // would visually contradict what those finished matches actually played as.
+              const roundUndecided = matches.filter(m => m.round === round).every(m => !m.winner);
+              const canEditRound = isOwner && roundUndecided;
               return (
-                <div className={`mb-1 ${align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"}`}>
-                  <h3 className="text-xs font-display uppercase text-muted-foreground">{roundLabel(round, totalRounds)}</h3>
-                  <p className="text-[10px] text-primary/80 font-mono">{roundMode} · BO{roundBestOf}</p>
+                <div className={`mb-1 flex items-center gap-1 ${align === "center" ? "justify-center" : align === "right" ? "justify-end" : "justify-start"}`}>
+                  <div className={align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"}>
+                    <h3 className="text-xs font-display uppercase text-muted-foreground">{roundLabel(round, totalRounds)}</h3>
+                    <p className="text-[10px] text-primary/80 font-mono">{roundMode} · BO{roundBestOf}</p>
+                  </div>
+                  {canEditRound && (
+                    <button
+                      onClick={() => onEditRoundMode(round)}
+                      title="Rundenmodus bearbeiten"
+                      aria-label="Rundenmodus bearbeiten"
+                      className="p-1.5 -m-1 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <Settings2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               );
             };
@@ -559,6 +579,13 @@ const TournamentPage = () => {
   const [editMatch, setEditMatch] = useState<Match | null>(null);
   const [editP1, setEditP1] = useState("");
   const [editP2, setEditP2] = useState("");
+  // Per-round mode override, edited from the bracket view itself (not the setup form) — see
+  // openRoundModeEditor/saveRoundMode. Separate from editMatch above: this touches only the
+  // tournament's own round_configs column, never the bracket/players/status/champion.
+  const [editingRound, setEditingRound] = useState<number | null>(null);
+  const [editRoundMode, setEditRoundMode] = useState("501");
+  const [editRoundBestOf, setEditRoundBestOf] = useState(3);
+  const [savingRoundMode, setSavingRoundMode] = useState(false);
   // Confirm before withdrawing a player mid-tournament — unlike removing a typo'd name during
   // setup (harmless, pre-draw), this forfeits every remaining match for a real participant,
   // often live at the venue. Same chip-based UI as setup made the two easy to confuse.
@@ -1055,6 +1082,41 @@ const TournamentPage = () => {
   const resolveRoundMode = (round: number): string => {
     const cfg = (activeTournament?.round_configs || [])[round - 1];
     return cfg?.mode || activeTournament?.game_mode || "501";
+  };
+
+  const resolveRoundBestOf = (round: number): number => {
+    const cfg = (activeTournament?.round_configs || [])[round - 1];
+    return cfg?.bestOf || activeTournament?.best_of_legs || 3;
+  };
+
+  /** Opens the round-mode editor (bracket view, owner only) — seeds it from this round's
+   *  current, already-resolved mode/bestOf so an untouched round doesn't look "unset". */
+  const openRoundModeEditor = (round: number) => {
+    setEditRoundMode(resolveRoundMode(round));
+    setEditRoundBestOf(resolveRoundBestOf(round));
+    setEditingRound(round);
+  };
+
+  /** Targeted update of just this one round's override — writes only `round_configs`, so unlike
+   *  the setup form's startTournament (which regenerates the whole bracket) this can never touch
+   *  an already-played match: every scoring entry point resolves mode live from this same column
+   *  at click-time (resolveRoundMode/koLiveGamePath) and a decided match's own `games` row is
+   *  already durable and fully decoupled from it by then. */
+  const saveRoundMode = async () => {
+    if (!activeTournament || editingRound === null) return;
+    setSavingRoundMode(true);
+    const next = [...(activeTournament.round_configs || [])];
+    while (next.length < editingRound) next.push({ mode: activeTournament.game_mode || "501", bestOf: activeTournament.best_of_legs || 3 });
+    next[editingRound - 1] = { mode: editRoundMode, bestOf: editRoundBestOf };
+    const { error } = await supabase.from("tournaments").update({ round_configs: next as unknown as Json }).eq("id", activeTournament.id);
+    if (error) {
+      toast({ title: "Fehler", description: "Rundenmodus konnte nicht gespeichert werden.", variant: "destructive" });
+    } else {
+      setActiveTournament({ ...activeTournament, round_configs: next });
+      toast({ title: `Modus für Runde ${editingRound} aktualisiert` });
+      setEditingRound(null);
+    }
+    setSavingRoundMode(false);
   };
 
   /** "Extern" rounds are explicitly played outside the app (a different system/board) — no live-game option for those.
@@ -1750,6 +1812,7 @@ const TournamentPage = () => {
             onStartLiveGame={startLiveGame}
             getLiveGameUrl={(m) => { const p = koLiveGamePath(m); return p ? `${window.location.origin}${p}` : null; }}
             isOwner={isOwner}
+            onEditRoundMode={openRoundModeEditor}
           />
         ) : (
           <div className="container space-y-4">
@@ -1871,6 +1934,44 @@ const TournamentPage = () => {
               <div className="flex gap-2 justify-end pt-1">
                 <Button size="sm" variant="ghost" onClick={() => setEditMatch(null)}>Abbrechen</Button>
                 <Button size="sm" onClick={saveMatchPlayers}>Speichern</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editingRound !== null && (
+          <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditingRound(null)}>
+            <div className="bg-card border border-border rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-display uppercase text-sm">Modus für Runde {editingRound} bearbeiten</h3>
+              <p className="text-[11px] text-muted-foreground">Gilt nur für diese Runde, nicht für den Rest des Turniers — und nur solange noch keine Partie darin entschieden ist.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">Spielmodus</label>
+                  <Select value={editRoundMode} onValueChange={setEditRoundMode}>
+                    <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      <SelectItem value="501">501</SelectItem>
+                      <SelectItem value="301">301</SelectItem>
+                      <SelectItem value="Cricket">Cricket</SelectItem>
+                      <SelectItem value="Extern">Extern gespielt</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">Best of Legs</label>
+                  <Select value={String(editRoundBestOf)} onValueChange={(v) => setEditRoundBestOf(Number(v))}>
+                    <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end pt-1">
+                <Button size="sm" variant="ghost" onClick={() => setEditingRound(null)}>Abbrechen</Button>
+                <Button size="sm" onClick={saveRoundMode} disabled={savingRoundMode} className="gap-1.5">
+                  {savingRoundMode && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Speichern
+                </Button>
               </div>
             </div>
           </div>
