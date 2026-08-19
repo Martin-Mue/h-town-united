@@ -599,6 +599,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      public_tournament_highlights: {
+        Args: { _tournament_id: string }
+        Returns: {
+          player_id: string | null
+          player_name: string
+          starting_score: number
+          throws: Json
+          won: boolean
+        }[]
+      }
       club_head_to_head: {
         Args: { _player_a: string; _player_b: string }
         Returns: {

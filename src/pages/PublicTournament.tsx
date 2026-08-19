@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw } from "lucide-react";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw, Target, ChevronDown, ChevronUp } from "lucide-react";
+import { computeTournamentHighlights, type TournamentHighlights, type TournamentStatsLegRow } from "@/utils/tournamentStats";
+import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import {
   roundLabelFor,
   currentBoardSchedule,
@@ -585,6 +587,9 @@ const PublicTournamentPage = () => {
     if (stored === "boards" || stored === "tree" || stored === "list") return stored;
     return window.innerWidth < 900 ? "list" : "tree";
   });
+  const [tournamentHighlights, setTournamentHighlights] = useState<TournamentHighlights | null>(null);
+  const [loadingHighlights, setLoadingHighlights] = useState(false);
+  const [showHighlights, setShowHighlights] = useState(false);
   const [autoRotate, setAutoRotateRaw] = useState(() => {
     if (typeof window === "undefined") return false;
     if (urlView === "auto") return true;
@@ -613,6 +618,20 @@ const PublicTournamentPage = () => {
     const next = !autoRotate;
     setAutoRotateRaw(next);
     if (typeof window !== "undefined") window.localStorage.setItem(AUTO_ROTATE_PREF_KEY, next ? "1" : "0");
+  };
+
+  /** Anonymous spectators can't read games/game_legs directly (authenticated-only RLS) — this
+   *  goes through the public_tournament_highlights RPC instead, which is gated on the same
+   *  public_view flag tournaments_public already uses (see its migration for the full reasoning).
+   *  Lazy on first expand, same as the creator-facing panel in Tournament.tsx. */
+  const toggleHighlights = async () => {
+    const next = !showHighlights;
+    setShowHighlights(next);
+    if (!next || tournamentHighlights || !t) return;
+    setLoadingHighlights(true);
+    const { data } = await supabase.rpc("public_tournament_highlights", { _tournament_id: t.id });
+    setTournamentHighlights(computeTournamentHighlights((data || []) as unknown as TournamentStatsLegRow[]));
+    setLoadingHighlights(false);
   };
 
   useEffect(() => {
@@ -778,7 +797,23 @@ const PublicTournamentPage = () => {
           >
             <RefreshCcw className={`w-3.5 h-3.5 ${autoRotate ? "animate-pulse" : ""}`} /> Automatisch wechseln
           </button>
+          <button
+            onClick={toggleHighlights}
+            className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 ${showHighlights ? "border-accent bg-accent/15 text-accent" : "border-border hover:bg-muted text-muted-foreground"}`}
+          >
+            <Target className="w-3.5 h-3.5" /> Highlights
+            {showHighlights ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
         </div>
+        {showHighlights && (
+          <div className="mt-2 rounded-xl border border-border bg-card p-3 max-w-xl">
+            {loadingHighlights ? (
+              <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+            ) : tournamentHighlights ? (
+              <TournamentHighlightsPanel highlights={tournamentHighlights} />
+            ) : null}
+          </div>
+        )}
       </div>
 
       {view === "boards" ? (

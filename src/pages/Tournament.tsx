@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target } from "lucide-react";
+import { computeTournamentHighlights, type TournamentHighlights, type TournamentStatsLegRow } from "@/utils/tournamentStats";
+import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -562,6 +564,12 @@ const TournamentPage = () => {
   // this component branches on `phase` with early returns — a hook called only inside one of
   // those branches would violate the rules of hooks the moment `phase` itself changes.
   const pagedTournaments = usePagedList(tournaments, { collapseAt: 10, paginateAt: 50, pageSize: 20 });
+  // Tournament-wide highlights (heatmap + per-participant 180s/big triples/bull/ton-plus
+  // finishes) — fetched lazily on first expand rather than every time a tournament opens, since
+  // it pulls every leg's full throw history for the tournament and most opens never look at it.
+  const [tournamentHighlights, setTournamentHighlights] = useState<TournamentHighlights | null>(null);
+  const [loadingHighlights, setLoadingHighlights] = useState(false);
+  const [showHighlights, setShowHighlights] = useState(false);
   const [activeTournament, setActiveTournament] = useState<TournamentRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [ceremonyChampion, setCeremonyChampion] = useState<string | null>(null);
@@ -1227,6 +1235,27 @@ const TournamentPage = () => {
     setActiveTournament(t);
     setBracketView(defaultBracketView(t.bracket as Match[]));
     setPhase("bracket");
+    setShowHighlights(false);
+    setTournamentHighlights(null);
+  };
+
+  /** Lazily fetches + computes this tournament's highlights on first expand, then just toggles
+   *  visibility on subsequent clicks — cheap since the source data can't change for a match that's
+   *  already been played (only new matches finishing would add more, and re-opening the section
+   *  after closing it doesn't need a fresh reload for that to eventually be seen next visit). */
+  const toggleHighlights = async () => {
+    const next = !showHighlights;
+    setShowHighlights(next);
+    if (!next || tournamentHighlights || !activeTournament) return;
+    setLoadingHighlights(true);
+    const { data: games } = await supabase.from("games").select("id").eq("tournament_id", activeTournament.id);
+    const gameIds = (games || []).map((g) => g.id);
+    if (gameIds.length === 0) { setTournamentHighlights({ heatmapPoints: [], participants: [] }); setLoadingHighlights(false); return; }
+    const { data: legs } = await supabase.from("game_legs")
+      .select("player_id, player_name, starting_score, throws, won")
+      .in("game_id", gameIds);
+    setTournamentHighlights(computeTournamentHighlights((legs || []) as unknown as TournamentStatsLegRow[]));
+    setLoadingHighlights(false);
   };
 
   const deleteTournament = async (id: string) => {
@@ -1703,6 +1732,30 @@ const TournamentPage = () => {
   if (!activeTournament) return null;
   const isKo = activeTournament.mode !== "round-robin";
 
+  // Shared by both the K.O. and round-robin returns below — one computed block instead of
+  // duplicating the collapsible markup in each branch.
+  const highlightsSection = (
+    <div className="container mb-4">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <button onClick={toggleHighlights} className="w-full flex items-center justify-between px-4 py-3 text-left">
+          <span className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground">
+            <Target className="w-4 h-4" /> Turnier-Highlights
+          </span>
+          {showHighlights ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {showHighlights && (
+          <div className="px-4 pb-4">
+            {loadingHighlights ? (
+              <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+            ) : tournamentHighlights ? (
+              <TournamentHighlightsPanel highlights={tournamentHighlights} showHeatmap />
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   if (isKo) {
     const matches = activeTournament.bracket as Match[];
     const totalRounds = totalRoundsOf(matches);
@@ -1785,6 +1838,8 @@ const TournamentPage = () => {
             </div>
           </div>
         )}
+
+        {highlightsSection}
 
         {/* View switcher + tournament management */}
         <div className="container mb-2 flex flex-wrap items-center gap-2">
@@ -2050,6 +2105,8 @@ const TournamentPage = () => {
           </Button>
         </div>
       )}
+
+      {highlightsSection}
 
       {/* Standings table */}
       <div className="bg-card rounded-xl border border-border p-4 mb-4">
