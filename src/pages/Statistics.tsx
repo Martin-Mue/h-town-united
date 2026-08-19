@@ -24,6 +24,8 @@ import {
 } from "@/utils/dartStats";
 import { highlightKindLabel } from "@/utils/x01Rules";
 import { generateSeasonReportPdf } from "@/utils/seasonReport";
+import { computeAimBias } from "@/utils/aimBias";
+import AimBiasCard from "@/components/stats/AimBiasCard";
 
 interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
@@ -517,6 +519,20 @@ const StatisticsPage = () => {
       });
     });
     return points;
+  }, [selectedPlayerId, filteredGames, gameLegs]);
+
+  // Same source data as the heatmap above, fed through computeAimBias instead of just plotted —
+  // see aimBias.ts for why this is one pooled statistic across every wedge rather than a
+  // per-number breakdown (which would need far more samples per segment than any club has yet).
+  const playerAimBias = useMemo(() => {
+    if (!selectedPlayerId) return null;
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const darts: DartThrow[] = [];
+    gameLegs.forEach((leg) => {
+      if (leg.player_id !== selectedPlayerId || !filteredIds.has(leg.game_id) || !Array.isArray(leg.throws)) return;
+      darts.push(...(leg.throws as unknown as DartThrow[]));
+    });
+    return computeAimBias(darts);
   }, [selectedPlayerId, filteredGames, gameLegs]);
 
   // Achievements — derived entirely from data already loaded (games/legs/players),
@@ -1165,6 +1181,8 @@ const StatisticsPage = () => {
                   </div>
                 </div>
               )}
+
+              {playerAimBias && <AimBiasCard bias={playerAimBias} />}
 
               {/* Throw heatmap — only camera-scored throws carry a tip position */}
               {playerHeatmapPoints.length > 0 && (
