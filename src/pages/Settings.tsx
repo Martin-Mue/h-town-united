@@ -1,38 +1,63 @@
 import { useTheme } from "next-themes";
-import { Settings as SettingsIcon, Moon, Bell, FileText, TriangleAlert } from "lucide-react";
+import { Settings as SettingsIcon, Moon, Bell, FileText, TriangleAlert, Languages } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { Switch } from "@/components/ui/switch";
 
-/** App-wide preferences. Dark mode and notifications were already toggleable from the header
- *  (see Layout.tsx) — those quick-access icons stay, this page just gives them a proper labeled
- *  home alongside things that don't fit a header icon at all (Impressum). Both toggles here use
- *  the exact same hooks/state as the header ones, so the two stay in sync automatically. */
+/** App-wide preferences. Dark mode and notifications used to also have their own header icons
+ *  (see Layout.tsx) — consolidated here instead now that there's a real settings surface, so
+ *  there's one place for these instead of two. Same underlying hooks/state either way. */
 const SettingsPage = () => {
   const { user } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
   const push = usePushSubscription(user?.id);
 
   return (
     <div className="container py-6 animate-slide-up max-w-2xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <SettingsIcon className="w-6 h-6 text-accent" />
-        <h2 className="text-2xl font-display uppercase">Einstellungen</h2>
+        <h2 className="text-2xl font-display uppercase">{t("settings.title")}</h2>
       </div>
 
       <div className="space-y-3 mb-6">
         <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
+            <Languages className="w-5 h-5 text-muted-foreground shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{t("settings.language")}</p>
+              <p className="text-xs text-muted-foreground">{t("settings.languageDesc")}</p>
+            </div>
+          </div>
+          <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
+            <button
+              onClick={() => setLanguage("de")}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${language === "de" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+            >
+              {t("settings.german")}
+            </button>
+            <button
+              onClick={() => setLanguage("en")}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors border-l border-border ${language === "en" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+            >
+              {t("settings.english")}
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Moon className="w-5 h-5 text-muted-foreground shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-medium">Dunkles Design</p>
-              <p className="text-xs text-muted-foreground">Wechselt zwischen hellem und dunklem Erscheinungsbild.</p>
+              <p className="text-sm font-medium">{t("settings.darkMode")}</p>
+              <p className="text-xs text-muted-foreground">{t("settings.darkModeDesc")}</p>
             </div>
           </div>
           <Switch
             checked={resolvedTheme === "dark"}
             onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-            aria-label="Dunkles Design"
+            aria-label={t("settings.darkMode")}
           />
         </div>
 
@@ -41,32 +66,32 @@ const SettingsPage = () => {
             <div className="flex items-center gap-3 min-w-0">
               <Bell className="w-5 h-5 text-muted-foreground shrink-0" />
               <div className="min-w-0">
-                <p className="text-sm font-medium">Benachrichtigungen</p>
-                <p className="text-xs text-muted-foreground">Z. B. wenn dein Turnierspiel als Nächstes dran ist.</p>
+                <p className="text-sm font-medium">{t("settings.notifications")}</p>
+                <p className="text-xs text-muted-foreground">{t("settings.notificationsDesc")}</p>
               </div>
             </div>
-            <Switch checked={push.enabled} onCheckedChange={push.toggle} disabled={push.busy} aria-label="Benachrichtigungen" />
+            <Switch checked={push.enabled} onCheckedChange={push.toggle} disabled={push.busy} aria-label={t("settings.notifications")} />
           </div>
         )}
       </div>
 
       <div className="bg-card border border-border rounded-xl p-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3 flex items-center gap-2">
-          <FileText className="w-4 h-4" /> Impressum
+          <FileText className="w-4 h-4" /> {t("settings.impressum")}
         </h3>
         {/* Placeholder structure only — a real Impressum needs the club's actual legal details
             (§5 TMG), which I don't have and won't invent. Filled in with real data by the club,
             not shipped as-is. */}
         <div className="flex items-start gap-2 mb-3 text-xs text-accent bg-accent/10 rounded-lg p-2.5">
           <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          <p>Vorlage — bitte mit den echten Vereinsangaben ausfüllen. Erst dann ist diese Seite ein rechtsgültiges Impressum nach §5 TMG.</p>
+          <p>{t("settings.impressumWarning")}</p>
         </div>
         <div className="text-xs text-muted-foreground space-y-3 leading-relaxed">
-          <p>Angaben gemäß § 5 TMG</p>
-          <p>[Vereinsname einfügen]<br />[Straße, Hausnummer einfügen]<br />[PLZ, Ort einfügen]</p>
-          <p><strong className="text-foreground">Vertreten durch:</strong><br />[Name des Vorstands/verantwortliche Person einfügen]</p>
-          <p><strong className="text-foreground">Kontakt:</strong><br />E-Mail: [E-Mail-Adresse einfügen]<br />Telefon: [optional]</p>
-          <p><strong className="text-foreground">Registereintrag:</strong><br />[Vereinsregister, Registergericht, Registernummer einfügen, falls vorhanden]</p>
+          <p>{t("settings.impressumHeading")}</p>
+          <p>{t("settings.impressumClubPlaceholder")}<br />{t("settings.impressumAddressPlaceholder")}<br />{t("settings.impressumCityPlaceholder")}</p>
+          <p><strong className="text-foreground">{t("settings.impressumRepresented")}</strong><br />{t("settings.impressumRepresentedPlaceholder")}</p>
+          <p><strong className="text-foreground">{t("settings.impressumContact")}</strong><br />{t("settings.impressumEmailPlaceholder")}<br />{t("settings.impressumPhoneOptional")}</p>
+          <p><strong className="text-foreground">{t("settings.impressumRegister")}</strong><br />{t("settings.impressumRegisterPlaceholder")}</p>
         </div>
       </div>
     </div>

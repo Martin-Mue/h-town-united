@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, Crosshair } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow } from "@/utils/clubActivity";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import htuLogo from "@/assets/htu-logo.jpg";
@@ -16,12 +17,12 @@ const EVENT_ICON: Record<ActivityEvent["type"], typeof Target> = {
 };
 
 const QUICK_ACTIONS = [
-  { to: "/game", label: "Neues Spiel", desc: "501 · 301 · Cricket", icon: Target },
-  { to: "/tournament", label: "Turnier", desc: "K.O. · Round Robin", icon: Trophy },
-  { to: "/tournaments/series", label: "Saison", desc: "Liga-Tabelle über mehrere Turniere", icon: Medal },
-  { to: "/statistics", label: "Statistiken", desc: "Ranglisten & Vergleiche", icon: BarChart3 },
-  { to: "/training", label: "Training", desc: "Drills & Coaching", icon: Dumbbell },
-  { to: "/players", label: "Verein", desc: "Mitglieder verwalten", icon: Users },
+  { to: "/game", labelKey: "home.newGame", descKey: "home.newGameDesc", icon: Target },
+  { to: "/tournament", labelKey: "home.tournament", descKey: "home.tournamentDesc", icon: Trophy },
+  { to: "/tournaments/series", labelKey: "home.season", descKey: "home.seasonDesc", icon: Medal },
+  { to: "/statistics", labelKey: "home.statistics", descKey: "home.statisticsDesc", icon: BarChart3 },
+  { to: "/training", labelKey: "home.training", descKey: "home.trainingDesc", icon: Dumbbell },
+  { to: "/players", labelKey: "home.club", descKey: "home.clubDesc", icon: Users },
 ];
 
 interface RecentGame {
@@ -34,6 +35,7 @@ interface RecentGame {
 }
 
 const DashboardPage = () => {
+  const { language, t } = useLanguage();
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const pagedRecentGames = usePagedList(recentGames);
@@ -69,11 +71,11 @@ const DashboardPage = () => {
   const formatDate = (iso: string) => {
     const d = new Date(iso);
     const today = new Date();
-    if (d.toDateString() === today.toDateString()) return "Heute";
+    if (d.toDateString() === today.toDateString()) return t("home.today");
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    if (d.toDateString() === yesterday.toDateString()) return "Gestern";
-    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+    if (d.toDateString() === yesterday.toDateString()) return t("home.yesterday");
+    return d.toLocaleDateString(language === "en" ? "en-US" : "de-DE", { day: "2-digit", month: "2-digit" });
   };
 
   return (
@@ -104,24 +106,26 @@ const DashboardPage = () => {
               </div>
             </div>
           </div>
+          {/* Deliberately not translated — it's a wordplay on the town name (Heiligenhaus),
+              not descriptive copy; an English rendering would just lose the point of it. */}
           <p className="font-graffiti text-xl sm:text-2xl leading-tight -rotate-1 select-none text-primary drop-shadow-[0_0_14px_hsl(185_85%_48%/0.45)]">
             Von Heiligenhausern, für Heiligenhaus
           </p>
           <p className="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-muted-foreground font-display mt-2">
-            Darts · Verein · Gemeinschaft
+            {t("home.tagline")}
           </p>
         </div>
       </div>
 
       {/* Quick action cards */}
-      <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">Schnellzugriff</h2>
+      <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("home.quickAccess")}</h2>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {QUICK_ACTIONS.map((action) => (
           <Link key={action.to} to={action.to}
             className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 transition-all group">
             <action.icon className="w-6 h-6 text-primary mb-2 group-hover:scale-110 transition-transform" />
-            <p className="font-semibold text-sm">{action.label}</p>
-            <p className="text-xs text-muted-foreground">{action.desc}</p>
+            <p className="font-semibold text-sm">{t(action.labelKey)}</p>
+            <p className="text-xs text-muted-foreground">{t(action.descKey)}</p>
           </Link>
         ))}
       </div>
@@ -133,7 +137,7 @@ const DashboardPage = () => {
       {activity.length > 0 && (
         <>
           <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
-            <Flame className="w-3.5 h-3.5 text-accent" /> Was war los?
+            <Flame className="w-3.5 h-3.5 text-accent" /> {t("home.whatsHappening")}
           </h2>
           <div className="space-y-2 mb-2">
             {pagedActivity.visible.map((e) => {
@@ -156,10 +160,10 @@ const DashboardPage = () => {
       )}
 
       {/* Recent games feed */}
-      <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">Letzte Spiele</h2>
+      <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("home.recentGames")}</h2>
       {recentGames.length === 0 ? (
         <Link to="/game" className="block bg-card border border-border hover:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-colors">
-          Noch keine Spiele gespielt. <span className="text-primary font-medium">Starte dein erstes Spiel!</span>
+          {t("home.noGamesYet")} <span className="text-primary font-medium">{t("home.startFirstGame")}</span>
         </Link>
       ) : (
         <div className="space-y-2">
@@ -186,7 +190,7 @@ const DashboardPage = () => {
           the app comes back to the foreground and auto-reloads once a newer one takes over, but
           this gives a way to *confirm* that happened instead of just trusting it silently did. */}
       <p className="mt-6 text-center text-[10px] text-muted-foreground/60">
-        Build {__APP_VERSION__} · {new Date(__BUILD_TIME__).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+        Build {__APP_VERSION__} · {new Date(__BUILD_TIME__).toLocaleString(language === "en" ? "en-US" : "de-DE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
       </p>
     </div>
   );
