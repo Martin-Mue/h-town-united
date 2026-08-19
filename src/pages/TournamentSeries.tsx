@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Layers, Plus, Trash2, Loader2, Trophy, ArrowLeft } from "lucide-react";
+import { Layers, Plus, Trash2, Loader2, Trophy, ArrowLeft, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -53,6 +53,7 @@ const TournamentSeriesPage = () => {
   const [tournaments, setTournaments] = useState<TournamentLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [savingSeries, setSavingSeries] = useState(false);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
@@ -70,15 +71,28 @@ const TournamentSeriesPage = () => {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const createSeries = async () => {
+  const resetForm = () => {
+    setName(""); setDesc(""); setScoring(DEFAULT_SCORING); setCreating(false); setEditingId(null);
+  };
+
+  const startEdit = (s: Series) => {
+    setName(s.name); setDesc(s.description || ""); setScoring(s.scoring);
+    setEditingId(s.id); setCreating(true);
+  };
+
+  const saveSeries = async () => {
     if (!name.trim() || !session?.user?.id || savingSeries) return;
     setSavingSeries(true);
     try {
-      const { error } = await supabase.from("tournament_series" as any).insert({
-        user_id: session.user.id, name: name.trim(), description: desc.trim() || null, scoring: scoring as any,
-      });
+      const { error } = editingId
+        ? await supabase.from("tournament_series" as any).update({
+            name: name.trim(), description: desc.trim() || null, scoring: scoring as any,
+          }).eq("id", editingId)
+        : await supabase.from("tournament_series" as any).insert({
+            user_id: session.user.id, name: name.trim(), description: desc.trim() || null, scoring: scoring as any,
+          });
       if (error) { toast({ title: "Fehler", description: error.message, variant: "destructive" }); return; }
-      setName(""); setDesc(""); setScoring(DEFAULT_SCORING); setCreating(false);
+      resetForm();
       fetchAll();
     } finally {
       setSavingSeries(false);
@@ -169,7 +183,7 @@ const TournamentSeriesPage = () => {
         </div>
         <div className="flex items-center gap-2">
           <Link to="/tournament" className="text-xs text-muted-foreground hover:text-foreground">← Turniere</Link>
-          <Button size="sm" onClick={() => setCreating((v) => !v)} className="gap-1">
+          <Button size="sm" onClick={() => (creating ? resetForm() : setCreating(true))} className="gap-1">
             <Plus className="w-4 h-4" /> {creating ? "Abbrechen" : "Neue Serie"}
           </Button>
         </div>
@@ -196,7 +210,9 @@ const TournamentSeriesPage = () => {
               ))}
             </div>
           </div>
-          <Button onClick={createSeries} className="w-full" disabled={!name.trim() || savingSeries}>{savingSeries ? "Anlegen…" : "Serie anlegen"}</Button>
+          <Button onClick={saveSeries} className="w-full" disabled={!name.trim() || savingSeries}>
+            {savingSeries ? "Speichern…" : editingId ? "Änderungen speichern" : "Serie anlegen"}
+          </Button>
         </div>
       )}
 
@@ -218,6 +234,10 @@ const TournamentSeriesPage = () => {
                   <p className="text-xs text-muted-foreground mt-0.5">{count} Turniere · {new Date(s.created_at).toLocaleDateString("de-DE")}</p>
                 </Link>
                 {s.user_id === session?.user?.id && (
+                  <div className="flex items-center">
+                  <Button variant="ghost" size="icon" title="Serie bearbeiten" aria-label="Serie bearbeiten" onClick={() => startEdit(s)}>
+                    <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                  </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon" title="Serie löschen" aria-label="Serie löschen">
@@ -237,6 +257,7 @@ const TournamentSeriesPage = () => {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                  </div>
                 )}
               </div>
             );
