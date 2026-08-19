@@ -13,6 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database, Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
@@ -589,7 +590,7 @@ const TournamentPage = () => {
     if (next && !slug) {
       slug = `${activeTournament.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "turnier"}-${activeTournament.id.slice(0, 6)}`;
     }
-    const { error } = await (supabase as any).from("tournaments").update({
+    const { error } = await supabase.from("tournaments").update({
       public_view: next, public_slug: slug,
     }).eq("id", activeTournament.id);
     if (error) {
@@ -607,18 +608,18 @@ const TournamentPage = () => {
     navigator.clipboard.writeText(url).then(() => toast({ title: "Link kopiert", description: url }));
   };
 
-  const mapTournamentRow = (t: any): TournamentRecord => ({
+  const mapTournamentRow = (t: Database["public"]["Tables"]["tournaments"]["Row"]): TournamentRecord => ({
     ...t,
-    players: (t.players as any) || [],
-    bracket: (t.bracket as any) || [],
-    game_mode: (t as any).game_mode || "501",
-    best_of_legs: (t as any).best_of_legs || 3,
-    series_id: (t as any).series_id || null,
-    round_configs: ((t as any).round_configs as RoundConfig[]) || [],
-    public_view: (t as any).public_view || false,
-    public_slug: (t as any).public_slug || null,
-    boards: (t as any).boards ?? 2,
-    live_play_enabled: (t as any).live_play_enabled ?? true,
+    players: (t.players as unknown as string[]) || [],
+    bracket: (t.bracket as unknown as Match[] | RoundRobinMatch[]) || [],
+    game_mode: t.game_mode || "501",
+    best_of_legs: t.best_of_legs || 3,
+    series_id: t.series_id || null,
+    round_configs: (t.round_configs as unknown as RoundConfig[]) || [],
+    public_view: t.public_view || false,
+    public_slug: t.public_slug || null,
+    boards: t.boards ?? 2,
+    live_play_enabled: t.live_play_enabled ?? true,
   });
 
   const fetchTournaments = useCallback(async () => {
@@ -648,8 +649,8 @@ const TournamentPage = () => {
   }, [dbPlayers]);
 
   const fetchSeries = useCallback(async () => {
-    const { data } = await supabase.from("tournament_series" as any).select("id, name").order("created_at", { ascending: false });
-    if (data) setSeriesList(data as any);
+    const { data } = await supabase.from("tournament_series").select("id, name").order("created_at", { ascending: false });
+    if (data) setSeriesList(data);
   }, []);
 
   useEffect(() => { fetchTournaments(); fetchDbPlayers(); fetchSeries(); }, [fetchTournaments, fetchDbPlayers, fetchSeries]);
@@ -819,7 +820,7 @@ const TournamentPage = () => {
   /** `live_play_enabled` is a recently-added column — if a given Supabase project hasn't had
    *  the migration applied yet, PostgREST rejects the whole write with a schema-cache error.
    *  Retry once without that field rather than hard-failing the entire save on account of it. */
-  const missingLivePlayColumn = (error: any) =>
+  const missingLivePlayColumn = (error: { code?: string; message?: string } | null) =>
     !!error && (error.code === "42703" || String(error.message || "").includes("live_play_enabled"));
 
   // ─── Start Tournament ──────────────────────────
@@ -830,17 +831,17 @@ const TournamentPage = () => {
     const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
 
     if (editingId) {
-      const payload: Record<string, any> = {
+      const payload: Database["public"]["Tables"]["tournaments"]["Update"] = {
         name: tournamentName || "Großevent",
         mode: tournamentMode,
         game_mode: gameMode,
         best_of_legs: bestOfLegs,
-        players: players as any,
-        bracket: bracket as any,
+        players: players as unknown as Json,
+        bracket: bracket as unknown as Json,
         status: "active",
         champion: null,
         series_id: seriesId === "none" ? null : seriesId,
-        round_configs: roundConfigs as any,
+        round_configs: roundConfigs as unknown as Json,
         boards,
         live_play_enabled: livePlayEnabled,
       };
@@ -854,7 +855,14 @@ const TournamentPage = () => {
         toast({ title: "Fehler", description: "Turnier konnte nicht gespeichert werden.", variant: "destructive" });
         return;
       }
-      const rec: TournamentRecord = { ...(upd as any), players: (upd as any).players, bracket: (upd as any).bracket, round_configs: (upd as any).round_configs || [], boards: (upd as any).boards ?? boards, live_play_enabled: (upd as any).live_play_enabled ?? livePlayEnabled };
+      const rec: TournamentRecord = {
+        ...upd,
+        players: upd.players as unknown as string[],
+        bracket: upd.bracket as unknown as Match[] | RoundRobinMatch[],
+        round_configs: (upd.round_configs as unknown as RoundConfig[]) || [],
+        boards: upd.boards ?? boards,
+        live_play_enabled: upd.live_play_enabled ?? livePlayEnabled,
+      };
       setActiveTournament(rec);
       setEditingId(null);
       setBracketView(defaultBracketView(rec.bracket as Match[]));
@@ -866,24 +874,24 @@ const TournamentPage = () => {
       return;
     }
 
-    const insertPayload: Record<string, any> = {
+    const insertPayload: Database["public"]["Tables"]["tournaments"]["Insert"] = {
       name: tournamentName || "Großevent",
       mode: tournamentMode,
       game_mode: gameMode,
       best_of_legs: bestOfLegs,
-      user_id: session?.user?.id,
-      players: players as any,
-      bracket: bracket as any,
+      user_id: session?.user?.id as string,
+      players: players as unknown as Json,
+      bracket: bracket as unknown as Json,
       status: "active",
       series_id: seriesId === "none" ? null : seriesId,
-      round_configs: roundConfigs as any,
+      round_configs: roundConfigs as unknown as Json,
       boards,
       live_play_enabled: livePlayEnabled,
     };
-    let { data, error } = await supabase.from("tournaments").insert(insertPayload as any).select().single();
+    let { data, error } = await supabase.from("tournaments").insert(insertPayload).select().single();
     if (error && missingLivePlayColumn(error)) {
       const { live_play_enabled, ...fallback } = insertPayload;
-      ({ data, error } = await supabase.from("tournaments").insert(fallback as any).select().single());
+      ({ data, error } = await supabase.from("tournaments").insert(fallback).select().single());
     }
 
     if (error || !data) {
@@ -891,7 +899,17 @@ const TournamentPage = () => {
       return;
     }
 
-    const record: TournamentRecord = { ...data, players: data.players as any, bracket: data.bracket as any, game_mode: (data as any).game_mode || gameMode, best_of_legs: (data as any).best_of_legs || bestOfLegs, series_id: (data as any).series_id, round_configs: (data as any).round_configs || [], boards: (data as any).boards ?? boards, live_play_enabled: (data as any).live_play_enabled ?? livePlayEnabled };
+    const record: TournamentRecord = {
+      ...data,
+      players: data.players as unknown as string[],
+      bracket: data.bracket as unknown as Match[] | RoundRobinMatch[],
+      game_mode: data.game_mode || gameMode,
+      best_of_legs: data.best_of_legs || bestOfLegs,
+      series_id: data.series_id,
+      round_configs: (data.round_configs as unknown as RoundConfig[]) || [],
+      boards: data.boards ?? boards,
+      live_play_enabled: data.live_play_enabled ?? livePlayEnabled,
+    };
     setActiveTournament(record);
     setBracketView(defaultBracketView(record.bracket as Match[]));
     setPhase("bracket");
@@ -929,7 +947,7 @@ const TournamentPage = () => {
     newlyPlayableMatches(freshBracket, withKeepers).forEach(notifyMatchReady);
 
     await supabase.from("tournaments").update({
-      bracket: withKeepers as any,
+      bracket: withKeepers as unknown as Json,
       champion,
       status: champion ? "finished" : "active",
     }).eq("id", activeTournament.id);
@@ -986,7 +1004,7 @@ const TournamentPage = () => {
     const nextPlayers = Array.from(new Set(
       preview.filter(m => m.round === 1).flatMap(m => [m.player1, m.player2]).filter(isRealPlayer) as string[]
     ));
-    await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
+    await supabase.from("tournaments").update({ players: nextPlayers as unknown as Json }).eq("id", activeTournament.id);
     setActiveTournament({ ...activeTournament, players: nextPlayers });
     await persistBracket(patch);
     setEditMatch(null);
@@ -1007,7 +1025,7 @@ const TournamentPage = () => {
       return copy;
     });
     const nextPlayers = activeTournament.players.filter(p => p !== name);
-    const { error } = await supabase.from("tournaments").update({ players: nextPlayers as any }).eq("id", activeTournament.id);
+    const { error } = await supabase.from("tournaments").update({ players: nextPlayers as unknown as Json }).eq("id", activeTournament.id);
     if (error) {
       toast({ title: "Fehler", description: "Nur der Ersteller kann Teilnehmer zurückziehen.", variant: "destructive" });
       return;
@@ -1124,7 +1142,7 @@ const TournamentPage = () => {
     }
 
     await supabase.from("tournaments").update({
-      bracket: bracket as any,
+      bracket: bracket as unknown as Json,
       champion,
       status: champion ? "finished" : "active",
     }).eq("id", activeTournament.id);
@@ -1152,7 +1170,7 @@ const TournamentPage = () => {
 
   /** A tournament counts as started as soon as a real match (no BYE) has a winner. */
   const hasStarted = (t: TournamentRecord) => {
-    if (t.mode === "round-robin") return ((t.bracket as any[]) || []).some((m: any) => m.played);
+    if (t.mode === "round-robin") return ((t.bracket as RoundRobinMatch[]) || []).some((m) => m.played);
     return ((t.bracket as Match[]) || []).some(
       (m) => !!m.winner && isRealPlayer(m.player1) && isRealPlayer(m.player2)
     );

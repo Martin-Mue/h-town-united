@@ -9,6 +9,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { type Match, isRealPlayer, totalRoundsOf } from "@/utils/tournament";
@@ -37,7 +38,7 @@ interface TournamentLite {
   status: string;
   champion: string | null;
   players: string[];
-  bracket: any;
+  bracket: Json;
   mode: string;
   created_at: string;
   series_id: string | null;
@@ -61,11 +62,11 @@ const TournamentSeriesPage = () => {
 
   const fetchAll = useCallback(async () => {
     const [s, t] = await Promise.all([
-      supabase.from("tournament_series" as any).select("*").order("created_at", { ascending: false }),
+      supabase.from("tournament_series").select("*").order("created_at", { ascending: false }),
       supabase.from("tournaments").select("id, name, status, champion, players, bracket, mode, created_at, series_id").order("created_at", { ascending: false }),
     ]);
-    if (s.data) setSeries((s.data as any[]).map((r) => ({ ...r, scoring: r.scoring || DEFAULT_SCORING })));
-    if (t.data) setTournaments(t.data.map((x: any) => ({ ...x, players: x.players || [], bracket: x.bracket || [], series_id: x.series_id || null })));
+    if (s.data) setSeries(s.data.map((r) => ({ ...r, scoring: (r.scoring as unknown as Scoring) || DEFAULT_SCORING })));
+    if (t.data) setTournaments(t.data.map((x) => ({ ...x, players: (x.players as unknown as string[]) || [], bracket: x.bracket || [], series_id: x.series_id || null })));
     setLoading(false);
   }, []);
 
@@ -85,11 +86,11 @@ const TournamentSeriesPage = () => {
     setSavingSeries(true);
     try {
       const { error } = editingId
-        ? await supabase.from("tournament_series" as any).update({
-            name: name.trim(), description: desc.trim() || null, scoring: scoring as any,
+        ? await supabase.from("tournament_series").update({
+            name: name.trim(), description: desc.trim() || null, scoring: scoring as unknown as Json,
           }).eq("id", editingId)
-        : await supabase.from("tournament_series" as any).insert({
-            user_id: session.user.id, name: name.trim(), description: desc.trim() || null, scoring: scoring as any,
+        : await supabase.from("tournament_series").insert({
+            user_id: session.user.id, name: name.trim(), description: desc.trim() || null, scoring: scoring as unknown as Json,
           });
       if (error) { toast({ title: "Fehler", description: error.message, variant: "destructive" }); return; }
       resetForm();
@@ -100,7 +101,7 @@ const TournamentSeriesPage = () => {
   };
 
   const deleteSeries = async (sid: string) => {
-    await supabase.from("tournament_series" as any).delete().eq("id", sid);
+    await supabase.from("tournament_series").delete().eq("id", sid);
     fetchAll();
   };
 
@@ -300,7 +301,7 @@ function computeStandings(tourneys: TournamentLite[], scoring: Scoring): Standin
     });
 
     if (t.mode !== "round-robin" && Array.isArray(t.bracket)) {
-      const matches = t.bracket as Match[];
+      const matches = t.bracket as unknown as Match[];
       if (matches.length > 0) {
         const totalRounds = totalRoundsOf(matches);
         const finalM = matches.find((m) => m.round === totalRounds);
