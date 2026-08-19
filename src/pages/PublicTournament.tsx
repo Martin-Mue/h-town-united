@@ -17,6 +17,8 @@ import {
   type LiveSnapshot,
 } from "@/utils/tournament";
 import QrCodeDialog from "@/components/QrCodeDialog";
+import AnimatedScore from "@/components/AnimatedScore";
+import { getCheckoutSuggestion } from "@/utils/checkoutTable";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
 
@@ -398,6 +400,33 @@ function roundRobinBoardCards(matches: RoundRobinMatch[], boards: number): { now
   return { now, onDeck, queuedCount };
 }
 
+/** Live checkout-route callout for the board-overview cards — the same "what do they need"
+ *  suggestion the in-game CheckoutSuggestion component shows the player themselves, surfaced to
+ *  spectators too. Only ever a suggestion (there are usually several valid routes); shows
+ *  nothing once a player's remaining score can't be finished in 3 darts under double-out. */
+const CheckoutBadges = ({ player1, player2, live }: { player1: string; player2: string; live?: LiveSnapshot }) => {
+  const badges: { name: string; route: string[] }[] = [];
+  if (typeof live?.remaining1 === "number") {
+    const route = getCheckoutSuggestion(live.remaining1);
+    if (route) badges.push({ name: player1, route });
+  }
+  if (typeof live?.remaining2 === "number") {
+    const route = getCheckoutSuggestion(live.remaining2);
+    if (route) badges.push({ name: player2, route });
+  }
+  if (badges.length === 0) return null;
+  return (
+    <div className="mt-1.5 space-y-1">
+      {badges.map((b) => (
+        <p key={b.name} className="text-[clamp(0.6rem,0.95vw,0.75rem)] text-accent flex items-center gap-1.5">
+          <span className="shrink-0">🎯 {b.name}:</span>
+          <span className="font-mono">{b.route.join(" ")}</span>
+        </p>
+      ))}
+    </div>
+  );
+};
+
 /**
  * Full-bleed, large-type board grid for TV/projector mirroring at club nights — shows
  * every board's current pairing + last known leg score at a glance from across the room,
@@ -475,7 +504,9 @@ const BoardOverview = ({
                 {c.player2}
               </p>
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
-                <span className="font-display text-[clamp(1.4rem,2.6vw,2rem)] text-secondary">{c.score1} : {c.score2}</span>
+                <span className="font-display text-[clamp(1.4rem,2.6vw,2rem)] text-secondary">
+                  <AnimatedScore value={c.score1} /> : <AnimatedScore value={c.score2} />
+                </span>
                 {c.scorekeeper !== undefined && (
                   <span className="text-[clamp(0.7rem,1.1vw,0.9rem)] text-muted-foreground flex items-center gap-1">
                     <PenLine className="w-3.5 h-3.5" /> {c.scorekeeper || "–"}
@@ -483,13 +514,16 @@ const BoardOverview = ({
                 )}
               </div>
               {isLiveSnapshotFresh(c.live) && (
-                <div className="mt-2 flex items-center justify-between rounded-lg bg-destructive/10 border border-destructive/30 px-2.5 py-1.5">
-                  <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-destructive flex items-center gap-1.5">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" /> Live
-                  </span>
-                  <span className="font-display text-[clamp(1rem,1.8vw,1.4rem)]">
-                    {c.live!.remaining1} : {c.live!.remaining2}
-                  </span>
+                <div className="mt-2 rounded-lg bg-destructive/10 border border-destructive/30 px-2.5 py-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-destructive flex items-center gap-1.5">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" /> Live
+                    </span>
+                    <span className="font-display text-[clamp(1rem,1.8vw,1.4rem)]">
+                      <AnimatedScore value={c.live!.remaining1 ?? 0} /> : <AnimatedScore value={c.live!.remaining2 ?? 0} />
+                    </span>
+                  </div>
+                  <CheckoutBadges player1={c.player1} player2={c.player2} live={c.live} />
                 </div>
               )}
             </div>
