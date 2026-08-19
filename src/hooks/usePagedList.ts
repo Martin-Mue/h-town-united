@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export interface PagedList<T> {
   visible: T[];
@@ -7,41 +7,45 @@ export interface PagedList<T> {
   page: number;
   pageCount: number;
   setPage: (page: number) => void;
-  showingAll: boolean;
-  isPaginated: boolean;
-  /** True only when there's an actual shorter view to collapse back to — false for a list short
-   *  enough that it always renders in full, so a "weniger anzeigen" button never appears with
-   *  nothing to hide. */
+  /** False = still collapsed to the initial `collapseAt`-sized teaser. */
+  expanded: boolean;
+  /** True whenever there's an actual shorter view to collapse back to — false for a list short
+   *  enough that it always renders in full, so "weniger anzeigen" never appears with nothing to
+   *  hide. Stays true even once paginated, so a deep page can still collapse straight back to 5. */
   canCollapse: boolean;
+  /** True only once expanded AND there's more than one page — gates the prev/next controls. */
+  isPaginated: boolean;
   expand: () => void;
+  /** Collapses all the way back to the initial teaser, resetting to page 1 too — not just "go
+   *  back one page". Anything that can be opened needs a way back to where it started. */
   collapse: () => void;
 }
 
 /**
- * Small-list-friendly windowing, shared by every long list in the app. Default thresholds (5 /
- * 20 / 20-per-page) match the app's standard list treatment — override only for a good reason
- * (e.g. a grid of <video> cards, which is heavier per item than a text row). Three tiers,
- * cheapest first:
+ * Small-list-friendly windowing, shared by every long list in the app. Default thresholds
+ * (collapse at 5, page at 20) match the app's standard list treatment — override only for a
+ * good reason (e.g. a grid of <video> cards, which is heavier per item than a text row).
+ * One progressive flow, not three independent size brackets:
  *  - `totalCount <= collapseAt`: everything renders, no controls at all — most lists in a
  *    single-club install never leave this tier.
- *  - `collapseAt < totalCount < paginateAt`: an initial `collapseAt`-sized slice plus a
- *    "mehr anzeigen" button that reveals the rest (up to `paginateAt - 1` items) in one go —
- *    and, once expanded, a "weniger anzeigen" button to collapse back. Anything that can be
- *    opened needs to be closeable again, not a one-way trip.
- *  - `totalCount >= paginateAt`: real paged navigation (`pageSize` per page) instead of "show
- *    everything", since that would mean rendering hundreds of rows/cards/videos at once.
+ *  - Otherwise it STARTS collapsed to `collapseAt` items regardless of how large the full list
+ *    is, with a "mehr anzeigen" button.
+ *  - Expanding reveals up to `pageSize` items (page 1) — if that's everything, a "weniger
+ *    anzeigen" button collapses back. If there's more than `pageSize` total, prev/next paging
+ *    (plus a way to collapse straight back to the teaser) takes over instead of rendering
+ *    hundreds of rows/cards/videos at once.
  * `page` is clamped against the current page count on every render, so a filter that shrinks
  * `items` can't leave it pointing past the new end — no separate reset-on-filter-change needed.
  */
 export function usePagedList<T>(
   items: T[],
-  opts?: { collapseAt?: number; paginateAt?: number; pageSize?: number },
+  opts?: { collapseAt?: number; pageSize?: number },
 ): PagedList<T> {
   const collapseAt = opts?.collapseAt ?? 5;
-  const paginateAt = opts?.paginateAt ?? 21;
   const pageSize = opts?.pageSize ?? 20;
   const [expanded, setExpanded] = useState(false);
   const [page, setPageState] = useState(1);
+  const collapse = useCallback(() => { setExpanded(false); setPageState(1); }, []);
 
   return useMemo((): PagedList<T> => {
     const totalCount = items.length;
@@ -49,16 +53,15 @@ export function usePagedList<T>(
     if (totalCount <= collapseAt) {
       return {
         visible: items, totalCount, visibleCount: totalCount, page: 1, pageCount: 1, setPage: () => {},
-        showingAll: true, isPaginated: false, canCollapse: false, expand: () => {}, collapse: () => {},
+        expanded: true, canCollapse: false, isPaginated: false, expand: () => {}, collapse: () => {},
       };
     }
 
-    if (totalCount < paginateAt) {
-      const visible = expanded ? items : items.slice(0, collapseAt);
+    if (!expanded) {
+      const visible = items.slice(0, collapseAt);
       return {
         visible, totalCount, visibleCount: visible.length, page: 1, pageCount: 1, setPage: () => {},
-        showingAll: expanded, isPaginated: false, canCollapse: true,
-        expand: () => setExpanded(true), collapse: () => setExpanded(false),
+        expanded: false, canCollapse: true, isPaginated: false, expand: () => setExpanded(true), collapse,
       };
     }
 
@@ -68,7 +71,7 @@ export function usePagedList<T>(
     return {
       visible, totalCount, visibleCount: visible.length, page: clampedPage, pageCount,
       setPage: (p: number) => setPageState(Math.min(Math.max(1, p), pageCount)),
-      showingAll: false, isPaginated: true, canCollapse: false, expand: () => {}, collapse: () => {},
+      expanded: true, canCollapse: true, isPaginated: pageCount > 1, expand: () => {}, collapse,
     };
-  }, [items, expanded, page, collapseAt, paginateAt, pageSize]);
+  }, [items, expanded, page, collapseAt, pageSize, collapse]);
 }

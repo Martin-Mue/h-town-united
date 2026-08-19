@@ -244,6 +244,38 @@ export type Database = {
           },
         ]
       }
+      manual_180_entries: {
+        Row: {
+          count: number
+          created_at: string
+          id: string
+          player_id: string
+          year: number
+        }
+        Insert: {
+          count: number
+          created_at?: string
+          id?: string
+          player_id: string
+          year: number
+        }
+        Update: {
+          count?: number
+          created_at?: string
+          id?: string
+          player_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_180_entries_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           ai_portrait_url: string | null

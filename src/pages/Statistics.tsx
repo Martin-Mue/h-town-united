@@ -28,6 +28,8 @@ import { computeAimBias } from "@/utils/aimBias";
 import AimBiasCard from "@/components/stats/AimBiasCard";
 import { computeClutchStats } from "@/utils/clutchStats";
 import ClutchCard from "@/components/stats/ClutchCard";
+import { combine180Breakdown, manualEntriesApplicable, type Manual180Entry } from "@/utils/manual180";
+import Manual180Editor from "@/components/stats/Manual180Editor";
 import SeasonRecap from "@/components/stats/SeasonRecap";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
@@ -82,6 +84,7 @@ const StatisticsPage = () => {
   const [players, setPlayers] = useState<PlayerStats[]>([]);
   const [gameLegs, setGameLegs] = useState<GameLegRecord[]>([]);
   const [highlightClips, setHighlightClips] = useState<HighlightClipRecord[]>([]);
+  const [manual180Entries, setManual180Entries] = useState<{ id: string; player_id: string; year: number; count: number }[]>([]);
   // storage_path -> short-lived signed URL. The dart-clips bucket is private (see migration
   // 20260816090000_security_advisor_fixes), so plain getPublicUrl() no longer resolves to
   // anything playable — every clip needs a signed URL fetched under the viewer's own auth.
@@ -113,7 +116,7 @@ const StatisticsPage = () => {
   const { session } = useAuth();
 
   const fetchData = useCallback(async () => {
-    const [gamesRes, playersRes, legsRes, clipsRes] = await Promise.all([
+    const [gamesRes, playersRes, legsRes, clipsRes, manual180Res] = await Promise.all([
       supabase.from("games")
         .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats")
         .order("played_at", { ascending: false }).limit(500),
@@ -123,11 +126,13 @@ const StatisticsPage = () => {
       supabase.from("game_legs").select("id, game_id, leg_number, player_index, player_name, player_id, starting_score, throws, won")
         .order("created_at", { ascending: false }).limit(4000),
       supabase.from("highlight_clips").select("*").order("created_at", { ascending: false }).limit(200),
+      supabase.from("manual_180_entries").select("id, player_id, year, count"),
     ]);
     if (gamesRes.data) setGames(gamesRes.data as GameRecord[]);
     if (playersRes.data) setPlayers(playersRes.data);
     if (legsRes.data) setGameLegs(legsRes.data as unknown as GameLegRecord[]);
     if (clipsRes.data) setHighlightClips(clipsRes.data as unknown as HighlightClipRecord[]);
+    if (manual180Res.data) setManual180Entries(manual180Res.data);
     setLoading(false);
   }, []);
 
@@ -360,6 +365,30 @@ const StatisticsPage = () => {
     return { totalGames, totalPlayers, avgOfAverages, bestAvg, bestHighscore, mostGames, totalDarts, highestGameAvg, mostWins };
   }, [filteredGames, players]);
 
+  // 180s across the WHOLE club (every player, camera-tracked + manually backfilled), scoped to
+  // whatever filter is active — same filteredGames convention every other club stat above
+  // already uses. Manual entries only ever get counted in when the active filter is itself
+  // whole-year-or-lifetime granularity (see manualEntriesApplicable) since a manual entry can't
+  // be verified against a relative window like "last 7 days".
+  const club180Breakdown = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const yearByGame = new Map(filteredGames.map((g) => [g.id, new Date(g.played_at).getFullYear()]));
+    const appTrackedByYear: Record<number, number> = {};
+    gameLegs.forEach((leg) => {
+      if (!filteredIds.has(leg.game_id) || !Array.isArray(leg.throws)) return;
+      const year = yearByGame.get(leg.game_id);
+      if (year === undefined) return;
+      const n = count180s(leg.throws as unknown as DartThrow[]);
+      if (n > 0) appTrackedByYear[year] = (appTrackedByYear[year] ?? 0) + n;
+    });
+    const manualEntries: Manual180Entry[] = manualEntriesApplicable(filterTime)
+      ? manual180Entries.filter((e) => filterYear === "all" || e.year === Number(filterYear))
+      : [];
+    return combine180Breakdown(appTrackedByYear, manualEntries);
+  }, [filteredGames, gameLegs, manual180Entries, filterTime, filterYear]);
+
+  const club180Total = useMemo(() => club180Breakdown.reduce((s, y) => s + y.total, 0), [club180Breakdown]);
+
   const leaderboard = useMemo(() => {
     // Any active filter (season, time range, mode, ...) switches the leaderboard from
     // lifetime totals to stats recomputed for just the filtered games.
@@ -563,6 +592,30 @@ const StatisticsPage = () => {
     return computeClutchStats(relevantGames, relevantLegs, selectedPlayerId);
   }, [selectedPlayerId, filteredGames, gameLegs, games]);
 
+  // Same club180Breakdown logic, scoped to just the selected player — the year/total filtering
+  // the player detail view needs is just the SAME filterYear/filterTime state everything else
+  // on this page already uses, applied here too rather than a separate bespoke filter.
+  const player180Breakdown = useMemo(() => {
+    if (!selectedPlayerId) return [];
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const yearByGame = new Map(filteredGames.map((g) => [g.id, new Date(g.played_at).getFullYear()]));
+    const appTrackedByYear: Record<number, number> = {};
+    gameLegs.forEach((leg) => {
+      if (leg.player_id !== selectedPlayerId || !filteredIds.has(leg.game_id) || !Array.isArray(leg.throws)) return;
+      const year = yearByGame.get(leg.game_id);
+      if (year === undefined) return;
+      const n = count180s(leg.throws as unknown as DartThrow[]);
+      if (n > 0) appTrackedByYear[year] = (appTrackedByYear[year] ?? 0) + n;
+    });
+    const myManualEntries = manual180Entries.filter((e) => e.player_id === selectedPlayerId);
+    const manualEntries: Manual180Entry[] = manualEntriesApplicable(filterTime)
+      ? myManualEntries.filter((e) => filterYear === "all" || e.year === Number(filterYear))
+      : [];
+    return combine180Breakdown(appTrackedByYear, manualEntries);
+  }, [selectedPlayerId, filteredGames, gameLegs, manual180Entries, filterTime, filterYear]);
+
+  const player180Total = useMemo(() => player180Breakdown.reduce((s, y) => s + y.total, 0), [player180Breakdown]);
+
   // Everything the "Saison-Rückblick" recap needs, scoped to whatever filter (season/mode/etc.)
   // is currently active — same filteredGames-id-set convention as playerAimBias above, so
   // "your season" genuinely reflects the season filter rather than always being lifetime.
@@ -732,7 +785,7 @@ const StatisticsPage = () => {
 
   // Each card renders a real <video> element — noticeably heavier than a text row, hence the
   // lower thresholds than the app's other lists.
-  const pagedClips = usePagedList(filteredClips, { collapseAt: 6, paginateAt: 30, pageSize: 12 });
+  const pagedClips = usePagedList(filteredClips, { collapseAt: 6, pageSize: 12 });
 
   // Batch-fetch signed URLs for whatever's currently visible — one request for the whole page
   // of clips instead of one per <video>. Re-runs whenever the filtered set changes (new clip
@@ -938,6 +991,7 @@ const StatisticsPage = () => {
               { label: "Mitglieder", value: clubStats.totalPlayers, icon: Users, color: "text-secondary" },
               { label: "Ø Club-Average", value: clubStats.avgOfAverages.toFixed(1), icon: TrendingUp, color: "text-accent" },
               { label: "Geworfene Darts", value: clubStats.totalDarts.toLocaleString(), icon: Hash, color: "text-primary" },
+              { label: "180er", value: club180Total, icon: Target, color: "text-accent" },
             ].map(s => (
               <div key={s.label} className="bg-card rounded-xl p-4 border border-border">
                 <s.icon className={`w-4 h-4 ${s.color} mb-1`} />
@@ -1256,6 +1310,35 @@ const StatisticsPage = () => {
 
               {playerAimBias && <AimBiasCard bias={playerAimBias} />}
               {playerClutchStats && <ClutchCard stats={playerClutchStats} />}
+
+              {/* 180s: app-tracked + manually backfilled, combined per year. Always shown for
+                  your own profile (even at 0) since that's also where the backfill editor lives;
+                  hidden for someone else's profile when there's nothing to show. */}
+              {(player180Total > 0 || playerDetailStats.player.user_id === session?.user?.id) && (
+                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                  <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
+                    <Target className="w-4 h-4" /> 180er
+                  </h3>
+                  <p className="font-display text-3xl">{player180Total}</p>
+                  {player180Breakdown.length > 0 && (
+                    <div className="mt-2 space-y-0.5">
+                      {player180Breakdown.map((y) => (
+                        <div key={y.year} className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{y.year}</span>
+                          <span>{y.total}{y.manual > 0 && ` (davon ${y.manual} nachgetragen)`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {playerDetailStats.player.user_id === session?.user?.id && (
+                    <Manual180Editor
+                      playerId={selectedPlayerId}
+                      entries={manual180Entries.filter((e) => e.player_id === selectedPlayerId)}
+                      onChanged={fetchData}
+                    />
+                  )}
+                </div>
+              )}
 
               {/* Throw heatmap — only camera-scored throws carry a tip position */}
               {playerHeatmapPoints.length > 0 && (

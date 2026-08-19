@@ -3,25 +3,36 @@ import { Button } from "@/components/ui/button";
 import type { PagedList } from "@/hooks/usePagedList";
 
 /** Renders whatever control (if any) a usePagedList result currently needs — nothing for a list
- *  short enough to always show in full, a "mehr anzeigen"/"weniger anzeigen" toggle in the
- *  collapsible tier (whichever direction is currently available — anything that can be opened
- *  must stay closeable too), or prev/next paging once the list is large enough to have switched
- *  to real pagination. One shared footer so every long list in the app gets the same look. */
+ *  short enough to always show in full, a "mehr anzeigen" teaser, "weniger anzeigen" once
+ *  expanded, or prev/next paging (plus a way to collapse straight back to the teaser) once
+ *  there's more than one page. One shared footer so every long list in the app matches. */
 export function ListPaginationFooter<T>({ list }: { list: PagedList<T> }) {
-  if (!list.isPaginated) {
-    if (!list.canCollapse) return null;
+  if (!list.canCollapse) return null;
+
+  if (!list.expanded) {
     return (
       <button
-        onClick={list.showingAll ? list.collapse : list.expand}
+        onClick={list.expand}
         className="w-full text-xs text-muted-foreground hover:text-foreground text-center py-2 transition-colors"
       >
-        {list.showingAll ? "weniger anzeigen ▴" : `${list.visibleCount} von ${list.totalCount} · mehr anzeigen ▾`}
+        {list.visibleCount} von {list.totalCount} · mehr anzeigen ▾
+      </button>
+    );
+  }
+
+  if (!list.isPaginated) {
+    return (
+      <button
+        onClick={list.collapse}
+        className="w-full text-xs text-muted-foreground hover:text-foreground text-center py-2 transition-colors"
+      >
+        weniger anzeigen ▴
       </button>
     );
   }
 
   return (
-    <div className="flex items-center justify-center gap-3 py-2">
+    <div className="flex items-center justify-center gap-2 py-2 flex-wrap">
       <Button
         variant="ghost" size="icon" className="h-9 w-9"
         disabled={list.page <= 1}
@@ -39,6 +50,9 @@ export function ListPaginationFooter<T>({ list }: { list: PagedList<T> }) {
       >
         <ChevronRight className="w-4 h-4" />
       </Button>
+      <button onClick={list.collapse} className="text-xs text-muted-foreground hover:text-foreground ml-1">
+        weniger anzeigen ▴
+      </button>
     </div>
   );
 }
