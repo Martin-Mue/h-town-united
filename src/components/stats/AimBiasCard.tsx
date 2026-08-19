@@ -1,6 +1,6 @@
-import { Crosshair } from "lucide-react";
+import { Crosshair, Lightbulb } from "lucide-react";
 import { RING } from "@/utils/dartboardGeometry";
-import type { AimBiasResult } from "@/utils/aimBias";
+import { describeAimTip, type AimBiasResult } from "@/utils/aimBias";
 
 interface AimBiasCardProps {
   bias: AimBiasResult;
@@ -70,6 +70,10 @@ const AimBiasCard = ({ bias }: AimBiasCardProps) => {
           <p><span className="text-muted-foreground">Seitlich: </span><span className="font-semibold">{fmtMm(bias.tangentialOffsetMm)}</span> <span className="text-muted-foreground">({tangentialWord})</span></p>
           <p className="text-[10px] text-muted-foreground pt-1">Bezogen auf ein Ziel oben am Board (z. B. T20) — bei Zielen weiter unten am Board dreht sich die seitliche Richtung entsprechend mit.</p>
         </div>
+      </div>
+      <div className="mt-3 pt-3 border-t border-border/60 flex items-start gap-2">
+        <Lightbulb className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+        <p className="text-xs text-accent">{describeAimTip(bias)}</p>
       </div>
     </div>
   );

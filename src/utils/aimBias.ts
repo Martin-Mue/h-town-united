@@ -101,4 +101,32 @@ export function computeAimBias(darts: CoordDart[]): AimBiasResult | null {
   };
 }
 
+/** Below this, a described offset reads as noise rather than a real tendency worth correcting —
+ *  same threshold AimBiasCard already used for its "gut getroffen" wording, now shared here so
+ *  the diagnosis and the correction advice can never disagree about what counts as "off". */
+const NEGLIGIBLE_MM = 0.5;
+
+/**
+ * Turns the raw diagnosis into an actual correction, not just a description of the problem —
+ * "you're landing left" on its own tells a player what already happened, not what to do about
+ * it. Phrased relative to a target near the top of the board (T20, the common case — same
+ * reference AimBiasCard's arrow uses) since "clockwise" only means a fixed screen direction once
+ * you fix which wedge you're talking about.
+ */
+export function describeAimTip(result: AimBiasResult): string {
+  const parts: string[] = [];
+  if (result.radialOffsetMm > NEGLIGIBLE_MM) {
+    parts.push("ziel bewusst etwas näher zur Mitte");
+  } else if (result.radialOffsetMm < -NEGLIGIBLE_MM) {
+    parts.push("du darfst ruhig etwas selbstbewusster nach außen zielen");
+  }
+  if (result.tangentialOffsetMm > NEGLIGIBLE_MM) {
+    parts.push("bei Zielen oben am Board (z. B. T20) leicht nach links korrigieren");
+  } else if (result.tangentialOffsetMm < -NEGLIGIBLE_MM) {
+    parts.push("bei Zielen oben am Board (z. B. T20) leicht nach rechts korrigieren");
+  }
+  if (parts.length === 0) return "Deine Wurftendenz ist aktuell unauffällig — einfach so weitermachen.";
+  return `Versuch: ${parts.join(" und ")}.`;
+}
+
 export { MIN_SAMPLE as AIM_BIAS_MIN_SAMPLE };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeAimBias, AIM_BIAS_MIN_SAMPLE, type CoordDart } from "./aimBias";
+import { computeAimBias, describeAimTip, AIM_BIAS_MIN_SAMPLE, type CoordDart, type AimBiasResult } from "./aimBias";
 import { SEGMENTS_CLOCKWISE, RING } from "./dartboardGeometry";
 
 /** Builds a synthetic dart landing exactly `radialOff`/`tangentialOff` (board-units) away from
@@ -88,5 +88,38 @@ describe("computeAimBias", () => {
     const manual: CoordDart[] = Array.from({ length: 10 }, () => ({ baseValue: 20, multiplier: 3 }));
     const result = computeAimBias([...withCoords, ...manual])!;
     expect(result.sampleSize).toBe(AIM_BIAS_MIN_SAMPLE);
+  });
+});
+
+describe("describeAimTip", () => {
+  const withOffsets = (radialOffsetMm: number, tangentialOffsetMm: number): AimBiasResult => ({
+    sampleSize: 30, avgRadialOffset: 0, avgTangentialOffset: 0, radialOffsetMm, tangentialOffsetMm,
+  });
+
+  it("matches the real case that prompted this feature: landing left → correct right", () => {
+    // Actual user-reported reading: +6.8mm radial (too far out), -3.1mm tangential — confirmed
+    // by the user themselves as a real, felt left-leaning tendency. -3.1 must produce "nach
+    // rechts" (correct right to counteract drifting left), never "nach links".
+    const tip = describeAimTip(withOffsets(6.8, -3.1));
+    expect(tip).toContain("nach rechts");
+    expect(tip).not.toContain("nach links");
+    expect(tip).toContain("näher zur Mitte");
+  });
+
+  it("tells a clockwise (right-drifting) bias to correct left", () => {
+    const tip = describeAimTip(withOffsets(0, 3.1));
+    expect(tip).toContain("nach links");
+    expect(tip).not.toContain("nach rechts");
+  });
+
+  it("tells a too-short bias to aim further out, not closer in", () => {
+    const tip = describeAimTip(withOffsets(-6.8, 0));
+    expect(tip).toContain("nach außen");
+    expect(tip).not.toContain("näher zur Mitte");
+  });
+
+  it("says nothing needs correcting when both offsets are negligible", () => {
+    const tip = describeAimTip(withOffsets(0.2, -0.1));
+    expect(tip).toMatch(/unauffällig/);
   });
 });
