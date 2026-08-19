@@ -218,6 +218,8 @@ const StatisticsPage = () => {
     };
   }, [filteredGames, filterPlayerId]);
 
+  const pagedTreblePerPlayer = usePagedList(trebleStats.perPlayer);
+
   // Checkout %, highest checkout, first-9 average — computed from the dart-by-dart
   // game_legs data (not available on X01 games only; Cricket has no "checkout").
   const advancedByPlayer = useMemo(() => {
@@ -379,6 +381,8 @@ const StatisticsPage = () => {
     });
   }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive]);
 
+  const pagedLeaderboard = usePagedList(leaderboard);
+
   const exportLeaderboardCsv = () => {
     const header = ["Platz", "Name", "Spiele", "Siege", "Punkte", "Elo", "Average", "Highscore", "Checkout %"];
     const rows = leaderboard.map((p, i) => [
@@ -467,8 +471,9 @@ const StatisticsPage = () => {
       else currentStreak = 0;
     });
 
-    // Recent form (last 10)
-    const recentForm = playerGames.slice(0, 10).map(g => {
+    // Recent form — full history, windowed for display by usePagedList in the render below
+    // rather than hard-capped here.
+    const recentForm = playerGames.map(g => {
       const isP1 = g.player1_id === selectedPlayerId;
       return {
         won: g.winner_name === (isP1 ? g.player1_name : g.player2_name),
@@ -509,6 +514,8 @@ const StatisticsPage = () => {
 
     return { player, winRate, averageTrend, currentStreak, bestStreak, recentForm, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: playerGames.length };
   }, [selectedPlayerId, filteredGames, players]);
+
+  const pagedRecentForm = usePagedList(playerDetailStats?.recentForm ?? []);
 
   // Throw heatmap — board-relative tip coordinates (boardU/boardV) are camera-framing-
   // independent, so points from different games/devices/sessions are directly comparable.
@@ -668,7 +675,8 @@ const StatisticsPage = () => {
     setFilterPlayerId("all");
   }, [viewScope, myPlayer]);
 
-  const recentGames = (viewScope === "personal" ? personalGames : filteredGames).slice(0, 20);
+  const recentGames = viewScope === "personal" ? personalGames : filteredGames;
+  const pagedRecentGames = usePagedList(recentGames);
 
   // Leg-by-leg breakdown per game, from the dart-by-dart game_legs data.
   const legsByGame = useMemo(() => {
@@ -1006,7 +1014,7 @@ const StatisticsPage = () => {
               </ResponsiveContainer>
               {trebleStats.perPlayer.length > 1 && (
                 <div className="mt-3 space-y-1">
-                  {trebleStats.perPlayer.slice(0, 8).map((p) => (
+                  {pagedTreblePerPlayer.visible.map((p) => (
                     <div key={p.name} className="flex items-center justify-between gap-2 text-xs">
                       {/* min-w-0 is required for truncate to actually take effect on a flex
                           child — without it the browser's default auto min-width keeps the
@@ -1017,6 +1025,7 @@ const StatisticsPage = () => {
                       </span>
                     </div>
                   ))}
+                  <ListPaginationFooter list={pagedTreblePerPlayer} />
                 </div>
               )}
             </div>
@@ -1085,7 +1094,9 @@ const StatisticsPage = () => {
               </div>
             ) : (
               <div className="space-y-1">
-                {leaderboard.map((p, i) => {
+                {pagedLeaderboard.visible.map((p) => {
+                  // True rank in the full standings, not the index within this page/slice.
+                  const i = leaderboard.indexOf(p);
                   const winRate = p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
                   const sortVal = sortBy === "average" ? Number(p.average).toFixed(1) :
                     sortBy === "games_won" ? p.games_won : sortBy === "high_score" ? p.high_score :
@@ -1108,6 +1119,7 @@ const StatisticsPage = () => {
                     </button>
                   );
                 })}
+                <ListPaginationFooter list={pagedLeaderboard} />
               </div>
             )}
           </div>
@@ -1286,16 +1298,16 @@ const StatisticsPage = () => {
               {/* Recent form */}
               {playerDetailStats.recentForm.length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-4 mb-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Letzte 10 Spiele</h3>
-                  <div className="flex gap-1 mb-3">
-                    {playerDetailStats.recentForm.map((f, i) => (
+                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Form</h3>
+                  <div className="flex gap-1 mb-3 flex-wrap">
+                    {pagedRecentForm.visible.map((f, i) => (
                       <div key={i} className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold ${f.won ? "bg-secondary/20 text-secondary" : "bg-destructive/20 text-destructive"}`}>
                         {f.won ? "W" : "L"}
                       </div>
                     ))}
                   </div>
                   <div className="space-y-1">
-                    {playerDetailStats.recentForm.map((f, i) => (
+                    {pagedRecentForm.visible.map((f, i) => (
                       <div key={i} className="flex items-center justify-between gap-2 text-xs px-2 py-1 rounded bg-muted/30">
                         <span className={`shrink-0 font-bold ${f.won ? "text-secondary" : "text-destructive"}`}>{f.won ? "Sieg" : "Ndl."}</span>
                         <span className="min-w-0 flex-1 truncate text-muted-foreground">vs {f.opponent}</span>
@@ -1304,6 +1316,7 @@ const StatisticsPage = () => {
                       </div>
                     ))}
                   </div>
+                  <ListPaginationFooter list={pagedRecentForm} />
                 </div>
               )}
 
@@ -1459,7 +1472,7 @@ const StatisticsPage = () => {
             </div>
           ) : (
             <div className="space-y-2">
-              {recentGames.map(g => {
+              {pagedRecentGames.visible.map(g => {
                 const legs = legsByGame[g.id];
                 const isExpanded = expandedGameId === g.id;
                 return (
@@ -1527,6 +1540,7 @@ const StatisticsPage = () => {
               })}
             </div>
           )}
+          <ListPaginationFooter list={pagedRecentGames} />
         </div>
       )}
 

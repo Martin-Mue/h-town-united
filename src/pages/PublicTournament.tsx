@@ -674,7 +674,7 @@ const PublicTournamentPage = () => {
     let cancelled = false;
 
     const load = async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from("tournaments_public")
         .select("*")
         .eq("public_slug", slug)
@@ -682,9 +682,9 @@ const PublicTournamentPage = () => {
       if (cancelled) return;
       if (!data) { setNotFound(true); setLoading(false); return; }
       setT({
-        ...(data as any),
-        players: (data as any).players || [],
-        bracket: (data as any).bracket || [],
+        ...(data as unknown as TournamentRow),
+        players: (data.players as unknown as string[]) || [],
+        bracket: (data.bracket as unknown as Match[]) || [],
       });
       setLoading(false);
     };

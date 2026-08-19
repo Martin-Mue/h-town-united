@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, Crosshair } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow } from "@/utils/clubActivity";
+import { usePagedList } from "@/hooks/usePagedList";
+import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem-color.png";
 
@@ -34,6 +36,8 @@ interface RecentGame {
 const DashboardPage = () => {
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const pagedRecentGames = usePagedList(recentGames);
+  const pagedActivity = usePagedList(activity);
 
   useEffect(() => {
     const load = async () => {
@@ -41,7 +45,7 @@ const DashboardPage = () => {
         .from("games")
         .select("id, mode, player1_name, player2_name, winner_name, played_at")
         .order("played_at", { ascending: false })
-        .limit(5);
+        .limit(100);
       if (data) setRecentGames(data);
     };
     load();
@@ -56,7 +60,7 @@ const DashboardPage = () => {
         supabase.from("game_legs").select("game_id, player_id, player_name, throws, starting_score, won"),
       ]);
       if (games && legs) {
-        setActivity(computeClubActivity(games, legs as unknown as ActivityLegRow[], 14).slice(0, 8));
+        setActivity(computeClubActivity(games, legs as unknown as ActivityLegRow[], 14));
       }
     };
     loadActivity();
@@ -131,8 +135,8 @@ const DashboardPage = () => {
           <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
             <Flame className="w-3.5 h-3.5 text-accent" /> Was war los?
           </h2>
-          <div className="space-y-2 mb-6">
-            {activity.map((e) => {
+          <div className="space-y-2 mb-2">
+            {pagedActivity.visible.map((e) => {
               const Icon = EVENT_ICON[e.type];
               return (
                 <div key={e.id} className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center gap-3">
@@ -147,6 +151,7 @@ const DashboardPage = () => {
               );
             })}
           </div>
+          <div className="mb-6"><ListPaginationFooter list={pagedActivity} /></div>
         </>
       )}
 
@@ -158,7 +163,7 @@ const DashboardPage = () => {
         </Link>
       ) : (
         <div className="space-y-2">
-          {recentGames.map((game) => (
+          {pagedRecentGames.visible.map((game) => (
             <div key={game.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-xs bg-muted px-2 py-0.5 rounded-md font-mono">{game.mode}</span>
@@ -172,6 +177,7 @@ const DashboardPage = () => {
               </div>
             </div>
           ))}
+          <ListPaginationFooter list={pagedRecentGames} />
         </div>
       )}
 

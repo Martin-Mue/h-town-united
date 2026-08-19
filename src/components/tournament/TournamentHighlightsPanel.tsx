@@ -13,7 +13,7 @@ interface TournamentHighlightsPanelProps {
 /** Shared by Tournament.tsx (full, with heatmap) and PublicTournament.tsx's compact live widget
  *  (table only) — one component so both surfaces stay in sync instead of two hand-kept copies. */
 const TournamentHighlightsPanel = ({ highlights, showHeatmap }: TournamentHighlightsPanelProps) => {
-  const paged = usePagedList(highlights.participants, { collapseAt: 8, paginateAt: 40, pageSize: 15 });
+  const paged = usePagedList(highlights.participants);
 
   if (highlights.participants.length === 0 && highlights.heatmapPoints.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-6">Noch keine Highlights in diesem Turnier.</p>;

@@ -13,6 +13,8 @@ import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { type Match, isRealPlayer, totalRoundsOf } from "@/utils/tournament";
+import { usePagedList } from "@/hooks/usePagedList";
+import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 
 interface Scoring {
   champion: number;
@@ -106,12 +108,18 @@ const TournamentSeriesPage = () => {
   };
 
   const activeSeries = id ? series.find((s) => s.id === id) : null;
+  // Computed unconditionally (not inside the `if (id && activeSeries)` branch below) so the
+  // usePagedList hook calls that depend on them stay unconditional too — this page early-returns
+  // per-branch, and a hook called only inside one branch would violate the rules of hooks the
+  // moment `id`/`activeSeries` themselves change (e.g. navigating list <-> detail).
+  const seriesTourneys = id ? tournaments.filter((t) => t.series_id === id) : [];
+  const standings = activeSeries ? computeStandings(seriesTourneys, activeSeries.scoring) : [];
+  const pagedStandings = usePagedList(standings);
+  const pagedSeriesTourneys = usePagedList(seriesTourneys);
+  const pagedSeries = usePagedList(series);
 
   // ─── SINGLE SERIES DETAIL ────────────────────────
   if (id && activeSeries) {
-    const seriesTourneys = tournaments.filter((t) => t.series_id === id);
-    const standings = computeStandings(seriesTourneys, activeSeries.scoring);
-
     return (
       <div className="container py-6 animate-slide-up max-w-4xl mx-auto">
         <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground">
@@ -132,20 +140,25 @@ const TournamentSeriesPage = () => {
             <p className="text-sm text-muted-foreground">Noch keine Turniere in dieser Serie abgeschlossen.</p>
           ) : (
             <div className="space-y-1">
-              {standings.map((s, i) => (
-                <div key={s.name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/40">
-                  <div className="flex items-center gap-3">
-                    <span className={`font-display w-8 ${i === 0 ? "text-accent" : ""}`}>
-                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
-                    </span>
-                    <span className="font-semibold text-sm">{s.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {s.champions > 0 && `${s.champions}× 🏆 · `}{s.tournaments} Turniere
-                    </span>
+              {pagedStandings.visible.map((s) => {
+                // True rank in the full standings, not the index within this page/slice.
+                const i = standings.indexOf(s);
+                return (
+                  <div key={s.name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/40">
+                    <div className="flex items-center gap-3">
+                      <span className={`font-display w-8 ${i === 0 ? "text-accent" : ""}`}>
+                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
+                      </span>
+                      <span className="font-semibold text-sm">{s.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {s.champions > 0 && `${s.champions}× 🏆 · `}{s.tournaments} Turniere
+                      </span>
+                    </div>
+                    <span className="font-display text-primary text-lg">{s.points} Pkt</span>
                   </div>
-                  <span className="font-display text-primary text-lg">{s.points} Pkt</span>
-                </div>
-              ))}
+                );
+              })}
+              <ListPaginationFooter list={pagedStandings} />
             </div>
           )}
         </div>
@@ -161,12 +174,13 @@ const TournamentSeriesPage = () => {
             </div>
           ) : (
             <div className="space-y-2">
-              {seriesTourneys.map((t) => (
+              {pagedSeriesTourneys.visible.map((t) => (
                 <Link key={t.id} to="/tournament" className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted transition-colors">
                   <span className="text-sm font-medium">{t.name}</span>
                   {t.champion && <span className="text-xs text-accent">🏆 {t.champion}</span>}
                 </Link>
               ))}
+              <ListPaginationFooter list={pagedSeriesTourneys} />
             </div>
           )}
         </div>
@@ -226,7 +240,7 @@ const TournamentSeriesPage = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {series.map((s) => {
+          {pagedSeries.visible.map((s) => {
             const count = tournaments.filter((t) => t.series_id === s.id).length;
             return (
               <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
@@ -263,6 +277,7 @@ const TournamentSeriesPage = () => {
               </div>
             );
           })}
+          <ListPaginationFooter list={pagedSeries} />
         </div>
       )}
     </div>

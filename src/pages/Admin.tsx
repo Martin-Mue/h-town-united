@@ -32,7 +32,7 @@ const AdminPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const pagedUsers = usePagedList(users, { collapseAt: 15, paginateAt: 60, pageSize: 30 });
+  const pagedUsers = usePagedList(users);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);

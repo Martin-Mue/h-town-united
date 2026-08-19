@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target } from "lucide-react";
 import { computeTournamentHighlights, type TournamentHighlights, type TournamentStatsLegRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
@@ -563,7 +563,7 @@ const TournamentPage = () => {
   // Hook call stays unconditional (top-level, not inside the "list" phase's early return) since
   // this component branches on `phase` with early returns — a hook called only inside one of
   // those branches would violate the rules of hooks the moment `phase` itself changes.
-  const pagedTournaments = usePagedList(tournaments, { collapseAt: 10, paginateAt: 50, pageSize: 20 });
+  const pagedTournaments = usePagedList(tournaments);
   // Tournament-wide highlights (heatmap + per-participant 180s/big triples/bull/ton-plus
   // finishes) — fetched lazily on first expand rather than every time a tournament opens, since
   // it pulls every leg's full throw history for the tournament and most opens never look at it.
@@ -575,6 +575,18 @@ const TournamentPage = () => {
   const [ceremonyChampion, setCeremonyChampion] = useState<string | null>(null);
   const [seenCeremonyFor, setSeenCeremonyFor] = useState<string | null>(null);
   const [publicToggling, setPublicToggling] = useState(false);
+
+  // Round-robin table/match-list windowing — computed here (top-level, unconditional) rather
+  // than down in the round-robin render branch itself, since this whole component early-returns
+  // per `phase`/`activeTournament` and a hook called only inside one of those branches would
+  // violate the rules of hooks the moment that value changes across renders.
+  const rrMatchesTop = activeTournament?.mode === "round-robin" ? (activeTournament.bracket as RoundRobinMatch[]) : [];
+  const rrStandings = calcStandings(rrMatchesTop);
+  const rrUnplayed = rrMatchesTop.filter(m => !m.played);
+  const rrPlayed = rrMatchesTop.filter(m => m.played);
+  const pagedRrStandings = usePagedList(rrStandings);
+  const pagedRrUnplayed = usePagedList(rrUnplayed);
+  const pagedRrPlayed = usePagedList(rrPlayed);
 
   // Setup state
   const [tournamentName, setTournamentName] = useState("");
@@ -1571,7 +1583,9 @@ const TournamentPage = () => {
                 <SelectTrigger className="bg-card border-border"><SelectValue placeholder="Turnier wählen" /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
                   <SelectItem value="none">Turnier wählen …</SelectItem>
-                  {tournaments.slice(0, 15).map(t => (
+                  {/* A dropdown's own content already scrolls for overflow — no "mehr anzeigen"/
+                      pagination control makes sense inside a <Select>, just a generous cap. */}
+                  {tournaments.slice(0, 100).map(t => (
                     <SelectItem key={t.id} value={t.id}>{t.name} ({t.players.length})</SelectItem>
                   ))}
                 </SelectContent>
@@ -2076,10 +2090,10 @@ const TournamentPage = () => {
   }
 
   // ─── ROUND ROBIN ────────────────────────────────
-  const rrMatches = activeTournament.bracket as RoundRobinMatch[];
-  const standings = calcStandings(rrMatches);
-  const unplayed = rrMatches.filter(m => !m.played);
-  const played = rrMatches.filter(m => m.played);
+  const rrMatches = rrMatchesTop;
+  const standings = rrStandings;
+  const unplayed = rrUnplayed;
+  const played = rrPlayed;
 
   return (
     <div className="container py-4 animate-slide-up">
@@ -2118,19 +2132,24 @@ const TournamentPage = () => {
           <span className="text-muted-foreground text-center">S</span>
           <span className="text-muted-foreground text-center">N</span>
           <span className="text-muted-foreground text-center">Pkt</span>
-          {standings.map((s, i) => (
-            <>
-              <span key={`pos-${s.name}`} className={`font-display ${i === 0 ? "text-accent" : ""}`}>
-                {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
-              </span>
-              <span key={`name-${s.name}`} className="font-semibold truncate">{s.name}</span>
-              <span key={`p-${s.name}`} className="text-center">{s.played}</span>
-              <span key={`w-${s.name}`} className="text-center text-secondary">{s.won}</span>
-              <span key={`l-${s.name}`} className="text-center text-destructive">{s.lost}</span>
-              <span key={`pts-${s.name}`} className="text-center font-display text-primary">{s.points}</span>
-            </>
-          ))}
+          {pagedRrStandings.visible.map((s) => {
+            // True rank in the full table, not the index within this page/slice.
+            const i = standings.indexOf(s);
+            return (
+              <Fragment key={s.name}>
+                <span className={`font-display ${i === 0 ? "text-accent" : ""}`}>
+                  {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
+                </span>
+                <span className="font-semibold truncate">{s.name}</span>
+                <span className="text-center">{s.played}</span>
+                <span className="text-center text-secondary">{s.won}</span>
+                <span className="text-center text-destructive">{s.lost}</span>
+                <span className="text-center font-display text-primary">{s.points}</span>
+              </Fragment>
+            );
+          })}
         </div>
+        <ListPaginationFooter list={pagedRrStandings} />
       </div>
 
       {/* Upcoming matches */}
@@ -2138,7 +2157,7 @@ const TournamentPage = () => {
         <div className="bg-card rounded-xl border border-border p-4 mb-4">
           <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Ausstehende Spiele ({unplayed.length})</h3>
           <div className="space-y-2">
-            {unplayed.map(m => (
+            {pagedRrUnplayed.visible.map(m => (
               <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2">
                 <span className="text-sm">{m.player1} <span className="text-muted-foreground">vs</span> {m.player2}</span>
                 <div className="flex gap-1">
@@ -2176,6 +2195,7 @@ const TournamentPage = () => {
               </div>
             ))}
           </div>
+          <ListPaginationFooter list={pagedRrUnplayed} />
         </div>
       )}
 
@@ -2184,13 +2204,14 @@ const TournamentPage = () => {
         <div className="bg-card rounded-xl border border-border p-4">
           <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Gespielte Partien ({played.length})</h3>
           <div className="space-y-1">
-            {played.map(m => (
+            {pagedRrPlayed.visible.map(m => (
               <div key={m.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
                 <span>{m.player1} vs {m.player2}</span>
                 <span className="text-xs text-secondary font-medium">{m.winner} ✓</span>
               </div>
             ))}
           </div>
+          <ListPaginationFooter list={pagedRrPlayed} />
         </div>
       )}
       {ceremonyChampion && (

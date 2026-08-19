@@ -458,7 +458,7 @@ const PlayersPage = () => {
   const filteredPlayers = players.filter(
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.nickname?.toLowerCase().includes(search.toLowerCase())
   );
-  const pagedPlayers = usePagedList(filteredPlayers, { collapseAt: 12, paginateAt: 60, pageSize: 24 });
+  const pagedPlayers = usePagedList(filteredPlayers);
 
   /** Renders the player's display image (AI portrait > avatar > emoji, with static fallback) */
   const PlayerAvatar = ({ player, size = "md" }: { player: PlayerProfile; size?: "sm" | "md" | "lg" }) => {

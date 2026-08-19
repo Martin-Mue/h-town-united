@@ -29,7 +29,7 @@ interface SampleRow {
 const AdminStats = () => {
   const [loading, setLoading] = useState(true);
   const [activity, setActivity] = useState<UserActivity[]>([]);
-  const pagedActivity = usePagedList(activity, { collapseAt: 15, paginateAt: 60, pageSize: 30 });
+  const pagedActivity = usePagedList(activity);
   const [sampleTotal, setSampleTotal] = useState(0);
   const [boardCounts, setBoardCounts] = useState<Record<string, number>>({});
   const [gameTotal, setGameTotal] = useState(0);

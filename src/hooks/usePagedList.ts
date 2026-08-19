@@ -13,12 +13,14 @@ export interface PagedList<T> {
 }
 
 /**
- * Small-list-friendly windowing, shared by every long list in the app (leaderboards excluded —
- * those are already roster-bound). Three tiers, cheapest first:
+ * Small-list-friendly windowing, shared by every long list in the app. Default thresholds (5 /
+ * 20 / 20-per-page) match the app's standard list treatment — override only for a good reason
+ * (e.g. a grid of <video> cards, which is heavier per item than a text row). Three tiers,
+ * cheapest first:
  *  - `totalCount <= collapseAt`: everything renders, no controls at all — most lists in a
  *    single-club install never leave this tier.
  *  - `collapseAt < totalCount < paginateAt`: an initial `collapseAt`-sized slice plus a
- *    "mehr anzeigen" button that reveals the rest in one go.
+ *    "mehr anzeigen" button that reveals the rest (up to `paginateAt - 1` items) in one go.
  *  - `totalCount >= paginateAt`: real paged navigation (`pageSize` per page) instead of "show
  *    everything", since that would mean rendering hundreds of rows/cards/videos at once.
  * `page` is clamped against the current page count on every render, so a filter that shrinks
@@ -28,8 +30,8 @@ export function usePagedList<T>(
   items: T[],
   opts?: { collapseAt?: number; paginateAt?: number; pageSize?: number },
 ): PagedList<T> {
-  const collapseAt = opts?.collapseAt ?? 8;
-  const paginateAt = opts?.paginateAt ?? 60;
+  const collapseAt = opts?.collapseAt ?? 5;
+  const paginateAt = opts?.paginateAt ?? 21;
   const pageSize = opts?.pageSize ?? 20;
   const [expanded, setExpanded] = useState(false);
   const [page, setPageState] = useState(1);
