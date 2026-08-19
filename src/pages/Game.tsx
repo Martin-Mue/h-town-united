@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import DartScoreInput from "@/components/game/DartScoreInput";
@@ -1690,10 +1690,12 @@ const GamePage = () => {
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 pb-1">Vereinsmitglied wählen</p>
                           <div className="space-y-1 max-h-48 overflow-y-auto">
                             {dbPlayers.map((dp) => (
-                              <button key={dp.id} onClick={() => setPlayerNames(prev => prev.map((v, idx) => idx === i ? dp.name : v))}
-                                className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${playerNames[i] === dp.name ? "bg-primary/15 text-primary" : "hover:bg-muted"}`}>
-                                <span>{dp.emoji}</span><span>{dp.name}</span>
-                              </button>
+                              <PopoverClose asChild key={dp.id}>
+                                <button onClick={() => setPlayerNames(prev => prev.map((v, idx) => idx === i ? dp.name : v))}
+                                  className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${playerNames[i] === dp.name ? "bg-primary/15 text-primary" : "hover:bg-muted"}`}>
+                                  <span>{dp.emoji}</span><span>{dp.name}</span>
+                                </button>
+                              </PopoverClose>
                             ))}
                           </div>
                         </PopoverContent>
