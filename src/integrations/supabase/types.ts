@@ -579,6 +579,18 @@ export type Database = {
           user_id: string
         }[]
       }
+      admin_user_activity: {
+        Args: never
+        Returns: {
+          average: number
+          created_at: string
+          email: string
+          games_played: number
+          last_sign_in_at: string
+          player_name: string
+          user_id: string
+        }[]
+      }
       admin_set_role: {
         Args: {
           _grant: boolean

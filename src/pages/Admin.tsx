@@ -15,6 +15,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import AdminStats from "@/components/admin/AdminStats";
 
 interface AdminUser {
   user_id: string;
@@ -108,8 +110,16 @@ const AdminPage = () => {
     <div className="container py-6 animate-slide-up">
       <div className="flex items-center gap-2 mb-6">
         <UserCog className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-display uppercase">Mitgliederverwaltung</h1>
+        <h1 className="text-2xl font-display uppercase">Administration</h1>
       </div>
+
+      <Tabs defaultValue="members">
+        <TabsList className="mb-4">
+          <TabsTrigger value="members">Mitglieder</TabsTrigger>
+          <TabsTrigger value="stats">Statistiken</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="members">
       <p className="text-sm text-muted-foreground mb-4">
         Hier kannst du Rollen vergeben und Accounts entfernen. Du selbst kannst dir die Admin-Rolle nicht entziehen.
       </p>
@@ -220,6 +230,12 @@ const AdminPage = () => {
           </tbody>
         </table>
       </div>
+        </TabsContent>
+
+        <TabsContent value="stats">
+          <AdminStats />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
