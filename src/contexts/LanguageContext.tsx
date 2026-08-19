@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, ReactNode } from "react";
-import { translate, type Language } from "@/i18n/translations";
+import { translate, LANGUAGES, type Language } from "@/i18n/translations";
 
 const LANGUAGE_PREF_KEY = "dart-language";
 
@@ -20,7 +20,8 @@ export const useLanguage = () => useContext(LanguageContext);
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguageState] = useState<Language>(() => {
     if (typeof window === "undefined") return "de";
-    return window.localStorage.getItem(LANGUAGE_PREF_KEY) === "en" ? "en" : "de";
+    const stored = window.localStorage.getItem(LANGUAGE_PREF_KEY);
+    return (LANGUAGES as string[]).includes(stored ?? "") ? (stored as Language) : "de";
   });
 
   const setLanguage = (lang: Language) => {

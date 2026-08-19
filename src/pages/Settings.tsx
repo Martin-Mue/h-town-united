@@ -4,6 +4,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LANGUAGES, type Language } from "@/i18n/translations";
+
+const LANGUAGE_LABEL_KEY: Record<Language, string> = {
+  de: "settings.german", en: "settings.english", fr: "settings.french",
+  pl: "settings.polish", nl: "settings.dutch", tr: "settings.turkish",
+};
 
 /** App-wide preferences. Dark mode and notifications used to also have their own header icons
  *  (see Layout.tsx) — consolidated here instead now that there's a real settings surface, so
@@ -30,20 +37,14 @@ const SettingsPage = () => {
               <p className="text-xs text-muted-foreground">{t("settings.languageDesc")}</p>
             </div>
           </div>
-          <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
-            <button
-              onClick={() => setLanguage("de")}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors ${language === "de" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
-            >
-              {t("settings.german")}
-            </button>
-            <button
-              onClick={() => setLanguage("en")}
-              className={`px-3 py-1.5 text-xs font-medium transition-colors border-l border-border ${language === "en" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
-            >
-              {t("settings.english")}
-            </button>
-          </div>
+          <Select value={language} onValueChange={(v) => setLanguage(v as Language)}>
+            <SelectTrigger className="w-[140px] shrink-0 bg-background border-border"><SelectValue /></SelectTrigger>
+            <SelectContent className="bg-card border-border">
+              {LANGUAGES.map((lang) => (
+                <SelectItem key={lang} value={lang}>{t(LANGUAGE_LABEL_KEY[lang])}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">

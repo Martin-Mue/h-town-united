@@ -4,6 +4,7 @@ import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, C
 import { supabase } from "@/integrations/supabase/client";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow } from "@/utils/clubActivity";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import htuLogo from "@/assets/htu-logo.jpg";
@@ -75,7 +76,7 @@ const DashboardPage = () => {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     if (d.toDateString() === yesterday.toDateString()) return t("home.yesterday");
-    return d.toLocaleDateString(language === "en" ? "en-US" : "de-DE", { day: "2-digit", month: "2-digit" });
+    return d.toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" });
   };
 
   return (
@@ -190,7 +191,7 @@ const DashboardPage = () => {
           the app comes back to the foreground and auto-reloads once a newer one takes over, but
           this gives a way to *confirm* that happened instead of just trusting it silently did. */}
       <p className="mt-6 text-center text-[10px] text-muted-foreground/60">
-        Build {__APP_VERSION__} · {new Date(__BUILD_TIME__).toLocaleString(language === "en" ? "en-US" : "de-DE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+        Build {__APP_VERSION__} · {new Date(__BUILD_TIME__).toLocaleString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
       </p>
     </div>
   );
