@@ -1196,6 +1196,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (autoOk) {
       setPhase("live");
       setStatus("Automatisch kalibriert (KI-Modell) · bereit – wirf deinen ersten Dart. Stimmt die Lage nicht, unten „Kalibrierung neu starten“ tippen.");
+      // Surface the D20/D3/D11/D6 debug dots immediately so the auto-calibration result is
+      // visually checkable against the real board right away, instead of requiring the user to
+      // already know the separate toggle exists. Still just sets the same showCalibDebug state
+      // the manual button controls, so tapping "Punkte ausblenden" dismisses it as normal.
+      setShowCalibDebug(true);
     } else {
       setPendingTaps([]);
       setPhase("calibrate");
