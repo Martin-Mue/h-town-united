@@ -49,6 +49,7 @@ import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
 import { ghostRemainingSequence, compareToGhost, buildBenchmarkSequence, GHOST_BENCHMARKS } from "@/utils/ghostMode";
+import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const WALKON_PREF_KEY = "dart-walkon-enabled";
@@ -350,7 +351,7 @@ const GamePage = () => {
   // each side's average SPECIFICALLY across these head-to-head games — deliberately separate
   // from their lifetime average (already shown from dbPlayers), since how someone plays against
   // this one specific opponent is its own, genuinely different number.
-  const [walkonH2H, setWalkonH2H] = useState<{ aWins: number; bWins: number; total: number; aAvg: number; bAvg: number } | null>(null);
+  const [walkonH2H, setWalkonH2H] = useState<{ aWins: number; bWins: number; total: number; aAvg: number; bAvg: number; storyline: string | null } | null>(null);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   // Whether a human actually wants the camera on — distinct from cameraEnabled itself, which
@@ -556,7 +557,7 @@ const GamePage = () => {
     const b = matchClubPlayer(dbPlayers, players[1].name);
     if (!a || !b || a.id === b.id) return;
     const { data, error } = await supabase.from("games")
-      .select("winner_id, player1_id, player1_average, player2_average")
+      .select("winner_id, player1_id, player1_average, player2_average, played_at")
       .or(`and(player1_id.eq.${a.id},player2_id.eq.${b.id}),and(player1_id.eq.${b.id},player2_id.eq.${a.id})`);
     if (error || !data) return;
     let aAvgSum = 0;
@@ -572,6 +573,12 @@ const GamePage = () => {
       total: data.length,
       aAvg: data.length > 0 ? aAvgSum / data.length : 0,
       bAvg: data.length > 0 ? bAvgSum / data.length : 0,
+      // Uses the names as typed for THIS match (not the resolved club-roster names) so the
+      // storyline text always matches the names already shown on the two player columns above it.
+      storyline: buildRivalryStoryline(
+        data.map((g) => ({ aWon: g.winner_id === a.id, playedAt: g.played_at })),
+        players[0].name, players[1].name,
+      ),
     });
   };
 
@@ -2138,6 +2145,13 @@ const GamePage = () => {
             {walkonH2H.total > 0 && (
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
                 Ø im Duell: {walkonH2H.aAvg.toFixed(1)} : {walkonH2H.bAvg.toFixed(1)}
+              </p>
+            )}
+            {/* The one true fact worth highlighting from this H2H history (streak, close
+                rivalry, or a revenge framing off the last meeting) — see rivalryStoryline.ts. */}
+            {walkonH2H.storyline && (
+              <p className="text-xs text-accent font-medium mt-3 max-w-xs mx-auto px-2">
+                {walkonH2H.storyline}
               </p>
             )}
           </div>

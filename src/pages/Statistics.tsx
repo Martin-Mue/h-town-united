@@ -26,6 +26,8 @@ import { highlightKindLabel } from "@/utils/x01Rules";
 import { generateSeasonReportPdf } from "@/utils/seasonReport";
 import { computeAimBias } from "@/utils/aimBias";
 import AimBiasCard from "@/components/stats/AimBiasCard";
+import { computeClutchStats } from "@/utils/clutchStats";
+import ClutchCard from "@/components/stats/ClutchCard";
 import SeasonRecap from "@/components/stats/SeasonRecap";
 import { Sparkles } from "lucide-react";
 
@@ -537,6 +539,20 @@ const StatisticsPage = () => {
     });
     return computeAimBias(darts);
   }, [selectedPlayerId, filteredGames, gameLegs]);
+
+  // Checkout rate in legs that could have decided the match right then, vs. everywhere else —
+  // see clutchStats.ts. Needs BOTH sides' leg rows per game to reconstruct the running leg
+  // count, so (unlike playerAimBias above) this does NOT pre-filter gameLegs down to just the
+  // selected player — computeClutchStats does that split internally. Cricket has no checkout,
+  // same exclusion advancedByPlayer already applies just above.
+  const playerClutchStats = useMemo(() => {
+    if (!selectedPlayerId) return null;
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const modeById = new Map(games.map((g) => [g.id, g.mode]));
+    const relevantLegs = gameLegs.filter((l) => filteredIds.has(l.game_id) && modeById.get(l.game_id) !== "cricket" && Array.isArray(l.throws));
+    const relevantGames = filteredGames.map((g) => ({ id: g.id, best_of_legs: g.best_of_legs }));
+    return computeClutchStats(relevantGames, relevantLegs, selectedPlayerId);
+  }, [selectedPlayerId, filteredGames, gameLegs, games]);
 
   // Everything the "Saison-Rückblick" recap needs, scoped to whatever filter (season/mode/etc.)
   // is currently active — same filteredGames-id-set convention as playerAimBias above, so
@@ -1221,6 +1237,7 @@ const StatisticsPage = () => {
               )}
 
               {playerAimBias && <AimBiasCard bias={playerAimBias} />}
+              {playerClutchStats && <ClutchCard stats={playerClutchStats} />}
 
               {/* Throw heatmap — only camera-scored throws carry a tip position */}
               {playerHeatmapPoints.length > 0 && (
