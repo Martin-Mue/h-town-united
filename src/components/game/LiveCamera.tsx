@@ -221,6 +221,18 @@ const MIN_DART_CONFIDENCE = 0.4;
 const AUTO_COMMIT_CONFIDENCE = 0.6;
 const EMPTY_BOARD_DELTA = 0.022;
 const DART_POSITION_MATCH = 0.09;
+// A genuine "something changed" event (a dart landing, a hand reaching in) sits around
+// CHANGE_DELTA (0.075) — this needs to sit well above that, so normal play never trips it, but
+// still clearly below "completely different scene" (pointing at a wall/ceiling/table isn't a
+// subtle case — every pixel block differs, not just the handful a dart or a hand would change).
+// Unverified against a real camera, same caveat as every threshold in this file — chosen by
+// reasoning about the metric's scale, not measured against real "pointed at the wrong thing" footage.
+const BOARD_MISSING_DELTA = 0.28;
+// Consecutive ticks (at TICK_MS each) the frame must fail BOARD_MISSING_DELTA before declaring
+// the board actually missing — long enough that a fast hand sweep across the board while pulling
+// darts (which can transiently look nothing like the empty-board baseline) doesn't false-trigger,
+// short enough that genuinely redirecting the camera is caught quickly.
+const BOARD_MISSING_STREAK = 5;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -388,6 +400,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const emptyBoardSigRef = useRef<number[] | null>(null);
   const stillFramesRef = useRef(0);
   const changeSeenRef = useRef(false);
+  // Consecutive ticks the frame has looked NOTHING like the calibrated board — see
+  // BOARD_MISSING_DELTA's own comment for why this needs its own, much higher threshold than
+  // "a dart landed" motion detection already uses.
+  const boardMissingStreakRef = useRef(0);
   const scanLockRef = useRef(false);
   const lastScanAtRef = useRef(0);
   // Cached last stable frame captured WHILE darts were on the board.
@@ -429,6 +445,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [accumulated, setAccumulated] = useState<DetectedDart[]>([]);
   const accumulatedRef = useRef<DetectedDart[]>([]);
   const [status, setStatus] = useState("Kamera startet …");
+  // True once the live frame has looked nothing like the calibrated board for several
+  // consecutive ticks — the camera got pointed away, bumped, or picked up mid-game. Deliberately
+  // NOT the existing `phase === "error"` state, which covers the whole video with an opaque
+  // panel (right for "camera access denied", wrong here — the user needs to actually SEE the
+  // live image to realize it's not pointed at the board and redirect it).
+  const [boardMissing, setBoardMissing] = useState(false);
   const [scanFailed, setScanFailed] = useState(false);
   const [needsReview, setNeedsReview] = useState(false);
   // Mirrors needsReview into a ref for the watcher-loop interval closure (same reason
@@ -509,6 +531,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
+    boardMissingStreakRef.current = 0;
+    setBoardMissing(false);
   }, []);
 
   // ─── rolling clip recorder ──────────────────────────────────────────
@@ -1356,6 +1380,29 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const boardEmpty = emptyBoardSigRef.current !== null && emptyDelta < EMPTY_BOARD_DELTA;
       setChangeDelta(emptyBoardSigRef.current ? emptyDelta : delta);
 
+      // Board-presence gate: if the frame looks nothing like the calibrated board for several
+      // ticks running, the camera got pointed away, bumped, or picked up — stop here, before any
+      // detection logic below runs, so nothing gets (mis)detected against a scene that isn't the
+      // board at all. Recovery is immediate (no streak needed) the moment a plausible frame
+      // reappears; only triggering needs the sustained-streak guard, so a genuinely brief motion
+      // blur doesn't cause a false trip.
+      const looksLikeSomethingElse = emptyBoardSigRef.current !== null && emptyDelta > BOARD_MISSING_DELTA;
+      boardMissingStreakRef.current = looksLikeSomethingElse ? boardMissingStreakRef.current + 1 : 0;
+      const nowMissing = boardMissingStreakRef.current >= BOARD_MISSING_STREAK;
+      if (nowMissing !== boardMissing) {
+        setBoardMissing(nowMissing);
+        if (nowMissing) {
+          setStatus("Kein Board erkannt — Kamera auf das Dartboard richten");
+        } else {
+          // Re-anchor "stable" to this frame so the large jump back to a real board image isn't
+          // itself immediately read as a change-event the instant detection resumes.
+          stableSigRef.current = sig;
+          changeSeenRef.current = false;
+          setStatus("Board wieder erkannt · bereit");
+        }
+      }
+      if (nowMissing) return;
+
       if (!scanLockRef.current && delta > CHANGE_DELTA) {
         changeSeenRef.current = true;
       }
@@ -1432,7 +1479,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, phase, dartsRemaining, detectionMode, paused]);
+  }, [enabled, phase, dartsRemaining, detectionMode, paused, boardMissing]);
 
   // ─── scan: analyze the pre-removal frame after darts are pulled ─────
   const runPullScan = async () => {
@@ -1946,6 +1993,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Analysiere…
           </div>
         )}
+        {boardMissing && (phase === "live" || phase === "scanning") && (
+          <div className="absolute inset-x-0 top-0 flex items-center justify-center gap-1.5 bg-destructive/90 py-1.5 text-xs font-medium text-destructive-foreground">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" /> Kein Board erkannt — Kamera auf das Dartboard richten
+          </div>
+        )}
         {phase === "error" && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/85 px-4 text-center text-xs text-foreground">
             {error}
@@ -2022,13 +2074,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         <div className="flex min-w-0 items-center gap-2">
           <span
             className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
-              phase === "live"
-                ? "bg-secondary animate-pulse-glow"
-                : phase === "scanning"
-                  ? "bg-primary animate-pulse"
-                  : phase === "error"
-                    ? "bg-destructive"
-                    : "bg-muted-foreground"
+              boardMissing
+                ? "bg-destructive animate-pulse"
+                : phase === "live"
+                  ? "bg-secondary animate-pulse-glow"
+                  : phase === "scanning"
+                    ? "bg-primary animate-pulse"
+                    : phase === "error"
+                      ? "bg-destructive"
+                      : "bg-muted-foreground"
             }`}
           />
           <div className="min-w-0">
