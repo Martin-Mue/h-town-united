@@ -95,6 +95,17 @@ export function computeCheckoutStats(throws: DartThrow[], startingScore: number)
   };
 }
 
+/** The only 3-dart visit totals between 0 and 180 that no combination of three legal darts (each
+ *  0-20, 25, or 50, with an allowed multiplier) can reach — a fixed, well-known fact about dart
+ *  scoring geometry, not something derived per call. Used to reject a typed/free-entry total
+ *  that can't correspond to any real visit, so a mis-typed total doesn't get silently fabricated
+ *  into made-up per-dart throws (see splitQuickRound in Game.tsx). */
+const UNREACHABLE_VISIT_TOTALS = new Set([179, 178, 176, 175, 173, 172, 169, 166, 163]);
+
+export function isAchievableVisitTotal(total: number): boolean {
+  return Number.isInteger(total) && total >= 0 && total <= 180 && !UNREACHABLE_VISIT_TOTALS.has(total);
+}
+
 /** Aggregates checkout stats across multiple legs (same player, one game or a whole career). */
 export function combineCheckoutStats(all: CheckoutStats[]): CheckoutStats {
   const attempts = all.reduce((s, c) => s + c.attempts, 0);

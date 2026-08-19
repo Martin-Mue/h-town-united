@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import DartScoreInput from "@/components/game/DartScoreInput";
+import DartScoreInput, { type DartInputMode } from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import LiveCamera, { type DetectedDart, type LiveCameraHandle } from "@/components/game/LiveCamera";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
@@ -29,6 +29,7 @@ import {
   count180s,
   computeCheckoutStats,
   combineCheckoutStats,
+  isAchievableVisitTotal,
 } from "@/utils/dartStats";
 
 /** Bot personas with their target 3-dart average */
@@ -53,6 +54,7 @@ import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const WALKON_PREF_KEY = "dart-walkon-enabled";
+const INPUT_MODE_PREF_KEY = "dart-input-mode";
 /** How long the walk-on intro stays up before auto-advancing (ms) — also the window
  *  during which a tap skips straight to the match. */
 const WALKON_DURATION_MS = 3200;
@@ -286,6 +288,14 @@ const GamePage = () => {
     const raw = window.localStorage.getItem(WALKON_PREF_KEY);
     return raw ? raw !== "false" : true;
   });
+  // Which of the 3 dart-entry modes (per-dart pad / quick-total grid / typed total) the scoring
+  // pad shows — persisted (not just component-local state) and switchable mid-game, deliberately
+  // shared across every DartScoreInput on this screen so choosing it once covers the whole match.
+  const [dartInputMode, setDartInputMode] = useState<DartInputMode>(() => {
+    if (typeof window === "undefined") return "single";
+    const raw = window.localStorage.getItem(INPUT_MODE_PREF_KEY);
+    return raw === "quick" || raw === "total" ? raw : "single";
+  });
   // Ghost mode lives as a 4th bot "level" (see the per-player bot picker) rather than a separate
   // toggle — a Geist-bot opponent that plays roughly the target's pace, with the human's live
   // progress compared against it turn by turn. Index-aligned with players; only meaningful for a
@@ -499,6 +509,11 @@ const GamePage = () => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(WALKON_PREF_KEY, JSON.stringify(walkonEnabled));
   }, [walkonEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(INPUT_MODE_PREF_KEY, dartInputMode);
+  }, [dartInputMode]);
 
   useEffect(() => {
     return () => {
@@ -1426,6 +1441,12 @@ const GamePage = () => {
   const handleQuickRound = (total: number) => {
     if (!game || game.isFinished) return;
     if (game.mode === "cricket") return;
+    // Belt-and-suspenders: the curated QUICK_ROUNDS presets are all real achievable totals, but
+    // this same handler also serves the free-typed "Eintippen" mode — reject anything a real
+    // 3-dart visit could never add up to, rather than have splitQuickRound silently fabricate a
+    // fake per-dart breakdown for it (that breakdown gets persisted into game_legs.throws and
+    // would corrupt downstream per-dart stats like 180-count and aim bias).
+    if (!isAchievableVisitTotal(total)) return;
     submitDetectedRound(splitQuickRound(total), undefined, true);
   };
 
@@ -2556,7 +2577,8 @@ const GamePage = () => {
             {showManualInput && (
               <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
                 onThrow={throwDart}
-                onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
+                onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
+                inputMode={dartInputMode} onInputModeChange={setDartInputMode} />
             )}
 
             {/* Correcting a mis-tap used to require opening "Manuelle Eingabe" first, then
@@ -2652,7 +2674,8 @@ const GamePage = () => {
           {/* Score input — disabled during a bot's turn */}
           <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
             onThrow={throwDart}
-            onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined} />
+            onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
+            inputMode={dartInputMode} onInputModeChange={setDartInputMode} />
 
           {/* Undo & actions row */}
           <div className="flex gap-2 mt-3">
