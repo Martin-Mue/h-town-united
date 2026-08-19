@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { computeTournamentHighlights, type TournamentStatsLegRow } from "./tournamentStats";
+import {
+  computeTournamentHighlights, computeTournamentAverages, mergeTournamentStats,
+  type TournamentStatsLegRow, type TournamentStatsGameRow,
+} from "./tournamentStats";
 import type { DartThrow } from "./dartStats";
 
 const dart = (baseValue: number, multiplier: number, boardU?: number, boardV?: number): DartThrow => ({
@@ -89,5 +92,74 @@ describe("computeTournamentHighlights", () => {
     ];
     const { participants } = computeTournamentHighlights(legs);
     expect(participants[0].name).toBe("OneEighty");
+  });
+});
+
+const game = (over: Partial<TournamentStatsGameRow> & { id: string }): TournamentStatsGameRow => ({
+  player1_id: "p1", player1_name: "Martin", player1_average: 45,
+  player2_id: "p2", player2_name: "Kevin", player2_average: 38,
+  ...over,
+});
+
+describe("computeTournamentAverages", () => {
+  it("pools a participant's own game averages as a mean, not a weighted total", () => {
+    const games: TournamentStatsGameRow[] = [
+      game({ id: "g1", player1_average: 40 }),
+      game({ id: "g2", player1_average: 60 }),
+    ];
+    const { participants } = computeTournamentAverages(games);
+    const martin = participants.find((p) => p.key === "p1")!;
+    expect(martin.tournamentAverage).toBe(50);
+    expect(martin.gamesPlayed).toBe(2);
+  });
+
+  it("needs no per-dart data at all — works purely off games rows (hand-scored tournament)", () => {
+    const games: TournamentStatsGameRow[] = [game({ id: "g1" })];
+    const { participants } = computeTournamentAverages(games);
+    expect(participants).toHaveLength(2);
+  });
+
+  it("passes through the per-game breakdown unaggregated", () => {
+    const games: TournamentStatsGameRow[] = [game({ id: "g1" }), game({ id: "g2", player1_average: 55 })];
+    const { games: rows } = computeTournamentAverages(games);
+    expect(rows).toHaveLength(2);
+    expect(rows[1].player1Average).toBe(55);
+  });
+
+  it("groups guests without a player_id by name", () => {
+    const games: TournamentStatsGameRow[] = [
+      game({ id: "g1", player1_id: null, player1_name: "Gast Uwe" }),
+    ];
+    const { participants } = computeTournamentAverages(games);
+    expect(participants.some((p) => p.key === "Gast Uwe")).toBe(true);
+  });
+
+  it("sorts by tournament average descending", () => {
+    const games: TournamentStatsGameRow[] = [game({ id: "g1", player1_average: 30, player2_average: 70 })];
+    const { participants } = computeTournamentAverages(games);
+    expect(participants[0].key).toBe("p2");
+  });
+});
+
+describe("mergeTournamentStats", () => {
+  it("gives a full row (zeroed highlight fields) to someone with an average but no highlight-worthy darts", () => {
+    const highlights = computeTournamentHighlights([]);
+    const averages = computeTournamentAverages([game({ id: "g1" })]);
+    const merged = mergeTournamentStats(highlights, averages);
+    expect(merged).toHaveLength(2);
+    expect(merged.find((p) => p.key === "p1")!.oneEighties).toBe(0);
+    expect(merged.find((p) => p.key === "p1")!.tournamentAverage).toBe(45);
+  });
+
+  it("gives a full row (zeroed average) to someone with highlights but no game-average data", () => {
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p3", player_name: "NoGameRow", starting_score: 501, won: false, throws: [dart(20, 3), dart(20, 3), dart(20, 3)] },
+    ];
+    const highlights = computeTournamentHighlights(legs);
+    const averages = computeTournamentAverages([]);
+    const merged = mergeTournamentStats(highlights, averages);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].tournamentAverage).toBe(0);
+    expect(merged[0].oneEighties).toBe(1);
   });
 });

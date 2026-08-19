@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target } from "lucide-react";
-import { computeTournamentHighlights, type TournamentHighlights, type TournamentStatsLegRow } from "@/utils/tournamentStats";
+import { computeTournamentHighlights, computeTournamentAverages, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import { Button } from "@/components/ui/button";
@@ -568,6 +568,7 @@ const TournamentPage = () => {
   // finishes) — fetched lazily on first expand rather than every time a tournament opens, since
   // it pulls every leg's full throw history for the tournament and most opens never look at it.
   const [tournamentHighlights, setTournamentHighlights] = useState<TournamentHighlights | null>(null);
+  const [tournamentAverages, setTournamentAverages] = useState<TournamentAverages | null>(null);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
   const [showHighlights, setShowHighlights] = useState(false);
   const [activeTournament, setActiveTournament] = useState<TournamentRecord | null>(null);
@@ -1249,19 +1250,26 @@ const TournamentPage = () => {
     setPhase("bracket");
     setShowHighlights(false);
     setTournamentHighlights(null);
+    setTournamentAverages(null);
   };
 
   /** Lazily fetches + computes this tournament's highlights on first expand, then just toggles
    *  visibility on subsequent clicks — cheap since the source data can't change for a match that's
    *  already been played (only new matches finishing would add more, and re-opening the section
-   *  after closing it doesn't need a fresh reload for that to eventually be seen next visit). */
+   *  after closing it doesn't need a fresh reload for that to eventually be seen next visit).
+   *  Averages come straight off the `games` rows (no per-dart data needed), so they work
+   *  identically for a tournament played entirely without the camera. */
   const toggleHighlights = async () => {
     const next = !showHighlights;
     setShowHighlights(next);
     if (!next || tournamentHighlights || !activeTournament) return;
     setLoadingHighlights(true);
-    const { data: games } = await supabase.from("games").select("id").eq("tournament_id", activeTournament.id);
-    const gameIds = (games || []).map((g) => g.id);
+    const { data: games } = await supabase.from("games")
+      .select("id, player1_id, player1_name, player1_average, player2_id, player2_name, player2_average")
+      .eq("tournament_id", activeTournament.id);
+    const gameRows = (games || []) as unknown as TournamentStatsGameRow[];
+    setTournamentAverages(computeTournamentAverages(gameRows));
+    const gameIds = gameRows.map((g) => g.id);
     if (gameIds.length === 0) { setTournamentHighlights({ heatmapPoints: [], participants: [] }); setLoadingHighlights(false); return; }
     const { data: legs } = await supabase.from("game_legs")
       .select("player_id, player_name, starting_score, throws, won")
@@ -1761,8 +1769,8 @@ const TournamentPage = () => {
           <div className="px-4 pb-4">
             {loadingHighlights ? (
               <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
-            ) : tournamentHighlights ? (
-              <TournamentHighlightsPanel highlights={tournamentHighlights} showHeatmap />
+            ) : tournamentHighlights && tournamentAverages ? (
+              <TournamentHighlightsPanel highlights={tournamentHighlights} averages={tournamentAverages} showHeatmap />
             ) : null}
           </div>
         )}

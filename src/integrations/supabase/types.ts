@@ -639,6 +639,13 @@ export type Database = {
           starting_score: number
           throws: Json
           won: boolean
+          game_id: string
+          player1_id: string | null
+          player1_name: string
+          player1_average: number
+          player2_id: string | null
+          player2_name: string
+          player2_average: number
         }[]
       }
       club_head_to_head: {

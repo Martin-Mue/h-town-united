@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw, Target, ChevronDown, ChevronUp } from "lucide-react";
-import { computeTournamentHighlights, type TournamentHighlights, type TournamentStatsLegRow } from "@/utils/tournamentStats";
+import { computeTournamentHighlights, computeTournamentAverages, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import {
   roundLabelFor,
@@ -588,6 +588,7 @@ const PublicTournamentPage = () => {
     return window.innerWidth < 900 ? "list" : "tree";
   });
   const [tournamentHighlights, setTournamentHighlights] = useState<TournamentHighlights | null>(null);
+  const [tournamentAverages, setTournamentAverages] = useState<TournamentAverages | null>(null);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
   const [showHighlights, setShowHighlights] = useState(false);
   const [autoRotate, setAutoRotateRaw] = useState(() => {
@@ -623,14 +624,31 @@ const PublicTournamentPage = () => {
   /** Anonymous spectators can't read games/game_legs directly (authenticated-only RLS) — this
    *  goes through the public_tournament_highlights RPC instead, which is gated on the same
    *  public_view flag tournaments_public already uses (see its migration for the full reasoning).
-   *  Lazy on first expand, same as the creator-facing panel in Tournament.tsx. */
+   *  Lazy on first expand, same as the creator-facing panel in Tournament.tsx. The RPC piggybacks
+   *  each game's average columns onto every one of its leg rows (one RPC, not two) — de-duplicate
+   *  by game_id before handing them to computeTournamentAverages, which expects one row per game. */
   const toggleHighlights = async () => {
     const next = !showHighlights;
     setShowHighlights(next);
     if (!next || tournamentHighlights || !t) return;
     setLoadingHighlights(true);
     const { data } = await supabase.rpc("public_tournament_highlights", { _tournament_id: t.id });
-    setTournamentHighlights(computeTournamentHighlights((data || []) as unknown as TournamentStatsLegRow[]));
+    const rows = (data || []) as unknown as (TournamentStatsLegRow & {
+      game_id: string; player1_id: string | null; player1_name: string; player1_average: number;
+      player2_id: string | null; player2_name: string; player2_average: number;
+    })[];
+    setTournamentHighlights(computeTournamentHighlights(rows));
+    const gamesByGameId = new Map<string, TournamentStatsGameRow>();
+    rows.forEach((r) => {
+      if (!gamesByGameId.has(r.game_id)) {
+        gamesByGameId.set(r.game_id, {
+          id: r.game_id,
+          player1_id: r.player1_id, player1_name: r.player1_name, player1_average: r.player1_average,
+          player2_id: r.player2_id, player2_name: r.player2_name, player2_average: r.player2_average,
+        });
+      }
+    });
+    setTournamentAverages(computeTournamentAverages([...gamesByGameId.values()]));
     setLoadingHighlights(false);
   };
 
@@ -809,8 +827,8 @@ const PublicTournamentPage = () => {
           <div className="mt-2 rounded-xl border border-border bg-card p-3 max-w-xl">
             {loadingHighlights ? (
               <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
-            ) : tournamentHighlights ? (
-              <TournamentHighlightsPanel highlights={tournamentHighlights} />
+            ) : tournamentHighlights && tournamentAverages ? (
+              <TournamentHighlightsPanel highlights={tournamentHighlights} averages={tournamentAverages} />
             ) : null}
           </div>
         )}
