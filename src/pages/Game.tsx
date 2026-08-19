@@ -20,7 +20,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
 import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
-import { simulateBotVisit, simulateBotCricketDart } from "@/utils/botPlayer";
+import { simulateBotVisit, simulateBotCricketDart, configForAverage, type LevelConfig } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
   highestVisit as getHighest3DartRound,
@@ -285,13 +285,19 @@ const GamePage = () => {
     const raw = window.localStorage.getItem(WALKON_PREF_KEY);
     return raw ? raw !== "false" : true;
   });
-  // "own-pb" races each player's own best-ever leg at this start score; a number races a named
-  // dart-count benchmark (see GHOST_BENCHMARKS) — a synthetic even-pace target, not a real
-  // recorded performance, so it's available even for a brand new player with no history yet.
-  const [ghostTarget, setGhostTarget] = useState<"off" | "own-pb" | number>("off");
-  // Index-aligned with players — each entry is that player's ghost as a running remaining-per-
-  // dart sequence. null = no qualifying ghost (own-pb with no past leg yet, ghost off, team/
-  // cricket game, or a bot).
+  // Ghost mode lives as a 4th bot "level" (see the per-player bot picker) rather than a separate
+  // toggle — a Geist-bot opponent that plays roughly the target's pace, with the human's live
+  // progress compared against it turn by turn. Index-aligned with players; only meaningful for a
+  // player marked isBot with botLevel effectively "ghost" (tracked here rather than in BotLevel
+  // itself, to avoid touching that type everywhere it's exhaustively handled elsewhere).
+  // "own-pb" races the HUMAN opponent's own best-ever leg at this start score; a number races a
+  // named dart-count benchmark (see GHOST_BENCHMARKS) — a synthetic even-pace target, not a real
+  // recorded performance, so it's available even against a brand new opponent with no history yet.
+  const [playerGhostTarget, setPlayerGhostTarget] = useState<("off" | "own-pb" | number)[]>(Array(MAX_PLAYERS).fill("off"));
+  // Index-aligned with players — each entry is what THAT player is racing against (their live
+  // pace compared to it turn by turn), not what they themselves embody. For a Geist-bot's human
+  // opponent, this is the bot's target sequence; the bot's own slot stays null (no comparison
+  // shown on a bot's own, non-rendered turn). null = no ghost assigned, or a past leg wasn't found.
   const [ghostSequences, setGhostSequences] = useState<(number[] | null)[]>([]);
   const [game, setGame] = useState<GameState | null>(() => loadActiveGameSnapshot());
   // Fallback defaults for handleX01Throw/handleCricketThrow when called without an explicit
@@ -527,6 +533,18 @@ const GamePage = () => {
     return parseInt(mode);
   };
 
+  /** A Geist-bot's display name names its target instead of a generic skill tier — shown
+   *  wherever a bot's name would otherwise appear (setup preview, in-game scoreboard, saved
+   *  game record). */
+  const botDisplayName = (i: number): string => {
+    const target = playerGhostTarget[i];
+    if (target !== "off") {
+      const label = typeof target === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === target)?.label ?? "Geist" : "Geist (Rekord)";
+      return `👻 ${label}`;
+    }
+    return BOT_PROFILES[playerBotLevel[i] ?? "medium"].name;
+  };
+
   // Fired once per match start (not a useEffect keyed on `game`, which changes on every dart) —
   // resolves both sides against the roster and pulls their head-to-head record for the walk-on
   // screen. Only meaningful for an individual 1v1: team games rank by one representative player
@@ -559,26 +577,33 @@ const GamePage = () => {
 
   // Fired once per match start, same pattern as loadWalkonH2H above. X01 only (Cricket's "best
   // leg" isn't a dart-count race the same way) and individual only (team games don't have a
-  // single person's "own" leg to race).
+  // single person's "own" leg to race). Looks for a Geist-bot among the players (see the bot
+  // picker's 4th option) — its target sequence gets assigned to the HUMAN players' slots (they're
+  // the ones with a turn-based indicator to show it against), not the bot's own slot.
   const loadGhostSequences = async (players: PlayerSlot[], startScore: number, teams?: TeamSlot[]) => {
-    if (ghostTarget === "off" || teams || mode === "cricket") {
+    const ghostBotIdx = players.findIndex((p, i) => p.isBot && playerGhostTarget[i] !== "off");
+    if (ghostBotIdx === -1 || teams || mode === "cricket") {
       setGhostSequences(players.map(() => null));
       return;
     }
-    if (typeof ghostTarget === "number") {
-      // Benchmark target: synchronous, synthetic, same for every non-bot player — no DB round-trip.
-      const benchmark = buildBenchmarkSequence(startScore, ghostTarget);
-      setGhostSequences(players.map((p) => (p.isBot ? null : benchmark)));
+    const target = playerGhostTarget[ghostBotIdx];
+    const assignToHumans = (seq: number[] | null) => setGhostSequences(players.map((p) => (p.isBot ? null : seq)));
+    if (typeof target === "number") {
+      // Benchmark target: synchronous, synthetic — no DB round-trip.
+      assignToHumans(buildBenchmarkSequence(startScore, target));
       return;
     }
-    // "own-pb": for each non-bot player with a club profile, find their own best-ever WON leg at
-    // this exact start score (fewest darts). Small data volumes here (a club's total leg count,
-    // not the whole games table) — picking the shortest client-side rather than needing a
-    // jsonb-array-length order clause PostgREST can't express directly.
-    const results = await Promise.all(players.map(async (p): Promise<number[] | null> => {
-      if (p.isBot) return null;
-      const match = matchClubPlayer(dbPlayers, p.name);
-      if (!match) return null;
+    // "own-pb": the HUMAN opponent races their own best-ever WON leg at this exact start score
+    // (fewest darts) — the Geist-bot embodies it back at them. Small data volumes here (a club's
+    // total leg count, not the whole games table) — picking the shortest client-side rather than
+    // needing a jsonb-array-length order clause PostgREST can't express directly.
+    const human = players.find((p) => !p.isBot);
+    const match = human ? matchClubPlayer(dbPlayers, human.name) : undefined;
+    if (!match) {
+      assignToHumans(null);
+      return;
+    }
+    const resolved = await (async (): Promise<number[] | null> => {
       const { data } = await supabase.from("game_legs")
         .select("throws")
         .eq("player_id", match.id)
@@ -591,8 +616,8 @@ const GamePage = () => {
         if (!best || throws.length < best.length) best = throws;
       }
       return best ? ghostRemainingSequence(best, startScore) : null;
-    }));
-    setGhostSequences(results);
+    })();
+    assignToHumans(resolved);
   };
 
   // Whether the follow-up stat-comparison screen (see the "stats" phase render below) has
@@ -613,7 +638,7 @@ const GamePage = () => {
     const n = numPlayers;
     const players: PlayerSlot[] = Array.from({ length: n }, (_, i) => ({
       name: playerIsBot[i]
-        ? BOT_PROFILES[playerBotLevel[i] ?? "medium"].name
+        ? botDisplayName(i)
         : (playerNames[i]?.trim() || `Spieler ${i + 1}`),
       doubleOut: playerDoubleOut[i] ?? true,
       doubleIn: playerDoubleIn[i] ?? false,
@@ -1441,6 +1466,24 @@ const GamePage = () => {
 
     setBotThinking(true);
     const level = player.botLevel ?? "medium";
+    // Geist-bot: instead of a fixed skill tier, pace this bot toward its ghost target's average
+    // — not an attempt to reconstruct its exact recorded dart-by-dart sequence (which risks
+    // landing on a remaining score with no valid double-out finish at all, mid-game), just an
+    // overall skill level that feels roughly right for the target. See configForAverage's own
+    // doc comment for why this tradeoff was made over exact reconstruction.
+    let botConfig: BotLevel | LevelConfig = level;
+    if (mode !== "cricket" && playerGhostTarget[idx] !== "off") {
+      const target = playerGhostTarget[idx];
+      let avgPerRound: number | null = null;
+      if (typeof target === "number") {
+        avgPerRound = (game.startScore / target) * 3;
+      } else {
+        const humanIdx = game.players.findIndex((p) => !p.isBot);
+        const seq = humanIdx !== -1 ? ghostSequences[humanIdx] : null;
+        if (seq && seq.length > 0) avgPerRound = (game.startScore / seq.length) * 3;
+      }
+      if (avgPerRound !== null) botConfig = configForAverage(avgPerRound);
+    }
 
     botTimerRef.current = setTimeout(() => {
       const teamIdx = teamIndexFor(game.teams, idx);
@@ -1460,7 +1503,7 @@ const GamePage = () => {
         let plan = botPlanRef.current;
         if (!plan || plan.key.split("-")[0] !== String(idx) || plan.key.split("-")[1] !== String(game.currentLeg.legNumber) || dartsThisRound === 0) {
           const mustDoubleIn = (player.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[teamIdx] ?? true);
-          const visit = simulateBotVisit(game.currentLeg.remaining[teamIdx], player.doubleOut ?? true, level, mustDoubleIn);
+          const visit = simulateBotVisit(game.currentLeg.remaining[teamIdx], player.doubleOut ?? true, botConfig, mustDoubleIn);
           plan = { key: `${idx}-${game.currentLeg.legNumber}`, darts: visit.darts, applied: 0 };
           botPlanRef.current = plan;
         }
@@ -1473,8 +1516,12 @@ const GamePage = () => {
     return () => {
       if (botTimerRef.current) clearTimeout(botTimerRef.current);
     };
+    // ghostSequences is a real dependency, not just for the linter: if the current turn's bot
+    // is a Geist-bot and this effect first fires before loadGhostSequences' async fetch has
+    // resolved (the opponent's own-record lookup, specifically), it must re-run once that
+    // resolves so botConfig gets computed from the real sequence length instead of null.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.currentPlayerIndex, game?.currentLeg.legNumber, dartsThisRound, game?.isFinished, phase, pendingTiebreak]);
+  }, [game?.currentPlayerIndex, game?.currentLeg.legNumber, dartsThisRound, game?.isFinished, phase, pendingTiebreak, playerGhostTarget, ghostSequences]);
 
   // useCallback with an honest dependency list (rather than a plain function) so the triggering
   // effect below can depend on this directly instead of needing its own eslint-disable — the
@@ -1717,7 +1764,7 @@ const GamePage = () => {
                   {playerIsBot[i] ? (
                     <div className="flex-1 rounded-lg bg-secondary/10 border border-secondary/40 px-3 py-2 text-sm text-secondary flex items-center gap-2 min-w-0">
                       <Bot className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">{BOT_PROFILES[playerBotLevel[i]].name}</span>
+                      <span className="truncate">{botDisplayName(i)}</span>
                     </div>
                   ) : (
                   <>
@@ -1760,15 +1807,45 @@ const GamePage = () => {
                 </div>
 
                 {playerIsBot[i] && (
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(["easy", "medium", "hard"] as BotLevel[]).map((lvl) => (
-                      <button key={lvl} onClick={() => setPlayerBotLevel(prev => prev.map((v, idx) => idx === i ? lvl : v))}
-                        className={`rounded px-2 py-1.5 text-center transition-colors ${playerBotLevel[i] === lvl ? "bg-secondary/25 text-secondary" : "bg-background text-muted-foreground"}`}>
-                        <span className="block text-[11px] font-display uppercase">{BOT_PROFILES[lvl].name}</span>
-                        <span className="block text-[10px] opacity-70">Ø {BOT_PROFILES[lvl].average}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    <div className={`grid gap-1.5 ${mode !== "cricket" && !teamMode ? "grid-cols-4" : "grid-cols-3"}`}>
+                      {(["easy", "medium", "hard"] as BotLevel[]).map((lvl) => (
+                        <button key={lvl} onClick={() => {
+                          setPlayerBotLevel(prev => prev.map((v, idx) => idx === i ? lvl : v));
+                          setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? "off" : v));
+                        }}
+                          className={`rounded px-2 py-1.5 text-center transition-colors ${playerBotLevel[i] === lvl && playerGhostTarget[i] === "off" ? "bg-secondary/25 text-secondary" : "bg-background text-muted-foreground"}`}>
+                          <span className="block text-[11px] font-display uppercase">{BOT_PROFILES[lvl].name}</span>
+                          <span className="block text-[10px] opacity-70">Ø {BOT_PROFILES[lvl].average}</span>
+                        </button>
+                      ))}
+                      {mode !== "cricket" && !teamMode && (
+                        <button
+                          onClick={() => setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? (v === "off" ? "own-pb" : v) : v))}
+                          title="Ein Bot, der ungefähr das Tempo eines Ziels spielt — dein eigenes bestes Leg oder ein fester Rekord — während dein Live-Fortschritt live dagegen verglichen wird."
+                          className={`rounded px-2 py-1.5 text-center transition-colors ${playerGhostTarget[i] !== "off" ? "bg-accent/25 text-accent" : "bg-background text-muted-foreground"}`}>
+                          <span className="block text-[11px] font-display uppercase">👻 Geist</span>
+                          <span className="block text-[10px] opacity-70">Herausforderung</span>
+                        </button>
+                      )}
+                    </div>
+                    {playerGhostTarget[i] !== "off" && (
+                      <div className="flex flex-wrap gap-1.5 -mt-0.5">
+                        <button
+                          onClick={() => setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? "own-pb" : v))}
+                          className={`rounded-lg px-2.5 py-1 text-[11px] font-display transition-colors ${playerGhostTarget[i] === "own-pb" ? "bg-accent text-accent-foreground" : "bg-background border border-border text-muted-foreground"}`}>
+                          Eigener Rekord
+                        </button>
+                        {GHOST_BENCHMARKS.filter((b) => getStartScore() / b.darts <= 60).map((b) => (
+                          <button key={b.darts}
+                            onClick={() => setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? b.darts : v))}
+                            className={`rounded-lg px-2.5 py-1 text-[11px] font-display transition-colors ${playerGhostTarget[i] === b.darts ? "bg-accent text-accent-foreground" : "bg-background border border-border text-muted-foreground"}`}>
+                            {b.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {mode !== "cricket" && (
@@ -1865,7 +1942,7 @@ const GamePage = () => {
               ).map((i) => {
                 const label = teamMode
                   ? (i === 0 ? (teamNames[0].trim() || "Team 1") : (teamNames[1].trim() || "Team 2"))
-                  : (playerIsBot[i] ? BOT_PROFILES[playerBotLevel[i]].name : (playerNames[i]?.trim() || `Spieler ${i + 1}`));
+                  : (playerIsBot[i] ? botDisplayName(i) : (playerNames[i]?.trim() || `Spieler ${i + 1}`));
                 const isChosen = teamMode ? (starterIndex % 2 === i) : starterIndex === i;
                 return (
                   <button
@@ -1912,36 +1989,6 @@ const GamePage = () => {
             </div>
             <Switch id="walkon-mode" checked={walkonEnabled} onCheckedChange={setWalkonEnabled} />
           </div>
-
-          {mode !== "cricket" && !teamMode && (
-            <div className="bg-card rounded-lg border border-border px-4 py-3">
-              <Label className="text-sm">👻 Geist-Modus</Label>
-              <p className="text-[10px] text-muted-foreground mt-0.5 mb-2">Live-Vergleich während des Spiels — gegen dein eigenes bestes Leg oder einen festen Tempo-Rekord.</p>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  onClick={() => setGhostTarget("off")}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-display transition-colors ${ghostTarget === "off" ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}
-                >
-                  Aus
-                </button>
-                <button
-                  onClick={() => setGhostTarget("own-pb")}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-display transition-colors ${ghostTarget === "own-pb" ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}
-                >
-                  Eigener Rekord
-                </button>
-                {GHOST_BENCHMARKS.filter((b) => getStartScore() / b.darts <= 60).map((b) => (
-                  <button
-                    key={b.darts}
-                    onClick={() => setGhostTarget(b.darts)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-display transition-colors ${ghostTarget === b.darts ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}
-                  >
-                    {b.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
             <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? "Aufwärmen starten" : "Spiel starten"}
@@ -2305,7 +2352,9 @@ const GamePage = () => {
           const teamIdx = teamIndexFor(game.teams, currentIdx);
           const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);
           if (!cmp) return null;
-          const targetLabel = typeof ghostTarget === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === ghostTarget)?.label ?? "Ziel" : "deinem Rekordtempo";
+          const ghostBotIdx = game.players.findIndex((p, i) => p.isBot && playerGhostTarget[i] !== "off");
+          const ghostBotTarget = ghostBotIdx !== -1 ? playerGhostTarget[ghostBotIdx] : "own-pb";
+          const targetLabel = typeof ghostBotTarget === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === ghostBotTarget)?.label ?? "Ziel" : "deinem Rekordtempo";
           return (
             <p className={`text-[10px] mt-1 font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
               👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} Punkte vor ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} Punkte hinter ${targetLabel}` : `genau im Tempo von ${targetLabel}`}

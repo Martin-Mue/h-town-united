@@ -9,7 +9,7 @@ import { isBustThrow, pointsFor } from "@/utils/x01Rules";
  *   hard   ≈ 68–75
  * (Club-realistic range of ~20–80 requested by the users.)
  */
-interface LevelConfig {
+export interface LevelConfig {
   /** probability of a complete miss on a scoring dart */
   miss: number;
   /** probability of hitting a random low-ish single */
@@ -28,6 +28,27 @@ const LEVEL_CONFIG: Record<BotLevel, LevelConfig> = {
   hard: { miss: 0.10, randomSingle: 0.30, aimedSingle: 0.38, aimedTriple: 0.22, doubleHitChance: 0.32 },
 };
 
+// Two more tiers, above "hard", used ONLY by Ghost mode's bot opponent (never offered as a
+// normal selectable bot level — see Game.tsx's per-player bot picker) — extrapolating the same
+// miss/aimedTriple/doubleHitChance trend easy→medium→hard continues, unverified against real
+// play the same way the three tiers above were originally hand-tuned to "feel right" rather than
+// measured. "elite" targets a strong tournament-level average, "legendary" a nine-dart-leg pace.
+const ELITE_CONFIG: LevelConfig = { miss: 0.04, randomSingle: 0.15, aimedSingle: 0.31, aimedTriple: 0.50, doubleHitChance: 0.55 };
+const LEGENDARY_CONFIG: LevelConfig = { miss: 0.01, randomSingle: 0.05, aimedSingle: 0.14, aimedTriple: 0.80, doubleHitChance: 0.75 };
+
+/** Picks a bot config whose rough 3-dart average is closest to `avgPerRound` — used to make a
+ *  Ghost-mode bot opponent's overall pace feel roughly like the target it's meant to embody
+ *  (own record or a named benchmark), without trying to reconstruct the target's exact recorded
+ *  dart-by-dart sequence (which risks landing on a remaining score with no valid double-out
+ *  finish at all, mid-game — a real risk of stalling a match, not just an approximation). */
+export function configForAverage(avgPerRound: number): LevelConfig {
+  if (avgPerRound >= 140) return LEGENDARY_CONFIG;
+  if (avgPerRound >= 90) return ELITE_CONFIG;
+  if (avgPerRound >= 55) return LEVEL_CONFIG.hard;
+  if (avgPerRound >= 35) return LEVEL_CONFIG.medium;
+  return LEVEL_CONFIG.easy;
+}
+
 function rand(): number {
   return Math.random();
 }
@@ -45,9 +66,7 @@ function parseRouteSegment(seg: string): { baseValue: number; multiplier: 1 | 2 
 const miss = (): DartThrow => ({ baseValue: 0, multiplier: 1, points: 0 });
 
 /** Simulate one dart aimed at a given base/multiplier target. */
-function simulateDart(targetBase: number, targetMultiplier: 1 | 2 | 3, level: BotLevel): DartThrow {
-  const cfg = LEVEL_CONFIG[level];
-
+function simulateDart(targetBase: number, targetMultiplier: 1 | 2 | 3, cfg: LevelConfig): DartThrow {
   // Aiming at a double / bullseye (checkout attempt)
   if (targetMultiplier === 2) {
     if (rand() < cfg.doubleHitChance) {
@@ -102,7 +121,8 @@ export interface BotVisitResult {
   checkedOut: boolean;
 }
 
-export function simulateBotVisit(remaining: number, doubleOut: boolean, level: BotLevel, mustDoubleIn = false): BotVisitResult {
+export function simulateBotVisit(remaining: number, doubleOut: boolean, level: BotLevel | LevelConfig, mustDoubleIn = false): BotVisitResult {
+  const cfg = typeof level === "string" ? LEVEL_CONFIG[level] : level;
   const darts: DartThrow[] = [];
   let rem = remaining;
   let gotIn = !mustDoubleIn;
@@ -130,7 +150,7 @@ export function simulateBotVisit(remaining: number, doubleOut: boolean, level: B
       }
     }
 
-    const dart = simulateDart(targetBase, targetMultiplier, level);
+    const dart = simulateDart(targetBase, targetMultiplier, cfg);
     darts.push(dart);
 
     if (!gotIn) {
