@@ -48,7 +48,7 @@ import { effectiveStartScore } from "@/utils/handicap";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
-import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
+import { ghostRemainingSequence, compareToGhost, buildBenchmarkSequence, GHOST_BENCHMARKS } from "@/utils/ghostMode";
 
 const SPEECH_PREF_KEY = "dart-speech-enabled";
 const WALKON_PREF_KEY = "dart-walkon-enabled";
@@ -285,10 +285,13 @@ const GamePage = () => {
     const raw = window.localStorage.getItem(WALKON_PREF_KEY);
     return raw ? raw !== "false" : true;
   });
-  const [ghostModeEnabled, setGhostModeEnabled] = useState(false);
-  // Index-aligned with players — each entry is that player's own best-ever WON leg at this
-  // start score (fewest darts), turned into a running remaining-per-dart sequence via
-  // ghostRemainingSequence. null = no qualifying past leg (or ghost mode off / not X01 / bot).
+  // "own-pb" races each player's own best-ever leg at this start score; a number races a named
+  // dart-count benchmark (see GHOST_BENCHMARKS) — a synthetic even-pace target, not a real
+  // recorded performance, so it's available even for a brand new player with no history yet.
+  const [ghostTarget, setGhostTarget] = useState<"off" | "own-pb" | number>("off");
+  // Index-aligned with players — each entry is that player's ghost as a running remaining-per-
+  // dart sequence. null = no qualifying ghost (own-pb with no past leg yet, ghost off, team/
+  // cricket game, or a bot).
   const [ghostSequences, setGhostSequences] = useState<(number[] | null)[]>([]);
   const [game, setGame] = useState<GameState | null>(() => loadActiveGameSnapshot());
   // Fallback defaults for handleX01Throw/handleCricketThrow when called without an explicit
@@ -554,18 +557,24 @@ const GamePage = () => {
     });
   };
 
-  // Fired once per match start, same pattern as loadWalkonH2H above. For each non-bot player
-  // with a club profile, finds their own best-ever WON leg at this exact start score (fewest
-  // darts) and turns it into a per-dart running-remaining sequence for live pace comparison
-  // during play. X01 only (Cricket's "best leg" isn't a dart-count race the same way) and
-  // individual only (team games don't have a single person's "own" leg to race). Small data
-  // volumes here (a club's total leg count, not the whole games table) — picking the shortest
-  // client-side rather than needing a jsonb-array-length order clause PostgREST can't express directly.
+  // Fired once per match start, same pattern as loadWalkonH2H above. X01 only (Cricket's "best
+  // leg" isn't a dart-count race the same way) and individual only (team games don't have a
+  // single person's "own" leg to race).
   const loadGhostSequences = async (players: PlayerSlot[], startScore: number, teams?: TeamSlot[]) => {
-    if (!ghostModeEnabled || teams || mode === "cricket") {
+    if (ghostTarget === "off" || teams || mode === "cricket") {
       setGhostSequences(players.map(() => null));
       return;
     }
+    if (typeof ghostTarget === "number") {
+      // Benchmark target: synchronous, synthetic, same for every non-bot player — no DB round-trip.
+      const benchmark = buildBenchmarkSequence(startScore, ghostTarget);
+      setGhostSequences(players.map((p) => (p.isBot ? null : benchmark)));
+      return;
+    }
+    // "own-pb": for each non-bot player with a club profile, find their own best-ever WON leg at
+    // this exact start score (fewest darts). Small data volumes here (a club's total leg count,
+    // not the whole games table) — picking the shortest client-side rather than needing a
+    // jsonb-array-length order clause PostgREST can't express directly.
     const results = await Promise.all(players.map(async (p): Promise<number[] | null> => {
       if (p.isBot) return null;
       const match = matchClubPlayer(dbPlayers, p.name);
@@ -1905,12 +1914,32 @@ const GamePage = () => {
           </div>
 
           {mode !== "cricket" && !teamMode && (
-            <div className="flex items-center justify-between gap-3 bg-card rounded-lg border border-border px-4 py-3">
-              <div className="min-w-0">
-                <Label htmlFor="ghost-mode" className="text-sm">👻 Geist-Modus</Label>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Live-Vergleich gegen dein eigenes bestes Leg bei diesem Startscore.</p>
+            <div className="bg-card rounded-lg border border-border px-4 py-3">
+              <Label className="text-sm">👻 Geist-Modus</Label>
+              <p className="text-[10px] text-muted-foreground mt-0.5 mb-2">Live-Vergleich während des Spiels — gegen dein eigenes bestes Leg oder einen festen Tempo-Rekord.</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setGhostTarget("off")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-display transition-colors ${ghostTarget === "off" ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}
+                >
+                  Aus
+                </button>
+                <button
+                  onClick={() => setGhostTarget("own-pb")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-display transition-colors ${ghostTarget === "own-pb" ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}
+                >
+                  Eigener Rekord
+                </button>
+                {GHOST_BENCHMARKS.filter((b) => getStartScore() / b.darts <= 60).map((b) => (
+                  <button
+                    key={b.darts}
+                    onClick={() => setGhostTarget(b.darts)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-display transition-colors ${ghostTarget === b.darts ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
               </div>
-              <Switch id="ghost-mode" checked={ghostModeEnabled} onCheckedChange={setGhostModeEnabled} />
             </div>
           )}
 
@@ -2276,9 +2305,10 @@ const GamePage = () => {
           const teamIdx = teamIndexFor(game.teams, currentIdx);
           const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);
           if (!cmp) return null;
+          const targetLabel = typeof ghostTarget === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === ghostTarget)?.label ?? "Ziel" : "deinem Rekordtempo";
           return (
             <p className={`text-[10px] mt-1 font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
-              👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} Punkte vor deinem Rekordtempo!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} Punkte hinter deinem Rekordtempo` : "genau im Rekordtempo"}
+              👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} Punkte vor ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} Punkte hinter ${targetLabel}` : `genau im Tempo von ${targetLabel}`}
             </p>
           );
         })()}
