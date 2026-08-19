@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { usePagedList } from "@/hooks/usePagedList";
+import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -556,6 +558,10 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
 const TournamentPage = () => {
   const [phase, setPhase] = useState<"list" | "setup" | "bracket">("list");
   const [tournaments, setTournaments] = useState<TournamentRecord[]>([]);
+  // Hook call stays unconditional (top-level, not inside the "list" phase's early return) since
+  // this component branches on `phase` with early returns — a hook called only inside one of
+  // those branches would violate the rules of hooks the moment `phase` itself changes.
+  const pagedTournaments = usePagedList(tournaments, { collapseAt: 10, paginateAt: 50, pageSize: 20 });
   const [activeTournament, setActiveTournament] = useState<TournamentRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [ceremonyChampion, setCeremonyChampion] = useState<string | null>(null);
@@ -653,7 +659,8 @@ const TournamentPage = () => {
     const { data } = await supabase
       .from("tournaments")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(200);
     if (data) {
       setTournaments(data.map(mapTournamentRow));
     }
@@ -1283,7 +1290,7 @@ const TournamentPage = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {tournaments.map(t => (
+            {pagedTournaments.visible.map(t => (
               <div key={t.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
                 <button onClick={() => openTournament(t)} className="flex-1 text-left">
                   <div className="flex items-center gap-3">
@@ -1329,6 +1336,7 @@ const TournamentPage = () => {
             ))}
           </div>
         )}
+        <ListPaginationFooter list={pagedTournaments} />
       </div>
     );
   }

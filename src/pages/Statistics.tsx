@@ -29,6 +29,8 @@ import AimBiasCard from "@/components/stats/AimBiasCard";
 import { computeClutchStats } from "@/utils/clutchStats";
 import ClutchCard from "@/components/stats/ClutchCard";
 import SeasonRecap from "@/components/stats/SeasonRecap";
+import { usePagedList } from "@/hooks/usePagedList";
+import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Sparkles } from "lucide-react";
 
 interface GameRecord {
@@ -197,7 +199,7 @@ const StatisticsPage = () => {
     const triples = entries.reduce((s, d) => s + (d.triples || 0), 0);
     const bigTriples = [20, 19, 18, 17, 16].map((n) => ({
       name: `T${n}`,
-      value: entries.reduce((s, d) => s + ((d as any)[`t${n}`] || 0), 0),
+      value: entries.reduce((s, d) => s + ((d[`t${n}` as keyof DetailStat] as number | undefined) || 0), 0),
     }));
     const perPlayer = Object.values(
       entries.reduce<Record<string, { name: string; visits: number; trebleless: number; triples: number }>>((acc, d) => {
@@ -719,6 +721,10 @@ const StatisticsPage = () => {
       return true;
     });
   }, [highlightClips, filterTime, filterPlayerId, viewScope, myPlayer]);
+
+  // Each card renders a real <video> element — noticeably heavier than a text row, hence the
+  // lower thresholds than the app's other lists.
+  const pagedClips = usePagedList(filteredClips, { collapseAt: 6, paginateAt: 30, pageSize: 12 });
 
   // Batch-fetch signed URLs for whatever's currently visible — one request for the whole page
   // of clips instead of one per <video>. Re-runs whenever the filtered set changes (new clip
@@ -1571,7 +1577,7 @@ const StatisticsPage = () => {
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredClips.map((clip) => (
+              {pagedClips.visible.map((clip) => (
                 <div key={clip.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
                   <video src={clipSignedUrls[clip.storage_path]} controls playsInline className="w-full aspect-video bg-black" preload="metadata" />
                   <div className="p-2.5">
@@ -1595,6 +1601,7 @@ const StatisticsPage = () => {
               ))}
             </div>
           )}
+          <ListPaginationFooter list={pagedClips} />
         </div>
       )}
       </>

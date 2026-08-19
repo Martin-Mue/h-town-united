@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Image as ImageIcon, Gamepad2, Users, Info } from "lucide-react";
+import { usePagedList } from "@/hooks/usePagedList";
+import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 
 interface UserActivity {
   user_id: string;
@@ -27,6 +29,7 @@ interface SampleRow {
 const AdminStats = () => {
   const [loading, setLoading] = useState(true);
   const [activity, setActivity] = useState<UserActivity[]>([]);
+  const pagedActivity = usePagedList(activity, { collapseAt: 15, paginateAt: 60, pageSize: 30 });
   const [sampleTotal, setSampleTotal] = useState(0);
   const [boardCounts, setBoardCounts] = useState<Record<string, number>>({});
   const [gameTotal, setGameTotal] = useState(0);
@@ -151,7 +154,7 @@ const AdminStats = () => {
               </tr>
             </thead>
             <tbody>
-              {activity.map((u) => (
+              {pagedActivity.visible.map((u) => (
                 <tr key={u.user_id} className="border-t border-border">
                   <td className="px-4 py-2.5 font-mono text-xs">{u.email}</td>
                   <td className="px-4 py-2.5 text-xs">{u.player_name ?? <span className="text-muted-foreground">–</span>}</td>
@@ -165,6 +168,7 @@ const AdminStats = () => {
             </tbody>
           </table>
         </div>
+        <ListPaginationFooter list={pagedActivity} />
         <div className="p-4 pt-3 flex gap-2 text-[11px] text-muted-foreground border-t border-border">
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <p>

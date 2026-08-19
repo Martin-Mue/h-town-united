@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { experienceScore } from "@/utils/dartStats";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { usePagedList } from "@/hooks/usePagedList";
+import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -318,9 +320,9 @@ const PlayersPage = () => {
         setGeneratedPortrait(data.imageBase64);
         toast({ title: "Portrait generiert! 🎯", description: "Dein KI-Spielerportrait ist fertig." });
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("AI portrait error:", err);
-      toast({ title: "KI-Fehler", description: err.message || "Portrait konnte nicht generiert werden.", variant: "destructive" });
+      toast({ title: "KI-Fehler", description: err instanceof Error ? err.message : "Portrait konnte nicht generiert werden.", variant: "destructive" });
     } finally {
       setGeneratingPortrait(false);
     }
@@ -456,6 +458,7 @@ const PlayersPage = () => {
   const filteredPlayers = players.filter(
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.nickname?.toLowerCase().includes(search.toLowerCase())
   );
+  const pagedPlayers = usePagedList(filteredPlayers, { collapseAt: 12, paginateAt: 60, pageSize: 24 });
 
   /** Renders the player's display image (AI portrait > avatar > emoji, with static fallback) */
   const PlayerAvatar = ({ player, size = "md" }: { player: PlayerProfile; size?: "sm" | "md" | "lg" }) => {
@@ -872,7 +875,7 @@ const PlayersPage = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredPlayers.map((player) => (
+          {pagedPlayers.visible.map((player) => (
             <Collapsible key={player.id} open={!!expandedCards[player.id]} onOpenChange={() => toggleCard(player.id)}>
               <div className="rounded-xl border border-border bg-card p-4 text-left transition-all group hover:border-primary/50 hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]">
                 <div className="flex items-start gap-3">
@@ -999,6 +1002,7 @@ const PlayersPage = () => {
           ))}
         </div>
       )}
+      {!loading && filteredPlayers.length > 0 && <ListPaginationFooter list={pagedPlayers} />}
     </div>
   );
 };

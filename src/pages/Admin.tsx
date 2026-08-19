@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminStats from "@/components/admin/AdminStats";
+import { usePagedList } from "@/hooks/usePagedList";
+import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 
 interface AdminUser {
   user_id: string;
@@ -30,6 +32,7 @@ const AdminPage = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const pagedUsers = usePagedList(users, { collapseAt: 15, paginateAt: 60, pageSize: 30 });
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -135,7 +138,7 @@ const AdminPage = () => {
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => {
+            {pagedUsers.visible.map((u) => {
               const isSelf = u.user_id === user?.id;
               const isAdminUser = u.roles?.includes("admin");
               return (
@@ -229,6 +232,7 @@ const AdminPage = () => {
             })}
           </tbody>
         </table>
+        <ListPaginationFooter list={pagedUsers} />
       </div>
         </TabsContent>
 
