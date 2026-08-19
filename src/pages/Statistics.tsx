@@ -26,6 +26,8 @@ import { highlightKindLabel } from "@/utils/x01Rules";
 import { generateSeasonReportPdf } from "@/utils/seasonReport";
 import { computeAimBias } from "@/utils/aimBias";
 import AimBiasCard from "@/components/stats/AimBiasCard";
+import SeasonRecap from "@/components/stats/SeasonRecap";
+import { Sparkles } from "lucide-react";
 
 interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
@@ -58,7 +60,7 @@ interface GameLegRecord {
   throws: DartThrow[]; won: boolean;
 }
 
-interface HighlightClipRecord {
+export interface HighlightClipRecord {
   id: string; game_id: string | null; player_id: string | null; player_name: string;
   kind: string; points: number; darts: DartThrow[]; storage_path: string; mime: string; created_at: string;
 }
@@ -88,6 +90,7 @@ const StatisticsPage = () => {
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
+  const [showSeasonRecap, setShowSeasonRecap] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "players" | "h2h" | "history" | "highlights">("overview");
   const [viewScope, setViewScope] = useState<"club" | "personal">(() => {
     if (typeof window === "undefined") return "club";
@@ -534,6 +537,36 @@ const StatisticsPage = () => {
     });
     return computeAimBias(darts);
   }, [selectedPlayerId, filteredGames, gameLegs]);
+
+  // Everything the "Saison-Rückblick" recap needs, scoped to whatever filter (season/mode/etc.)
+  // is currently active — same filteredGames-id-set convention as playerAimBias above, so
+  // "your season" genuinely reflects the season filter rather than always being lifetime.
+  const playerSeasonRecap = useMemo(() => {
+    if (!selectedPlayerId || !playerDetailStats) return null;
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const myLegs = gameLegs.filter((l) => l.player_id === selectedPlayerId && filteredIds.has(l.game_id) && Array.isArray(l.throws));
+    const total180s = myLegs.reduce((s, l) => s + count180s(l.throws as unknown as DartThrow[]), 0);
+    const checkout = advancedByPlayer[selectedPlayerId]?.checkout;
+    const clips = highlightClips
+      .filter((c) => c.player_id === selectedPlayerId && c.game_id && filteredIds.has(c.game_id))
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 4);
+    const playerGames = filteredGames.filter((g) => g.player1_id === selectedPlayerId || g.player2_id === selectedPlayerId);
+    const wins = playerGames.filter((g) => g.winner_name === (g.player1_id === selectedPlayerId ? g.player1_name : g.player2_name)).length;
+    return {
+      player: playerDetailStats.player,
+      games: playerDetailStats.totalGames,
+      wins,
+      winRate: playerDetailStats.winRate,
+      total180s,
+      bestCheckout: checkout?.highestCheckout ?? 0,
+      checkoutPercentage: checkout?.percentage ?? 0,
+      bestGameAvg: playerDetailStats.bestGameAvg,
+      bestStreak: playerDetailStats.bestStreak,
+      elo: Math.round(playerDetailStats.player.elo_rating ?? 1000),
+      clips,
+    };
+  }, [selectedPlayerId, playerDetailStats, filteredGames, gameLegs, advancedByPlayer, highlightClips]);
 
   // Achievements — derived entirely from data already loaded (games/legs/players),
   // no separate table: unlocking is just "does the existing stat cross this threshold".
@@ -1081,10 +1114,15 @@ const StatisticsPage = () => {
               <div className="bg-card rounded-xl border border-border p-4 mb-4">
                 <div className="flex items-center gap-3 mb-3">
                   <span className="text-3xl">{playerDetailStats.player.emoji}</span>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <h3 className="text-xl font-display uppercase">{playerDetailStats.player.name}</h3>
                     <p className="text-xs text-muted-foreground">{playerDetailStats.totalGames} Spiele · {playerDetailStats.winRate}% Siegquote · {Math.round(playerDetailStats.player.elo_rating ?? 1000)} Elo</p>
                   </div>
+                  {playerSeasonRecap && (
+                    <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => setShowSeasonRecap(true)}>
+                      <Sparkles className="w-3.5 h-3.5" /> Rückblick
+                    </Button>
+                  )}
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[
@@ -1543,6 +1581,13 @@ const StatisticsPage = () => {
         </div>
       )}
       </>
+      )}
+
+      {showSeasonRecap && playerSeasonRecap && (
+        <SeasonRecap
+          recap={{ ...playerSeasonRecap, periodLabel: filterYear !== "all" ? `Saison ${filterYear}` : "Gesamte Karriere" }}
+          onClose={() => setShowSeasonRecap(false)}
+        />
       )}
     </div>
   );
