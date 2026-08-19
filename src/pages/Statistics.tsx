@@ -30,6 +30,7 @@ import { computeClutchStats } from "@/utils/clutchStats";
 import ClutchCard from "@/components/stats/ClutchCard";
 import { combine180Breakdown, manualEntriesApplicable, type Manual180Entry } from "@/utils/manual180";
 import Manual180Editor from "@/components/stats/Manual180Editor";
+import { useLanguage } from "@/contexts/LanguageContext";
 import SeasonRecap from "@/components/stats/SeasonRecap";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
@@ -114,6 +115,7 @@ const StatisticsPage = () => {
   const [filterBestOf, setFilterBestOf] = useState<string>("all");
   const [filterYear, setFilterYear] = useState<string>("all");
   const { session } = useAuth();
+  const { t } = useLanguage();
 
   const fetchData = useCallback(async () => {
     const [gamesRes, playersRes, legsRes, clipsRes, manual180Res] = await Promise.all([
@@ -860,16 +862,16 @@ const StatisticsPage = () => {
   }
 
   const clubTabs = [
-    { key: "overview" as const, label: "Übersicht", icon: BarChart3 },
-    { key: "players" as const, label: "Spieler", icon: Users },
-    { key: "h2h" as const, label: "H2H", icon: Crosshair },
-    { key: "history" as const, label: "Spiele", icon: Target },
-    { key: "highlights" as const, label: "Highlights", icon: Video },
+    { key: "overview" as const, labelKey: "stats.tabOverview", icon: BarChart3 },
+    { key: "players" as const, labelKey: "stats.tabPlayers", icon: Users },
+    { key: "h2h" as const, labelKey: "stats.tabH2H", icon: Crosshair },
+    { key: "history" as const, labelKey: "stats.tabGames", icon: Target },
+    { key: "highlights" as const, labelKey: "stats.tabHighlights", icon: Video },
   ];
   const personalTabs = [
-    { key: "players" as const, label: "Meine Stats", icon: Users },
-    { key: "history" as const, label: "Meine Spiele", icon: Target },
-    { key: "highlights" as const, label: "Meine Highlights", icon: Video },
+    { key: "players" as const, labelKey: "stats.tabMyStats", icon: Users },
+    { key: "history" as const, labelKey: "stats.tabMyGames", icon: Target },
+    { key: "highlights" as const, labelKey: "stats.tabMyHighlights", icon: Video },
   ];
   const tabs = viewScope === "personal" ? personalTabs : clubTabs;
 
@@ -878,16 +880,16 @@ const StatisticsPage = () => {
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div className="flex items-center gap-3">
           <BarChart3 className="w-6 h-6 text-primary" />
-          <h2 className="text-2xl font-display uppercase">Statistiken</h2>
+          <h2 className="text-2xl font-display uppercase">{t("stats.title")}</h2>
         </div>
         <div className="flex gap-1 bg-card rounded-lg border border-border p-1">
           <button onClick={() => setScope("club")}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewScope === "club" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-            Verein
+            {t("nav.club")}
           </button>
           <button onClick={() => setScope("personal")}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewScope === "personal" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-            Ich
+            {t("stats.myself")}
           </button>
         </div>
       </div>
@@ -896,9 +898,9 @@ const StatisticsPage = () => {
         <div className="bg-card rounded-xl border border-border p-6 text-center mb-4">
           <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm text-muted-foreground mb-3">
-            Kein Spielerprofil mit deinem Account verknüpft — persönliche Statistiken brauchen diese Verknüpfung.
+            {t("stats.noProfileLinked")}
           </p>
-          <Button asChild size="sm"><Link to="/players">Zu den Spielern</Link></Button>
+          <Button asChild size="sm"><Link to="/players">{t("stats.goToPlayers")}</Link></Button>
         </div>
       )}
 
@@ -908,58 +910,58 @@ const StatisticsPage = () => {
       <div className="bg-card rounded-xl border border-border p-3 mb-4">
         <div className="flex items-center justify-between mb-2">
           <span className="flex items-center gap-1.5 text-xs font-display uppercase tracking-wider text-muted-foreground">
-            <Filter className="w-3.5 h-3.5" /> Filter
+            <Filter className="w-3.5 h-3.5" /> {t("stats.filter")}
             {filtersActive && (
               <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary">
-                {filteredGames.length} / {games.length} Spiele
+                {filteredGames.length} / {games.length} {t("stats.games")}
               </span>
             )}
           </span>
           {filtersActive && (
             <button onClick={resetFilters} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <X className="w-3 h-3" /> Zurücksetzen
+              <X className="w-3 h-3" /> {t("stats.reset")}
             </button>
           )}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
           <Select value={filterTime} onValueChange={(v) => setFilterTime(v as typeof filterTime)}>
-            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Zeitraum" /></SelectTrigger>
+            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder={t("stats.timeframe")} /></SelectTrigger>
             <SelectContent className="bg-card border-border">
-              <SelectItem value="all">Alle Zeit</SelectItem>
-              <SelectItem value="today">Heute</SelectItem>
-              <SelectItem value="week">Letzte 7 Tage</SelectItem>
-              <SelectItem value="month">Letzte 30 Tage</SelectItem>
-              <SelectItem value="year">Letzte 12 Monate</SelectItem>
+              <SelectItem value="all">{t("stats.allTime")}</SelectItem>
+              <SelectItem value="today">{t("home.today")}</SelectItem>
+              <SelectItem value="week">{t("stats.last7Days")}</SelectItem>
+              <SelectItem value="month">{t("stats.last30Days")}</SelectItem>
+              <SelectItem value="year">{t("stats.last12Months")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filterYear} onValueChange={setFilterYear}>
-            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Saison" /></SelectTrigger>
+            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder={t("home.season")} /></SelectTrigger>
             <SelectContent className="bg-card border-border">
-              <SelectItem value="all">Alle Saisons</SelectItem>
-              {availableYears.map(y => <SelectItem key={y} value={String(y)}>Saison {y}</SelectItem>)}
+              <SelectItem value="all">{t("stats.allSeasons")}</SelectItem>
+              {availableYears.map(y => <SelectItem key={y} value={String(y)}>{t("home.season")} {y}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterMode} onValueChange={setFilterMode}>
-            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Modus" /></SelectTrigger>
+            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder={t("stats.mode")} /></SelectTrigger>
             <SelectContent className="bg-card border-border">
-              <SelectItem value="all">Alle Modi</SelectItem>
+              <SelectItem value="all">{t("stats.allModes")}</SelectItem>
               {availableModes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
           {viewScope === "club" && (
             <Select value={filterPlayerId} onValueChange={setFilterPlayerId}>
-              <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Spieler" /></SelectTrigger>
+              <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder={t("stats.player")} /></SelectTrigger>
               <SelectContent className="bg-card border-border">
-                <SelectItem value="all">Alle Spieler</SelectItem>
+                <SelectItem value="all">{t("stats.allPlayers")}</SelectItem>
                 {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
           <Select value={filterBestOf} onValueChange={setFilterBestOf}>
-            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Best of" /></SelectTrigger>
+            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder={t("stats.bestOf")} /></SelectTrigger>
             <SelectContent className="bg-card border-border">
-              <SelectItem value="all">Alle Formate</SelectItem>
-              {availableBestOf.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+              <SelectItem value="all">{t("stats.allFormats")}</SelectItem>
+              {availableBestOf.map(n => <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -970,10 +972,10 @@ const StatisticsPage = () => {
           without needing to track scroll position in JS. */}
       <div className="relative mb-6">
         <div className="flex gap-1 bg-card rounded-lg border border-border p-1 overflow-x-auto">
-          {tabs.map(t => (
-            <button key={t.key} onClick={() => setActiveTab(t.key)}
-              className={`shrink-0 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-all ${activeTab === t.key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-              <t.icon className="w-3.5 h-3.5 shrink-0" />{t.label}
+          {tabs.map(tab => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              className={`shrink-0 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-all ${activeTab === tab.key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+              <tab.icon className="w-3.5 h-3.5 shrink-0" />{t(tab.labelKey)}
             </button>
           ))}
         </div>
@@ -987,16 +989,16 @@ const StatisticsPage = () => {
           {/* Club overview cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
-              { label: "Gespielte Spiele", value: clubStats.totalGames, icon: Target, color: "text-primary" },
-              { label: "Mitglieder", value: clubStats.totalPlayers, icon: Users, color: "text-secondary" },
-              { label: "Ø Club-Average", value: clubStats.avgOfAverages.toFixed(1), icon: TrendingUp, color: "text-accent" },
-              { label: "Geworfene Darts", value: clubStats.totalDarts.toLocaleString(), icon: Hash, color: "text-primary" },
-              { label: "180er", value: club180Total, icon: Target, color: "text-accent" },
+              { labelKey: "stats.gamesPlayed", value: clubStats.totalGames, icon: Target, color: "text-primary" },
+              { labelKey: "stats.members", value: clubStats.totalPlayers, icon: Users, color: "text-secondary" },
+              { labelKey: "stats.clubAverage", value: clubStats.avgOfAverages.toFixed(1), icon: TrendingUp, color: "text-accent" },
+              { labelKey: "stats.dartsThrown", value: clubStats.totalDarts.toLocaleString(), icon: Hash, color: "text-primary" },
+              { labelKey: "stats.oneEighties", value: club180Total, icon: Target, color: "text-accent" },
             ].map(s => (
-              <div key={s.label} className="bg-card rounded-xl p-4 border border-border">
+              <div key={s.labelKey} className="bg-card rounded-xl p-4 border border-border">
                 <s.icon className={`w-4 h-4 ${s.color} mb-1`} />
                 <p className="text-2xl font-display">{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
+                <p className="text-xs text-muted-foreground">{t(s.labelKey)}</p>
               </div>
             ))}
           </div>
@@ -1004,18 +1006,18 @@ const StatisticsPage = () => {
           {/* Records */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
-              { label: "Höchster Score", value: clubStats.bestHighscore.val, sub: clubStats.bestHighscore.name, icon: Trophy, color: "text-accent" },
-              { label: "Bester Ø", value: clubStats.bestAvg.val.toFixed(1), sub: clubStats.bestAvg.name, icon: Flame, color: "text-destructive" },
-              { label: "Bester Game-Ø", value: clubStats.highestGameAvg.val.toFixed(1), sub: clubStats.highestGameAvg.name, icon: Zap, color: "text-secondary" },
-              { label: "Meiste Siege", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, color: "text-primary" },
-              { label: "Höchstes Finish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, color: "text-accent" },
-              { label: "Beste Checkout %", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, color: "text-secondary" },
-              { label: "Beste MPR (Cricket)", value: bestMpr.val ? bestMpr.val.toFixed(2) : "-", sub: bestMpr.name, icon: Target, color: "text-accent" },
+              { labelKey: "stats.highestScore", value: clubStats.bestHighscore.val, sub: clubStats.bestHighscore.name, icon: Trophy, color: "text-accent" },
+              { labelKey: "stats.bestAverage", value: clubStats.bestAvg.val.toFixed(1), sub: clubStats.bestAvg.name, icon: Flame, color: "text-destructive" },
+              { labelKey: "stats.bestGameAverage", value: clubStats.highestGameAvg.val.toFixed(1), sub: clubStats.highestGameAvg.name, icon: Zap, color: "text-secondary" },
+              { labelKey: "stats.mostWins", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, color: "text-primary" },
+              { labelKey: "stats.highestFinish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, color: "text-accent" },
+              { labelKey: "stats.bestCheckoutPct", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, color: "text-secondary" },
+              { labelKey: "stats.bestMpr", value: bestMpr.val ? bestMpr.val.toFixed(2) : "-", sub: bestMpr.name, icon: Target, color: "text-accent" },
             ].map(s => (
-              <div key={s.label} className="bg-card rounded-xl p-3 border border-border">
+              <div key={s.labelKey} className="bg-card rounded-xl p-3 border border-border">
                 <s.icon className={`w-4 h-4 ${s.color} mb-1`} />
                 <p className="text-xl font-display">{s.value}</p>
-                <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                <p className="text-[10px] text-muted-foreground">{t(s.labelKey)}</p>
                 <p className="text-[10px] text-primary">{s.sub}</p>
               </div>
             ))}
@@ -1025,7 +1027,7 @@ const StatisticsPage = () => {
           {gamesTimeline.some(d => d.count > 0) && (
             <div className="bg-card rounded-xl border border-border p-4 mb-6">
               <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                <Calendar className="w-4 h-4" /> Spiele der letzten 30 Tage
+                <Calendar className="w-4 h-4" /> {t("stats.gamesLast30Days")}
               </h3>
               <ResponsiveContainer width="100%" height={120}>
                 <BarChart data={gamesTimeline}>
@@ -1042,20 +1044,20 @@ const StatisticsPage = () => {
           {trebleStats.hasData && (
             <div className="bg-card rounded-xl border border-border p-4 mb-6">
               <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                <Crosshair className="w-4 h-4" /> Triple-Analyse
+                <Crosshair className="w-4 h-4" /> {t("stats.tripleAnalysis")}
               </h3>
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="bg-muted/30 rounded-lg p-3">
                   <p className="text-2xl font-display text-destructive">{trebleStats.treblelessRate.toFixed(1)}%</p>
-                  <p className="text-[10px] text-muted-foreground">Trebleless Visits</p>
+                  <p className="text-[10px] text-muted-foreground">{t("stats.treblelessVisits")}</p>
                 </div>
                 <div className="bg-muted/30 rounded-lg p-3">
                   <p className="text-2xl font-display">{trebleStats.trebleless}</p>
-                  <p className="text-[10px] text-muted-foreground">von {trebleStats.visits} Visits</p>
+                  <p className="text-[10px] text-muted-foreground">{t("stats.of")} {trebleStats.visits} {t("stats.visits")}</p>
                 </div>
                 <div className="bg-muted/30 rounded-lg p-3">
                   <p className="text-2xl font-display text-secondary">{trebleStats.triples}</p>
-                  <p className="text-[10px] text-muted-foreground">Triples gesamt</p>
+                  <p className="text-[10px] text-muted-foreground">{t("stats.triplesTotal")}</p>
                 </div>
               </div>
               <ResponsiveContainer width="100%" height={140}>
