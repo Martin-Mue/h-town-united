@@ -8,7 +8,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   LineChart, Line, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   AreaChart, Area,
 } from "recharts";
@@ -791,7 +791,7 @@ const StatisticsPage = () => {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
           <Select value={filterTime} onValueChange={(v) => setFilterTime(v as typeof filterTime)}>
-            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Zeitraum" /></SelectTrigger>
+            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Zeitraum" /></SelectTrigger>
             <SelectContent className="bg-card border-border">
               <SelectItem value="all">Alle Zeit</SelectItem>
               <SelectItem value="today">Heute</SelectItem>
@@ -801,14 +801,14 @@ const StatisticsPage = () => {
             </SelectContent>
           </Select>
           <Select value={filterYear} onValueChange={setFilterYear}>
-            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Saison" /></SelectTrigger>
+            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Saison" /></SelectTrigger>
             <SelectContent className="bg-card border-border">
               <SelectItem value="all">Alle Saisons</SelectItem>
               {availableYears.map(y => <SelectItem key={y} value={String(y)}>Saison {y}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterMode} onValueChange={setFilterMode}>
-            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Modus" /></SelectTrigger>
+            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Modus" /></SelectTrigger>
             <SelectContent className="bg-card border-border">
               <SelectItem value="all">Alle Modi</SelectItem>
               {availableModes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
@@ -816,7 +816,7 @@ const StatisticsPage = () => {
           </Select>
           {viewScope === "club" && (
             <Select value={filterPlayerId} onValueChange={setFilterPlayerId}>
-              <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Spieler" /></SelectTrigger>
+              <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Spieler" /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="all">Alle Spieler</SelectItem>
                 {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
@@ -824,7 +824,7 @@ const StatisticsPage = () => {
             </Select>
           )}
           <Select value={filterBestOf} onValueChange={setFilterBestOf}>
-            <SelectTrigger className="h-9 bg-muted border-border text-xs"><SelectValue placeholder="Best of" /></SelectTrigger>
+            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder="Best of" /></SelectTrigger>
             <SelectContent className="bg-card border-border">
               <SelectItem value="all">Alle Formate</SelectItem>
               {availableBestOf.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
@@ -982,14 +982,14 @@ const StatisticsPage = () => {
                 <Trophy className="w-4 h-4" /> Rangliste{filterYear !== "all" ? ` · Saison ${filterYear}` : filtersActive ? " · gefiltert" : ""}
               </h3>
               <div className="flex items-center gap-1.5">
-                <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={exportLeaderboardCsv} disabled={leaderboard.length === 0} title="Als CSV exportieren">
+                <Button size="sm" variant="outline" className="h-10 text-xs gap-1" onClick={exportLeaderboardCsv} disabled={leaderboard.length === 0} title="Als CSV exportieren">
                   <Download className="w-3.5 h-3.5" /> CSV
                 </Button>
-                <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={exportSeasonPdf} disabled={leaderboard.length === 0} title="Ausführlicher Saisonbericht als PDF">
+                <Button size="sm" variant="outline" className="h-10 text-xs gap-1" onClick={exportSeasonPdf} disabled={leaderboard.length === 0} title="Ausführlicher Saisonbericht als PDF">
                   <FileText className="w-3.5 h-3.5" /> PDF
                 </Button>
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-                  <SelectTrigger className="w-[140px] h-8 text-xs bg-muted border-border"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-[140px] h-10 text-xs bg-muted border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     <SelectItem value="points">Punkte (Saison)</SelectItem>
                     <SelectItem value="elo">Elo-Rating</SelectItem>
@@ -1198,6 +1198,7 @@ const StatisticsPage = () => {
                       <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} domain={["auto", "auto"]} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
                       <Area type="monotone" dataKey="average" stroke="hsl(185 85% 48%)" fill="url(#avgGrad)" strokeWidth={2} name="Game Ø" />
                       <Line type="monotone" dataKey="runningAvg" stroke="hsl(155 65% 42%)" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Laufender Ø" />
                     </AreaChart>
@@ -1295,13 +1296,16 @@ const StatisticsPage = () => {
                 <Select value={compareP1} onValueChange={setCompareP1}>
                   <SelectTrigger className="bg-muted border-border text-sm"><SelectValue placeholder="Spieler 1" /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
+                    {/* Each side excludes whoever is already picked on the other — a same-player
+                        H2H is meaningless (mirrored identical stats), so prevent it at the input
+                        instead of silently rendering a self-comparison with no warning. */}
+                    {players.filter(p => p.id !== compareP2).map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={compareP2} onValueChange={setCompareP2}>
                   <SelectTrigger className="bg-muted border-border text-sm"><SelectValue placeholder="Spieler 2" /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
+                    {players.filter(p => p.id !== compareP1).map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -1348,8 +1352,9 @@ const StatisticsPage = () => {
                       <PolarGrid stroke="hsl(222 18% 14%)" />
                       <PolarAngleAxis dataKey="skill" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} />
                       <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
-                      <Radar dataKey="p1" stroke="hsl(185 85% 48%)" fill="hsl(185 85% 48%)" fillOpacity={0.15} strokeWidth={2} />
-                      <Radar dataKey="p2" stroke="hsl(155 65% 42%)" fill="hsl(155 65% 42%)" fillOpacity={0.15} strokeWidth={2} />
+                      <Radar dataKey="p1" name={h2hRecords.p1.name} stroke="hsl(185 85% 48%)" fill="hsl(185 85% 48%)" fillOpacity={0.15} strokeWidth={2} />
+                      <Radar dataKey="p2" name={h2hRecords.p2.name} stroke="hsl(155 65% 42%)" fill="hsl(155 65% 42%)" fillOpacity={0.15} strokeWidth={2} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
                     </RadarChart>
                   </ResponsiveContainer>
                 </>
@@ -1458,7 +1463,7 @@ const StatisticsPage = () => {
             {viewScope === "club" && highlightClips.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <Select value={cleanupDays} onValueChange={setCleanupDays}>
-                  <SelectTrigger className="h-7 w-[110px] text-[11px] bg-background border-border"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-[110px] text-[11px] bg-background border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     <SelectItem value="30">älter als 30 Tage</SelectItem>
                     <SelectItem value="90">älter als 90 Tage</SelectItem>
@@ -1467,7 +1472,7 @@ const StatisticsPage = () => {
                 </Select>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" disabled={oldClips.length === 0}>
+                    <Button size="sm" variant="outline" className="h-9 text-[11px] gap-1" disabled={oldClips.length === 0}>
                       <Trash2 className="w-3 h-3" /> Aufräumen ({oldClips.length})
                     </Button>
                   </AlertDialogTrigger>

@@ -342,7 +342,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
       )}
       {canStartLiveGame(match) && (
         <div className="flex border-t border-border/60">
-          <Button variant="secondary" size="sm" className="flex-1 rounded-none h-8 text-xs gap-1.5" onClick={() => onStartLiveGame(match)}>
+          <Button variant="secondary" size="sm" className="flex-1 rounded-none h-11 text-xs gap-1.5" onClick={() => onStartLiveGame(match)}>
             <Play className="w-3.5 h-3.5" /> Spiel starten
           </Button>
           {getLiveGameUrl(match) && (
@@ -352,7 +352,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
               downloadName={`match-${match.id}`}
               trigger={
-                <button className="shrink-0 rounded-none border-l border-border/60 px-3 h-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
+                <button className="shrink-0 rounded-none border-l border-border/60 px-4 h-11 min-w-11 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
                   <QrCode className="w-3.5 h-3.5" />
                 </button>
               }
@@ -1656,7 +1656,7 @@ const TournamentPage = () => {
               <span className="text-muted-foreground shrink-0 hidden sm:inline">Beamer-Link:</span>
               <code className="font-mono text-secondary truncate">{window.location.origin}/live/{activeTournament.public_slug}</code>
               <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1" onClick={copyPublicLink}>
+                <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" onClick={copyPublicLink}>
                   <Copy className="w-3 h-3" /> Kopieren
                 </Button>
                 <QrCodeDialog
@@ -1665,7 +1665,7 @@ const TournamentPage = () => {
                   description="Scannen führt direkt zur öffentlichen Live-Ansicht — ohne Login oder Registrierung. Zum Ausdrucken oder Anzeigen am Eingang."
                   downloadName={`live-${activeTournament.public_slug}`}
                   trigger={
-                    <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1">
+                    <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1">
                       <QrCode className="w-3 h-3" /> QR
                     </Button>
                   }
@@ -1676,7 +1676,7 @@ const TournamentPage = () => {
                   description="Startet direkt im automatischen Wechsel zwischen Turnierbaum/Liste und Board-Übersicht (alle 15s) — ideal für einen TV oder Beamer, den niemand mehr bedient."
                   downloadName={`live-auto-${activeTournament.public_slug}`}
                   trigger={
-                    <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1" title="Für einen unbeaufsichtigten Bildschirm: automatischer Wechsel zwischen Turnierbaum und Board-Übersicht">
+                    <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" title="Für einen unbeaufsichtigten Bildschirm: automatischer Wechsel zwischen Turnierbaum und Board-Übersicht">
                       <RefreshCcw className="w-3 h-3" /> Auto
                     </Button>
                   }
@@ -1761,7 +1761,7 @@ const TournamentPage = () => {
                         </span>
                         {canStartLiveGame(e.match) && (
                           <>
-                            <Button size="sm" variant="secondary" className="h-7 text-xs gap-1 shrink-0" onClick={() => startLiveGame(e.match)}>
+                            <Button size="sm" variant="secondary" className="h-9 text-xs gap-1 shrink-0" onClick={() => startLiveGame(e.match)}>
                               <Play className="w-3 h-3" /> Spiel starten
                             </Button>
                             {koLiveGamePath(e.match) && (
@@ -1771,7 +1771,7 @@ const TournamentPage = () => {
                                 description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
                                 downloadName={`match-${e.match.id}`}
                                 trigger={
-                                  <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
+                                  <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
                                     <QrCode className="w-3.5 h-3.5" />
                                   </Button>
                                 }
@@ -1960,7 +1960,7 @@ const TournamentPage = () => {
                 <div className="flex gap-1">
                   {(activeTournament.live_play_enabled ?? true) && activeTournament.game_mode !== "Extern" && (
                     <>
-                      <Button size="sm" variant="secondary" className="text-xs h-7 px-2 gap-1" onClick={() => startLiveGameRr(m)}>
+                      <Button size="sm" variant="secondary" className="text-xs h-9 px-2 gap-1" onClick={() => startLiveGameRr(m)}>
                         <Play className="w-3 h-3" /> Spiel starten
                       </Button>
                       {rrLiveGamePath(m) && (
@@ -1970,7 +1970,7 @@ const TournamentPage = () => {
                           description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
                           downloadName={`match-${m.id}`}
                           trigger={
-                            <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
+                            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
                               <QrCode className="w-3.5 h-3.5" />
                             </Button>
                           }
