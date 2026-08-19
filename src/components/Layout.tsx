@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3, UserCog, CloudOff, RefreshCw, Bell, BellOff, Sun, Moon } from "lucide-react";
+import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3, UserCog, CloudOff, RefreshCw, Bell, BellOff, Sun, Moon, Settings } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -147,6 +147,11 @@ const Layout = ({ children }: { children: ReactNode }) => {
                 <span className="hidden sm:inline">{pendingCount} offline</span>
               </div>
             )}
+            <Link to="/settings">
+              <Button variant="ghost" size="icon" title="Einstellungen" aria-label="Einstellungen">
+                <Settings className="w-4 h-4" />
+              </Button>
+            </Link>
             <Button variant="ghost" size="icon" onClick={handleSignOut} disabled={signingOut} title="Abmelden" aria-label="Abmelden">
               <LogOut className="w-4 h-4" />
             </Button>

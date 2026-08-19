@@ -23,6 +23,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Admin = lazy(() => import("./pages/Admin"));
 const TournamentSeries = lazy(() => import("./pages/TournamentSeries"));
 const PublicTournament = lazy(() => import("./pages/PublicTournament"));
+const Settings = lazy(() => import("./pages/Settings"));
 
 const RouteFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -69,6 +70,7 @@ const App = () => (
                           <Route path="/training" element={<Training />} />
                           <Route path="/statistics" element={<Statistics />} />
                           <Route path="/admin" element={<Admin />} />
+                          <Route path="/settings" element={<Settings />} />
                           <Route path="*" element={<NotFound />} />
                         </Routes>
                       </Suspense>
