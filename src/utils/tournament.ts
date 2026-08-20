@@ -518,13 +518,15 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
   return groupOrder.flatMap((key) => headToHeadRank(groups.get(key)!));
 }
 
-export const roundLabelFor = (round: number, total: number) => {
-  if (round === 0) return "Vorrunde";
-  if (round === total) return "Finale";
-  if (round === total - 1) return "Halbfinale";
-  if (round === total - 2) return "Viertelfinale";
-  if (round === total - 3) return "Achtelfinale";
-  if (round === total - 4) return "Sechzehntelfinale";
-  if (round === total - 5) return "Zweiunddreißigstelfinale";
-  return `Runde ${round}`;
+/** Pure utility, no access to the language context — callers (all React components) pass their
+ *  own t() through. */
+export const roundLabelFor = (round: number, total: number, t: (key: string) => string) => {
+  if (round === 0) return t("tournament.preliminaryRoundLabel");
+  if (round === total) return t("tournament.final");
+  if (round === total - 1) return t("tournament.semifinal");
+  if (round === total - 2) return t("tournament.quarterfinal");
+  if (round === total - 3) return t("tournament.roundOf16");
+  if (round === total - 4) return t("tournament.roundOf32");
+  if (round === total - 5) return t("tournament.roundOf64");
+  return `${t("tournament.roundLabel")} ${round}`;
 };

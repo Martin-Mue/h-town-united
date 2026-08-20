@@ -683,25 +683,36 @@ const StatisticsPage = () => {
     const h2hGames = filteredGames.filter(g =>
       (g.player1_id === compareP1 && g.player2_id === compareP2) || (g.player1_id === compareP2 && g.player2_id === compareP1)
     );
-    let p1Wins = 0, p2Wins = 0, p1AvgSum = 0, p2AvgSum = 0, p1HighestAvg = 0, p2HighestAvg = 0;
+    let p1Wins = 0, p2Wins = 0, p1AvgSum = 0, p2AvgSum = 0;
     h2hGames.forEach(g => {
       const isP1First = g.player1_id === compareP1;
       const myAvg = isP1First ? g.player1_average : g.player2_average;
       const oppAvg = isP1First ? g.player2_average : g.player1_average;
       p1AvgSum += Number(myAvg); p2AvgSum += Number(oppAvg);
-      p1HighestAvg = Math.max(p1HighestAvg, Number(myAvg)); p2HighestAvg = Math.max(p2HighestAvg, Number(oppAvg));
       if (g.winner_name === p1.name) p1Wins++; else if (g.winner_name === p2.name) p2Wins++;
     });
+    // "Beste Game-Ø" is each player's own best single-game average across ALL their games (same
+    // definition as the per-player tab's bestGameAvg), not scoped to just this pairing — unlike
+    // "Ø im Duell" right next to it, which IS deliberately h2h-only. Two players who've barely
+    // played each other would otherwise show a misleadingly low "best" here.
+    const bestGameAvgFor = (playerId: string) => {
+      const theirAvgs = filteredGames
+        .filter(g => g.player1_id === playerId || g.player2_id === playerId)
+        .map(g => Number(g.player1_id === playerId ? g.player1_average : g.player2_average));
+      return theirAvgs.length > 0 ? Math.max(...theirAvgs) : 0;
+    };
+    const p1BestGameAvg = bestGameAvgFor(compareP1);
+    const p2BestGameAvg = bestGameAvgFor(compareP2);
     const winRate = (p: PlayerStats) => p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
     return {
       p1, p2, h2hGames: h2hGames.length, p1Wins, p2Wins,
-      // "–" (not "0"/"0.0") when there are no head-to-head games yet — these two are scoped to
-      // just this matchup, unlike Ø Gesamt/Highscore in the same table (career-wide), so a bare
-      // 0 here read as a real (very low) stat instead of "no data for this pairing".
+      // "–" (not "0"/"0.0") when there are no head-to-head games yet — "Ø im Duell" is scoped to
+      // just this matchup, unlike Ø Gesamt/Highscore/Beste Game-Ø in the same table (career-wide),
+      // so a bare 0 here read as a real (very low) stat instead of "no data for this pairing".
       p1AvgH2H: h2hGames.length > 0 ? (p1AvgSum / h2hGames.length).toFixed(1) : "–",
       p2AvgH2H: h2hGames.length > 0 ? (p2AvgSum / h2hGames.length).toFixed(1) : "–",
-      p1HighestAvg: h2hGames.length > 0 ? p1HighestAvg.toFixed(1) : "–",
-      p2HighestAvg: h2hGames.length > 0 ? p2HighestAvg.toFixed(1) : "–",
+      p1HighestAvg: p1BestGameAvg > 0 ? p1BestGameAvg.toFixed(1) : "–",
+      p2HighestAvg: p2BestGameAvg > 0 ? p2BestGameAvg.toFixed(1) : "–",
       radar: [
         { skill: "Average", p1: Math.min(Number(p1.average), 100), p2: Math.min(Number(p2.average), 100) },
         { skill: "Highscore", p1: (p1.high_score / 180) * 100, p2: (p2.high_score / 180) * 100 },

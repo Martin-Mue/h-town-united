@@ -1340,7 +1340,7 @@ const TournamentPage = () => {
     if (activeTournament?.id === id) { setActiveTournament(null); setPhase("list"); }
   };
 
-  const roundLabel = roundLabelFor;
+  const roundLabel = (round: number, total: number) => roundLabelFor(round, total, t);
 
   /** A tournament counts as started as soon as a real match (no BYE) has a winner. */
   const hasStarted = (t: TournamentRecord) => {
@@ -1578,7 +1578,7 @@ const TournamentPage = () => {
               <div className="space-y-2">
                 {roundConfigs.map((cfg, idx) => {
                   const total = roundConfigs.length;
-                  const label = roundLabelFor(idx + 1, total);
+                  const label = roundLabelFor(idx + 1, total, t);
                   return (
                     <div key={idx} className="grid grid-cols-[80px_1fr_1fr] gap-2 items-center">
                       <span className="text-xs font-display uppercase text-muted-foreground">{label}</span>
@@ -1760,7 +1760,7 @@ const TournamentPage = () => {
                 </div>
                 <div className="text-[11px] text-muted-foreground space-y-1">
                   <p>
-                    {t("tournament.modeProgression")} {roundConfigs.map((c, i) => `${roundLabelFor(i + 1, roundConfigs.length)}: ${c.mode} BO${c.bestOf}`).join(" · ")}
+                    {t("tournament.modeProgression")} {roundConfigs.map((c, i) => `${roundLabelFor(i + 1, roundConfigs.length, t)}: ${c.mode} BO${c.bestOf}`).join(" · ")}
                   </p>
                   <p>
                     {drawMode === "random"
@@ -1775,7 +1775,7 @@ const TournamentPage = () => {
                       return (
                         <div key={r} className="flex flex-col justify-around gap-1 min-w-[130px]">
                           <p className="text-[9px] uppercase tracking-wider text-muted-foreground text-center">
-                            {roundLabelFor(r, rounds)}
+                            {roundLabelFor(r, rounds, t)}
                           </p>
                           {list.map((m, i) => (
                             <div key={m.id} className="bg-card border border-border rounded px-1.5 py-1 text-[10px] leading-tight">

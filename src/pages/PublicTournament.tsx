@@ -20,6 +20,7 @@ import {
 } from "@/utils/tournament";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import AnimatedScore from "@/components/AnimatedScore";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
@@ -33,6 +34,7 @@ interface TournamentRow {
 
 /** Read-only round-robin standings + match list — mirrors the admin Tabelle view. */
 const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
+  const { t } = useLanguage();
   const standings = calcStandings(matches);
   const unplayed = matches.filter((m) => !m.played);
   const played = matches.filter((m) => m.played);
@@ -40,14 +42,14 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
   return (
     <div className="space-y-4">
       <div className="bg-card rounded-xl border border-border p-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Tabelle</h3>
+        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
         <div className="grid grid-cols-[auto_1fr_repeat(4,40px)] gap-x-2 gap-y-1 text-xs">
           <span className="text-muted-foreground">#</span>
-          <span className="text-muted-foreground">Spieler</span>
-          <span className="text-muted-foreground text-center">Sp</span>
-          <span className="text-muted-foreground text-center">S</span>
-          <span className="text-muted-foreground text-center">N</span>
-          <span className="text-muted-foreground text-center">Pkt</span>
+          <span className="text-muted-foreground">{t("stats.player")}</span>
+          <span className="text-muted-foreground text-center">{t("tournament.playedAbbrev")}</span>
+          <span className="text-muted-foreground text-center">{t("tournament.wonAbbrev")}</span>
+          <span className="text-muted-foreground text-center">{t("tournament.lostAbbrev")}</span>
+          <span className="text-muted-foreground text-center">{t("tournament.pointsAbbrev")}</span>
           {standings.map((s, i) => (
             <div className="contents" key={s.name}>
               <span className={`font-display ${i === 0 ? "text-accent" : ""}`}>
@@ -65,7 +67,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
 
       {unplayed.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Ausstehende Spiele ({unplayed.length})</h3>
+          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.upcomingMatches")} ({unplayed.length})</h3>
           <div className="space-y-1.5">
             {unplayed.map((m) => (
               <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2 text-sm">
@@ -78,7 +80,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
 
       {played.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Gespielte Partien ({played.length})</h3>
+          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.playedMatches")} ({played.length})</h3>
           <div className="space-y-1">
             {played.map((m) => (
               <div key={m.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
@@ -93,8 +95,6 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
   );
 };
 
-const roundLabel = roundLabelFor;
-
 /** Mirrored, auto-fitting bracket — identical layout to the admin view, read-only. */
 const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbackBestOf }: {
   matches: Match[];
@@ -103,6 +103,8 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   fallbackMode?: string;
   fallbackBestOf?: number;
 }) => {
+  const { t } = useLanguage();
+  const roundLabel = (round: number, total: number) => roundLabelFor(round, total, t);
   // v2 — no continuous auto-measurement. The old version re-measured the tree on every
   // resize/orientation change and multiplied a computed "fit" scale into the zoom, which
   // depended on layout having fully settled at exactly the right moment; when it hadn't
@@ -204,7 +206,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
         {!m.winner && (m.scorekeeper || m.scorekeeperRule || m.board) && (
           <div className={`px-2 py-0.5 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[9px] text-muted-foreground ${compact ? "" : "px-3 py-1 text-[10px]"}`}>
             <span className="truncate">✍️ {keeperLabel(m, matches) || "–"}</span>
-            {m.board ? <span className="font-mono">Board {m.board}</span> : null}
+            {m.board ? <span className="font-mono">{t("camera.board")} {m.board}</span> : null}
           </div>
         )}
       </div>
@@ -272,7 +274,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
       {prelimMatches.length > 0 && (
         <div className="mb-3 rounded-xl border border-border bg-card/60 p-3">
           <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
-            Preliminary Round · winners advance to the main bracket
+            {t("tournament.preliminaryRound")}
           </p>
           <div className="flex flex-wrap gap-2">
             {prelimMatches.map(m => (
@@ -283,13 +285,13 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
       )}
       <div className="relative">
       <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-card/90 backdrop-blur border border-border rounded-lg p-1">
-        <button onClick={() => setUserZoom(z => Math.max(0.4, +(z - 0.15).toFixed(2)))} title="Verkleinern" aria-label="Verkleinern" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+        <button onClick={() => setUserZoom(z => Math.max(0.4, +(z - 0.15).toFixed(2)))} title={t("tournament.zoomOut")} aria-label={t("tournament.zoomOut")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
-        <button onClick={fitToScreen} title="Auf Bildschirm einpassen" aria-label="Auf Bildschirm einpassen" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+        <button onClick={fitToScreen} title={t("tournament.fitToScreen")} aria-label={t("tournament.fitToScreen")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
-        <button onClick={() => setUserZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))} title="Vergrößern" aria-label="Vergrößern" className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
+        <button onClick={() => setUserZoom(z => Math.min(2.5, +(z + 0.15).toFixed(2)))} title={t("tournament.zoomIn")} aria-label={t("tournament.zoomIn")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
           <ZoomIn className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -326,6 +328,8 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   fallbackMode?: string;
   fallbackBestOf?: number;
 }) => {
+  const { t } = useLanguage();
+  const roundLabel = (round: number, total: number) => roundLabelFor(round, total, t);
   const hasPrelim = matches.some(m => m.round === 0);
   const rounds = [...(hasPrelim ? [0] : []), ...Array.from({ length: totalRounds }, (_, i) => i + 1)];
   return (
@@ -353,7 +357,7 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
                       {m.score1 ?? 0}:{m.score2 ?? 0}
                     </span>
                     {live && m.board ? (
-                      <span className="shrink-0 font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5">Board {m.board}</span>
+                      <span className="shrink-0 font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5">{t("camera.board")} {m.board}</span>
                     ) : null}
                   </div>
                 );
@@ -443,6 +447,7 @@ const BoardOverview = ({
   queuedCount: number;
   totalRounds: number;
 }) => {
+  const { t } = useLanguage();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -461,17 +466,17 @@ const BoardOverview = ({
     <div ref={wrapRef} className="p-4 sm:p-6 bg-background min-h-[60vh]">
       <div className="flex items-center justify-between mb-4">
         <p className="text-[clamp(0.7rem,1.2vw,0.9rem)] uppercase tracking-[0.3em] text-primary flex items-center gap-2">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary animate-pulse" /> Board-Übersicht · Live
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary animate-pulse" /> {t("pt.boardOverview")} · {t("tournament.live")}
         </p>
         <div className="flex items-center gap-1.5">
           {typeof window !== "undefined" && (
             <QrCodeDialog
               url={`${window.location.origin}${window.location.pathname}?view=boards`}
-              title="Board-Übersicht"
-              description="Auf dem eigenen Handy weiterverfolgen — scannen öffnet direkt diese Ansicht, ohne Login."
+              title={t("pt.boardOverview")}
+              description={t("pt.followOnOwnPhone")}
               downloadName="board-uebersicht"
               trigger={
-                <button className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1.5" title="QR-Code zum Mitverfolgen">
+                <button className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1.5" title={t("pt.qrToFollow")}>
                   <QrCodeIcon className="w-3.5 h-3.5" /> QR
                 </button>
               }
@@ -480,25 +485,25 @@ const BoardOverview = ({
           <button
             onClick={toggleFullscreen}
             className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1.5"
-            title={isFullscreen ? "Vollbild verlassen" : "Vollbild (für TV/Beamer)"}
+            title={isFullscreen ? t("pt.exitFullscreen") : t("pt.enterFullscreenTv")}
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            {isFullscreen ? "Vollbild verlassen" : "Vollbild"}
+            {isFullscreen ? t("pt.exitFullscreen") : t("pt.fullscreenShort")}
           </button>
         </div>
       </div>
 
       {now.length === 0 ? (
         <p className="text-[clamp(1rem,2vw,1.5rem)] text-muted-foreground text-center py-12">
-          Noch keine laufenden Partien.
+          {t("pt.noOngoingMatches")}
         </p>
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 320px), 1fr))` }}>
           {now.map((c) => (
             <div key={c.id} className="rounded-2xl border-2 border-primary/50 bg-gradient-to-br from-primary/10 via-card to-accent/5 p-4 sm:p-6 glow-cyan">
               <div className="flex items-center justify-between mb-3">
-                <span className="font-display text-[clamp(1.1rem,2vw,1.6rem)] text-primary">Board {c.board}</span>
-                {c.round !== undefined && <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-muted-foreground">{roundLabelFor(c.round, totalRounds)}</span>}
+                <span className="font-display text-[clamp(1.1rem,2vw,1.6rem)] text-primary">{t("camera.board")} {c.board}</span>
+                {c.round !== undefined && <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-muted-foreground">{roundLabelFor(c.round, totalRounds, t)}</span>}
               </div>
               <p className="font-display uppercase leading-tight text-[clamp(1.3rem,3.2vw,2.4rem)]">
                 {c.player1}
@@ -519,7 +524,7 @@ const BoardOverview = ({
                 <div className="mt-2 rounded-lg bg-destructive/10 border border-destructive/30 px-2.5 py-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-destructive flex items-center gap-1.5">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" /> Live
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" /> {t("tournament.live")}
                     </span>
                     <span className="font-display text-[clamp(1rem,1.8vw,1.4rem)]">
                       <AnimatedScore value={c.live!.remaining1 ?? 0} /> : <AnimatedScore value={c.live!.remaining2 ?? 0} />
@@ -535,11 +540,11 @@ const BoardOverview = ({
 
       {onDeck.length > 0 && (
         <div className="mt-6">
-          <p className="text-[clamp(0.7rem,1.1vw,0.85rem)] uppercase tracking-widest text-muted-foreground mb-2">Als Nächstes</p>
+          <p className="text-[clamp(0.7rem,1.1vw,0.85rem)] uppercase tracking-widest text-muted-foreground mb-2">{t("pt.upNext")}</p>
           <div className="flex flex-wrap gap-2">
             {onDeck.map((c) => (
               <div key={c.id} className="rounded-xl border border-border bg-card/60 px-3 py-2 flex items-center gap-2">
-                <span className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] bg-primary/10 text-primary rounded px-1.5 py-0.5 shrink-0">Board {c.board}</span>
+                <span className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] bg-primary/10 text-primary rounded px-1.5 py-0.5 shrink-0">{t("camera.board")} {c.board}</span>
                 <span className="text-[clamp(0.85rem,1.4vw,1.05rem)] uppercase tracking-wide">
                   {c.player1} <span className="text-muted-foreground normal-case">vs</span> {c.player2}
                 </span>
@@ -550,7 +555,7 @@ const BoardOverview = ({
       )}
       {queuedCount > 0 && (
         <p className="mt-3 text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-muted-foreground">
-          +{queuedCount} weitere Partie{queuedCount > 1 ? "n" : ""} in der Warteschlange
+          +{queuedCount} {t("pt.moreMatchesQueued")}
         </p>
       )}
     </div>
@@ -567,6 +572,10 @@ const AUTO_ROTATE_MS = 15000;
 
 const PublicTournamentPage = () => {
   const { slug } = useParams<{ slug: string }>();
+  // Aliased to `tr` (not the usual `t`) — this component already uses `t` for the tournament
+  // record itself (a name from long before this page had any translations, too widely
+  // referenced below to rename instead).
+  const { t: tr } = useLanguage();
   const [t, setT] = useState<TournamentRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -732,8 +741,8 @@ const PublicTournamentPage = () => {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center p-6">
         <Radio className="w-10 h-10 text-muted-foreground mb-3" />
-        <h1 className="font-display text-2xl uppercase mb-1">Kein Live-Turnier</h1>
-        <p className="text-sm text-muted-foreground">Dieser Link ist ungültig oder wurde deaktiviert.</p>
+        <h1 className="font-display text-2xl uppercase mb-1">{tr("pt.noLiveTournament")}</h1>
+        <p className="text-sm text-muted-foreground">{tr("pt.invalidOrDeactivatedLink")}</p>
       </div>
     );
   }
@@ -743,6 +752,7 @@ const PublicTournamentPage = () => {
   const totalRounds = isKo ? totalRoundsOf(matches) : 0;
   const completed = matches.filter(m => m.winner && isPlayable(m)).slice(-8).reverse();
   const boardsCount = t.boards ?? 2;
+  const roundLabel = (round: number, total: number) => roundLabelFor(round, total, tr);
 
   // Board-aware look-ahead — single source of truth shared by the "Jetzt am Board"
   // banner, the "Als Nächstes" sidebar card, and the full-screen board overview.
@@ -768,21 +778,21 @@ const PublicTournamentPage = () => {
               <span className="inline-flex items-center gap-2 shrink-0">
                 {t.champion ? (
                   <>
-                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground" /> Beendet
+                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground" /> {tr("pt.finished")}
                   </>
                 ) : (
                   <>
-                    <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" /> Live
+                    <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" /> {tr("tournament.live")}
                   </>
                 )}
               </span>
-              <span>{t.players.length} Spieler · {t.game_mode} BO{t.best_of_legs} · {boardsCount} Board{boardsCount > 1 ? "s" : ""}</span>
+              <span>{t.players.length} {tr("game.playersSuffix")} · {t.game_mode} BO{t.best_of_legs} · {boardsCount} {tr("camera.board")}{boardsCount > 1 ? "s" : ""}</span>
             </p>
           </div>
         </div>
         {t.champion && (
           <div className="text-right shrink-0">
-            <p className="text-[10px] uppercase tracking-widest text-accent">Champion</p>
+            <p className="text-[10px] uppercase tracking-widest text-accent">{tr("pt.champion")}</p>
             <p className="font-display text-xl text-accent">🏆 {t.champion}</p>
           </div>
         )}
@@ -795,15 +805,15 @@ const PublicTournamentPage = () => {
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border overflow-hidden">
             <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-              <Monitor className="w-3.5 h-3.5" /> Board-Übersicht
+              <Monitor className="w-3.5 h-3.5" /> {tr("pt.boardOverview")}
             </button>
             {isKo && (
               <>
                 <button onClick={() => selectView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                  <Network className="w-3.5 h-3.5" /> Turnierbaum
+                  <Network className="w-3.5 h-3.5" /> {tr("tournament.bracketTreeTab")}
                 </button>
                 <button onClick={() => selectView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                  <Rows3 className="w-3.5 h-3.5" /> Rundenliste
+                  <Rows3 className="w-3.5 h-3.5" /> {tr("pt.roundList")}
                 </button>
               </>
             )}
@@ -811,15 +821,15 @@ const PublicTournamentPage = () => {
           <button
             onClick={toggleAutoRotate}
             className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 ${autoRotate ? "border-secondary bg-secondary/15 text-secondary" : "border-border hover:bg-muted text-muted-foreground"}`}
-            title="Wechselt automatisch alle 15s zwischen Turnierbaum/Liste und Board-Übersicht — praktisch für einen Bildschirm, den niemand mehr bedient."
+            title={tr("pt.autoRotateTooltip")}
           >
-            <RefreshCcw className={`w-3.5 h-3.5 ${autoRotate ? "animate-pulse" : ""}`} /> Automatisch wechseln
+            <RefreshCcw className={`w-3.5 h-3.5 ${autoRotate ? "animate-pulse" : ""}`} /> {tr("pt.autoSwitch")}
           </button>
           <button
             onClick={toggleHighlights}
             className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 ${showHighlights ? "border-accent bg-accent/15 text-accent" : "border-border hover:bg-muted text-muted-foreground"}`}
           >
-            <Target className="w-3.5 h-3.5" /> Highlights
+            <Target className="w-3.5 h-3.5" /> {tr("pt.highlightsLabel")}
             {showHighlights ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -842,14 +852,14 @@ const PublicTournamentPage = () => {
           {nowBoards.length > 0 && (
             <div className="mb-3 rounded-2xl border-2 border-primary/50 bg-gradient-to-r from-primary/15 via-card to-accent/10 p-4 glow-cyan">
               <p className="text-[11px] uppercase tracking-[0.3em] text-primary mb-2 flex items-center gap-2">
-                <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" /> Jetzt am Board
+                <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" /> {tr("pt.nowOnBoard")}
               </p>
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
                 {nowBoards.map(({ board, match: m }) => (
                   <div key={m.id} className="rounded-xl bg-background/60 border border-border px-3 py-2">
                     <p className="font-display text-lg uppercase truncate">{m.player1} <span className="text-muted-foreground text-sm normal-case">vs</span> {m.player2}</p>
                     <p className="text-xs text-muted-foreground flex items-center gap-2">
-                      <span className="font-mono text-primary">Board {board}</span>
+                      <span className="font-mono text-primary">{tr("camera.board")} {board}</span>
                       <span>✍️ {keeperLabel(m, matches) || "–"}</span>
                     </p>
                   </div>
@@ -886,7 +896,7 @@ const PublicTournamentPage = () => {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <ListOrdered className="w-4 h-4 text-primary" />
-                  <h3 className="font-display uppercase text-sm">Als Nächstes</h3>
+                  <h3 className="font-display uppercase text-sm">{tr("pt.upNext")}</h3>
                 </div>
                 <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                   <Monitor className="w-3 h-3" /> {boardsCount}
@@ -894,7 +904,7 @@ const PublicTournamentPage = () => {
               </div>
               {onDeck.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  {nowBoards.length === 0 ? "Noch keine Paarungen feststehend." : "Alle bekannten Paarungen laufen bereits."}
+                  {nowBoards.length === 0 ? tr("pt.noPairingsYet") : tr("pt.allKnownPairingsRunning")}
                 </p>
               ) : (
                 <>
@@ -905,7 +915,7 @@ const PublicTournamentPage = () => {
                     {onDeck.map(({ board, match: m }) => (
                       <li key={m.id} className="flex items-center gap-2 text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">
                         <span className="font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5 shrink-0">
-                          Board {board}
+                          {tr("camera.board")} {board}
                         </span>
                         <span className="truncate uppercase tracking-wide">
                           {m.player1} <span className="text-muted-foreground normal-case">vs</span> {m.player2}
@@ -917,7 +927,7 @@ const PublicTournamentPage = () => {
               )}
               {queuedCount > 0 && (
                 <p className="mt-2.5 pt-2 border-t border-border/60 text-[10px] uppercase tracking-widest text-muted-foreground">
-                  +{queuedCount} weitere Partie{queuedCount > 1 ? "n" : ""} in der Warteschlange
+                  +{queuedCount} {tr("pt.moreMatchesQueued")}
                 </p>
               )}
             </div>
@@ -926,17 +936,17 @@ const PublicTournamentPage = () => {
           <div className="bg-card border border-border rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <Zap className="w-4 h-4 text-accent" />
-              <h3 className="font-display uppercase text-sm">Live-Ticker</h3>
+              <h3 className="font-display uppercase text-sm">{tr("pt.liveTicker")}</h3>
             </div>
             {completed.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Noch keine abgeschlossenen Matches.</p>
+              <p className="text-xs text-muted-foreground">{tr("pt.noCompletedMatches")}</p>
             ) : (
               <ol className="space-y-2">
                 {completed.map(m => (
                   <li key={m.id} className="text-xs border-l-2 border-primary/40 pl-2">
                     <p className="font-display text-sm uppercase">
                       <span className="text-secondary">{m.winner}</span>
-                      <span className="text-muted-foreground normal-case"> schlägt </span>
+                      <span className="text-muted-foreground normal-case"> {tr("tournament.beats")} </span>
                       {m.winner === m.player1 ? m.player2 : m.player1}
                     </p>
                     <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
@@ -945,7 +955,7 @@ const PublicTournamentPage = () => {
               </ol>
             )}
             <div className="mt-4 pt-3 border-t border-border text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-              <Users className="w-3 h-3" /> {t.players.length} Teilnehmer
+              <Users className="w-3 h-3" /> {t.players.length} {tr("tournament.participants")}
             </div>
           </div>
         </aside>
@@ -955,10 +965,10 @@ const PublicTournamentPage = () => {
       {flash && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
           <div className="rounded-2xl border-2 border-accent bg-card/95 backdrop-blur px-8 py-5 text-center glow-gold shadow-2xl">
-            <p className="text-[11px] uppercase tracking-[0.3em] text-accent mb-1">Ergebnis · {roundLabel(flash.round, totalRounds)}</p>
+            <p className="text-[11px] uppercase tracking-[0.3em] text-accent mb-1">{tr("pt.resultLabel")} · {roundLabel(flash.round, totalRounds)}</p>
             <p className="font-display text-3xl uppercase">
               <span className="text-secondary">{flash.winner}</span>
-              <span className="text-muted-foreground text-lg"> schlägt </span>
+              <span className="text-muted-foreground text-lg"> {tr("tournament.beats")} </span>
               {flash.winner === flash.player1 ? flash.player2 : flash.player1}
             </p>
             <p className="font-display text-xl text-primary mt-1">{flash.score1 ?? 0} : {flash.score2 ?? 0}</p>
