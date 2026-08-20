@@ -698,6 +698,28 @@ export const translations: Record<string, Record<Language, string>> = {
   "tournament.playedMatches": { de: "Gespielte Partien", en: "Played matches", fr: "Matchs joués", pl: "Rozegrane mecze", nl: "Gespeelde wedstrijden", tr: "Oynanan maçlar" },
   "tournament.bigEvent": { de: "Großevent", en: "Big event", fr: "Grand événement", pl: "Duże wydarzenie", nl: "Groot evenement", tr: "Büyük etkinlik" },
   "tournament.external": { de: "Extern", en: "External", fr: "Externe", pl: "Zewnętrzne", nl: "Extern", tr: "Harici" },
+
+  // TournamentSeries.tsx
+  "series.allSeries": { de: "Alle Serien", en: "All series", fr: "Toutes les séries", pl: "Wszystkie serie", nl: "Alle reeksen", tr: "Tüm seriler" },
+  "series.overallStandings": { de: "Gesamtwertung", en: "Overall standings", fr: "Classement général", pl: "Klasyfikacja generalna", nl: "Algemene stand", tr: "Genel klasman" },
+  "series.noTournamentsFinishedYet": { de: "Noch keine Turniere in dieser Serie abgeschlossen.", en: "No tournaments in this series finished yet.", fr: "Aucun tournoi de cette série n'est encore terminé.", pl: "Żaden turniej w tej serii nie został jeszcze zakończony.", nl: "Nog geen toernooien in deze reeks afgerond.", tr: "Bu serideki hiçbir turnuva henüz tamamlanmadı." },
+  "series.tournamentsSuffix": { de: "Turniere", en: "tournaments", fr: "tournois", pl: "turniejów", nl: "toernooien", tr: "turnuva" },
+  "series.noTournamentsAssigned": { de: "Noch keine Turniere zugeordnet. Wähle bei der Turniererstellung diese Serie aus.", en: "No tournaments assigned yet. Choose this series when creating a tournament.", fr: "Aucun tournoi assigné pour l'instant. Choisis cette série lors de la création d'un tournoi.", pl: "Nie przypisano jeszcze żadnych turniejów. Wybierz tę serię podczas tworzenia turnieju.", nl: "Nog geen toernooien toegewezen. Kies deze reeks bij het aanmaken van een toernooi.", tr: "Henüz turnuva atanmadı. Bir turnuva oluştururken bu seriyi seçin." },
+  "series.pageTitle": { de: "Turnierserien", en: "Tournament series", fr: "Séries de tournois", pl: "Serie turniejów", nl: "Toernooireeksen", tr: "Turnuva serileri" },
+  "series.newSeries": { de: "Neue Serie", en: "New series", fr: "Nouvelle série", pl: "Nowa seria", nl: "Nieuwe reeks", tr: "Yeni seri" },
+  "common.name": { de: "Name", en: "Name", fr: "Nom", pl: "Nazwa", nl: "Naam", tr: "İsim" },
+  "common.description": { de: "Beschreibung", en: "Description", fr: "Description", pl: "Opis", nl: "Beschrijving", tr: "Açıklama" },
+  "common.optional": { de: "Optional", en: "Optional", fr: "Optionnel", pl: "Opcjonalnie", nl: "Optioneel", tr: "İsteğe bağlı" },
+  "series.pointDistribution": { de: "Punkteverteilung", en: "Point distribution", fr: "Répartition des points", pl: "Rozdział punktów", nl: "Puntenverdeling", tr: "Puan dağılımı" },
+  "series.semifinalAbbrev": { de: "SF", en: "SF", fr: "SF", pl: "PF", nl: "SF", tr: "YF" },
+  "series.quarterfinalAbbrev": { de: "VF", en: "QF", fr: "QF", pl: "ĆF", nl: "KF", tr: "ÇF" },
+  "series.participationAbbrev": { de: "Teiln.", en: "Part.", fr: "Part.", pl: "Udz.", nl: "Deeln.", tr: "Kat." },
+  "series.createSeries": { de: "Serie anlegen", en: "Create series", fr: "Créer la série", pl: "Utwórz serię", nl: "Reeks aanmaken", tr: "Seri oluştur" },
+  "series.noSeriesYet": { de: "Noch keine Serien. Erstelle eine, um mehrere Turniere zu einer Gesamtwertung zu verbinden.", en: "No series yet. Create one to combine multiple tournaments into an overall standings.", fr: "Pas encore de séries. Crée-en une pour combiner plusieurs tournois en un classement général.", pl: "Jeszcze żadnych serii. Utwórz jedną, aby połączyć kilka turniejów w klasyfikację generalną.", nl: "Nog geen reeksen. Maak er een aan om meerdere toernooien te combineren tot een algemene stand.", tr: "Henüz seri yok. Birden fazla turnuvayı genel bir klasmanda birleştirmek için bir tane oluştur." },
+  "series.editSeries": { de: "Serie bearbeiten", en: "Edit series", fr: "Modifier la série", pl: "Edytuj serię", nl: "Reeks bewerken", tr: "Seriyi düzenle" },
+  "series.deleteSeries": { de: "Serie löschen", en: "Delete series", fr: "Supprimer la série", pl: "Usuń serię", nl: "Reeks verwijderen", tr: "Seriyi sil" },
+  "series.deleteSeriesConfirm": { de: "Serie löschen?", en: "Delete series?", fr: "Supprimer la série ?", pl: "Usunąć serię?", nl: "Reeks verwijderen?", tr: "Seri silinsin mi?" },
+  "series.deleteSeriesWarning": { de: "wird gelöscht. Die enthaltenen Turniere bleiben erhalten, verlieren aber ihre Zuordnung zur Serie.", en: "will be deleted. The tournaments it contains stay intact but lose their assignment to the series.", fr: "sera supprimée. Les tournois qu'elle contient restent intacts mais perdent leur association à la série.", pl: "zostanie usunięta. Zawarte w niej turnieje pozostaną, ale stracą przypisanie do serii.", nl: "wordt verwijderd. De toernooien erin blijven behouden, maar verliezen hun koppeling aan de reeks.", tr: "silinecek. İçerdiği turnuvalar kalır ancak seriye atanmışlıkları kaybolur." },
 };
 
 export function translate(key: string, language: Language): string {

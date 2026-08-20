@@ -11,10 +11,12 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { type Match, isRealPlayer, totalRoundsOf } from "@/utils/tournament";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
+import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 
 interface Scoring {
   champion: number;
@@ -52,6 +54,7 @@ const TournamentSeriesPage = () => {
   const { id } = useParams();
   const { session } = useAuth();
   const { toast } = useToast();
+  const { t, language } = useLanguage();
   const [series, setSeries] = useState<Series[]>([]);
   const [tournaments, setTournaments] = useState<TournamentLite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +97,7 @@ const TournamentSeriesPage = () => {
         : await supabase.from("tournament_series").insert({
             user_id: session.user.id, name: name.trim(), description: desc.trim() || null, scoring: scoring as unknown as Json,
           });
-      if (error) { toast({ title: "Fehler", description: error.message, variant: "destructive" }); return; }
+      if (error) { toast({ title: t("common.error"), description: error.message, variant: "destructive" }); return; }
       resetForm();
       fetchAll();
     } finally {
@@ -123,7 +126,7 @@ const TournamentSeriesPage = () => {
     return (
       <div className="container py-6 animate-slide-up max-w-4xl mx-auto">
         <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground">
-          <ArrowLeft className="w-4 h-4" /> Alle Serien
+          <ArrowLeft className="w-4 h-4" /> {t("series.allSeries")}
         </Link>
 
         <div className="mb-6">
@@ -135,9 +138,9 @@ const TournamentSeriesPage = () => {
         </div>
 
         <div className="bg-card border border-border rounded-xl p-4 mb-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Gesamtwertung</h3>
+          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("series.overallStandings")}</h3>
           {standings.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Noch keine Turniere in dieser Serie abgeschlossen.</p>
+            <p className="text-sm text-muted-foreground">{t("series.noTournamentsFinishedYet")}</p>
           ) : (
             <div className="space-y-1">
               {pagedStandings.visible.map((s) => {
@@ -151,10 +154,10 @@ const TournamentSeriesPage = () => {
                       </span>
                       <span className="font-semibold text-sm">{s.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {s.champions > 0 && `${s.champions}× 🏆 · `}{s.tournaments} Turniere
+                        {s.champions > 0 && `${s.champions}× 🏆 · `}{s.tournaments} {t("series.tournamentsSuffix")}
                       </span>
                     </div>
-                    <span className="font-display text-primary text-lg">{s.points} Pkt</span>
+                    <span className="font-display text-primary text-lg">{s.points} {t("tournament.pointsAbbrev")}</span>
                   </div>
                 );
               })}
@@ -164,12 +167,12 @@ const TournamentSeriesPage = () => {
         </div>
 
         <div className="bg-card border border-border rounded-xl p-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Turniere ({seriesTourneys.length})</h3>
+          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("series.tournamentsSuffix")} ({seriesTourneys.length})</h3>
           {seriesTourneys.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-sm text-muted-foreground mb-3">Noch keine Turniere zugeordnet. Wähle bei der Turniererstellung diese Serie aus.</p>
+              <p className="text-sm text-muted-foreground mb-3">{t("series.noTournamentsAssigned")}</p>
               <Button asChild size="sm">
-                <Link to="/tournament">Turnier erstellen</Link>
+                <Link to="/tournament">{t("tournament.createTournamentHeading")}</Link>
               </Button>
             </div>
           ) : (
@@ -194,12 +197,12 @@ const TournamentSeriesPage = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Layers className="w-6 h-6 text-accent" />
-          <h2 className="text-2xl font-display uppercase">Turnierserien</h2>
+          <h2 className="text-2xl font-display uppercase">{t("series.pageTitle")}</h2>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/tournament" className="text-xs text-muted-foreground hover:text-foreground">← Turniere</Link>
+          <Link to="/tournament" className="text-xs text-muted-foreground hover:text-foreground">← {t("tournament.tournaments")}</Link>
           <Button size="sm" onClick={() => (creating ? resetForm() : setCreating(true))} className="gap-1">
-            <Plus className="w-4 h-4" /> {creating ? "Abbrechen" : "Neue Serie"}
+            <Plus className="w-4 h-4" /> {creating ? t("common.cancel") : t("series.newSeries")}
           </Button>
         </div>
       </div>
@@ -207,26 +210,26 @@ const TournamentSeriesPage = () => {
       {creating && (
         <div className="bg-card border border-primary/30 rounded-xl p-4 mb-4 space-y-3">
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Name</label>
+            <label className="text-sm text-muted-foreground mb-1 block">{t("common.name")}</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Winter Series 2026" />
           </div>
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Beschreibung</label>
-            <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional" rows={2} />
+            <label className="text-sm text-muted-foreground mb-1 block">{t("common.description")}</label>
+            <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t("common.optional")} rows={2} />
           </div>
           <div>
-            <label className="text-sm text-muted-foreground mb-2 block">Punkteverteilung</label>
+            <label className="text-sm text-muted-foreground mb-2 block">{t("series.pointDistribution")}</label>
             <div className="grid grid-cols-5 gap-2">
               {(["champion", "runnerUp", "semi", "quarter", "participation"] as const).map((k) => (
                 <div key={k}>
-                  <label className="text-[10px] uppercase text-muted-foreground">{k === "champion" ? "1." : k === "runnerUp" ? "2." : k === "semi" ? "SF" : k === "quarter" ? "VF" : "Teiln."}</label>
+                  <label className="text-[10px] uppercase text-muted-foreground">{k === "champion" ? "1." : k === "runnerUp" ? "2." : k === "semi" ? t("series.semifinalAbbrev") : k === "quarter" ? t("series.quarterfinalAbbrev") : t("series.participationAbbrev")}</label>
                   <Input type="number" value={scoring[k]} onChange={(e) => setScoring({ ...scoring, [k]: parseInt(e.target.value) || 0 })} className="h-8 text-sm" />
                 </div>
               ))}
             </div>
           </div>
           <Button onClick={saveSeries} className="w-full" disabled={!name.trim() || savingSeries}>
-            {savingSeries ? "Speichern…" : editingId ? "Änderungen speichern" : "Serie anlegen"}
+            {savingSeries ? t("tournament.saving") : editingId ? t("tournament.saveChanges") : t("series.createSeries")}
           </Button>
         </div>
       )}
@@ -236,39 +239,39 @@ const TournamentSeriesPage = () => {
       ) : series.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Layers className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Noch keine Serien. Erstelle eine, um mehrere Turniere zu einer Gesamtwertung zu verbinden.</p>
+          <p className="text-sm">{t("series.noSeriesYet")}</p>
         </div>
       ) : (
         <div className="space-y-3">
           {pagedSeries.visible.map((s) => {
-            const count = tournaments.filter((t) => t.series_id === s.id).length;
+            const count = tournaments.filter((tourn) => tourn.series_id === s.id).length;
             return (
               <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
                 <Link to={`/tournaments/series/${s.id}`} className="flex-1">
                   <p className="font-semibold text-sm">{s.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{count} Turniere · {new Date(s.created_at).toLocaleDateString("de-DE")}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{count} {t("series.tournamentsSuffix")} · {new Date(s.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language])}</p>
                 </Link>
                 {s.user_id === session?.user?.id && (
                   <div className="flex items-center">
-                  <Button variant="ghost" size="icon" title="Serie bearbeiten" aria-label="Serie bearbeiten" onClick={() => startEdit(s)}>
+                  <Button variant="ghost" size="icon" title={t("series.editSeries")} aria-label={t("series.editSeries")} onClick={() => startEdit(s)}>
                     <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" title="Serie löschen" aria-label="Serie löschen">
+                      <Button variant="ghost" size="icon" title={t("series.deleteSeries")} aria-label={t("series.deleteSeries")}>
                         <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Serie löschen?</AlertDialogTitle>
+                        <AlertDialogTitle>{t("series.deleteSeriesConfirm")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          „{s.name}" wird gelöscht. Die enthaltenen Turniere bleiben erhalten, verlieren aber ihre Zuordnung zur Serie.
+                          „{s.name}" {t("series.deleteSeriesWarning")}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => deleteSeries(s.id)}>Löschen</AlertDialogAction>
+                        <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteSeries(s.id)}>{t("stats.delete")}</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
