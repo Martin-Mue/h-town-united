@@ -891,7 +891,7 @@ const TournamentPage = () => {
 
     if (editingId) {
       const payload: Database["public"]["Tables"]["tournaments"]["Update"] = {
-        name: tournamentName || "Großevent",
+        name: tournamentName || t("tournament.bigEvent"),
         mode: tournamentMode,
         game_mode: gameMode,
         best_of_legs: bestOfLegs,
@@ -1536,7 +1536,7 @@ const TournamentPage = () => {
                           <SelectItem value="501">501</SelectItem>
                           <SelectItem value="301">301</SelectItem>
                           <SelectItem value="Cricket">Cricket</SelectItem>
-                          <SelectItem value="Extern">Extern</SelectItem>
+                          <SelectItem value="Extern">{t("tournament.external")}</SelectItem>
                         </SelectContent>
                       </Select>
                       <Select value={String(cfg.bestOf)} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, bestOf: Number(v) } : c))}>
@@ -1765,7 +1765,7 @@ const TournamentPage = () => {
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <button onClick={toggleHighlights} className="w-full flex items-center justify-between px-4 py-3 text-left">
           <span className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground">
-            <Target className="w-4 h-4" /> Turnier-Highlights
+            <Target className="w-4 h-4" /> {t("tournament.tournamentHighlights")}
           </span>
           {showHighlights ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
         </button>
@@ -1791,7 +1791,7 @@ const TournamentPage = () => {
         <div className="container flex items-center justify-between mb-2">
           <div>
             <h2 className="text-lg font-display uppercase leading-tight">{activeTournament.name}</h2>
-            <p className="text-xs text-muted-foreground">K.O.-System · {activeTournament.players.length} Spieler · {activeTournament.game_mode} · Best of {activeTournament.best_of_legs}</p>
+            <p className="text-xs text-muted-foreground">{t("tournament.koSystem")} · {activeTournament.players.length} {t("game.playersSuffix")} · {activeTournament.game_mode} · {t("stats.bestOf")} {activeTournament.best_of_legs}</p>
           </div>
           <div className="flex items-center gap-2">
             {/* Live-Spiel an/aus lives in the tournament edit form only now — a per-tournament
@@ -1800,18 +1800,18 @@ const TournamentPage = () => {
             {isOwner && (
               <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
                 <Radio className={`w-3.5 h-3.5 ${activeTournament.public_view ? "animate-pulse" : ""}`} />
-                {activeTournament.public_view ? "Live an" : "Live-Ansicht"}
+                {activeTournament.public_view ? t("tournament.liveOn") : t("tournament.liveView")}
               </Button>
             )}
             {/* Link/QR live here only, in the "Beamer-Link" banner below — having them here
                 too duplicated the exact same link/QR right on top of each other. */}
             {!hasStarted(activeTournament) && isOwner && (
               <Button variant="outline" size="sm" onClick={() => editTournament(activeTournament)}>
-                Bearbeiten
+                {t("common.edit")}
               </Button>
             )}
             <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
-              ← Übersicht
+              ← {t("tournament.overview")}
             </Button>
           </div>
         </div>
@@ -1820,16 +1820,16 @@ const TournamentPage = () => {
           <div className="container mb-2">
             <div className="bg-gradient-to-r from-secondary/10 via-primary/10 to-accent/10 border border-secondary/30 rounded-xl px-4 py-1.5 text-xs flex items-center gap-2">
               <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse shrink-0" />
-              <span className="text-muted-foreground shrink-0 hidden sm:inline">Beamer-Link:</span>
+              <span className="text-muted-foreground shrink-0 hidden sm:inline">{t("tournament.projectorLink")}</span>
               <code className="font-mono text-secondary truncate">{window.location.origin}/live/{activeTournament.public_slug}</code>
               <div className="flex items-center gap-1.5 ml-auto shrink-0">
                 <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" onClick={copyPublicLink}>
-                  <Copy className="w-3 h-3" /> Kopieren
+                  <Copy className="w-3 h-3" /> {t("common.copy")}
                 </Button>
                 <QrCodeDialog
                   url={`${window.location.origin}/live/${activeTournament.public_slug}`}
-                  title="Live-Ansicht"
-                  description="Scannen führt direkt zur öffentlichen Live-Ansicht — ohne Login oder Registrierung. Zum Ausdrucken oder Anzeigen am Eingang."
+                  title={t("tournament.liveView")}
+                  description={t("tournament.scanForPublicLiveView")}
                   downloadName={`live-${activeTournament.public_slug}`}
                   trigger={
                     <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1">
@@ -1839,11 +1839,11 @@ const TournamentPage = () => {
                 />
                 <QrCodeDialog
                   url={`${window.location.origin}/live/${activeTournament.public_slug}?view=auto`}
-                  title="Bildschirm-Modus"
-                  description="Startet direkt im automatischen Wechsel zwischen Turnierbaum/Liste und Board-Übersicht (alle 15s) — ideal für einen TV oder Beamer, den niemand mehr bedient."
+                  title={t("tournament.screenMode")}
+                  description={t("tournament.screenModeDesc")}
                   downloadName={`live-auto-${activeTournament.public_slug}`}
                   trigger={
-                    <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" title="Für einen unbeaufsichtigten Bildschirm: automatischer Wechsel zwischen Turnierbaum und Board-Übersicht">
+                    <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" title={t("tournament.unattendedScreenTooltip")}>
                       <RefreshCcw className="w-3 h-3" /> Auto
                     </Button>
                   }
@@ -1857,9 +1857,9 @@ const TournamentPage = () => {
           <div className="container mb-2">
             <div className="bg-card border-2 border-accent rounded-xl px-4 py-2 text-center glow-gold flex items-center justify-center gap-2 flex-wrap">
               <Trophy className="w-5 h-5 text-accent shrink-0" />
-              <p className="font-display uppercase text-sm">{activeTournament.champion} <span className="text-accent">· Champion!</span></p>
+              <p className="font-display uppercase text-sm">{activeTournament.champion} <span className="text-accent">· {t("tournament.championSuffix")}</span></p>
               <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setCeremonyChampion(activeTournament.champion)}>
-                🏆 Zeremonie
+                🏆 {t("tournament.ceremony")}
               </Button>
             </div>
           </div>
@@ -1871,19 +1871,19 @@ const TournamentPage = () => {
         <div className="container mb-2 flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border overflow-hidden">
             <button onClick={() => setBracketView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${bracketView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
-              <Network className="w-3.5 h-3.5" /> Turnierbaum
+              <Network className="w-3.5 h-3.5" /> {t("tournament.bracketTreeTab")}
             </button>
             <button onClick={() => setBracketView("schedule")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${bracketView === "schedule" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
-              <ListOrdered className="w-3.5 h-3.5" /> Spielplan &amp; Schreiber
+              <ListOrdered className="w-3.5 h-3.5" /> {t("tournament.scheduleAndScorekeeper")}
             </button>
           </div>
           {isOwner && (
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={reshuffleScorekeepers}>
-              <Shuffle className="w-3.5 h-3.5" /> Schreiber neu auslosen
+              <Shuffle className="w-3.5 h-3.5" /> {t("tournament.redrawScorekeepers")}
             </Button>
           )}
           <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-            <Monitor className="w-3.5 h-3.5" /> {activeTournament.boards || 2} Boards
+            <Monitor className="w-3.5 h-3.5" /> {activeTournament.boards || 2} {t("camera.board")}s
           </span>
         </div>
 
@@ -1910,7 +1910,7 @@ const TournamentPage = () => {
               const open = schedule.filter(e => !e.match.winner);
               const slots = [...new Set(open.map(e => e.slot))].sort((a, b) => a - b);
               if (slots.length === 0) {
-                return <p className="text-sm text-muted-foreground">Alle aktuell spielbaren Partien sind erledigt.</p>;
+                return <p className="text-sm text-muted-foreground">{t("tournament.allPlayableMatchesDone")}</p>;
               }
               return slots.map((slot, i) => (
                 <div key={slot} className="bg-card border border-border rounded-xl overflow-hidden">
@@ -1919,29 +1919,29 @@ const TournamentPage = () => {
                       {roundLabel(open.find(e => e.slot === slot)!.round, totalRounds)}
                     </h3>
                     <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                      {i === 0 ? "Jetzt am Board" : `Spielrunde ${i + 1}`}
+                      {i === 0 ? t("tournament.nowOnBoard") : `${t("tournament.playRound")} ${i + 1}`}
                     </span>
                   </div>
                   <div className="divide-y divide-border">
                     {open.filter(e => e.slot === slot).map(e => (
                       <div key={e.match.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
-                        <span className="font-mono text-xs bg-primary/10 text-primary rounded px-2 py-0.5 shrink-0">Board {e.board}</span>
+                        <span className="font-mono text-xs bg-primary/10 text-primary rounded px-2 py-0.5 shrink-0">{t("camera.board")} {e.board}</span>
                         <span className="flex-1 truncate uppercase tracking-wide">
                           <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
                         </span>
                         {canStartLiveGame(e.match) && (
                           <>
                             <Button size="sm" variant="secondary" className="h-9 text-xs gap-1 shrink-0" onClick={() => startLiveGame(e.match)}>
-                              <Play className="w-3 h-3" /> Spiel starten
+                              <Play className="w-3 h-3" /> {t("game.startGame")}
                             </Button>
                             {koLiveGamePath(e.match) && (
                               <QrCodeDialog
                                 url={`${window.location.origin}${koLiveGamePath(e.match)}`}
-                                title="Spiel starten"
-                                description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
+                                title={t("game.startGame")}
+                                description={t("tournament.scanOnBoardDevice")}
                                 downloadName={`match-${e.match.id}`}
                                 trigger={
-                                  <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
+                                  <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" title={t("tournament.qrForThisMatch")} aria-label={t("tournament.qrForThisMatchShow")}>
                                     <QrCode className="w-3.5 h-3.5" />
                                   </Button>
                                 }
@@ -1959,7 +1959,7 @@ const TournamentPage = () => {
                               <SelectValue>{scorekeeperLabel(e.match, matches) || "–"}</SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-card border-border max-h-64">
-                              <SelectItem value="__auto">Automatisch (Turnier-Regel)</SelectItem>
+                              <SelectItem value="__auto">{t("tournament.automaticTournamentRule")}</SelectItem>
                               {activeTournament.players
                                 // Not just this match's own two players — anyone playing ANY match
                                 // in this same slot is unavailable too (matches assignScorekeepers'
@@ -1974,8 +1974,7 @@ const TournamentPage = () => {
                     ))}
                   </div>
                   <p className="px-4 py-1.5 text-[10px] text-muted-foreground border-t border-border/60">
-                    „Automatisch" = Schreiber wird vom Turnierplan vergeben: bevorzugt bereits ausgeschiedene Spieler,
-                    sonst der Verlierer des vorherigen Spiels am selben Board; in der ersten Runde ein Spieler, der erst später dran ist.
+                    {t("tournament.autoScorekeeperExplain")}
                   </p>
                 </div>
               ));
@@ -1983,8 +1982,8 @@ const TournamentPage = () => {
 
             {isOwner && (
               <div className="bg-card border border-border rounded-xl p-4">
-                <h3 className="font-display uppercase text-sm mb-2 flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> Teilnehmer verwalten</h3>
-                <p className="text-[11px] text-muted-foreground mb-2">Spieler, die nicht erscheinen oder aufgeben, hier zurückziehen – Baum, Spielplan und Schreiber werden neu berechnet.</p>
+                <h3 className="font-display uppercase text-sm mb-2 flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
+                <p className="text-[11px] text-muted-foreground mb-2">{t("tournament.withdrawHint")}</p>
                 <div className="flex flex-wrap gap-2">
                   {activeTournament.players.map(p => (
                     <AlertDialog key={p} open={confirmWithdraw === p} onOpenChange={(open) => setConfirmWithdraw(open ? p : null)}>
@@ -1995,14 +1994,14 @@ const TournamentPage = () => {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>{p} zurückziehen?</AlertDialogTitle>
+                          <AlertDialogTitle>{p} {t("tournament.withdrawConfirmSuffix")}</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Alle noch offenen Matches von {p} werden als Aufgabe gewertet, Baum, Spielplan und Schreiber neu berechnet. Bereits gespielte Ergebnisse bleiben erhalten.
+                            {t("tournament.allOpenMatchesFrom")} {p} {t("tournament.withdrawWarning")}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => withdrawPlayer(p)}>Zurückziehen</AlertDialogAction>
+                          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => withdrawPlayer(p)}>{t("tournament.withdrawCapital")}</AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
@@ -2016,13 +2015,13 @@ const TournamentPage = () => {
         {editMatch && (
           <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditMatch(null)}>
             <div className="bg-card border border-border rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
-              <h3 className="font-display uppercase text-sm">Partie bearbeiten</h3>
-              <p className="text-[11px] text-muted-foreground">Leer lassen = Freilos (BYE). Ergebnisse dieser Partie werden zurückgesetzt.</p>
-              <Input value={editP1} onChange={(e) => setEditP1(e.target.value)} placeholder="Spieler 1 (leer = BYE)" className="bg-background border-border" />
-              <Input value={editP2} onChange={(e) => setEditP2(e.target.value)} placeholder="Spieler 2 (leer = BYE)" className="bg-background border-border" />
+              <h3 className="font-display uppercase text-sm">{t("tournament.editMatchHeading")}</h3>
+              <p className="text-[11px] text-muted-foreground">{t("tournament.emptyMeansBye")}</p>
+              <Input value={editP1} onChange={(e) => setEditP1(e.target.value)} placeholder={t("tournament.player1ByePlaceholder")} className="bg-background border-border" />
+              <Input value={editP2} onChange={(e) => setEditP2(e.target.value)} placeholder={t("tournament.player2ByePlaceholder")} className="bg-background border-border" />
               <div className="flex gap-2 justify-end pt-1">
-                <Button size="sm" variant="ghost" onClick={() => setEditMatch(null)}>Abbrechen</Button>
-                <Button size="sm" onClick={saveMatchPlayers}>Speichern</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditMatch(null)}>{t("common.cancel")}</Button>
+                <Button size="sm" onClick={saveMatchPlayers}>{t("game.save")}</Button>
               </div>
             </div>
           </div>
@@ -2031,35 +2030,35 @@ const TournamentPage = () => {
         {editingRound !== null && (
           <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditingRound(null)}>
             <div className="bg-card border border-border rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
-              <h3 className="font-display uppercase text-sm">Modus für Runde {editingRound} bearbeiten</h3>
-              <p className="text-[11px] text-muted-foreground">Gilt nur für diese Runde, nicht für den Rest des Turniers — und nur solange noch keine Partie darin entschieden ist.</p>
+              <h3 className="font-display uppercase text-sm">{t("tournament.editModeForRound")} {editingRound} {t("tournament.editHeadingSuffix")}</h3>
+              <p className="text-[11px] text-muted-foreground">{t("tournament.roundModeScopeNote")}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">Spielmodus</label>
+                  <label className="text-sm text-muted-foreground mb-1 block">{t("game.gameMode")}</label>
                   <Select value={editRoundMode} onValueChange={setEditRoundMode}>
                     <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-card border-border">
                       <SelectItem value="501">501</SelectItem>
                       <SelectItem value="301">301</SelectItem>
                       <SelectItem value="Cricket">Cricket</SelectItem>
-                      <SelectItem value="Extern">Extern gespielt</SelectItem>
+                      <SelectItem value="Extern">{t("tournament.playedExternally")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">Best of Legs</label>
+                  <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.bestOfLegsLabel")}</label>
                   <Select value={String(editRoundBestOf)} onValueChange={(v) => setEditRoundBestOf(Number(v))}>
                     <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-card border-border">
-                      {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                      {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="flex gap-2 justify-end pt-1">
-                <Button size="sm" variant="ghost" onClick={() => setEditingRound(null)}>Abbrechen</Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditingRound(null)}>{t("common.cancel")}</Button>
                 <Button size="sm" onClick={saveRoundMode} disabled={savingRoundMode} className="gap-1.5">
-                  {savingRoundMode && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Speichern
+                  {savingRoundMode && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {t("game.save")}
                 </Button>
               </div>
             </div>
@@ -2075,14 +2074,14 @@ const TournamentPage = () => {
               <div className="bg-card border border-border rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Zap className="w-4 h-4 text-accent" />
-                  <h3 className="font-display uppercase text-sm">Live-Ticker · Turnierverlauf</h3>
+                  <h3 className="font-display uppercase text-sm">{t("tournament.liveTickerHeading")}</h3>
                 </div>
                 <ol className="grid md:grid-cols-2 gap-2 text-xs">
                   {done.map(m => (
                     <li key={m.id} className="border-l-2 border-primary/40 pl-2">
                       <p className="font-display text-sm">
                         <span className="text-secondary">{m.winner}</span>
-                        <span className="text-muted-foreground"> schlägt </span>
+                        <span className="text-muted-foreground"> {t("tournament.beats")} </span>
                         {m.winner === m.player1 ? m.player2 : m.player1}
                       </p>
                       <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
@@ -2112,11 +2111,11 @@ const TournamentPage = () => {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
-          <p className="text-xs text-muted-foreground">Round Robin · {activeTournament.players.length} Spieler</p>
+          <p className="text-xs text-muted-foreground">{t("tournament.roundRobin")} · {activeTournament.players.length} {t("game.playersSuffix")}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
-            ← Übersicht
+            ← {t("tournament.overview")}
           </Button>
         </div>
       </div>
@@ -2125,9 +2124,9 @@ const TournamentPage = () => {
         <div className="bg-card border-2 border-accent rounded-xl p-4 text-center glow-gold mb-4">
           <Trophy className="w-8 h-8 text-accent mx-auto mb-1" />
           <p className="font-display uppercase text-xl">{activeTournament.champion}</p>
-          <p className="text-accent text-sm font-display uppercase">Champion!</p>
+          <p className="text-accent text-sm font-display uppercase">{t("tournament.championSuffix")}</p>
           <Button size="sm" variant="ghost" className="mt-2 text-xs" onClick={() => setCeremonyChampion(activeTournament.champion)}>
-            🏆 Pokal-Zeremonie zeigen
+            🏆 {t("tournament.showTrophyCeremony")}
           </Button>
         </div>
       )}
@@ -2136,14 +2135,14 @@ const TournamentPage = () => {
 
       {/* Standings table */}
       <div className="bg-card rounded-xl border border-border p-4 mb-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Tabelle</h3>
+        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
         <div className="grid grid-cols-[auto_1fr_repeat(4,40px)] gap-x-2 gap-y-1 text-xs">
           <span className="text-muted-foreground">#</span>
-          <span className="text-muted-foreground">Spieler</span>
-          <span className="text-muted-foreground text-center">Sp</span>
-          <span className="text-muted-foreground text-center">S</span>
-          <span className="text-muted-foreground text-center">N</span>
-          <span className="text-muted-foreground text-center">Pkt</span>
+          <span className="text-muted-foreground">{t("stats.player")}</span>
+          <span className="text-muted-foreground text-center">{t("tournament.playedAbbrev")}</span>
+          <span className="text-muted-foreground text-center">{t("tournament.wonAbbrev")}</span>
+          <span className="text-muted-foreground text-center">{t("tournament.lostAbbrev")}</span>
+          <span className="text-muted-foreground text-center">{t("tournament.pointsAbbrev")}</span>
           {pagedRrStandings.visible.map((s) => {
             // True rank in the full table, not the index within this page/slice.
             const i = standings.indexOf(s);
@@ -2167,7 +2166,7 @@ const TournamentPage = () => {
       {/* Upcoming matches */}
       {unplayed.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-4 mb-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Ausstehende Spiele ({unplayed.length})</h3>
+          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.upcomingMatches")} ({unplayed.length})</h3>
           <div className="space-y-2">
             {pagedRrUnplayed.visible.map(m => (
               <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2">
@@ -2176,16 +2175,16 @@ const TournamentPage = () => {
                   {(activeTournament.live_play_enabled ?? true) && activeTournament.game_mode !== "Extern" && (
                     <>
                       <Button size="sm" variant="secondary" className="text-xs h-9 px-2 gap-1" onClick={() => startLiveGameRr(m)}>
-                        <Play className="w-3 h-3" /> Spiel starten
+                        <Play className="w-3 h-3" /> {t("game.startGame")}
                       </Button>
                       {rrLiveGamePath(m) && (
                         <QrCodeDialog
                           url={`${window.location.origin}${rrLiveGamePath(m)}`}
-                          title="Spiel starten"
-                          description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
+                          title={t("game.startGame")}
+                          description={t("tournament.scanOnBoardDevice")}
                           downloadName={`match-${m.id}`}
                           trigger={
-                            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
+                            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" title={t("tournament.qrForThisMatch")} aria-label={t("tournament.qrForThisMatchShow")}>
                               <QrCode className="w-3.5 h-3.5" />
                             </Button>
                           }
@@ -2214,7 +2213,7 @@ const TournamentPage = () => {
       {/* Played matches */}
       {played.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Gespielte Partien ({played.length})</h3>
+          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.playedMatches")} ({played.length})</h3>
           <div className="space-y-1">
             {pagedRrPlayed.visible.map(m => (
               <div key={m.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
