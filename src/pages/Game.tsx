@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/compone
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import DartScoreInput, { type DartInputMode } from "@/components/game/DartScoreInput";
+import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import LiveCamera, { type DetectedDart, type LiveCameraHandle } from "@/components/game/LiveCamera";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
@@ -316,6 +317,10 @@ const GamePage = () => {
   const selectedScore = 20;
   const multiplier = 1;
   const [editingThrowIdx, setEditingThrowIdx] = useState<number | null>(null);
+  /** Which specific dart (by its flat index into that player's throws array) currently has its
+   *  value-edit popover open — separate from editingThrowIdx above, which is just the "edit mode
+   *  is on for this history card at all" toggle. */
+  const [editingChipIdx, setEditingChipIdx] = useState<number | null>(null);
   const [showDetailedStats, setShowDetailedStats] = useState(false);
   const [sharingResult, setSharingResult] = useState(false);
   const [gameSaved, setGameSaved] = useState(false);
@@ -1412,7 +1417,82 @@ const GamePage = () => {
       return { ...prev, currentLeg: updatedLeg };
     });
     if (isCurrentRoundThrow) setDartsThisRound((d) => Math.max(0, d - 1));
-    setEditingThrowIdx(null);
+    setEditingChipIdx(null);
+    // Edit MODE (editingThrowIdx) deliberately stays open — correcting one mis-tap rarely means
+    // that was the only one this round, and re-opening "Bearbeiten" per dart was exactly the
+    // friction being fixed here.
+  };
+
+  /** Changes a past dart's recorded value IN PLACE (same array index) instead of removing it —
+   *  deleting a mid-round dart shifts every later dart's index, which silently reshuffles which
+   *  darts group into which visit (180-count, highest-visit, and the round-by-round display all
+   *  read visits by array position). Re-validates the same legality rules real scoring already
+   *  enforces (can't bust the visit, can't finish on a non-double under double-out) rather than
+   *  trusting the edit blindly — a correction tool that can silently corrupt the leg worse than
+   *  the mistake it was fixing would be worse than not having it. */
+  const editThrowValue = (playerIdx: number, throwIndex: number, newBase: number, newMultiplier: 1 | 2 | 3) => {
+    if (!game) return;
+    const oldDart = game.currentLeg.throws[playerIdx]?.[throwIndex];
+    if (!oldDart) return;
+    const newPoints = pointsFor(newBase, newMultiplier);
+
+    if (game.mode === "cricket") {
+      setGame((prev) => {
+        if (!prev) return prev;
+        const newThrows = [...prev.currentLeg.throws[playerIdx]];
+        newThrows[throwIndex] = { baseValue: newBase, multiplier: newMultiplier, points: newPoints };
+        const updatedLeg: LegState = { ...prev.currentLeg, throws: [...prev.currentLeg.throws] };
+        updatedLeg.throws[playerIdx] = newThrows;
+        // Cricket marks/points can't be patched incrementally — see deleteThrow's own comment
+        // on replayCricketState just above.
+        const cricket = replayCricketState(updatedLeg.throws, prev.currentLeg.startingPlayerIndex, prev.teams, prev.cricketNumbers ?? CRICKET_NUMBERS);
+        return { ...prev, currentLeg: updatedLeg, cricket };
+      });
+      setEditingChipIdx(null);
+      return;
+    }
+
+    const n = game.players.length;
+    const teamIdx = teamIndexFor(game.teams, playerIdx);
+    const currentRemaining = remainingRef.current[teamIdx] ?? game.currentLeg.remaining[teamIdx];
+    const doubleOut = game.players[playerIdx].doubleOut ?? true;
+    // Reframed as "what if this exact slot had originally been thrown as newBase/newMultiplier" —
+    // reconstructs the remaining as it stood right before this dart (undo just this one dart's
+    // points), then reuses isBustThrow itself rather than re-deriving its bust conditions here.
+    const remainingBeforeThisDart = currentRemaining + oldDart.points;
+    const newRemaining = remainingBeforeThisDart - newPoints;
+    const isDouble = qualifyingDouble(newMultiplier);
+    if (isBustThrow(remainingBeforeThisDart, newPoints, doubleOut, isDouble)) {
+      toast({
+        title: "Ungültiger Wert",
+        description: newRemaining < 0 ? "Das würde den Rest negativ machen." : "Ein Checkout muss auf einem Doppel enden.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    remainingRef.current[teamIdx] = newRemaining;
+    setGame((prev) => {
+      if (!prev) return prev;
+      const newThrows = [...prev.currentLeg.throws[playerIdx]];
+      newThrows[throwIndex] = { baseValue: newBase, multiplier: newMultiplier, points: newPoints };
+      const updatedLeg: LegState = { ...prev.currentLeg, throws: [...prev.currentLeg.throws], remaining: [...prev.currentLeg.remaining] };
+      updatedLeg.throws[playerIdx] = newThrows;
+      updatedLeg.remaining[teamIdx] = newRemaining;
+      // The edited dart now finishes the leg (e.g. correcting a checkout that got mis-entered
+      // as something else) — same completion path a real checkout dart triggers.
+      if (newRemaining === 0) return applyLegWin(prev, prev, updatedLeg, teamIdx);
+      return { ...prev, currentLeg: updatedLeg };
+    });
+
+    if (newRemaining === 0) {
+      setDartsThisRound(0);
+      const nextStarter = (game.currentLeg.startingPlayerIndex + 1) % n;
+      setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
+      triggerConfetti();
+      if (soundEnabled) setTimeout(() => playCheckoutSound(), 100);
+    }
+    setEditingChipIdx(null);
   };
 
   const splitQuickRound = (total: number): DetectedDart[] => {
@@ -2584,53 +2664,18 @@ const GamePage = () => {
             {/* Correcting a mis-tap used to require opening "Manuelle Eingabe" first, then
                 finding this section inside it — two collapsed layers deep, easy to miss
                 especially while scoring with the camera (this doesn't need the number pad open
-                at all, just the ability to review/delete a wrong throw). Now always visible
+                at all, just the ability to review/edit/delete a wrong throw). Now always visible
                 whenever there's something to correct, independent of that toggle. */}
-            {currentThrows.length > 0 && (
-              <div className="mt-3 bg-card rounded-xl border border-border p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-muted-foreground uppercase font-display">Würfe · {currentPlayerName}</p>
-                  <button onClick={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)} className="text-xs text-primary flex items-center gap-1">
-                    <Edit2 className="w-3 h-3" /> Bearbeiten
-                  </button>
-                </div>
-                <div className="space-y-1">
-                  {Array.from({ length: Math.ceil(currentThrows.length / 3) }, (_, roundIdx) => {
-                    const roundThrows = currentThrows.slice(roundIdx * 3, roundIdx * 3 + 3);
-                    const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0);
-                    const is180 = roundTotal === 180 && roundThrows.length === 3;
-                    return (
-                      <div key={roundIdx} className={`flex items-center gap-1.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
-                        <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
-                        {roundThrows.map((t, i) => {
-                          const globalIdx = roundIdx * 3 + i;
-                          return (
-                            <div key={globalIdx} className="relative group">
-                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
-                                t.multiplier === 3 ? "bg-primary/20 text-primary" :
-                                t.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
-                              }`}>
-                                {t.multiplier === 3 ? "T" : t.multiplier === 2 ? "D" : ""}{t.baseValue === 50 ? "Bull" : t.baseValue === 0 ? "Miss" : t.baseValue}
-                              </span>
-                              {editingThrowIdx !== null && (
-                                <button onClick={() => deleteThrow(activeIdx, globalIdx)}
-                                  title="Wurf löschen" aria-label="Wurf löschen"
-                                  className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
-                                  <X className="w-2.5 h-2.5 text-destructive-foreground" />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                        <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
-                          {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <ThrowHistoryEditor
+              throws={currentThrows}
+              playerName={currentPlayerName}
+              editModeOn={editingThrowIdx !== null}
+              onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
+              openChipIdx={editingChipIdx}
+              onOpenChipChange={setEditingChipIdx}
+              onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
+              onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
+            />
 
             <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
               <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
@@ -2696,51 +2741,16 @@ const GamePage = () => {
             </Button>
           </div>
 
-          {/* Throw history (editable) */}
-          {currentThrows.length > 0 && (
-            <div className="mt-3 bg-card rounded-xl border border-border p-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-muted-foreground uppercase font-display">Würfe · {currentPlayerName}</p>
-                <button onClick={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)} className="text-xs text-primary flex items-center gap-1">
-                  <Edit2 className="w-3 h-3" /> Bearbeiten
-                </button>
-              </div>
-              <div className="space-y-1">
-                {Array.from({ length: Math.ceil(currentThrows.length / 3) }, (_, roundIdx) => {
-                  const roundThrows = currentThrows.slice(roundIdx * 3, roundIdx * 3 + 3);
-                  const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0);
-                  const is180 = roundTotal === 180 && roundThrows.length === 3;
-                  return (
-                    <div key={roundIdx} className={`flex items-center gap-1.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
-                      <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
-                      {roundThrows.map((t, i) => {
-                        const globalIdx = roundIdx * 3 + i;
-                        return (
-                          <div key={globalIdx} className="relative group">
-                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
-                              t.multiplier === 3 ? "bg-primary/20 text-primary" :
-                              t.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
-                            }`}>
-                              {t.multiplier === 3 ? "T" : t.multiplier === 2 ? "D" : ""}{t.baseValue === 50 ? "Bull" : t.baseValue === 0 ? "Miss" : t.baseValue}
-                            </span>
-                            {editingThrowIdx !== null && (
-                              <button onClick={() => deleteThrow(activeIdx, globalIdx)}
-                                className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
-                                <X className="w-2.5 h-2.5 text-destructive-foreground" />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                      <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
-                        {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <ThrowHistoryEditor
+            throws={currentThrows}
+            playerName={currentPlayerName}
+            editModeOn={editingThrowIdx !== null}
+            onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
+            openChipIdx={editingChipIdx}
+            onOpenChipChange={setEditingChipIdx}
+            onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
+            onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
+          />
 
           <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
             <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
