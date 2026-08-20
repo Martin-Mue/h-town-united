@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
 import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
@@ -163,7 +164,9 @@ const loadTrainingDataEnabled = (): boolean => {
 };
 
 const CALIB_KEY = "dartcam-calibration-v5";
-const CALIB_LABELS = ["Doppel 20 (oben)", "Doppel 3 (unten)", "Doppel 11 (links)", "Doppel 6 (rechts)"] as const;
+/** Translation keys (not literal strings — this is module scope, no access to the language
+ *  context) resolved via t() at each call site. */
+const CALIB_LABEL_KEYS = ["camera.calibD20", "camera.calibD3", "camera.calibD11", "camera.calibD6"] as const;
 const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
 
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
@@ -244,7 +247,7 @@ const loadCalib = (key: string = CALIB_KEY): Calibration => {
     if (!raw) return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
     const p = JSON.parse(raw);
     let taps = Array.isArray(p?.taps) && p.taps.length === 4
-      ? p.taps.map((t: any) => ({ x: clamp(Number(t?.x) || 0.5, 0, 1), y: clamp(Number(t?.y) || 0.5, 0, 1) }))
+      ? p.taps.map((t: { x?: unknown; y?: unknown }) => ({ x: clamp(Number(t?.x) || 0.5, 0, 1), y: clamp(Number(t?.y) || 0.5, 0, 1) }))
       : undefined;
     // A calibration saved before the tap-validation check existed (or corrupted localStorage)
     // could be degenerate — silently scoring every dart as "Miss" forever if trusted as-is.
@@ -382,6 +385,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   onRequestManualEntry,
   paused = false,
 }, ref) => {
+  const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -615,7 +619,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     (async () => {
       try {
         setPhase("starting");
-        setStatus("Kamera startet …");
+        setStatus(t("camera.starting"));
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             ...(selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : { facingMode: { ideal: "environment" } }),
@@ -659,7 +663,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         }, 600);
       } catch (err) {
         console.error("camera error", err);
-        setError("Kamerazugriff nicht möglich. Bitte Berechtigung erteilen.");
+        setError(t("camera.accessDenied"));
         setPhase("error");
       }
     })();
@@ -1005,7 +1009,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const v = videoRef.current;
     if (!v || !v.videoWidth) {
       setPhase("live");
-      setStatus("Bereit – wirf deinen ersten Dart");
+      setStatus(t("camera.readyThrowFirst"));
       resetLoop();
       return;
     }
@@ -1022,12 +1026,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         await runLocalCalibrationFlow();
       } else {
         setPhase("live");
-        setStatus("Bereit – wirf deinen ersten Dart");
+        setStatus(t("camera.readyThrowFirst"));
       }
       return;
     }
     setPhase("detecting");
-    setStatus("Suche Dartboard …");
+    setStatus(t("camera.searchingBoard"));
     setAutoCalibrating(true);
     try {
       const dataUrl = captureFullFrame(960, 0.7);
@@ -1046,10 +1050,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (!calib.taps || calib.taps.length !== 4) {
       setPendingTaps([]);
       setPhase("calibrate");
-      setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
+      setStatus(`${t("camera.calibStep")} 1/4: ${t("camera.tapOn")} ${t(CALIB_LABEL_KEYS[0])}`);
     } else {
       setPhase("live");
-      setStatus("Bereit – wirf deinen ersten Dart");
+      setStatus(t("camera.readyThrowFirst"));
     }
   };
 
@@ -1120,15 +1124,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (!applyCalibrationTaps(videoSpace)) {
         setPendingTaps([]);
         setActiveTap(null);
-        setStatus("Kalibrierung ungültig — Punkte zu nah beieinander oder auf einer Linie. Bitte die 4 Punkte nochmal genau auf die Doppel-Ring-Kanten tippen.");
+        setStatus(t("camera.calibInvalid"));
         return;
       }
       setPendingTaps([]);
       resetLoop();
       setPhase("live");
-      setStatus("Kalibriert · bereit – wirf deinen ersten Dart");
+      setStatus(t("camera.calibratedReady"));
     } else {
-      setStatus(`Kalibrierung ${next.length + 1}/4: ${CALIB_LABELS[next.length]}`);
+      setStatus(`${t("camera.calibStep")} ${next.length + 1}/4: ${t(CALIB_LABEL_KEYS[next.length])}`);
     }
   };
 
@@ -1211,7 +1215,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // finishes within the ~600ms autoDetectBoard runs after camera start, so auto-calibration
     // would silently never fire in practice.
     setPhase("detecting");
-    setStatus("KI-Modell lädt – suche Kalibrierpunkte …");
+    setStatus(t("camera.modelLoadingCalib"));
     const modelOk = await preloadDartModel();
     modelReadyRef.current = modelOk;
     setModelReady(modelOk);
@@ -1219,7 +1223,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     resetLoop();
     if (autoOk) {
       setPhase("live");
-      setStatus("Automatisch kalibriert (KI-Modell) · bereit – wirf deinen ersten Dart. Stimmt die Lage nicht, unten „Kalibrierung neu starten“ tippen.");
+      setStatus(t("camera.autoCalibratedReady"));
       // Surface the D20/D3/D11/D6 debug dots immediately so the auto-calibration result is
       // visually checkable against the real board right away, instead of requiring the user to
       // already know the separate toggle exists. Still just sets the same showCalibDebug state
@@ -1228,7 +1232,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     } else {
       setPendingTaps([]);
       setPhase("calibrate");
-      setStatus(`Kalibrierung 1/4: Tippe auf ${CALIB_LABELS[0]}`);
+      setStatus(`${t("camera.calibStep")} 1/4: ${t("camera.tapOn")} ${t(CALIB_LABEL_KEYS[0])}`);
     }
   };
 
@@ -1276,7 +1280,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     resetLoop();
     emptyImageDataRef.current = null;
     if (phase === "live" || phase === "scanning") {
-      setStatus("Stabilisiere Bild …");
+      setStatus(t("camera.stabilizing"));
     }
   };
 
@@ -1366,11 +1370,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (!stableSigRef.current) {
         if (stillFramesRef.current >= 2) {
           stableSigRef.current = sig;
-          setStatus("Bereit – wirf deine Darts, dann alle 3 ziehen");
+          setStatus(t("camera.readyThrowAllThenPull"));
           emptyBoardSigRef.current = sig;
           if (detectionMode === "local") emptyImageDataRef.current = grabImageData();
         } else {
-          setStatus("Stabilisiere Bild …");
+          setStatus(t("camera.stabilizing"));
         }
         return;
       }
@@ -1392,13 +1396,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (nowMissing !== boardMissing) {
         setBoardMissing(nowMissing);
         if (nowMissing) {
-          setStatus("Kein Board erkannt — Kamera auf das Dartboard richten");
+          setStatus(t("camera.noBoardDetected"));
         } else {
           // Re-anchor "stable" to this frame so the large jump back to a real board image isn't
           // itself immediately read as a change-event the instant detection resumes.
           stableSigRef.current = sig;
           changeSeenRef.current = false;
-          setStatus("Board wieder erkannt · bereit");
+          setStatus(t("camera.boardReacquired"));
         }
       }
       if (nowMissing) return;
@@ -1440,7 +1444,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           // Refresh the local baseline too — lighting can drift over a session, and this is
           // the moment we're most sure the board is genuinely empty.
           if (detectionMode === "local") emptyImageDataRef.current = grabImageData();
-          setStatus("Board leer · wirf deinen ersten Dart");
+          setStatus(t("camera.boardEmptyThrowFirst"));
         } else {
           if (detectionMode === "local") {
             preRemovalImageDataRef.current = grabImageData();
@@ -1453,8 +1457,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           setThrowsSeen(throwsSeenRef.current);
           setStatus(
             throwsSeenRef.current >= dartsRemaining
-              ? `${throwsSeenRef.current} Darts auf dem Board · jetzt ziehen`
-              : `${throwsSeenRef.current}/${dartsRemaining} auf dem Board · nächsten werfen oder ziehen`,
+              ? `${throwsSeenRef.current} ${t("camera.dartsOnBoardPullNow")}`
+              : `${throwsSeenRef.current}/${dartsRemaining} ${t("camera.onBoardNextOrPull")}`,
           );
           // Try to identify THIS dart right now, in true throw order — see
           // scoreNewlyLandedDart's doc comment. Best-effort: if it can't, the status text above
@@ -1469,10 +1473,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       if (!scanLockRef.current) {
         if (changeSeenRef.current) {
-          setStatus("Bewegung erkannt – warte bis still …");
+          setStatus(t("camera.motionDetectedWait"));
         } else if (throwsSeenRef.current === 0) {
           if (stillFramesRef.current >= 4 && boardEmpty) emptyBoardSigRef.current = sig;
-          setStatus("Bereit – wirf deinen ersten Dart");
+          setStatus(t("camera.readyThrowFirst"));
         }
       }
     }, TICK_MS);
@@ -1504,7 +1508,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setLastConfidence(overallConfidence);
       setLastDetectionSource("model");
       setNeedsReview(true);
-      setStatus(`Bitte prüfen: ${alreadyIdentified.map(dartLabel).join(", ")}`);
+      setStatus(`${t("camera.pleaseCheck")} ${alreadyIdentified.map(dartLabel).join(", ")}`);
       setPhase("live");
       scanLockRef.current = false;
       preRemovalFrameRef.current = null;
@@ -1523,7 +1527,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setError(null);
     setScanFailed(false);
     playScanStartSound();
-    setStatus("Erkenne Darts …");
+    setStatus(t("camera.detectingDarts"));
 
     try {
       let candidateDarts: DetectedDart[];
@@ -1598,7 +1602,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         // Diagnostic only — helps tell "genuinely nothing found" apart from
         // "found darts but they got filtered out" when this happens in the field.
         console.warn("[LiveCamera] scan found 0 darts", { mode: detectionMode });
-        setStatus("Keine Darts erkannt · bitte manuell erfassen");
+        setStatus(t("camera.noDartsDetectedManual"));
         setScanFailed(true);
       } else {
         setAccumulated(candidateDarts);
@@ -1613,20 +1617,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           // is confident — safe to hand straight over to the next player.
           setNeedsReview(false);
           setTimeout(() => commitRound(candidateDarts), 250);
-          setStatus(`Runde erkannt: ${candidateDarts.map(dartLabel).join(", ")}`);
+          setStatus(`${t("camera.roundDetected")} ${candidateDarts.map(dartLabel).join(", ")}`);
         } else {
           // Unsure — wait for a manual Übernehmen/Verwerfen instead of guessing wrong
           // silently. The board is still empty either way, so nothing is lost by waiting.
           setNeedsReview(true);
-          setStatus(`Bitte prüfen: ${candidateDarts.map(dartLabel).join(", ")}`);
+          setStatus(`${t("camera.pleaseCheck")} ${candidateDarts.map(dartLabel).join(", ")}`);
         }
       }
       setPhase("live");
     } catch (err: unknown) {
       console.error("scan error", err);
-      setError(err instanceof Error ? err.message : "Erkennung fehlgeschlagen.");
+      setError(err instanceof Error ? err.message : t("camera.detectionFailed"));
       setPhase("live");
-      setStatus("Scan fehlgeschlagen · manuell erfassen");
+      setStatus(t("camera.scanFailed"));
       setScanFailed(true);
     } finally {
       scanLockRef.current = false;
@@ -1651,7 +1655,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (sig) emptyBoardSigRef.current = sig;
     resetLoop();
     setPhase("live");
-    setStatus("Runde übernommen · bereit für nächsten Wurf");
+    setStatus(t("camera.roundCommittedReady"));
   };
 
   const discardRound = () => {
@@ -1663,7 +1667,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const sig = buildSignature();
     if (sig) emptyBoardSigRef.current = sig;
     resetLoop();
-    setStatus("Runde verworfen · bereit für nächsten Wurf");
+    setStatus(t("camera.roundDiscardedReady"));
   };
 
   const manualScan = () => {
@@ -1808,7 +1812,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             Auto-Scoring
           </span>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-9 w-9" title="Kamera schließen" aria-label="Kamera schließen">
+        <Button variant="ghost" size="icon" onClick={onClose} className="h-9 w-9" title={t("game.closeCamera")} aria-label={t("game.closeCamera")}>
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -1821,20 +1825,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           }`}
           title={
             modelReady
-              ? "Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten. Nutzt das trainierte KI-Modell, mit Bewegungserkennung als Rückfallebene."
-              : "Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten. KI-Modell lädt im Hintergrund; bis dahin läuft die Bewegungserkennung."
+              ? t("camera.localDetectionModel")
+              : t("camera.localDetectionLoading")
           }
         >
-          Lokal (offline)
+          {t("camera.local")}
         </button>
         <button
           onClick={() => changeDetectionMode("cloud")}
           className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
             detectionMode === "cloud" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
           }`}
-          title="Erkennung per Cloud-KI — braucht Internet, verursacht laufende KI-Kosten, dafür robuster"
+          title={t("camera.cloudDetectionTooltip")}
         >
-          Cloud-KI
+          {t("camera.cloudAi")}
         </button>
       </div>
       {/* The mode explanations above only lived in a hover `title` — invisible on a touch-only
@@ -1842,9 +1846,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
         {detectionMode === "local"
           ? (modelReady
-              ? "Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten. Nutzt das trainierte KI-Modell, mit Bewegungserkennung als Rückfallebene."
-              : "Erkennung läuft komplett auf dem Gerät — offline, keine KI-Kosten. KI-Modell lädt im Hintergrund; bis dahin läuft die Bewegungserkennung.")
-          : "Erkennung per Cloud-KI — braucht Internet, verursacht laufende KI-Kosten, dafür robuster."}
+              ? t("camera.localDetectionModel")
+              : t("camera.localDetectionLoading"))
+          : t("camera.cloudDetectionDesc")}
       </p>
 
       {detectionMode === "local" && (
@@ -1853,15 +1857,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             onClick={() => setTrainingDataEnabled(!trainingDataEnabled)}
             className="flex w-full items-center justify-between text-[11px]"
           >
-            <span className="text-muted-foreground">Trainingsdaten sammeln (für späteres eigenes Modell)</span>
+            <span className="text-muted-foreground">{t("camera.collectTrainingData")}</span>
             <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${trainingDataEnabled ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
-              {trainingDataEnabled ? "An" : "Aus"}
+              {trainingDataEnabled ? t("common.on") : t("common.off")}
             </span>
           </button>
           {/* Same reasoning as above — this is the privacy-relevant one (uploads a real board
               photo) and defaults on, so its explanation can't be hover-only. */}
           <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-            Speichert bei jeder übernommenen Runde das Board-Bildpaar plus die (ggf. korrigierten) Dart-Positionen als Trainingsdaten für ein späteres, echtes Erkennungsmodell — nur der Board-Ausschnitt, kein weiteres Kamerabild.
+            {t("camera.trainingDataDesc")}
           </p>
         </div>
       )}
@@ -1973,7 +1977,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         {paused && phase === "live" && (
           <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
             <span className="rounded-full bg-background/85 px-3 py-1 text-[11px] text-foreground shadow">
-              Pausiert · erst die Frage oben beantworten
+              {t("camera.pausedAnswerAbove")}
             </span>
           </div>
         )}
@@ -1982,20 +1986,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 px-4 text-center text-xs text-foreground">
             <Loader2 className="mb-2 h-5 w-5 animate-spin" />
             {phase === "starting"
-              ? "Kamera startet…"
+              ? t("camera.starting")
               : detectionMode === "local"
                 ? status
-                : "Board wird automatisch erkannt…"}
+                : t("camera.boardAutoDetecting")}
           </div>
         )}
         {phase === "scanning" && (
           <div className="absolute inset-x-0 top-0 flex items-center justify-center bg-background/70 py-1.5 text-xs text-foreground">
-            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Analysiere…
+            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> {t("camera.analyzing")}
           </div>
         )}
         {boardMissing && (phase === "live" || phase === "scanning") && (
           <div className="absolute inset-x-0 top-0 flex items-center justify-center gap-1.5 bg-destructive/90 py-1.5 text-xs font-medium text-destructive-foreground">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0" /> Kein Board erkannt — Kamera auf das Dartboard richten
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {t("camera.noBoardDetected")}
           </div>
         )}
         {phase === "error" && (
@@ -2022,21 +2026,21 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           still means no scrolling to reach it. */}
       {phase === "live" && trackingStatus === "warn" && (
         <div className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-center text-[11px] font-medium text-accent">
-          Board hat sich verschoben — bei Bedarf neu kalibrieren
+          {t("camera.boardDrifted")}
         </div>
       )}
 
       {phase === "calibrate" && activeTap && (
         <div className="rounded-lg border border-border bg-card p-2 shadow-sm">
           <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
-            Fein justieren – dann bestätigen
+            {t("camera.fineAdjustThenConfirm")}
           </div>
           <div className="mx-auto grid w-32 grid-cols-3 gap-1">
             <div />
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, -0.005)}>▲</Button>
             <div />
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(-0.005, 0)}>◀</Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setActiveTap(null)} title="Neu setzen">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setActiveTap(null)} title={t("camera.resetPoint")}>
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0.005, 0)}>▶</Button>
@@ -2045,7 +2049,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             <div />
           </div>
           <Button size="sm" className="mt-2 w-full gap-1 font-display uppercase" onClick={confirmActiveTap}>
-            <Check className="h-4 w-4" /> Punkt bestätigen
+            <Check className="h-4 w-4" /> {t("camera.confirmPoint")}
           </Button>
         </div>
       )}
@@ -2053,18 +2057,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       {repositioningIndex !== null && accumulated[repositioningIndex] && (
         <div className="rounded-lg border border-border bg-card p-2 shadow-sm">
           <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
-            Dart {repositioningIndex + 1} ({dartLabel(accumulated[repositioningIndex])}) — im Bild antippen, dann bestätigen
+            {t("game.dartCounterLabel")} {repositioningIndex + 1} ({dartLabel(accumulated[repositioningIndex])}) — {t("camera.tapInImageThenConfirm")}
           </div>
           <div className="flex items-center justify-center gap-1">
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, -0.01)}>▲</Button>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(-0.01, 0)}>◀</Button>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0.01, 0)}>▶</Button>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, 0.01)}>▼</Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={cancelReposition} title="Abbrechen">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={cancelReposition} title={t("common.cancel")}>
               <X className="h-4 w-4" />
             </Button>
             <Button size="sm" className="h-8 flex-1 gap-1 font-display uppercase" onClick={confirmReposition} disabled={!repositionDraft}>
-              <Check className="h-4 w-4" /> Übernehmen
+              <Check className="h-4 w-4" /> {t("camera.accept")}
             </Button>
           </div>
         </div>
@@ -2090,8 +2094,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               {playerName ?? "Auto-Scoring"}
               {accumulated.length < dartsRemaining && !needsReview && (
                 <span className="ml-1 text-muted-foreground">
-                  · noch {dartsRemaining - accumulated.length} Dart
-                  {dartsRemaining - accumulated.length === 1 ? "" : "s"}
+                  · {dartsRemaining - accumulated.length} {t("game.dartsSuffix")} {t("camera.dartsRemainingSuffix")}
                 </span>
               )}
             </p>
@@ -2099,8 +2102,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
         </div>
         {showAdvanced && (
-          <div className="ml-3 shrink-0 space-y-0.5 text-right text-[10px] uppercase tracking-wider text-muted-foreground" title="Bewegung / Bild-Differenz zum leeren Board — Rohwerte für die Erkennungs-Abstimmung, nicht relevant für normales Spielen.">
-            <div>Bew {(motion * 100).toFixed(0)}%</div>
+          <div className="ml-3 shrink-0 space-y-0.5 text-right text-[10px] uppercase tracking-wider text-muted-foreground" title={t("camera.motionDiffTooltip")}>
+            <div>{t("camera.motionAbbrev")} {(motion * 100).toFixed(0)}%</div>
             <div>Δ {(changeDelta * 100).toFixed(0)}%</div>
           </div>
         )}
@@ -2108,7 +2111,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       {autoCalibrating && (
         <div className="rounded-md border border-accent/30 bg-accent/5 px-3 py-1.5 text-[11px] text-accent">
-          Auto-Kalibrierung läuft – Zoom & Board-Lage werden angepasst.
+          {t("camera.autoCalibRunning")}
         </div>
       )}
 
@@ -2117,31 +2120,31 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <button
             onClick={restartCalibration}
             className="flex-1 rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
-            title="Löscht die aktuelle Kalibrierung und versucht sie neu — erst automatisch per KI-Modell, sonst per manuellem 4-Punkt-Tap."
+            title={t("camera.restartCalibTooltip")}
           >
-            <Target className="h-3.5 w-3.5" /> Kalibrierung neu starten
+            <Target className="h-3.5 w-3.5" /> {t("camera.restartCalibButton")}
           </button>
           <button
             onClick={() => setShowCalibDebug((v) => !v)}
             className={`shrink-0 rounded-md border px-3 py-1.5 text-[11px] flex items-center justify-center gap-1.5 ${
               showCalibDebug ? "border-accent bg-accent/15 text-accent" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
-            title="Zeigt direkt im Kamerabild, wo die App D20/D3/D11/D6 verortet — kein Konsolen-Zugriff nötig, einfach mit dem echten Board vergleichen."
+            title={t("camera.showCalibPointsTooltip")}
           >
-            {showCalibDebug ? "Punkte ausblenden" : "D20/D3/D11/D6 zeigen"}
+            {showCalibDebug ? t("camera.hidePoints") : t("camera.showCalibPoints")}
           </button>
         </div>
       )}
 
       {scanFailed && onRequestManualEntry && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[11px]">
-          <span className="text-destructive">Scan hat keine Darts gefunden.</span>
+          <span className="text-destructive">{t("camera.scanFoundNoDarts")}</span>
           <div className="flex shrink-0 gap-1.5">
             <Button size="sm" variant="outline" className="h-9 px-3 text-[11px]" onClick={() => { setScanFailed(false); manualScan(); }}>
-              Erneut scannen
+              {t("camera.rescan")}
             </Button>
             <Button size="sm" variant="default" className="h-9 px-3 text-[11px]" onClick={onRequestManualEntry}>
-              Manuell erfassen
+              {t("camera.enterManually")}
             </Button>
           </div>
         </div>
@@ -2149,7 +2152,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       {needsReview && (
         <div className="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-[11px] text-accent">
-          Nicht ganz sicher erkannt — bitte unten prüfen und mit „Übernehmen" bestätigen (oder einzelne Darts korrigieren).
+          {t("camera.notQuiteSureDetected")}
         </div>
       )}
 
@@ -2157,13 +2160,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       <div className={`rounded-xl border p-3 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent ${needsReview ? "border-accent/50" : "border-primary/30"}`}>
         <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
           <span className="flex items-center gap-1">
-            <Zap className="h-3 w-3 text-accent" /> Aktuelle Runde
+            <Zap className="h-3 w-3 text-accent" /> {t("camera.currentRound")}
           </span>
           <span>
             {accumulated.length}/{dartsRemaining}
             {lastConfidence > 0 && (
               <span className="ml-2">
-                {lastDetectionSource === "model" ? "KI-Modell" : lastDetectionSource === "diff" ? "Bewegung" : "Cloud-KI"}{" "}
+                {lastDetectionSource === "model" ? t("camera.sourceModel") : lastDetectionSource === "diff" ? t("camera.sourceMotion") : t("camera.cloudAi")}{" "}
                 {(lastConfidence * 100).toFixed(0)}%
               </span>
             )}
@@ -2179,7 +2182,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                     key={`slot-${i}`}
                     className="inline-flex h-7 w-14 items-center justify-center rounded-md border border-dashed border-border/60 text-[10px] text-muted-foreground"
                   >
-                    Dart {i + 1}
+                    {t("game.dartCounterLabel")} {i + 1}
                   </span>
                 );
               }
@@ -2200,7 +2203,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
           <div className="ml-3 shrink-0 text-right">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Summe
+              {t("camera.sum")}
             </div>
             <div className="font-display text-3xl leading-none text-primary">
               {roundTotal}
@@ -2213,7 +2216,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         <div className="space-y-1.5">
           {accumulated.map((dart, i) => (
             <div key={i} className="flex items-center gap-2 rounded-lg bg-muted p-2">
-              <span className="w-10 text-[10px] text-muted-foreground">Dart {i + 1}</span>
+              <span className="w-10 text-[10px] text-muted-foreground">{t("game.dartCounterLabel")} {i + 1}</span>
               <select
                 value={dart.multiplier}
                 onChange={(e) => adjustDart(i, "multiplier", Number(e.target.value))}
@@ -2231,13 +2234,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 onChange={(e) => adjustDart(i, "baseValue", Number(e.target.value))}
                 className="flex-1 rounded border border-border bg-background px-1 py-1 text-xs"
               >
-                <option value={0}>Miss</option>
+                <option value={0}>{t("game.miss")}</option>
                 {Array.from({ length: 20 }, (_, k) => k + 1).map((v) => (
                   <option key={v} value={v}>
                     {v}
                   </option>
                 ))}
-                <option value={25}>Bull (25/50)</option>
+                <option value={25}>{t("camera.bullOption")}</option>
               </select>
               <span className="w-10 text-right font-display text-primary">{dart.points}</span>
               <Button
@@ -2254,7 +2257,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                   // visible marker to nudge/re-tap from, instead of starting from nothing.
                   setRepositionDraft(hasPosition(dart) ? toFullFrameXY(dart) : null);
                 }}
-                title="Position korrigieren — auf die echte Stelle im Kamerabild tippen"
+                title={t("camera.correctPositionTitle")}
               >
                 <Target className="h-3.5 w-3.5" />
               </Button>
@@ -2263,7 +2266,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 size="icon"
                 className="h-9 w-9"
                 onClick={() => removeDart(i)}
-                title="Dart entfernen"
+                title={t("camera.removeDartTitle")}
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -2287,7 +2290,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           variant="outline"
           disabled={phase !== "live" || paused}
         >
-          <ScanLine className="h-4 w-4" /> Jetzt scannen
+          <ScanLine className="h-4 w-4" /> {t("camera.scanNow")}
         </Button>
         {accumulated.length > 0 && (
           <Button
@@ -2295,9 +2298,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             size="sm"
             onClick={discardRound}
             className="gap-1"
-            title="Erkannte Darts verwerfen"
+            title={t("camera.discardDetectedTitle")}
           >
-            <RotateCcw className="h-4 w-4" /> Verwerfen
+            <RotateCcw className="h-4 w-4" /> {t("camera.discard")}
           </Button>
         )}
         {/* Gated on a complete round OR a confirmed end-of-visit, not just accumulated.length > 0
@@ -2314,9 +2317,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             size="sm"
             onClick={() => commitRound(accumulated)}
             className={`gap-1 ${needsReview ? "animate-pulse-glow" : ""}`}
-            title="Runde übernehmen"
+            title={t("camera.commitRoundTitle")}
           >
-            <Check className="h-4 w-4" /> Übernehmen
+            <Check className="h-4 w-4" /> {t("camera.accept")}
           </Button>
         )}
       </div>
@@ -2325,7 +2328,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         onClick={() => setShowAdvanced((v) => !v)}
         className="flex w-full items-center justify-between rounded border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted"
       >
-        <span>Bildausschnitt manuell anpassen</span>
+        <span>{t("camera.adjustCropManually")}</span>
         {showAdvanced ? (
           <ChevronUp className="h-3.5 w-3.5" />
         ) : (
@@ -2335,7 +2338,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       {showAdvanced && (
         <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-2 text-xs">
           <div className="space-y-1">
-            <div className="text-[10px] text-muted-foreground">Dieses Gerät ist kalibriert für</div>
+            <div className="text-[10px] text-muted-foreground">{t("camera.deviceCalibratedFor")}</div>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -2343,36 +2346,36 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 className="h-8 w-8 shrink-0"
                 onClick={() => switchBoard(String(Math.max(1, Number(activeBoard) - 1)))}
                 disabled={activeBoard === "1"}
-                title="Vorheriges Board"
+                title={t("camera.previousBoard")}
               >
                 −
               </Button>
-              <span className="flex-1 text-center font-display text-sm text-foreground">Board {activeBoard}</span>
+              <span className="flex-1 text-center font-display text-sm text-foreground">{t("camera.board")} {activeBoard}</span>
               <Button
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 shrink-0"
                 onClick={() => switchBoard(String(Number(activeBoard) + 1))}
-                title="Nächstes Board"
+                title={t("camera.nextBoard")}
               >
                 +
               </Button>
             </div>
             <p className="text-[10px] text-muted-foreground">
-              Jedes Board hat seine eigene Kalibrierung — praktisch, wenn dasselbe Tablet an mehreren Boards eines Vereinsabends läuft.
+              {t("camera.multiboardExplain")}
             </p>
           </div>
           {devices.length > 1 && (
             <div className="space-y-1">
-              <div className="text-[10px] text-muted-foreground">Kamera für Board {activeBoard}</div>
+              <div className="text-[10px] text-muted-foreground">{t("camera.cameraForBoard")} {activeBoard}</div>
               <select
                 value={selectedDeviceId ?? ""}
                 onChange={(e) => switchCamera(e.target.value || null)}
                 className="w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
               >
-                <option value="">Automatisch</option>
+                <option value="">{t("camera.auto")}</option>
                 {devices.map((d, i) => (
-                  <option key={d.deviceId} value={d.deviceId}>{d.label || `Kamera ${i + 1}`}</option>
+                  <option key={d.deviceId} value={d.deviceId}>{d.label || `${t("camera.cameraLabel")} ${i + 1}`}</option>
                 ))}
               </select>
             </div>
@@ -2384,7 +2387,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             disabled={phase === "detecting"}
             className="w-full gap-1"
           >
-            <RotateCcw className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> {phase === "detecting" ? "Erkenne Board…" : "Board neu auto-erkennen"}
+            <RotateCcw className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> {phase === "detecting" ? t("camera.detectingBoard") : t("camera.reAutoDetectBoard")}
           </Button>
           {detectionMode === "local" && (
             <Button
@@ -2393,14 +2396,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               onClick={restartCalibration}
               disabled={phase === "detecting"}
               className="w-full gap-1"
-              title="Löscht die aktuelle Kalibrierung und versucht sie neu — erst automatisch per KI-Modell, sonst per manuellem 4-Punkt-Tap. Sinnvoll, wenn Darts zuletzt falsch bewertet wurden."
+              title={`${t("camera.restartCalibTooltip")} ${t("camera.restartCalibTooltipSuffix")}`}
             >
-              <Target className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> Kalibrierung neu starten
+              <Target className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> {t("camera.restartCalibButton")}
             </Button>
           )}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Horizontal</span>
+              <span>{t("camera.horizontal")}</span>
               <span>{Math.round(calib.x * 100)}%</span>
             </div>
             <Slider
@@ -2413,7 +2416,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Vertikal</span>
+              <span>{t("camera.vertical")}</span>
               <span>{Math.round(calib.y * 100)}%</span>
             </div>
             <Slider
@@ -2426,7 +2429,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Größe</span>
+              <span>{t("camera.size")}</span>
               <span>{Math.round(calib.size * 100)}%</span>
             </div>
             <Slider
@@ -2439,7 +2442,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>Zoom</span>
+              <span>{t("camera.zoom")}</span>
               <span>{calib.zoom.toFixed(1)}x</span>
             </div>
             <Slider

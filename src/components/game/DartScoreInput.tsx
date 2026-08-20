@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { isAchievableVisitTotal } from "@/utils/dartStats";
 
 /** Available base score values on a dartboard */
@@ -13,7 +14,7 @@ const QUICK_ROUNDS = [180, 170, 140, 121, 100, 85, 81, 60, 45, 41, 40, 32, 26, 9
 
 export type DartInputMode = "single" | "quick" | "total";
 
-const MODE_LABEL: Record<DartInputMode, string> = { single: "Einzeln", quick: "Schnell", total: "Eintippen" };
+const MODE_LABEL_KEY: Record<DartInputMode, string> = { single: "game.modeSingle", quick: "game.modeQuick", total: "game.modeTotal" };
 
 interface DartScoreInputProps {
   isDisabled: boolean;
@@ -51,6 +52,7 @@ interface DartScoreInputProps {
  * switch mid-game (e.g. per-dart while it's close, typed totals once a leg is a formality).
  */
 const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputModeChange, dartsThisRound = 0 }: DartScoreInputProps) => {
+  const { t } = useLanguage();
   const [localMode, setLocalMode] = useState<DartInputMode>("single");
   const [totalText, setTotalText] = useState("");
   const mode = inputMode ?? localMode;
@@ -84,12 +86,12 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
                 key={m}
                 onClick={() => !locked && setMode(m)}
                 disabled={locked}
-                title={locked ? "Erst zu Beginn der nächsten Aufnahme verfügbar" : undefined}
+                title={locked ? t("game.modeLockedTooltip") : undefined}
                 className={`py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
                   effectiveMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 } ${locked ? "opacity-40 cursor-not-allowed" : ""}`}
               >
-                {MODE_LABEL[m]}
+                {t(MODE_LABEL_KEY[m])}
               </button>
             );
           })}
@@ -97,7 +99,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
       )}
       {onQuickRound && midVisit && (
         <p className="text-[10px] text-muted-foreground text-center -mt-1.5 mb-2">
-          Schnell/Eintippen erst zu Beginn der nächsten Aufnahme
+          {t("game.modeLockedNote")}
         </p>
       )}
 
@@ -111,7 +113,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
                 <button
                   onClick={() => onThrow(v, 1)}
                   disabled={isDisabled}
-                  title={`Einfach ${v}`}
+                  title={`${t("game.simple")} ${v}`}
                   className="w-full py-2 text-lg font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
                 >
                   {v}
@@ -120,7 +122,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
                   <button
                     onClick={() => onThrow(v, 3)}
                     disabled={isDisabled}
-                    title={`Dreifach ${v}`}
+                    title={`${t("game.triple")} ${v}`}
                     className="py-1.5 text-xs font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
                   >
                     T
@@ -128,7 +130,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
                   <button
                     onClick={() => onThrow(v, 2)}
                     disabled={isDisabled}
-                    title={`Doppel ${v}`}
+                    title={`${t("game.double")} ${v}`}
                     className="py-1.5 text-xs font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
                   >
                     D
@@ -148,9 +150,9 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
               it just makes that special-case dead code (points: 25*2=50, targetNumber: 25 either way). */}
           <div className="flex gap-1.5">
             {[
-              { value: 0, mul: 1 as const, label: "Miss" },
-              { value: 25, mul: 1 as const, label: "Bull (25)" },
-              { value: 25, mul: 2 as const, label: "Bullseye (50)" },
+              { value: 0, mul: 1 as const, label: t("game.miss") },
+              { value: 25, mul: 1 as const, label: `${t("game.bull")} (25)` },
+              { value: 25, mul: 2 as const, label: `${t("game.bullseye")} (50)` },
             ].map((target) => (
               <button
                 key={target.label}
@@ -182,7 +184,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
 
       {effectiveMode === "total" && onQuickRound && (
         <div className="flex flex-col items-center gap-2 py-2">
-          <p className="text-xs text-muted-foreground text-center">Gesamtpunktzahl der Aufnahme (0–180)</p>
+          <p className="text-xs text-muted-foreground text-center">{t("game.visitTotalLabel")}</p>
           <div className="flex gap-2 w-full max-w-[240px]">
             <Input
               type="number"
@@ -193,18 +195,18 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
               onChange={(e) => setTotalText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") submitTotal(); }}
               disabled={isDisabled}
-              placeholder="z. B. 100"
+              placeholder={t("game.scorePlaceholderExample")}
               className="text-center text-lg font-bold bg-background border-border"
             />
             <Button onClick={submitTotal} disabled={isDisabled || !totalValid} className="shrink-0">
-              Eintragen
+              {t("game.enterScore")}
             </Button>
           </div>
           {totalValue !== null && !totalValid && (
             <p className="text-[11px] text-destructive">
               {totalValue > 180 || totalValue < 0 || !Number.isInteger(totalValue)
-                ? "Ungültige Punktzahl (0–180)."
-                : `${totalValue} ist mit 3 Darts nicht erreichbar.`}
+                ? t("game.invalidScore")
+                : `${totalValue} ${t("game.notAchievableWith3Darts")}`}
             </p>
           )}
         </div>

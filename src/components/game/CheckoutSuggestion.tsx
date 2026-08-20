@@ -1,4 +1,5 @@
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface CheckoutSuggestionProps {
   /** Current remaining score */
@@ -14,6 +15,7 @@ interface CheckoutSuggestionProps {
  * Only renders when a valid checkout exists (score 2–170).
  */
 const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate }: CheckoutSuggestionProps) => {
+  const { t } = useLanguage();
   const route = getCheckoutSuggestion(remaining);
   if (!route) return null;
 
@@ -24,8 +26,8 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate }: Che
           Checkout · {playerName}
         </p>
         {personalCheckoutRate != null && (
-          <p className="text-[10px] text-muted-foreground" title="Deine bisherige Checkout-Quote in diesem Score-Bereich">
-            Quote: <span className="text-foreground font-semibold">{personalCheckoutRate.toFixed(0)}%</span>
+          <p className="text-[10px] text-muted-foreground" title={t("game.checkoutRateTooltip")}>
+            {t("game.rateLabel")} <span className="text-foreground font-semibold">{personalCheckoutRate.toFixed(0)}%</span>
           </p>
         )}
       </div>
