@@ -44,10 +44,14 @@ export function dartLabel(d: { baseValue: number; multiplier: number }): string 
  *  total available and showed it). The 180/checkout wording is now identical either way; ton_plus
  *  still takes an optional `points` for the live-banner case, where showing the actual number is
  *  more useful than a generic label — a deliberate difference, not drift. */
-export function highlightKindLabel(kind: string, points?: number): string {
+/** "180"/"Checkout"/"Ton+" are darts jargon, kept unchanged across every UI language (same
+ *  convention as "Double Out" etc. elsewhere) — only the "Punkte"/"points" word varies, so callers
+ *  (all React components with access to the language context) pass it in translated rather than
+ *  this pure utility importing useLanguage itself. */
+export function highlightKindLabel(kind: string, points: number | undefined, pointsLabel: string): string {
   if (kind === "180") return "🎯 180";
   if (kind === "checkout") return "🏆 Checkout";
-  return points !== undefined ? `🔥 ${points} Punkte` : "🔥 Ton+";
+  return points !== undefined ? `🔥 ${points} ${pointsLabel}` : "🔥 Ton+";
 }
 
 /**

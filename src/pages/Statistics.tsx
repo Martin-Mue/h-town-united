@@ -824,7 +824,7 @@ const StatisticsPage = () => {
     }
   };
 
-  const clipKindLabel = highlightKindLabel;
+  const clipKindLabel = (kind: string, points?: number) => highlightKindLabel(kind, points, t("game.points"));
 
   const oldClips = useMemo(() => {
     const cutoff = Date.now() - Number(cleanupDays) * 86_400_000;

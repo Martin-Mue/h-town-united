@@ -419,6 +419,29 @@ export const translations: Record<string, Record<Language, string>> = {
   "camera.discard": { de: "Verwerfen", en: "Discard", fr: "Rejeter", pl: "Odrzuć", nl: "Verwerpen", tr: "Reddet" },
   "camera.detectingBoard": { de: "Erkenne Board…", en: "Detecting board…", fr: "Détection de la cible…", pl: "Wykrywanie tarczy…", nl: "Bord detecteren…", tr: "Tahta algılanıyor…" },
   "camera.reAutoDetectBoard": { de: "Board neu auto-erkennen", en: "Re-auto-detect board", fr: "Redétecter la cible automatiquement", pl: "Wykryj tarczę ponownie automatycznie", nl: "Bord opnieuw automatisch detecteren", tr: "Tahtayı yeniden otomatik algıla" },
+
+  // ThrowClipDialog.tsx
+  "game.throwClip": { de: "Wurf-Clip", en: "Throw clip", fr: "Clip du lancer", pl: "Klip rzutu", nl: "Worpclip", tr: "Atış klibi" },
+  "game.save": { de: "Speichern", en: "Save", fr: "Enregistrer", pl: "Zapisz", nl: "Opslaan", tr: "Kaydet" },
+  "game.close": { de: "Schließen", en: "Close", fr: "Fermer", pl: "Zamknij", nl: "Sluiten", tr: "Kapat" },
+  "game.clipHighlightTip": { de: "Tipp: 180er und Checkouts werden automatisch als Highlight markiert.", en: "Tip: 180s and checkouts are automatically marked as a highlight.", fr: "Astuce : les 180 et les checkouts sont automatiquement marqués comme highlight.", pl: "Wskazówka: 180-ki i checkouty są automatycznie oznaczane jako highlight.", nl: "Tip: 180's en checkouts worden automatisch als highlight gemarkeerd.", tr: "İpucu: 180'ler ve checkoutlar otomatik olarak öne çıkan an olarak işaretlenir." },
+
+  // SeasonRecap.tsx
+  "recap.gamesAndWins": { de: "Spiele & Siege", en: "Games & wins", fr: "Parties & victoires", pl: "Gry i zwycięstwa", nl: "Potjes & overwinningen", tr: "Oyunlar ve galibiyetler" },
+  "recap.winRateSuffix": { de: "Siegquote", en: "win rate", fr: "taux de victoire", pl: "wskaźnik zwycięstw", nl: "winratio", tr: "galibiyet oranı" },
+  "recap.bestGame": { de: "Bestes Spiel", en: "Best game", fr: "Meilleure partie", pl: "Najlepsza gra", nl: "Beste potje", tr: "En iyi oyun" },
+  "recap.oneEightiesThrown": { de: "180er geworfen", en: "180s thrown", fr: "180 réalisés", pl: "Rzucone 180-ki", nl: "180's gegooid", tr: "Atılan 180'ler" },
+  "recap.noneYetNextTime": { de: "noch keiner — nächstes Mal!", en: "none yet — next time!", fr: "aucun pour l'instant — la prochaine fois !", pl: "jeszcze żadnej — następnym razem!", nl: "nog geen — volgende keer!", tr: "henüz yok — bir dahaki sefere!" },
+  "recap.bestFinish": { de: "Bestes Finish", en: "Best finish", fr: "Meilleur finish", pl: "Najlepsze zakończenie", nl: "Beste finish", tr: "En iyi bitiriş" },
+  "recap.checkoutRateSuffix": { de: "Checkout-Quote", en: "checkout rate", fr: "taux de checkout", pl: "wskaźnik checkoutu", nl: "checkout-percentage", tr: "checkout oranı" },
+  "recap.bestWinStreak": { de: "Beste Siegesserie", en: "Best win streak", fr: "Meilleure série de victoires", pl: "Najlepsza seria zwycięstw", nl: "Beste winstreak", tr: "En iyi galibiyet serisi" },
+  "recap.inARow": { de: "in Folge", en: "in a row", fr: "d'affilée", pl: "z rzędu", nl: "op rij", tr: "üst üste" },
+  "recap.eloRating": { de: "Elo-Rating", en: "Elo rating", fr: "Classement Elo", pl: "Ranking Elo", nl: "Elo-rating", tr: "Elo puanı" },
+  "recap.current": { de: "aktuell", en: "current", fr: "actuel", pl: "aktualnie", nl: "actueel", tr: "güncel" },
+  "recap.yourHighlights": { de: "Deine Highlights", en: "Your highlights", fr: "Tes highlights", pl: "Twoje najlepsze momenty", nl: "Jouw highlights", tr: "Öne çıkanların" },
+  "recap.noGamesInPeriod": { de: "Noch keine Spiele in diesem Zeitraum — der Rückblick füllt sich mit den ersten Partien.", en: "No games yet in this period — the recap fills in with the first matches.", fr: "Pas encore de parties sur cette période — le récap se remplira avec les premiers matchs.", pl: "Brak jeszcze gier w tym okresie — podsumowanie wypełni się wraz z pierwszymi meczami.", nl: "Nog geen potjes in deze periode — het overzicht vult zich met de eerste wedstrijden.", tr: "Bu dönemde henüz oyun yok — özet ilk maçlarla dolacak." },
+  "recap.creatingImage": { de: "Wird erstellt…", en: "Creating…", fr: "Création en cours…", pl: "Tworzenie…", nl: "Wordt gemaakt…", tr: "Oluşturuluyor…" },
+  "recap.shareAsImage": { de: "Als Bild teilen", en: "Share as image", fr: "Partager en image", pl: "Udostępnij jako obraz", nl: "Delen als afbeelding", tr: "Görsel olarak paylaş" },
 };
 
 export function translate(key: string, language: Language): string {

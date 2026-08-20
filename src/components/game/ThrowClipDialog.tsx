@@ -3,6 +3,7 @@ import { Download, Sparkles, Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { DetectedDart } from "@/components/game/LiveCamera";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { dartLabel, highlightKindLabel } from "@/utils/x01Rules";
 
 export interface ThrowClipPopup {
@@ -23,6 +24,7 @@ interface Props {
 }
 
 const ThrowClipDialog = ({ popup, onClose }: Props) => {
+  const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -49,15 +51,15 @@ const ThrowClipDialog = ({ popup, onClose }: Props) => {
             ) : (
               <Trophy className="h-5 w-5 text-primary" />
             )}
-            <span>Wurf-Clip · {popup.playerName}</span>
+            <span>{t("game.throwClip")} · {popup.playerName}</span>
           </DialogTitle>
         </DialogHeader>
 
         {isHighlight && (
           <div className="mx-4 -mt-1 mb-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-center text-xs font-display uppercase tracking-wider text-accent">
             {popup.is180 || popup.isCheckout
-              ? `${highlightKindLabel(popup.is180 ? "180" : "checkout")}!`
-              : highlightKindLabel("ton_plus", popup.total)}
+              ? `${highlightKindLabel(popup.is180 ? "180" : "checkout", undefined, t("game.points"))}!`
+              : highlightKindLabel("ton_plus", popup.total, t("game.points"))}
           </div>
         )}
 
@@ -88,7 +90,7 @@ const ThrowClipDialog = ({ popup, onClose }: Props) => {
               ))}
             </div>
             <div className="text-right shrink-0">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Summe</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("camera.sum")}</div>
               <div className="font-display text-2xl leading-none text-primary">{popup.total}</div>
             </div>
           </div>
@@ -96,15 +98,15 @@ const ThrowClipDialog = ({ popup, onClose }: Props) => {
           <div className="flex gap-2">
             <Button asChild className="flex-1 gap-2 font-display uppercase">
               <a href={popup.url} download={filename}>
-                <Download className="h-4 w-4" /> Speichern
+                <Download className="h-4 w-4" /> {t("game.save")}
               </a>
             </Button>
             <Button variant="outline" onClick={onClose} className="gap-1">
-              <X className="h-4 w-4" /> Schließen
+              <X className="h-4 w-4" /> {t("game.close")}
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground text-center">
-            Tipp: 180er und Checkouts werden automatisch als Highlight markiert.
+            {t("game.clipHighlightTip")}
           </p>
         </div>
       </DialogContent>

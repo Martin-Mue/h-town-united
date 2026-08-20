@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { shareOrDownloadSeasonRecap } from "@/utils/seasonRecapImage";
 import type { HighlightClipRecord } from "@/pages/Statistics";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { highlightKindLabel } from "@/utils/x01Rules";
 
 export interface SeasonRecapData {
@@ -32,6 +33,7 @@ interface SeasonRecapProps {
  *  timed/swipe-gesture story format — same visual "reveal" feeling, but nothing that depends on
  *  gesture or timing behavior no camera-less environment could ever verify actually feels right. */
 const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
+  const { t } = useLanguage();
   const [clipUrls, setClipUrls] = useState<Record<string, string>>({});
   const [sharing, setSharing] = useState(false);
 
@@ -73,12 +75,12 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
   };
 
   const statCards = [
-    { icon: Trophy, label: "Spiele & Siege", value: `${recap.wins} / ${recap.games}`, sub: `${recap.winRate}% Siegquote`, color: "text-primary" },
-    { icon: TrendingUp, label: "Bestes Spiel", value: recap.bestGameAvg.toFixed(1), sub: "Average", color: "text-secondary" },
-    { icon: Target, label: "180er geworfen", value: String(recap.total180s), sub: recap.total180s > 0 ? "🎯".repeat(Math.min(recap.total180s, 5)) : "noch keiner — nächstes Mal!", color: "text-accent" },
-    { icon: Crosshair, label: "Bestes Finish", value: recap.bestCheckout > 0 ? String(recap.bestCheckout) : "–", sub: recap.checkoutPercentage > 0 ? `${recap.checkoutPercentage.toFixed(0)}% Checkout-Quote` : "", color: "text-destructive" },
-    { icon: Flame, label: "Beste Siegesserie", value: `${recap.bestStreak}×`, sub: "in Folge", color: "text-orange-400" },
-    { icon: Award, label: "Elo-Rating", value: String(recap.elo), sub: "aktuell", color: "text-primary" },
+    { icon: Trophy, label: t("recap.gamesAndWins"), value: `${recap.wins} / ${recap.games}`, sub: `${recap.winRate}% ${t("recap.winRateSuffix")}`, color: "text-primary" },
+    { icon: TrendingUp, label: t("recap.bestGame"), value: recap.bestGameAvg.toFixed(1), sub: "Average", color: "text-secondary" },
+    { icon: Target, label: t("recap.oneEightiesThrown"), value: String(recap.total180s), sub: recap.total180s > 0 ? "🎯".repeat(Math.min(recap.total180s, 5)) : t("recap.noneYetNextTime"), color: "text-accent" },
+    { icon: Crosshair, label: t("recap.bestFinish"), value: recap.bestCheckout > 0 ? String(recap.bestCheckout) : "–", sub: recap.checkoutPercentage > 0 ? `${recap.checkoutPercentage.toFixed(0)}% ${t("recap.checkoutRateSuffix")}` : "", color: "text-destructive" },
+    { icon: Flame, label: t("recap.bestWinStreak"), value: `${recap.bestStreak}×`, sub: t("recap.inARow"), color: "text-orange-400" },
+    { icon: Award, label: t("recap.eloRating"), value: String(recap.elo), sub: t("recap.current"), color: "text-primary" },
   ];
 
   return (
@@ -91,7 +93,7 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{recap.periodLabel}</p>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Schließen"><X className="w-5 h-5" /></Button>
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("game.close")}><X className="w-5 h-5" /></Button>
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
@@ -112,7 +114,7 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
 
         {recap.clips.length > 0 && (
           <div>
-            <h3 className="font-display text-sm uppercase text-muted-foreground mb-2 mt-6">Deine Highlights</h3>
+            <h3 className="font-display text-sm uppercase text-muted-foreground mb-2 mt-6">{t("recap.yourHighlights")}</h3>
             <div className="space-y-3">
               {recap.clips.map((clip, i) => (
                 <div key={clip.id} className="bg-card border border-border rounded-xl overflow-hidden animate-scale-in" style={{ animationDelay: `${(statCards.length + i) * 60}ms`, animationFillMode: "backwards" }}>
@@ -122,8 +124,8 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
                     <div className="w-full aspect-video bg-muted animate-pulse" />
                   )}
                   <div className="p-2.5 flex items-center justify-between text-xs">
-                    <span className="rounded-full bg-accent/15 text-accent px-2 py-0.5 text-[10px]">{highlightKindLabel(clip.kind)}</span>
-                    <span className="text-muted-foreground">{clip.points} Punkte</span>
+                    <span className="rounded-full bg-accent/15 text-accent px-2 py-0.5 text-[10px]">{highlightKindLabel(clip.kind, undefined, t("game.points"))}</span>
+                    <span className="text-muted-foreground">{clip.points} {t("game.points")}</span>
                   </div>
                 </div>
               ))}
@@ -133,12 +135,12 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
 
         {recap.games === 0 && (
           <p className="text-center text-sm text-muted-foreground py-8">
-            Noch keine Spiele in diesem Zeitraum — der Rückblick füllt sich mit den ersten Partien.
+            {t("recap.noGamesInPeriod")}
           </p>
         )}
 
         <Button onClick={handleShare} disabled={sharing} className="w-full gap-2 mt-4">
-          <Share2 className="w-4 h-4" /> {sharing ? "Wird erstellt…" : "Als Bild teilen"}
+          <Share2 className="w-4 h-4" /> {sharing ? t("recap.creatingImage") : t("recap.shareAsImage")}
         </Button>
       </div>
     </div>
