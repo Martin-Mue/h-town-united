@@ -31,6 +31,7 @@ import ClutchCard from "@/components/stats/ClutchCard";
 import { combine180Breakdown, manualEntriesApplicable, type Manual180Entry } from "@/utils/manual180";
 import Manual180Editor from "@/components/stats/Manual180Editor";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import SeasonRecap from "@/components/stats/SeasonRecap";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
@@ -115,7 +116,7 @@ const StatisticsPage = () => {
   const [filterBestOf, setFilterBestOf] = useState<string>("all");
   const [filterYear, setFilterYear] = useState<string>("all");
   const { session } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const fetchData = useCallback(async () => {
     const [gamesRes, playersRes, legsRes, clipsRes, manual180Res] = await Promise.all([
@@ -415,7 +416,7 @@ const StatisticsPage = () => {
   const pagedLeaderboard = usePagedList(leaderboard);
 
   const exportLeaderboardCsv = () => {
-    const header = ["Platz", "Name", "Spiele", "Siege", "Punkte", "Elo", "Average", "Highscore", "Checkout %"];
+    const header = [t("stats.rank"), "Name", t("stats.games"), t("game.winsLabel"), t("game.points"), "Elo", "Average", "Highscore", "Checkout %"];
     const rows = leaderboard.map((p, i) => [
       i + 1, p.name, p.games_played, p.games_won, p.games_won * 2, p.elo_rating ?? 1000,
       Number(p.average).toFixed(1), p.high_score, (advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0),
@@ -432,7 +433,7 @@ const StatisticsPage = () => {
   };
 
   const exportSeasonPdf = () => {
-    const periodLabel = filterYear !== "all" ? `Saison ${filterYear}` : "Gesamt";
+    const periodLabel = filterYear !== "all" ? `${t("stats.season")} ${filterYear}` : t("stats.overall");
     generateSeasonReportPdf({
       clubName: "H-Town United e.V. · Darts Club",
       periodLabel,
@@ -441,13 +442,13 @@ const StatisticsPage = () => {
       avgOfAverages: clubStats.avgOfAverages,
       totalDarts: clubStats.totalDarts,
       highlights: [
-        { label: "Bester Ø Average", name: clubStats.bestAvg.name, value: clubStats.bestAvg.val.toFixed(1) },
-        { label: "Höchster Highscore", name: clubStats.bestHighscore.name, value: String(clubStats.bestHighscore.val) },
-        { label: "Höchstes Einzelspiel-Average", name: clubStats.highestGameAvg.name, value: clubStats.highestGameAvg.val.toFixed(1) },
-        { label: "Meiste Siege", name: clubStats.mostWins.name, value: String(clubStats.mostWins.val) },
-        { label: "Beste Checkout-Quote (≥5 Versuche)", name: bestCheckoutRate.name, value: `${bestCheckoutRate.val.toFixed(0)}%` },
-        { label: "Höchstes Checkout", name: bestHighestCheckout.name, value: String(bestHighestCheckout.val) },
-        { label: "Beste Cricket-MPR (≥3 Runden)", name: bestMpr.name, value: bestMpr.val.toFixed(2) },
+        { label: t("stats.bestAverageFull"), name: clubStats.bestAvg.name, value: clubStats.bestAvg.val.toFixed(1) },
+        { label: t("stats.highestHighscore"), name: clubStats.bestHighscore.name, value: String(clubStats.bestHighscore.val) },
+        { label: t("stats.highestSingleGameAverage"), name: clubStats.highestGameAvg.name, value: clubStats.highestGameAvg.val.toFixed(1) },
+        { label: t("stats.mostWins"), name: clubStats.mostWins.name, value: String(clubStats.mostWins.val) },
+        { label: t("stats.bestCheckoutRateMin"), name: bestCheckoutRate.name, value: `${bestCheckoutRate.val.toFixed(0)}%` },
+        { label: t("stats.highestCheckout"), name: bestHighestCheckout.name, value: String(bestHighestCheckout.val) },
+        { label: t("stats.bestCricketMprMin"), name: bestMpr.name, value: bestMpr.val.toFixed(2) },
       ].filter((h) => h.name !== "-"),
       leaderboard: leaderboard.map((p, i) => ({
         rank: i + 1, name: p.name, gamesPlayed: p.games_played, gamesWon: p.games_won,
@@ -487,7 +488,7 @@ const StatisticsPage = () => {
       runningAvg = (runningAvg * i + Number(avg)) / (i + 1);
       return {
         game: i + 1,
-        date: new Date(g.played_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }),
+        date: new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" }),
         average: Number(avg).toFixed(1),
         runningAvg: runningAvg.toFixed(1),
       };
@@ -510,7 +511,7 @@ const StatisticsPage = () => {
         won: g.winner_name === (isP1 ? g.player1_name : g.player2_name),
         avg: Number(isP1 ? g.player1_average : g.player2_average),
         opponent: isP1 ? g.player2_name : g.player1_name,
-        date: new Date(g.played_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }),
+        date: new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" }),
       };
     });
 
@@ -544,7 +545,7 @@ const StatisticsPage = () => {
     }, null);
 
     return { player, winRate, averageTrend, currentStreak, bestStreak, recentForm, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: playerGames.length };
-  }, [selectedPlayerId, filteredGames, players]);
+  }, [selectedPlayerId, filteredGames, players, language]);
 
   const pagedRecentForm = usePagedList(playerDetailStats?.recentForm ?? []);
 
@@ -660,19 +661,19 @@ const StatisticsPage = () => {
     const bestMpr = cricketByPlayer[player.id]?.cricket.mpr ?? 0;
 
     const defs: { icon: string; title: string; desc: string; unlocked: boolean }[] = [
-      { icon: "🎮", title: "Erstes Spiel", desc: "Das erste Spiel gespielt", unlocked: player.games_played >= 1 },
-      { icon: "💯", title: "100 Spiele", desc: "100 Spiele gespielt", unlocked: player.games_played >= 100 },
-      { icon: "🎯", title: "Erster 180er", desc: "Einen 180er geworfen", unlocked: total180s >= 1 },
-      { icon: "🔥", title: "180er-Serie", desc: "10× die 180 getroffen", unlocked: total180s >= 10 },
-      { icon: "⚡", title: "Siegesserie", desc: "5 Spiele in Folge gewonnen", unlocked: playerDetailStats.bestStreak >= 5 },
-      { icon: "🚀", title: "Ton-Finish", desc: "Ein Checkout von 100+ geworfen", unlocked: highestCheckout >= 100 },
-      { icon: "🐐", title: "170er-Finish", desc: "Das höchstmögliche Checkout: 170", unlocked: highestCheckout >= 170 },
-      { icon: "🎳", title: "Perfektes Leg", desc: "Ein Leg in genau 9 Darts gewonnen", unlocked: nineDarters >= 1 },
-      { icon: "📈", title: "Klub-Elite", desc: "Ø 60+ über die Karriere", unlocked: Number(player.average) >= 60 },
-      { icon: "🦾", title: "Cricket-Meister", desc: "3.0+ MPR in einem Spiel", unlocked: bestMpr >= 3 },
+      { icon: "🎮", title: t("achv.firstGame"), desc: t("achv.firstGameDesc"), unlocked: player.games_played >= 1 },
+      { icon: "💯", title: t("achv.hundredGames"), desc: t("achv.hundredGamesDesc"), unlocked: player.games_played >= 100 },
+      { icon: "🎯", title: t("achv.firstOneEighty"), desc: t("achv.firstOneEightyDesc"), unlocked: total180s >= 1 },
+      { icon: "🔥", title: t("achv.oneEightyStreak"), desc: t("achv.oneEightyStreakDesc"), unlocked: total180s >= 10 },
+      { icon: "⚡", title: t("achv.winStreak"), desc: t("achv.winStreakDesc"), unlocked: playerDetailStats.bestStreak >= 5 },
+      { icon: "🚀", title: t("achv.tonFinish"), desc: t("achv.tonFinishDesc"), unlocked: highestCheckout >= 100 },
+      { icon: "🐐", title: t("achv.170Finish"), desc: t("achv.170FinishDesc"), unlocked: highestCheckout >= 170 },
+      { icon: "🎳", title: t("achv.perfectLeg"), desc: t("achv.perfectLegDesc"), unlocked: nineDarters >= 1 },
+      { icon: "📈", title: t("achv.clubElite"), desc: t("achv.clubEliteDesc"), unlocked: Number(player.average) >= 60 },
+      { icon: "🦾", title: t("achv.cricketMaster"), desc: t("achv.cricketMasterDesc"), unlocked: bestMpr >= 3 },
     ];
     return defs;
-  }, [selectedPlayerId, playerDetailStats, gameLegs, advancedByPlayer, cricketByPlayer]);
+  }, [selectedPlayerId, playerDetailStats, gameLegs, advancedByPlayer, cricketByPlayer, t]);
 
   const h2hRecords = useMemo(() => {
     if (!compareP1 || !compareP2) return null;
@@ -694,9 +695,13 @@ const StatisticsPage = () => {
     const winRate = (p: PlayerStats) => p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
     return {
       p1, p2, h2hGames: h2hGames.length, p1Wins, p2Wins,
-      p1AvgH2H: h2hGames.length > 0 ? (p1AvgSum / h2hGames.length).toFixed(1) : "0",
-      p2AvgH2H: h2hGames.length > 0 ? (p2AvgSum / h2hGames.length).toFixed(1) : "0",
-      p1HighestAvg: p1HighestAvg.toFixed(1), p2HighestAvg: p2HighestAvg.toFixed(1),
+      // "–" (not "0"/"0.0") when there are no head-to-head games yet — these two are scoped to
+      // just this matchup, unlike Ø Gesamt/Highscore in the same table (career-wide), so a bare
+      // 0 here read as a real (very low) stat instead of "no data for this pairing".
+      p1AvgH2H: h2hGames.length > 0 ? (p1AvgSum / h2hGames.length).toFixed(1) : "–",
+      p2AvgH2H: h2hGames.length > 0 ? (p2AvgSum / h2hGames.length).toFixed(1) : "–",
+      p1HighestAvg: h2hGames.length > 0 ? p1HighestAvg.toFixed(1) : "–",
+      p2HighestAvg: h2hGames.length > 0 ? p2HighestAvg.toFixed(1) : "–",
       radar: [
         { skill: "Average", p1: Math.min(Number(p1.average), 100), p2: Math.min(Number(p2.average), 100) },
         { skill: "Highscore", p1: (p1.high_score / 180) * 100, p2: (p2.high_score / 180) * 100 },
@@ -852,13 +857,13 @@ const StatisticsPage = () => {
     if (!clip.game_id) return null;
     const g = gamesById.get(clip.game_id);
     if (!g) return null;
-    const modeLabel = g.mode === "cricket" ? "Cricket" : g.mode === "custom" ? `Custom ${g.start_score}` : g.mode;
+    const modeLabel = g.mode === "cricket" ? "Cricket" : g.mode === "custom" ? `${t("game.custom")} ${g.start_score}` : g.mode;
     const opponent = g.player1_name === clip.player_name ? g.player2_name : g.player1_name;
     return opponent && opponent !== "—" ? `${modeLabel} · vs ${opponent}` : modeLabel;
   };
 
   if (loading) {
-    return <div role="status" aria-label="Lädt Statistiken" className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+    return <div role="status" aria-label={t("stats.loadingStats")} className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
 
   const clubTabs = [
@@ -1089,7 +1094,7 @@ const StatisticsPage = () => {
 
           {modeDistribution.length > 0 && (
             <div className="bg-card rounded-xl border border-border p-4 mb-6">
-              <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Spielmodi</h3>
+              <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("stats.gameModes")}</h3>
               <div className="flex items-center gap-6">
                 <ResponsiveContainer width={120} height={120}>
                   <PieChart>
@@ -1115,23 +1120,23 @@ const StatisticsPage = () => {
           <div className="bg-card rounded-xl border border-border p-4">
             <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
               <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
-                <Trophy className="w-4 h-4" /> Rangliste{filterYear !== "all" ? ` · Saison ${filterYear}` : filtersActive ? " · gefiltert" : ""}
+                <Trophy className="w-4 h-4" /> {t("stats.leaderboard")}{filterYear !== "all" ? ` · ${t("stats.season")} ${filterYear}` : filtersActive ? ` · ${t("stats.filtered")}` : ""}
               </h3>
               <div className="flex items-center gap-1.5">
-                <Button size="sm" variant="outline" className="h-10 text-xs gap-1" onClick={exportLeaderboardCsv} disabled={leaderboard.length === 0} title="Als CSV exportieren">
+                <Button size="sm" variant="outline" className="h-10 text-xs gap-1" onClick={exportLeaderboardCsv} disabled={leaderboard.length === 0} title={t("stats.exportAsCsv")}>
                   <Download className="w-3.5 h-3.5" /> CSV
                 </Button>
-                <Button size="sm" variant="outline" className="h-10 text-xs gap-1" onClick={exportSeasonPdf} disabled={leaderboard.length === 0} title="Ausführlicher Saisonbericht als PDF">
+                <Button size="sm" variant="outline" className="h-10 text-xs gap-1" onClick={exportSeasonPdf} disabled={leaderboard.length === 0} title={t("stats.detailedSeasonReportPdf")}>
                   <FileText className="w-3.5 h-3.5" /> PDF
                 </Button>
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
                   <SelectTrigger className="w-[140px] h-10 text-xs bg-muted border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="points">Punkte (Saison)</SelectItem>
-                    <SelectItem value="elo">Elo-Rating</SelectItem>
-                    <SelectItem value="average">Ø Average</SelectItem>
-                    <SelectItem value="games_won">Siege</SelectItem>
-                    <SelectItem value="win_rate">Siegquote %</SelectItem>
+                    <SelectItem value="points">{t("stats.pointsSeason")}</SelectItem>
+                    <SelectItem value="elo">{t("recap.eloRating")}</SelectItem>
+                    <SelectItem value="average">{t("stats.average")}</SelectItem>
+                    <SelectItem value="games_won">{t("game.winsLabel")}</SelectItem>
+                    <SelectItem value="win_rate">{t("stats.winRatePercent")}</SelectItem>
                     <SelectItem value="high_score">Highscore</SelectItem>
                     <SelectItem value="checkout">Checkout %</SelectItem>
                   </SelectContent>
@@ -1140,13 +1145,13 @@ const StatisticsPage = () => {
             </div>
             <p className="text-[10px] text-muted-foreground mb-3">
               {sortBy === "points"
-                ? "2 Punkte pro Sieg — als Saison-Tabelle nutzbar, wenn oben eine Saison ausgewählt ist."
-                : filtersActive ? "Werte für den aktuell gefilterten Zeitraum/Modus." : "Lebenszeit-Werte über alle Spiele."}
+                ? t("stats.pointsPerWinSeasonNote")
+                : filtersActive ? t("stats.valuesForFilteredPeriod") : t("stats.lifetimeValues")}
             </p>
             {leaderboard.length === 0 ? (
               <div className="text-center py-4">
-                <p className="text-sm text-muted-foreground mb-3">Noch keine Spieler.</p>
-                <Button asChild size="sm"><Link to="/players">Mitglied hinzufügen</Link></Button>
+                <p className="text-sm text-muted-foreground mb-3">{t("stats.noPlayersYet")}</p>
+                <Button asChild size="sm"><Link to="/players">{t("stats.addMember")}</Link></Button>
               </div>
             ) : (
               <div className="space-y-1">
@@ -1188,14 +1193,14 @@ const StatisticsPage = () => {
           {viewScope === "club" ? (
             <div className="mb-4">
               <Select value={selectedPlayerId} onValueChange={setSelectedPlayerId}>
-                <SelectTrigger className="bg-card border-border"><SelectValue placeholder="Spieler wählen..." /></SelectTrigger>
+                <SelectTrigger className="bg-card border-border"><SelectValue placeholder={t("stats.choosePlayer")} /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
                   {players.map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground mb-4">Deine persönliche Statistik</p>
+            <p className="text-xs text-muted-foreground mb-4">{t("stats.yourPersonalStats")}</p>
           )}
 
           {playerDetailStats ? (
@@ -1206,20 +1211,20 @@ const StatisticsPage = () => {
                   <span className="text-3xl">{playerDetailStats.player.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <h3 className="text-xl font-display uppercase">{playerDetailStats.player.name}</h3>
-                    <p className="text-xs text-muted-foreground">{playerDetailStats.totalGames} Spiele · {playerDetailStats.winRate}% Siegquote · {Math.round(playerDetailStats.player.elo_rating ?? 1000)} Elo</p>
+                    <p className="text-xs text-muted-foreground">{playerDetailStats.totalGames} {t("stats.games")} · {playerDetailStats.winRate}% {t("recap.winRateSuffix")} · {Math.round(playerDetailStats.player.elo_rating ?? 1000)} Elo</p>
                   </div>
                   {playerSeasonRecap && (
                     <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => setShowSeasonRecap(true)}>
-                      <Sparkles className="w-3.5 h-3.5" /> Rückblick
+                      <Sparkles className="w-3.5 h-3.5" /> {t("stats.recap")}
                     </Button>
                   )}
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { label: "Ø Average", value: Number(playerDetailStats.player.average).toFixed(1), color: "text-primary" },
+                    { label: t("stats.average"), value: Number(playerDetailStats.player.average).toFixed(1), color: "text-primary" },
                     { label: "Highscore", value: playerDetailStats.player.high_score, color: "text-accent" },
-                    { label: "Serie", value: `${playerDetailStats.currentStreak}🔥`, color: "text-destructive" },
-                    { label: "Beste Serie", value: playerDetailStats.bestStreak, color: "text-secondary" },
+                    { label: t("stats.streak"), value: `${playerDetailStats.currentStreak}🔥`, color: "text-destructive" },
+                    { label: t("stats.bestStreak"), value: playerDetailStats.bestStreak, color: "text-secondary" },
                   ].map(s => (
                     <div key={s.label} className="text-center">
                       <p className={`text-lg font-display ${s.color}`}>{s.value}</p>
@@ -1233,7 +1238,7 @@ const StatisticsPage = () => {
               {playerAchievements.length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-4 mb-4">
                   <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                    <Award className="w-4 h-4" /> Erfolge
+                    <Award className="w-4 h-4" /> {t("stats.achievements")}
                     <span className="text-[10px] normal-case text-muted-foreground/70">
                       ({playerAchievements.filter((a) => a.unlocked).length}/{playerAchievements.length})
                     </span>
@@ -1258,11 +1263,11 @@ const StatisticsPage = () => {
                   0" if rendered unconditionally like every other stat here guards for. */}
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="bg-card rounded-xl border border-border p-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Bester Game-Ø</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("stats.bestGameAverage")}</p>
                   <p className="text-2xl font-display text-secondary">{playerDetailStats.totalGames > 0 ? playerDetailStats.bestGameAvg.toFixed(1) : "–"}</p>
                 </div>
                 <div className="bg-card rounded-xl border border-border p-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">Schlechtester Game-Ø</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("stats.worstGameAverage")}</p>
                   <p className="text-2xl font-display text-destructive">{playerDetailStats.totalGames > 0 ? playerDetailStats.worstGameAvg.toFixed(1) : "–"}</p>
                 </div>
               </div>
@@ -1271,14 +1276,14 @@ const StatisticsPage = () => {
               {advancedByPlayer[playerDetailStats.player.id] && (
                 <div className="bg-card rounded-xl border border-border p-4 mb-4">
                   <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                    <Crosshair className="w-4 h-4" /> Checkout &amp; Eröffnung
+                    <Crosshair className="w-4 h-4" /> {t("stats.checkoutAndOpening")}
                   </h3>
                   <div className="grid grid-cols-4 gap-2">
                     {[
                       { label: "First 9 Ø", value: advancedByPlayer[playerDetailStats.player.id].first9.toFixed(1), color: "text-primary" },
                       { label: "Checkout %", value: `${advancedByPlayer[playerDetailStats.player.id].checkout.percentage.toFixed(0)}%`, color: "text-secondary" },
-                      { label: "Höchstes Finish", value: advancedByPlayer[playerDetailStats.player.id].checkout.highestCheckout, color: "text-accent" },
-                      { label: "Checkout-Versuche", value: advancedByPlayer[playerDetailStats.player.id].checkout.attempts, color: "text-muted-foreground" },
+                      { label: t("stats.highestFinish"), value: advancedByPlayer[playerDetailStats.player.id].checkout.highestCheckout, color: "text-accent" },
+                      { label: t("stats.checkoutAttempts"), value: advancedByPlayer[playerDetailStats.player.id].checkout.attempts, color: "text-muted-foreground" },
                     ].map(s => (
                       <div key={s.label} className="text-center">
                         <p className={`text-lg font-display ${s.color}`}>{s.value}</p>
@@ -1298,8 +1303,8 @@ const StatisticsPage = () => {
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { label: "MPR", value: cricketByPlayer[playerDetailStats.player.id].cricket.mpr.toFixed(2), color: "text-primary" },
-                      { label: "Trefferquote", value: `${cricketByPlayer[playerDetailStats.player.id].cricket.hitRate.toFixed(0)}%`, color: "text-secondary" },
-                      { label: "Marks gesamt", value: cricketByPlayer[playerDetailStats.player.id].cricket.marks, color: "text-accent" },
+                      { label: t("stats.hitRate"), value: `${cricketByPlayer[playerDetailStats.player.id].cricket.hitRate.toFixed(0)}%`, color: "text-secondary" },
+                      { label: t("stats.marksTotal"), value: cricketByPlayer[playerDetailStats.player.id].cricket.marks, color: "text-accent" },
                     ].map(s => (
                       <div key={s.label} className="text-center">
                         <p className={`text-lg font-display ${s.color}`}>{s.value}</p>
@@ -1319,7 +1324,7 @@ const StatisticsPage = () => {
               {(player180Total > 0 || playerDetailStats.player.user_id === session?.user?.id) && (
                 <div className="bg-card rounded-xl border border-border p-4 mb-4">
                   <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
-                    <Target className="w-4 h-4" /> 180er
+                    <Target className="w-4 h-4" /> {t("stats.oneEighties")}
                   </h3>
                   <p className="font-display text-3xl">{player180Total}</p>
                   {player180Breakdown.length > 0 && (
@@ -1327,7 +1332,7 @@ const StatisticsPage = () => {
                       {player180Breakdown.map((y) => (
                         <div key={y.year} className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>{y.year}</span>
-                          <span>{y.total}{y.manual > 0 && ` (davon ${y.manual} nachgetragen)`}</span>
+                          <span>{y.total}{y.manual > 0 && ` (${t("stats.ofWhichBackfilled")} ${y.manual} ${t("stats.backfilledSuffix")})`}</span>
                         </div>
                       ))}
                     </div>
@@ -1346,10 +1351,10 @@ const StatisticsPage = () => {
               {playerHeatmapPoints.length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-4 mb-4">
                   <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
-                    <Crosshair className="w-4 h-4" /> Wurf-Heatmap
+                    <Crosshair className="w-4 h-4" /> {t("stats.throwHeatmap")}
                   </h3>
                   <p className="text-[10px] text-muted-foreground mb-3">
-                    {playerHeatmapPoints.length} per Kamera erfasste Würfe · zeigt, wo die Darts wirklich landen
+                    {playerHeatmapPoints.length} {t("stats.cameraThrowsCaptured")}
                   </p>
                   <DartboardHeatmap points={playerHeatmapPoints} />
                 </div>
@@ -1359,7 +1364,7 @@ const StatisticsPage = () => {
               {playerDetailStats.averageTrend.length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-4 mb-4">
                   <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4" /> Average-Verlauf
+                    <TrendingUp className="w-4 h-4" /> {t("stats.averageTrend")}
                   </h3>
                   <ResponsiveContainer width="100%" height={160}>
                     <AreaChart data={playerDetailStats.averageTrend}>
@@ -1373,8 +1378,8 @@ const StatisticsPage = () => {
                       <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} domain={["auto", "auto"]} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} />
                       <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
-                      <Area type="monotone" dataKey="average" stroke="hsl(185 85% 48%)" fill="url(#avgGrad)" strokeWidth={2} name="Game Ø" />
-                      <Line type="monotone" dataKey="runningAvg" stroke="hsl(155 65% 42%)" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Laufender Ø" />
+                      <Area type="monotone" dataKey="average" stroke="hsl(185 85% 48%)" fill="url(#avgGrad)" strokeWidth={2} name={t("stats.gameAverageSeries")} />
+                      <Line type="monotone" dataKey="runningAvg" stroke="hsl(155 65% 42%)" strokeWidth={2} strokeDasharray="5 3" dot={false} name={t("stats.runningAverageSeries")} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -1383,7 +1388,7 @@ const StatisticsPage = () => {
               {/* Recent form */}
               {playerDetailStats.recentForm.length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-4 mb-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Form</h3>
+                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("stats.form")}</h3>
                   <div className="flex gap-1 mb-3 flex-wrap">
                     {pagedRecentForm.visible.map((f, i) => (
                       <div key={i} className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold ${f.won ? "bg-secondary/20 text-secondary" : "bg-destructive/20 text-destructive"}`}>
@@ -1394,7 +1399,7 @@ const StatisticsPage = () => {
                   <div className="space-y-1">
                     {pagedRecentForm.visible.map((f, i) => (
                       <div key={i} className="flex items-center justify-between gap-2 text-xs px-2 py-1 rounded bg-muted/30">
-                        <span className={`shrink-0 font-bold ${f.won ? "text-secondary" : "text-destructive"}`}>{f.won ? "Sieg" : "Ndl."}</span>
+                        <span className={`shrink-0 font-bold ${f.won ? "text-secondary" : "text-destructive"}`}>{f.won ? t("stats.win") : t("stats.lossAbbrev")}</span>
                         <span className="min-w-0 flex-1 truncate text-muted-foreground">vs {f.opponent}</span>
                         <span className="shrink-0 font-display">Ø {f.avg.toFixed(1)}</span>
                         <span className="shrink-0 text-muted-foreground">{f.date}</span>
@@ -1413,18 +1418,18 @@ const StatisticsPage = () => {
                     {playerDetailStats.nemesis ? (
                       <>
                         <p className="text-lg font-display text-destructive truncate">{playerDetailStats.nemesis.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{playerDetailStats.nemesis.wins}W-{playerDetailStats.nemesis.losses}L gegen sie</p>
+                        <p className="text-[10px] text-muted-foreground">{playerDetailStats.nemesis.wins}W-{playerDetailStats.nemesis.losses}L {t("stats.recordAgainstThem")}</p>
                       </>
-                    ) : <p className="text-xs text-muted-foreground">Noch keine Daten</p>}
+                    ) : <p className="text-xs text-muted-foreground">{t("stats.noDataYet")}</p>}
                   </div>
                   <div className="bg-card rounded-xl border border-secondary/30 p-3 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">🎯 Lieblingsgegner</p>
+                    <p className="text-xs text-muted-foreground mb-1">🎯 {t("stats.favoriteOpponent")}</p>
                     {playerDetailStats.favoriteOpponent ? (
                       <>
                         <p className="text-lg font-display text-secondary truncate">{playerDetailStats.favoriteOpponent.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{playerDetailStats.favoriteOpponent.wins}W-{playerDetailStats.favoriteOpponent.losses}L gegen sie</p>
+                        <p className="text-[10px] text-muted-foreground">{playerDetailStats.favoriteOpponent.wins}W-{playerDetailStats.favoriteOpponent.losses}L {t("stats.recordAgainstThem")}</p>
                       </>
-                    ) : <p className="text-xs text-muted-foreground">Noch keine Daten</p>}
+                    ) : <p className="text-xs text-muted-foreground">{t("stats.noDataYet")}</p>}
                   </div>
                 </div>
               )}
@@ -1432,7 +1437,7 @@ const StatisticsPage = () => {
               {/* Opponents breakdown */}
               {Object.keys(playerDetailStats.opponents).length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Gegner-Bilanz</h3>
+                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("stats.opponentRecord")}</h3>
                   <div className="space-y-1">
                     {Object.entries(playerDetailStats.opponents)
                       .sort(([, a], [, b]) => (b.wins + b.losses) - (a.wins + a.losses))
@@ -1456,7 +1461,7 @@ const StatisticsPage = () => {
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Wähle einen Spieler aus.</p>
+              <p className="text-sm">{t("stats.selectAPlayer")}</p>
             </div>
           )}
         </>
@@ -1469,7 +1474,7 @@ const StatisticsPage = () => {
             <div className="bg-card rounded-xl border border-border p-4">
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <Select value={compareP1} onValueChange={setCompareP1}>
-                  <SelectTrigger className="bg-muted border-border text-sm"><SelectValue placeholder="Spieler 1" /></SelectTrigger>
+                  <SelectTrigger className="bg-muted border-border text-sm"><SelectValue placeholder={`${t("stats.player")} 1`} /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     {/* Each side excludes whoever is already picked on the other — a same-player
                         H2H is meaningless (mirrored identical stats), so prevent it at the input
@@ -1478,7 +1483,7 @@ const StatisticsPage = () => {
                   </SelectContent>
                 </Select>
                 <Select value={compareP2} onValueChange={setCompareP2}>
-                  <SelectTrigger className="bg-muted border-border text-sm"><SelectValue placeholder="Spieler 2" /></SelectTrigger>
+                  <SelectTrigger className="bg-muted border-border text-sm"><SelectValue placeholder={`${t("stats.player")} 2`} /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     {players.filter(p => p.id !== compareP1).map(p => <SelectItem key={p.id} value={p.id}>{p.emoji} {p.name}</SelectItem>)}
                   </SelectContent>
@@ -1488,7 +1493,7 @@ const StatisticsPage = () => {
                 <>
                   {h2hRecords.h2hGames > 0 && (
                     <div className="bg-muted/30 rounded-lg p-4 mb-4 text-center">
-                      <p className="text-xs text-muted-foreground mb-2">{h2hRecords.h2hGames} direkte Duelle</p>
+                      <p className="text-xs text-muted-foreground mb-2">{h2hRecords.h2hGames} {t("stats.directDuels")}</p>
                       <div className="flex items-center justify-center gap-6">
                         <div>
                           <p className="text-3xl font-display text-primary">{h2hRecords.p1Wins}</p>
@@ -1508,11 +1513,11 @@ const StatisticsPage = () => {
                     <div className="text-muted-foreground">vs</div>
                     <div className="font-semibold text-secondary">{h2hRecords.p2.emoji} {h2hRecords.p2.name}</div>
                     {[
-                      { label: "Ø Gesamt", v1: Number(h2hRecords.p1.average).toFixed(1), v2: Number(h2hRecords.p2.average).toFixed(1) },
-                      { label: "Ø im Duell", v1: h2hRecords.p1AvgH2H, v2: h2hRecords.p2AvgH2H },
+                      { label: t("stats.overallAverage"), v1: Number(h2hRecords.p1.average).toFixed(1), v2: Number(h2hRecords.p2.average).toFixed(1) },
+                      { label: t("game.duelAverage"), v1: h2hRecords.p1AvgH2H, v2: h2hRecords.p2AvgH2H },
                       { label: "Highscore", v1: h2hRecords.p1.high_score, v2: h2hRecords.p2.high_score },
-                      { label: "Beste Game-Ø", v1: h2hRecords.p1HighestAvg, v2: h2hRecords.p2HighestAvg },
-                      { label: "Siege", v1: h2hRecords.p1.games_won, v2: h2hRecords.p2.games_won },
+                      { label: t("stats.bestGameAverage"), v1: h2hRecords.p1HighestAvg, v2: h2hRecords.p2HighestAvg },
+                      { label: t("game.winsLabel"), v1: h2hRecords.p1.games_won, v2: h2hRecords.p2.games_won },
                       { label: "Checkout %", v1: `${Number(h2hRecords.p1.double_rate).toFixed(0)}%`, v2: `${Number(h2hRecords.p2.double_rate).toFixed(0)}%` },
                     ].map(row => (
                       <React.Fragment key={row.label}>
@@ -1535,11 +1540,11 @@ const StatisticsPage = () => {
                 </>
               )}
               {!h2hRecords && compareP1 && compareP2 && (
-                <p className="text-sm text-muted-foreground text-center py-4">Keine gemeinsamen Spiele gefunden.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">{t("stats.noCommonGamesFound")}</p>
               )}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-12">Mindestens 2 Spieler nötig für H2H-Vergleich.</p>
+            <p className="text-sm text-muted-foreground text-center py-12">{t("stats.needTwoPlayersH2H")}</p>
           )}
         </>
       )}
@@ -1548,12 +1553,12 @@ const StatisticsPage = () => {
       {activeTab === "history" && (
         <div className="bg-card rounded-xl border border-border p-4">
           <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-            <Target className="w-4 h-4" /> Spielverlauf
+            <Target className="w-4 h-4" /> {t("stats.gameHistory")}
           </h3>
           {recentGames.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-sm text-muted-foreground mb-3">Noch keine Spiele.</p>
-              <Button asChild size="sm"><Link to="/game">Spiel starten</Link></Button>
+              <p className="text-sm text-muted-foreground mb-3">{t("home.noGamesYet")}</p>
+              <Button asChild size="sm"><Link to="/game">{t("game.startGame")}</Link></Button>
             </div>
           ) : (
             <div className="space-y-2">
@@ -1573,14 +1578,14 @@ const StatisticsPage = () => {
                             {g.player1_name} <span className="text-muted-foreground">vs</span> {g.player2_name}
                           </span>
                           <div className="text-[10px] text-muted-foreground">
-                            Ø {Number(g.player1_average).toFixed(1)} - {Number(g.player2_average).toFixed(1)} · {g.player1_legs_won}:{g.player2_legs_won} Legs
+                            Ø {Number(g.player1_average).toFixed(1)} - {Number(g.player2_average).toFixed(1)} · {g.player1_legs_won}:{g.player2_legs_won} {t("game.legsSuffix")}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-2">
                         <div className="flex flex-col items-end gap-0.5">
                           <span className="text-xs text-muted-foreground">
-                            {new Date(g.played_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+                            {new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" })}
                           </span>
                           <span className="text-xs text-secondary font-medium">{g.winner_name} ✓</span>
                         </div>
@@ -1595,7 +1600,7 @@ const StatisticsPage = () => {
                         <div className="px-3 pb-3 space-y-1.5 border-t border-border/60 pt-2">
                           {legs.map((leg) => (
                             <div key={leg.legNumber} className="rounded-md bg-background/60 px-2.5 py-2">
-                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Leg {leg.legNumber}</p>
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{t("game.leg")} {leg.legNumber}</p>
                               <div className="space-y-1">
                                 {leg.players.map((p) => (
                                   <div key={p.name} className="flex items-center justify-between text-xs">
@@ -1604,9 +1609,9 @@ const StatisticsPage = () => {
                                     </span>
                                     <span className="text-muted-foreground font-mono shrink-0 ml-2">
                                       {leg.mode === "cricket"
-                                        ? `MPR ${p.mpr.toFixed(2)} · ${p.hitRate.toFixed(0)}% Trefferquote`
+                                        ? `MPR ${p.mpr.toFixed(2)} · ${p.hitRate.toFixed(0)}% ${t("stats.hitRate")}`
                                         : `Ø ${p.average.toFixed(1)}${p.first9 > 0 ? ` · F9 ${p.first9.toFixed(1)}` : ""}`}
-                                      {" · "}{p.dartsThrown} Darts
+                                      {" · "}{p.dartsThrown} {t("game.dartsSuffix")}
                                     </span>
                                   </div>
                                 ))}
@@ -1616,7 +1621,7 @@ const StatisticsPage = () => {
                         </div>
                       ) : (
                         <p className="px-3 pb-3 pt-1 text-[11px] text-muted-foreground border-t border-border/60">
-                          Keine Leg-Details verfügbar — dieses Spiel wurde vor der Detail-Aufzeichnung gespielt.
+                          {t("stats.noLegDetailsAvailable")}
                         </p>
                       )
                     )}
@@ -1634,35 +1639,35 @@ const StatisticsPage = () => {
         <div className="bg-card rounded-xl border border-border p-4">
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
-              <Video className="w-4 h-4" /> Highlight-Clips
+              <Video className="w-4 h-4" /> {t("stats.highlightClips")}
             </h3>
             {viewScope === "club" && highlightClips.length > 0 && (
               <div className="flex items-center gap-1.5">
                 <Select value={cleanupDays} onValueChange={setCleanupDays}>
                   <SelectTrigger className="h-9 w-[110px] text-[11px] bg-background border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="30">älter als 30 Tage</SelectItem>
-                    <SelectItem value="90">älter als 90 Tage</SelectItem>
-                    <SelectItem value="365">älter als 1 Jahr</SelectItem>
+                    <SelectItem value="30">{t("stats.olderThan30Days")}</SelectItem>
+                    <SelectItem value="90">{t("stats.olderThan90Days")}</SelectItem>
+                    <SelectItem value="365">{t("stats.olderThan1Year")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button size="sm" variant="outline" className="h-9 text-[11px] gap-1" disabled={oldClips.length === 0}>
-                      <Trash2 className="w-3 h-3" /> Aufräumen ({oldClips.length})
+                      <Trash2 className="w-3 h-3" /> {t("stats.cleanUp")} ({oldClips.length})
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>{oldClips.length} Clips löschen?</AlertDialogTitle>
+                      <AlertDialogTitle>{oldClips.length} {t("stats.deleteClipsConfirm")}</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Alle Highlight-Clips, die älter als {cleanupDays === "365" ? "1 Jahr" : `${cleanupDays} Tage`} sind, werden unwiderruflich gelöscht — Video-Dateien und Datenbankeinträge.
+                        {t("stats.deleteClipsWarningPrefix")} {cleanupDays === "365" ? t("stats.oneYear") : `${cleanupDays} ${t("stats.daysCount")}`} {t("stats.deleteClipsWarningSuffix")}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                      <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
                       <AlertDialogAction onClick={deleteOldClips} disabled={cleaningUpClips}>
-                        {cleaningUpClips ? "Löscht…" : "Löschen"}
+                        {cleaningUpClips ? t("stats.deleting") : t("stats.delete")}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -1672,7 +1677,7 @@ const StatisticsPage = () => {
           </div>
           {filteredClips.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              Noch keine Highlight-Clips. 180er, Checkouts und Ton-Plus-Aufnahmen aus der Kamera-Erkennung landen hier automatisch.
+              {t("stats.noHighlightClipsYet")}
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1688,10 +1693,10 @@ const StatisticsPage = () => {
                       <p className="text-[10px] text-primary/80 truncate mb-1">{clipGameLabel(clip)}</p>
                     )}
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>{clip.points} Punkte · {new Date(clip.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
+                      <span>{clip.points} {t("game.points")} · {new Date(clip.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
                       <button onClick={() => deleteClip(clip)} disabled={deletingClipId === clip.id}
                         className="p-2 -m-2 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
-                        title="Clip löschen" aria-label="Clip löschen">
+                        title={t("stats.deleteClip")} aria-label={t("stats.deleteClip")}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -1708,7 +1713,7 @@ const StatisticsPage = () => {
 
       {showSeasonRecap && playerSeasonRecap && (
         <SeasonRecap
-          recap={{ ...playerSeasonRecap, periodLabel: filterYear !== "all" ? `Saison ${filterYear}` : "Gesamte Karriere" }}
+          recap={{ ...playerSeasonRecap, periodLabel: filterYear !== "all" ? `${t("stats.season")} ${filterYear}` : t("stats.entireCareer") }}
           onClose={() => setShowSeasonRecap(false)}
         />
       )}
