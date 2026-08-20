@@ -19,6 +19,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
 import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, type LevelConfig } from "@/utils/botPlayer";
@@ -33,11 +34,13 @@ import {
   isAchievableVisitTotal,
 } from "@/utils/dartStats";
 
-/** Bot personas with their target 3-dart average */
-const BOT_PROFILES: Record<BotLevel, { name: string; average: string }> = {
-  easy: { name: "Bot Lv.1 · Rookie", average: "25–30" },
-  medium: { name: "Bot Lv.2 · Ligaspieler", average: "45–50" },
-  hard: { name: "Bot Lv.3 · Pro", average: "68–75" },
+/** Bot personas with their target 3-dart average. `nameKey` (not a literal string) since this is
+ *  a module-level constant with no access to the language context — resolved via t() at each
+ *  call site instead. */
+const BOT_PROFILES: Record<BotLevel, { nameKey: string; average: string }> = {
+  easy: { nameKey: "game.botLv1", average: "25–30" },
+  medium: { nameKey: "game.botLv2", average: "45–50" },
+  hard: { nameKey: "game.botLv3", average: "68–75" },
 };
 import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
@@ -357,6 +360,7 @@ const GamePage = () => {
   const { session } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [searchParams] = useSearchParams();
   // Declared up here (rather than alongside their other in-game-HUD state further down) because
   // the crash-recovery save effect just below needs them in its dependency array, which is
@@ -369,7 +373,7 @@ const GamePage = () => {
   const restoredFromSnapshotRef = useRef(phase === "playing" && !!game);
   useEffect(() => {
     if (restoredFromSnapshotRef.current) {
-      toast({ title: "Spiel wiederhergestellt", description: "Nach einem Neuladen an der letzten Stelle weitergemacht." });
+      toast({ title: t("game.gameRestored"), description: t("game.gameRestoredDesc") });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -599,10 +603,10 @@ const GamePage = () => {
   const botDisplayName = (i: number): string => {
     const target = playerGhostTarget[i];
     if (target !== "off") {
-      const label = typeof target === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === target)?.label ?? "Geist" : "Geist (Rekord)";
+      const label = typeof target === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === target)?.label ?? t("game.ghost") : t("game.ghostRecord");
       return `👻 ${label}`;
     }
-    return BOT_PROFILES[playerBotLevel[i] ?? "medium"].name;
+    return t(BOT_PROFILES[playerBotLevel[i] ?? "medium"].nameKey);
   };
 
   // Fired once per match start (not a useEffect keyed on `game`, which changes on every dart) —
@@ -852,7 +856,7 @@ const GamePage = () => {
       // The only feedback a bust used to get was this sound (plus optional TTS) — with sound
       // off, or in a loud room, a player just sees their score silently hold and has no idea
       // why, which is exactly the kind of thing that causes a mid-match dispute later.
-      toast({ title: "Überworfen!", description: `${game.players[idx].name} — Rest bleibt bei ${turnStartRemaining}.`, variant: "destructive" });
+      toast({ title: t("game.bustTitle"), description: `${game.players[idx].name} — ${t("game.remainingStaysAt")} ${turnStartRemaining}.`, variant: "destructive" });
       remainingRef.current[teamIdx] = turnStartRemaining;
       setGame((prev) => {
         if (!prev) return prev;
@@ -1031,7 +1035,7 @@ const GamePage = () => {
     setDartsThisRound(0);
     flashScore(winnerIndex);
     triggerConfetti();
-    toast({ title: "Ausgebullt!", description: `${winnerName} gewinnt das Leg per Ausbullen.` });
+    toast({ title: t("game.bulledOutTitle"), description: `${winnerName} ${t("game.winsLegViaBullOff")}` });
     if (soundEnabled) setTimeout(() => (matchWon ? playVictorySound() : playCheckoutSound()), 100);
     if (speechEnabled) {
       const text = matchWon ? `${winnerName} gewinnt das Ausbullen und die Partie!` : `${winnerName} gewinnt das Ausbullen und damit das Leg!`;
@@ -1354,7 +1358,7 @@ const GamePage = () => {
     // Same "give the player something to actually see" fix as the manual-entry bust path —
     // the camera flow used to rely on playBustSound()/TTS alone too.
     if (busted) {
-      toast({ title: "Überworfen!", description: `${game.players[startIdx].name} — Rest bleibt bei ${curStart}.`, variant: "destructive" });
+      toast({ title: t("game.bustTitle"), description: `${game.players[startIdx].name} — ${t("game.remainingStaysAt")} ${curStart}.`, variant: "destructive" });
     }
 
     if (speechEnabled) {
@@ -1503,8 +1507,8 @@ const GamePage = () => {
     const isDouble = qualifyingDouble(newMultiplier);
     if (isBustThrow(remainingBeforeThisDart, newPoints, doubleOut, isDouble)) {
       toast({
-        title: "Ungültiger Wert",
-        description: newRemaining < 0 ? "Das würde den Rest negativ machen." : "Ein Checkout muss auf einem Doppel enden.",
+        title: t("game.invalidValue"),
+        description: newRemaining < 0 ? t("game.wouldMakeNegative") : t("game.checkoutMustEndDouble"),
         variant: "destructive",
       });
       return;
@@ -1682,7 +1686,7 @@ const GamePage = () => {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
       await saveGameRecord(game, session?.user?.id, pendingGameIdRef.current, link);
       if (game.players.length > 2) {
-        toast({ title: "Spiel gespeichert", description: "Alle Spieler wurden erfasst — der Turnierverlauf im Klassiker-Datensatz zeigt aber nur die Top 2." });
+        toast({ title: t("game.gameSavedTitle"), description: t("game.gameSavedAllPlayersDesc") });
       }
       if (link) {
         try {
@@ -1706,8 +1710,8 @@ const GamePage = () => {
             score2: game.legsWon[1],
           });
           toast({
-            title: "Turnier wird nachgetragen",
-            description: "Ergebnis konnte gerade nicht in den Turnierbaum übernommen werden — wird automatisch nachgeholt.",
+            title: t("game.tournamentPending"),
+            description: t("game.tournamentPendingDesc"),
           });
         }
       }
@@ -1731,15 +1735,15 @@ const GamePage = () => {
       }
       setQueuedOffline(true);
       toast({
-        title: "Offline gespeichert",
+        title: t("game.savedOfflineTitle"),
         description: link
-          ? "Keine Verbindung — Ergebnis und Turnier-Eintrag bleiben auf diesem Gerät und synchronisieren automatisch, sobald wieder Netz da ist."
-          : "Keine Verbindung — das Ergebnis bleibt auf diesem Gerät und synchronisiert automatisch, sobald wieder Netz da ist.",
+          ? t("game.savedOfflineWithLinkDesc")
+          : t("game.savedOfflineNoLinkDesc"),
       });
     }
     setGameSaved(true);
     savingRef.current = false;
-  }, [game, gameSaved, session, toast]);
+  }, [game, gameSaved, session, toast, t]);
 
   useEffect(() => {
     if (game?.isFinished && !gameSaved && session?.user?.id) saveGame();
@@ -1797,30 +1801,30 @@ const GamePage = () => {
     const activePlayerCount = numPlayers;
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
-        <h2 className="text-2xl font-display uppercase mb-1 text-center">Neues Spiel</h2>
+        <h2 className="text-2xl font-display uppercase mb-1 text-center">{t("home.newGame")}</h2>
         {tournamentLinkName && (
           <p className="text-xs text-center text-primary mb-5">
-            Turnier-Match · {tournamentLinkName} — Ergebnis wird nach Spielende automatisch im Turnierbaum eingetragen.
+            {t("game.tournamentMatch")} · {tournamentLinkName} {t("game.tournamentMatchNote")}
           </p>
         )}
         {!tournamentLinkName && <div className="mb-6" />}
         <div className="space-y-4">
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Spielmodus</label>
+            <label className="text-sm text-muted-foreground mb-1 block">{t("game.gameMode")}</label>
             <Select value={mode} onValueChange={(v) => setMode(v as GameMode)}>
               <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="501">501</SelectItem>
                 <SelectItem value="301">301</SelectItem>
                 <SelectItem value="cricket">Cricket</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
+                <SelectItem value="custom">{t("game.custom")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {mode === "custom" && (
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Startwert</label>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("game.startValue")}</label>
               <input type="number" value={customStartScore} onChange={(e) => setCustomStartScore(parseInt(e.target.value) || 0)}
                 className="w-full rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
             </div>
@@ -1828,8 +1832,8 @@ const GamePage = () => {
 
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
             <div className="min-w-0">
-              <Label htmlFor="team-mode" className="text-sm">Team-Modus</Label>
-              <p className="text-[10px] text-muted-foreground mt-0.5">2 Teams werfen abwechselnd, ein Teammitglied nach dem anderen, mit gemeinsamem Score.</p>
+              <Label htmlFor="team-mode" className="text-sm">{t("game.teamMode")}</Label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.teamModeDesc")}</p>
             </div>
             <Switch id="team-mode" checked={teamMode} onCheckedChange={(v) => {
               setTeamMode(v);
@@ -1840,19 +1844,19 @@ const GamePage = () => {
           {teamMode && (
             <div className="grid grid-cols-2 gap-2">
               <input value={teamNames[0]} onChange={(e) => setTeamNames([e.target.value, teamNames[1]])}
-                placeholder="Team 1" className="rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
+                placeholder={`${t("game.team")} 1`} className="rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
               <input value={teamNames[1]} onChange={(e) => setTeamNames([teamNames[0], e.target.value])}
-                placeholder="Team 2" className="rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
+                placeholder={`${t("game.team")} 2`} className="rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
             </div>
           )}
 
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">{teamMode ? "Spieler pro Team" : "Anzahl Spieler"}</label>
+            <label className="text-sm text-muted-foreground mb-1 block">{teamMode ? t("game.playersPerTeam") : t("game.numPlayers")}</label>
             <div className="grid grid-cols-4 gap-2">
               {(teamMode ? [4, 6, 8] : Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2)).map((n) => (
                 <button key={n} onClick={() => setNumPlayers(n)}
                   className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-card border-border text-muted-foreground"}`}>
-                  {teamMode ? `${n / 2} vs ${n / 2}` : `${n} Spieler`}
+                  {teamMode ? `${n / 2} vs ${n / 2}` : `${n} ${t("game.playersSuffix")}`}
                 </button>
               ))}
             </div>
@@ -1861,8 +1865,8 @@ const GamePage = () => {
           {mode === "cricket" && (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
               <div className="min-w-0">
-                <Label htmlFor="custom-cricket" className="text-sm">Custom Cricket</Label>
-                <p className="text-[10px] text-muted-foreground mt-0.5">6 zufällige Zahlen + Bull, jedes Spiel neu ausgelost – statt immer 20-15 + Bull.</p>
+                <Label htmlFor="custom-cricket" className="text-sm">{t("game.customCricket")}</Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.customCricketDesc")}</p>
               </div>
               <Switch id="custom-cricket" checked={customCricket} onCheckedChange={setCustomCricket} />
             </div>
@@ -1871,29 +1875,29 @@ const GamePage = () => {
           {mode !== "cricket" && (
             <>
               <div>
-                <label className="text-sm text-muted-foreground mb-1 block">Best of (Legs)</label>
+                <label className="text-sm text-muted-foreground mb-1 block">{t("game.bestOfLegs")}</label>
                 <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))}>
                   <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     {[1, 3, 5, 7, 9, 11].map((n) => (
-                      <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>
+                      <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <label className="text-sm text-muted-foreground mb-1 block">Rundenlimit pro Leg</label>
+                <label className="text-sm text-muted-foreground mb-1 block">{t("game.roundLimitPerLeg")}</label>
                 <Select value={String(maxRoundsX01)} onValueChange={(v) => setMaxRoundsX01(parseInt(v))}>
                   <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="0">Kein Limit</SelectItem>
+                    <SelectItem value="0">{t("game.noLimit")}</SelectItem>
                     {[8, 10, 12, 15, 20, 25].map((n) => (
-                      <SelectItem key={n} value={String(n)}>Max. {n} Runden</SelectItem>
+                      <SelectItem key={n} value={String(n)}>{t("game.max")} {n} {t("game.rounds")}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-muted-foreground mt-1">Nach dem Limit gewinnt das Leg wer weniger Restpunkte hat.</p>
+                <p className="text-[10px] text-muted-foreground mt-1">{t("game.roundLimitDesc")}</p>
               </div>
             </>
           )}
@@ -1918,18 +1922,18 @@ const GamePage = () => {
                     <input
                       value={playerNames[i]}
                       onChange={(e) => setPlayerNames(prev => prev.map((v, idx) => idx === i ? e.target.value : v))}
-                      placeholder="Name eingeben..."
+                      placeholder={t("game.enterName")}
                       className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                     {dbPlayers.length > 0 && (
                       <Popover>
                         <PopoverTrigger asChild>
-                          <button className="shrink-0 rounded-lg border border-border px-2.5 py-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Vereinsmitglied wählen">
+                          <button className="shrink-0 rounded-lg border border-border px-2.5 py-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title={t("game.chooseClubMember")}>
                             <Users className="w-3.5 h-3.5" />
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-56 p-2" align="end">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 pb-1">Vereinsmitglied wählen</p>
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 pb-1">{t("game.chooseClubMember")}</p>
                           <div className="space-y-1 max-h-48 overflow-y-auto">
                             {dbPlayers.map((dp) => (
                               <PopoverClose asChild key={dp.id}>
@@ -1948,8 +1952,8 @@ const GamePage = () => {
                   <button
                     onClick={() => setPlayerIsBot(prev => prev.map((v, idx) => idx === i ? !v : v))}
                     className={`shrink-0 rounded-lg border px-2.5 py-2 flex items-center gap-1 text-xs transition-colors ${playerIsBot[i] ? "bg-secondary/20 border-secondary text-secondary" : "bg-background border-border text-muted-foreground"}`}
-                    title="Bot-Gegner">
-                    <Bot className="w-3.5 h-3.5" /> Bot
+                    title={t("game.botOpponent")}>
+                    <Bot className="w-3.5 h-3.5" /> {t("game.bot")}
                   </button>
                 </div>
 
@@ -1962,17 +1966,17 @@ const GamePage = () => {
                           setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? "off" : v));
                         }}
                           className={`rounded px-2 py-1.5 text-center transition-colors ${playerBotLevel[i] === lvl && playerGhostTarget[i] === "off" ? "bg-secondary/25 text-secondary" : "bg-background text-muted-foreground"}`}>
-                          <span className="block text-[11px] font-display uppercase">{BOT_PROFILES[lvl].name}</span>
+                          <span className="block text-[11px] font-display uppercase">{t(BOT_PROFILES[lvl].nameKey)}</span>
                           <span className="block text-[10px] opacity-70">Ø {BOT_PROFILES[lvl].average}</span>
                         </button>
                       ))}
                       {mode !== "cricket" && !teamMode && (
                         <button
                           onClick={() => setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? (v === "off" ? "own-pb" : v) : v))}
-                          title="Ein Bot, der ungefähr das Tempo eines Ziels spielt — dein eigenes bestes Leg oder ein fester Rekord — während dein Live-Fortschritt live dagegen verglichen wird."
+                          title={t("game.ghostTooltip")}
                           className={`rounded px-2 py-1.5 text-center transition-colors ${playerGhostTarget[i] !== "off" ? "bg-accent/25 text-accent" : "bg-background text-muted-foreground"}`}>
-                          <span className="block text-[11px] font-display uppercase">👻 Geist</span>
-                          <span className="block text-[10px] opacity-70">Herausforderung</span>
+                          <span className="block text-[11px] font-display uppercase">👻 {t("game.ghost")}</span>
+                          <span className="block text-[10px] opacity-70">{t("game.ghostChallenge")}</span>
                         </button>
                       )}
                     </div>
@@ -1981,7 +1985,7 @@ const GamePage = () => {
                         <button
                           onClick={() => setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? "own-pb" : v))}
                           className={`rounded-lg px-2.5 py-1 text-[11px] font-display transition-colors ${playerGhostTarget[i] === "own-pb" ? "bg-accent text-accent-foreground" : "bg-background border border-border text-muted-foreground"}`}>
-                          Eigener Rekord
+                          {t("game.ownRecord")}
                         </button>
                         {GHOST_BENCHMARKS.filter((b) => getStartScore() / b.darts <= 60).map((b) => (
                           <button key={b.darts}
@@ -1998,16 +2002,16 @@ const GamePage = () => {
                 {mode !== "cricket" && (
                   <>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{playerDoubleIn[i] ? "Double In" : "Straight In"}</span>
+                      <span className="text-xs text-muted-foreground">{playerDoubleIn[i] ? t("game.doubleIn") : t("game.straightIn")}</span>
                       <Switch checked={playerDoubleIn[i]} onCheckedChange={(v) => setPlayerDoubleIn(prev => prev.map((val, idx) => idx === i ? v : val))} />
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{playerDoubleOut[i] ? "Double Out" : "Single Out"}</span>
+                      <span className="text-xs text-muted-foreground">{playerDoubleOut[i] ? t("game.doubleOut") : t("game.singleOut")}</span>
                       <Switch checked={playerDoubleOut[i]} onCheckedChange={(v) => setPlayerDoubleOut(prev => prev.map((val, idx) => idx === i ? v : val))} />
                     </div>
                     {!teamMode && (
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground" title="Startpunkte-Ausgleich für ungleich starke Spieler">Handicap</span>
+                        <span className="text-xs text-muted-foreground" title={t("game.handicapTooltip")}>{t("game.handicap")}</span>
                         <div className="flex items-center gap-1.5">
                           <input
                             type="number"
@@ -2020,13 +2024,13 @@ const GamePage = () => {
                             }}
                             className="w-16 rounded-lg bg-background border border-border px-2 py-1 text-sm text-foreground text-right focus:outline-none focus:ring-1 focus:ring-primary"
                           />
-                          <span className="text-[10px] text-muted-foreground">Punkte</span>
+                          <span className="text-[10px] text-muted-foreground">{t("game.points")}</span>
                         </div>
                       </div>
                     )}
                     {!teamMode && playerHandicap[i] > 0 && (
                       <p className="text-[10px] text-muted-foreground text-right -mt-1.5">
-                        Startet bei {Math.max(2, getStartScore() - playerHandicap[i])} statt {getStartScore()}
+                        {t("game.startsAt")} {Math.max(2, getStartScore() - playerHandicap[i])} {t("game.insteadOf")} {getStartScore()}
                       </p>
                     )}
                   </>
@@ -2039,7 +2043,7 @@ const GamePage = () => {
           <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
             <div className="flex items-center gap-2">
               {soundEnabled ? <Volume2 className="w-4 h-4 text-primary" /> : <VolumeX className="w-4 h-4 text-muted-foreground" />}
-              <Label className="text-sm font-medium">Sound & Haptik</Label>
+              <Label className="text-sm font-medium">{t("game.soundHaptics")}</Label>
             </div>
             <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
           </div>
@@ -2047,24 +2051,24 @@ const GamePage = () => {
           <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
             <div className="flex items-center gap-2">
               {speechEnabled ? <Mic className="w-4 h-4 text-primary" /> : <MicOff className="w-4 h-4 text-muted-foreground" />}
-              <Label className="text-sm font-medium">Sprachausgabe</Label>
+              <Label className="text-sm font-medium">{t("game.speechOutput")}</Label>
             </div>
             <Switch checked={speechEnabled} onCheckedChange={setSpeechEnabled} />
           </div>
 
           {speechEnabled && (
             <div className="bg-card rounded-lg border border-border px-4 py-3">
-              <Label className="text-sm font-medium mb-2 block">Caller-Stimme</Label>
+              <Label className="text-sm font-medium mb-2 block">{t("game.callerVoice")}</Label>
               <div className="grid grid-cols-4 gap-1.5">
                 {([
-                  { value: "auto", label: "Männlich" },
-                  { value: "female", label: "Weiblich" },
-                  { value: "yoda", label: "Yoda" },
-                  { value: "herald", label: "Herold" },
-                  { value: "kernasi", label: "Kernasi" },
-                  { value: "reporter", label: "Reporter" },
-                  { value: "genz", label: "Gen Z" },
-                ] as { value: CallerVoice; label: string }[]).map((opt) => (
+                  { value: "auto", labelKey: "game.voiceMale" },
+                  { value: "female", labelKey: "game.voiceFemale" },
+                  { value: "yoda", labelKey: "game.voiceYoda" },
+                  { value: "herald", labelKey: "game.voiceHerald" },
+                  { value: "kernasi", labelKey: "game.voiceKernasi" },
+                  { value: "reporter", labelKey: "game.voiceReporter" },
+                  { value: "genz", labelKey: "game.voiceGenZ" },
+                ] as { value: CallerVoice; labelKey: string }[]).map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => changeCallerVoice(opt.value)}
@@ -2072,7 +2076,7 @@ const GamePage = () => {
                       callerVoice === opt.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </button>
                 ))}
               </div>
@@ -2080,16 +2084,16 @@ const GamePage = () => {
           )}
 
           <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
-            <Label className="text-sm">Anwurf — wer beginnt?</Label>
-            <p className="text-[10px] text-muted-foreground -mt-1">Ausbullen entscheidet üblicherweise, wer eröffnet — einfach den Sieger antippen.</p>
+            <Label className="text-sm">{t("game.whoStarts")}</Label>
+            <p className="text-[10px] text-muted-foreground -mt-1">{t("game.whoStartsDesc")}</p>
             <div className="grid grid-cols-2 gap-1.5">
               {(teamMode
                 ? [0, 1]
                 : Array.from({ length: activePlayerCount }, (_, i) => i)
               ).map((i) => {
                 const label = teamMode
-                  ? (i === 0 ? (teamNames[0].trim() || "Team 1") : (teamNames[1].trim() || "Team 2"))
-                  : (playerIsBot[i] ? botDisplayName(i) : (playerNames[i]?.trim() || `Spieler ${i + 1}`));
+                  ? (i === 0 ? (teamNames[0].trim() || `${t("game.team")} 1`) : (teamNames[1].trim() || `${t("game.team")} 2`))
+                  : (playerIsBot[i] ? botDisplayName(i) : (playerNames[i]?.trim() || `${t("stats.player")} ${i + 1}`));
                 const isChosen = teamMode ? (starterIndex % 2 === i) : starterIndex === i;
                 return (
                   <button
@@ -2109,8 +2113,8 @@ const GamePage = () => {
           <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <Label htmlFor="warmup-mode" className="text-sm">Aufwärmen vor dem Match</Label>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Kurze Einwerf-Phase mit Timer — zählt nicht in die Statistik.</p>
+                <Label htmlFor="warmup-mode" className="text-sm">{t("game.warmupBeforeMatch")}</Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.warmupBeforeMatchDesc")}</p>
               </div>
               <Switch id="warmup-mode" checked={warmupEnabled} onCheckedChange={setWarmupEnabled} />
             </div>
@@ -2131,14 +2135,14 @@ const GamePage = () => {
 
           <div className="flex items-center justify-between gap-3 bg-card rounded-lg border border-border px-4 py-3">
             <div className="min-w-0">
-              <Label htmlFor="walkon-mode" className="text-sm">Walk-on-Intro</Label>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Kurze Namens-Einblendung mit Sound vor dem ersten Wurf.</p>
+              <Label htmlFor="walkon-mode" className="text-sm">{t("game.walkonIntro")}</Label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.walkonIntroDesc")}</p>
             </div>
             <Switch id="walkon-mode" checked={walkonEnabled} onCheckedChange={setWalkonEnabled} />
           </div>
 
           <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
-            <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? "Aufwärmen starten" : "Spiel starten"}
+            <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? t("game.startWarmup") : t("game.startGame")}
           </Button>
         </div>
       </div>
@@ -2152,8 +2156,8 @@ const GamePage = () => {
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
         <div className="text-center mb-4">
-          <h2 className="text-2xl font-display uppercase text-primary">Aufwärmen</h2>
-          <p className="text-xs text-muted-foreground mt-1">Frei einwerfen — zählt nicht in die Statistik.</p>
+          <h2 className="text-2xl font-display uppercase text-primary">{t("game.warmup")}</h2>
+          <p className="text-xs text-muted-foreground mt-1">{t("game.warmupDesc")}</p>
         </div>
 
         <div className="bg-card rounded-2xl border border-primary/30 glow-cyan p-6 mb-4 text-center">
@@ -2161,20 +2165,20 @@ const GamePage = () => {
             {mm}:{String(ss).padStart(2, "0")}
           </div>
           <div className="flex items-center justify-center gap-4 mt-3 text-xs text-muted-foreground">
-            <span>{warmupDarts} Darts</span>
+            <span>{warmupDarts} {t("game.dartsSuffix")}</span>
             <span>·</span>
-            <span>{warmupTotal} Punkte</span>
+            <span>{warmupTotal} {t("game.points")}</span>
           </div>
           <div className="flex items-center justify-center gap-2 mt-3">
             <Button size="sm" variant="outline" onClick={() => setWarmupRemaining((s) => s + 30)}>+30s</Button>
-            <Button size="sm" variant="outline" onClick={() => setWarmupRemaining(0)}>Timer beenden</Button>
+            <Button size="sm" variant="outline" onClick={() => setWarmupRemaining(0)}>{t("game.endTimer")}</Button>
           </div>
         </div>
 
         <DartScoreInput isDisabled={false} onThrow={submitWarmupDart} />
 
         <Button onClick={enterMatch} className="w-full mt-4 font-display uppercase text-lg py-6">
-          <Target className="w-5 h-5 mr-2" /> Los geht's
+          <Target className="w-5 h-5 mr-2" /> {t("game.letsGo")}
         </Button>
       </div>
     );
@@ -2182,7 +2186,7 @@ const GamePage = () => {
 
   // ─── WALK-ON INTRO ──────────────────────────────────
   if (phase === "walkon" && game) {
-    const names = game.teams ? game.teams.map((t) => t.name) : game.players.map((p) => p.name);
+    const names = game.teams ? game.teams.map((tm) => tm.name) : game.players.map((p) => p.name);
     const isDuel = names.length === 2;
     return (
       <div
@@ -2191,7 +2195,7 @@ const GamePage = () => {
       >
         <div className="absolute inset-0 gradient-hero" />
         <p className="relative text-[11px] uppercase tracking-[0.4em] text-muted-foreground mb-6 animate-slide-up">
-          Auf die Bühne
+          {t("game.walkonEntranceLabel")}
         </p>
         {isDuel ? (
           <div className="relative flex flex-col items-center gap-3 w-full max-w-md">
@@ -2208,7 +2212,7 @@ const GamePage = () => {
           </div>
         ) : (
           <div className="relative flex flex-col items-center gap-2 w-full max-w-md">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Es spielen</p>
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">{t("game.playersPlaying")}</p>
             {names.map((name, i) => (
               <h2
                 key={i}
@@ -2221,7 +2225,7 @@ const GamePage = () => {
           </div>
         )}
         <p className="relative text-[10px] uppercase tracking-widest text-muted-foreground mt-8 animate-slide-up" style={{ animationDelay: "400ms" }}>
-          Antippen zum Überspringen
+          {t("game.tapToSkip")}
         </p>
       </div>
     );
@@ -2248,13 +2252,13 @@ const GamePage = () => {
         {p ? (
           <div className="flex flex-col gap-5 w-full items-center">
             {statRow("Average", Number(p.average).toFixed(1))}
-            {statRow("Siege", `${p.games_won}/${p.games_played}`)}
+            {statRow(t("game.winsLabel"), `${p.games_won}/${p.games_played}`)}
             {statRow("Elo", String(Math.round(p.elo_rating)))}
-            {statRow("Highscore", String(p.high_score))}
+            {statRow(t("game.highscoreLabel"), String(p.high_score))}
             {statRow("Checkout", `${Number(p.double_rate).toFixed(0)}%`)}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">Kein Profil</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">{t("game.noProfile")}</p>
         )}
       </div>
     );
@@ -2265,7 +2269,7 @@ const GamePage = () => {
       >
         <div className="absolute inset-0 gradient-hero" />
         <p className="relative text-[11px] uppercase tracking-[0.4em] text-muted-foreground mb-8 animate-slide-up">
-          Statistik-Vergleich
+          {t("game.statsComparison")}
         </p>
         <div className="relative flex items-start justify-center gap-4 sm:gap-10 w-full max-w-lg animate-scale-in">
           {playerColumn(names[0], a, "text-primary glow-cyan")}
@@ -2275,16 +2279,16 @@ const GamePage = () => {
         {walkonH2H && (
           <div className="relative mt-10 text-center animate-slide-up">
             <p className="font-display text-3xl uppercase text-accent">
-              {walkonH2H.total > 0 ? `${walkonH2H.aWins} : ${walkonH2H.bWins}` : "Erstes Mal"}
+              {walkonH2H.total > 0 ? `${walkonH2H.aWins} : ${walkonH2H.bWins}` : t("game.firstTime")}
             </p>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
-              {walkonH2H.total > 0 ? `Bisher gegeneinander · ${walkonH2H.total} Spiele` : "Erstes Aufeinandertreffen"}
+              {walkonH2H.total > 0 ? `${t("game.headToHeadSoFar")} · ${walkonH2H.total} ${t("stats.games")}` : t("game.firstMeeting")}
             </p>
             {/* Average specifically FROM these head-to-head games — a genuinely different number
                 from the lifetime average shown per player above, not a duplicate of it. */}
             {walkonH2H.total > 0 && (
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
-                Ø im Duell: {walkonH2H.aAvg.toFixed(1)} : {walkonH2H.bAvg.toFixed(1)}
+                {t("game.duelAverage")}: {walkonH2H.aAvg.toFixed(1)} : {walkonH2H.bAvg.toFixed(1)}
               </p>
             )}
             {/* The one true fact worth highlighting from this H2H history (streak, close
@@ -2297,7 +2301,7 @@ const GamePage = () => {
           </div>
         )}
         <p className="relative text-[10px] uppercase tracking-widest text-muted-foreground mt-10 animate-slide-up">
-          Antippen zum Start
+          {t("game.tapToStart")}
         </p>
       </div>
     );
@@ -2310,13 +2314,13 @@ const GamePage = () => {
   const currentPlayerName = game.players[activeIdx].name;
   const currentRemaining = game.currentLeg.remaining[activeTeamIdx];
   const currentThrows = game.currentLeg.throws[activeIdx];
-  const scoreLabels = game.teams ? game.teams.map((t) => t.name) : game.players.map((p) => p.name);
+  const scoreLabels = game.teams ? game.teams.map((tm) => tm.name) : game.players.map((p) => p.name);
   const numCols = scoreLabels.length <= 2 ? "grid-cols-2" : scoreLabels.length === 3 ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4";
   const awaitingDoubleIn = !isCricket && (currentPlayer?.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[activeTeamIdx] ?? true);
 
   const doubleInBanner = awaitingDoubleIn ? (
     <div className="mb-3 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-center text-xs text-accent font-display uppercase tracking-wide">
-      Double In erforderlich – nur ein Doppel bringt {game.teams ? `${game.teams[activeTeamIdx].name} (${currentPlayerName})` : currentPlayerName} rein
+      {t("game.doubleInRequired")} {game.teams ? `${game.teams[activeTeamIdx].name} (${currentPlayerName})` : currentPlayerName} {t("game.doubleInRequiredSuffix")}
     </div>
   ) : null;
 
@@ -2325,7 +2329,7 @@ const GamePage = () => {
       <table className="w-full text-center text-xs border-collapse">
         <thead>
           <tr>
-            <th className="text-left font-normal text-muted-foreground pb-1 pr-2">Ziel</th>
+            <th className="text-left font-normal text-muted-foreground pb-1 pr-2">{t("game.target")}</th>
             {scoreLabels.map((name, i) => (
               <th key={i} className={`font-bold truncate px-1 pb-1 max-w-[4.5rem] ${i === activeTeamIdx ? "text-primary" : ""}`}>{name}</th>
             ))}
@@ -2355,7 +2359,7 @@ const GamePage = () => {
             </tr>
           ))}
           <tr className="border-t border-border/50">
-            <td className="text-left text-muted-foreground pt-1 pr-2">Punkte</td>
+            <td className="text-left text-muted-foreground pt-1 pr-2">{t("game.points")}</td>
             {game.cricket!.map((c, i) => (
               <td key={i} className={`pt-1 font-display ${i === activeTeamIdx ? "text-primary font-bold" : ""}`}>{c.points}</td>
             ))}
@@ -2423,11 +2427,11 @@ const GamePage = () => {
               </div>
               {card.subLabel && (
                 <p className={`text-[10px] truncate ${isActive ? "text-primary/70" : "text-muted-foreground/70"}`}>
-                  {card.subLabel}{isActive ? ` · dran: ${currentPlayerName}` : ""}
+                  {card.subLabel}{isActive ? ` · ${t("game.turnLabel")}: ${currentPlayerName}` : ""}
                 </p>
               )}
               {isActive && card.isBot && botThinking ? (
-                <p className="text-sm font-display mt-1 text-secondary animate-pulse">Bot wirft…</p>
+                <p className="text-sm font-display mt-1 text-secondary animate-pulse">Bot {t("game.isThrowing")}…</p>
               ) : (
                 <p className={`text-4xl landscape:text-2xl font-display mt-1 landscape:mt-0 transition-colors ${
                   isFlashing ? "text-accent animate-pulse-glow" : showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
@@ -2477,17 +2481,17 @@ const GamePage = () => {
       {/* Leg info bar */}
       {game.bestOfLegs > 1 && (
         <div className="text-center text-xs landscape:text-[10px] text-muted-foreground mt-2 landscape:mt-1">
-          Leg {game.currentLeg.legNumber} · {game.players[game.currentLeg.startingPlayerIndex].name} fängt an
+          {t("game.leg")} {game.currentLeg.legNumber} · {game.players[game.currentLeg.startingPlayerIndex].name} {t("game.startsFirst")}
         </div>
       )}
 
       {/* Current player indicator with dart counter + round score */}
       <div className="text-center mt-2 landscape:mt-1">
         <span className="text-sm text-primary font-medium">
-          {currentPlayer?.isBot && botThinking ? `${currentPlayerName} (Bot) wirft…` : `${currentPlayerName} wirft`}
+          {currentPlayerName}{currentPlayer?.isBot ? " (Bot)" : ""} {currentPlayer?.isBot && botThinking ? `${t("game.isThrowing")}…` : t("game.isThrowing")}
         </span>
         {mode !== "cricket" && !(currentPlayer?.doubleOut ?? true) && (
-          <span className="text-[10px] text-muted-foreground ml-2">(Single Out)</span>
+          <span className="text-[10px] text-muted-foreground ml-2">({t("game.singleOut")})</span>
         )}
         <div className="flex justify-center gap-1 mt-1 landscape:mt-0.5">
           {[0, 1, 2].map((i) => (
@@ -2495,7 +2499,7 @@ const GamePage = () => {
           ))}
         </div>
         <div className="flex items-center justify-center gap-2 mt-1 landscape:mt-0.5">
-          <span className="text-[10px] text-muted-foreground">Dart {dartsThisRound + 1} / 3</span>
+          <span className="text-[10px] text-muted-foreground">{t("game.dartCounterLabel")} {dartsThisRound + 1} / 3</span>
           {dartsThisRound > 0 && (
             <span className="text-xs font-display text-primary">+{currentRoundTotal}</span>
           )}
@@ -2508,10 +2512,10 @@ const GamePage = () => {
           if (!cmp) return null;
           const ghostBotIdx = game.players.findIndex((p, i) => p.isBot && playerGhostTarget[i] !== "off");
           const ghostBotTarget = ghostBotIdx !== -1 ? playerGhostTarget[ghostBotIdx] : "own-pb";
-          const targetLabel = typeof ghostBotTarget === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === ghostBotTarget)?.label ?? "Ziel" : "deinem Rekordtempo";
+          const targetLabel = typeof ghostBotTarget === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === ghostBotTarget)?.label ?? t("game.target") : t("game.yourRecordPace");
           return (
             <p className={`text-[10px] mt-1 font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
-              👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} Punkte vor ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} Punkte hinter ${targetLabel}` : `genau im Tempo von ${targetLabel}`}
+              👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} ${t("game.pointsAhead")} ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} ${t("game.pointsBehind")} ${targetLabel}` : `${t("game.exactlyOnPace")} ${targetLabel}`}
             </p>
           );
         })()}
@@ -2531,8 +2535,8 @@ const GamePage = () => {
           <div className="bg-card border border-primary/30 rounded-2xl p-8 text-center animate-scale-in max-w-md mx-4 glow-cyan">
             <Trophy className="w-16 h-16 text-accent mx-auto mb-4" />
             <h2 className="text-3xl font-display uppercase mb-1">{game.winnerName}</h2>
-            <p className="text-accent font-display text-xl uppercase mb-4">Gewinnt!</p>
-            {game.bestOfLegs > 1 && <p className="text-sm text-muted-foreground mb-4">{game.legsWon.join(" : ")} Legs</p>}
+            <p className="text-accent font-display text-xl uppercase mb-4">{t("game.wins")}</p>
+            {game.bestOfLegs > 1 && <p className="text-sm text-muted-foreground mb-4">{game.legsWon.join(" : ")} {t("game.legsSuffix")}</p>}
 
             {postGameStats && (
               <div className="grid grid-cols-2 gap-3 mb-4 text-left">
@@ -2551,26 +2555,26 @@ const GamePage = () => {
 
             {postGameStats && (
               <button onClick={() => setShowDetailedStats(!showDetailedStats)} className="text-xs text-primary underline mb-4 block mx-auto">
-                {showDetailedStats ? "Weniger anzeigen" : "Detaillierte Statistiken"}
+                {showDetailedStats ? t("game.lessStats") : t("game.detailedStats")}
               </button>
             )}
 
             {showDetailedStats && postGameStats && (
               <div className="bg-muted/30 rounded-lg p-4 mb-4 text-xs overflow-x-auto">
                 <div className="grid gap-y-2" style={{ gridTemplateColumns: `1fr repeat(${postGameStats.length}, 1fr)` }}>
-                  <span className="text-muted-foreground text-left">Statistik</span>
+                  <span className="text-muted-foreground text-left">{t("game.statistic")}</span>
                   {postGameStats.map(p => <span key={p.name} className="font-semibold text-primary text-center truncate">{p.name}</span>)}
 
                   {[
                     { l: "Ø Average", v: (p: typeof postGameStats[number]) => p.average.toFixed(1) },
                     { l: "First 9 Ø", v: (p: typeof postGameStats[number]) => p.first9.toFixed(1) },
                     { l: "Highscore", v: (p: typeof postGameStats[number]) => p.highscore },
-                    { l: "Würfe", v: (p: typeof postGameStats[number]) => p.totalThrows },
-                    { l: "Checkout-Quote", v: (p: typeof postGameStats[number]) => p.checkout.attempts > 0 ? `${p.checkout.hits}/${p.checkout.attempts} (${p.checkout.percentage.toFixed(0)}%)` : "–" },
-                    { l: "Triples", v: (p: typeof postGameStats[number]) => p.triples },
+                    { l: t("game.throwsCount"), v: (p: typeof postGameStats[number]) => p.totalThrows },
+                    { l: t("game.checkoutRate"), v: (p: typeof postGameStats[number]) => p.checkout.attempts > 0 ? `${p.checkout.hits}/${p.checkout.attempts} (${p.checkout.percentage.toFixed(0)}%)` : "–" },
+                    { l: t("game.triplesLabel"), v: (p: typeof postGameStats[number]) => p.triples },
                     { l: "100+", v: (p: typeof postGameStats[number]) => p.tonPlus },
                     { l: "180!", v: (p: typeof postGameStats[number]) => p.s180 },
-                    { l: "Punkte", v: (p: typeof postGameStats[number]) => p.totalPoints },
+                    { l: t("game.points"), v: (p: typeof postGameStats[number]) => p.totalPoints },
                   ].map(row => (
                     <span key={row.l} className="contents">
                       <span className="text-left text-muted-foreground">{row.l}</span>
@@ -2583,17 +2587,17 @@ const GamePage = () => {
 
             <div className="flex gap-2">
               <Button variant="outline" onClick={shareResult} disabled={sharingResult} className="gap-1.5 shrink-0">
-                <Share2 className="w-4 h-4" /> {sharingResult ? "…" : "Teilen"}
+                <Share2 className="w-4 h-4" /> {sharingResult ? "…" : t("game.share")}
               </Button>
               {tournamentLinkName ? (
-                <Button onClick={() => navigate("/tournament")} className="flex-1 font-display uppercase">Zurück zum Turnier</Button>
+                <Button onClick={() => navigate("/tournament")} className="flex-1 font-display uppercase">{t("game.backToTournament")}</Button>
               ) : (
-                <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">Neues Spiel</Button>
+                <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">{t("home.newGame")}</Button>
               )}
             </div>
             {gameSaved && (
               <p className="text-[10px] text-muted-foreground mt-2">
-                {queuedOffline ? "⏳ Offline gespeichert — wird synchronisiert, sobald wieder Netz da ist" : "✓ Spiel gespeichert"}
+                {queuedOffline ? t("game.savedOffline") : t("game.gameSaved")}
               </p>
             )}
           </div>
@@ -2607,9 +2611,9 @@ const GamePage = () => {
 
       {pendingTiebreak && (
         <div className="mx-4 mb-3 rounded-lg border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
-          <p className="font-display text-sm uppercase tracking-wide text-accent">Rundenlimit erreicht — Gleichstand</p>
+          <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.tiebreakReached")}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {pendingTiebreak.tiedIndexes.map((i) => scoreLabels[i]).join(" vs. ")} liegen gleichauf. Wer hat das Ausbullen gewonnen?
+            {pendingTiebreak.tiedIndexes.map((i) => scoreLabels[i]).join(" vs. ")} {t("game.tiebreakTied")}
           </p>
           <div className="mt-3 flex flex-wrap justify-center gap-1.5">
             {pendingTiebreak.tiedIndexes.map((i) => (
@@ -2639,9 +2643,9 @@ const GamePage = () => {
             {doubleInBanner}
             {pendingCheckoutChoice && (
               <div className="mb-3 rounded-lg border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
-                <p className="font-display text-sm uppercase tracking-wide text-accent">Mögliches Finish erkannt</p>
+                <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.possibleFinishDetected")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Welcher Dart war der letzte? (Musste ein Doppel sein, sonst überworfen.)
+                  {t("game.whichDartWasLast")}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
                   {pendingCheckoutChoice.darts.map((t, idx) => (
@@ -2657,11 +2661,11 @@ const GamePage = () => {
                 <div className="mt-3 flex flex-wrap justify-center gap-1.5">
                   {pendingCheckoutChoice.doubleIndexes.map((idx) => (
                     <Button key={idx} size="sm" onClick={() => resolveCheckoutChoice(idx)} className="gap-1">
-                      Fertig mit {dartLabel(pendingCheckoutChoice.darts[idx])}
+                      {t("game.doneWith")} {dartLabel(pendingCheckoutChoice.darts[idx])}
                     </Button>
                   ))}
                   <Button size="sm" variant="outline" onClick={() => resolveCheckoutChoice("bust")}>
-                    Kein Finish – überworfen
+                    {t("game.noFinishBust")}
                   </Button>
                 </div>
               </div>
@@ -2689,7 +2693,7 @@ const GamePage = () => {
               onClick={() => setShowManualInput((v) => !v)}
               className="w-full flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted mb-3"
             >
-              <span className="flex items-center gap-1.5"><Keyboard className="w-3.5 h-3.5" /> Manuelle Eingabe</span>
+              <span className="flex items-center gap-1.5"><Keyboard className="w-3.5 h-3.5" /> {t("game.manualEntry")}</span>
               {showManualInput ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
@@ -2718,20 +2722,20 @@ const GamePage = () => {
             />
 
             <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
-              <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
+              <RotateCcw className="w-4 h-4 mr-2" /> {t("game.cancelGame")}
             </Button>
           </div>
 
           {/* Compact bottom bar — always reachable, no matter how tall the camera/manual-input content gets. */}
           <div className="shrink-0 border-t border-border bg-background/95 backdrop-blur px-4 py-2.5 flex gap-2">
             <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak} className="flex-1 gap-1">
-              <Undo2 className="w-4 h-4" /> Rückgängig
+              <Undo2 className="w-4 h-4" /> {t("game.undo")}
             </Button>
             <Button
               variant={showManualInput ? "default" : "outline"}
               onClick={() => setShowManualInput((v) => !v)}
               className="gap-1"
-              title="Manuelle Eingabe ein-/ausblenden"
+              title={t("game.toggleManualEntry")}
             >
               <Keyboard className="w-4 h-4" />
             </Button>
@@ -2739,11 +2743,11 @@ const GamePage = () => {
               variant="default"
               onClick={() => { cameraWantedRef.current = false; setCameraEnabled(false); }}
               className="gap-1"
-              title="Kamera schließen"
+              title={t("game.closeCamera")}
             >
-              <Camera className="w-4 h-4" /> Cam aus
+              <Camera className="w-4 h-4" /> {t("game.camOff")}
             </Button>
-            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? "Sound ausschalten" : "Sound einschalten"} aria-label={soundEnabled ? "Sound ausschalten" : "Sound einschalten"}>
+            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </Button>
           </div>
@@ -2766,18 +2770,18 @@ const GamePage = () => {
           {/* Undo & actions row */}
           <div className="flex gap-2 mt-3">
             <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak} className="flex-1 gap-1">
-              <Undo2 className="w-4 h-4" /> Rückgängig
+              <Undo2 className="w-4 h-4" /> {t("game.undo")}
             </Button>
             <Button
               variant="outline"
               onClick={() => { cameraWantedRef.current = true; setCameraEnabled(true); }}
               disabled={!!currentPlayer?.isBot}
               className="gap-1"
-              title="Live-Kamera-Scoring"
+              title={t("game.liveCameraScoring")}
             >
-              <Camera className="w-4 h-4" /> Cam
+              <Camera className="w-4 h-4" /> {t("game.cam")}
             </Button>
-            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? "Sound ausschalten" : "Sound einschalten"} aria-label={soundEnabled ? "Sound ausschalten" : "Sound einschalten"}>
+            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </Button>
           </div>
@@ -2794,7 +2798,7 @@ const GamePage = () => {
           />
 
           <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
-            <RotateCcw className="w-4 h-4 mr-2" /> Spiel abbrechen
+            <RotateCcw className="w-4 h-4 mr-2" /> {t("game.cancelGame")}
           </Button>
         </>
       )}
