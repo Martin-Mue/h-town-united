@@ -19,6 +19,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
@@ -250,6 +252,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
   // change + full rationale): fixed, always-legible scale by default, native scroll for
   // overflow, manual zoom, and "fit to screen" as a one-time on-demand measurement instead of
   // a background process that could render at the wrong scale depending on layout timing.
+  const { t } = useLanguage();
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [userZoom, setUserZoom] = useState(1);
@@ -333,7 +336,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === BYE ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
           <button disabled={!isOwner || !player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left uppercase tracking-wide disabled:cursor-not-allowed">{player || "TBD"}</button>
           {isOwner && (
-            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title="Leg gewonnen" aria-label={`Leg für ${player || "Spieler"} gewonnen`}>
+            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title={t("tournament.legWon")} aria-label={`${t("tournament.legWonFor")} ${player || t("stats.player")}`}>
               <Plus className="w-4 h-4" />
             </Button>
           )}
@@ -344,22 +347,22 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
       {(match.scorekeeper || match.scorekeeperRule || match.board) && !match.winner && (
         <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
           <span className="truncate">✍️ {scorekeeperLabel(match, matches) || "–"}</span>
-          {match.board ? <span className="font-mono">Board {match.board}</span> : null}
+          {match.board ? <span className="font-mono">{t("camera.board")} {match.board}</span> : null}
         </div>
       )}
       {canStartLiveGame(match) && (
         <div className="flex border-t border-border/60">
           <Button variant="secondary" size="sm" className="flex-1 rounded-none h-11 text-xs gap-1.5" onClick={() => onStartLiveGame(match)}>
-            <Play className="w-3.5 h-3.5" /> Spiel starten
+            <Play className="w-3.5 h-3.5" /> {t("game.startGame")}
           </Button>
           {getLiveGameUrl(match) && (
             <QrCodeDialog
               url={getLiveGameUrl(match)!}
-              title="Spiel starten"
-              description="Auf dem Board-Gerät scannen — öffnet das Match direkt und vorausgefüllt."
+              title={t("game.startGame")}
+              description={t("tournament.scanOnBoardDevice")}
               downloadName={`match-${match.id}`}
               trigger={
-                <button className="shrink-0 rounded-none border-l border-border/60 px-4 h-11 min-w-11 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="QR-Code für dieses Match" aria-label="QR-Code für dieses Match anzeigen">
+                <button className="shrink-0 rounded-none border-l border-border/60 px-4 h-11 min-w-11 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title={t("tournament.qrForThisMatch")} aria-label={t("tournament.qrForThisMatchShow")}>
                   <QrCode className="w-3.5 h-3.5" />
                 </button>
               }
@@ -373,26 +376,26 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
             <AlertDialog open={confirmResetId === match.id} onOpenChange={(open) => setConfirmResetId(open ? match.id : null)}>
               <AlertDialogTrigger asChild>
                 <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={(e) => e.stopPropagation()}>
-                  <RotateCcw className="w-3 h-3 mr-1" /> zurücksetzen
+                  <RotateCcw className="w-3 h-3 mr-1" /> {t("tournament.resetLowercase")}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Match zurücksetzen?</AlertDialogTitle>
+                  <AlertDialogTitle>{t("tournament.resetMatchConfirm")}</AlertDialogTitle>
                   <AlertDialogDescription>
-                    {match.player1} vs. {match.player2}: Ergebnis wird gelöscht. Falls spätere Runden bereits auf diesem Ergebnis aufbauen, werden auch deren Ergebnisse zurückgesetzt.
+                    {match.player1} vs. {match.player2}: {t("tournament.resetMatchWarning")}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => resetKoMatch(match.id)}>Zurücksetzen</AlertDialogAction>
+                  <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => resetKoMatch(match.id)}>{t("tournament.resetCapital")}</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           )}
           {onEditMatch && match.round === 1 && (
             <Button variant="ghost" size="sm" className="flex-1 rounded-none h-7 text-xs" onClick={() => onEditMatch(match)}>
-              <PencilLine className="w-3 h-3 mr-1" /> bearbeiten
+              <PencilLine className="w-3 h-3 mr-1" /> {t("tournament.editLowercase")}
             </Button>
           )}
         </div>
@@ -405,27 +408,27 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     <div className={wrapperClass}>
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 bg-background/80 backdrop-blur sticky top-0 z-10">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-          Zoom {(userZoom * 100).toFixed(0)}%
+          {t("camera.zoom")} {(userZoom * 100).toFixed(0)}%
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.max(0.3, z - 0.15))} title="Verkleinern" aria-label="Verkleinern">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.max(0.3, z - 0.15))} title={t("tournament.zoomOut")} aria-label={t("tournament.zoomOut")}>
             <ZoomOut className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={fitToScreen} title="Auf Bildschirm einpassen" aria-label="Auf Bildschirm einpassen">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={fitToScreen} title={t("tournament.fitToScreen")} aria-label={t("tournament.fitToScreen")}>
             <Maximize2 className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.min(3, z + 0.15))} title="Vergrößern" aria-label="Vergrößern">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setUserZoom(z => Math.min(3, z + 0.15))} title={t("tournament.zoomIn")} aria-label={t("tournament.zoomIn")}>
             <ZoomIn className="w-4 h-4" />
           </Button>
           <Button variant={fullscreen ? "default" : "outline"} size="sm" className="h-8 gap-1 ml-1" onClick={() => setFullscreen(f => !f)}>
-            {fullscreen ? "Schließen" : "Vollbild"}
+            {fullscreen ? t("tournament.fullscreenExit") : t("tournament.fullscreenEnter")}
           </Button>
         </div>
       </div>
       {prelimMatches.length > 0 && (
         <div className="mx-3 mt-3 rounded-xl border border-border bg-card/60 p-3">
           <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
-            Preliminary Round · winners advance to the main bracket
+            {t("tournament.preliminaryRound")}
           </p>
           <div className="flex flex-wrap gap-2">
             {prelimMatches.map(m => (
@@ -484,8 +487,8 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
                   {canEditRound && (
                     <button
                       onClick={() => onEditRoundMode(round)}
-                      title="Rundenmodus bearbeiten"
-                      aria-label="Rundenmodus bearbeiten"
+                      title={t("tournament.editRoundMode")}
+                      aria-label={t("tournament.editRoundMode")}
                       className="p-1.5 -m-1 text-muted-foreground hover:text-primary transition-colors"
                     >
                       <Settings2 className="w-3 h-3" />
@@ -558,6 +561,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
 };
 
 const TournamentPage = () => {
+  const { t, language } = useLanguage();
   const [phase, setPhase] = useState<"list" | "setup" | "bracket">("list");
   const [tournaments, setTournaments] = useState<TournamentRecord[]>([]);
   // Hook call stays unconditional (top-level, not inside the "list" phase's early return) since
@@ -648,10 +652,10 @@ const TournamentPage = () => {
       public_view: next, public_slug: slug,
     }).eq("id", activeTournament.id);
     if (error) {
-      toast({ title: "Fehler", description: "Öffentliche Ansicht konnte nicht geändert werden.", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("tournament.publicViewToggleFailed"), variant: "destructive" });
     } else {
       setActiveTournament({ ...activeTournament, public_view: next, public_slug: slug });
-      toast({ title: next ? "Live-Ansicht aktiv" : "Live-Ansicht deaktiviert", description: next && slug ? `${window.location.origin}/live/${slug}` : undefined });
+      toast({ title: next ? t("tournament.liveViewActive") : t("tournament.liveViewDeactivated"), description: next && slug ? `${window.location.origin}/live/${slug}` : undefined });
     }
     setPublicToggling(false);
   };
@@ -659,7 +663,7 @@ const TournamentPage = () => {
   const copyPublicLink = () => {
     if (!activeTournament?.public_slug) return;
     const url = `${window.location.origin}/live/${activeTournament.public_slug}`;
-    navigator.clipboard.writeText(url).then(() => toast({ title: "Link kopiert", description: url }));
+    navigator.clipboard.writeText(url).then(() => toast({ title: t("tournament.linkCopied"), description: url }));
   };
 
   const mapTournamentRow = (t: Database["public"]["Tables"]["tournaments"]["Row"]): TournamentRecord => ({
@@ -904,10 +908,10 @@ const TournamentPage = () => {
       if (updErr && missingLivePlayColumn(updErr)) {
         const { live_play_enabled, ...fallback } = payload;
         ({ data: upd, error: updErr } = await supabase.from("tournaments").update(fallback).eq("id", editingId).select().single());
-        if (!updErr) toast({ title: "Hinweis", description: "„Live-Spiel“-Einstellung konnte nicht gespeichert werden (Datenbank-Migration fehlt noch).", variant: "destructive" });
+        if (!updErr) toast({ title: t("common.notice"), description: t("tournament.liveGameSettingSaveFailed"), variant: "destructive" });
       }
       if (updErr || !upd) {
-        toast({ title: "Fehler", description: "Turnier konnte nicht gespeichert werden.", variant: "destructive" });
+        toast({ title: t("common.error"), description: t("tournament.tournamentSaveFailed"), variant: "destructive" });
         return;
       }
       const rec: TournamentRecord = {
@@ -925,7 +929,7 @@ const TournamentPage = () => {
       setPlayers([]);
       setTournamentName("");
       fetchTournaments();
-      toast({ title: "Turnier aktualisiert" });
+      toast({ title: t("tournament.tournamentUpdated") });
       return;
     }
 
@@ -950,7 +954,7 @@ const TournamentPage = () => {
     }
 
     if (error || !data) {
-      toast({ title: "Fehler", description: "Turnier konnte nicht erstellt werden.", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("tournament.tournamentCreateFailed"), variant: "destructive" });
       return;
     }
 
@@ -1063,7 +1067,7 @@ const TournamentPage = () => {
     setActiveTournament({ ...activeTournament, players: nextPlayers });
     await persistBracket(patch);
     setEditMatch(null);
-    toast({ title: "Turnierbaum aktualisiert" });
+    toast({ title: t("tournament.bracketUpdated") });
   };
 
   /** Withdraw a player: only *unplayed* matches are adjusted, results stay untouched. */
@@ -1082,12 +1086,12 @@ const TournamentPage = () => {
     const nextPlayers = activeTournament.players.filter(p => p !== name);
     const { error } = await supabase.from("tournaments").update({ players: nextPlayers as unknown as Json }).eq("id", activeTournament.id);
     if (error) {
-      toast({ title: "Fehler", description: "Nur der Ersteller kann Teilnehmer zurückziehen.", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("tournament.onlyCreatorCanWithdraw"), variant: "destructive" });
       return;
     }
     setActiveTournament({ ...activeTournament, players: nextPlayers });
     await persistBracket(patch);
-    toast({ title: `${name} zurückgezogen`, description: "Gespielte Partien bleiben erhalten, nur offene Stellen werden angepasst." });
+    toast({ title: `${name} ${t("tournament.withdrawn")}`, description: t("tournament.withdrawnDesc") });
   };
 
   /** Manually set (and lock) the scorekeeper of a single match. */
@@ -1103,7 +1107,7 @@ const TournamentPage = () => {
   const reshuffleScorekeepers = async () => {
     if (!activeTournament) return;
     await persistBracket((fresh) => [...fresh], { reshuffleKeepers: true });
-    toast({ title: "Schreiber neu ausgelost" });
+    toast({ title: t("tournament.scorekeeperRedrawn") });
   };
 
   /** "501" | "301" | "Cricket" | "Extern" — a round can override the tournament's default mode. */
@@ -1138,10 +1142,10 @@ const TournamentPage = () => {
     next[editingRound - 1] = { mode: editRoundMode, bestOf: editRoundBestOf };
     const { error } = await supabase.from("tournaments").update({ round_configs: next as unknown as Json }).eq("id", activeTournament.id);
     if (error) {
-      toast({ title: "Fehler", description: "Rundenmodus konnte nicht gespeichert werden.", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("tournament.roundModeSaveFailed"), variant: "destructive" });
     } else {
       setActiveTournament({ ...activeTournament, round_configs: next });
-      toast({ title: `Modus für Runde ${editingRound} aktualisiert` });
+      toast({ title: `${t("tournament.modeForRoundUpdated")} ${editingRound} ${t("tournament.updatedSuffix")}` });
       setEditingRound(null);
     }
     setSavingRoundMode(false);
@@ -1200,7 +1204,7 @@ const TournamentPage = () => {
   // a plain confirm() (no existing AlertDialog wraps this button, and this only fires on the
   // rare actual collision) is a pragmatic guard rather than silently starting a duplicate.
   const startLiveGame = (match: Match) => {
-    if (isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} scheint gerade schon auf einem anderen Gerät zu laufen. Trotzdem ein neues Spiel starten?`)) {
+    if (isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} ${t("tournament.matchAlreadyRunningConfirm")}`)) {
       return;
     }
     const path = koLiveGamePath(match);
@@ -1208,7 +1212,7 @@ const TournamentPage = () => {
   };
 
   const startLiveGameRr = (match: RoundRobinMatch) => {
-    if (isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} scheint gerade schon auf einem anderen Gerät zu laufen. Trotzdem ein neues Spiel starten?`)) {
+    if (isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} ${t("tournament.matchAlreadyRunningConfirm")}`)) {
       return;
     }
     const path = rrLiveGamePath(match);
@@ -1318,14 +1322,14 @@ const TournamentPage = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Trophy className="w-6 h-6 text-accent" />
-            <h2 className="text-2xl font-display uppercase">Turniere</h2>
+            <h2 className="text-2xl font-display uppercase">{t("tournament.tournaments")}</h2>
           </div>
           <div className="flex items-center gap-2">
             <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
-              <Layers className="w-3.5 h-3.5" /> Serien
+              <Layers className="w-3.5 h-3.5" /> {t("tournament.series")}
             </Link>
             <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
-              <Plus className="w-4 h-4" /> Neues Turnier
+              <Plus className="w-4 h-4" /> {t("tournament.newTournament")}
             </Button>
           </div>
         </div>
@@ -1335,48 +1339,48 @@ const TournamentPage = () => {
         ) : tournaments.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Noch keine Turniere. Erstelle dein erstes!</p>
+            <p className="text-sm">{t("tournament.noTournamentsYet")}</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {pagedTournaments.visible.map(t => (
-              <div key={t.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
-                <button onClick={() => openTournament(t)} className="flex-1 text-left">
+            {pagedTournaments.visible.map(tourn => (
+              <div key={tourn.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
+                <button onClick={() => openTournament(tourn)} className="flex-1 text-left">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${t.status === "active" ? "bg-secondary animate-pulse" : t.status === "finished" ? "bg-accent" : "bg-muted-foreground"}`} />
+                    <div className={`w-2 h-2 rounded-full ${tourn.status === "active" ? "bg-secondary animate-pulse" : tourn.status === "finished" ? "bg-accent" : "bg-muted-foreground"}`} />
                     <div>
-                      <p className="font-semibold text-sm">{t.name}</p>
+                      <p className="font-semibold text-sm">{tourn.name}</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="bg-muted px-1.5 py-0.5 rounded font-mono">{t.mode === "round-robin" ? "Jeder gegen Jeden" : "K.O."}</span>
-                        <span><Users className="w-3 h-3 inline" /> {t.players.length}</span>
-                        <span>{new Date(t.created_at).toLocaleDateString("de-DE")}</span>
+                        <span className="bg-muted px-1.5 py-0.5 rounded font-mono">{tourn.mode === "round-robin" ? t("tournament.roundRobin") : "K.O."}</span>
+                        <span><Users className="w-3 h-3 inline" /> {tourn.players.length}</span>
+                        <span>{new Date(tourn.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language])}</span>
                       </div>
                     </div>
                   </div>
-                  {t.champion && <p className="text-xs text-accent mt-1">🏆 {t.champion}</p>}
+                  {tourn.champion && <p className="text-xs text-accent mt-1">🏆 {tourn.champion}</p>}
                 </button>
-                {!hasStarted(t) && isOwnerOf(t) && (
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); editTournament(t); }} className="text-xs">
-                    Bearbeiten
+                {!hasStarted(tourn) && isOwnerOf(tourn) && (
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); editTournament(tourn); }} className="text-xs">
+                    {t("common.edit")}
                   </Button>
                 )}
-                {isOwnerOf(t) && (
+                {isOwnerOf(tourn) && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()} title="Turnier löschen" aria-label="Turnier löschen">
+                    <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()} title={t("tournament.deleteTournament")} aria-label={t("tournament.deleteTournament")}>
                       <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Turnier löschen?</AlertDialogTitle>
+                      <AlertDialogTitle>{t("tournament.deleteTournamentConfirm")}</AlertDialogTitle>
                       <AlertDialogDescription>
-                        „{t.name}" wird unwiderruflich gelöscht, inklusive Turnierbaum und Ergebnissen.
+                        „{tourn.name}" {t("tournament.deleteTournamentWarning")}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => deleteTournament(t.id)}>Löschen</AlertDialogAction>
+                      <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => deleteTournament(tourn.id)}>{t("stats.delete")}</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -1394,59 +1398,59 @@ const TournamentPage = () => {
   if (phase === "setup") {
     return (
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
-        <Button variant="ghost" onClick={() => { setEditingId(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm">← Zurück</Button>
+        <Button variant="ghost" onClick={() => { setEditingId(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm">← {t("common.back")}</Button>
         <div className="mb-6 rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> Großevent-Modus</div>
-          <h2 className="text-2xl font-display uppercase">{editingId ? "Turnier bearbeiten" : "Turnier erstellen"}</h2>
-          <p className="text-sm text-muted-foreground">Für bis zu 64 Teilnehmer, Gastspieler und schnelle Ergebnis-Erfassung.</p>
+          <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> {t("tournament.bigEventMode")}</div>
+          <h2 className="text-2xl font-display uppercase">{editingId ? t("tournament.editTournamentHeading") : t("tournament.createTournamentHeading")}</h2>
+          <p className="text-sm text-muted-foreground">{t("tournament.upTo64Participants")}</p>
         </div>
         <div className="space-y-4">
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Turniername</label>
-            <Input value={tournamentName} onChange={(e) => setTournamentName(e.target.value)} placeholder="z.B. Vereinsmeisterschaft 2026" className="bg-card border-border" />
+            <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.tournamentName")}</label>
+            <Input value={tournamentName} onChange={(e) => setTournamentName(e.target.value)} placeholder={t("tournament.tournamentNamePlaceholder")} className="bg-card border-border" />
           </div>
           {seriesList.length > 0 && (
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> Turnierserie (optional)</label>
+              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> {t("tournament.tournamentSeries")}</label>
               <Select value={seriesId} onValueChange={setSeriesId}>
                 <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  <SelectItem value="none">Keine Serie</SelectItem>
+                  <SelectItem value="none">{t("tournament.noSeries")}</SelectItem>
                   {seriesList.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           )}
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Modus</label>
+            <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.structureMode")}</label>
             <Select value={tournamentMode} onValueChange={setTournamentMode}>
               <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
-                <SelectItem value="ko">K.O.-System</SelectItem>
-                <SelectItem value="round-robin">Jeder gegen Jeden</SelectItem>
+                <SelectItem value="ko">{t("tournament.koSystem")}</SelectItem>
+                <SelectItem value="round-robin">{t("tournament.roundRobin")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Spielmodus</label>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("game.gameMode")}</label>
               <Select value={gameMode} onValueChange={setGameMode}>
                 <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
                   <SelectItem value="501">501</SelectItem>
                   <SelectItem value="301">301</SelectItem>
                   <SelectItem value="Cricket">Cricket</SelectItem>
-                  <SelectItem value="Extern">Extern gespielt</SelectItem>
+                  <SelectItem value="Extern">{t("tournament.playedExternally")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Best of Legs</label>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.bestOfLegsLabel")}</label>
               <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
                 <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                  {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -1454,36 +1458,36 @@ const TournamentPage = () => {
 
           {tournamentMode !== "round-robin" && (
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Turnierbaum-Größe</label>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.bracketSize")}</label>
               <Select value={targetSize} onValueChange={setTargetSize}>
                 <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  <SelectItem value="auto">Automatisch – passt sich der Teilnehmerzahl an</SelectItem>
-                  {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>Fest: {n}er Baum</SelectItem>)}
+                  <SelectItem value="auto">{t("tournament.autoAdaptsToParticipants")}</SelectItem>
+                  {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>{t("tournament.fixed")}: {n}{t("tournament.playerBracketSuffix")}</SelectItem>)}
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground mt-1">
-                Empfohlen: Automatisch. Der Baum wird dann genau so groß wie nötig – das ergibt die wenigsten Freilose.
+                {t("tournament.recommendedAuto")}
               </p>
             </div>
           )}
 
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> Verfügbare Boards</label>
+            <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> {t("tournament.availableBoards")}</label>
             <Select value={String(boards)} onValueChange={(v) => setBoards(Number(v))}>
               <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
-                {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <SelectItem key={n} value={String(n)}>{n} Board{n > 1 ? "s" : ""}</SelectItem>)}
+                {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <SelectItem key={n} value={String(n)}>{n} {t("camera.board")}{n > 1 ? "s" : ""}</SelectItem>)}
               </SelectContent>
             </Select>
-            <p className="text-[11px] text-muted-foreground mt-1">Bestimmt Spielplan-Reihenfolge und Schreiber-Einteilung.</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{t("tournament.determinesScheduleOrder")}</p>
           </div>
 
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
             <div className="min-w-0">
-              <Label htmlFor="live-play-enabled" className="text-sm flex items-center gap-1"><Play className="w-3.5 h-3.5" /> Live-Spiel aus dem Turnierbaum</Label>
+              <Label htmlFor="live-play-enabled" className="text-sm flex items-center gap-1"><Play className="w-3.5 h-3.5" /> {t("tournament.livePlayFromBracket")}</Label>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Erlaubt "Spiel starten" auf spielbaren Partien — öffnet die Live-Zählung direkt, auch auf mehreren Boards gleichzeitig. Aus = reine Turnierdarstellung, Ergebnisse werden ausschließlich manuell eingetragen.
+                {t("tournament.livePlayDesc")}
               </p>
             </div>
             <Switch id="live-play-enabled" checked={livePlayEnabled} onCheckedChange={setLivePlayEnabled} />
@@ -1492,21 +1496,21 @@ const TournamentPage = () => {
           {tournamentMode !== "round-robin" && (
             <Collapsible className="bg-muted/30 border border-border rounded-xl">
               <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1"><Settings2 className="w-3.5 h-3.5" /> Auslosung · {drawMode === "random" ? "Zufällig" : "Manuell"}</span>
+                <span className="flex items-center gap-1"><Settings2 className="w-3.5 h-3.5" /> {t("tournament.draw")} · {drawMode === "random" ? t("tournament.random") : t("tournament.manual")}</span>
                 <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
               </CollapsibleTrigger>
               <CollapsibleContent className="px-3 pb-3 space-y-2">
                 <Select value={drawMode} onValueChange={(v) => setDrawMode(v as "random" | "manual")}>
                   <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="random">Zufällige Auslosung</SelectItem>
-                    <SelectItem value="manual">Manuell festgelegte Partien</SelectItem>
+                    <SelectItem value="random">{t("tournament.randomDraw")}</SelectItem>
+                    <SelectItem value="manual">{t("tournament.manualMatches")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground">
                   {drawMode === "random"
-                    ? "Die Paarungen der ersten Runde werden beim Start zufällig gelost."
-                    : "Die Reihenfolge der Teilnehmerliste bestimmt die Paarungen: 1 vs 2, 3 vs 4, usw."}
+                    ? t("tournament.randomDrawDesc")
+                    : t("tournament.manualDrawDesc")}
                 </p>
               </CollapsibleContent>
             </Collapsible>
@@ -1515,7 +1519,7 @@ const TournamentPage = () => {
           {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
             <Collapsible className="bg-muted/30 border border-border rounded-xl">
               <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> Modus pro Runde (optional, Steigerung möglich)</span>
+                <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> {t("tournament.modePerRound")}</span>
                 <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
               </CollapsibleTrigger>
               <CollapsibleContent className="px-3 pb-3">
@@ -1538,7 +1542,7 @@ const TournamentPage = () => {
                       <Select value={String(cfg.bestOf)} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, bestOf: Number(v) } : c))}>
                         <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-card border-border">
-                          {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>Best of {n}</SelectItem>)}
+                          {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1553,9 +1557,9 @@ const TournamentPage = () => {
           {dbPlayers.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-muted-foreground">Vereinsmitglieder hinzufügen</label>
+                <label className="text-sm text-muted-foreground">{t("tournament.addClubMembers")}</label>
                 <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => addPlayers(dbPlayers.map(p => p.name))}>
-                  Alle übernehmen
+                  {t("tournament.addAll")}
                 </Button>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1566,35 +1570,35 @@ const TournamentPage = () => {
                   </button>
                 ))}
                 {dbPlayers.every(p => players.includes(p.name)) && (
-                  <p className="text-xs text-muted-foreground italic py-1">Alle Vereinsmitglieder sind bereits im Turnier.</p>
+                  <p className="text-xs text-muted-foreground italic py-1">{t("tournament.allMembersInTournament")}</p>
                 )}
               </div>
             </div>
           )}
 
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Schnell-Eingabe (Enter = übernehmen, mehrere Namen mit Komma)</label>
+            <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.quickEntry")}</label>
             <div className="flex gap-2">
-              <Input autoFocus value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="Name, Name, Name …" className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
-              <Input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} placeholder="Spitzname (optional)" className="bg-card border-border w-44" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
-              <Button onClick={addPlayer} size="icon" variant="outline" title="Spieler hinzufügen" aria-label="Spieler hinzufügen"><Plus className="w-4 h-4" /></Button>
+              <Input autoFocus value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder={t("tournament.namePlaceholder")} className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
+              <Input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} placeholder={t("tournament.nicknamePlaceholder")} className="bg-card border-border w-44" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
+              <Button onClick={addPlayer} size="icon" variant="outline" title={t("tournament.addPlayer")} aria-label={t("tournament.addPlayer")}><Plus className="w-4 h-4" /></Button>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
-              Gleiche Namen? Mit Spitznamen bleiben sie unterscheidbar – er wird als „Name (Spitzname)" im Turnierbaum und Spielplan angezeigt.
+              {t("tournament.sameNamesHint")}
             </p>
           </div>
 
           {tournaments.length > 0 && (
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Teilnehmerfeld aus früherem Turnier übernehmen</label>
-              <Select value="none" onValueChange={(v) => { const t = tournaments.find(x => x.id === v); if (t) addPlayers(t.players); }}>
-                <SelectTrigger className="bg-card border-border"><SelectValue placeholder="Turnier wählen" /></SelectTrigger>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.copyFromPreviousTournament")}</label>
+              <Select value="none" onValueChange={(v) => { const found = tournaments.find(x => x.id === v); if (found) addPlayers(found.players); }}>
+                <SelectTrigger className="bg-card border-border"><SelectValue placeholder={t("tournament.chooseTournament")} /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  <SelectItem value="none">Turnier wählen …</SelectItem>
+                  <SelectItem value="none">{t("tournament.chooseTournament")} …</SelectItem>
                   {/* A dropdown's own content already scrolls for overflow — no "mehr anzeigen"/
                       pagination control makes sense inside a <Select>, just a generous cap. */}
-                  {tournaments.slice(0, 100).map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.name} ({t.players.length})</SelectItem>
+                  {tournaments.slice(0, 100).map(tourn => (
+                    <SelectItem key={tourn.id} value={tourn.id}>{tourn.name} ({tourn.players.length})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1602,19 +1606,19 @@ const TournamentPage = () => {
           )}
 
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Gastliste einfügen</label>
-            <Textarea value={bulkInput} onChange={(e) => setBulkInput(e.target.value)} placeholder="Ein Name pro Zeile oder per Komma getrennt" />
+            <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.guestList")}</label>
+            <Textarea value={bulkInput} onChange={(e) => setBulkInput(e.target.value)} placeholder={t("tournament.guestListPlaceholder")} />
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              <Button size="sm" variant="outline" onClick={addBulkPlayers}>Liste übernehmen</Button>
-              {tournamentMode !== "round-robin" && <Button size="sm" variant="outline" onClick={fillGuestPlayers}>Mit Gästen auffüllen</Button>}
+              <Button size="sm" variant="outline" onClick={addBulkPlayers}>{t("tournament.adoptList")}</Button>
+              {tournamentMode !== "round-robin" && <Button size="sm" variant="outline" onClick={fillGuestPlayers}>{t("tournament.fillWithGuests")}</Button>}
               <div className="flex items-center gap-1">
                 <Input type="number" min={1} max={64} value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value))} className="h-8 w-16 bg-card border-border" />
-                <Button size="sm" variant="outline" onClick={() => addPlayers(Array.from({ length: Math.max(1, guestCount) }, (_, i) => `Gast ${String(players.length + i + 1).padStart(2, "0")}`))}>
-                  Gäste hinzufügen
+                <Button size="sm" variant="outline" onClick={() => addPlayers(Array.from({ length: Math.max(1, guestCount) }, (_, i) => `${t("tournament.guestNamePrefix")} ${String(players.length + i + 1).padStart(2, "0")}`))}>
+                  {t("tournament.addGuests")}
                 </Button>
               </div>
               {players.length > 0 && (
-                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPlayers([])}>Liste leeren</Button>
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPlayers([])}>{t("tournament.clearList")}</Button>
               )}
             </div>
           </div>
@@ -1622,10 +1626,10 @@ const TournamentPage = () => {
           {players.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-muted-foreground">Teilnehmer ({players.length})</label>
+                <label className="text-sm text-muted-foreground">{t("tournament.participants")} ({players.length})</label>
                 {drawMode === "random" && (
                   <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={redraw}>
-                    <Shuffle className="w-3.5 h-3.5" /> Neu auslosen
+                    <Shuffle className="w-3.5 h-3.5" /> {t("tournament.redraw")}
                   </Button>
                 )}
               </div>
@@ -1635,13 +1639,13 @@ const TournamentPage = () => {
                     <div key={p} className="flex items-center gap-2 bg-card border border-border rounded-lg px-2 py-1.5 text-sm">
                       <span className="w-6 text-center font-mono text-xs text-muted-foreground">{i + 1}</span>
                       <span className="flex-1 truncate">{p}</span>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled={i === 0} onClick={() => movePlayer(i, -1)} title="Nach oben" aria-label={`${p} nach oben verschieben`}><ArrowUp className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled={i === players.length - 1} onClick={() => movePlayer(i, 1)} title="Nach unten" aria-label={`${p} nach unten verschieben`}><ArrowDown className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => removePlayer(p)} title="Entfernen" aria-label={`${p} entfernen`}><Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled={i === 0} onClick={() => movePlayer(i, -1)} title={t("tournament.moveUp")} aria-label={`${p} ${t("tournament.moveUpFor")}`}><ArrowUp className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" disabled={i === players.length - 1} onClick={() => movePlayer(i, 1)} title={t("tournament.moveDown")} aria-label={`${p} ${t("tournament.moveDownFor")}`}><ArrowDown className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => removePlayer(p)} title={t("tournament.removeAction")} aria-label={`${p} ${t("tournament.removeFor")}`}><Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></Button>
                     </div>
                   ))}
                   <p className="text-[11px] text-muted-foreground pt-1">
-                    Reihenfolge bestimmt die Paarungen – siehe Vorschau unten.
+                    {t("tournament.orderDeterminesPairings")}
                   </p>
                 </div>
               ) : (
@@ -1679,22 +1683,22 @@ const TournamentPage = () => {
               <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary">
-                    <Network className="w-3.5 h-3.5" /> Vorschau Turnierbaum
+                    <Network className="w-3.5 h-3.5" /> {t("tournament.bracketPreview")}
                   </div>
                   {drawMode === "random" && (
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={redraw}>
-                      <Shuffle className="w-3.5 h-3.5" /> Neu auslosen
+                      <Shuffle className="w-3.5 h-3.5" /> {t("tournament.redraw")}
                     </Button>
                   )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                   {[
-                    { label: "Teilnehmer", value: players.length },
-                    { label: "Hauptraster", value: `${size}er` },
-                    { label: "Runden", value: rounds },
+                    { label: t("tournament.participants"), value: players.length },
+                    { label: t("tournament.mainGrid"), value: `${size}er` },
+                    { label: t("game.rounds"), value: rounds },
                     seeding.prelimPairs.length > 0
-                      ? { label: "Preliminary Matches", value: seeding.prelimPairs.length }
-                      : { label: "Freilose", value: byes },
+                      ? { label: t("tournament.preliminaryMatches"), value: seeding.prelimPairs.length }
+                      : { label: t("tournament.byes"), value: byes },
                   ].map((s) => (
                     <div key={s.label} className="bg-card border border-border rounded-lg py-2">
                       <p className="font-display text-xl">{s.value}</p>
@@ -1704,12 +1708,12 @@ const TournamentPage = () => {
                 </div>
                 <div className="text-[11px] text-muted-foreground space-y-1">
                   <p>
-                    Modus-Verlauf: {roundConfigs.map((c, i) => `${roundLabelFor(i + 1, roundConfigs.length)}: ${c.mode} BO${c.bestOf}`).join(" · ")}
+                    {t("tournament.modeProgression")} {roundConfigs.map((c, i) => `${roundLabelFor(i + 1, roundConfigs.length)}: ${c.mode} BO${c.bestOf}`).join(" · ")}
                   </p>
                   <p>
                     {drawMode === "random"
-                      ? "Vollständig zufällige Auslosung – genau diese Paarungen werden beim Start übernommen."
-                      : "Paarungen wie unten festgelegt."}
+                      ? t("tournament.fullyRandomDraw")
+                      : t("tournament.pairingsAsBelow")}
                   </p>
                 </div>
                 <div className="max-h-[60vh] overflow-auto rounded-lg bg-card/40 p-2">
@@ -1743,7 +1747,7 @@ const TournamentPage = () => {
           })()}
 
           <Button onClick={startTournament} className="w-full mt-4 font-display uppercase text-lg py-6" disabled={players.length < 2 || savingTournament}>
-            <Play className="w-5 h-5 mr-2" /> {savingTournament ? "Speichern…" : editingId ? "Änderungen speichern" : "Turnier starten"}
+            <Play className="w-5 h-5 mr-2" /> {savingTournament ? t("tournament.saving") : editingId ? t("tournament.saveChanges") : t("tournament.startTournament")}
           </Button>
         </div>
       </div>
