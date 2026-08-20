@@ -2670,7 +2670,7 @@ const GamePage = () => {
                 </div>
               </div>
             )}
-            {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} /></div>}
+            {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />}
 
             {!currentPlayer?.isBot && (
               <LiveCamera
@@ -2755,7 +2755,7 @@ const GamePage = () => {
       ) : (
         <>
           {/* Checkout suggestion */}
-          {!isCricket && !currentPlayer?.isBot && (currentPlayer?.doubleOut ?? true) && <div className="mt-3 mb-3"><CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} /></div>}
+          {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />}
 
           {/* Cricket scoreboard */}
           {cricketBoard}

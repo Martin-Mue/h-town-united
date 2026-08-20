@@ -321,7 +321,15 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
     ? "fixed inset-0 z-50 bg-background flex flex-col"
     : "relative w-full";
 
-  const renderMatch = (match: Match, side: "left" | "right" | "center", isLast: boolean) => (
+  const renderMatch = (match: Match, side: "left" | "right" | "center", isLast: boolean) => {
+    // While a linked live game is in progress, the match's own score1/score2 stay at their
+    // pre-match value the whole time — recordMatchResult only writes them once, when the WHOLE
+    // best-of-N match ends (see saveGame in Game.tsx), not leg by leg. match.live is the
+    // periodically-pushed "score right now" snapshot built for the public spectator view
+    // (PublicTournament.tsx already shows it); using it here too is what lets the bracket/
+    // schedule itself show the current leg count instead of looking stuck at 0:0 all match.
+    const liveFresh = !match.winner && isLiveSnapshotFresh(match.live);
+    return (
     <div key={match.id} className={`bg-card border rounded-xl overflow-hidden relative ${match.winner ? "border-border" : "border-primary/30"}`}>
       {!isLast && side === "left" && (
         <span aria-hidden className="absolute top-1/2 -right-4 w-4 h-px bg-border" />
@@ -340,14 +348,23 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               <Plus className="w-4 h-4" />
             </Button>
           )}
-          <span className="w-6 text-center font-display text-base">{idx === 0 ? match.score1 || 0 : match.score2 || 0}</span>
+          <span className={`w-6 text-center font-display text-base ${liveFresh ? "text-accent" : ""}`}>
+            {liveFresh ? (idx === 0 ? match.live!.legs1 : match.live!.legs2) : (idx === 0 ? match.score1 || 0 : match.score2 || 0)}
+          </span>
           {match.winner === player && <Check className="w-4 h-4 text-secondary" />}
         </div>
       ))}
-      {(match.scorekeeper || match.scorekeeperRule || match.board) && !match.winner && (
+      {(match.scorekeeper || match.scorekeeperRule || match.board || liveFresh) && !match.winner && (
         <div className="px-3 py-1 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[10px] text-muted-foreground">
           <span className="truncate">✍️ {scorekeeperLabel(match, matches) || "–"}</span>
-          {match.board ? <span className="font-mono">{t("camera.board")} {match.board}</span> : null}
+          <span className="flex items-center gap-2 shrink-0">
+            {liveFresh && (
+              <span className="flex items-center gap-1 text-accent">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
+              </span>
+            )}
+            {match.board ? <span className="font-mono">{t("camera.board")} {match.board}</span> : null}
+          </span>
         </div>
       )}
       {canStartLiveGame(match) && (
@@ -401,7 +418,8 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
         </div>
       )}
     </div>
-  );
+    );
+  };
   const prelimMatches = matches.filter(m => m.round === 0).sort((a, b) => a.position - b.position);
 
   return (
@@ -425,18 +443,42 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           </Button>
         </div>
       </div>
-      {prelimMatches.length > 0 && (
+      {prelimMatches.length > 0 && (() => {
+        // Same round_configs[totalRounds] convention as resolveRoundMode/resolveRoundBestOf in
+        // the parent (TournamentPage) — round 0 has no valid index of its own within the
+        // round-1..totalRounds array, so its override lives one slot past the last real round.
+        const prelimCfg = (activeTournament.round_configs || [])[totalRounds];
+        const prelimMode = prelimCfg?.mode || activeTournament.game_mode;
+        const prelimBestOf = prelimCfg?.bestOf || activeTournament.best_of_legs;
+        const canEditPrelim = isOwner && prelimMatches.every(m => !m.winner);
+        return (
         <div className="mx-3 mt-3 rounded-xl border border-border bg-card/60 p-3">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
-            {t("tournament.preliminaryRound")}
-          </p>
+          <div className="mb-2 flex items-center gap-1">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+                {t("tournament.preliminaryRound")}
+              </p>
+              <p className="text-[10px] text-primary/80 font-mono">{prelimMode} · BO{prelimBestOf}</p>
+            </div>
+            {canEditPrelim && (
+              <button
+                onClick={() => onEditRoundMode(0)}
+                title={t("tournament.editRoundMode")}
+                aria-label={t("tournament.editRoundMode")}
+                className="p-1.5 -m-1 text-muted-foreground hover:text-primary transition-colors"
+              >
+                <Settings2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2">
             {prelimMatches.map(m => (
               <div key={m.id} className="min-w-[220px] flex-1">{renderMatch(m, "center", true)}</div>
             ))}
           </div>
         </div>
-      )}
+        );
+      })()}
       <div className="relative flex-1">
       <div
         ref={wrapRef}
@@ -1111,13 +1153,22 @@ const TournamentPage = () => {
   };
 
   /** "501" | "301" | "Cricket" | "Extern" — a round can override the tournament's default mode. */
+  /** round_configs[i] holds round (i+1)'s override for every real round (1..totalRounds) — that
+   *  indexing predates the preliminary round (round 0) ever being independently configurable, and
+   *  round 0 has no valid negative index to reuse. Appending its override one slot past the last
+   *  real round instead of renumbering keeps every existing tournament's round_configs reading
+   *  exactly as before: that extra index is simply absent (reads as undefined, same as today) on
+   *  any tournament saved before this. */
+  const roundConfigIndex = (round: number): number =>
+    round === 0 ? totalRoundsOf((activeTournament?.bracket as Match[]) || []) : round - 1;
+
   const resolveRoundMode = (round: number): string => {
-    const cfg = (activeTournament?.round_configs || [])[round - 1];
+    const cfg = (activeTournament?.round_configs || [])[roundConfigIndex(round)];
     return cfg?.mode || activeTournament?.game_mode || "501";
   };
 
   const resolveRoundBestOf = (round: number): number => {
-    const cfg = (activeTournament?.round_configs || [])[round - 1];
+    const cfg = (activeTournament?.round_configs || [])[roundConfigIndex(round)];
     return cfg?.bestOf || activeTournament?.best_of_legs || 3;
   };
 
@@ -1137,15 +1188,16 @@ const TournamentPage = () => {
   const saveRoundMode = async () => {
     if (!activeTournament || editingRound === null) return;
     setSavingRoundMode(true);
+    const idx = roundConfigIndex(editingRound);
     const next = [...(activeTournament.round_configs || [])];
-    while (next.length < editingRound) next.push({ mode: activeTournament.game_mode || "501", bestOf: activeTournament.best_of_legs || 3 });
-    next[editingRound - 1] = { mode: editRoundMode, bestOf: editRoundBestOf };
+    while (next.length <= idx) next.push({ mode: activeTournament.game_mode || "501", bestOf: activeTournament.best_of_legs || 3 });
+    next[idx] = { mode: editRoundMode, bestOf: editRoundBestOf };
     const { error } = await supabase.from("tournaments").update({ round_configs: next as unknown as Json }).eq("id", activeTournament.id);
     if (error) {
       toast({ title: t("common.error"), description: t("tournament.roundModeSaveFailed"), variant: "destructive" });
     } else {
       setActiveTournament({ ...activeTournament, round_configs: next });
-      toast({ title: `${t("tournament.modeForRoundUpdated")} ${editingRound} ${t("tournament.updatedSuffix")}` });
+      toast({ title: editingRound === 0 ? `${t("tournament.preliminaryRoundLabel")} ${t("tournament.updatedSuffix")}` : `${t("tournament.modeForRoundUpdated")} ${editingRound} ${t("tournament.updatedSuffix")}` });
       setEditingRound(null);
     }
     setSavingRoundMode(false);
@@ -1186,7 +1238,7 @@ const TournamentPage = () => {
   const koLiveGamePath = (match: Match): string | null => {
     if (!activeTournament || !isRealPlayer(match.player1) || !isRealPlayer(match.player2)) return null;
     const roundMode = resolveRoundMode(match.round);
-    const bestOf = (activeTournament.round_configs || [])[match.round - 1]?.bestOf || activeTournament.best_of_legs || 1;
+    const bestOf = resolveRoundBestOf(match.round);
     return liveGamePath(match.id, match.player1!, match.player2!, roundMode, bestOf);
   };
 
@@ -1929,6 +1981,12 @@ const TournamentPage = () => {
                         <span className="flex-1 truncate uppercase tracking-wide">
                           <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
                         </span>
+                        {isLiveSnapshotFresh(e.match.live) && (
+                          <span className="shrink-0 flex items-center gap-1 text-accent text-xs font-display">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                            {e.match.live!.legs1}:{e.match.live!.legs2}
+                          </span>
+                        )}
                         {canStartLiveGame(e.match) && (
                           <>
                             <Button size="sm" variant="secondary" className="h-9 text-xs gap-1 shrink-0" onClick={() => startLiveGame(e.match)}>
@@ -2030,7 +2088,11 @@ const TournamentPage = () => {
         {editingRound !== null && (
           <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditingRound(null)}>
             <div className="bg-card border border-border rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
-              <h3 className="font-display uppercase text-sm">{t("tournament.editModeForRound")} {editingRound} {t("tournament.editHeadingSuffix")}</h3>
+              <h3 className="font-display uppercase text-sm">
+                {editingRound === 0
+                  ? `${t("tournament.preliminaryRoundLabel")} ${t("tournament.editHeadingSuffix")}`
+                  : `${t("tournament.editModeForRound")} ${editingRound} ${t("tournament.editHeadingSuffix")}`}
+              </h3>
               <p className="text-[11px] text-muted-foreground">{t("tournament.roundModeScopeNote")}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -2171,6 +2233,12 @@ const TournamentPage = () => {
             {pagedRrUnplayed.visible.map(m => (
               <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2">
                 <span className="text-sm">{m.player1} <span className="text-muted-foreground">vs</span> {m.player2}</span>
+                {isLiveSnapshotFresh(m.live) && (
+                  <span className="shrink-0 flex items-center gap-1 text-accent text-xs font-display mx-2">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                    {m.live!.legs1}:{m.live!.legs2}
+                  </span>
+                )}
                 <div className="flex gap-1">
                   {(activeTournament.live_play_enabled ?? true) && activeTournament.game_mode !== "Extern" && (
                     <>

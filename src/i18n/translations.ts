@@ -696,6 +696,8 @@ export const translations: Record<string, Record<Language, string>> = {
   "tournament.pointsAbbrev": { de: "Pkt", en: "Pts", fr: "Pts", pl: "Pkt", nl: "Pt", tr: "Pu" },
   "tournament.upcomingMatches": { de: "Ausstehende Spiele", en: "Upcoming matches", fr: "Matchs à venir", pl: "Nadchodzące mecze", nl: "Aankomende wedstrijden", tr: "Yaklaşan maçlar" },
   "tournament.playedMatches": { de: "Gespielte Partien", en: "Played matches", fr: "Matchs joués", pl: "Rozegrane mecze", nl: "Gespeelde wedstrijden", tr: "Oynanan maçlar" },
+  "tournament.live": { de: "Live", en: "Live", fr: "En direct", pl: "Na żywo", nl: "Live", tr: "Canlı" },
+  "tournament.preliminaryRoundLabel": { de: "Vorrunde", en: "Preliminary round", fr: "Tour préliminaire", pl: "Runda wstępna", nl: "Voorronde", tr: "Ön tur" },
   "tournament.bigEvent": { de: "Großevent", en: "Big event", fr: "Grand événement", pl: "Duże wydarzenie", nl: "Groot evenement", tr: "Büyük etkinlik" },
   "tournament.external": { de: "Extern", en: "External", fr: "Externe", pl: "Zewnętrzne", nl: "Extern", tr: "Harici" },
 
