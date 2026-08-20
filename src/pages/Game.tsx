@@ -212,6 +212,13 @@ interface UndoSnapshot {
 
 const DEFAULT_NAMES = Array.from({ length: MAX_PLAYERS }, (_, i) => `Spieler ${i + 1}`);
 
+interface ActiveGameSnapshot {
+  game: GameState;
+  dartsThisRound: number;
+  turnStartRemaining: number;
+  tournamentLink: { tournamentId: string; matchId: string; tournamentName?: string } | null;
+}
+
 /**
  * Crash-recovery for an in-progress match — a page reload (pull-to-refresh triggered by
  * accident, a PWA update taking over, the tab getting killed) used to lose the whole game with
@@ -220,21 +227,39 @@ const DEFAULT_NAMES = Array.from({ length: MAX_PLAYERS }, (_, i) => `Spieler ${i
  * no server round-trip needed, and it's already gone the moment the leg finishes (see
  * clearActiveGameSnapshot), since a finished game is the existing save/offline-queue path's job
  * to protect, not this one's.
+ *
+ * Also carries dartsThisRound/turnStartRemaining/tournamentLink alongside `game` — these used to
+ * live in plain, unpersisted component state, so a reload mid-visit silently reset them to their
+ * defaults (0/0/null) while `game` itself came back from mid-leg. turnStartRemaining stuck at 0
+ * is the confirmed mechanism behind a real report of a player's remaining suddenly jumping to 0
+ * with no valid checkout: the NEXT bust on that leg reverts `remaining` to turnStartRemaining
+ * (see the bust branch below), which after an unrestored reload was 0 instead of the player's
+ * real pre-visit score. tournamentLink not surviving a reload similarly left the post-game screen
+ * offering a plain "new game" instead of "back to tournament", and silently dropped the bracket
+ * result write on save.
  */
 const ACTIVE_GAME_KEY = "dartcam-active-game-v1";
-function loadActiveGameSnapshot(): GameState | null {
+function loadActiveGameSnapshot(): ActiveGameSnapshot | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(ACTIVE_GAME_KEY);
-    return raw ? (JSON.parse(raw) as GameState) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Snapshots written before this wrapper existed were a bare GameState (recognizable by a
+    // field only GameState has) — treated as having no partial-visit/tournament-link info
+    // rather than discarded outright, so upgrading doesn't lose an in-progress game.
+    if (parsed && typeof parsed === "object" && "currentLeg" in parsed) {
+      return { game: parsed as GameState, dartsThisRound: 0, turnStartRemaining: 0, tournamentLink: null };
+    }
+    return parsed as ActiveGameSnapshot;
   } catch {
     return null;
   }
 }
-function saveActiveGameSnapshot(game: GameState) {
+function saveActiveGameSnapshot(snapshot: ActiveGameSnapshot) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(game));
+    window.localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(snapshot));
   } catch {
     /* storage full/unavailable — not fatal, just no crash-recovery this session */
   }
@@ -245,8 +270,12 @@ function clearActiveGameSnapshot() {
 }
 
 const GamePage = () => {
+  // Read exactly once (on mount) — every piece of state a crash-recovery restore touches
+  // (phase, game, dartsThisRound, turnStartRemaining, the tournament link) seeds from this same
+  // snapshot below, rather than each independently re-reading localStorage.
+  const [initialSnapshot] = useState(() => loadActiveGameSnapshot());
   const [phase, setPhase] = useState<"setup" | "warmup" | "walkon" | "stats" | "playing" | "postGame">(() =>
-    loadActiveGameSnapshot() ? "playing" : "setup"
+    initialSnapshot ? "playing" : "setup"
   );
   const [mode, setMode] = useState<GameMode>("501");
   const [bestOfLegs, setBestOfLegs] = useState(1);
@@ -311,7 +340,7 @@ const GamePage = () => {
   // opponent, this is the bot's target sequence; the bot's own slot stays null (no comparison
   // shown on a bot's own, non-rendered turn). null = no ghost assigned, or a past leg wasn't found.
   const [ghostSequences, setGhostSequences] = useState<(number[] | null)[]>([]);
-  const [game, setGame] = useState<GameState | null>(() => loadActiveGameSnapshot());
+  const [game, setGame] = useState<GameState | null>(() => initialSnapshot?.game ?? null);
   // Fallback defaults for handleX01Throw/handleCricketThrow when called without an explicit
   // dart (bot logic, camera detection) — DartScoreInput's buttons always pass explicit values.
   const selectedScore = 20;
@@ -329,6 +358,12 @@ const GamePage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
+  // Declared up here (rather than alongside their other in-game-HUD state further down) because
+  // the crash-recovery save effect just below needs them in its dependency array, which is
+  // evaluated eagerly on every render — unlike a closure body, that array literal genuinely
+  // can't reference a const declared later in the same component function.
+  const [dartsThisRound, setDartsThisRound] = useState(() => initialSnapshot?.dartsThisRound ?? 0);
+  const [turnStartRemaining, setTurnStartRemaining] = useState<number>(() => initialSnapshot?.turnStartRemaining ?? 0);
   // Computed once at mount (before any reset/finish can clear the snapshot) — whether this
   // page load recovered an in-progress game rather than starting fresh at "setup".
   const restoredFromSnapshotRef = useRef(phase === "playing" && !!game);
@@ -343,14 +378,21 @@ const GamePage = () => {
   // (resetGame), since a finished game's durability is the existing save/offline-queue path's
   // job, not this snapshot's.
   useEffect(() => {
-    if (phase === "playing" && game && !game.isFinished) saveActiveGameSnapshot(game);
-  }, [game, phase]);
+    if (phase === "playing" && game && !game.isFinished) {
+      saveActiveGameSnapshot({ game, dartsThisRound, turnStartRemaining, tournamentLink: tournamentLinkRef.current });
+    }
+    // dartsThisRound/turnStartRemaining included deliberately — without them a snapshot taken
+    // mid-visit (after game changed but before either was re-derived) could be saved with stale
+    // values; tournamentLinkRef is a ref so its current value doesn't need to be a dependency.
+  }, [game, phase, dartsThisRound, turnStartRemaining]);
   useEffect(() => {
     if (game?.isFinished) clearActiveGameSnapshot();
   }, [game?.isFinished]);
-  /** Set once on mount when this game was launched from a tournament bracket match ("Spiel starten") — used to tag the saved game and write the result back into the bracket on finish. */
-  const tournamentLinkRef = useRef<{ tournamentId: string; matchId: string; tournamentName?: string } | null>(null);
-  const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(null);
+  /** Set once on mount when this game was launched from a tournament bracket match ("Spiel starten") — used to tag the saved game and write the result back into the bracket on finish. Restored from the crash-recovery snapshot too, so a mid-game reload doesn't sever the link (see loadActiveGameSnapshot's doc comment). */
+  const tournamentLinkRef = useRef<{ tournamentId: string; matchId: string; tournamentName?: string } | null>(initialSnapshot?.tournamentLink ?? null);
+  const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(() =>
+    initialSnapshot?.tournamentLink ? (initialSnapshot.tournamentLink.tournamentName || "Turnier") : null
+  );
   const savingRef = useRef(false);
   // Mirrors game.currentLeg.remaining, updated synchronously the instant a throw is processed —
   // not just on the next render. handleX01Throw reads from this instead of the `game` closure
@@ -528,9 +570,6 @@ const GamePage = () => {
       if (botTimerRef.current) clearTimeout(botTimerRef.current);
     };
   }, []);
-
-  const [dartsThisRound, setDartsThisRound] = useState(0);
-  const [turnStartRemaining, setTurnStartRemaining] = useState<number>(0);
 
   const isCricket = game?.mode === "cricket";
   const currentIdx = game?.currentPlayerIndex ?? 0;
