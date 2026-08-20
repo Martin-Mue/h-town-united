@@ -26,6 +26,14 @@ interface DartScoreInputProps {
    *  don't need to wire it up. */
   inputMode?: DartInputMode;
   onInputModeChange?: (mode: DartInputMode) => void;
+  /** How many darts have already landed in the CURRENT visit. Schnell/Eintippen both resolve
+   *  their submission as a fresh 3-dart visit against the current remaining score (see
+   *  submitDetectedRound in Game.tsx) — switching into them after 1–2 darts already went in via
+   *  the single-dart pad would submit those on top of the already-thrown ones instead of
+   *  replacing them, desyncing remaining/checkout math. So they're only offered at the start of
+   *  a visit; default 0 so callers that don't track this (e.g. Training.tsx drills) are
+   *  unaffected. */
+  dartsThisRound?: number;
 }
 
 /**
@@ -42,11 +50,18 @@ interface DartScoreInputProps {
  * want different tradeoffs between speed and per-dart detail, and the same scorekeeper may want to
  * switch mid-game (e.g. per-dart while it's close, typed totals once a leg is a formality).
  */
-const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputModeChange }: DartScoreInputProps) => {
+const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputModeChange, dartsThisRound = 0 }: DartScoreInputProps) => {
   const [localMode, setLocalMode] = useState<DartInputMode>("single");
   const [totalText, setTotalText] = useState("");
   const mode = inputMode ?? localMode;
   const setMode = onInputModeChange ?? setLocalMode;
+  const midVisit = dartsThisRound > 0;
+  // What actually renders — forced to "single" mid-visit regardless of the stored mode (see
+  // dartsThisRound doc above). Deliberately doesn't write this back through setMode: the only
+  // way to reach a partial visit is by throwing via the single-dart pad in the first place, so
+  // in normal play `mode` is already "single" by the time this matters; this only guards a
+  // state-desync edge case (e.g. a mid-visit page reload restoring a stale mode).
+  const effectiveMode = midVisit ? "single" : mode;
 
   const totalValue = totalText.trim() === "" ? null : Number(totalText);
   const totalValid = totalValue !== null && isAchievableVisitTotal(totalValue);
@@ -62,21 +77,31 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
           is being able to change tack at any moment mid-game without hunting for the control. */}
       {onQuickRound && (
         <div className="grid grid-cols-3 gap-1 mb-2.5 p-0.5 rounded-lg bg-muted/50">
-          {(["single", "quick", "total"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
-                mode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {MODE_LABEL[m]}
-            </button>
-          ))}
+          {(["single", "quick", "total"] as const).map((m) => {
+            const locked = midVisit && m !== "single";
+            return (
+              <button
+                key={m}
+                onClick={() => !locked && setMode(m)}
+                disabled={locked}
+                title={locked ? "Erst zu Beginn der nächsten Aufnahme verfügbar" : undefined}
+                className={`py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
+                  effectiveMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                } ${locked ? "opacity-40 cursor-not-allowed" : ""}`}
+              >
+                {MODE_LABEL[m]}
+              </button>
+            );
+          })}
         </div>
       )}
+      {onQuickRound && midVisit && (
+        <p className="text-[10px] text-muted-foreground text-center -mt-1.5 mb-2">
+          Schnell/Eintippen erst zu Beginn der nächsten Aufnahme
+        </p>
+      )}
 
-      {mode === "single" && (
+      {effectiveMode === "single" && (
         <>
           {/* Number grid — 4 wide so each card has real room; Single dominates, Double/Triple sit
               below as their own full-width-of-card buttons. One tap anywhere submits immediately. */}
@@ -140,7 +165,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
         </>
       )}
 
-      {mode === "quick" && onQuickRound && (
+      {effectiveMode === "quick" && onQuickRound && (
         <div className="grid grid-cols-5 gap-1.5">
           {QUICK_ROUNDS.map((v) => (
             <button
@@ -155,7 +180,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
         </div>
       )}
 
-      {mode === "total" && onQuickRound && (
+      {effectiveMode === "total" && onQuickRound && (
         <div className="flex flex-col items-center gap-2 py-2">
           <p className="text-xs text-muted-foreground text-center">Gesamtpunktzahl der Aufnahme (0–180)</p>
           <div className="flex gap-2 w-full max-w-[240px]">

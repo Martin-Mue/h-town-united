@@ -2658,7 +2658,8 @@ const GamePage = () => {
               <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
                 onThrow={throwDart}
                 onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
-                inputMode={dartInputMode} onInputModeChange={setDartInputMode} />
+                inputMode={dartInputMode} onInputModeChange={setDartInputMode}
+                dartsThisRound={dartsThisRound} />
             )}
 
             {/* Correcting a mis-tap used to require opening "Manuelle Eingabe" first, then
@@ -2720,7 +2721,8 @@ const GamePage = () => {
           <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
             onThrow={throwDart}
             onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
-            inputMode={dartInputMode} onInputModeChange={setDartInputMode} />
+            inputMode={dartInputMode} onInputModeChange={setDartInputMode}
+            dartsThisRound={dartsThisRound} />
 
           {/* Undo & actions row */}
           <div className="flex gap-2 mt-3">
