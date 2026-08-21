@@ -212,9 +212,9 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.custom": { de: "Custom", en: "Custom", fr: "Personnalisé", pl: "Niestandardowy", nl: "Aangepast", tr: "Özel" },
   "game.ghost": { de: "Geist", en: "Ghost", fr: "Fantôme", pl: "Duch", nl: "Geest", tr: "Hayalet" },
   "game.ghostRecord": { de: "Geist (Rekord)", en: "Ghost (record)", fr: "Fantôme (record)", pl: "Duch (rekord)", nl: "Geest (record)", tr: "Hayalet (rekor)" },
-  "game.botLv1": { de: "Bot Lv.1 · Rookie", en: "Bot Lv.1 · Rookie", fr: "Bot Niv.1 · Rookie", pl: "Bot Poz.1 · Rookie", nl: "Bot Niv.1 · Rookie", tr: "Bot Sv.1 · Rookie" },
-  "game.botLv2": { de: "Bot Lv.2 · Ligaspieler", en: "Bot Lv.2 · League player", fr: "Bot Niv.2 · Joueur de ligue", pl: "Bot Poz.2 · Zawodnik ligowy", nl: "Bot Niv.2 · Competitiespeler", tr: "Bot Sv.2 · Lig oyuncusu" },
-  "game.botLv3": { de: "Bot Lv.3 · Pro", en: "Bot Lv.3 · Pro", fr: "Bot Niv.3 · Pro", pl: "Bot Poz.3 · Pro", nl: "Bot Niv.3 · Pro", tr: "Bot Sv.3 · Pro" },
+  "game.botLv1": { de: "Kreisliga", en: "Sunday League", fr: "Ligue de district", pl: "Liga okręgowa", nl: "Zondagsliga", tr: "İlçe Ligi" },
+  "game.botLv2": { de: "Landesliga", en: "Regional League", fr: "Ligue régionale", pl: "Liga wojewódzka", nl: "Hoofdklasse", tr: "Bölgesel Lig" },
+  "game.botLv3": { de: "Bundesliga-Ass", en: "Premier League Ace", fr: "As de Ligue 1", pl: "As Ekstraklasy", nl: "Eredivisie-ster", tr: "Süper Lig Yıldızı" },
   "game.voiceYoda": { de: "Yoda", en: "Yoda", fr: "Yoda", pl: "Yoda", nl: "Yoda", tr: "Yoda" },
 
   // Game.tsx — playing HUD (scoreboard, cricket board, current-turn indicator) + winner overlay.
