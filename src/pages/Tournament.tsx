@@ -1336,9 +1336,11 @@ const TournamentPage = () => {
   }, []);
 
   // Fires once per opened tournament (not gated behind the Highlights panel's own expand) so the
-  // participants list's "Turnier-Average" column is populated as soon as there's anything to show.
+  // participants list's "Turnier-Average" column is populated as soon as there's anything to
+  // show — status is always "active" or "finished" here (there's no separate not-yet-started
+  // state; a tournament gets its bracket the moment it's created), so this isn't gated on status.
   useEffect(() => {
-    if (!activeTournament || activeTournament.status !== "active" || tournamentAverages) return;
+    if (!activeTournament || tournamentAverages) return;
     loadTournamentAverages(activeTournament.id);
   }, [activeTournament, tournamentAverages, loadTournamentAverages]);
 

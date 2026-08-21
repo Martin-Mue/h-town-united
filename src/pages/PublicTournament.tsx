@@ -692,12 +692,16 @@ const PublicTournamentPage = () => {
     await loadHighlightsAndAverages(t.id);
   };
 
-  // Fires once per tournament so the participants rotation view has averages ready without
-  // requiring the separate Highlights panel to be opened by hand first.
+  // Only when the participants view is actually (or about to be, via rotation) on screen — most
+  // spectators just watch the board/bracket view and never touch either of the stats surfaces,
+  // so firing this RPC unconditionally for every page load would be a lot of wasted per-dart
+  // throw data fetched for nothing on what's often a multi-viewer live-event page.
   useEffect(() => {
     if (!t || tournamentAverages) return;
+    const willShowParticipants = view === "participants" || (autoRotate && rotationSlots.participants);
+    if (!willShowParticipants) return;
     loadHighlightsAndAverages(t.id);
-  }, [t, tournamentAverages, loadHighlightsAndAverages]);
+  }, [t, tournamentAverages, view, autoRotate, rotationSlots, loadHighlightsAndAverages]);
 
   /** The slot a given `view` value belongs to — tree/list both count as "bracket" since they're
    *  two presentations of the same data, never independently rotation-eligible. */
@@ -943,7 +947,7 @@ const PublicTournamentPage = () => {
         <div className="px-4 pb-6">
           <div className="rounded-xl border border-border bg-card p-4 max-w-xl mx-auto">
             <h3 className="font-display uppercase text-sm mb-3 text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
-            {loadingHighlights && !tournamentAverages ? (
+            {!tournamentAverages ? (
               <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
             ) : (
               <div className="space-y-1.5">
