@@ -21,6 +21,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import htuLogo from "@/assets/htu-logo.jpg";
 
 // recharts (~390KB) is only needed once a player's detail view is open, not for browsing
@@ -86,6 +87,7 @@ const EMPTY_PLAYER_FORM = {
  * Supports photo upload and AI-generated dart jersey portraits.
  */
 const PlayersPage = () => {
+  const { t } = useLanguage();
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -128,7 +130,9 @@ const PlayersPage = () => {
   );
   const shouldShowProfileHint = !!user && !ownPlayerProfile && !profileHintDismissed;
 
-  // Auto-open the create dialog right after signup.
+  // Auto-open the create dialog right after signup. Keyed on the URL param only —
+  // openCreateProfile is a plain (non-memoized) function whose identity changes every render,
+  // and re-running this on every such change would fight the setSearchParams cleanup below.
   useEffect(() => {
     if (searchParams.get("createProfile") === "1") {
       openCreateProfile();
@@ -136,6 +140,7 @@ const PlayersPage = () => {
       params.delete("createProfile");
       setSearchParams(params, { replace: true });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, setSearchParams]);
 
   /** Generates signed URLs for player avatar/portrait storage paths */
@@ -175,13 +180,13 @@ const PlayersPage = () => {
 
     if (error) {
       console.error("Failed to fetch players:", error);
-      toast({ title: "Fehler", description: "Spieler konnten nicht geladen werden.", variant: "destructive" });
+      toast({ title: t("players.errorTitle"), description: t("players.loadFailed"), variant: "destructive" });
     } else {
       const withSignedUrls = await resolveSignedUrls(data || []);
       setPlayers(withSignedUrls);
     }
     setLoading(false);
-  }, [toast]);
+  }, [toast, t]);
 
   useEffect(() => {
     fetchPlayers();
@@ -194,9 +199,9 @@ const PlayersPage = () => {
     setDeletingId(player.id);
     const { error } = await supabase.from("players").delete().eq("id", player.id);
     if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      toast({ title: t("players.errorTitle"), description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Mitglied entfernt", description: `${player.name} wurde aus dem Verein entfernt.` });
+      toast({ title: t("players.memberRemoved"), description: `${player.name} ${t("players.memberRemovedDesc")}` });
       setPlayers((prev) => prev.filter((p) => p.id !== player.id));
       // Avatar/AI-portrait uploads live under their own playerId-prefixed folder, unrelated to
       // the row itself — list rather than guess exact filenames (extension varies jpg/png).
@@ -243,7 +248,7 @@ const PlayersPage = () => {
     // Without this guard, clicking it a second time creates a second profile owned by the same
     // account instead of editing the first.
     if (ownPlayerProfile) {
-      toast({ title: "Du hast bereits ein Profil", description: `Bearbeite dein bestehendes Profil "${ownPlayerProfile.name}" stattdessen.` });
+      toast({ title: t("players.alreadyHaveProfile"), description: `${t("players.editExistingProfileInstead")} "${ownPlayerProfile.name}" ${t("players.instead")}` });
       openEditProfile(ownPlayerProfile);
       return;
     }
@@ -318,11 +323,11 @@ const PlayersPage = () => {
       const data = await response.json();
       if (data.imageBase64) {
         setGeneratedPortrait(data.imageBase64);
-        toast({ title: "Portrait generiert! 🎯", description: "Dein KI-Spielerportrait ist fertig." });
+        toast({ title: t("players.portraitGenerated"), description: t("players.aiPortraitReady") });
       }
     } catch (err) {
       console.error("AI portrait error:", err);
-      toast({ title: "KI-Fehler", description: err instanceof Error ? err.message : "Portrait konnte nicht generiert werden.", variant: "destructive" });
+      toast({ title: t("players.aiErrorTitle"), description: err instanceof Error ? err.message : t("players.portraitGenerationFailed"), variant: "destructive" });
     } finally {
       setGeneratingPortrait(false);
     }
@@ -377,7 +382,7 @@ const PlayersPage = () => {
 
       const { error } = await supabase.from("players").update(updatePayload).eq("id", editingPlayerId);
       if (error) {
-        toast({ title: "Fehler", description: "Profil konnte nicht aktualisiert werden.", variant: "destructive" });
+        toast({ title: t("players.errorTitle"), description: t("players.profileUpdateFailed"), variant: "destructive" });
         return;
       }
 
@@ -397,7 +402,7 @@ const PlayersPage = () => {
       resetForm();
       setDialogOpen(false);
       fetchPlayers();
-      toast({ title: "Profil aktualisiert", description: "Deine Spielerkarte wurde aktualisiert." });
+      toast({ title: t("players.profileUpdated"), description: t("players.playerCardUpdated") });
       return;
     }
 
@@ -422,7 +427,7 @@ const PlayersPage = () => {
       .single();
 
     if (error || !inserted) {
-      toast({ title: "Fehler", description: "Spieler konnte nicht erstellt werden.", variant: "destructive" });
+      toast({ title: t("players.errorTitle"), description: t("players.createFailed"), variant: "destructive" });
       return;
     }
 
@@ -449,7 +454,7 @@ const PlayersPage = () => {
     resetForm();
     setDialogOpen(false);
     fetchPlayers();
-    toast({ title: "Mitglied hinzugefügt! 🎯", description: `${newName} ist jetzt im Verein.` });
+    toast({ title: t("players.memberAdded"), description: `${newName} ${t("players.nowInClub")}` });
     } finally {
       setSavingPlayer(false);
     }
@@ -499,20 +504,20 @@ const PlayersPage = () => {
     const skillRadarData = [
       { skill: "Average", value: Math.min(Number(selectedPlayer.average), 100) },
       { skill: "Highscore", value: (selectedPlayer.high_score / 180) * 100 },
-      { skill: "Siegquote", value: winRate },
-      { skill: "Erfahrung", value: experienceScore(selectedPlayer.games_played) },
-      { skill: "Doppelquote", value: Number(selectedPlayer.double_rate) },
+      { skill: t("players.winRateLabel"), value: winRate },
+      { skill: t("players.experienceLabel"), value: experienceScore(selectedPlayer.games_played) },
+      { skill: t("players.doubleRateLabel"), value: Number(selectedPlayer.double_rate) },
     ];
 
     const winLossData = [
-      { label: "Siege", value: selectedPlayer.games_won, fill: "hsl(155 65% 42%)" },
-      { label: "Niederlagen", value: selectedPlayer.games_played - selectedPlayer.games_won, fill: "hsl(0 72% 51%)" },
+      { label: t("game.winsLabel"), value: selectedPlayer.games_won, fill: "hsl(155 65% 42%)" },
+      { label: t("players.losses"), value: selectedPlayer.games_played - selectedPlayer.games_won, fill: "hsl(0 72% 51%)" },
     ];
 
     return (
       <div className="container py-6 animate-slide-up">
         <Button variant="ghost" onClick={() => setSelectedPlayer(null)} className="mb-4 text-muted-foreground">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Zurück
+          <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
         </Button>
 
         {/* Player header with portrait */}
@@ -524,13 +529,13 @@ const PlayersPage = () => {
             {selectedPlayer.hometown && (
               <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                 <MapPin className="w-3 h-3" /> {selectedPlayer.hometown}
-                {selectedPlayer.joined_year && <span>· seit {selectedPlayer.joined_year}</span>}
+                {selectedPlayer.joined_year && <span>· {t("players.sinceYear")} {selectedPlayer.joined_year}</span>}
               </p>
             )}
           </div>
           {selectedPlayer.user_id === user?.id && (
             <Button variant="outline" size="sm" className="ml-auto gap-2" onClick={() => openEditProfile(selectedPlayer)}>
-              <Pencil className="w-3.5 h-3.5" /> Profil bearbeiten
+              <Pencil className="w-3.5 h-3.5" /> {t("players.editProfile")}
             </Button>
           )}
         </div>
@@ -546,7 +551,7 @@ const PlayersPage = () => {
         {/* Bio */}
         {selectedPlayer.bio && (
           <div className="bg-card border border-border rounded-xl p-4 mb-4">
-            <p className="text-xs uppercase text-muted-foreground font-display mb-2">Steckbrief</p>
+            <p className="text-xs uppercase text-muted-foreground font-display mb-2">{t("players.bioHeading")}</p>
             <p className="text-sm whitespace-pre-line text-foreground/90">{selectedPlayer.bio}</p>
           </div>
         )}
@@ -558,31 +563,31 @@ const PlayersPage = () => {
               <div className="bg-card rounded-xl p-3 border border-border">
                 <Hand className="w-4 h-4 text-primary mb-1" />
                 <p className="text-sm font-display">{
-                  selectedPlayer.throwing_hand === "right" ? "Rechts" :
-                  selectedPlayer.throwing_hand === "left" ? "Links" : "Beidhändig"
+                  selectedPlayer.throwing_hand === "right" ? t("players.right") :
+                  selectedPlayer.throwing_hand === "left" ? t("players.left") : t("players.ambidextrous")
                 }</p>
-                <p className="text-[10px] text-muted-foreground">Wurfhand</p>
+                <p className="text-[10px] text-muted-foreground">{t("players.throwingHand")}</p>
               </div>
             )}
             {selectedPlayer.dart_weight_g && (
               <div className="bg-card rounded-xl p-3 border border-border">
                 <Target className="w-4 h-4 text-primary mb-1" />
                 <p className="text-sm font-display">{selectedPlayer.dart_weight_g} g</p>
-                <p className="text-[10px] text-muted-foreground">Pfeil-Gewicht</p>
+                <p className="text-[10px] text-muted-foreground">{t("players.dartWeight")}</p>
               </div>
             )}
             {selectedPlayer.favorite_double && (
               <div className="bg-card rounded-xl p-3 border border-border">
                 <Trophy className="w-4 h-4 text-primary mb-1" />
                 <p className="text-sm font-display">{selectedPlayer.favorite_double}</p>
-                <p className="text-[10px] text-muted-foreground">Lieblings-Double</p>
+                <p className="text-[10px] text-muted-foreground">{t("players.favoriteDouble")}</p>
               </div>
             )}
             {selectedPlayer.birthday && (
               <div className="bg-card rounded-xl p-3 border border-border">
                 <Calendar className="w-4 h-4 text-primary mb-1" />
                 <p className="text-sm font-display">{new Date(selectedPlayer.birthday).toLocaleDateString("de-DE")}</p>
-                <p className="text-[10px] text-muted-foreground">Geburtstag</p>
+                <p className="text-[10px] text-muted-foreground">{t("players.birthday")}</p>
               </div>
             )}
           </div>
@@ -591,10 +596,10 @@ const PlayersPage = () => {
         {/* Stats cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           {[
-            { label: "Spiele", value: selectedPlayer.games_played, icon: Target },
-            { label: "Siege", value: `${selectedPlayer.games_won} (${winRate}%)`, icon: Trophy },
+            { label: t("stats.games"), value: selectedPlayer.games_played, icon: Target },
+            { label: t("game.winsLabel"), value: `${selectedPlayer.games_won} (${winRate}%)`, icon: Trophy },
             { label: "Highscore", value: selectedPlayer.high_score, icon: TrendingUp },
-            { label: "Ø Score", value: Number(selectedPlayer.average).toFixed(1), icon: BarChart3 },
+            { label: t("stats.average"), value: Number(selectedPlayer.average).toFixed(1), icon: BarChart3 },
           ].map((stat) => (
             <div key={stat.label} className="bg-card rounded-xl p-4 border border-border">
               <stat.icon className="w-4 h-4 text-primary mb-1" />
@@ -605,7 +610,7 @@ const PlayersPage = () => {
         </div>
 
         {/* Charts */}
-        <Suspense fallback={<div className="h-[180px] mb-6 flex items-center justify-center text-muted-foreground text-sm">Lade Diagramme…</div>}>
+        <Suspense fallback={<div className="h-[180px] mb-6 flex items-center justify-center text-muted-foreground text-sm">{t("players.loadingCharts")}</div>}>
           <PlayerStatsCharts skillRadarData={skillRadarData} winLossData={winLossData} />
         </Suspense>
       </div>
@@ -618,12 +623,12 @@ const PlayersPage = () => {
       {shouldShowProfileHint && (
         <Alert className="mb-4 border-primary/30 bg-primary/5">
           <Info className="h-4 w-4" />
-          <AlertTitle>Neues Profil-Update</AlertTitle>
+          <AlertTitle>{t("players.newProfileUpdateTitle")}</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <p>Bestehende Mitglieder können ihr Spielerprofil jetzt einmalig ergänzen und später jederzeit bearbeiten.</p>
+            <p>{t("players.profileUpdateDesc")}</p>
             <div className="flex gap-2">
-              <Button size="sm" onClick={openCreateProfile}>Profil anlegen</Button>
-              <Button size="sm" variant="ghost" onClick={dismissProfileHint}>Später</Button>
+              <Button size="sm" onClick={openCreateProfile}>{t("players.createProfileBtn")}</Button>
+              <Button size="sm" variant="ghost" onClick={dismissProfileHint}>{t("players.later")}</Button>
             </div>
           </AlertDescription>
         </Alert>
@@ -646,25 +651,25 @@ const PlayersPage = () => {
             <div className="absolute -inset-1 rounded-full border border-primary/40 group-hover:rotate-180 transition-transform duration-[2000ms]" />
             <img
               src={htuLogo}
-              alt="H-Town United Vereinsemblem"
+              alt={t("players.clubEmblemAlt")}
               className="relative w-24 h-24 md:w-28 md:h-28 rounded-full object-cover border-2 border-primary/50 glow-cyan group-hover:scale-105 group-active:scale-95 transition-transform duration-300"
             />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-primary font-display mb-1">Vereinsverwaltung</p>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-primary font-display mb-1">{t("players.clubManagement")}</p>
             <h2 className="text-2xl md:text-3xl font-display uppercase leading-tight">
               H-Town United <span className="text-muted-foreground text-base">e.V.</span>
             </h2>
             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Users className="w-3.5 h-3.5 text-secondary" />
-                <span className="font-display text-foreground">{players.length}</span> Mitglieder
+                <span className="font-display text-foreground">{players.length}</span> {t("stats.members")}
               </span>
               <span className="flex items-center gap-1">
                 <Trophy className="w-3.5 h-3.5 text-accent" />
                 <span className="font-display text-foreground">
                   {players.reduce((s, p) => s + p.games_won, 0)}
-                </span> Siege
+                </span> {t("game.winsLabel")}
               </span>
               <span className="flex items-center gap-1">
                 <Target className="w-3.5 h-3.5 text-primary" />
@@ -678,7 +683,7 @@ const PlayersPage = () => {
       </div>
 
       <div className="flex items-center justify-between mb-6 relative">
-        <h3 className="text-sm font-display uppercase tracking-widest text-muted-foreground">Mitglieder</h3>
+        <h3 className="text-sm font-display uppercase tracking-widest text-muted-foreground">{t("stats.members")}</h3>
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open) {
@@ -686,25 +691,25 @@ const PlayersPage = () => {
           }
         }}>
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1" onClick={openCreateProfile}><Plus className="w-4 h-4" /> Mitglied</Button>
+            <Button size="sm" className="gap-1" onClick={openCreateProfile}><Plus className="w-4 h-4" /> {t("players.memberButton")}</Button>
           </DialogTrigger>
           <DialogContent className="bg-card border-border max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-display uppercase">{isEditMode ? "Spielerprofil bearbeiten" : "Neues Mitglied"}</DialogTitle>
+              <DialogTitle className="font-display uppercase">{isEditMode ? t("players.editPlayerProfileTitle") : t("players.newMemberTitle")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label>Name *</Label>
-                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Vor- und Nachname" className="bg-muted border-border" />
+                <Label>{t("players.nameRequired")}</Label>
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("players.firstLastNamePlaceholder")} className="bg-muted border-border" />
               </div>
               <div>
-                <Label>Spitzname</Label>
-                <Input value={newNickname} onChange={(e) => setNewNickname(e.target.value)} placeholder="Optional" className="bg-muted border-border" />
+                <Label>{t("players.nickname")}</Label>
+                <Input value={newNickname} onChange={(e) => setNewNickname(e.target.value)} placeholder={t("common.optional")} className="bg-muted border-border" />
               </div>
 
               {/* Emoji avatar picker */}
               <div>
-                <Label>Emoji Avatar</Label>
+                <Label>{t("players.emojiAvatar")}</Label>
                 <div className="flex gap-2 mt-1 flex-wrap">
                   {EMOJI_AVATARS.map((a) => (
                     <button key={a} onClick={() => setNewEmoji(a)}
@@ -718,9 +723,9 @@ const PlayersPage = () => {
               {/* Photo upload */}
               <div>
                 <Label className="flex items-center gap-1.5">
-                  <Camera className="w-3.5 h-3.5" /> Foto hochladen
+                  <Camera className="w-3.5 h-3.5" /> {t("players.uploadPhoto")}
                 </Label>
-                <p className="text-xs text-muted-foreground mb-2">Lade ein Foto hoch, um ein KI-Spielerportrait im Darttrikot zu generieren.</p>
+                <p className="text-xs text-muted-foreground mb-2">{t("players.uploadPhotoDesc")}</p>
                 <label className="flex items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 transition-colors bg-muted/30">
                   <input type="file" accept="image/*" onChange={handlePhotoSelect} className="hidden" />
                   {uploadedPhoto ? (
@@ -728,7 +733,7 @@ const PlayersPage = () => {
                   ) : (
                     <div className="text-center">
                       <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
-                      <span className="text-xs text-muted-foreground">Foto auswählen</span>
+                      <span className="text-xs text-muted-foreground">{t("players.choosePhoto")}</span>
                     </div>
                   )}
                 </label>
@@ -744,15 +749,15 @@ const PlayersPage = () => {
                     className="w-full gap-2 border-primary/30 hover:border-primary/60"
                   >
                     {generatingPortrait ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> KI generiert Portrait...</>
+                      <><Loader2 className="w-4 h-4 animate-spin" /> {t("players.aiGeneratingPortrait")}</>
                     ) : (
-                      <><Sparkles className="w-4 h-4 text-accent" /> KI-Portrait im Darttrikot generieren</>
+                      <><Sparkles className="w-4 h-4 text-accent" /> {t("players.generateAiPortraitBtn")}</>
                     )}
                   </Button>
 
                   {generatedPortrait && (
                     <div className="mt-3 text-center">
-                      <p className="text-xs text-muted-foreground mb-2">KI-generiertes Spielerportrait:</p>
+                      <p className="text-xs text-muted-foreground mb-2">{t("players.aiGeneratedPortraitLabel")}</p>
                       <img
                         src={generatedPortrait}
                         alt="AI Generated Portrait"
@@ -767,79 +772,79 @@ const PlayersPage = () => {
               <details className="rounded-lg border border-border bg-muted/20 p-3">
                 <summary className="text-sm font-medium cursor-pointer select-none flex items-center gap-2">
                   <Sparkles className="w-3.5 h-3.5 text-primary" />
-                  Mehr über mich <span className="text-xs text-muted-foreground">(alles optional)</span>
+                  {t("players.moreAboutMe")} <span className="text-xs text-muted-foreground">{t("players.allOptional")}</span>
                 </summary>
                 <div className="mt-3 space-y-3">
                   <div>
-                    <Label>Bio / Steckbrief</Label>
+                    <Label>{t("players.bioLabel")}</Label>
                     <Textarea
                       value={newBio}
                       onChange={(e) => setNewBio(e.target.value)}
-                      placeholder="Wie bist du zum Darten gekommen, Lieblings-Spieler, ..."
+                      placeholder={t("players.bioPlaceholder")}
                       className="bg-muted border-border min-h-[70px]"
                     />
                   </div>
                   <div>
-                    <Label>Motto</Label>
+                    <Label>{t("players.motto")}</Label>
                     <Input
                       value={newMotto}
                       onChange={(e) => setNewMotto(e.target.value)}
-                      placeholder='z.B. "180 oder gar nix"'
+                      placeholder={t("players.mottoPlaceholder")}
                       className="bg-muted border-border"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Wurfhand</Label>
+                      <Label>{t("players.throwingHand")}</Label>
                       <Select value={newHand} onValueChange={setNewHand}>
-                        <SelectTrigger className="bg-muted border-border"><SelectValue placeholder="Wählen..." /></SelectTrigger>
+                        <SelectTrigger className="bg-muted border-border"><SelectValue placeholder={t("players.choosePlaceholder")} /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="right">Rechts</SelectItem>
-                          <SelectItem value="left">Links</SelectItem>
-                          <SelectItem value="ambi">Beidhändig</SelectItem>
+                          <SelectItem value="right">{t("players.right")}</SelectItem>
+                          <SelectItem value="left">{t("players.left")}</SelectItem>
+                          <SelectItem value="ambi">{t("players.ambidextrous")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <Label>Dart-Gewicht (g)</Label>
+                      <Label>{t("players.dartWeightLabel")}</Label>
                       <Input
                         type="number" min={10} max={50}
                         value={newWeight}
                         onChange={(e) => setNewWeight(e.target.value)}
-                        placeholder="z.B. 23"
+                        placeholder={t("players.egWeight")}
                         className="bg-muted border-border"
                       />
                     </div>
                     <div>
-                      <Label>Lieblings-Double</Label>
+                      <Label>{t("players.favoriteDouble")}</Label>
                       <Input
                         value={newFavDouble}
                         onChange={(e) => setNewFavDouble(e.target.value)}
-                        placeholder="z.B. D16"
+                        placeholder={t("players.egDouble")}
                         className="bg-muted border-border"
                       />
                     </div>
                     <div>
-                      <Label>Heimatstadt</Label>
+                      <Label>{t("players.hometown")}</Label>
                       <Input
                         value={newHometown}
                         onChange={(e) => setNewHometown(e.target.value)}
-                        placeholder="z.B. Hannover"
+                        placeholder={t("players.egHometown")}
                         className="bg-muted border-border"
                       />
                     </div>
                     <div>
-                      <Label>Mitglied seit</Label>
+                      <Label>{t("players.memberSince")}</Label>
                       <Input
                         type="number" min={1900} max={2100}
                         value={newJoinedYear}
                         onChange={(e) => setNewJoinedYear(e.target.value)}
-                        placeholder="z.B. 2024"
+                        placeholder={t("players.egYear")}
                         className="bg-muted border-border"
                       />
                     </div>
                     <div>
-                      <Label>Geburtstag</Label>
+                      <Label>{t("players.birthday")}</Label>
                       <Input
                         type="date"
                         value={newBirthday}
@@ -852,7 +857,7 @@ const PlayersPage = () => {
               </details>
 
               <Button onClick={addPlayer} className="w-full" disabled={!newName.trim() || savingPlayer}>
-                {savingPlayer ? "Speichern…" : isEditMode ? "Profil speichern" : "Mitglied hinzufügen"}
+                {savingPlayer ? t("players.saving") : isEditMode ? t("players.saveProfile") : t("players.addMemberBtn")}
               </Button>
             </div>
           </DialogContent>
@@ -861,7 +866,7 @@ const PlayersPage = () => {
 
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Mitglied suchen..." className="pl-9 bg-card border-border" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("players.searchMemberPlaceholder")} className="pl-9 bg-card border-border" />
       </div>
 
       {loading ? (
@@ -871,7 +876,7 @@ const PlayersPage = () => {
       ) : filteredPlayers.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Target className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Noch keine Mitglieder. Füge dein erstes Vereinsmitglied hinzu!</p>
+          <p className="text-sm">{t("players.noMembersYet")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -890,13 +895,13 @@ const PlayersPage = () => {
                           {player.nickname && <p className="text-xs text-primary truncate">"{player.nickname}"</p>}
                         </button>
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          <Badge variant="outline" className="border-primary/30 text-primary">{player.games_played} Spiele</Badge>
-                          <Badge variant="outline" className="border-secondary/40 text-secondary">{player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0}% Siege</Badge>
+                          <Badge variant="outline" className="border-primary/30 text-primary">{player.games_played} {t("stats.games")}</Badge>
+                          <Badge variant="outline" className="border-secondary/40 text-secondary">{player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0}% {t("game.winsLabel")}</Badge>
                           {player.favorite_double && <Badge variant="outline">{player.favorite_double}</Badge>}
                         </div>
                       </div>
                       {player.user_id === user?.id && (
-                        <Button variant="ghost" size="icon" onClick={() => openEditProfile(player)} title="Profil bearbeiten">
+                        <Button variant="ghost" size="icon" onClick={() => openEditProfile(player)} title={t("players.editProfile")}>
                           <Pencil className="w-4 h-4" />
                         </Button>
                       )}
@@ -912,7 +917,7 @@ const PlayersPage = () => {
                         <p className="text-[10px] text-muted-foreground uppercase">Ø</p>
                       </div>
                       <div className="rounded-lg bg-muted/40 px-2 py-2">
-                        <p className="text-sm font-display">{player.throwing_hand === "left" ? "Links" : player.throwing_hand === "right" ? "Rechts" : player.throwing_hand === "ambi" ? "Beide" : "–"}</p>
+                        <p className="text-sm font-display">{player.throwing_hand === "left" ? t("players.left") : player.throwing_hand === "right" ? t("players.right") : player.throwing_hand === "ambi" ? t("players.both") : "–"}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Hand</p>
                       </div>
                     </div>
@@ -921,7 +926,7 @@ const PlayersPage = () => {
 
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" className="mt-3 w-full justify-between text-xs text-muted-foreground">
-                    Mehr Details
+                    {t("players.moreDetails")}
                     <ChevronDown className={`w-4 h-4 transition-transform ${expandedCards[player.id] ? "rotate-180" : ""}`} />
                   </Button>
                 </CollapsibleTrigger>
@@ -929,19 +934,19 @@ const PlayersPage = () => {
                 <CollapsibleContent className="pt-2">
                   <div className="grid grid-cols-2 gap-2 border-t border-border pt-3 text-xs">
                     <div className="rounded-lg bg-muted/30 p-3">
-                      <p className="text-muted-foreground uppercase mb-1">Wohnort</p>
-                      <p>{player.hometown || "Nicht angegeben"}</p>
+                      <p className="text-muted-foreground uppercase mb-1">{t("players.residence")}</p>
+                      <p>{player.hometown || t("players.notSpecified")}</p>
                     </div>
                     <div className="rounded-lg bg-muted/30 p-3">
-                      <p className="text-muted-foreground uppercase mb-1">Mitglied seit</p>
+                      <p className="text-muted-foreground uppercase mb-1">{t("players.memberSince")}</p>
                       <p>{player.joined_year || "–"}</p>
                     </div>
                     <div className="rounded-lg bg-muted/30 p-3">
-                      <p className="text-muted-foreground uppercase mb-1">Dartgewicht</p>
+                      <p className="text-muted-foreground uppercase mb-1">{t("players.dartWeightShort")}</p>
                       <p>{player.dart_weight_g ? `${player.dart_weight_g} g` : "–"}</p>
                     </div>
                     <div className="rounded-lg bg-muted/30 p-3">
-                      <p className="text-muted-foreground uppercase mb-1">Geburtstag</p>
+                      <p className="text-muted-foreground uppercase mb-1">{t("players.birthday")}</p>
                       <p>{player.birthday ? new Date(player.birthday).toLocaleDateString("de-DE") : "–"}</p>
                     </div>
                   </div>
@@ -960,19 +965,18 @@ const PlayersPage = () => {
                           className="mt-3 w-full justify-center gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           disabled={deletingId === player.id}
                         >
-                          <Trash2 className="w-3.5 h-3.5" /> Profil entfernen
+                          <Trash2 className="w-3.5 h-3.5" /> {t("players.removeProfile")}
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>{player.name} entfernen?</AlertDialogTitle>
+                          <AlertDialogTitle>{player.name} {t("players.removeConfirmSuffix")}</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Das Spielerprofil und seine gesammelten Statistiken (Average, Highscore, Elo …) werden unwiderruflich gelöscht.
-                            Bereits gespielte Spiele bleiben mit Namen erhalten, verlieren dabei aber ihre Verknüpfung zu diesem Profil.
+                            {t("players.removeWarning")}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel disabled={deletingId === player.id}>Abbrechen</AlertDialogCancel>
+                          <AlertDialogCancel disabled={deletingId === player.id}>{t("common.cancel")}</AlertDialogCancel>
                           <AlertDialogAction
                             onClick={async (e) => {
                               // Radix closes the dialog synchronously on click by default — without
@@ -985,7 +989,7 @@ const PlayersPage = () => {
                             }}
                             disabled={deletingId === player.id}
                           >
-                            {deletingId === player.id ? "Entfernt…" : "Entfernen"}
+                            {deletingId === player.id ? t("players.removing") : t("players.remove")}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -993,7 +997,7 @@ const PlayersPage = () => {
                   )}
                   {isAdmin && player.user_id && (
                     <p className="mt-3 text-[11px] text-muted-foreground text-center">
-                      Profil ist mit einem Account verknüpft — zum vollständigen Entfernen des Mitglieds (inkl. Account) die <Link to="/admin" className="text-primary underline">Mitgliederverwaltung</Link> nutzen.
+                      {t("players.linkedAccountNotePrefix")} <Link to="/admin" className="text-primary underline">{t("players.memberManagement")}</Link> {t("players.linkedAccountNoteSuffix")}
                     </p>
                   )}
                 </CollapsibleContent>

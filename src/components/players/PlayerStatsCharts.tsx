@@ -1,4 +1,5 @@
 import { ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, BarChart, Bar, XAxis, YAxis } from "recharts";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export interface SkillRadarPoint {
   skill: string;
@@ -13,10 +14,12 @@ export interface WinLossBar {
 
 /** Split out of Players.tsx so recharts (~390KB) is only ever fetched once a player's
  *  detail view is actually opened, not just from browsing the roster list. */
-const PlayerStatsCharts = ({ skillRadarData, winLossData }: { skillRadarData: SkillRadarPoint[]; winLossData: WinLossBar[] }) => (
+const PlayerStatsCharts = ({ skillRadarData, winLossData }: { skillRadarData: SkillRadarPoint[]; winLossData: WinLossBar[] }) => {
+  const { t } = useLanguage();
+  return (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
     <div className="bg-card rounded-xl border border-border p-4">
-      <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Skill Profil</h3>
+      <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("players.skillProfile")}</h3>
       <ResponsiveContainer width="100%" height={180}>
         <RadarChart data={skillRadarData}>
           <PolarGrid stroke="hsl(222 18% 14%)" />
@@ -28,7 +31,7 @@ const PlayerStatsCharts = ({ skillRadarData, winLossData }: { skillRadarData: Sk
     </div>
 
     <div className="bg-card rounded-xl border border-border p-4">
-      <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">Siege / Niederlagen</h3>
+      <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("game.winsLabel")} / {t("players.losses")}</h3>
       <ResponsiveContainer width="100%" height={120}>
         <BarChart data={winLossData} layout="vertical">
           <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
@@ -38,6 +41,7 @@ const PlayerStatsCharts = ({ skillRadarData, winLossData }: { skillRadarData: Sk
       </ResponsiveContainer>
     </div>
   </div>
-);
+  );
+};
 
 export default PlayerStatsCharts;
