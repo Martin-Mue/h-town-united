@@ -807,6 +807,25 @@ const PublicTournamentPage = () => {
   const matches = t.bracket as Match[];
   const totalRounds = isKo ? totalRoundsOf(matches) : 0;
   const completed = matches.filter(m => m.winner && isPlayable(m)).slice(-8).reverse();
+
+  // Elimination status per participant, for the Teilnehmer view's colored still-in/out signal.
+  // KO only — round-robin has no elimination concept (everyone plays every scheduled match
+  // regardless of outcome), so this stays null there and that view just shows no status dot.
+  // A player can only lose once in single elimination, so "eliminated" never needs re-checking
+  // once set; the champion is applied last so it wins over the (never-true-for-them) default.
+  const eliminationStatus: Record<string, "active" | "eliminated" | "champion"> | null = isKo
+    ? (() => {
+        const status: Record<string, "active" | "eliminated" | "champion"> = {};
+        for (const name of t.players) status[name] = "active";
+        for (const m of matches) {
+          if (!isPlayable(m) || !m.winner) continue;
+          const loser = m.winner === m.player1 ? m.player2 : m.player1;
+          if (loser && loser in status) status[loser] = "eliminated";
+        }
+        if (t.champion && t.champion in status) status[t.champion] = "champion";
+        return status;
+      })()
+    : null;
   const boardsCount = t.boards ?? 2;
   const roundLabel = (round: number, total: number) => roundLabelFor(round, total, tr);
 
@@ -933,12 +952,16 @@ const PublicTournamentPage = () => {
 
       {view === "highlights" ? (
         <div className="px-4 pb-6">
-          <div className="rounded-xl border border-border bg-card p-4 max-w-2xl mx-auto">
+          {/* No max-w here (used to cap at max-w-2xl) — a TV/tablet propped up for the live
+              rotation has the width to spare, and the highlight table only grows as the
+              tournament goes on, so it should use that width rather than stay narrow and squeeze
+              a growing row/column count into a fixed small box. */}
+          <div className="rounded-xl border border-border bg-card p-4">
             <h3 className="font-display uppercase text-sm mb-3 text-muted-foreground flex items-center gap-2"><Target className="w-4 h-4" /> {tr("pt.highlightsLabel")}</h3>
             {!tournamentHighlights || !tournamentAverages ? (
               <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
             ) : (
-              <TournamentHighlightsPanel highlights={tournamentHighlights} averages={tournamentAverages} />
+              <TournamentHighlightsPanel highlights={tournamentHighlights} averages={tournamentAverages} liveView />
             )}
           </div>
         </div>
@@ -956,12 +979,22 @@ const PublicTournamentPage = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
                 {t.players.map((p) => {
                   const avgRow = tournamentAverages?.participants.find((pa) => pa.key === p || pa.name === p);
+                  const status = eliminationStatus?.[p];
+                  const borderColor =
+                    status === "champion" ? "border-l-accent" :
+                    status === "eliminated" ? "border-l-muted-foreground/30" :
+                    status === "active" ? "border-l-secondary" : "border-l-transparent";
                   return (
-                    <div key={p} className="rounded-lg bg-muted/30 px-2 py-1.5 min-w-0">
-                      <p className="truncate text-xs font-medium">{p}</p>
+                    <div key={p} className={`rounded-lg bg-muted/30 border-l-4 ${borderColor} px-2 py-1.5 min-w-0 ${status === "eliminated" ? "opacity-60" : ""}`}>
+                      <p className="truncate text-xs font-medium">{status === "champion" && "🏆 "}{p}</p>
                       <p className="font-display text-sm text-primary leading-tight">
                         {avgRow && avgRow.tournamentAverage > 0 ? `Ø ${avgRow.tournamentAverage.toFixed(1)}` : "–"}
                       </p>
+                      {status && status !== "champion" && (
+                        <p className={`text-[9px] uppercase tracking-wide leading-tight ${status === "active" ? "text-secondary" : "text-muted-foreground"}`}>
+                          {status === "active" ? tr("pt.statusActive") : tr("pt.statusEliminated")}
+                        </p>
+                      )}
                     </div>
                   );
                 })}
