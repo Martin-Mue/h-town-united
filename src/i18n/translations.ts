@@ -704,8 +704,6 @@ export const translations: Record<string, Record<Language, string>> = {
 
   // PublicTournament.tsx (spectator/beamer live view).
   "pt.boardOverview": { de: "Board-Übersicht", en: "Board overview", fr: "Aperçu des cibles", pl: "Przegląd tarcz", nl: "Bordoverzicht", tr: "Tahta genel görünümü" },
-  "pt.followOnOwnPhone": { de: "Auf dem eigenen Handy weiterverfolgen — scannen öffnet direkt diese Ansicht, ohne Login.", en: "Follow along on your own phone — scanning opens this view directly, no login.", fr: "Suivre sur ton propre téléphone — scanner ouvre directement cette vue, sans connexion.", pl: "Śledź na własnym telefonie — skanowanie otwiera bezpośrednio ten widok, bez logowania.", nl: "Volg mee op je eigen telefoon — scannen opent direct deze weergave, zonder inloggen.", tr: "Kendi telefonundan takip et — tarama bu görünümü doğrudan açar, giriş gerekmez." },
-  "pt.qrToFollow": { de: "QR-Code zum Mitverfolgen", en: "QR code to follow along", fr: "Code QR pour suivre", pl: "Kod QR do śledzenia", nl: "QR-code om mee te volgen", tr: "Takip etmek için QR kodu" },
   "pt.exitFullscreen": { de: "Vollbild verlassen", en: "Exit fullscreen", fr: "Quitter le plein écran", pl: "Zamknij pełny ekran", nl: "Volledig scherm verlaten", tr: "Tam ekrandan çık" },
   "pt.enterFullscreenTv": { de: "Vollbild (für TV/Beamer)", en: "Fullscreen (for TV/projector)", fr: "Plein écran (pour TV/projecteur)", pl: "Pełny ekran (dla TV/projektora)", nl: "Volledig scherm (voor tv/beamer)", tr: "Tam ekran (TV/projeksiyon için)" },
   "pt.fullscreenShort": { de: "Vollbild", en: "Fullscreen", fr: "Plein écran", pl: "Pełny ekran", nl: "Volledig scherm", tr: "Tam ekran" },

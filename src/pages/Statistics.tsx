@@ -210,13 +210,19 @@ const StatisticsPage = () => {
       name: `T${n}`,
       value: entries.reduce((s, d) => s + ((d[`t${n}` as keyof DetailStat] as number | undefined) || 0), 0),
     }));
+    // Grouped by player_id, not by name — every entry here already passed the members-only
+    // filter above, so player_id is always present. Grouping by name instead would (and used to)
+    // split one person into multiple rows the moment they rename their profile (e.g. "Martin" vs
+    // "Martin Müller" after adding a last name), since old game_legs rows keep whatever name was
+    // typed at the time.
     const perPlayer = Object.values(
       entries.reduce<Record<string, { name: string; visits: number; trebleless: number; triples: number }>>((acc, d) => {
-        const cur = acc[d.name] || { name: d.name, visits: 0, trebleless: 0, triples: 0 };
+        const key = d.player_id as string;
+        const cur = acc[key] || { name: d.name, visits: 0, trebleless: 0, triples: 0 };
         cur.visits += d.visits || 0;
         cur.trebleless += d.trebleless || 0;
         cur.triples += d.triples || 0;
-        acc[d.name] = cur;
+        acc[key] = cur;
         return acc;
       }, {})
     ).sort((a, b) => (a.trebleless / Math.max(1, a.visits)) - (b.trebleless / Math.max(1, b.visits)));

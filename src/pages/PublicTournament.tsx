@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw, Target, Settings2, Check } from "lucide-react";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import {
@@ -18,7 +18,6 @@ import {
   type RoundRobinStanding,
   type LiveSnapshot,
 } from "@/utils/tournament";
-import QrCodeDialog from "@/components/QrCodeDialog";
 import AnimatedScore from "@/components/AnimatedScore";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
@@ -332,22 +331,32 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   const roundLabel = (round: number, total: number) => roundLabelFor(round, total, t);
   const hasPrelim = matches.some(m => m.round === 0);
   const rounds = [...(hasPrelim ? [0] : []), ...Array.from({ length: totalRounds }, (_, i) => i + 1)];
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {rounds.map(round => {
         const cfg = (roundConfigs || [])[round - 1];
         const list = matches.filter(m => m.round === round).sort((a, b) => a.position - b.position);
+        // Splits PER MATCH, not per round — with up to 64 players (32 first-round matches) the
+        // old always-everything-at-full-size layout couldn't fit on screen during the live-view
+        // rotation's ~15s per view, forcing a scroll nobody has time for. A match actually worth
+        // watching right now (undecided + playable — the same `live` check each row already
+        // computed) keeps the full one-row treatment; everything else (already decided, or still
+        // waiting on an earlier round to feed it players) collapses to a dense grid — so a huge
+        // first round visibly shrinks match-by-match as it's actually played, not just once the
+        // entire round happens to finish.
+        const liveList = list.filter(m => !m.winner && isPlayable(m));
+        const otherList = list.filter(m => m.winner || !isPlayable(m));
         return (
           <div key={round} className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between">
               <h3 className="font-display uppercase text-sm">{roundLabel(round, totalRounds)}</h3>
               <span className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · BO{cfg?.bestOf || fallbackBestOf}</span>
             </div>
-            <div className="divide-y divide-border">
-              {list.map(m => {
-                const live = !m.winner && isPlayable(m);
-                return (
-                  <div key={m.id} className={`px-4 py-2.5 flex items-center gap-3 text-sm ${live ? "bg-primary/5" : ""}`}>
+            {liveList.length > 0 && (
+              <div className="divide-y divide-border">
+                {liveList.map(m => (
+                  <div key={m.id} className="px-4 py-2.5 flex items-center gap-3 text-sm bg-primary/5">
                     {[m.player1, m.player2].map((player, idx) => (
                       <span key={idx} className={`flex-1 min-w-0 truncate uppercase tracking-wide ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
                         {player || "TBD"}
@@ -356,13 +365,26 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
                     <span className="shrink-0 font-display text-base tabular-nums">
                       {m.score1 ?? 0}:{m.score2 ?? 0}
                     </span>
-                    {live && m.board ? (
+                    {m.board ? (
                       <span className="shrink-0 font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5">{t("camera.board")} {m.board}</span>
                     ) : null}
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
+            {otherList.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1 p-1.5">
+                {otherList.map(m => (
+                  <div key={m.id} className="rounded-lg bg-muted/20 px-2 py-1 text-xs min-w-0">
+                    {[m.player1, m.player2].map((player, idx) => (
+                      <p key={idx} className={`truncate uppercase tracking-wide leading-tight ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
+                        {player || "TBD"}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}
@@ -448,49 +470,13 @@ const BoardOverview = ({
   totalRounds: number;
 }) => {
   const { t } = useLanguage();
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    const onChange = () => setIsFullscreen(document.fullscreenElement === wrapRef.current);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
-    else wrapRef.current?.requestFullscreen().catch(() => undefined);
-  };
 
   return (
-    <div ref={wrapRef} className="p-4 sm:p-6 bg-background min-h-[60vh]">
+    <div className="p-4 sm:p-6 bg-background min-h-[60vh]">
       <div className="flex items-center justify-between mb-4">
         <p className="text-[clamp(0.7rem,1.2vw,0.9rem)] uppercase tracking-[0.3em] text-primary flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary animate-pulse" /> {t("pt.boardOverview")} · {t("tournament.live")}
         </p>
-        <div className="flex items-center gap-1.5">
-          {typeof window !== "undefined" && (
-            <QrCodeDialog
-              url={`${window.location.origin}${window.location.pathname}?view=boards`}
-              title={t("pt.boardOverview")}
-              description={t("pt.followOnOwnPhone")}
-              downloadName="board-uebersicht"
-              trigger={
-                <button className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1.5" title={t("pt.qrToFollow")}>
-                  <QrCodeIcon className="w-3.5 h-3.5" /> QR
-                </button>
-              }
-            />
-          )}
-          <button
-            onClick={toggleFullscreen}
-            className="rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted flex items-center gap-1.5"
-            title={isFullscreen ? t("pt.exitFullscreen") : t("pt.enterFullscreenTv")}
-          >
-            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-            {isFullscreen ? t("pt.exitFullscreen") : t("pt.fullscreenShort")}
-          </button>
-        </div>
       </div>
 
       {now.length === 0 ? (
@@ -590,6 +576,22 @@ const PublicTournamentPage = () => {
   const [flash, setFlash] = useState<Match | null>(null);
   const seenResults = useRef<Set<string> | null>(null);
   const flashTimer = useRef<number | null>(null);
+  // One shared fullscreen wrapper around the toolbar + whichever view is active, instead of
+  // each view (tree/list/participants/highlights) reimplementing its own Fullscreen API glue —
+  // BoardOverview used to be the only one with this, now every rotation slot gets it uniformly
+  // for free from a single toggle. Excludes the page <header> (logo/title) on purpose, so
+  // fullscreen spends its space on the actual content, not branding chrome.
+  const viewWrapRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === viewWrapRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+    else viewWrapRef.current?.requestFullscreen().catch(() => undefined);
+  };
   // A QR code can deep-link straight to a specific view (?view=boards|tree|list|auto) —
   // handy for a TV/projector screen's own corner QR, or one printed specifically for a
   // board. Falls back to this device's last manually-picked view, then the usual default.
@@ -854,8 +856,10 @@ const PublicTournamentPage = () => {
 
       {/* Always visible regardless of which view is active — previously this only rendered
           inside the tree/list branch, so landing on (or switching to) Board-Übersicht had no
-          way back to the bracket at all. */}
-      <div className="px-4 pt-4">
+          way back to the bracket at all. Also the shared fullscreen target — wrapping the
+          toolbar in it too (not just the content below) means switching views, adjusting
+          rotation, or exiting fullscreen never requires leaving fullscreen first. */}
+      <div ref={viewWrapRef} className="px-4 pt-4 bg-background">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border overflow-hidden">
             <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
@@ -893,6 +897,14 @@ const PublicTournamentPage = () => {
           >
             <Settings2 className="w-3.5 h-3.5" />
           </button>
+          <button
+            onClick={toggleFullscreen}
+            className="px-2.5 py-1.5 rounded-lg border border-border text-xs flex items-center gap-1.5 hover:bg-muted text-muted-foreground ml-auto"
+            title={isFullscreen ? tr("pt.exitFullscreen") : tr("pt.enterFullscreenTv")}
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            {isFullscreen ? tr("pt.exitFullscreen") : tr("pt.fullscreenShort")}
+          </button>
         </div>
         {showRotationSettings && (
           <div className="mb-2 rounded-xl border border-border bg-card p-3 max-w-xl">
@@ -918,7 +930,6 @@ const PublicTournamentPage = () => {
             </div>
           </div>
         )}
-      </div>
 
       {view === "highlights" ? (
         <div className="px-4 pb-6">
@@ -961,7 +972,7 @@ const PublicTournamentPage = () => {
       ) : view === "boards" ? (
         <BoardOverview now={boardCardsNow} onDeck={boardCardsOnDeck} queuedCount={boardCardsQueued} totalRounds={totalRounds} />
       ) : (
-      <div className="grid lg:grid-cols-[1fr_320px] gap-4 p-4">
+      <div className={`grid gap-4 p-4 ${view === "tree" ? "" : "lg:grid-cols-[1fr_320px]"}`}>
         <div className="min-w-0">
           {/* "Jetzt am Board" used to duplicate here too — removed, the dedicated Board-Übersicht
               view (see view === "boards" above) is the one place for that now, so switching to
@@ -989,6 +1000,7 @@ const PublicTournamentPage = () => {
           )}
         </div>
 
+        {view !== "tree" && (
         <aside className="flex flex-col gap-4 lg:sticky lg:top-4 self-start">
           {isKo && (
             <div className="bg-card border border-border rounded-xl p-4">
@@ -1058,8 +1070,10 @@ const PublicTournamentPage = () => {
             </div>
           </div>
         </aside>
+        )}
       </div>
       )}
+      </div>
 
       {flash && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
