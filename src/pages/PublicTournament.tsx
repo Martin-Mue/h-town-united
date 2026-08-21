@@ -933,20 +933,24 @@ const PublicTournamentPage = () => {
         </div>
       ) : view === "participants" ? (
         <div className="px-4 pb-6">
-          <div className="rounded-xl border border-border bg-card p-4 max-w-xl mx-auto">
-            <h3 className="font-display uppercase text-sm mb-3 text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <h3 className="font-display uppercase text-sm mb-2 text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
             {!tournamentAverages ? (
               <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
             ) : (
-              <div className="space-y-1.5">
+              // Grid, not a single scrolling column — this view specifically is meant to fit a
+              // full field (up to 64) on screen at once on a propped-up TV/tablet, the same way
+              // the board overview does. Column count scales with viewport width; row height
+              // stays minimal (compact padding/text) so more of them actually fit vertically.
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
                 {t.players.map((p) => {
                   const avgRow = tournamentAverages?.participants.find((pa) => pa.key === p || pa.name === p);
                   return (
-                    <div key={p} className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 px-3 py-2.5">
-                      <span className="min-w-0 truncate text-sm font-medium">{p}</span>
-                      <span className="shrink-0 font-display text-primary">
+                    <div key={p} className="rounded-lg bg-muted/30 px-2 py-1.5 min-w-0">
+                      <p className="truncate text-xs font-medium">{p}</p>
+                      <p className="font-display text-sm text-primary leading-tight">
                         {avgRow && avgRow.tournamentAverage > 0 ? `Ø ${avgRow.tournamentAverage.toFixed(1)}` : "–"}
-                      </span>
+                      </p>
                     </div>
                   );
                 })}

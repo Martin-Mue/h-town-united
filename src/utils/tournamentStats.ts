@@ -193,5 +193,13 @@ export function mergeTournamentStats(highlights: TournamentHighlights, averages:
     entry.checkout170 = h.checkout170;
     byKey.set(h.key, entry);
   }
-  return [...byKey.values()].sort((a, b) => b.tournamentAverage - a.tournamentAverage || b.oneEighties - a.oneEighties);
+  // Ranked by highlight magnitude, biggest first — this is the Highlights table, not the
+  // leaderboard, so someone with real highlight-worthy darts (even a single 180) belongs above
+  // someone who just has a higher average but nothing highlight-worthy at all. tournamentAverage
+  // is the tiebreak, not the primary key. Mirrors computeTournamentHighlights' own internal sort.
+  return [...byKey.values()].sort((a, b) =>
+    b.oneEighties - a.oneEighties || b.checkout170 - a.checkout170 || b.checkout160Plus - a.checkout160Plus ||
+    b.checkout140Plus - a.checkout140Plus || b.checkout120Plus - a.checkout120Plus || b.checkout100Plus - a.checkout100Plus ||
+    b.bigTriples - a.bigTriples || b.bulls - a.bulls || b.tournamentAverage - a.tournamentAverage
+  );
 }

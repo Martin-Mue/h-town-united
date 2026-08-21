@@ -189,7 +189,7 @@ const StatisticsPage = () => {
       const ds = (g.detail_stats || {}) as { players?: DetailStat[]; player1?: DetailStat | null; player2?: DetailStat | null };
       if (ds.players && ds.players.length > 0) {
         ds.players.forEach((d) => {
-          if (!d) return;
+          if (!d || !d.player_id) return; // members only — bots/guests never match a roster player
           if (filterPlayerId !== "all" && (d.player_id ?? null) !== filterPlayerId) return;
           entries.push(d);
         });
@@ -197,7 +197,7 @@ const StatisticsPage = () => {
         // Legacy games saved before detail_stats covered every player, not just the top 2.
         ([["player1", g.player1_id], ["player2", g.player2_id]] as const).forEach(([key, pid]) => {
           const d = ds[key];
-          if (!d) return;
+          if (!d || !pid) return; // members only
           if (filterPlayerId !== "all" && pid !== filterPlayerId) return;
           entries.push(d);
         });
