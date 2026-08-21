@@ -241,16 +241,19 @@ interface BracketViewportProps {
   onStartLiveGame: (match: Match) => void;
   /** Absolute URL for the QR code — null when the match isn't in a live-startable state. */
   getLiveGameUrl: (match: Match) => string | null;
-  /** Only the tournament's creator gets manual tap/edit/reset controls — the DB itself only
-   *  allows non-owners to write bracket/champion/status (needed for "Spiel starten" results to
-   *  land regardless of who plays), everyone else edits nothing manually, on purpose (see
-   *  20260815170000 migration). "Spiel starten" itself stays available to everyone below. */
+  /** True SETTINGS edits (round mode/format) stay creator-only — DB-enforced, see
+   *  20260815170000 migration. Used only for canEditPrelim below, NOT for manual result entry
+   *  (that's canEditResults, a separate/broader prop — the DB already allows non-owners to write
+   *  bracket/champion/status regardless). */
   isOwner: boolean;
+  /** Manual tap/edit/reset controls for a match's RESULT — broader than isOwner (see its
+   *  definition in the parent for why), since the DB itself already allows this. */
+  canEditResults: boolean;
   /** Opens the round-mode editor for this round header (owner only, see roundHeader below). */
   onEditRoundMode: (round: number) => void;
 }
 
-const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, isOwner, onEditRoundMode }: BracketViewportProps) => {
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, isOwner, canEditResults, onEditRoundMode }: BracketViewportProps) => {
   // v2 — no continuous auto-measurement (see PublicTournament.tsx's LiveBracket for the same
   // change + full rationale): fixed, always-legible scale by default, native scroll for
   // overflow, manual zoom, and "fit to screen" as a one-time on-demand measurement instead of
@@ -345,8 +348,8 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           className={`w-full px-3 py-2.5 text-sm text-left flex items-center justify-between gap-2 transition-colors ${
             idx === 0 ? "border-b border-border" : ""
           } ${match.winner === player ? "bg-secondary/10 text-secondary font-semibold" : player === BYE ? "text-muted-foreground/30" : "hover:bg-muted"} ${!player ? "text-muted-foreground/30" : ""}`}>
-          <button disabled={!isOwner || !player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left uppercase tracking-wide disabled:cursor-not-allowed">{player || "TBD"}</button>
-          {isOwner && (
+          <button disabled={!canEditResults || !player || player === BYE || !!match.winner} onClick={() => player && setKoWinner(match.id, player)} className="min-w-0 flex-1 truncate text-left uppercase tracking-wide disabled:cursor-not-allowed">{player || "TBD"}</button>
+          {canEditResults && (
             <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" disabled={!player || player === BYE || !!match.winner} onClick={() => setKoScore(match.id, idx === 0 ? 1 : 2)} title={t("tournament.legWon")} aria-label={`${t("tournament.legWonFor")} ${player || t("stats.player")}`}>
               <Plus className="w-4 h-4" />
             </Button>
@@ -390,7 +393,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
           )}
         </div>
       )}
-      {isOwner && (match.winner || match.score1 || match.score2 || onEditMatch) && (
+      {canEditResults && (match.winner || match.score1 || match.score2 || onEditMatch) && (
         <div className="flex border-t border-border/60">
           {(match.winner || match.score1 || match.score2) && (
             <AlertDialog open={confirmResetId === match.id} onOpenChange={(open) => setConfirmResetId(open ? match.id : null)}>
@@ -678,12 +681,22 @@ const TournamentPage = () => {
   const { session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  /** Manual bracket edits (tap winner, +1 leg, reset, edit players, delete, settings) are for
-   *  the creator only — the DB enforces this too (see 20260815170000 migration), this just
-   *  keeps the UI from showing controls that would fail. `isOwnerOf` for the list view (many
+  /** True tournament SETTINGS edits (name, mode, round_configs, players, public_view, …) are
+   *  creator-only, DB-enforced via the 20260815170000 migration's trigger — this just keeps the
+   *  UI from showing controls that would fail server-side. `isOwnerOf` for the list view (many
    *  tournaments at once), `isOwner` for whichever one is currently open. */
   const isOwnerOf = (t: TournamentRecord) => !!session?.user?.id && t.user_id === session.user.id;
   const isOwner = activeTournament ? isOwnerOf(activeTournament) : false;
+  /** RESULT/bracket edits (tap winner, +1 leg, reset a match, edit round-1 players, reshuffle
+   *  scorekeepers) are a different story: the same trigger above explicitly exempts
+   *  bracket/champion/status from the owner lock, specifically so a live game finishing on
+   *  someone else's device can still write its result back. This one extra account is trusted
+   *  the same way for the MANUAL entry path too, at the user's explicit request — logged into
+   *  their own second (non-admin) account on whatever devices are scorekeeping. Not a role
+   *  system; just this one id, matching how the app already hardcodes specific accounts
+   *  elsewhere (e.g. Players.tsx's STATIC_PORTRAITS). */
+  const TRUSTED_RESULT_EDITOR_ID = "37a33cda-b542-4b30-b9b3-49d597a3bb97"; // mueller-kim@outlook.com
+  const canEditResults = isOwner || session?.user?.id === TRUSTED_RESULT_EDITOR_ID;
 
   const togglePublicView = async () => {
     if (!activeTournament) return;
@@ -1960,7 +1973,7 @@ const TournamentPage = () => {
               <ListOrdered className="w-3.5 h-3.5" /> {t("tournament.scheduleAndScorekeeper")}
             </button>
           </div>
-          {isOwner && (
+          {canEditResults && (
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={reshuffleScorekeepers}>
               <Shuffle className="w-3.5 h-3.5" /> {t("tournament.redrawScorekeepers")}
             </Button>
@@ -1984,6 +1997,7 @@ const TournamentPage = () => {
             onStartLiveGame={startLiveGame}
             getLiveGameUrl={(m) => { const p = koLiveGamePath(m); return p ? `${window.location.origin}${p}` : null; }}
             isOwner={isOwner}
+            canEditResults={canEditResults}
             onEditRoundMode={openRoundModeEditor}
           />
         ) : (
@@ -2310,7 +2324,7 @@ const TournamentPage = () => {
                       )}
                     </>
                   )}
-                  {isOwner && (
+                  {canEditResults && (
                     <>
                       <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player1)}>
                         {m.player1} ✓
