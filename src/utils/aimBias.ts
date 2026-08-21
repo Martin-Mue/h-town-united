@@ -127,20 +127,20 @@ const NEGLIGIBLE_MM = 0.5;
  * reference AimBiasCard's arrow uses) since "clockwise" only means a fixed screen direction once
  * you fix which wedge you're talking about.
  */
-export function describeAimTip(result: AimBiasResult): string {
+export function describeAimTip(result: AimBiasResult, t: (key: string) => string): string {
   const parts: string[] = [];
   if (result.radialOffsetMm > NEGLIGIBLE_MM) {
-    parts.push("ziel bewusst etwas näher zur Mitte");
+    parts.push(t("aimBias.tipAimCloser"));
   } else if (result.radialOffsetMm < -NEGLIGIBLE_MM) {
-    parts.push("du darfst ruhig etwas selbstbewusster nach außen zielen");
+    parts.push(t("aimBias.tipAimFurther"));
   }
   if (result.tangentialOffsetMm > NEGLIGIBLE_MM) {
-    parts.push("bei Zielen oben am Board (z. B. T20) leicht nach links korrigieren");
+    parts.push(t("aimBias.tipCorrectLeft"));
   } else if (result.tangentialOffsetMm < -NEGLIGIBLE_MM) {
-    parts.push("bei Zielen oben am Board (z. B. T20) leicht nach rechts korrigieren");
+    parts.push(t("aimBias.tipCorrectRight"));
   }
-  if (parts.length === 0) return "Deine Wurftendenz ist aktuell unauffällig — einfach so weitermachen.";
-  return `Versuch: ${parts.join(" und ")}.`;
+  if (parts.length === 0) return t("aimBias.tipUnremarkable");
+  return `${t("aimBias.tipTryPrefix")} ${parts.join(` ${t("aimBias.tipAnd")} `)}.`;
 }
 
 export { MIN_SAMPLE as AIM_BIAS_MIN_SAMPLE };

@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { computeAimBias, describeAimTip, AIM_BIAS_MIN_SAMPLE, type CoordDart, type AimBiasResult } from "./aimBias";
 import { SEGMENTS_CLOCKWISE, RING } from "./dartboardGeometry";
+import { translate } from "@/i18n/translations";
+
+const t = (key: string) => translate(key, "de");
 
 /** Builds a synthetic dart landing exactly `radialOff`/`tangentialOff` (board-units) away from
  *  the true ideal center of the given (baseValue, multiplier) ring — the exact inverse of what
@@ -134,26 +137,26 @@ describe("describeAimTip", () => {
     // Actual user-reported reading: +6.8mm radial (too far out), -3.1mm tangential — confirmed
     // by the user themselves as a real, felt left-leaning tendency. -3.1 must produce "nach
     // rechts" (correct right to counteract drifting left), never "nach links".
-    const tip = describeAimTip(withOffsets(6.8, -3.1));
+    const tip = describeAimTip(withOffsets(6.8, -3.1), t);
     expect(tip).toContain("nach rechts");
     expect(tip).not.toContain("nach links");
     expect(tip).toContain("näher zur Mitte");
   });
 
   it("tells a clockwise (right-drifting) bias to correct left", () => {
-    const tip = describeAimTip(withOffsets(0, 3.1));
+    const tip = describeAimTip(withOffsets(0, 3.1), t);
     expect(tip).toContain("nach links");
     expect(tip).not.toContain("nach rechts");
   });
 
   it("tells a too-short bias to aim further out, not closer in", () => {
-    const tip = describeAimTip(withOffsets(-6.8, 0));
+    const tip = describeAimTip(withOffsets(-6.8, 0), t);
     expect(tip).toContain("nach außen");
     expect(tip).not.toContain("näher zur Mitte");
   });
 
   it("says nothing needs correcting when both offsets are negligible", () => {
-    const tip = describeAimTip(withOffsets(0.2, -0.1));
+    const tip = describeAimTip(withOffsets(0.2, -0.1), t);
     expect(tip).toMatch(/unauffällig/);
   });
 });

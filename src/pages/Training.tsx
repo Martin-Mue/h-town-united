@@ -6,14 +6,15 @@ import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import CoachingPlan from "@/components/training/CoachingPlan";
 import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
 import { CHECKOUT_ROUTES } from "@/utils/checkoutTable";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 /** Training drill definition */
 interface TrainingDrill {
   id: string;
   name: string;
-  description: string;
+  descriptionKey: string;
   icon: typeof Target;
-  difficulty: "Anfänger" | "Fortgeschritten" | "Profi";
+  difficulty: "beginner" | "intermediate" | "pro";
   durationMinutes: number;
   category: "doubles" | "finishing" | "accuracy" | "pressure";
 }
@@ -23,153 +24,154 @@ const TRAINING_DRILLS: TrainingDrill[] = [
   {
     id: "doubles-only",
     name: "Doubles Only",
-    description: "Triff jedes Doppelfeld einmal. Trainiere deine Checkout-Sicherheit.",
+    descriptionKey: "training.doublesOnlyDesc",
     icon: Target,
-    difficulty: "Anfänger",
+    difficulty: "beginner",
     durationMinutes: 15,
     category: "doubles",
   },
   {
     id: "around-the-clock",
     name: "Around the Clock",
-    description: "Triff 1 bis 20 der Reihe nach. Perfekt für Genauigkeit und Routine.",
+    descriptionKey: "training.aroundTheClockDesc",
     icon: RotateCw,
-    difficulty: "Anfänger",
+    difficulty: "beginner",
     durationMinutes: 10,
     category: "accuracy",
   },
   {
     id: "121-challenge",
     name: "121 Challenge",
-    description: "Starte bei 121 und checke aus. Wie viele Darts brauchst du?",
+    descriptionKey: "training.121ChallengeDesc",
     icon: Crosshair,
-    difficulty: "Fortgeschritten",
+    difficulty: "intermediate",
     durationMinutes: 10,
     category: "finishing",
   },
   {
     id: "pressure-training",
     name: "Pressure Training",
-    description: "Simuliere Match-Situationen: 32, 40, 16 rest – checke unter Druck.",
+    descriptionKey: "training.pressureTrainingDesc",
     icon: Zap,
-    difficulty: "Profi",
+    difficulty: "pro",
     durationMinutes: 20,
     category: "pressure",
   },
   {
     id: "random-finish",
     name: "Random Finish Drill",
-    description: "Zufällige Checkout-Werte zwischen 2 und 170. Teste dein Wissen.",
+    descriptionKey: "training.randomFinishDesc",
     icon: Trophy,
-    difficulty: "Fortgeschritten",
+    difficulty: "intermediate",
     durationMinutes: 15,
     category: "finishing",
   },
   {
     id: "target-grind",
     name: "Target Grind",
-    description: "Wähle dein Zielfeld (z. B. T20, T19, Bull). Wirf X Runden und zähle deine Treffer.",
+    descriptionKey: "training.targetGrindDesc",
     icon: Target,
-    difficulty: "Fortgeschritten",
+    difficulty: "intermediate",
     durationMinutes: 20,
     category: "accuracy",
   },
   {
     id: "big-single-lock",
     name: "Big Single Lock",
-    description: "Start bei S1. 3 Singles = Segment gelockt. 2 Treffer = weiter, 1 Treffer = zurück zum letzten Lock. Aufsteigend bis S20.",
+    descriptionKey: "training.bigSingleLockDesc",
     icon: Lock,
-    difficulty: "Fortgeschritten",
+    difficulty: "intermediate",
     durationMinutes: 15,
     category: "accuracy",
   },
   {
     id: "random-score",
     name: "Random Score",
-    description: "10 Runden, in jeder Runde ein zufälliges Zielsegment (S/D/T). Wirf 3 Darts pro Runde und sammle Treffer.",
+    descriptionKey: "training.randomScoreDesc",
     icon: Shuffle,
-    difficulty: "Fortgeschritten",
+    difficulty: "intermediate",
     durationMinutes: 10,
     category: "accuracy",
   },
   {
     id: "bull-control",
     name: "Bull Control",
-    description:
-      "X01 für 2–8 Spieler: Punkten darf nur, wer zuletzt das Bull getroffen hat – und nur auf einer einzigen Zahl (z. B. 20). Jeder Bull-Treffer klaut die Scoring-Lizenz.",
+    descriptionKey: "training.bullControlDesc",
     icon: Crosshair,
-    difficulty: "Profi",
+    difficulty: "pro",
     durationMinutes: 25,
     category: "pressure",
   },
   {
     id: "shanghai",
     name: "Shanghai",
-    description:
-      "Runde für Runde von 1 bis 20: Triffst du Single, Double UND Triple derselben Zahl in einer einzigen Aufnahme, gewinnst du sofort – ein Shanghai! Sonst zählt jeder Treffer als Score. Der Nervenkitzel-Klassiker, den man in kaum einer App findet.",
+    descriptionKey: "training.shanghaiDesc",
     icon: PartyPopper,
-    difficulty: "Profi",
+    difficulty: "pro",
     durationMinutes: 15,
     category: "pressure",
   },
   {
     id: "halve-it",
     name: "Halve It",
-    description:
-      "10 Runden, jede mit eigenem Ziel (Zahl, Doppel, Triple, Bull). Ein Treffer bringt Punkte – ein kompletter Fehlwurf halbiert deinen Punktestand sofort. Der Klassiker aus jeder Vereinskneipe, gnadenlos und selten digital zu finden.",
+    descriptionKey: "training.halveItDesc",
     icon: Divide,
-    difficulty: "Fortgeschritten",
+    difficulty: "intermediate",
     durationMinutes: 15,
     category: "pressure",
   },
   {
     id: "bobs-27",
     name: "Bob's 27",
-    description:
-      "Start bei 27 Punkten. Von 1 bis 20 immer auf das Doppel der laufenden Runde: Treffer bringen den doppelten Zahlenwert, ein Fehlwurf kostet ihn. Fällt dein Konto auf 0, ist Schluss. Das beliebteste Aufwärm-Ritual im Ligadarts.",
+    descriptionKey: "training.bobs27Desc",
     icon: ListOrdered,
-    difficulty: "Profi",
+    difficulty: "pro",
     durationMinutes: 15,
     category: "doubles",
   },
   {
     id: "shanghai-rtc",
     name: "Shanghai Round the Clock",
-    description:
-      "Der Reihe nach von deiner Startzahl bis 20: Triff Single UND Triple derselben Zahl (Reihenfolge egal) und schließe dann mit dem Doppel ab, um zur nächsten Zahl zu kommen. Wählbare Startzahl, optional rundenbegrenzt.",
+    descriptionKey: "training.shanghaiRtcDesc",
     icon: Route,
-    difficulty: "Profi",
+    difficulty: "pro",
     durationMinutes: 20,
     category: "pressure",
   },
 ];
 
 interface HalveItRound {
-  label: string;
+  labelKey: string;
   kind: "number" | "anyDouble" | "anyTriple" | "bull";
   number?: number;
 }
 /** 10-round Halve It sequence — mixes fixed numbers with "any double/triple/bull" rounds,
  *  the way it's traditionally chalked up on a pub blackboard. */
 const HALVE_IT_ROUNDS: HalveItRound[] = [
-  { label: "20", kind: "number", number: 20 },
-  { label: "Doppel (beliebig)", kind: "anyDouble" },
-  { label: "19", kind: "number", number: 19 },
-  { label: "18", kind: "number", number: 18 },
-  { label: "Bull", kind: "bull" },
-  { label: "17", kind: "number", number: 17 },
-  { label: "Triple (beliebig)", kind: "anyTriple" },
-  { label: "16", kind: "number", number: 16 },
-  { label: "15", kind: "number", number: 15 },
-  { label: "Doppel (beliebig)", kind: "anyDouble" },
+  { labelKey: "20", kind: "number", number: 20 },
+  { labelKey: "training.anyDouble", kind: "anyDouble" },
+  { labelKey: "19", kind: "number", number: 19 },
+  { labelKey: "18", kind: "number", number: 18 },
+  { labelKey: "game.bull", kind: "bull" },
+  { labelKey: "17", kind: "number", number: 17 },
+  { labelKey: "training.anyTriple", kind: "anyTriple" },
+  { labelKey: "16", kind: "number", number: 16 },
+  { labelKey: "15", kind: "number", number: 15 },
+  { labelKey: "training.anyDouble", kind: "anyDouble" },
 ];
 const HALVE_IT_START = 40;
 const BOBS_27_ROUNDS = 20;
 
 const DIFFICULTY_COLORS: Record<string, string> = {
-  "Anfänger": "bg-secondary/20 text-secondary",
-  "Fortgeschritten": "bg-primary/20 text-primary",
-  "Profi": "bg-accent/20 text-accent",
+  beginner: "bg-secondary/20 text-secondary",
+  intermediate: "bg-primary/20 text-primary",
+  pro: "bg-accent/20 text-accent",
+};
+
+const DIFFICULTY_LABEL_KEY: Record<string, string> = {
+  beginner: "training.difficultyBeginner",
+  intermediate: "training.difficultyIntermediate",
+  pro: "training.difficultyPro",
 };
 
 /** Double fields for doubles-only drill */
@@ -240,43 +242,43 @@ function saveRecord(drillId: string, entry: RecordEntry, variant?: string) {
 /** Given a FINISHED drill state, returns the comparable result for this run, or null if this
  *  particular run doesn't produce one (e.g. a round-cappable drill cut short before actually
  *  reaching the end — see `completedFully` — isn't a fair "how fast can you finish" data point). */
-function computeRecordCandidate(drillId: string, state: DrillState): Omit<RecordEntry, "achievedAt"> | null {
+function computeRecordCandidate(drillId: string, state: DrillState, t: (key: string) => string): Omit<RecordEntry, "achievedAt"> | null {
   switch (drillId) {
     case "around-the-clock":
     case "doubles-only":
     case "big-single-lock":
-      return state.completedFully ? { value: state.dartsThrown, higherIsBetter: false, label: "Darts bis zum Abschluss" } : null;
+      return state.completedFully ? { value: state.dartsThrown, higherIsBetter: false, label: t("training.recordDartsToComplete") } : null;
     case "121-challenge":
-      return state.remaining === 0 ? { value: state.dartsThrown, higherIsBetter: false, label: "Darts bis zum Checkout" } : null;
+      return state.remaining === 0 ? { value: state.dartsThrown, higherIsBetter: false, label: t("training.recordDartsToCheckout") } : null;
     case "pressure-training":
     case "random-finish":
-      return { value: state.dartsThrown, higherIsBetter: false, label: "Darts für alle Checkouts" };
+      return { value: state.dartsThrown, higherIsBetter: false, label: t("training.recordDartsForAllCheckouts") };
     case "target-grind":
     case "random-score":
       return state.dartsThrown > 0
-        ? { value: Math.round((state.hits / state.dartsThrown) * 100), higherIsBetter: true, label: "Trefferquote %" }
+        ? { value: Math.round((state.hits / state.dartsThrown) * 100), higherIsBetter: true, label: t("training.recordHitRatePercent") }
         : null;
     case "shanghai":
-      return { value: state.shanghaiScore ?? 0, higherIsBetter: true, label: "Shanghai-Score" };
+      return { value: state.shanghaiScore ?? 0, higherIsBetter: true, label: t("training.recordShanghaiScore") };
     case "shanghai-rtc":
-      return { value: state.rtcScore ?? 0, higherIsBetter: true, label: "Score" };
+      return { value: state.rtcScore ?? 0, higherIsBetter: true, label: t("training.recordScore") };
     case "halve-it":
-      return { value: state.remaining, higherIsBetter: true, label: "Endstand" };
+      return { value: state.remaining, higherIsBetter: true, label: t("training.recordFinalScore") };
     case "bobs-27":
-      return { value: Math.max(0, state.remaining), higherIsBetter: true, label: "Endstand" };
+      return { value: Math.max(0, state.remaining), higherIsBetter: true, label: t("training.recordFinalScore") };
     default:
       return null;
   }
 }
 
 /** Generates a random random-score target: {base, mul, label} */
-function randomTarget(): { base: number; mul: number; label: string } {
+function randomTarget(t: (key: string) => string): { base: number; mul: number; label: string } {
   const roll = Math.random();
   if (roll < 0.15) {
     // Bull / Bullseye
     return Math.random() < 0.5
-      ? { base: 25, mul: 1, label: "Bull (25)" }
-      : { base: 25, mul: 2, label: "Bullseye (50)" };
+      ? { base: 25, mul: 1, label: `${t("game.bull")} (25)` }
+      : { base: 25, mul: 2, label: `${t("game.bullseye")} (50)` };
   }
   const base = Math.floor(Math.random() * 20) + 1;
   const mulRoll = Math.random();
@@ -358,6 +360,7 @@ interface DrillConfig {
 }
 
 const TrainingPage = () => {
+  const { t } = useLanguage();
   const [selectedDrill, setSelectedDrill] = useState<TrainingDrill | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [drillState, setDrillState] = useState<DrillState | null>(null);
@@ -387,7 +390,7 @@ const TrainingPage = () => {
   // Compare + persist the instant a run finishes.
   useEffect(() => {
     if (!selectedDrill || !drillState?.finished) return;
-    const candidate = computeRecordCandidate(selectedDrill.id, drillState);
+    const candidate = computeRecordCandidate(selectedDrill.id, drillState, t);
     if (!candidate) {
       setBrokeRecord(false);
       return;
@@ -403,14 +406,14 @@ const TrainingPage = () => {
     } else {
       setBrokeRecord(false);
     }
-  }, [drillState, selectedDrill]);
+  }, [drillState, selectedDrill, t]);
 
   const categories = [
-    { key: "all", label: "Alle" },
-    { key: "doubles", label: "Doppel" },
-    { key: "finishing", label: "Finish" },
-    { key: "accuracy", label: "Genauigkeit" },
-    { key: "pressure", label: "Druck" },
+    { key: "all", label: t("training.categoryAll") },
+    { key: "doubles", label: t("training.categoryDoubles") },
+    { key: "finishing", label: t("training.categoryFinishing") },
+    { key: "accuracy", label: t("training.categoryAccuracy") },
+    { key: "pressure", label: t("training.categoryPressure") },
   ];
 
   const filteredDrills = filterCategory === "all"
@@ -421,7 +424,7 @@ const TrainingPage = () => {
   const startDrill = (drill: TrainingDrill, config: DrillConfig = drillConfig) => {
     setBrokeRecord(false);
     setRtcFlash(false);
-    let state: DrillState = {
+    const state: DrillState = {
       drillId: drill.id,
       dartsThrown: 0,
       dartsThisRound: 0,
@@ -455,11 +458,12 @@ const TrainingPage = () => {
         state.currentTarget = PRESSURE_CHECKOUTS[0];
         state.remaining = PRESSURE_CHECKOUTS[0];
         break;
-      case "random-finish":
+      case "random-finish": {
         const val = randomCheckout();
         state.remaining = val;
         state.currentTarget = val;
         break;
+      }
       case "target-grind": {
         const base = config.targetBase ?? 20;
         const mul = config.targetMul ?? 3;
@@ -475,10 +479,10 @@ const TrainingPage = () => {
         state.lockedIndex = -1;
         break;
       case "random-score": {
-        const t = randomTarget();
-        state.randomBase = t.base;
-        state.randomMul = t.mul;
-        state.randomLabel = t.label;
+        const randTarget = randomTarget(t);
+        state.randomBase = randTarget.base;
+        state.randomMul = randTarget.mul;
+        state.randomLabel = randTarget.label;
         state.maxRounds = 10;
         break;
       }
@@ -510,7 +514,7 @@ const TrainingPage = () => {
       case "bull-control": {
         const names = (config.bcPlayerNames && config.bcPlayerNames.length >= 2
           ? config.bcPlayerNames
-          : ["Spieler 1", "Spieler 2"]).map((n, i) => n.trim() || `Spieler ${i + 1}`);
+          : [`${t("stats.player")} 1`, `${t("stats.player")} 2`]).map((n, i) => n.trim() || `${t("stats.player")} ${i + 1}`);
         const start = config.bcStart ?? 301;
         state.bcPlayers = names.map((name) => ({ name, remaining: start }));
         state.bcTurn = 0;
@@ -913,10 +917,10 @@ const TrainingPage = () => {
 
         // Random Score: draw new target
         if (selectedDrill.id === "random-score") {
-          const t = randomTarget();
-          updated.randomBase = t.base;
-          updated.randomMul = t.mul;
-          updated.randomLabel = t.label;
+          const randTarget = randomTarget(t);
+          updated.randomBase = randTarget.base;
+          updated.randomMul = randTarget.mul;
+          updated.randomLabel = randTarget.label;
           updated.hitsThisRound = 0;
           if ((updated.roundsPlayed ?? 0) >= (prev.maxRounds ?? 10)) {
             updated.finished = true;
@@ -936,7 +940,7 @@ const TrainingPage = () => {
 
       return updated;
     });
-  }, [selectedDrill]);
+  }, [selectedDrill, t]);
 
   const handleDrillThrow = useCallback((base: number, mul: number) => {
     processDart(base, mul);
@@ -966,7 +970,7 @@ const TrainingPage = () => {
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
         <Button variant="ghost" onClick={exitDrill} className="mb-4 text-muted-foreground">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Zurück
+          <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
         </Button>
 
         <div className="text-center mb-4">
@@ -987,15 +991,15 @@ const TrainingPage = () => {
               <CheckCircle className="w-12 h-12 text-secondary mx-auto mb-3" />
             )}
             <h3 className="text-2xl font-display uppercase mb-2">
-              {drillState.shanghaiWin ? "SHANGHAI! 🎉" : drillState.rtcWin ? "Rund um die Uhr! 🎉" : bobsBusted ? "Konto leer 💸" : "Geschafft! 🎯"}
+              {drillState.shanghaiWin ? "SHANGHAI! 🎉" : drillState.rtcWin ? t("training.roundTheClockWin") : bobsBusted ? t("training.accountEmpty") : t("training.doneGeneric")}
             </h3>
             {brokeRecord ? (
               <div className="mb-4 rounded-lg border border-accent bg-accent/15 px-3 py-2 text-accent font-display uppercase text-sm flex items-center justify-center gap-2 animate-pulse-glow">
-                <Trophy className="w-4 h-4" /> Neuer persönlicher Rekord!
+                <Trophy className="w-4 h-4" /> {t("training.newPersonalRecord")}
               </div>
             ) : currentRecord ? (
               <p className="text-xs text-muted-foreground mb-4">
-                Rekord: <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
+                {t("training.recordLabel")} <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
               </p>
             ) : null}
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
@@ -1003,34 +1007,34 @@ const TrainingPage = () => {
                 <div className="bg-muted/50 rounded-lg p-3 col-span-2">
                   <p className="text-2xl font-display">{drillState.shanghaiScore ?? 0}</p>
                   <p className="text-xs text-muted-foreground">
-                    {drillState.shanghaiWin ? `Shanghai auf der ${drillState.currentTarget}, Runde ${drillState.targetIndex + 1}!` : "Score nach 20 Runden"}
+                    {drillState.shanghaiWin ? `${t("training.shanghaiOnNumberRound")} ${drillState.currentTarget}, ${t("tournament.roundLabel")} ${drillState.targetIndex + 1}!` : t("training.scoreAfter20Rounds")}
                   </p>
                 </div>
               ) : selectedDrill.id === "shanghai-rtc" ? (
                 <div className="bg-muted/50 rounded-lg p-3 col-span-2">
-                  <p className="text-2xl font-display">{drillState.rtcWin ? "Zahl 20" : drillState.currentTarget}</p>
+                  <p className="text-2xl font-display">{drillState.rtcWin ? t("training.number20") : drillState.currentTarget}</p>
                   <p className="text-xs text-muted-foreground">
                     {drillState.rtcWin
-                      ? `Alle Zahlen bis 20 geschafft — Score ${drillState.rtcScore ?? 0}`
-                      : `Rundenlimit erreicht bei Zahl ${drillState.currentTarget} · Score ${drillState.rtcScore ?? 0}`}
+                      ? `${t("training.allNumbersDone")} ${drillState.rtcScore ?? 0}`
+                      : `${t("training.roundLimitReachedAtNumber")} ${drillState.currentTarget} · ${t("training.scoreLabel")} ${drillState.rtcScore ?? 0}`}
                   </p>
                 </div>
               ) : selectedDrill.id === "halve-it" ? (
                 <div className="bg-muted/50 rounded-lg p-3 col-span-2">
                   <p className="text-2xl font-display">{drillState.remaining}</p>
-                  <p className="text-xs text-muted-foreground">Endstand nach 10 Runden</p>
+                  <p className="text-xs text-muted-foreground">{t("training.finalScoreAfter10Rounds")}</p>
                 </div>
               ) : selectedDrill.id === "bobs-27" ? (
                 <div className="bg-muted/50 rounded-lg p-3 col-span-2">
                   <p className="text-2xl font-display">{Math.max(0, drillState.remaining)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {bobsBusted ? `Pleite in Runde ${drillState.targetIndex + 1}` : "Endstand nach 20 Runden"}
+                    {bobsBusted ? `${t("training.bustInRound")} ${drillState.targetIndex + 1}` : t("training.finalScoreAfter20Rounds")}
                   </p>
                 </div>
               ) : selectedDrill.id === "bull-control" ? (
                 <div className="bg-muted/50 rounded-lg p-3 col-span-2">
                   <p className="text-2xl font-display text-secondary">{drillState.bcWinner ?? "—"}</p>
-                  <p className="text-xs text-muted-foreground mb-2">Gewinner</p>
+                  <p className="text-xs text-muted-foreground mb-2">{t("training.winner")}</p>
                   <div className="space-y-1 text-left">
                     {(drillState.bcPlayers ?? []).map((p) => (
                       <div key={p.name} className="flex items-center justify-between text-xs">
@@ -1044,11 +1048,11 @@ const TrainingPage = () => {
                 <>
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-2xl font-display">{drillState.dartsThrown}</p>
-                    <p className="text-xs text-muted-foreground">Darts geworfen</p>
+                    <p className="text-xs text-muted-foreground">{t("training.dartsThrownLabel")}</p>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-2xl font-display">{drillState.hits}</p>
-                    <p className="text-xs text-muted-foreground">Treffer</p>
+                    <p className="text-xs text-muted-foreground">{t("training.hitsLabel")}</p>
                   </div>
                 </>
               )}
@@ -1058,7 +1062,7 @@ const TrainingPage = () => {
                     <p className="text-2xl font-display">
                       {drillState.dartsThrown > 0 ? Math.round((drillState.hits / drillState.dartsThrown) * 100) : 0}%
                     </p>
-                    <p className="text-xs text-muted-foreground">Trefferquote</p>
+                    <p className="text-xs text-muted-foreground">{t("stats.hitRate")}</p>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-2xl font-display">
@@ -1066,17 +1070,17 @@ const TrainingPage = () => {
                         ? Math.round((drillState.roundScores.reduce((a, b) => a + b, 0) / drillState.roundScores.length) * 3)
                         : 0}
                     </p>
-                    <p className="text-xs text-muted-foreground">Ø 3-Dart</p>
+                    <p className="text-xs text-muted-foreground">{t("training.avg3Dart")}</p>
                   </div>
                 </>
               )}
             </div>
             <div className="flex gap-2">
               <Button onClick={restartDrill} variant="outline" className="flex-1 gap-1">
-                <RotateCcw className="w-4 h-4" /> Nochmal
+                <RotateCcw className="w-4 h-4" /> {t("training.again")}
               </Button>
               <Button onClick={exitDrill} className="flex-1">
-                Beenden
+                {t("training.finish")}
               </Button>
             </div>
           </div>
@@ -1091,14 +1095,14 @@ const TrainingPage = () => {
               {/* Target display */}
               {selectedDrill.id === "around-the-clock" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Triff die</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("training.hitThe")}</p>
                   <p className="text-5xl font-display text-primary">{drillState.currentTarget}</p>
                   <p className="text-xs text-muted-foreground mt-1">{drillState.targetIndex + 1} / {drillState.targetList.length}</p>
                 </div>
               )}
               {selectedDrill.id === "doubles-only" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Triff Double</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("training.hitDouble")}</p>
                   <p className="text-5xl font-display text-primary">D{drillState.currentTarget}</p>
                   <p className="text-xs text-muted-foreground mt-1">{drillState.targetIndex + 1} / {drillState.targetList.length}</p>
                 </div>
@@ -1114,48 +1118,48 @@ const TrainingPage = () => {
                   )}
                   {selectedDrill.id === "random-finish" && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Geschafft: {drillState.hits} / 10
+                      {t("training.completedOutOf10")} {drillState.hits} / 10
                     </p>
                   )}
                 </div>
               )}
               {selectedDrill.id === "target-grind" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Ziel</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("game.target")}</p>
                   <p className="text-5xl font-display text-primary">
                     {(drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Treffer: {drillState.hits} · Runde {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10}
+                    {t("training.hitsLabel")}: {drillState.hits} · {t("tournament.roundLabel")} {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10}
                   </p>
                 </div>
               )}
               {selectedDrill.id === "big-single-lock" && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">
-                    Triff Single · Runde: {drillState.hitsThisRound}/3 Treffer
+                    {t("training.hitSingleRoundOf3")} {drillState.hitsThisRound}/3 {t("training.hitsOf3")}
                   </p>
                   <p className="text-5xl font-display text-primary">S{drillState.currentTarget}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Locked: {drillState.lockedIndex !== undefined && drillState.lockedIndex >= 0
+                    {t("training.locked")} {drillState.lockedIndex !== undefined && drillState.lockedIndex >= 0
                       ? `S${drillState.targetList[drillState.lockedIndex]}`
-                      : "—"} · Feld {drillState.targetIndex + 1} / {drillState.targetList.length}
-                    {drillState.maxRounds ? ` · Runde ${(drillState.roundsPlayed ?? 0) + 1}/${drillState.maxRounds}` : ""}
+                      : "—"} · {t("training.field")} {drillState.targetIndex + 1} / {drillState.targetList.length}
+                    {drillState.maxRounds ? ` · ${t("tournament.roundLabel")} ${(drillState.roundsPlayed ?? 0) + 1}/${drillState.maxRounds}` : ""}
                   </p>
                 </div>
               )}
               {selectedDrill.id === "random-score" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Zufalls-Ziel</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("training.randomTargetLabel")}</p>
                   <p className="text-5xl font-display text-primary">{drillState.randomLabel}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Runde {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10} · Treffer gesamt: {drillState.hits}
+                    {t("tournament.roundLabel")} {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10} · {t("training.totalHitsLabel")} {drillState.hits}
                   </p>
                 </div>
               )}
               {selectedDrill.id === "shanghai" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Shanghai · Runde {drillState.targetIndex + 1} / 20</p>
+                  <p className="text-xs text-muted-foreground mb-1">Shanghai · {t("tournament.roundLabel")} {drillState.targetIndex + 1} / 20</p>
                   <p className="text-5xl font-display text-primary">{drillState.currentTarget}</p>
                   <div className="flex justify-center gap-2 mt-2">
                     {[1, 2, 3].map((m) => (
@@ -1168,7 +1172,7 @@ const TrainingPage = () => {
                       </span>
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">Score: <span className="text-foreground font-bold">{drillState.shanghaiScore ?? 0}</span></p>
+                  <p className="text-xs text-muted-foreground mt-2">{t("training.scoreLabel")} <span className="text-foreground font-bold">{drillState.shanghaiScore ?? 0}</span></p>
                 </div>
               )}
               {selectedDrill.id === "shanghai-rtc" && (() => {
@@ -1176,7 +1180,7 @@ const TrainingPage = () => {
                 return (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">
-                      Zahl {drillState.targetIndex + 1} / {drillState.targetList.length}
+                      {t("training.numberLabel")} {drillState.targetIndex + 1} / {drillState.targetList.length}
                     </p>
                     <p className={`text-5xl font-display transition-colors ${rtcFlash ? "text-destructive" : "text-primary"}`}>{drillState.currentTarget}</p>
                     <div className="flex justify-center gap-2 mt-2">
@@ -1197,16 +1201,16 @@ const TrainingPage = () => {
                     </div>
                     <p className="text-xs mt-2">
                       {rtcFlash ? (
-                        <span className="text-destructive font-bold animate-scale-in">Vertan — nochmal!</span>
+                        <span className="text-destructive font-bold animate-scale-in">{t("training.missedTryAgain")}</span>
                       ) : stDone ? (
-                        <span className="text-accent font-bold">Jetzt Doppel zum Weiterkommen!</span>
+                        <span className="text-accent font-bold">{t("training.nowDoubleToAdvance")}</span>
                       ) : (
-                        <span className="text-muted-foreground">Single + Triple in beliebiger Reihenfolge</span>
+                        <span className="text-muted-foreground">{t("training.singleTripleAnyOrder")}</span>
                       )}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Score: <span className="text-foreground font-bold">{drillState.rtcScore ?? 0}</span>
-                      {drillState.maxRounds ? <> · Runde {(drillState.roundsPlayed ?? 0) + 1}/{drillState.maxRounds}</> : null}
+                      {t("training.scoreLabel")} <span className="text-foreground font-bold">{drillState.rtcScore ?? 0}</span>
+                      {drillState.maxRounds ? <> · {t("tournament.roundLabel")} {(drillState.roundsPlayed ?? 0) + 1}/{drillState.maxRounds}</> : null}
                     </p>
                   </div>
                 );
@@ -1214,13 +1218,13 @@ const TrainingPage = () => {
               {selectedDrill.id === "halve-it" && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">
-                    Halve It · Runde {drillState.targetIndex + 1} / {HALVE_IT_ROUNDS.length}
+                    Halve It · {t("tournament.roundLabel")} {drillState.targetIndex + 1} / {HALVE_IT_ROUNDS.length}
                   </p>
                   <p className="text-4xl font-display text-primary">
-                    {HALVE_IT_ROUNDS[drillState.targetIndex]?.label ?? "—"}
+                    {t(HALVE_IT_ROUNDS[drillState.targetIndex]?.labelKey ?? "—")}
                   </p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Punktestand: <span className="text-foreground font-bold">{drillState.remaining}</span>
+                    {t("training.scoreStandLabel")} <span className="text-foreground font-bold">{drillState.remaining}</span>
                     {(drillState.hiRoundPoints ?? 0) > 0 && <span className="text-secondary"> (+{drillState.hiRoundPoints})</span>}
                   </p>
                 </div>
@@ -1228,24 +1232,24 @@ const TrainingPage = () => {
               {selectedDrill.id === "bobs-27" && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">
-                    Bob's 27 · Runde {drillState.targetIndex + 1} / {BOBS_27_ROUNDS}
+                    Bob's 27 · {t("tournament.roundLabel")} {drillState.targetIndex + 1} / {BOBS_27_ROUNDS}
                   </p>
                   <p className="text-5xl font-display text-primary">D{drillState.targetIndex + 1}</p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Konto: <span className={`font-bold ${drillState.remaining <= 6 ? "text-destructive" : "text-foreground"}`}>{drillState.remaining}</span>
-                    {" · "}Treffer diese Runde: {drillState.hitsThisRound}/3
+                    {t("training.accountLabel")} <span className={`font-bold ${drillState.remaining <= 6 ? "text-destructive" : "text-foreground"}`}>{drillState.remaining}</span>
+                    {" · "}{t("training.hitsThisRoundLabel")} {drillState.hitsThisRound}/3
                   </p>
                 </div>
               )}
               {selectedDrill.id === "bull-control" && drillState.bcPlayers && (
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground">
-                    Scoring-Zahl: <span className="text-primary font-display">{drillState.bcNumber}</span> · Lizenz per <span className="text-accent font-display">BULL</span>
+                    {t("training.scoringNumberLabel")} <span className="text-primary font-display">{drillState.bcNumber}</span> · {t("training.licenseVia")} <span className="text-accent font-display">BULL</span>
                   </p>
                   <p className="text-3xl font-display">
                     {(drillState.bcScorer ?? -1) === (drillState.bcTurn ?? 0)
-                      ? <span className="text-secondary">Scoring aktiv</span>
-                      : <span className="text-muted-foreground">Erst Bull treffen!</span>}
+                      ? <span className="text-secondary">{t("training.scoringActive")}</span>
+                      : <span className="text-muted-foreground">{t("training.hitBullFirst")}</span>}
                   </p>
                   <div className="grid gap-1.5">
                     {drillState.bcPlayers.map((p, i) => (
@@ -1254,7 +1258,7 @@ const TrainingPage = () => {
                           i === (drillState.bcTurn ?? 0) ? "border-primary bg-primary/10" : "border-border bg-background opacity-70"
                         }`}>
                         <span className="flex items-center gap-2 truncate">
-                          {i === (drillState.bcScorer ?? -1) && <span title="Scoring-Lizenz">🎯</span>}
+                          {i === (drillState.bcScorer ?? -1) && <span title={t("training.scoringLicenseTitle")}>🎯</span>}
                           {p.name}
                         </span>
                         <span className="font-display text-xl">{p.remaining}</span>
@@ -1262,7 +1266,7 @@ const TrainingPage = () => {
                     ))}
                   </div>
                   {drillState.bcWinner && (
-                    <p className="text-accent font-display uppercase">🏆 {drillState.bcWinner} gewinnt!</p>
+                    <p className="text-accent font-display uppercase">🏆 {drillState.bcWinner} {t("training.wins")}</p>
                   )}
                 </div>
               )}
@@ -1279,7 +1283,7 @@ const TrainingPage = () => {
                 ))}
               </div>
               <p className="text-[10px] text-muted-foreground mt-1">
-                Dart {drillState.dartsThisRound + 1} / 3 · Gesamt: {drillState.dartsThrown}
+                {t("training.dartOfThree")} {drillState.dartsThisRound + 1} / 3 · {t("training.totalShort")} {drillState.dartsThrown}
               </p>
             </div>
             </div>
@@ -1287,7 +1291,7 @@ const TrainingPage = () => {
             {/* Checkout suggestion for finish drills */}
             {isCheckoutDrill && drillState.remaining <= 170 && (
               <div className="mb-3">
-                <CheckoutSuggestion remaining={drillState.remaining} playerName="Training" />
+                <CheckoutSuggestion remaining={drillState.remaining} playerName={t("training.trainingPlayerName")} />
               </div>
             )}
 
@@ -1298,7 +1302,7 @@ const TrainingPage = () => {
                 onClose={() => setCameraEnabled(false)}
                 onRoundCommit={handleCameraRound}
                 dartsRemaining={Math.max(1, 3 - drillState.dartsThisRound)}
-                playerName="Training"
+                playerName={t("training.trainingPlayerName")}
               />
             )}
 
@@ -1315,7 +1319,7 @@ const TrainingPage = () => {
                 onClick={() => setCameraEnabled((v) => !v)}
                 className="w-full gap-2"
               >
-                <Camera className="w-4 h-4" /> {cameraEnabled ? "Kamera aus" : "Kamera-Scoring"}
+                <Camera className="w-4 h-4" /> {cameraEnabled ? t("training.cameraOff") : t("training.cameraScoring")}
               </Button>
             </div>
           </>
@@ -1330,41 +1334,41 @@ const TrainingPage = () => {
     const isTargetGrind = selectedDrill.id === "target-grind";
     const isBullControl = selectedDrill.id === "bull-control";
     const isShanghaiRtc = selectedDrill.id === "shanghai-rtc";
-    const bcNames = drillConfig.bcPlayerNames ?? ["Spieler 1", "Spieler 2"];
+    const bcNames = drillConfig.bcPlayerNames ?? [`${t("stats.player")} 1`, `${t("stats.player")} 2`];
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
         <Button variant="ghost" onClick={() => { setSelectedDrill(null); setDrillConfig({}); }} className="mb-4 text-muted-foreground">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Zurück
+          <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
         </Button>
 
         <div className="bg-card rounded-xl border border-border p-6 text-center">
           <selectedDrill.icon className="w-12 h-12 text-primary mx-auto mb-3" />
           <h2 className="text-2xl font-display uppercase mb-2">{selectedDrill.name}</h2>
-          <p className="text-muted-foreground text-sm mb-4">{selectedDrill.description}</p>
+          <p className="text-muted-foreground text-sm mb-4">{t(selectedDrill.descriptionKey)}</p>
 
           <div className="flex justify-center gap-3 mb-6">
             <span className={`text-xs px-2 py-1 rounded-full ${DIFFICULTY_COLORS[selectedDrill.difficulty]}`}>
-              {selectedDrill.difficulty}
+              {t(DIFFICULTY_LABEL_KEY[selectedDrill.difficulty])}
             </span>
             <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
-              ~{selectedDrill.durationMinutes} Min
+              ~{selectedDrill.durationMinutes} {t("training.minutesSuffix")}
             </span>
           </div>
 
           {currentRecord && (
             <p className="text-xs text-muted-foreground mb-5 flex items-center justify-center gap-1.5">
-              <Trophy className="w-3.5 h-3.5 text-accent" /> Dein Rekord: <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
+              <Trophy className="w-3.5 h-3.5 text-accent" /> {t("training.yourRecordLabel")} <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
             </p>
           )}
 
           {isBullControl && (
             <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
               <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
-                <Settings2 className="w-3.5 h-3.5" /> Einstellungen
+                <Settings2 className="w-3.5 h-3.5" /> {t("training.settingsHeading")}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Startpunkte</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("training.startingPoints")}</p>
                   <select className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm"
                     value={drillConfig.bcStart ?? 301}
                     onChange={(e) => setDrillConfig((c) => ({ ...c, bcStart: Number(e.target.value) }))}>
@@ -1372,7 +1376,7 @@ const TrainingPage = () => {
                   </select>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Scoring-Zahl</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("training.scoringNumber")}</p>
                   <select className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm"
                     value={drillConfig.bcNumber ?? 20}
                     onChange={(e) => setDrillConfig((c) => ({ ...c, bcNumber: Number(e.target.value) }))}>
@@ -1381,28 +1385,28 @@ const TrainingPage = () => {
                 </div>
               </div>
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Spieler ({bcNames.length})</p>
+                <p className="text-xs text-muted-foreground">{t("stats.player")} ({bcNames.length})</p>
                 {bcNames.map((n, i) => (
                   <input key={i} value={n}
                     onChange={(e) => setDrillConfig((c) => ({
                       ...c,
-                      bcPlayerNames: (c.bcPlayerNames ?? ["Spieler 1", "Spieler 2"]).map((v, idx) => idx === i ? e.target.value : v),
+                      bcPlayerNames: (c.bcPlayerNames ?? bcNames).map((v, idx) => idx === i ? e.target.value : v),
                     }))}
                     className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm" />
                 ))}
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" disabled={bcNames.length >= BULL_CONTROL_MAX_PLAYERS}
-                    onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: [...bcNames, `Spieler ${bcNames.length + 1}`] }))}>
-                    + Spieler
+                    onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: [...bcNames, `${t("stats.player")} ${bcNames.length + 1}`] }))}>
+                    {t("training.addPlayerShort")}
                   </Button>
                   <Button size="sm" variant="ghost" disabled={bcNames.length <= 2}
                     onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: bcNames.slice(0, -1) }))}>
-                    − Spieler
+                    {t("training.removePlayerShort")}
                   </Button>
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Nur wer zuletzt ein Bull geworfen hat, punktet – und ausschließlich mit der gewählten Zahl. Exakt auf 0 gewinnt.
+                {t("training.bullControlRules")}
               </p>
             </div>
           )}
@@ -1410,12 +1414,12 @@ const TrainingPage = () => {
           {(supportsRoundLimit || isTargetGrind) && (
             <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
               <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
-                <Settings2 className="w-3.5 h-3.5" /> Einstellungen
+                <Settings2 className="w-3.5 h-3.5" /> {t("training.settingsHeading")}
               </div>
 
               {isShanghaiRtc && (
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Startzahl</p>
+                  <p className="text-xs text-muted-foreground">{t("training.startingNumber")}</p>
                   <select
                     className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm"
                     value={drillConfig.rtcStart ?? 1}
@@ -1430,16 +1434,16 @@ const TrainingPage = () => {
 
               {isTargetGrind && (
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Zielfeld wählen</p>
+                  <p className="text-xs text-muted-foreground">{t("training.chooseTargetField")}</p>
                   <div className="flex gap-2">
                     <select
                       className="flex-1 bg-background border border-border rounded-md px-2 py-1.5 text-sm"
                       value={drillConfig.targetMul ?? 3}
                       onChange={(e) => setDrillConfig((c) => ({ ...c, targetMul: Number(e.target.value) }))}
                     >
-                      <option value={1}>Single</option>
-                      <option value={2}>Double</option>
-                      <option value={3}>Triple</option>
+                      <option value={1}>{t("training.singleOption")}</option>
+                      <option value={2}>{t("training.doubleOption")}</option>
+                      <option value={3}>{t("training.tripleOption")}</option>
                     </select>
                     <select
                       className="flex-1 bg-background border border-border rounded-md px-2 py-1.5 text-sm"
@@ -1447,7 +1451,7 @@ const TrainingPage = () => {
                       onChange={(e) => setDrillConfig((c) => ({ ...c, targetBase: Number(e.target.value) }))}
                     >
                       {[20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 25].map((n) => (
-                        <option key={n} value={n}>{n === 25 ? "Bull" : n}</option>
+                        <option key={n} value={n}>{n === 25 ? t("game.bull") : n}</option>
                       ))}
                     </select>
                   </div>
@@ -1457,7 +1461,7 @@ const TrainingPage = () => {
               {supportsRoundLimit && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">
-                    Runden {isTargetGrind ? "" : "(optional – begrenzt endloses Training)"}
+                    {t("training.roundsLabel")} {isTargetGrind ? "" : t("training.optionalUnlimitedNote")}
                   </p>
                   <div className="flex gap-2 flex-wrap">
                     {[5, 10, 15, 20, 30].map((n) => (
@@ -1482,7 +1486,7 @@ const TrainingPage = () => {
                             : "bg-background border-border hover:border-primary/40"
                         }`}
                       >
-                        Endlos
+                        {t("training.endless")}
                       </button>
                     )}
                   </div>
@@ -1492,7 +1496,7 @@ const TrainingPage = () => {
           )}
 
           <Button onClick={() => startDrill(selectedDrill)} className="w-full font-display uppercase text-lg py-6">
-            <Play className="w-5 h-5 mr-2" /> Training starten
+            <Play className="w-5 h-5 mr-2" /> {t("training.startTraining")}
           </Button>
         </div>
       </div>
@@ -1504,7 +1508,7 @@ const TrainingPage = () => {
     <div className="container py-6 animate-slide-up">
       <div className="flex items-center gap-3 mb-6">
         <Dumbbell className="w-6 h-6 text-primary" />
-        <h2 className="text-2xl font-display uppercase">Training</h2>
+        <h2 className="text-2xl font-display uppercase">{t("training.pageTitle")}</h2>
       </div>
 
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
@@ -1534,13 +1538,13 @@ const TrainingPage = () => {
               <drill.icon className="w-8 h-8 text-primary shrink-0 group-hover:scale-110 transition-transform" />
               <div className="min-w-0">
                 <p className="font-semibold text-sm mb-1">{drill.name}</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">{drill.description}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">{t(drill.descriptionKey)}</p>
                 <div className="flex gap-2 mt-2">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full ${DIFFICULTY_COLORS[drill.difficulty]}`}>
-                    {drill.difficulty}
+                    {t(DIFFICULTY_LABEL_KEY[drill.difficulty])}
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                    {drill.durationMinutes} Min
+                    {drill.durationMinutes} {t("training.minutesSuffix")}
                   </span>
                 </div>
               </div>

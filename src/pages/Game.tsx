@@ -640,7 +640,7 @@ const GamePage = () => {
       // storyline text always matches the names already shown on the two player columns above it.
       storyline: buildRivalryStoryline(
         data.map((g) => ({ aWon: g.winner_id === a.id, playedAt: g.played_at })),
-        players[0].name, players[1].name,
+        players[0].name, players[1].name, t,
       ),
     });
   };

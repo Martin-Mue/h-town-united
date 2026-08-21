@@ -1,6 +1,7 @@
 import { Crosshair, Lightbulb } from "lucide-react";
 import { RING } from "@/utils/dartboardGeometry";
 import { describeAimTip, type AimBiasResult } from "@/utils/aimBias";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface AimBiasCardProps {
   bias: AimBiasResult;
@@ -33,30 +34,31 @@ const fmtMm = (mm: number) => `${Math.abs(mm) < 0.5 ? "~0" : (mm > 0 ? "+" : "")
 /** Rough, unverified descriptive bands for the grouping radius — not a measured benchmark
  *  against real player data, just something more readable than a bare millimeter figure. A
  *  treble bed is only ~6mm wide, which is the intuition behind the "eng" cutoff. */
-const groupingWord = (mm: number) => (mm < 8 ? "eng gruppiert" : mm < 18 ? "normal gestreut" : "weit gestreut");
+const groupingWord = (mm: number, t: (key: string) => string) => (mm < 8 ? t("aimBias.tightlyGrouped") : mm < 18 ? t("aimBias.normallySpread") : t("aimBias.widelySpread"));
 
 /** Shows a player's pooled aim bias (see aimBias.ts) as one arrow on a reference board, from
  *  where a dart aimed at Treble 20 should land to where this player's darts land on average —
  *  exaggerated for visibility — plus the real, unscaled offset in millimeters. */
 const AimBiasCard = ({ bias }: AimBiasCardProps) => {
+  const { t } = useLanguage();
   const { idealU, idealV, actualU, actualV } = project(bias.avgRadialOffset, bias.avgTangentialOffset);
   const toXY = (u: number, v: number) => [CENTER + u * BOARD_RADIUS, CENTER + v * BOARD_RADIUS];
   const [ix, iy] = toXY(idealU, idealV);
   const [ax, ay] = toXY(actualU, actualV);
 
-  const radialWord = bias.radialOffsetMm > 0.5 ? "zu weit außen" : bias.radialOffsetMm < -0.5 ? "zu weit innen" : "gut getroffen (radial)";
-  const tangentialWord = bias.tangentialOffsetMm > 0.5 ? "im Uhrzeigersinn versetzt" : bias.tangentialOffsetMm < -0.5 ? "gegen den Uhrzeigersinn versetzt" : "gut getroffen (seitlich)";
+  const radialWord = bias.radialOffsetMm > 0.5 ? t("aimBias.tooFarOutside") : bias.radialOffsetMm < -0.5 ? t("aimBias.tooFarInside") : t("aimBias.wellHitRadial");
+  const tangentialWord = bias.tangentialOffsetMm > 0.5 ? t("aimBias.offsetClockwise") : bias.tangentialOffsetMm < -0.5 ? t("aimBias.offsetCounterClockwise") : t("aimBias.wellHitTangential");
 
   return (
     <div className="bg-card rounded-xl border border-border p-4 mb-4">
       <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
-        <Crosshair className="w-4 h-4" /> Wurf-Tendenz
+        <Crosshair className="w-4 h-4" /> {t("aimBias.title")}
       </h3>
       <p className="text-[10px] text-muted-foreground mb-3">
-        Aus {bias.sampleSize} per Kamera erfassten Würfen · Pfeil stark übertrieben, damit er überhaupt sichtbar ist
+        {t("aimBias.subtitlePrefix")} {bias.sampleSize} {t("aimBias.subtitleSuffix")}
       </p>
       <div className="flex items-center gap-4">
-        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-28 h-28 shrink-0" role="img" aria-label="Wurf-Tendenz relativ zum Ziel">
+        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-28 h-28 shrink-0" role="img" aria-label={t("aimBias.title")}>
           <circle cx={CENTER} cy={CENTER} r={RING.doubleOuter * BOARD_RADIUS} fill="hsl(222 20% 12%)" stroke="hsl(222 18% 22%)" strokeWidth={1} />
           <circle cx={CENTER} cy={CENTER} r={RING.doubleInner * BOARD_RADIUS} fill="none" stroke="hsl(222 18% 22%)" strokeWidth={0.5} strokeDasharray="2 2" />
           <circle cx={CENTER} cy={CENTER} r={RING.trebleOuter * BOARD_RADIUS} fill="none" stroke="hsl(185 85% 48%)" strokeOpacity={0.35} strokeWidth={0.5} />
@@ -74,15 +76,15 @@ const AimBiasCard = ({ bias }: AimBiasCardProps) => {
           <circle cx={ax} cy={ay} r={bias.groupingRadius * MAGNIFY * BOARD_RADIUS} fill="hsl(45 100% 58%)" fillOpacity={0.12} stroke="hsl(45 100% 58%)" strokeOpacity={0.6} strokeWidth={1} strokeDasharray="3 2" />
         </svg>
         <div className="flex-1 space-y-1.5 text-xs">
-          <p><span className="text-muted-foreground">Radial: </span><span className="font-semibold">{fmtMm(bias.radialOffsetMm)}</span> <span className="text-muted-foreground">({radialWord})</span></p>
-          <p><span className="text-muted-foreground">Seitlich: </span><span className="font-semibold">{fmtMm(bias.tangentialOffsetMm)}</span> <span className="text-muted-foreground">({tangentialWord})</span></p>
-          <p><span className="text-muted-foreground">Gruppierung: </span><span className="font-semibold">±{bias.groupingRadiusMm.toFixed(1)} mm</span> <span className="text-muted-foreground">({groupingWord(bias.groupingRadiusMm)})</span></p>
-          <p className="text-[10px] text-muted-foreground pt-1">Bezogen auf ein Ziel oben am Board (z. B. T20) — bei Zielen weiter unten am Board dreht sich die seitliche Richtung entsprechend mit. Die gestrichelte Fläche zeigt, wie eng deine Darts um deinen eigenen Schnitt streuen, unabhängig von der Tendenz.</p>
+          <p><span className="text-muted-foreground">{t("aimBias.radial")}: </span><span className="font-semibold">{fmtMm(bias.radialOffsetMm)}</span> <span className="text-muted-foreground">({radialWord})</span></p>
+          <p><span className="text-muted-foreground">{t("aimBias.tangential")}: </span><span className="font-semibold">{fmtMm(bias.tangentialOffsetMm)}</span> <span className="text-muted-foreground">({tangentialWord})</span></p>
+          <p><span className="text-muted-foreground">{t("aimBias.grouping")}: </span><span className="font-semibold">±{bias.groupingRadiusMm.toFixed(1)} mm</span> <span className="text-muted-foreground">({groupingWord(bias.groupingRadiusMm, t)})</span></p>
+          <p className="text-[10px] text-muted-foreground pt-1">{t("aimBias.footnote")}</p>
         </div>
       </div>
       <div className="mt-3 pt-3 border-t border-border/60 flex items-start gap-2">
         <Lightbulb className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
-        <p className="text-xs text-accent">{describeAimTip(bias)}</p>
+        <p className="text-xs text-accent">{describeAimTip(bias, t)}</p>
       </div>
     </div>
   );

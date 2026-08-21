@@ -89,13 +89,13 @@ export function computeClutchStats(games: ClutchGameRow[], legs: ClutchLegRow[],
 
 /** One-line takeaway comparing clutch vs. normal checkout rate. Caller is responsible for
  *  checking `clutch.attempts >= MIN_CLUTCH_ATTEMPTS` first — this always returns a verdict. */
-export function describeClutchTakeaway({ clutch, normal }: ClutchResult): string {
+export function describeClutchTakeaway({ clutch, normal }: ClutchResult, t: (key: string) => string): string {
   const diff = clutch.percentage - normal.percentage;
   if (Math.abs(diff) < NEGLIGIBLE_DIFF_PP) {
-    return "Kein messbarer Unterschied unter Druck — genauso zuverlässig wie sonst.";
+    return t("clutch.noDifference");
   }
   const diffAbs = Math.abs(diff).toFixed(0);
   return diff > 0
-    ? `Unter Druck triffst du sogar häufiger — ${diffAbs} Prozentpunkte über deiner normalen Quote. Echter Clutch-Faktor.`
-    : `Unter Druck sinkt deine Quote um ${diffAbs} Prozentpunkte gegenüber sonst — der Moment, an dem sich gezieltes Üben am meisten lohnt.`;
+    ? `${t("clutch.higherUnderPressurePrefix")} ${diffAbs} ${t("clutch.higherUnderPressureSuffix")}`
+    : `${t("clutch.lowerUnderPressurePrefix")} ${diffAbs} ${t("clutch.lowerUnderPressureSuffix")}`;
 }

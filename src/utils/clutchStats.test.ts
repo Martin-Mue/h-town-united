@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { computeClutchStats, describeClutchTakeaway, type ClutchGameRow, type ClutchLegRow } from "./clutchStats";
 import type { DartThrow, CheckoutStats } from "./dartStats";
+import { translate } from "@/i18n/translations";
 
+const t = (key: string) => translate(key, "de");
 const co = (over: Partial<CheckoutStats>): CheckoutStats => ({ attempts: 0, hits: 0, percentage: 0, highestCheckout: 0, ...over });
 
 const dart = (points: number): DartThrow => ({ baseValue: points, multiplier: 1, points });
@@ -81,17 +83,17 @@ describe("computeClutchStats", () => {
 
 describe("describeClutchTakeaway", () => {
   it("reports a positive clutch factor when the pressure rate is clearly higher", () => {
-    const text = describeClutchTakeaway({ clutch: co({ percentage: 70 }), normal: co({ percentage: 50 }) });
+    const text = describeClutchTakeaway({ clutch: co({ percentage: 70 }), normal: co({ percentage: 50 }) }, t);
     expect(text).toContain("häufiger");
   });
 
   it("reports a drop when the pressure rate is clearly lower", () => {
-    const text = describeClutchTakeaway({ clutch: co({ percentage: 30 }), normal: co({ percentage: 50 }) });
+    const text = describeClutchTakeaway({ clutch: co({ percentage: 30 }), normal: co({ percentage: 50 }) }, t);
     expect(text).toContain("sinkt");
   });
 
   it("reports no measurable difference for a small gap", () => {
-    const text = describeClutchTakeaway({ clutch: co({ percentage: 52 }), normal: co({ percentage: 50 }) });
+    const text = describeClutchTakeaway({ clutch: co({ percentage: 52 }), normal: co({ percentage: 50 }) }, t);
     expect(text).toContain("Kein messbarer Unterschied");
   });
 });

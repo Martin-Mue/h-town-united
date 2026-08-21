@@ -3,6 +3,7 @@ import { Sparkles, Loader2, Play, TrendingUp, Target, Crosshair, Zap, RotateCw, 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { computeAimBias, describeAimTip, type AimBiasResult, type CoordDart } from "@/utils/aimBias";
 
 /** Public shape so the parent (Training page) can map ids back to drills. */
@@ -36,14 +37,14 @@ interface CoachingPlanProps {
 }
 
 /** Choose drills based on weakest metrics. Order = priority. */
-const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
+const buildRecommendations = (s: PlayerStats | null, t: (key: string) => string): CoachRecommendation[] => {
   const recs: CoachRecommendation[] = [];
 
   if (!s || s.games === 0) {
     return [
-      { drillId: "around-the-clock", title: "Around the Clock", reason: "Solide Basis aufbauen – jede Zahl einmal treffen.", metric: "Einstieg", priority: 1, icon: RotateCw },
-      { drillId: "doubles-only", title: "Doubles Only", reason: "Doppelfelder von Anfang an automatisieren.", metric: "Einstieg", priority: 2, icon: Target },
-      { drillId: "121-challenge", title: "121 Challenge", reason: "Erstes Checkout-Gefühl unter realistischen Bedingungen.", metric: "Einstieg", priority: 3, icon: Crosshair },
+      { drillId: "around-the-clock", title: "Around the Clock", reason: t("coach.introBasics"), metric: t("coach.entryLevel"), priority: 1, icon: RotateCw },
+      { drillId: "doubles-only", title: "Doubles Only", reason: t("coach.introDoubles"), metric: t("coach.entryLevel"), priority: 2, icon: Target },
+      { drillId: "121-challenge", title: "121 Challenge", reason: t("coach.introCheckout"), metric: t("coach.entryLevel"), priority: 3, icon: Crosshair },
     ];
   }
 
@@ -52,8 +53,8 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     recs.push({
       drillId: "doubles-only",
       title: "Doubles Only",
-      reason: `Deine Doppel-Quote liegt bei ${Math.round(s.doubleRate)} %. Gezieltes Doppel-Training bringt dir die meisten Punkte zurück.`,
-      metric: `Doppel ${Math.round(s.doubleRate)} %`,
+      reason: `${t("coach.doubleRateLowPrefix")} ${Math.round(s.doubleRate)} ${t("coach.doubleRateLowSuffix")}`,
+      metric: `${t("training.categoryDoubles")} ${Math.round(s.doubleRate)} %`,
       priority: 1,
       icon: Target,
     });
@@ -61,8 +62,8 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     recs.push({
       drillId: "pressure-training",
       title: "Pressure Training",
-      reason: `Mit ${Math.round(s.doubleRate)} % Doppel solltest du Druck-Finishes (32, 40, 16) automatisieren.`,
-      metric: `Doppel ${Math.round(s.doubleRate)} %`,
+      reason: `${t("coach.doubleRateMidPrefix")} ${Math.round(s.doubleRate)} ${t("coach.doubleRateMidSuffix")}`,
+      metric: `${t("training.categoryDoubles")} ${Math.round(s.doubleRate)} %`,
       priority: 1,
       icon: Zap,
     });
@@ -76,8 +77,8 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     recs.push({
       drillId: "around-the-clock",
       title: "Around the Clock",
-      reason: `Deine Wurf-Tendenz (Statistik-Seite) zeigt einen klaren Versatz: ${describeAimTip(s.aimBias)} Dieser Drill trainiert Genauigkeit über das ganze Board, ideal um die Korrektur einzuüben.`,
-      metric: "Wurf-Tendenz",
+      reason: `${t("coach.aimBiasReasonPrefix")} ${describeAimTip(s.aimBias, t)} ${t("coach.aimBiasReasonSuffix")}`,
+      metric: t("coach.aimTendencyMetric"),
       priority: 2,
       icon: Compass,
     });
@@ -88,7 +89,7 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     recs.push({
       drillId: "around-the-clock",
       title: "Around the Clock",
-      reason: `Schnitt von ${s.avg.toFixed(1)} – Treffsicherheit auf die Zahlenfelder ist der Hebel.`,
+      reason: `${t("coach.avgLowPrefix")} ${s.avg.toFixed(1)} ${t("coach.avgLowSuffix")}`,
       metric: `Ø ${s.avg.toFixed(1)}`,
       priority: 2,
       icon: RotateCw,
@@ -97,7 +98,7 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     recs.push({
       drillId: "target-grind",
       title: "T20 Grind",
-      reason: `Schnitt von ${s.avg.toFixed(1)} – konstantere Triple-20-Treffer heben dich auf das nächste Level.`,
+      reason: `${t("coach.avgLowPrefix")} ${s.avg.toFixed(1)} ${t("coach.avgMidSuffix")}`,
       metric: `Ø ${s.avg.toFixed(1)}`,
       priority: 2,
       icon: Trophy,
@@ -106,7 +107,7 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     recs.push({
       drillId: "random-finish",
       title: "Random Finish Drill",
-      reason: `Starker Schnitt (${s.avg.toFixed(1)}). Zufalls-Checkouts halten dich flexibel.`,
+      reason: `${t("coach.avgHighPrefix")} (${s.avg.toFixed(1)}). ${t("coach.avgHighSuffix")}`,
       metric: `Ø ${s.avg.toFixed(1)}`,
       priority: 2,
       icon: Crosshair,
@@ -118,8 +119,8 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     recs.push({
       drillId: "pressure-training",
       title: "Pressure Training",
-      reason: `Aktuelle Form (Ø ${s.recentAvg.toFixed(1)}) liegt unter deinem Schnitt – Druck-Routine schärft den Fokus.`,
-      metric: "Formtief",
+      reason: `${t("coach.formDipPrefix")} ${s.recentAvg.toFixed(1)}${t("coach.formDipSuffix")}`,
+      metric: t("coach.formDipMetric"),
       priority: 3,
       icon: Zap,
     });
@@ -127,8 +128,8 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     recs.push({
       drillId: "target-grind",
       title: "T20 Grind",
-      reason: `Höchster 3-Dart-Score bisher: ${s.highscore}. Triple-20 ist der direkteste Weg über 100.`,
-      metric: `HS ${s.highscore}`,
+      reason: `${t("coach.highscorePrefix")} ${s.highscore}${t("coach.highscoreSuffix")}`,
+      metric: `${t("coach.hsMetric")} ${s.highscore}`,
       priority: 3,
       icon: Trophy,
     });
@@ -136,8 +137,8 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
     recs.push({
       drillId: "121-challenge",
       title: "121 Challenge",
-      reason: "Klassisches Match-Checkout – hält Routine und Druckfestigkeit oben.",
-      metric: "Routine",
+      reason: t("coach.routineReason"),
+      metric: t("coach.routineMetric"),
       priority: 3,
       icon: Crosshair,
     });
@@ -153,9 +154,9 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
 
   // Top up to 3 if needed.
   const fallback: CoachRecommendation[] = [
-    { drillId: "around-the-clock", title: "Around the Clock", reason: "Allround-Treffsicherheit.", metric: "Basis", priority: 9, icon: RotateCw },
-    { drillId: "doubles-only", title: "Doubles Only", reason: "Doppelfelder festigen.", metric: "Basis", priority: 9, icon: Target },
-    { drillId: "t20-grind", title: "T20 Grind", reason: "Maximale Scoring-Power.", metric: "Basis", priority: 9, icon: Trophy },
+    { drillId: "around-the-clock", title: "Around the Clock", reason: t("coach.fallbackAllround"), metric: t("coach.basisMetric"), priority: 9, icon: RotateCw },
+    { drillId: "doubles-only", title: "Doubles Only", reason: t("coach.fallbackDoubles"), metric: t("coach.basisMetric"), priority: 9, icon: Target },
+    { drillId: "t20-grind", title: "T20 Grind", reason: t("coach.fallbackScoring"), metric: t("coach.basisMetric"), priority: 9, icon: Trophy },
   ];
   for (const f of fallback) {
     if (unique.length >= 3) break;
@@ -165,6 +166,7 @@ const buildRecommendations = (s: PlayerStats | null): CoachRecommendation[] => {
 };
 
 const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
+  const { t } = useLanguage();
   const { session } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<PlayerStats | null>(null);
@@ -235,31 +237,31 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
     return () => { cancelled = true; };
   }, [session?.user?.id]);
 
-  const recommendations = useMemo(() => buildRecommendations(stats), [stats]);
+  const recommendations = useMemo(() => buildRecommendations(stats, t), [stats, t]);
 
   return (
     <div className="bg-card border border-primary/20 rounded-xl p-4">
       <div className="flex items-center gap-2 mb-3">
         <Sparkles className="w-4 h-4 text-primary" />
-        <h3 className="font-display uppercase text-sm text-primary">Coaching · dein Plan</h3>
+        <h3 className="font-display uppercase text-sm text-primary">{t("coach.title")}</h3>
       </div>
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-          <Loader2 className="w-4 h-4 animate-spin" /> Analyse läuft …
+          <Loader2 className="w-4 h-4 animate-spin" /> {t("coach.analyzing")}
         </div>
       ) : (
         <>
           {stats && stats.games > 0 ? (
             <div className="grid grid-cols-4 gap-2 text-center mb-4">
-              <Stat label="Spiele" value={stats.games.toString()} />
-              <Stat label="Siege" value={stats.wins.toString()} />
-              <Stat label="Ø Score" value={stats.avg.toFixed(1)} />
-              <Stat label="Doppel" value={`${Math.round(stats.doubleRate)}%`} />
+              <Stat label={t("stats.games")} value={stats.games.toString()} />
+              <Stat label={t("game.winsLabel")} value={stats.wins.toString()} />
+              <Stat label={t("stats.average")} value={stats.avg.toFixed(1)} />
+              <Stat label={t("training.categoryDoubles")} value={`${Math.round(stats.doubleRate)}%`} />
             </div>
           ) : (
             <p className="text-xs text-muted-foreground mb-3">
-              Noch keine Spieldaten – wir starten dich mit einem Einsteiger-Plan. Spiele ein paar Matches und der Plan wird persönlicher.
+              {t("coach.noDataYet")}
             </p>
           )}
 
@@ -271,14 +273,14 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-display uppercase text-muted-foreground">Schritt {idx + 1}</span>
+                    <span className="text-[10px] font-display uppercase text-muted-foreground">{t("coach.step")} {idx + 1}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">{rec.metric}</span>
                   </div>
                   <p className="font-semibold text-sm truncate">{rec.title}</p>
                   <p className="text-xs text-muted-foreground line-clamp-2">{rec.reason}</p>
                 </div>
                 <Button size="sm" variant="outline" className="gap-1 shrink-0" onClick={() => onStartDrill(rec.drillId)}>
-                  <Play className="w-3 h-3" /> Start
+                  <Play className="w-3 h-3" /> {t("coach.start")}
                 </Button>
               </div>
             ))}
@@ -286,7 +288,7 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
 
           <div className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground">
             <TrendingUp className="w-3 h-3" />
-            Plan aktualisiert sich automatisch nach jedem Match.
+            {t("coach.autoUpdateNote")}
           </div>
         </>
       )}
