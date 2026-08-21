@@ -135,17 +135,6 @@ interface Calibration {
   taps?: { x: number; y: number }[]; // 4 reference points in normalized video coords: D20, D3, D11, D6
 }
 
-/** "local" runs the whole pipeline on-device (no network call, no AI credits — see
- *  dartVision.ts); "cloud" keeps the original Gemini-vision-based detection as a fallback for
- *  setups where local blob-diffing proves too unreliable (bad lighting, overlapping darts).
- *  Device-wide, not per-board, since it reflects "does this tablet have/want a connection". */
-type DetectionMode = "local" | "cloud";
-const DETECTION_MODE_KEY = "dartcam-detection-mode";
-const loadDetectionMode = (): DetectionMode => {
-  if (typeof window === "undefined") return "local";
-  return window.localStorage.getItem(DETECTION_MODE_KEY) === "cloud" ? "cloud" : "local";
-};
-
 /**
  * Opt-in, per-device: every local-mode scan already captures a matched "empty board" /
  * "darts stuck in" image pair (see dartVision.ts), and every manual correction the player makes
@@ -211,13 +200,6 @@ const STILL_AFTER_CHANGE = 4;
 // Tick interval of the watcher loop.
 const TICK_MS = 400;
 const SCAN_COOLDOWN_MS = 3200;
-// The client now derives the actual segment/ring geometrically from the tip
-// position (see refineWithCalibration below), so the AI's confidence is really
-// just "is this a real dart tip" — a lower bar than "did I classify it right".
-// Keeping this too strict silently drops real detections, which reads as
-// "nothing found" to the player. Better to show a borderline detection (which
-// they can edit/remove) than to show nothing.
-const MIN_DART_CONFIDENCE = 0.4;
 // Below this, or if any dart is missing a usable tip position (falling back to the AI's
 // much less reliable raw segment guess instead of the deterministic calibration math),
 // the round is shown for manual review (Übernehmen/Verwerfen) instead of auto-committing.
@@ -263,13 +245,6 @@ const loadCalib = (key: string = CALIB_KEY): Calibration => {
   } catch {
     return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
   }
-};
-
-type BoardDetection = {
-  cx?: number;
-  cy?: number;
-  size?: number;
-  confidence?: number;
 };
 
 type ZoomCapability = { min: number; max: number; step: number };
@@ -318,52 +293,6 @@ const dartDistance = (a: DetectedDart, b: DetectedDart) => {
 const samePhysicalDart = (a: DetectedDart, b: DetectedDart) =>
   dartDistance(a, b) < DART_POSITION_MATCH || (!hasPosition(a) && !hasPosition(b) && dartKey(a) === dartKey(b));
 
-const sanitizeAiDarts = (raw: unknown, max: number): DetectedDart[] => {
-  if (!Array.isArray(raw)) return [];
-  const parsed = raw
-    .map((d: unknown) => {
-      const dart = d as Partial<DetectedDart> & {
-        segment?: unknown;
-        multiplier?: unknown;
-        points?: unknown;
-        confidence?: unknown;
-        x?: unknown;
-        y?: unknown;
-      };
-      const baseValue = Number(dart.segment ?? dart.baseValue) || 0;
-      const multiplier = ([1, 2, 3].includes(Number(dart.multiplier))
-        ? Number(dart.multiplier)
-        : 1) as 1 | 2 | 3;
-      const fallbackPoints = pointsFor(baseValue, multiplier);
-      const x = Number(dart.x);
-      const y = Number(dart.y);
-      // Tips near the double ring legitimately land close to the crop edge — clamp a
-      // small overshoot into range instead of dropping the position outright, since
-      // losing it means falling back to the AI's much less reliable raw segment guess.
-      const EDGE_TOLERANCE = 0.08;
-      const validX = Number.isFinite(x) && x >= -EDGE_TOLERANCE && x <= 1 + EDGE_TOLERANCE;
-      const validY = Number.isFinite(y) && y >= -EDGE_TOLERANCE && y <= 1 + EDGE_TOLERANCE;
-      return {
-        baseValue,
-        multiplier,
-        points: Number.isFinite(Number(dart.points)) ? Number(dart.points) : fallbackPoints,
-        confidence: Number(dart.confidence) || 0,
-        ...(validX ? { x: clamp(x, 0, 1) } : {}),
-        ...(validY ? { y: clamp(y, 0, 1) } : {}),
-      };
-    })
-    .filter((d) => d.confidence >= MIN_DART_CONFIDENCE)
-    .sort((a, b) => b.confidence - a.confidence);
-
-  const deduped: DetectedDart[] = [];
-  for (const dart of parsed) {
-    if (deduped.some((existing) => samePhysicalDart(existing, dart))) continue;
-    deduped.push(dart);
-    if (deduped.length >= max) break;
-  }
-  return deduped;
-};
-
 function diffNewDarts(prev: DetectedDart[], ai: DetectedDart[]): DetectedDart[] {
   if (ai.length <= prev.length) return [];
   const remaining = ai.slice();
@@ -410,11 +339,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const boardMissingStreakRef = useRef(0);
   const scanLockRef = useRef(false);
   const lastScanAtRef = useRef(0);
-  // Cached last stable frame captured WHILE darts were on the board.
-  // Used to send to AI once the user pulls the darts.
-  const preRemovalFrameRef = useRef<string | null>(null);
-  // Same two moments as above (empty baseline / just-before-pulled), but as raw pixel data
-  // for local diff-based detection instead of a JPEG string for the cloud AI — see dartVision.ts.
+  // Empty baseline / just-before-pulled moments, as raw pixel data for local diff-based
+  // detection — see dartVision.ts.
   const emptyImageDataRef = useRef<ImageData | null>(null);
   const preRemovalImageDataRef = useRef<ImageData | null>(null);
   // Unclipped MODEL_INPUT_SIZE-square capture of the same "darts stuck in" moment, for the
@@ -427,13 +353,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // Visually observed throws in the current turn (motion → still while board non-empty)
   const throwsSeenRef = useRef(0);
   const [throwsSeen, setThrowsSeen] = useState(0);
-  const [detectionMode, setDetectionModeState] = useState<DetectionMode>(() => loadDetectionMode());
   const [modelReady, setModelReady] = useState(false);
-  const [lastDetectionSource, setLastDetectionSource] = useState<"model" | "diff" | "cloud" | null>(null);
-  const setDetectionMode = (mode: DetectionMode) => {
-    if (typeof window !== "undefined") window.localStorage.setItem(DETECTION_MODE_KEY, mode);
-    setDetectionModeState(mode);
-  };
+  const [lastDetectionSource, setLastDetectionSource] = useState<"model" | "diff" | null>(null);
   const [trainingDataEnabled, setTrainingDataEnabledState] = useState<boolean>(() => loadTrainingDataEnabled());
   const setTrainingDataEnabled = (enabled: boolean) => {
     if (typeof window !== "undefined") window.localStorage.setItem(TRAINING_DATA_KEY, enabled ? "on" : "off");
@@ -474,7 +395,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [calib, setCalib] = useState<Calibration>(() => loadCalib(calibKeyFor(loadActiveBoard())));
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(() => loadDeviceId(loadActiveBoard()));
-  const [autoCalibrating, setAutoCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   // On-device visual check for the calibration, no browser devtools needed — many testers only
   // have the phone itself in hand. Shows exactly where the app thinks D20/D3/D11/D6 are, right
@@ -529,7 +449,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     stillFramesRef.current = 0;
     changeSeenRef.current = false;
     scanLockRef.current = false;
-    preRemovalFrameRef.current = null;
     preRemovalImageDataRef.current = null;
     preRemovalModelFrameRef.current = null;
     pendingTrainingCaptureRef.current = null;
@@ -841,82 +760,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     }
   }, []);
 
-  const updateAutoCalibration = useCallback(async (board?: BoardDetection | null) => {
-    if (!board?.confidence || Number(board.confidence) < 0.35) return;
-    // Once the user has done the precise 4-point tap calibration, those tap coordinates
-    // are recorded relative to the camera's physical framing at that moment. Letting
-    // auto-calibration keep nudging the actual hardware zoom afterwards silently
-    // invalidates every tap — the board transform in scoreFromBoardPoint would then be
-    // computing segments/rings against a frame that's no longer what was calibrated,
-    // which reads as "detection got worse over the session" even though nothing about
-    // the AI changed. So: soft-drift the digital crop (x/y/size) for framing/motion-diff
-    // purposes always, but never touch physical zoom again once real taps exist.
-    const hasManualCalibration = (calib.taps?.length ?? 0) === 4;
-    const nextX = clamp(Number(board.cx) || calib.x, 0.15, 0.85);
-    const nextY = clamp(Number(board.cy) || calib.y, 0.15, 0.85);
-    const boardSize = clamp(Number(board.size) || calib.size, 0.35, 0.98);
-    const nextSize = clamp(boardSize * 1.08, MIN_ANALYSIS_SIZE, 0.98);
-    const nextZoom = zoomCapsRef.current
-      ? clamp(TARGET_BOARD_RATIO / boardSize, zoomCapsRef.current.min, zoomCapsRef.current.max)
-      : calib.zoom;
-    setCalib((prev) => ({
-      ...prev,
-      x: prev.x * 0.5 + nextX * 0.5,
-      y: prev.y * 0.5 + nextY * 0.5,
-      size: prev.size * 0.4 + nextSize * 0.6,
-      zoom: hasManualCalibration ? prev.zoom : prev.zoom * 0.4 + nextZoom * 0.6,
-    }));
-    if (zoomCapsRef.current && !hasManualCalibration) await applyCameraZoom(nextZoom);
-  }, [applyCameraZoom, calib.x, calib.y, calib.size, calib.zoom, calib.taps]);
-
-  const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
-  const captureFrame = (target = 1024, quality = 0.82) => {
-    const c = drawToCanvas(target, true);
-    return c ? c.toDataURL("image/jpeg", quality) : null;
-  };
-
-  const captureFullFrame = (target = 960, quality = 0.72) => {
-    const v = videoRef.current;
-    const c = canvasRef.current;
-    if (!v || !c || !v.videoWidth || !v.videoHeight) return null;
-    const scale = target / v.videoWidth;
-    const height = Math.max(1, Math.round(v.videoHeight * scale));
-    c.width = target;
-    c.height = height;
-    const ctx = c.getContext("2d");
-    if (!ctx) return null;
-    ctx.clearRect(0, 0, target, height);
-    ctx.drawImage(v, 0, 0, v.videoWidth, v.videoHeight, 0, 0, target, height);
-    return c.toDataURL("image/jpeg", quality);
-  };
-
-  const isRetryable = (error: unknown) => {
-    const status =
-      typeof error === "object" && error !== null && "status" in error
-        ? Number((error as { status?: unknown }).status)
-        : NaN;
-    const retryable =
-      typeof error === "object" && error !== null && "retryable" in error
-        ? Boolean((error as { retryable?: unknown }).retryable)
-        : null;
-    const message = error instanceof Error ? error.message : String(error ?? "");
-    return (
-      retryable === true ||
-      [429, 500, 502, 503, 504].includes(status) ||
-      message.includes("non-2xx") ||
-      message.includes("Rate limit") ||
-      message.includes("AI analysis failed")
-    );
-  };
-
-  const makeErr = (message: string, status?: number, retryable = true) => {
-    const err = new Error(message) as Error & { status?: number; retryable?: boolean };
-    if (typeof status === "number") err.status = status;
-    err.retryable = retryable;
-    return err;
-  };
-
   /** Re-draws raw pixel data onto a scratch canvas to get a compressed, uploadable JPEG blob —
    *  ImageData itself can't be uploaded directly. */
   const imageDataToBlob = (img: ImageData, quality = 0.85): Promise<Blob | null> => {
@@ -978,33 +821,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     }
   };
 
-  const analyzeFrame = async (imageBase64: string, detectBoard = false) => {
-    const maxAttempts = 3;
-    let lastError: unknown = null;
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      try {
-        const { data, error } = await supabase.functions.invoke("analyze-dartboard", {
-          body: { imageBase64, detectBoard },
-        });
-        if (error) throw error;
-        if (data?.error) {
-          throw makeErr(
-            String(data.error),
-            Number(data.status) || undefined,
-            Boolean(data.retryable ?? true),
-          );
-        }
-        return data;
-      } catch (error) {
-        lastError = error;
-        if (attempt === maxAttempts - 1 || !isRetryable(error)) throw error;
-        await sleep(350 * (attempt + 1));
-      }
-    }
-    throw lastError ?? new Error("Unknown analysis error");
-  };
-
   // ─── auto-detect board ────────────────────────────────────────────
+  // Digital crop/zoom is left alone here; only the 4 calibration points are attempted
+  // automatically (via the trained model — see runLocalCalibrationFlow/tryAutoCalibrate), with
+  // manual tapping as the always-available fallback/override. An earlier version of this ran a
+  // heuristic board-circle finder to drive the crop/physical camera zoom automatically — pulled
+  // back out after real-world testing found it made calibration worse, not better (an
+  // unvalidated guess was moving the physical zoom to a bad spot before the user even started
+  // tapping).
   const autoDetectBoard = async () => {
     const v = videoRef.current;
     if (!v || !v.videoWidth) {
@@ -1013,44 +837,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       resetLoop();
       return;
     }
-    // Local mode: no cloud call to auto-frame the board with. An earlier version of this ran
-    // a local heuristic board-circle finder here and let it drive the crop/physical camera
-    // zoom automatically — pulled back out after real-world testing found it made calibration
-    // worse, not better (an unvalidated guess was moving the physical zoom to a bad spot before
-    // the user even started tapping). Digital crop/zoom is left alone here; only the 4
-    // calibration points are attempted automatically (via the trained model), with manual
-    // tapping as the always-available fallback/override.
-    if (detectionMode === "local") {
-      resetLoop();
-      if (!calib.taps || calib.taps.length !== 4) {
-        await runLocalCalibrationFlow();
-      } else {
-        setPhase("live");
-        setStatus(t("camera.readyThrowFirst"));
-      }
-      return;
-    }
-    setPhase("detecting");
-    setStatus(t("camera.searchingBoard"));
-    setAutoCalibrating(true);
-    try {
-      const dataUrl = captureFullFrame(960, 0.7);
-      if (!dataUrl) throw new Error("no frame");
-      const data = await analyzeFrame(dataUrl, true);
-      if (data?.board && Number(data.board.confidence) >= 0.4) {
-        await updateAutoCalibration(data.board as BoardDetection);
-      }
-    } catch (err) {
-      console.warn("auto-detect failed", err);
-    } finally {
-      setAutoCalibrating(false);
-    }
     resetLoop();
-    // Prompt user to 4-point calibrate once per session/device
     if (!calib.taps || calib.taps.length !== 4) {
-      setPendingTaps([]);
-      setPhase("calibrate");
-      setStatus(`${t("camera.calibStep")} 1/4: ${t("camera.tapOn")} ${t(CALIB_LABEL_KEYS[0])}`);
+      await runLocalCalibrationFlow();
     } else {
       setPhase("live");
       setStatus(t("camera.readyThrowFirst"));
@@ -1272,18 +1061,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setSelectedDeviceId(deviceId);
   };
 
-  /** Switching modes invalidates any in-flight baseline/pre-removal captures from the other
-   *  mode (they're different data shapes), so just reset the watcher loop and re-arm live. */
-  const changeDetectionMode = (mode: DetectionMode) => {
-    if (mode === detectionMode) return;
-    setDetectionMode(mode);
-    resetLoop();
-    emptyImageDataRef.current = null;
-    if (phase === "live" || phase === "scanning") {
-      setStatus(t("camera.stabilizing"));
-    }
-  };
-
   /**
    * Identifies and scores exactly the dart that just landed — called from the watcher loop the
    * moment a throw event is detected (motion settled, board non-empty), instead of only ever
@@ -1372,7 +1149,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           stableSigRef.current = sig;
           setStatus(t("camera.readyThrowAllThenPull"));
           emptyBoardSigRef.current = sig;
-          if (detectionMode === "local") emptyImageDataRef.current = grabImageData();
+          emptyImageDataRef.current = grabImageData();
         } else {
           setStatus(t("camera.stabilizing"));
         }
@@ -1424,7 +1201,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           // a new visit starts from here. Cut the clip segment here so its footage lines up with
           // real throws instead of an arbitrary timer (see restartClipSegment/CLIP_SEGMENT_MS).
           restartClipSegment();
-          const hasPreRemovalCapture = detectionMode === "local" ? !!preRemovalImageDataRef.current : !!preRemovalFrameRef.current;
+          const hasPreRemovalCapture = !!preRemovalImageDataRef.current;
           // A still-unreviewed round (accumulated darts awaiting Übernehmen/Verwerfen) must not
           // be silently overwritten by a new scan — if the player throws/pulls a second round
           // before acting on the first, this used to replace the pending darts with no trace of
@@ -1443,16 +1220,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           emptyBoardSigRef.current = sig;
           // Refresh the local baseline too — lighting can drift over a session, and this is
           // the moment we're most sure the board is genuinely empty.
-          if (detectionMode === "local") emptyImageDataRef.current = grabImageData();
+          emptyImageDataRef.current = grabImageData();
           setStatus(t("camera.boardEmptyThrowFirst"));
         } else {
-          if (detectionMode === "local") {
-            preRemovalImageDataRef.current = grabImageData();
-            if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
-          } else {
-            const frame = captureFrame(1280, 0.9);
-            if (frame) preRemovalFrameRef.current = frame;
-          }
+          preRemovalImageDataRef.current = grabImageData();
+          if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
           throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
           setThrowsSeen(throwsSeenRef.current);
           setStatus(
@@ -1463,7 +1235,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           // Try to identify THIS dart right now, in true throw order — see
           // scoreNewlyLandedDart's doc comment. Best-effort: if it can't, the status text above
           // still holds and the existing end-of-visit batch scan picks up the slack later.
-          if (detectionMode === "local" && !perThrowLockRef.current) {
+          if (!perThrowLockRef.current) {
             perThrowLockRef.current = true;
             void scoreNewlyLandedDart().finally(() => { perThrowLockRef.current = false; });
           }
@@ -1483,19 +1255,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, phase, dartsRemaining, detectionMode, paused, boardMissing]);
+  }, [enabled, phase, dartsRemaining, paused, boardMissing]);
 
   // ─── scan: analyze the pre-removal frame after darts are pulled ─────
   const runPullScan = async () => {
-    const isLocal = detectionMode === "local";
-
     // Every dart in this visit was already identified incrementally, in true chronological
     // order, as it landed (see scoreNewlyLandedDart) — nothing left to batch-detect, and
     // re-running detection now would only risk REPLACING a correctly-ordered result with a
     // fresh, unordered one. Skip straight to the same review stance the batch path below
-    // reaches at its own end (local mode always reviews — see its own comment further down).
+    // reaches at its own end (this mode always reviews — see its own comment further down).
     const alreadyIdentified = accumulatedRef.current;
-    if (isLocal && throwsSeenRef.current > 0 && alreadyIdentified.length >= throwsSeenRef.current) {
+    if (throwsSeenRef.current > 0 && alreadyIdentified.length >= throwsSeenRef.current) {
       setPhase("scanning");
       lastScanAtRef.current = performance.now();
       setError(null);
@@ -1511,14 +1281,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setStatus(`${t("camera.pleaseCheck")} ${alreadyIdentified.map(dartLabel).join(", ")}`);
       setPhase("live");
       scanLockRef.current = false;
-      preRemovalFrameRef.current = null;
       preRemovalImageDataRef.current = null;
       preRemovalModelFrameRef.current = null;
       return;
     }
 
-    const img = preRemovalFrameRef.current;
-    if (isLocal ? !preRemovalImageDataRef.current || !emptyImageDataRef.current : !img) {
+    if (!preRemovalImageDataRef.current || !emptyImageDataRef.current) {
       scanLockRef.current = false;
       return;
     }
@@ -1547,83 +1315,63 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         return { darts, confidence };
       };
 
-      if (isLocal) {
-        if (trainingDataEnabled) {
-          // Stash the reference (not a copy) before the finally block below nulls these refs —
-          // consumed at commit time with whatever the player ends up confirming/correcting.
-          pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current!, after: preRemovalImageDataRef.current! };
-        }
-        const modelFrame = preRemovalModelFrameRef.current;
-        const modelResult = modelReadyRef.current && modelFrame
-          ? await detectDartsWithModel(modelFrame, throwsSeenRef.current)
-          : null;
-        if (modelResult && !modelResult.unavailable && modelResult.darts.length > 0) {
-          setLastDetectionSource("model");
-          // Raw crop-space positions BEFORE calibration turns them into segments — if a report
-          // ever again says "detection looks wrong", these numbers are what separate "the model
-          // found the wrong spot" from "the model was right but calibration scored it wrong".
-          console.info("[LiveCamera] model dart detections (crop-relative x/y, 0-1)", modelResult.darts);
-          candidateDarts = refineWithCalibration(
-            modelResult.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
-          );
-          console.info("[LiveCamera] scored darts after calibration", candidateDarts);
-          overallConfidence = modelResult.darts.reduce((s, d) => s + d.confidence, 0) / modelResult.darts.length;
-          // Model found a different dart count than what we visually saw land (occlusion, or a
-          // spurious low-confidence extra box) — force manual review instead of trusting the
-          // count blindly.
-          if (modelResult.darts.length !== throwsSeenRef.current) {
-            overallConfidence = Math.min(overallConfidence, AUTO_COMMIT_CONFIDENCE - 0.05);
-          }
-        } else {
-          // Model not loaded yet / inference failed / found nothing — the older motion-diff
-          // heuristic is still here as a safety net so auto-scoring never just stops working.
-          if (modelResult && !modelResult.unavailable) {
-            // Diagnostic only — if the model ran but found nothing, the raw top score (even
-            // below threshold) tells us whether it's "almost detecting" (real-world confidence
-            // just runs lower than the Colab validation set) or "not detecting at all" (crop
-            // framing / preprocessing mismatch) — very different problems to chase.
-            console.warn("[LiveCamera] model found 0 darts, max raw score seen:", modelResult.maxDartScore);
-          }
-          setLastDetectionSource("diff");
-          const fallback = runDiffFallback();
-          candidateDarts = fallback.darts;
-          overallConfidence = fallback.confidence;
+      if (trainingDataEnabled) {
+        // Stash the reference (not a copy) before the finally block below nulls these refs —
+        // consumed at commit time with whatever the player ends up confirming/correcting.
+        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current!, after: preRemovalImageDataRef.current! };
+      }
+      const modelFrame = preRemovalModelFrameRef.current;
+      const modelResult = modelReadyRef.current && modelFrame
+        ? await detectDartsWithModel(modelFrame, throwsSeenRef.current)
+        : null;
+      if (modelResult && !modelResult.unavailable && modelResult.darts.length > 0) {
+        setLastDetectionSource("model");
+        // Raw crop-space positions BEFORE calibration turns them into segments — if a report
+        // ever again says "detection looks wrong", these numbers are what separate "the model
+        // found the wrong spot" from "the model was right but calibration scored it wrong".
+        console.info("[LiveCamera] model dart detections (crop-relative x/y, 0-1)", modelResult.darts);
+        candidateDarts = refineWithCalibration(
+          modelResult.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
+        );
+        console.info("[LiveCamera] scored darts after calibration", candidateDarts);
+        overallConfidence = modelResult.darts.reduce((s, d) => s + d.confidence, 0) / modelResult.darts.length;
+        // Model found a different dart count than what we visually saw land (occlusion, or a
+        // spurious low-confidence extra box) — force manual review instead of trusting the
+        // count blindly.
+        if (modelResult.darts.length !== throwsSeenRef.current) {
+          overallConfidence = Math.min(overallConfidence, AUTO_COMMIT_CONFIDENCE - 0.05);
         }
       } else {
-        setLastDetectionSource("cloud");
-        const data = await analyzeFrame(img!);
-        overallConfidence = Number(data?.overallConfidence) || 0;
-        candidateDarts = refineWithCalibration(sanitizeAiDarts(data?.darts, Math.max(throwsSeenRef.current, 1)));
-        if (data?.board) void updateAutoCalibration(data.board as BoardDetection);
+        // Model not loaded yet / inference failed / found nothing — the older motion-diff
+        // heuristic is still here as a safety net so auto-scoring never just stops working.
+        if (modelResult && !modelResult.unavailable) {
+          // Diagnostic only — if the model ran but found nothing, the raw top score (even
+          // below threshold) tells us whether it's "almost detecting" (real-world confidence
+          // just runs lower than the Colab validation set) or "not detecting at all" (crop
+          // framing / preprocessing mismatch) — very different problems to chase.
+          console.warn("[LiveCamera] model found 0 darts, max raw score seen:", modelResult.maxDartScore);
+        }
+        setLastDetectionSource("diff");
+        const fallback = runDiffFallback();
+        candidateDarts = fallback.darts;
+        overallConfidence = fallback.confidence;
       }
       setLastConfidence(overallConfidence);
 
       if (candidateDarts.length === 0) {
         // Diagnostic only — helps tell "genuinely nothing found" apart from
         // "found darts but they got filtered out" when this happens in the field.
-        console.warn("[LiveCamera] scan found 0 darts", { mode: detectionMode });
+        console.warn("[LiveCamera] scan found 0 darts");
         setStatus(t("camera.noDartsDetectedManual"));
         setScanFailed(true);
       } else {
         setAccumulated(candidateDarts);
         candidateDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
-        const allPositioned = candidateDarts.every(hasPosition);
-        // Local detection has no real-world track record yet (unlike the cloud model) — never
-        // auto-commit on its say-so alone, always make the player confirm/correct first. Prevents
-        // a bad reading from silently scoring the wrong player and advancing the turn.
-        const highConfidence = !isLocal && overallConfidence >= AUTO_COMMIT_CONFIDENCE && allPositioned;
-        if (highConfidence) {
-          // Board is already confirmed empty (that's what triggered this scan) and detection
-          // is confident — safe to hand straight over to the next player.
-          setNeedsReview(false);
-          setTimeout(() => commitRound(candidateDarts), 250);
-          setStatus(`${t("camera.roundDetected")} ${candidateDarts.map(dartLabel).join(", ")}`);
-        } else {
-          // Unsure — wait for a manual Übernehmen/Verwerfen instead of guessing wrong
-          // silently. The board is still empty either way, so nothing is lost by waiting.
-          setNeedsReview(true);
-          setStatus(`${t("camera.pleaseCheck")} ${candidateDarts.map(dartLabel).join(", ")}`);
-        }
+        // No real-world track record yet — never auto-commit on the detector's say-so alone,
+        // always make the player confirm/correct first. Prevents a bad reading from silently
+        // scoring the wrong player and advancing the turn.
+        setNeedsReview(true);
+        setStatus(`${t("camera.pleaseCheck")} ${candidateDarts.map(dartLabel).join(", ")}`);
       }
       setPhase("live");
     } catch (err: unknown) {
@@ -1634,7 +1382,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setScanFailed(true);
     } finally {
       scanLockRef.current = false;
-      preRemovalFrameRef.current = null;
       preRemovalImageDataRef.current = null;
       preRemovalModelFrameRef.current = null;
     }
@@ -1675,13 +1422,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // incrementally mid-visit (see scoreNewlyLandedDart); needsReview (an already-finished round
     // sitting there awaiting Übernehmen/Verwerfen) is the actual thing this must not disturb.
     if (!scanLockRef.current && !needsReviewRef.current) {
-      if (detectionMode === "local") {
-        preRemovalImageDataRef.current = grabImageData();
-        if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
-      } else {
-        const frame = captureFrame(1280, 0.9);
-        if (frame) preRemovalFrameRef.current = frame;
-      }
+      preRemovalImageDataRef.current = grabImageData();
+      if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
       throwsSeenRef.current = Math.max(throwsSeenRef.current, dartsRemaining);
       scanLockRef.current = true;
       void runPullScan();
@@ -1817,58 +1559,28 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </Button>
       </div>
 
-      <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1 text-[11px]">
-        <button
-          onClick={() => changeDetectionMode("local")}
-          className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
-            detectionMode === "local" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-          }`}
-          title={
-            modelReady
-              ? t("camera.localDetectionModel")
-              : t("camera.localDetectionLoading")
-          }
-        >
-          {t("camera.local")}
-        </button>
-        <button
-          onClick={() => changeDetectionMode("cloud")}
-          className={`flex-1 rounded-md py-1.5 font-medium transition-colors ${
-            detectionMode === "cloud" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-          }`}
-          title={t("camera.cloudDetectionTooltip")}
-        >
-          {t("camera.cloudAi")}
-        </button>
-      </div>
-      {/* The mode explanations above only lived in a hover `title` — invisible on a touch-only
-          phone. Always show the currently-selected mode's own explanation instead. */}
+      {/* Was a hover-only `title` before the local/cloud mode toggle sat here — kept visible
+          (not touch-hidden) now that this is the only mode there is to explain. */}
       <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
-        {detectionMode === "local"
-          ? (modelReady
-              ? t("camera.localDetectionModel")
-              : t("camera.localDetectionLoading"))
-          : t("camera.cloudDetectionDesc")}
+        {modelReady ? t("camera.localDetectionModel") : t("camera.localDetectionLoading")}
       </p>
 
-      {detectionMode === "local" && (
-        <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
-          <button
-            onClick={() => setTrainingDataEnabled(!trainingDataEnabled)}
-            className="flex w-full items-center justify-between text-[11px]"
-          >
-            <span className="text-muted-foreground">{t("camera.collectTrainingData")}</span>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${trainingDataEnabled ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
-              {trainingDataEnabled ? t("common.on") : t("common.off")}
-            </span>
-          </button>
-          {/* Same reasoning as above — this is the privacy-relevant one (uploads a real board
-              photo) and defaults on, so its explanation can't be hover-only. */}
-          <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-            {t("camera.trainingDataDesc")}
-          </p>
-        </div>
-      )}
+      <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
+        <button
+          onClick={() => setTrainingDataEnabled(!trainingDataEnabled)}
+          className="flex w-full items-center justify-between text-[11px]"
+        >
+          <span className="text-muted-foreground">{t("camera.collectTrainingData")}</span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${trainingDataEnabled ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
+            {trainingDataEnabled ? t("common.on") : t("common.off")}
+          </span>
+        </button>
+        {/* Same reasoning as above — this is the privacy-relevant one (uploads a real board
+            photo) and defaults on, so its explanation can't be hover-only. */}
+        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+          {t("camera.trainingDataDesc")}
+        </p>
+      </div>
 
       <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
         <video
@@ -1985,11 +1697,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         {(phase === "starting" || phase === "detecting") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 px-4 text-center text-xs text-foreground">
             <Loader2 className="mb-2 h-5 w-5 animate-spin" />
-            {phase === "starting"
-              ? t("camera.starting")
-              : detectionMode === "local"
-                ? status
-                : t("camera.boardAutoDetecting")}
+            {phase === "starting" ? t("camera.starting") : status}
           </div>
         )}
         {phase === "scanning" && (
@@ -2109,13 +1817,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         )}
       </div>
 
-      {autoCalibrating && (
-        <div className="rounded-md border border-accent/30 bg-accent/5 px-3 py-1.5 text-[11px] text-accent">
-          {t("camera.autoCalibRunning")}
-        </div>
-      )}
-
-      {detectionMode === "local" && (phase === "live" || phase === "scanning") && (
+      {(phase === "live" || phase === "scanning") && (
         <div className="flex gap-1.5">
           <button
             onClick={restartCalibration}
@@ -2166,7 +1868,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             {accumulated.length}/{dartsRemaining}
             {lastConfidence > 0 && (
               <span className="ml-2">
-                {lastDetectionSource === "model" ? t("camera.sourceModel") : lastDetectionSource === "diff" ? t("camera.sourceMotion") : t("camera.cloudAi")}{" "}
+                {lastDetectionSource === "model" ? t("camera.sourceModel") : t("camera.sourceMotion")}{" "}
                 {(lastConfidence * 100).toFixed(0)}%
               </span>
             )}
@@ -2389,18 +2091,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           >
             <RotateCcw className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> {phase === "detecting" ? t("camera.detectingBoard") : t("camera.reAutoDetectBoard")}
           </Button>
-          {detectionMode === "local" && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={restartCalibration}
-              disabled={phase === "detecting"}
-              className="w-full gap-1"
-              title={`${t("camera.restartCalibTooltip")} ${t("camera.restartCalibTooltipSuffix")}`}
-            >
-              <Target className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> {t("camera.restartCalibButton")}
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={restartCalibration}
+            disabled={phase === "detecting"}
+            className="w-full gap-1"
+            title={`${t("camera.restartCalibTooltip")} ${t("camera.restartCalibTooltipSuffix")}`}
+          >
+            <Target className={`h-4 w-4 ${phase === "detecting" ? "animate-spin" : ""}`} /> {t("camera.restartCalibButton")}
+          </Button>
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
               <span>{t("camera.horizontal")}</span>
