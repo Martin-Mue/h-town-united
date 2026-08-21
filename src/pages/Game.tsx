@@ -2251,7 +2251,7 @@ const GamePage = () => {
         <h3 className={`font-display text-lg sm:text-2xl uppercase text-center truncate max-w-full ${nameClass}`}>{name}</h3>
         {p ? (
           <div className="flex flex-col gap-5 w-full items-center">
-            {statRow("Average", Number(p.average).toFixed(1))}
+            {statRow("Average", p.games_played > 0 ? Number(p.average).toFixed(1) : "–")}
             {statRow(t("game.winsLabel"), `${p.games_won}/${p.games_played}`)}
             {statRow("Elo", String(Math.round(p.elo_rating)))}
             {statRow(t("game.highscoreLabel"), String(p.high_score))}

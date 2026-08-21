@@ -348,7 +348,11 @@ const StatisticsPage = () => {
   const clubStats = useMemo(() => {
     const totalGames = filteredGames.length;
     const totalPlayers = players.length;
-    const avgOfAverages = players.length > 0 ? players.reduce((s, p) => s + Number(p.average), 0) / players.length : 0;
+    // Only players who've actually played a game have a meaningful average — a fresh 0-game
+    // member defaults to average 0, which would otherwise drag the whole club figure down for
+    // no reason other than not having played yet.
+    const activePlayers = players.filter((p) => p.games_played > 0);
+    const avgOfAverages = activePlayers.length > 0 ? activePlayers.reduce((s, p) => s + Number(p.average), 0) / activePlayers.length : 0;
     const bestAvg = players.reduce((best, p) => Number(p.average) > best.val ? { name: p.name, val: Number(p.average), emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const bestHighscore = players.reduce((best, p) => p.high_score > best.val ? { name: p.name, val: p.high_score, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const mostGames = players.reduce((best, p) => p.games_played > best.val ? { name: p.name, val: p.games_played, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
@@ -492,7 +496,7 @@ const StatisticsPage = () => {
   const sortValueFor = (p: PlayerStats): string | number => {
     const winRate = p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
     switch (sortBy) {
-      case "average": return Number(p.average).toFixed(1);
+      case "average": return p.games_played > 0 ? Number(p.average).toFixed(1) : "–";
       case "games_won": return p.games_won;
       case "high_score": return p.high_score;
       case "win_rate": return `${winRate}%`;
@@ -1361,7 +1365,7 @@ const StatisticsPage = () => {
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { label: t("stats.average"), value: Number(playerDetailStats.player.average).toFixed(1), color: "text-primary" },
+                    { label: t("stats.average"), value: playerDetailStats.player.games_played > 0 ? Number(playerDetailStats.player.average).toFixed(1) : "–", color: "text-primary" },
                     { label: "Highscore", value: playerDetailStats.player.high_score, color: "text-accent" },
                     { label: t("stats.streak"), value: `${playerDetailStats.currentStreak}🔥`, color: "text-destructive" },
                     { label: t("stats.bestStreak"), value: playerDetailStats.bestStreak, color: "text-secondary" },
@@ -1655,7 +1659,7 @@ const StatisticsPage = () => {
                     <div className="text-muted-foreground">vs</div>
                     <div className="font-semibold text-secondary">{h2hRecords.p2.emoji} {h2hRecords.p2.name}</div>
                     {[
-                      { label: t("stats.overallAverage"), v1: Number(h2hRecords.p1.average).toFixed(1), v2: Number(h2hRecords.p2.average).toFixed(1) },
+                      { label: t("stats.overallAverage"), v1: h2hRecords.p1.games_played > 0 ? Number(h2hRecords.p1.average).toFixed(1) : "–", v2: h2hRecords.p2.games_played > 0 ? Number(h2hRecords.p2.average).toFixed(1) : "–" },
                       { label: t("game.duelAverage"), v1: h2hRecords.p1AvgH2H, v2: h2hRecords.p2AvgH2H },
                       { label: "Highscore", v1: h2hRecords.p1.high_score, v2: h2hRecords.p2.high_score },
                       { label: t("stats.bestGameAverage"), v1: h2hRecords.p1HighestAvg, v2: h2hRecords.p2HighestAvg },

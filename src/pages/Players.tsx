@@ -599,7 +599,7 @@ const PlayersPage = () => {
             { label: t("stats.games"), value: selectedPlayer.games_played, icon: Target },
             { label: t("game.winsLabel"), value: `${selectedPlayer.games_won} (${winRate}%)`, icon: Trophy },
             { label: "Highscore", value: selectedPlayer.high_score, icon: TrendingUp },
-            { label: t("stats.average"), value: Number(selectedPlayer.average).toFixed(1), icon: BarChart3 },
+            { label: t("stats.average"), value: selectedPlayer.games_played > 0 ? Number(selectedPlayer.average).toFixed(1) : "–", icon: BarChart3 },
           ].map((stat) => (
             <div key={stat.label} className="bg-card rounded-xl p-4 border border-border">
               <stat.icon className="w-4 h-4 text-primary mb-1" />
@@ -913,7 +913,7 @@ const PlayersPage = () => {
                         <p className="text-[10px] text-muted-foreground uppercase">High</p>
                       </div>
                       <div className="rounded-lg bg-muted/40 px-2 py-2">
-                        <p className="text-sm font-display">{Number(player.average).toFixed(1)}</p>
+                        <p className="text-sm font-display">{player.games_played > 0 ? Number(player.average).toFixed(1) : "–"}</p>
                         <p className="text-[10px] text-muted-foreground uppercase">Ø</p>
                       </div>
                       <div className="rounded-lg bg-muted/40 px-2 py-2">
