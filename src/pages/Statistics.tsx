@@ -395,7 +395,10 @@ const StatisticsPage = () => {
     const yearByGame = new Map(filteredGames.map((g) => [g.id, new Date(g.played_at).getFullYear()]));
     const appTrackedByYear: Record<number, number> = {};
     gameLegs.forEach((leg) => {
-      if (!filteredIds.has(leg.game_id) || !Array.isArray(leg.throws)) return;
+      // player_id is only ever set for a leg matched to a real roster member — bots and
+      // unregistered guest names (the "Spieler 1"/"Spieler 2" defaults) never match, so this
+      // guard is exactly "members only" without needing a separate bot/guest check.
+      if (!leg.player_id || !filteredIds.has(leg.game_id) || !Array.isArray(leg.throws)) return;
       const year = yearByGame.get(leg.game_id);
       if (year === undefined) return;
       const n = count180s(leg.throws as unknown as DartThrow[]);
