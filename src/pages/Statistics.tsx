@@ -1676,14 +1676,14 @@ const StatisticsPage = () => {
                       </React.Fragment>
                     ))}
                   </div>
-                  <ResponsiveContainer width="100%" height={200}>
+                  <ResponsiveContainer width="100%" height={340}>
                     <RadarChart data={h2hRecords.radar}>
                       <PolarGrid stroke="hsl(222 18% 14%)" />
-                      <PolarAngleAxis dataKey="skill" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} />
+                      <PolarAngleAxis dataKey="skill" tick={{ fontSize: 13, fill: "hsl(222 12% 50%)" }} />
                       <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
                       <Radar dataKey="p1" name={h2hRecords.p1.name} stroke="hsl(185 85% 48%)" fill="hsl(185 85% 48%)" fillOpacity={0.15} strokeWidth={2} />
                       <Radar dataKey="p2" name={h2hRecords.p2.name} stroke="hsl(155 65% 42%)" fill="hsl(155 65% 42%)" fillOpacity={0.15} strokeWidth={2} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
                     </RadarChart>
                   </ResponsiveContainer>
                 </>
