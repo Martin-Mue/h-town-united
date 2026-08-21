@@ -77,6 +77,9 @@ interface TournamentRecord {
   boards?: number;
   /** Off = pure bracket display + manual result entry, no "Spiel starten" button anywhere. Defaults on. */
   live_play_enabled?: boolean;
+  /** Who's actually shown up, keyed by participant name (same name-keyed space as `players`/
+   *  `bracket`) — organizer-only check-in state, independent of match results. */
+  attendance?: Record<string, boolean> | null;
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
@@ -720,6 +723,7 @@ const TournamentPage = () => {
     public_slug: t.public_slug || null,
     boards: t.boards ?? 2,
     live_play_enabled: t.live_play_enabled ?? true,
+    attendance: (t.attendance as unknown as Record<string, boolean>) || {},
   });
 
   const fetchTournaments = useCallback(async () => {
@@ -963,6 +967,7 @@ const TournamentPage = () => {
         round_configs: (upd.round_configs as unknown as RoundConfig[]) || [],
         boards: upd.boards ?? boards,
         live_play_enabled: upd.live_play_enabled ?? livePlayEnabled,
+        attendance: (upd.attendance as unknown as Record<string, boolean>) || {},
       };
       setActiveTournament(rec);
       setEditingId(null);
@@ -1010,6 +1015,7 @@ const TournamentPage = () => {
       round_configs: (data.round_configs as unknown as RoundConfig[]) || [],
       boards: data.boards ?? boards,
       live_play_enabled: data.live_play_enabled ?? livePlayEnabled,
+      attendance: (data.attendance as unknown as Record<string, boolean>) || {},
     };
     setActiveTournament(record);
     setBracketView(defaultBracketView(record.bracket as Match[]));
@@ -1134,6 +1140,14 @@ const TournamentPage = () => {
     setActiveTournament({ ...activeTournament, players: nextPlayers });
     await persistBracket(patch);
     toast({ title: `${name} ${t("tournament.withdrawn")}`, description: t("tournament.withdrawnDesc") });
+  };
+
+  /** Check-in state is independent of match results/withdrawal — just who's physically here. */
+  const toggleAttendance = async (name: string) => {
+    if (!activeTournament) return;
+    const next = { ...(activeTournament.attendance || {}), [name]: !(activeTournament.attendance?.[name]) };
+    setActiveTournament({ ...activeTournament, attendance: next });
+    await supabase.from("tournaments").update({ attendance: next as unknown as Json }).eq("id", activeTournament.id);
   };
 
   /** Manually set (and lock) the scorekeeper of a single match. */
@@ -1309,6 +1323,25 @@ const TournamentPage = () => {
     setTournamentAverages(null);
   };
 
+  /** Just the cheap half of toggleHighlights below (games rows only, no per-dart legs) — split
+   *  out so the participants list can show each entrant's live tournament average right away
+   *  without needing the heavier Highlights panel opened first. */
+  const loadTournamentAverages = useCallback(async (tournamentId: string) => {
+    const { data: games } = await supabase.from("games")
+      .select("id, player1_id, player1_name, player1_average, player2_id, player2_name, player2_average")
+      .eq("tournament_id", tournamentId);
+    const gameRows = (games || []) as unknown as TournamentStatsGameRow[];
+    setTournamentAverages(computeTournamentAverages(gameRows));
+    return gameRows;
+  }, []);
+
+  // Fires once per opened tournament (not gated behind the Highlights panel's own expand) so the
+  // participants list's "Turnier-Average" column is populated as soon as there's anything to show.
+  useEffect(() => {
+    if (!activeTournament || activeTournament.status !== "active" || tournamentAverages) return;
+    loadTournamentAverages(activeTournament.id);
+  }, [activeTournament, tournamentAverages, loadTournamentAverages]);
+
   /** Lazily fetches + computes this tournament's highlights on first expand, then just toggles
    *  visibility on subsequent clicks — cheap since the source data can't change for a match that's
    *  already been played (only new matches finishing would add more, and re-opening the section
@@ -1320,11 +1353,7 @@ const TournamentPage = () => {
     setShowHighlights(next);
     if (!next || tournamentHighlights || !activeTournament) return;
     setLoadingHighlights(true);
-    const { data: games } = await supabase.from("games")
-      .select("id, player1_id, player1_name, player1_average, player2_id, player2_name, player2_average")
-      .eq("tournament_id", activeTournament.id);
-    const gameRows = (games || []) as unknown as TournamentStatsGameRow[];
-    setTournamentAverages(computeTournamentAverages(gameRows));
+    const gameRows = await loadTournamentAverages(activeTournament.id);
     const gameIds = gameRows.map((g) => g.id);
     if (gameIds.length === 0) { setTournamentHighlights({ heatmapPoints: [], participants: [] }); setLoadingHighlights(false); return; }
     const { data: legs } = await supabase.from("game_legs")
@@ -2041,29 +2070,48 @@ const TournamentPage = () => {
             {isOwner && (
               <div className="bg-card border border-border rounded-xl p-4">
                 <h3 className="font-display uppercase text-sm mb-2 flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
-                <p className="text-[11px] text-muted-foreground mb-2">{t("tournament.withdrawHint")}</p>
-                <div className="flex flex-wrap gap-2">
-                  {activeTournament.players.map(p => (
-                    <AlertDialog key={p} open={confirmWithdraw === p} onOpenChange={(open) => setConfirmWithdraw(open ? p : null)}>
-                      <AlertDialogTrigger asChild>
-                        <button className="bg-muted border border-border rounded-lg px-3 py-1 text-xs hover:border-destructive hover:text-destructive transition-colors">
-                          {p} ×
+                <p className="text-[11px] text-muted-foreground mb-3">{t("tournament.withdrawHint")}</p>
+                <div className="space-y-1.5">
+                  {activeTournament.players.map(p => {
+                    const avgRow = tournamentAverages?.participants.find(pa => pa.key === p || pa.name === p);
+                    const present = !!activeTournament.attendance?.[p];
+                    return (
+                      <div key={p} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${present ? "border-secondary/40 bg-secondary/10" : "border-border bg-muted/20"}`}>
+                        <button
+                          onClick={() => toggleAttendance(p)}
+                          role="checkbox" aria-checked={present} aria-label={`${p} ${t("tournament.attendancePresent")}`}
+                          className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${present ? "bg-secondary border-secondary text-secondary-foreground" : "border-muted-foreground/40"}`}
+                        >
+                          {present && <Check className="w-4 h-4" />}
                         </button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>{p} {t("tournament.withdrawConfirmSuffix")}</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            {t("tournament.allOpenMatchesFrom")} {p} {t("tournament.withdrawWarning")}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => withdrawPlayer(p)}>{t("tournament.withdrawCapital")}</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  ))}
+                        <span className="flex-1 min-w-0 truncate text-sm font-medium">{p}</span>
+                        {avgRow && (
+                          <span className="shrink-0 text-sm font-display text-primary" title={t("tournament.tournamentAverage")}>
+                            Ø {avgRow.tournamentAverage > 0 ? avgRow.tournamentAverage.toFixed(1) : "–"}
+                          </span>
+                        )}
+                        <AlertDialog open={confirmWithdraw === p} onOpenChange={(open) => setConfirmWithdraw(open ? p : null)}>
+                          <AlertDialogTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" title={t("tournament.withdrawCapital")} aria-label={`${p} ${t("tournament.withdrawCapital")}`}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>{p} {t("tournament.withdrawConfirmSuffix")}</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {t("tournament.allOpenMatchesFrom")} {p} {t("tournament.withdrawWarning")}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => withdrawPlayer(p)}>{t("tournament.withdrawCapital")}</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

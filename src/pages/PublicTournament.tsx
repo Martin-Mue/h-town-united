@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw, Target, ChevronDown, ChevronUp } from "lucide-react";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw, Target, ChevronDown, ChevronUp, Settings2, Check } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import {
@@ -569,6 +569,14 @@ const BoardOverview = ({
 const VIEW_PREF_KEY = "dart-live-view-pref";
 const AUTO_ROTATE_PREF_KEY = "dart-live-autorotate-pref";
 const AUTO_ROTATE_MS = 15000;
+/** Which of the 3 rotation-eligible slots ("bracket" covers both tree and list — they're two
+ *  presentations of the same data, never both in the rotation at once) auto-rotate should cycle
+ *  through. Persisted per-device like the view/autorotate prefs above; defaults to everything on
+ *  so an existing device's behavior doesn't change until someone deliberately narrows it down. */
+type RotationSlot = "boards" | "bracket" | "participants";
+const ROTATION_ORDER: RotationSlot[] = ["boards", "bracket", "participants"];
+const ROTATION_SLOTS_PREF_KEY = "dart-live-rotation-slots";
+const DEFAULT_ROTATION_SLOTS: Record<RotationSlot, boolean> = { boards: true, bracket: true, participants: true };
 
 const PublicTournamentPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -587,15 +595,32 @@ const PublicTournamentPage = () => {
   // board. Falls back to this device's last manually-picked view, then the usual default.
   const urlView = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
   const hadExplicitViewPref =
-    urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "auto" ||
+    urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "participants" || urlView === "auto" ||
     (typeof window !== "undefined" && !!window.localStorage.getItem(VIEW_PREF_KEY));
-  const [view, setViewRaw] = useState<"tree" | "list" | "boards">(() => {
+  const [view, setViewRaw] = useState<"tree" | "list" | "boards" | "participants">(() => {
     if (typeof window === "undefined") return "tree";
-    if (urlView === "boards" || urlView === "tree" || urlView === "list") return urlView;
+    if (urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "participants") return urlView;
     const stored = window.localStorage.getItem(VIEW_PREF_KEY);
-    if (stored === "boards" || stored === "tree" || stored === "list") return stored;
+    if (stored === "boards" || stored === "tree" || stored === "list" || stored === "participants") return stored;
     return window.innerWidth < 900 ? "list" : "tree";
   });
+  const [rotationSlots, setRotationSlots] = useState<Record<RotationSlot, boolean>>(() => {
+    if (typeof window === "undefined") return DEFAULT_ROTATION_SLOTS;
+    try {
+      const stored = window.localStorage.getItem(ROTATION_SLOTS_PREF_KEY);
+      if (!stored) return DEFAULT_ROTATION_SLOTS;
+      const parsed = JSON.parse(stored);
+      return { ...DEFAULT_ROTATION_SLOTS, ...parsed };
+    } catch { return DEFAULT_ROTATION_SLOTS; }
+  });
+  const [showRotationSettings, setShowRotationSettings] = useState(false);
+  const toggleRotationSlot = (slot: RotationSlot) => {
+    setRotationSlots((prev) => {
+      const next = { ...prev, [slot]: !prev[slot] };
+      if (typeof window !== "undefined") window.localStorage.setItem(ROTATION_SLOTS_PREF_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
   const [tournamentHighlights, setTournamentHighlights] = useState<TournamentHighlights | null>(null);
   const [tournamentAverages, setTournamentAverages] = useState<TournamentAverages | null>(null);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
@@ -614,8 +639,8 @@ const PublicTournamentPage = () => {
 
   /** User-driven view change — persists the pick and turns off auto-rotate (picking a
    *  view by hand means "show me this now", not "keep rotating"). */
-  const selectView = (next: "tree" | "list" | "boards") => {
-    if (next !== "boards") bracketViewRef.current = next;
+  const selectView = (next: "tree" | "list" | "boards" | "participants") => {
+    if (next === "tree" || next === "list") bracketViewRef.current = next;
     setViewRaw(next);
     setAutoRotateRaw(false);
     if (typeof window !== "undefined") {
@@ -633,15 +658,14 @@ const PublicTournamentPage = () => {
   /** Anonymous spectators can't read games/game_legs directly (authenticated-only RLS) — this
    *  goes through the public_tournament_highlights RPC instead, which is gated on the same
    *  public_view flag tournaments_public already uses (see its migration for the full reasoning).
-   *  Lazy on first expand, same as the creator-facing panel in Tournament.tsx. The RPC piggybacks
-   *  each game's average columns onto every one of its leg rows (one RPC, not two) — de-duplicate
-   *  by game_id before handing them to computeTournamentAverages, which expects one row per game. */
-  const toggleHighlights = async () => {
-    const next = !showHighlights;
-    setShowHighlights(next);
-    if (!next || tournamentHighlights || !t) return;
+   *  The RPC piggybacks each game's average columns onto every one of its leg rows (one RPC, not
+   *  two) — de-duplicate by game_id before handing them to computeTournamentAverages, which
+   *  expects one row per game. Shared by the Highlights panel and the participants rotation view
+   *  — there's no cheaper "averages only" endpoint for anonymous spectators, so both draw on the
+   *  same one-time fetch instead of hitting the RPC twice. */
+  const loadHighlightsAndAverages = useCallback(async (tournamentId: string) => {
     setLoadingHighlights(true);
-    const { data } = await supabase.rpc("public_tournament_highlights", { _tournament_id: t.id });
+    const { data } = await supabase.rpc("public_tournament_highlights", { _tournament_id: tournamentId });
     const rows = (data || []) as unknown as (TournamentStatsLegRow & {
       game_id: string; player1_id: string | null; player1_name: string; player1_average: number;
       player2_id: string | null; player2_name: string; player2_average: number;
@@ -659,15 +683,52 @@ const PublicTournamentPage = () => {
     });
     setTournamentAverages(computeTournamentAverages([...gamesByGameId.values()]));
     setLoadingHighlights(false);
+  }, []);
+
+  const toggleHighlights = async () => {
+    const next = !showHighlights;
+    setShowHighlights(next);
+    if (!next || tournamentHighlights || !t) return;
+    await loadHighlightsAndAverages(t.id);
   };
+
+  // Fires once per tournament so the participants rotation view has averages ready without
+  // requiring the separate Highlights panel to be opened by hand first.
+  useEffect(() => {
+    if (!t || tournamentAverages) return;
+    loadHighlightsAndAverages(t.id);
+  }, [t, tournamentAverages, loadHighlightsAndAverages]);
+
+  /** The slot a given `view` value belongs to — tree/list both count as "bracket" since they're
+   *  two presentations of the same data, never independently rotation-eligible. */
+  const slotOf = (v: "tree" | "list" | "boards" | "participants"): RotationSlot =>
+    v === "boards" ? "boards" : v === "participants" ? "participants" : "bracket";
+  const viewForSlot = (slot: RotationSlot): "tree" | "list" | "boards" | "participants" =>
+    slot === "boards" ? "boards" : slot === "participants" ? "participants" : bracketViewRef.current;
 
   useEffect(() => {
     if (!autoRotate) return;
+    const enabledSlots = ROTATION_ORDER.filter((s) => rotationSlots[s]);
+    if (enabledSlots.length === 0) return;
     const id = window.setInterval(() => {
-      setViewRaw((v) => (v === "boards" ? bracketViewRef.current : "boards"));
+      setViewRaw((v) => {
+        const curIdx = enabledSlots.indexOf(slotOf(v));
+        const nextSlot = enabledSlots[(curIdx + 1) % enabledSlots.length];
+        return viewForSlot(nextSlot);
+      });
     }, AUTO_ROTATE_MS);
     return () => window.clearInterval(id);
-  }, [autoRotate]);
+  }, [autoRotate, rotationSlots]);
+
+  // If the currently-shown view's slot gets unchecked while auto-rotating, jump to the next
+  // enabled one immediately instead of waiting out the rest of the interval on a now-excluded view.
+  useEffect(() => {
+    if (!autoRotate) return;
+    if (rotationSlots[slotOf(view)]) return;
+    const enabledSlots = ROTATION_ORDER.filter((s) => rotationSlots[s]);
+    if (enabledSlots.length > 0) setViewRaw(viewForSlot(enabledSlots[0]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rotationSlots, autoRotate]);
 
   // A 32+ player mirrored tree can't stay legible at any scale that also fits a
   // screen — default those straight to the always-readable round list. Only applies when
@@ -817,6 +878,9 @@ const PublicTournamentPage = () => {
                 </button>
               </>
             )}
+            <button onClick={() => selectView("participants")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "participants" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+              <Users className="w-3.5 h-3.5" /> {tr("pt.participantsView")}
+            </button>
           </div>
           <button
             onClick={toggleAutoRotate}
@@ -826,6 +890,14 @@ const PublicTournamentPage = () => {
             <RefreshCcw className={`w-3.5 h-3.5 ${autoRotate ? "animate-pulse" : ""}`} /> {tr("pt.autoSwitch")}
           </button>
           <button
+            onClick={() => setShowRotationSettings((v) => !v)}
+            className={`px-2.5 py-1.5 rounded-lg border text-xs flex items-center gap-1 ${showRotationSettings ? "border-secondary bg-secondary/15 text-secondary" : "border-border hover:bg-muted text-muted-foreground"}`}
+            title={tr("pt.rotationSettingsTooltip")}
+            aria-label={tr("pt.rotationSettingsTooltip")}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+          </button>
+          <button
             onClick={toggleHighlights}
             className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 ${showHighlights ? "border-accent bg-accent/15 text-accent" : "border-border hover:bg-muted text-muted-foreground"}`}
           >
@@ -833,6 +905,29 @@ const PublicTournamentPage = () => {
             {showHighlights ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
         </div>
+        {showRotationSettings && (
+          <div className="mb-2 rounded-xl border border-border bg-card p-3 max-w-xl">
+            <p className="text-[11px] text-muted-foreground mb-2">{tr("pt.rotationSettingsDesc")}</p>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { slot: "boards" as const, label: tr("pt.boardOverview") },
+                { slot: "bracket" as const, label: isKo ? tr("tournament.bracketTreeTab") : tr("pt.standings") },
+                { slot: "participants" as const, label: tr("pt.participantsView") },
+              ]).map((opt) => (
+                <button
+                  key={opt.slot}
+                  onClick={() => toggleRotationSlot(opt.slot)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs ${rotationSlots[opt.slot] ? "border-secondary bg-secondary/15 text-secondary" : "border-border text-muted-foreground"}`}
+                >
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center ${rotationSlots[opt.slot] ? "bg-secondary border-secondary" : "border-muted-foreground/40"}`}>
+                    {rotationSlots[opt.slot] && <Check className="w-3 h-3 text-secondary-foreground" />}
+                  </span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {showHighlights && (
           <div className="mt-2 rounded-xl border border-border bg-card p-3 max-w-xl">
             {loadingHighlights ? (
@@ -844,7 +939,30 @@ const PublicTournamentPage = () => {
         )}
       </div>
 
-      {view === "boards" ? (
+      {view === "participants" ? (
+        <div className="px-4 pb-6">
+          <div className="rounded-xl border border-border bg-card p-4 max-w-xl mx-auto">
+            <h3 className="font-display uppercase text-sm mb-3 text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
+            {loadingHighlights && !tournamentAverages ? (
+              <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+            ) : (
+              <div className="space-y-1.5">
+                {t.players.map((p) => {
+                  const avgRow = tournamentAverages?.participants.find((pa) => pa.key === p || pa.name === p);
+                  return (
+                    <div key={p} className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 px-3 py-2.5">
+                      <span className="min-w-0 truncate text-sm font-medium">{p}</span>
+                      <span className="shrink-0 font-display text-primary">
+                        {avgRow && avgRow.tournamentAverage > 0 ? `Ø ${avgRow.tournamentAverage.toFixed(1)}` : "–"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : view === "boards" ? (
         <BoardOverview now={boardCardsNow} onDeck={boardCardsOnDeck} queuedCount={boardCardsQueued} totalRounds={totalRounds} />
       ) : (
       <div className="grid lg:grid-cols-[1fr_320px] gap-4 p-4">

@@ -455,6 +455,7 @@ export type Database = {
       }
       tournaments: {
         Row: {
+          attendance: Json
           best_of_legs: number
           boards: number
           bracket: Json
@@ -476,6 +477,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attendance?: Json
           best_of_legs?: number
           boards?: number
           bracket?: Json
@@ -497,6 +499,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attendance?: Json
           best_of_legs?: number
           boards?: number
           bracket?: Json

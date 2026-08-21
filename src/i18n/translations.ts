@@ -951,6 +951,13 @@ export const translations: Record<string, Record<Language, string>> = {
   "players.clubEmblemAlt": { de: "H-Town United Vereinsemblem", en: "H-Town United club emblem", fr: "Emblème du club H-Town United", pl: "Godło klubu H-Town United", nl: "H-Town United clubembleem", tr: "H-Town United kulüp amblemi" },
   "players.skillProfile": { de: "Skill Profil", en: "Skill profile", fr: "Profil de compétences", pl: "Profil umiejętności", nl: "Vaardighedenprofiel", tr: "Yetenek profili" },
 
+  "tournament.attendancePresent": { de: "anwesend", en: "present", fr: "présent", pl: "obecny", nl: "aanwezig", tr: "mevcut" },
+  "tournament.tournamentAverage": { de: "Turnier-Average", en: "Tournament average", fr: "Moyenne du tournoi", pl: "Średnia turniejowa", nl: "Toernooigemiddelde", tr: "Turnuva ortalaması" },
+  "pt.participantsView": { de: "Teilnehmer", en: "Participants", fr: "Participants", pl: "Uczestnicy", nl: "Deelnemers", tr: "Katılımcılar" },
+  "pt.rotationSettingsTooltip": { de: "Auto-Wechsel anpassen", en: "Customize auto-rotate", fr: "Personnaliser la rotation auto", pl: "Dostosuj automatyczne przełączanie", nl: "Automatisch wisselen aanpassen", tr: "Otomatik geçişi özelleştir" },
+  "pt.rotationSettingsDesc": { de: "Wähle, welche Ansichten der Auto-Wechsel durchläuft.", en: "Choose which views auto-rotate cycles through.", fr: "Choisis les vues incluses dans la rotation automatique.", pl: "Wybierz widoki uwzględniane w automatycznym przełączaniu.", nl: "Kies welke weergaven automatisch wisselen doorloopt.", tr: "Otomatik geçişin döneceği görünümleri seç." },
+  "pt.standings": { de: "Tabelle", en: "Standings", fr: "Classement", pl: "Tabela", nl: "Stand", tr: "Puan durumu" },
+
   // aimBias.ts + AimBiasCard.tsx
   "aimBias.tipAimCloser": { de: "ziel bewusst etwas näher zur Mitte", en: "aim deliberately a bit closer to the center", fr: "vise délibérément un peu plus près du centre", pl: "celuj świadomie nieco bliżej środka", nl: "richt bewust wat dichter bij het midden", tr: "bilinçli olarak merkeze biraz daha yakın nişan al" },
   "aimBias.tipAimFurther": { de: "du darfst ruhig etwas selbstbewusster nach außen zielen", en: "you can confidently aim a bit further outward", fr: "tu peux viser un peu plus vers l'extérieur avec plus d'assurance", pl: "możesz śmielej celować nieco bardziej na zewnątrz", nl: "je mag gerust wat zelfverzekerder naar buiten richten", tr: "biraz daha kendinden emin şekilde dışa doğru nişan alabilirsin" },
