@@ -963,24 +963,9 @@ const PublicTournamentPage = () => {
       ) : (
       <div className="grid lg:grid-cols-[1fr_320px] gap-4 p-4">
         <div className="min-w-0">
-          {nowBoards.length > 0 && (
-            <div className="mb-3 rounded-2xl border-2 border-primary/50 bg-gradient-to-r from-primary/15 via-card to-accent/10 p-4 glow-cyan">
-              <p className="text-[11px] uppercase tracking-[0.3em] text-primary mb-2 flex items-center gap-2">
-                <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" /> {tr("pt.nowOnBoard")}
-              </p>
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                {nowBoards.map(({ board, match: m }) => (
-                  <div key={m.id} className="rounded-xl bg-background/60 border border-border px-3 py-2">
-                    <p className="font-display text-lg uppercase truncate">{m.player1} <span className="text-muted-foreground text-sm normal-case">vs</span> {m.player2}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-2">
-                      <span className="font-mono text-primary">{tr("camera.board")} {board}</span>
-                      <span>✍️ {keeperLabel(m, matches) || "–"}</span>
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* "Jetzt am Board" used to duplicate here too — removed, the dedicated Board-Übersicht
+              view (see view === "boards" above) is the one place for that now, so switching to
+              tree/list/round-robin isn't showing the same live-match cards twice. */}
           {isKo ? (
             view === "tree" ? (
               <LiveBracket
