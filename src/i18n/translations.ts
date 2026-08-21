@@ -192,12 +192,10 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.startsAt": { de: "Startet bei", en: "Starts at", fr: "Démarre à", pl: "Zaczyna od", nl: "Start op", tr: "Başlangıç" },
   "game.insteadOf": { de: "statt", en: "instead of", fr: "au lieu de", pl: "zamiast", nl: "in plaats van", tr: "yerine" },
   "game.soundHaptics": { de: "Sound & Haptik", en: "Sound & haptics", fr: "Son & vibrations", pl: "Dźwięk i wibracje", nl: "Geluid & trilling", tr: "Ses ve titreşim" },
-  "game.speechOutput": { de: "Sprachausgabe", en: "Voice announcer", fr: "Annonceur vocal", pl: "Lektor głosowy", nl: "Spraakweergave", tr: "Sesli anons" },
   "game.callerVoice": { de: "Caller-Stimme", en: "Caller voice", fr: "Voix de l'annonceur", pl: "Głos spikera", nl: "Omroeperstem", tr: "Anons sesi" },
   "game.voiceMale": { de: "Männlich", en: "Male", fr: "Masculine", pl: "Męski", nl: "Mannelijk", tr: "Erkek" },
   "game.voiceFemale": { de: "Weiblich", en: "Female", fr: "Féminine", pl: "Żeński", nl: "Vrouwelijk", tr: "Kadın" },
-  "game.voiceHerald": { de: "Herold", en: "Herald", fr: "Héraut", pl: "Herold", nl: "Heraut", tr: "Tellal" },
-  "game.voiceReporter": { de: "Reporter", en: "Reporter", fr: "Reporter", pl: "Reporter", nl: "Reporter", tr: "Muhabir" },
+  "game.voiceOff": { de: "Ohne Caller", en: "No caller", fr: "Sans annonceur", pl: "Bez spikera", nl: "Geen omroeper", tr: "Anons yok" },
   "game.whoStarts": { de: "Anwurf — wer beginnt?", en: "First throw — who starts?", fr: "Premier lancer — qui commence ?", pl: "Pierwszy rzut — kto zaczyna?", nl: "Wie begint?", tr: "İlk atış — kim başlıyor?" },
   "game.whoStartsDesc": { de: "Ausbullen entscheidet üblicherweise, wer eröffnet — einfach den Sieger antippen.", en: "A bull-off usually decides who opens — just tap the winner.", fr: "Un lancer au bull décide généralement qui ouvre — appuie simplement sur le gagnant.", pl: "Rzut o bulla zwykle decyduje, kto zaczyna — po prostu dotknij zwycięzcy.", nl: "Uitbullen bepaalt meestal wie opent — tik gewoon op de winnaar.", tr: "Genellikle kimin başlayacağına bull atışı karar verir — kazananın üstüne dokun." },
   "game.warmupBeforeMatch": { de: "Aufwärmen vor dem Match", en: "Warm up before the match", fr: "Échauffement avant le match", pl: "Rozgrzewka przed meczem", nl: "Opwarmen voor de wedstrijd", tr: "Maçtan önce ısınma" },
@@ -218,8 +216,6 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.botLv2": { de: "Bot Lv.2 · Ligaspieler", en: "Bot Lv.2 · League player", fr: "Bot Niv.2 · Joueur de ligue", pl: "Bot Poz.2 · Zawodnik ligowy", nl: "Bot Niv.2 · Competitiespeler", tr: "Bot Sv.2 · Lig oyuncusu" },
   "game.botLv3": { de: "Bot Lv.3 · Pro", en: "Bot Lv.3 · Pro", fr: "Bot Niv.3 · Pro", pl: "Bot Poz.3 · Pro", nl: "Bot Niv.3 · Pro", tr: "Bot Sv.3 · Pro" },
   "game.voiceYoda": { de: "Yoda", en: "Yoda", fr: "Yoda", pl: "Yoda", nl: "Yoda", tr: "Yoda" },
-  "game.voiceKernasi": { de: "Kernasi", en: "Kernasi", fr: "Kernasi", pl: "Kernasi", nl: "Kernasi", tr: "Kernasi" },
-  "game.voiceGenZ": { de: "Gen Z", en: "Gen Z", fr: "Gen Z", pl: "Gen Z", nl: "Gen Z", tr: "Gen Z" },
 
   // Game.tsx — playing HUD (scoreboard, cricket board, current-turn indicator) + winner overlay.
   "game.doubleInRequired": { de: "Double In erforderlich – nur ein Doppel bringt", en: "Double In required – only a double gets", fr: "Double In requis – seul un double fait entrer", pl: "Wymagane Double In – tylko double wprowadza", nl: "Double In vereist – alleen een dubbel brengt", tr: "Double In gerekli – sadece bir çift" },

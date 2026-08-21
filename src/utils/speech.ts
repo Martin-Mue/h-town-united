@@ -1,19 +1,28 @@
 import { isCheckoutPossible } from "@/utils/checkoutTable";
 
-/** "auto" keeps the previous default behavior (biased toward a deeper/male-sounding voice,
- *  since that's what most people expect from a darts caller). The character personas don't
- *  pick a different voice (no browser ships a "herald" voice) — each swaps in its own
- *  distinctive phrasing + delivery instead, which is what actually carries the character. */
-export type CallerVoice = "auto" | "male" | "female" | "yoda" | "herald" | "kernasi" | "reporter" | "genz";
+/** "off" mutes the caller entirely — replaces the old separate speech-on/off Switch, which is
+ *  now just this one picker's 4th option instead of a second control next to it. The character
+ *  personas (just "yoda" now) don't pick a different browser voice (no browser ships a "yoda"
+ *  voice) — they swap in distinctive phrasing + delivery instead, which is what actually
+ *  carries the character. */
+export type CallerVoice = "off" | "male" | "female" | "yoda";
 const CALLER_VOICE_KEY = "dart-caller-voice";
+/** The old, now-removed separate on/off Switch's localStorage key — read once below purely to
+ *  migrate a device that had explicitly muted speech into the new unified picker's "off". */
+const LEGACY_SPEECH_ENABLED_KEY = "dart-speech-enabled";
 
-let callerVoice: CallerVoice = "auto";
-// "pirate"/"robot" removed (Aug 2026) — kept out of this list on purpose so a device that
-// still has one saved in localStorage falls through to "auto" below instead of crashing.
-const VALID_CALLER_VOICES: readonly CallerVoice[] = ["male", "female", "yoda", "herald", "kernasi", "reporter", "genz"];
+let callerVoice: CallerVoice = "male";
+// "auto"/"pirate"/"robot"/"herald"/"kernasi"/"reporter"/"genz" removed (Aug 2026) — kept out of
+// this list on purpose so a device that still has one saved in localStorage falls through to
+// the default below instead of crashing.
+const VALID_CALLER_VOICES: readonly CallerVoice[] = ["off", "male", "female", "yoda"];
 if (typeof window !== "undefined") {
   const raw = window.localStorage.getItem(CALLER_VOICE_KEY);
-  if ((VALID_CALLER_VOICES as readonly string[]).includes(raw ?? "")) callerVoice = raw as CallerVoice;
+  if ((VALID_CALLER_VOICES as readonly string[]).includes(raw ?? "")) {
+    callerVoice = raw as CallerVoice;
+  } else if (window.localStorage.getItem(LEGACY_SPEECH_ENABLED_KEY) === "false") {
+    callerVoice = "off";
+  }
 }
 
 export function getCallerVoice(): CallerVoice {
@@ -64,9 +73,9 @@ function pickGermanVoice(): SpeechSynthesisVoice | undefined {
   const pool = german.length > 0 ? german : voices;
   // Common German male/female voice names across Windows/Chrome/Edge TTS engines — nudged
   // above quality-only sorting so the caller persona picker actually changes something
-  // audible, not just the text style. "auto"/"yoda" both default to the male bias (was the
-  // existing default — a deeper voice reads more like a real caller than the higher-pitched
-  // female voices most engines ship as their first option).
+  // audible, not just the text style. "yoda" also defaults to the male bias (a deeper voice
+  // reads more like a real caller than the higher-pitched female voices most engines ship as
+  // their first option) — only an explicit "female" pick asks for the female-leaning voice.
   const MALE_NAME_HINTS = ["stefan", "conrad", "ralf", "klaus", "male", "markus", "florian"];
   const FEMALE_NAME_HINTS = ["katja", "hedda", "petra", "anna", "vicki", "marlene", "helena", "female"];
   const wantsFemale = callerVoice === "female";
@@ -451,416 +460,8 @@ const YODA_PACK: PersonaPack = {
   ], "legWonNextLeg"),
 };
 
-// Formal, archaic medieval-herald German: "Fürwahr", "Wohlan", "Höret, höret", "edler Recke".
-const HERALD_PACK: PersonaPack = {
-  options: { pitch: 0.85, rate: 0.85, volume: 1 },
-  hypeOptions: { pitch: 0.92, rate: 0.9, volume: 1 },
-  hype180: [
-    "Höret, höret! Das Maximum ist vollbracht!",
-    "Fürwahr, ein Wurf für die Geschichtsbücher!",
-    "Einhundertachtzig! Ruhm und Ehre diesem Recken!",
-    "Man höre und staune — die Höchstzahl ist gefallen!",
-    "Ein Wurf von königlicher Präzision!",
-    "Die Chronisten werden dies festhalten — einhundertachtzig!",
-    "Fürwahr, dies ist die Krone jeden Wurfes!",
-    "Kein Zweifel bleibt — ein wahrer Meister wirft heute!",
-  ],
-  hypeHighTon: [
-    "Wohlan, eine gewaltige Runde!",
-    "Fürwahr stark getroffen!",
-    "Eine Runde von großer Wucht, in der Tat!",
-    "Wacker gekämpft in dieser Runde!",
-    "Von großer Stärke zeugt dieser Wurf!",
-    "Ein wahrhaft eindrucksvolles Schauspiel!",
-  ],
-  hypeTonPlus: [
-    "Wacker getroffen, edler Recke!",
-    "Ein Treffer von großer Güte!",
-    "Fürwahr, das sitzt!",
-    "Wohlgezielt, dieser Wurf!",
-    "Von feiner Hand, dieser Treffer!",
-    "Ein Wurf von Format!",
-  ],
-  hypeLowScore: [
-    "Ein schwacher Wurf, fürwahr.",
-    "Nicht die Stunde des Ruhmes, diese war.",
-    "Selbst wackere Recken haben schwache Tage.",
-    "Mehr Übung vonnöten, wie es scheint.",
-    "Kein Glanzstück, das muss man sagen.",
-  ],
-  hypeCheckout: [
-    "Das Leg ist vollbracht!",
-    "Höret, höret — der Sieg dieser Runde!",
-    "Fürwahr, ein Treffer von großer Präzision!",
-    "Das Tor zum Sieg, weit geöffnet!",
-    "Mit eiserner Hand, das Leg vollendet!",
-    "Ein würdiger Abschluss, fürwahr!",
-    "Die Fahne des Sieges, gehisst!",
-    "Vollbracht — mit Ruhm und Ehre!",
-  ],
-  hypeCheckoutNamed: (name) => [
-    `${name} vollbringt das Leg mit Bravour!`,
-    `Preiset ${name}, den Meister dieser Runde!`,
-    `${name}, wackerer Streiter, vollendet die Runde!`,
-    `Man neige das Haupt vor ${name}s Können!`,
-  ],
-  hypeMatchWin: (name) => [
-    `Höret, höret! ${name} trägt den Sieg davon!`,
-    `${name}, wackerer Champion dieser Partie!`,
-    `Ruhm und Ehre gebühren ${name}!`,
-    `${name} erhebt sich als wahrer Meister dieser Halle!`,
-    `Die Krone des Abends, ${name} gebührt!`,
-  ],
-  hypeBust: [
-    "Ein Fehltritt, fürwahr.",
-    "Das Glück, es war dem Recken heut nicht hold.",
-    "Verfehlt, doch die nächste Runde winkt.",
-    "Selbst die Tapfersten straucheln bisweilen.",
-    "Ein Rückschlag nur, kein Untergang.",
-    "Die Ehre bleibt unangetastet, trotz Fehlwurfs.",
-  ],
-  hypeCricketClose: [
-    "Verschlossen, wie ein Burgtor!",
-    "Fürwahr, geschlossen!",
-    "Dieses Feld, erobert und verriegelt!",
-    "Kein Zutritt mehr — verwehrt!",
-  ],
-  nextTurn: (name) => pickRandomNoRepeat([
-    `Wohlan, ${name} ist nun am Zuge.`,
-    `Man höre: ${name} ist an der Reihe.`,
-    `${name}, tritt vor und wirf!`,
-    `Nun trete vor, ${name}!`,
-    `${name}, die Bühne gehört nun dir.`,
-  ], "nextTurn"),
-  plainRound: (total) => pickRandomNoRepeat([
-    `${germanNumberWords(total)} Punkte, wohlan.`,
-    `Fürwahr, ${germanNumberWords(total)} Punkte.`,
-    `${germanNumberWords(total)}, so steht es geschrieben.`,
-    `Vermerkt: ${germanNumberWords(total)} Punkte.`,
-    `${germanNumberWords(total)} Punkte, in die Chronik eingetragen.`,
-  ], "plainRound"),
-  checkoutRemaining: (remaining, name, nickname) => {
-    const words = germanNumberWords(remaining);
-    return nickname
-      ? `${name} bedarf noch ${words} — dem ${nickname}!`
-      : pickRandomNoRepeat([`${name} bedarf noch ${words} zum Siege.`, `Noch ${words} trennen ${name} vom Ruhme.`, `${words} noch, bis ${name} den Sieg erringt.`], "checkoutRemaining");
-  },
-  legWonNextLeg: (winner, next) => pickRandomNoRepeat([
-    `Das Leg, an ${winner} vergeben! ${next} eröffnet die nächste Runde.`,
-    `${winner} trägt dieses Leg davon! Bereit stehe nun ${next}.`,
-  ], "legWonNextLeg"),
-};
-
-// Fully original — a loud, cocky, street-slang-heavy hype-man who trash-talks and teases hard,
-// but you can't help but like him (ribbing, not actually mean, no real profanity/insults).
-const KERNASI_PACK: PersonaPack = {
-  options: { pitch: 0.9, rate: 1.15, volume: 1 },
-  hypeOptions: { pitch: 1, rate: 1.32, volume: 1 },
-  hype180: [
-    "ALTER, EINHUNDERTACHTZIG! Ischwöre, das gibt's doch nicht!",
-    "Bratan, das war der Wahnsinn, komplett krank!",
-    "Ne ne ne, das darf nicht wahr sein — Maximum, Alter!",
-    "Digga ich flipp grad komplett aus, EINHUNDERTACHTZIG!",
-    "Junge Junge Junge, das war der Hammer schlechthin!",
-    "Alter, mach die Bude zu, mehr geht heut nicht mehr!",
-    "Ischwöre auf alles, das war Weltklasse pur!",
-    "Digga, das war einfach nur unverschämt gut!",
-    "Bratan, schreib das auf — Legende gerade geboren!",
-  ],
-  hypeHighTon: [
-    "Ischwöre, das war fett!",
-    "Alter, geht ab wie Schmidts Katze!",
-    "Krass, Alter, richtig stark!",
-    "Digga, da guckst du, oder?",
-    "Bratan, das war mal ne Ansage!",
-    "Alter, sowas seh ich nicht jeden Tag!",
-  ],
-  hypeTonPlus: [
-    "Ischwöre, passt!",
-    "Alter, nicht schlecht!",
-    "Joa, geht klar!",
-    "Bisschen Sahne obendrauf, nice!",
-    "Solide, Digga, solide!",
-    "Passt scho, Alter!",
-  ],
-  hypeLowScore: [
-    "Alter, das war jetzt nicht so der Bringer.",
-    "Ischwöre, da geht mehr, Digga.",
-    "Bratan, das war eher mau.",
-    "Puh, Alter, schwacher Tag heute?",
-    "Digga, das hat wehgetan zuzuschauen.",
-  ],
-  hypeCheckout: [
-    "PENG, Alter, weg is er!",
-    "Ischwöre, der Gegner konnte nur zugucken!",
-    "Sauber weggeputzt, wie meine Bude samstags!",
-    "Da war NIX zu holen, Alter, gar nix!",
-    "Bratan, das war chirurgische Präzision!",
-    "Aufgeräumt wie beim Frühjahrsputz, Alter!",
-    "Digga, Tür zu, Licht aus, fertig!",
-    "Sauber, Alter, richtig sauber!",
-  ],
-  hypeCheckoutNamed: (name) => [
-    `${name}, du Vollprofi, Alter!`,
-    `Ischwöre, ${name} ist einfach nur Boss!`,
-    `${name} macht hier einfach kurzen Prozess, Bratan!`,
-    `Digga, ${name} zeigt hier grad, wie's geht!`,
-    `${name}, Respekt, Alter, wirklich Respekt!`,
-  ],
-  hypeMatchWin: (name) => [
-    `${name} räumt hier komplett ab, Alter, Wahnsinn!`,
-    `Ischwöre, ${name} ist heute einfach die Nummer eins!`,
-    `${name} hat hier keinem eine Chance gelassen, Bratan!`,
-    `Absoluter Ehrenmensch — ${name} gewinnt, Digga!`,
-    `Alter, ${name} hat die ganze Bude abgeräumt!`,
-    `${name}, Legende des Abends, Bratan, ganz klar!`,
-  ],
-  hypeBust: [
-    "Ohhh nein, Alter, das war nix!",
-    "Ischwöre, das tat mir grad selbst weh!",
-    "Digga, komplett vorbei, was war das denn?!",
-    "Alter, geh nochmal üben, ne im Ernst!",
-    "Das war mehr peinlich als daneben, Bratan!",
-    "Puh, Alter, da war wohl grad keiner zu Hause.",
-    "Digga, das hat sogar der Nachbar gesehen — autsch.",
-  ],
-  hypeCricketClose: [
-    "Zu, Alter, fix und fertig!",
-    "Dicht wie meine Bude nach zwölf!",
-    "Digga, Deckel drauf, nächste!",
-    "Alter, das Feld gehört jetzt dir!",
-  ],
-  nextTurn: (name) => pickRandomNoRepeat([
-    `Los, ${name}, zeig, was du drauf hast, Alter!`,
-    `${name}, jetzt du, mach kein Terror!`,
-    `Auf geht's, ${name}, zeig's ihnen, Bratan!`,
-    `${name} ist dran — Digga, keinen Druck, nur Ehre.`,
-    `${name}, ran an die Kiste!`,
-    `Alter, jetzt liegt's an dir, ${name}!`,
-  ], "nextTurn"),
-  plainRound: (total) => pickRandomNoRepeat([
-    `${germanNumberWords(total)}, Alter, geht klar.`,
-    `${germanNumberWords(total)}, ischwöre, passt scho.`,
-    `${germanNumberWords(total)}, nicht der Bringer, aber okay, Digga.`,
-    `${germanNumberWords(total)}, Bratan, weiter im Text.`,
-    `${germanNumberWords(total)}, Alter.`,
-    `Solala, ${germanNumberWords(total)}, Digga.`,
-  ], "plainRound"),
-  checkoutRemaining: (remaining, name, nickname) => {
-    const words = germanNumberWords(remaining);
-    return nickname
-      ? `${name} braucht noch ${words} — na los, der ${nickname} wartet, Alter!`
-      : pickRandomNoRepeat([`${name} braucht noch ${words}, pack's an, Digga!`, `Noch ${words} für ${name}, Bratan, das schaffst du!`, `${words} noch, Alter, keine Panik!`], "checkoutRemaining");
-  },
-  legWonNextLeg: (winner, next) => pickRandomNoRepeat([
-    `Leg geht an ${winner}, Alter! ${next}, zeig, was du kannst!`,
-    `Digga, ${winner} macht das Leg klar! ${next}, du bist dran!`,
-  ], "legWonNextLeg"),
-};
-
-// Classic breathless radio-commentary energy (escalating exclamations, "meine Damen und
-// Herren") — generic to the genre, not modeled on any specific real commentator's signature
-// lines (see chat: declined to reproduce e.g. Herbert Zimmermann's or Trapattoni's actual
-// famous quotes, which are tied to real, identifiable people).
-const REPORTER_PACK: PersonaPack = {
-  options: { pitch: 1, rate: 1.05, volume: 1 },
-  hypeOptions: { pitch: 1.2, rate: 1.35, volume: 1 },
-  hype180: [
-    "Und das ist... EINHUNDERTACHTZIG! Was für ein Wurf, meine Damen und Herren!",
-    "Da ist er, der Maximum-Treffer! Unfassbar, was hier gerade passiert!",
-    "Ganz Heiligenhaus wird das sehen wollen — einhundertachtzig!",
-    "Ich fasse es nicht — einhundertachtzig, meine Damen und Herren!",
-    "Was für ein Abend, was für ein Wurf! Maximum!",
-    "Die Halle explodiert — einhundertachtzig!",
-    "Das schreiben wir uns hinter die Ohren — Maximum-Wurf!",
-  ],
-  hypeHighTon: [
-    "Und das sitzt! Was für eine Runde!",
-    "Die Halle tobt — starke Punktzahl!",
-    "Was für eine Vorstellung heute Abend!",
-    "Da bleibt einem die Spucke weg!",
-    "Meine Damen und Herren, das war stark!",
-  ],
-  hypeTonPlus: [
-    "Sauber, sauber, sauber!",
-    "Da ist Klasse zu sehen!",
-    "Ordentlich, muss man sagen!",
-    "Das nenne ich abgezockt!",
-  ],
-  hypeLowScore: [
-    "Das war schon eine schwächere Runde.",
-    "Da geht sicher noch mehr.",
-    "Kein Ruhmesblatt, diese Runde.",
-    "Die Form heute lässt zu wünschen übrig.",
-    "Bitter, so wenig aus drei Darts zu holen.",
-  ],
-  hypeCheckout: [
-    "Uuuund AUS! Das Leg ist durch!",
-    "Er macht den Deckel drauf — herausragend!",
-    "Da ist die Tür zu, meine Damen und Herren!",
-    "Was für ein Nervenspiel — und gewonnen!",
-    "Eiskalt ausgespielt — Checkout!",
-    "Die Nerven behalten und eingelocht — großartig!",
-    "Da ist er, der entscheidende Wurf!",
-  ],
-  hypeCheckoutNamed: (name) => [
-    `${name} mit der ganz großen Nervenstärke!`,
-    `${name} macht das Leg klar — Wahnsinn!`,
-    `Was für ein Auftritt von ${name}!`,
-    `${name} zeigt hier meisterhafte Klasse!`,
-  ],
-  hypeMatchWin: (name) => [
-    `${name} ist Sieger dieser großartigen Partie!`,
-    `Und ${name} jubelt — verdienter Sieg!`,
-    `${name} krönt eine starke Leistung mit dem Matchgewinn!`,
-    `Was für ein Match — ${name} gewinnt verdient!`,
-    `${name}, der Held des heutigen Abends!`,
-  ],
-  hypeBust: [
-    "Oh, das sitzt nicht — bitter für ihn.",
-    "Da war der Druck wohl zu groß.",
-    "Schade, so nah dran und doch daneben.",
-    "Das wird ihn ärgern, keine Frage.",
-    "Bitter für ihn, so kurz vor dem Ziel.",
-  ],
-  hypeCricketClose: [
-    "Geschlossen — und wie!",
-    "Da ist sie zu, sauber gemacht!",
-    "Dieses Feld ist Geschichte!",
-    "Sauber verriegelt, meine Damen und Herren!",
-  ],
-  nextTurn: (name) => pickRandomNoRepeat([
-    `Und jetzt ist ${name} am Zug.`,
-    `Der Blick geht zu ${name}.`,
-    `${name} übernimmt.`,
-    `Alle Augen auf ${name}.`,
-    `Die Bühne gehört jetzt ${name}.`,
-  ], "nextTurn"),
-  plainRound: (total) => pickRandomNoRepeat([
-    `${germanNumberWords(total)} Punkte.`,
-    `Und weiter geht's mit ${germanNumberWords(total)}.`,
-    `${germanNumberWords(total)}, notiert.`,
-    `Solide ${germanNumberWords(total)}.`,
-    `${germanNumberWords(total)} — weiter im Programm.`,
-  ], "plainRound"),
-  checkoutRemaining: (remaining, name, nickname) => {
-    const words = germanNumberWords(remaining);
-    return nickname
-      ? `${name} braucht noch ${words} — der große ${nickname}!`
-      : pickRandomNoRepeat([`${name} braucht noch ${words} zum Sieg.`, `Noch ${words} trennen ${name} vom Triumph.`, `${words} noch für ${name} bis zum Matchball.`], "checkoutRemaining");
-  },
-  legWonNextLeg: (winner, next) => pickRandomNoRepeat([
-    `Das Leg geht an ${winner}! Gleich geht's weiter mit ${next}.`,
-    `${winner} sichert sich dieses Leg! Als Nächstes: ${next}.`,
-  ], "legWonNextLeg"),
-};
-
-// Intentionally over-the-top/cringe — an adult announcer badly overusing current youth slang
-// (real terms, deliberately mashed together too densely) is the whole joke, not a genuine
-// attempt to sound authentically "cool".
-const GENZ_PACK: PersonaPack = {
-  options: { pitch: 1.05, rate: 1.18, volume: 1 },
-  hypeOptions: { pitch: 1.18, rate: 1.35, volume: 1 },
-  hype180: [
-    "Digga EINHUNDERTACHTZIG, das ist mega based, no cap!",
-    "Bro this is literally cinema, einhundertachtzig!",
-    "Lowkey highkey war das der Clip des Jahrhunderts!",
-    "Sheesh — ne Digga, sorry, aber 180 ist einfach nur ein Move!",
-    "Das war main character energy, ganz ehrlich!",
-    "180?! Bro hat grad alle zu NPCs gemacht, fr fr!",
-    "Kein Cap, das war so ein riesen dubs-Moment!",
-    "Digga, das geht direkt in die Highlight-Reel!",
-    "Bro ist grad offiziell zur Legende geworden, no cap!",
-  ],
-  hypeHighTon: [
-    "Das ist lowkey schon final boss energy!",
-    "Digga das ist giving Profi-Vibes!",
-    "Mega Aura, du bist grad am cooken!",
-    "Bro, das war nicht mid, das war goated!",
-    "Das war ehrlich richtig clean, digga!",
-  ],
-  hypeTonPlus: [
-    "Passt, ist safe kein L!",
-    "Solide, nicht mid!",
-    "Bisschen slay, ehrlich gesagt!",
-    "Fr fr nicht schlecht, digga!",
-    "Ist okay-based, würd ich sagen!",
-  ],
-  hypeLowScore: [
-    "Digga, das war ehrlich mid.",
-    "Bro, safe kein Highlight.",
-    "Das war NPC-Energie, ehrlich gesagt.",
-    "Lowkey schwache Runde, digga.",
-    "Bro braucht ein Reset, fr fr.",
-  ],
-  hypeCheckout: [
-    "GECHECKT! Das ist ein core memory, digga!",
-    "Bro hat grad gecookt, würd ich sagen!",
-    "No cap das war clean, wie ein Skibidi-Ending!",
-    "Ehre! Main-Character-Moment, digga!",
-    "Das ist so ein W, bro — delulu is not the solulu, aber DAS hier ist real!",
-    "Sheesh, einfach eingetütet, ist safe!",
-    "Digga, das war ein Statement-W!",
-  ],
-  hypeCheckoutNamed: (name) => [
-    `${name} ist grad main character, digga!`,
-    `${name} cookt einfach nur, bro!`,
-    `${name} mit dem fetten W, no cap!`,
-    `${name} ist grad einfach nur built different!`,
-  ],
-  hypeMatchWin: (name) => [
-    `${name} ist der Final Boss, digga, no cap!`,
-    `${name} hat hier einfach nur GG gesagt, bro!`,
-    `${name} ist grad literally goated, kein Cap!`,
-    `${name} zieht den ganzen Match-W ein, fr fr!`,
-    `${name}, offiziell die Aura des Abends, digga!`,
-  ],
-  hypeBust: [
-    "Bro das ist ein riesen L, ehrlich.",
-    "Digga du bist grad von dir selbst gecooked worden.",
-    "Das war mega mid, sorry, aber safe.",
-    "NPC-Verhalten, Digga, echt jetzt.",
-    "Aura minus zehntausend, das.",
-    "Bro, das war lowkey embarrassing, no cap.",
-  ],
-  hypeCricketClose: [
-    "Zu, digga, easy W.",
-    "Dicht, ist safe.",
-    "Ehre, das Feld ist Geschichte.",
-    "Bro hat das Feld grad geclosed, no cap.",
-  ],
-  nextTurn: (name) => pickRandomNoRepeat([
-    `${name}, du bist dran, zeig main character energy, digga!`,
-    `${name}, deine Zeit zu cooken, bro!`,
-    `Los ${name}, keine NPC-Vibes bitte!`,
-    `${name} ist on the clock, digga, kein Druck.`,
-    `${name}, dein Moment, lock in!`,
-  ], "nextTurn"),
-  plainRound: (total) => pickRandomNoRepeat([
-    `${germanNumberWords(total)}, ist mid, aber okay, digga.`,
-    `${germanNumberWords(total)}, safe kein W aber auch kein L.`,
-    `${germanNumberWords(total)}, passt scho, digga.`,
-    `${germanNumberWords(total)}, fr fr.`,
-    `${germanNumberWords(total)}, lowkey solide.`,
-  ], "plainRound"),
-  checkoutRemaining: (remaining, name, nickname) => {
-    const words = germanNumberWords(remaining);
-    return nickname
-      ? `${name} braucht noch ${words} — der ${nickname}, digga, das wird mega!`
-      : pickRandomNoRepeat([`${name} braucht noch ${words}, geh drauf, digga!`, `Noch ${words} für ${name}, bro, du schaffst das, no cap!`, `${words} noch, digga, lock in!`], "checkoutRemaining");
-  },
-  legWonNextLeg: (winner, next) => pickRandomNoRepeat([
-    `Leg-W für ${winner}, digga! ${next}, du bist dran!`,
-    `${winner} cookt sich das Leg, bro! ${next}, deine Zeit!`,
-  ], "legWonNextLeg"),
-};
-
 const PERSONA_PACKS: Partial<Record<CallerVoice, PersonaPack>> = {
   yoda: YODA_PACK,
-  herald: HERALD_PACK,
-  kernasi: KERNASI_PACK,
-  reporter: REPORTER_PACK,
-  genz: GENZ_PACK,
 };
 
 // Pitch baseline lowered across the board (was 0.92-1.55) — the old range read as too high/

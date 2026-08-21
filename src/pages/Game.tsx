@@ -56,7 +56,6 @@ import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/reposi
 import { ghostRemainingSequence, compareToGhost, buildBenchmarkSequence, GHOST_BENCHMARKS } from "@/utils/ghostMode";
 import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 
-const SPEECH_PREF_KEY = "dart-speech-enabled";
 const WALKON_PREF_KEY = "dart-walkon-enabled";
 const INPUT_MODE_PREF_KEY = "dart-input-mode";
 /** How long the walk-on intro stays up before auto-advancing (ms) — also the window
@@ -306,12 +305,11 @@ const GamePage = () => {
   const [playerIsBot, setPlayerIsBot] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
   const [playerBotLevel, setPlayerBotLevel] = useState<BotLevel[]>(Array(MAX_PLAYERS).fill("medium"));
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [speechEnabled, setSpeechEnabled] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const raw = window.localStorage.getItem(SPEECH_PREF_KEY);
-    return raw ? raw !== "false" : true;
-  });
   const [callerVoice, setCallerVoiceState] = useState<CallerVoice>(() => getCallerVoice());
+  // Derived, not its own state — "off" is now just the caller-voice picker's 4th option instead
+  // of a separate Switch, so every existing `if (speechEnabled)` gate below keeps working
+  // unchanged off of this one source of truth.
+  const speechEnabled = callerVoice !== "off";
   const changeCallerVoice = (v: CallerVoice) => {
     setCallerVoice(v);
     setCallerVoiceState(v);
@@ -550,11 +548,6 @@ const GamePage = () => {
         if (combined.attempts > 0) setCheckoutRates((prev) => ({ ...prev, [player.name]: combined.percentage }));
       });
   }, [game, phase, dbPlayers]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(SPEECH_PREF_KEY, JSON.stringify(speechEnabled));
-  }, [speechEnabled]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2048,40 +2041,30 @@ const GamePage = () => {
             <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
           </div>
 
-          <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
-            <div className="flex items-center gap-2">
+          <div className="bg-card rounded-lg border border-border px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
               {speechEnabled ? <Mic className="w-4 h-4 text-primary" /> : <MicOff className="w-4 h-4 text-muted-foreground" />}
-              <Label className="text-sm font-medium">{t("game.speechOutput")}</Label>
+              <Label className="text-sm font-medium">{t("game.callerVoice")}</Label>
             </div>
-            <Switch checked={speechEnabled} onCheckedChange={setSpeechEnabled} />
+            <div className="grid grid-cols-4 gap-1.5">
+              {([
+                { value: "male", labelKey: "game.voiceMale" },
+                { value: "female", labelKey: "game.voiceFemale" },
+                { value: "yoda", labelKey: "game.voiceYoda" },
+                { value: "off", labelKey: "game.voiceOff" },
+              ] as { value: CallerVoice; labelKey: string }[]).map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => changeCallerVoice(opt.value)}
+                  className={`py-2 rounded-lg text-xs font-semibold transition-all ${
+                    callerVoice === opt.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t(opt.labelKey)}
+                </button>
+              ))}
+            </div>
           </div>
-
-          {speechEnabled && (
-            <div className="bg-card rounded-lg border border-border px-4 py-3">
-              <Label className="text-sm font-medium mb-2 block">{t("game.callerVoice")}</Label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {([
-                  { value: "auto", labelKey: "game.voiceMale" },
-                  { value: "female", labelKey: "game.voiceFemale" },
-                  { value: "yoda", labelKey: "game.voiceYoda" },
-                  { value: "herald", labelKey: "game.voiceHerald" },
-                  { value: "kernasi", labelKey: "game.voiceKernasi" },
-                  { value: "reporter", labelKey: "game.voiceReporter" },
-                  { value: "genz", labelKey: "game.voiceGenZ" },
-                ] as { value: CallerVoice; labelKey: string }[]).map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => changeCallerVoice(opt.value)}
-                    className={`py-2 rounded-lg text-xs font-semibold transition-all ${
-                      callerVoice === opt.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {t(opt.labelKey)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
             <Label className="text-sm">{t("game.whoStarts")}</Label>
