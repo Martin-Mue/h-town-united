@@ -16,11 +16,17 @@ export interface ParticipantHighlight {
   bigTriples: number;
   bulls: number;
   oneEighties: number;
-  /** Winning-leg checkouts >= 100, INCLUDING the 170s below — "ton-plus" is the broader category
-   *  a 170 finish is still a member of, not a separate bucket that would otherwise undercount it. */
-  tonPlusFinishes: number;
-  /** Winning-leg checkouts of exactly 170 — the maximum possible, always worth calling out by itself. */
-  maxCheckouts: number;
+  /** Winning-leg checkout THRESHOLDS — each is cumulative ("at least X"), so a 170 finish counts
+   *  toward all five, not just checkout170. Mirrors how darts players actually talk about
+   *  checkouts ("a 140+", "a ton-plus"), and keeps every tier from undercounting the ones above it. */
+  checkout100Plus: number;
+  checkout120Plus: number;
+  checkout140Plus: number;
+  checkout160Plus: number;
+  /** Exactly 170 — the maximum possible checkout, universally nicknamed "Big Fish". Already
+   *  included in checkout160Plus above; called out on its own since it's the one score every
+   *  darts player instantly recognizes. */
+  checkout170: number;
 }
 
 export interface TournamentHighlights {
@@ -69,16 +75,19 @@ export interface ParticipantStatsRow {
   bigTriples: number;
   bulls: number;
   oneEighties: number;
-  tonPlusFinishes: number;
-  maxCheckouts: number;
+  checkout100Plus: number;
+  checkout120Plus: number;
+  checkout140Plus: number;
+  checkout160Plus: number;
+  checkout170: number;
 }
 
 const BIG_TRIPLE_NUMBERS = new Set([16, 17, 18, 19, 20]);
 
 /**
  * Pools every dart from a tournament's legs into a board-wide heatmap plus a per-participant
- * highlight tally (big triples, bulls, 180s, ton-plus/maximum finishes) — the handful of stats
- * exciting enough to show on a spectator screen, not a full statistics breakdown. Grouped by
+ * highlight tally (big triples, bulls, 180s, checkout tiers) — the handful of stats exciting
+ * enough to show on a spectator screen, not a full statistics breakdown. Grouped by
  * `player_id ?? player_name` so guests without a club profile still get their own row.
  */
 export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): TournamentHighlights {
@@ -88,7 +97,10 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
   for (const leg of legs) {
     if (!Array.isArray(leg.throws) || leg.throws.length === 0) continue;
     const key = leg.player_id ?? leg.player_name;
-    const entry = byKey.get(key) ?? { key, name: leg.player_name, bigTriples: 0, bulls: 0, oneEighties: 0, tonPlusFinishes: 0, maxCheckouts: 0 };
+    const entry = byKey.get(key) ?? {
+      key, name: leg.player_name, bigTriples: 0, bulls: 0, oneEighties: 0,
+      checkout100Plus: 0, checkout120Plus: 0, checkout140Plus: 0, checkout160Plus: 0, checkout170: 0,
+    };
 
     for (const t of leg.throws) {
       if (typeof t.boardU === "number" && typeof t.boardV === "number") {
@@ -101,16 +113,23 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
 
     if (leg.won) {
       const { highestCheckout } = computeCheckoutStats(leg.throws, leg.starting_score);
-      if (highestCheckout >= 100) entry.tonPlusFinishes++;
-      if (highestCheckout === 170) entry.maxCheckouts++;
+      if (highestCheckout >= 100) entry.checkout100Plus++;
+      if (highestCheckout >= 120) entry.checkout120Plus++;
+      if (highestCheckout >= 140) entry.checkout140Plus++;
+      if (highestCheckout >= 160) entry.checkout160Plus++;
+      if (highestCheckout === 170) entry.checkout170++;
     }
 
     byKey.set(key, entry);
   }
 
   const participants = [...byKey.values()]
-    .filter((p) => p.bigTriples || p.bulls || p.oneEighties || p.tonPlusFinishes || p.maxCheckouts)
-    .sort((a, b) => b.oneEighties - a.oneEighties || b.maxCheckouts - a.maxCheckouts || b.tonPlusFinishes - a.tonPlusFinishes || b.bigTriples - a.bigTriples);
+    .filter((p) => p.bigTriples || p.bulls || p.oneEighties || p.checkout100Plus)
+    .sort((a, b) =>
+      b.oneEighties - a.oneEighties || b.checkout170 - a.checkout170 || b.checkout160Plus - a.checkout160Plus ||
+      b.checkout140Plus - a.checkout140Plus || b.checkout120Plus - a.checkout120Plus || b.checkout100Plus - a.checkout100Plus ||
+      b.bigTriples - a.bigTriples
+    );
 
   return { heatmapPoints, participants };
 }
@@ -157,17 +176,21 @@ export function computeTournamentAverages(games: TournamentStatsGameRow[]): Tour
  *  all, which is the common case for a hand-scored tournament) still gets a full row — the other
  *  side's fields just default to 0, not dropped from the table entirely. */
 export function mergeTournamentStats(highlights: TournamentHighlights, averages: TournamentAverages): ParticipantStatsRow[] {
+  const emptyHighlights = { bigTriples: 0, bulls: 0, oneEighties: 0, checkout100Plus: 0, checkout120Plus: 0, checkout140Plus: 0, checkout160Plus: 0, checkout170: 0 };
   const byKey = new Map<string, ParticipantStatsRow>();
   for (const p of averages.participants) {
-    byKey.set(p.key, { key: p.key, name: p.name, tournamentAverage: p.tournamentAverage, bigTriples: 0, bulls: 0, oneEighties: 0, tonPlusFinishes: 0, maxCheckouts: 0 });
+    byKey.set(p.key, { key: p.key, name: p.name, tournamentAverage: p.tournamentAverage, ...emptyHighlights });
   }
   for (const h of highlights.participants) {
-    const entry = byKey.get(h.key) ?? { key: h.key, name: h.name, tournamentAverage: 0, bigTriples: 0, bulls: 0, oneEighties: 0, tonPlusFinishes: 0, maxCheckouts: 0 };
+    const entry = byKey.get(h.key) ?? { key: h.key, name: h.name, tournamentAverage: 0, ...emptyHighlights };
     entry.bigTriples = h.bigTriples;
     entry.bulls = h.bulls;
     entry.oneEighties = h.oneEighties;
-    entry.tonPlusFinishes = h.tonPlusFinishes;
-    entry.maxCheckouts = h.maxCheckouts;
+    entry.checkout100Plus = h.checkout100Plus;
+    entry.checkout120Plus = h.checkout120Plus;
+    entry.checkout140Plus = h.checkout140Plus;
+    entry.checkout160Plus = h.checkout160Plus;
+    entry.checkout170 = h.checkout170;
     byKey.set(h.key, entry);
   }
   return [...byKey.values()].sort((a, b) => b.tournamentAverage - a.tournamentAverage || b.oneEighties - a.oneEighties);

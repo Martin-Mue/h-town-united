@@ -2,6 +2,7 @@ import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { mergeTournamentStats, type TournamentHighlights, type TournamentAverages } from "@/utils/tournamentStats";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface TournamentHighlightsPanelProps {
   highlights: TournamentHighlights;
@@ -16,12 +17,13 @@ interface TournamentHighlightsPanelProps {
 /** Shared by Tournament.tsx (full, with heatmap) and PublicTournament.tsx's compact live widget
  *  (table only) — one component so both surfaces stay in sync instead of two hand-kept copies. */
 const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap }: TournamentHighlightsPanelProps) => {
+  const { t } = useLanguage();
   const merged = mergeTournamentStats(highlights, averages);
   const paged = usePagedList(merged);
   const pagedGames = usePagedList(averages.games);
 
   if (merged.length === 0 && highlights.heatmapPoints.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-6">Noch keine Highlights in diesem Turnier.</p>;
+    return <p className="text-sm text-muted-foreground text-center py-6">{t("tournament.noHighlightsYet")}</p>;
   }
 
   return (
@@ -36,13 +38,16 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap }: Tourna
           <table className="w-full text-xs">
             <thead>
               <tr className="text-left text-[10px] uppercase text-muted-foreground">
-                <th className="py-1 pr-2">Spieler</th>
-                <th className="py-1 px-1.5 text-center" title="Turnier-Average">Ø</th>
+                <th className="py-1 pr-2">{t("stats.player")}</th>
+                <th className="py-1 px-1.5 text-center" title={t("tournament.tournamentAverage")}>Ø</th>
                 <th className="py-1 px-1.5 text-center" title="180er">180</th>
-                <th className="py-1 px-1.5 text-center" title="170-Finish (Maximum)">170</th>
-                <th className="py-1 px-1.5 text-center" title="Ton-Plus-Finishes (≥100)">Ton+</th>
-                <th className="py-1 px-1.5 text-center" title="Große Triples (T16–T20)">Triple</th>
-                <th className="py-1 pl-1.5 text-center" title="Bull-Treffer">Bull</th>
+                <th className="py-1 px-1.5 text-center" title="Checkout ≥100">100+</th>
+                <th className="py-1 px-1.5 text-center" title="Checkout ≥120">120+</th>
+                <th className="py-1 px-1.5 text-center" title="Checkout ≥140">140+</th>
+                <th className="py-1 px-1.5 text-center" title="Checkout ≥160">160+</th>
+                <th className="py-1 px-1.5 text-center" title={t("tournament.bigFishTooltip")}>170 🐟</th>
+                <th className="py-1 px-1.5 text-center" title={t("tournament.bigTriplesTooltip")}>{t("tournament.bigTriplesAbbrev")}</th>
+                <th className="py-1 pl-1.5 text-center" title="Bull">Bull</th>
               </tr>
             </thead>
             <tbody>
@@ -51,21 +56,25 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap }: Tourna
                   <td className="py-1.5 pr-2 font-medium truncate max-w-[120px]">{p.name}</td>
                   <td className="py-1.5 px-1.5 text-center font-mono text-primary">{p.tournamentAverage > 0 ? p.tournamentAverage.toFixed(1) : "–"}</td>
                   <td className="py-1.5 px-1.5 text-center font-mono">{p.oneEighties || "–"}</td>
-                  <td className="py-1.5 px-1.5 text-center font-mono">{p.maxCheckouts || "–"}</td>
-                  <td className="py-1.5 px-1.5 text-center font-mono">{p.tonPlusFinishes || "–"}</td>
+                  <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout100Plus || "–"}</td>
+                  <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout120Plus || "–"}</td>
+                  <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout140Plus || "–"}</td>
+                  <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout160Plus || "–"}</td>
+                  <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout170 || "–"}</td>
                   <td className="py-1.5 px-1.5 text-center font-mono">{p.bigTriples || "–"}</td>
                   <td className="py-1.5 pl-1.5 text-center font-mono">{p.bulls || "–"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <p className="text-[10px] text-muted-foreground pt-1.5">{t("tournament.checkoutTierLegend")}</p>
           <ListPaginationFooter list={paged} />
         </div>
       )}
 
       {pagedGames.visible.length > 0 && (
         <div>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Spiel-Average je Partie</p>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">{t("tournament.gameAveragePerMatch")}</p>
           <div className="space-y-1">
             {pagedGames.visible.map((g) => (
               <div key={g.gameId} className="flex items-center justify-between text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">
