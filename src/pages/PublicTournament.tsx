@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw, Target, ChevronDown, ChevronUp, Settings2, Check } from "lucide-react";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, QrCode as QrCodeIcon, RefreshCcw, Target, Settings2, Check } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import {
@@ -569,14 +569,14 @@ const BoardOverview = ({
 const VIEW_PREF_KEY = "dart-live-view-pref";
 const AUTO_ROTATE_PREF_KEY = "dart-live-autorotate-pref";
 const AUTO_ROTATE_MS = 15000;
-/** Which of the 3 rotation-eligible slots ("bracket" covers both tree and list — they're two
+/** Which of the 4 rotation-eligible slots ("bracket" covers both tree and list — they're two
  *  presentations of the same data, never both in the rotation at once) auto-rotate should cycle
  *  through. Persisted per-device like the view/autorotate prefs above; defaults to everything on
  *  so an existing device's behavior doesn't change until someone deliberately narrows it down. */
-type RotationSlot = "boards" | "bracket" | "participants";
-const ROTATION_ORDER: RotationSlot[] = ["boards", "bracket", "participants"];
+type RotationSlot = "boards" | "bracket" | "participants" | "highlights";
+const ROTATION_ORDER: RotationSlot[] = ["boards", "bracket", "participants", "highlights"];
 const ROTATION_SLOTS_PREF_KEY = "dart-live-rotation-slots";
-const DEFAULT_ROTATION_SLOTS: Record<RotationSlot, boolean> = { boards: true, bracket: true, participants: true };
+const DEFAULT_ROTATION_SLOTS: Record<RotationSlot, boolean> = { boards: true, bracket: true, participants: true, highlights: true };
 
 const PublicTournamentPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -595,13 +595,13 @@ const PublicTournamentPage = () => {
   // board. Falls back to this device's last manually-picked view, then the usual default.
   const urlView = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
   const hadExplicitViewPref =
-    urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "participants" || urlView === "auto" ||
+    urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "participants" || urlView === "highlights" || urlView === "auto" ||
     (typeof window !== "undefined" && !!window.localStorage.getItem(VIEW_PREF_KEY));
-  const [view, setViewRaw] = useState<"tree" | "list" | "boards" | "participants">(() => {
+  const [view, setViewRaw] = useState<"tree" | "list" | "boards" | "participants" | "highlights">(() => {
     if (typeof window === "undefined") return "tree";
-    if (urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "participants") return urlView;
+    if (urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "participants" || urlView === "highlights") return urlView;
     const stored = window.localStorage.getItem(VIEW_PREF_KEY);
-    if (stored === "boards" || stored === "tree" || stored === "list" || stored === "participants") return stored;
+    if (stored === "boards" || stored === "tree" || stored === "list" || stored === "participants" || stored === "highlights") return stored;
     return window.innerWidth < 900 ? "list" : "tree";
   });
   const [rotationSlots, setRotationSlots] = useState<Record<RotationSlot, boolean>>(() => {
@@ -623,8 +623,6 @@ const PublicTournamentPage = () => {
   };
   const [tournamentHighlights, setTournamentHighlights] = useState<TournamentHighlights | null>(null);
   const [tournamentAverages, setTournamentAverages] = useState<TournamentAverages | null>(null);
-  const [loadingHighlights, setLoadingHighlights] = useState(false);
-  const [showHighlights, setShowHighlights] = useState(false);
   const [autoRotate, setAutoRotateRaw] = useState(() => {
     if (typeof window === "undefined") return false;
     if (urlView === "auto") return true;
@@ -639,7 +637,7 @@ const PublicTournamentPage = () => {
 
   /** User-driven view change — persists the pick and turns off auto-rotate (picking a
    *  view by hand means "show me this now", not "keep rotating"). */
-  const selectView = (next: "tree" | "list" | "boards" | "participants") => {
+  const selectView = (next: "tree" | "list" | "boards" | "participants" | "highlights") => {
     if (next === "tree" || next === "list") bracketViewRef.current = next;
     setViewRaw(next);
     setAutoRotateRaw(false);
@@ -664,7 +662,6 @@ const PublicTournamentPage = () => {
    *  — there's no cheaper "averages only" endpoint for anonymous spectators, so both draw on the
    *  same one-time fetch instead of hitting the RPC twice. */
   const loadHighlightsAndAverages = useCallback(async (tournamentId: string) => {
-    setLoadingHighlights(true);
     const { data } = await supabase.rpc("public_tournament_highlights", { _tournament_id: tournamentId });
     const rows = (data || []) as unknown as (TournamentStatsLegRow & {
       game_id: string; player1_id: string | null; player1_name: string; player1_average: number;
@@ -682,33 +679,25 @@ const PublicTournamentPage = () => {
       }
     });
     setTournamentAverages(computeTournamentAverages([...gamesByGameId.values()]));
-    setLoadingHighlights(false);
   }, []);
 
-  const toggleHighlights = async () => {
-    const next = !showHighlights;
-    setShowHighlights(next);
-    if (!next || tournamentHighlights || !t) return;
-    await loadHighlightsAndAverages(t.id);
-  };
-
-  // Only when the participants view is actually (or about to be, via rotation) on screen — most
-  // spectators just watch the board/bracket view and never touch either of the stats surfaces,
-  // so firing this RPC unconditionally for every page load would be a lot of wasted per-dart
-  // throw data fetched for nothing on what's often a multi-viewer live-event page.
+  // Only when the participants or highlights view is actually (or about to be, via rotation) on
+  // screen — most spectators just watch the board/bracket view and never touch either of the
+  // stats surfaces, so firing this RPC unconditionally for every page load would be a lot of
+  // wasted per-dart throw data fetched for nothing on what's often a multi-viewer live-event page.
   useEffect(() => {
     if (!t || tournamentAverages) return;
-    const willShowParticipants = view === "participants" || (autoRotate && rotationSlots.participants);
-    if (!willShowParticipants) return;
+    const willShowStats = view === "participants" || view === "highlights" || (autoRotate && (rotationSlots.participants || rotationSlots.highlights));
+    if (!willShowStats) return;
     loadHighlightsAndAverages(t.id);
   }, [t, tournamentAverages, view, autoRotate, rotationSlots, loadHighlightsAndAverages]);
 
   /** The slot a given `view` value belongs to — tree/list both count as "bracket" since they're
    *  two presentations of the same data, never independently rotation-eligible. */
-  const slotOf = (v: "tree" | "list" | "boards" | "participants"): RotationSlot =>
-    v === "boards" ? "boards" : v === "participants" ? "participants" : "bracket";
-  const viewForSlot = (slot: RotationSlot): "tree" | "list" | "boards" | "participants" =>
-    slot === "boards" ? "boards" : slot === "participants" ? "participants" : bracketViewRef.current;
+  const slotOf = (v: "tree" | "list" | "boards" | "participants" | "highlights"): RotationSlot =>
+    v === "boards" ? "boards" : v === "participants" ? "participants" : v === "highlights" ? "highlights" : "bracket";
+  const viewForSlot = (slot: RotationSlot): "tree" | "list" | "boards" | "participants" | "highlights" =>
+    slot === "boards" ? "boards" : slot === "participants" ? "participants" : slot === "highlights" ? "highlights" : bracketViewRef.current;
 
   useEffect(() => {
     if (!autoRotate) return;
@@ -885,6 +874,9 @@ const PublicTournamentPage = () => {
             <button onClick={() => selectView("participants")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "participants" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
               <Users className="w-3.5 h-3.5" /> {tr("pt.participantsView")}
             </button>
+            <button onClick={() => selectView("highlights")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "highlights" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+              <Target className="w-3.5 h-3.5" /> {tr("pt.highlightsLabel")}
+            </button>
           </div>
           <button
             onClick={toggleAutoRotate}
@@ -901,13 +893,6 @@ const PublicTournamentPage = () => {
           >
             <Settings2 className="w-3.5 h-3.5" />
           </button>
-          <button
-            onClick={toggleHighlights}
-            className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 ${showHighlights ? "border-accent bg-accent/15 text-accent" : "border-border hover:bg-muted text-muted-foreground"}`}
-          >
-            <Target className="w-3.5 h-3.5" /> {tr("pt.highlightsLabel")}
-            {showHighlights ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
         </div>
         {showRotationSettings && (
           <div className="mb-2 rounded-xl border border-border bg-card p-3 max-w-xl">
@@ -917,6 +902,7 @@ const PublicTournamentPage = () => {
                 { slot: "boards" as const, label: tr("pt.boardOverview") },
                 { slot: "bracket" as const, label: isKo ? tr("tournament.bracketTreeTab") : tr("pt.standings") },
                 { slot: "participants" as const, label: tr("pt.participantsView") },
+                { slot: "highlights" as const, label: tr("pt.highlightsLabel") },
               ]).map((opt) => (
                 <button
                   key={opt.slot}
@@ -932,18 +918,20 @@ const PublicTournamentPage = () => {
             </div>
           </div>
         )}
-        {showHighlights && (
-          <div className="mt-2 rounded-xl border border-border bg-card p-3 max-w-xl">
-            {loadingHighlights ? (
-              <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
-            ) : tournamentHighlights && tournamentAverages ? (
-              <TournamentHighlightsPanel highlights={tournamentHighlights} averages={tournamentAverages} />
-            ) : null}
-          </div>
-        )}
       </div>
 
-      {view === "participants" ? (
+      {view === "highlights" ? (
+        <div className="px-4 pb-6">
+          <div className="rounded-xl border border-border bg-card p-4 max-w-2xl mx-auto">
+            <h3 className="font-display uppercase text-sm mb-3 text-muted-foreground flex items-center gap-2"><Target className="w-4 h-4" /> {tr("pt.highlightsLabel")}</h3>
+            {!tournamentHighlights || !tournamentAverages ? (
+              <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+            ) : (
+              <TournamentHighlightsPanel highlights={tournamentHighlights} averages={tournamentAverages} />
+            )}
+          </div>
+        </div>
+      ) : view === "participants" ? (
         <div className="px-4 pb-6">
           <div className="rounded-xl border border-border bg-card p-4 max-w-xl mx-auto">
             <h3 className="font-display uppercase text-sm mb-3 text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
