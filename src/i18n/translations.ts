@@ -863,9 +863,11 @@ export const translations: Record<string, Record<Language, string>> = {
   "training.scoringLicenseTitle": { de: "Scoring-Lizenz", en: "Scoring licence", fr: "Licence de score", pl: "Licencja punktowania", nl: "Scorelicentie", tr: "Skor lisansı" },
 
   // 180s prominence — personal + club stats.
-  "stats.oneEightyCount": { de: "180er", en: "180s", fr: "180", pl: "180", nl: "180's", tr: "180'ler" },
   "stats.oneEightiesBy": { de: "180er nach Spieler", en: "180s by player", fr: "180 par joueur", pl: "180 według gracza", nl: "180's per speler", tr: "Oyuncuya göre 180'ler" },
   "stats.clubOneEighties": { de: "Vereins-180er", en: "Club 180s", fr: "180 du club", pl: "180 klubu", nl: "Club-180's", tr: "Kulüp 180'leri" },
+  "stats.tapForPlayerBreakdown": { de: "Antippen für Aufschlüsselung nach Spieler", en: "Tap for a breakdown by player", fr: "Appuyez pour la répartition par joueur", nl: "Tik voor uitsplitsing per speler", pl: "Dotknij, aby zobaczyć podział na graczy", tr: "Oyuncuya göre dağılım için dokunun" },
+  "stats.noOneEightiesYet": { de: "Noch keine 180er erfasst.", en: "No 180s recorded yet.", fr: "Aucun 180 enregistré pour l'instant.", nl: "Nog geen 180's geregistreerd.", pl: "Nie zarejestrowano jeszcze żadnych 180.", tr: "Henüz kaydedilmiş 180 yok." },
+  "stats.backToOverview": { de: "Zurück zur Übersicht", en: "Back to overview", fr: "Retour à l'aperçu", pl: "Powrót do przeglądu", nl: "Terug naar overzicht", tr: "Genel bakışa dön" },
 
   // aimBias.ts + AimBiasCard.tsx
   "aimBias.tipAimCloser": { de: "ziel bewusst etwas näher zur Mitte", en: "aim deliberately a bit closer to the center", fr: "vise délibérément un peu plus près du centre", pl: "celuj świadomie nieco bliżej środka", nl: "richt bewust wat dichter bij het midden", tr: "bilinçli olarak merkeze biraz daha yakın nişan al" },

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download, FileText } from "lucide-react";
+import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download, FileText, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -95,7 +95,8 @@ const StatisticsPage = () => {
   const [cleaningUpClips, setCleaningUpClips] = useState(false);
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo">("average");
+  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo" | "one_eighties" | "highest_checkout" | "mpr" | "best_game_avg">("average");
+  const [rankingFocusKey, setRankingFocusKey] = useState<typeof sortBy | null>(null);
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
@@ -368,6 +369,18 @@ const StatisticsPage = () => {
     return { totalGames, totalPlayers, avgOfAverages, bestAvg, bestHighscore, mostGames, totalDarts, highestGameAvg, mostWins };
   }, [filteredGames, players]);
 
+  // Per-player best single-game average — same source rows as clubStats.highestGameAvg above,
+  // just grouped by player instead of reduced to one club-wide winner, so "Bester Game-Ø" can
+  // also drive a full ranked list (like every other Records tile), not just show the #1 name.
+  const playerBestGameAvgById = useMemo(() => {
+    const result: Record<string, number> = {};
+    filteredGames.forEach((g) => {
+      if (g.player1_id && g.player1_average > (result[g.player1_id] ?? 0)) result[g.player1_id] = g.player1_average;
+      if (g.player2_id && g.player2_average > (result[g.player2_id] ?? 0)) result[g.player2_id] = g.player2_average;
+    });
+    return result;
+  }, [filteredGames]);
+
   // 180s across the WHOLE club (every player, camera-tracked + manually backfilled), scoped to
   // whatever filter is active — same filteredGames convention every other club stat above
   // already uses. Manual entries only ever get counted in when the active filter is itself
@@ -392,6 +405,42 @@ const StatisticsPage = () => {
 
   const club180Total = useMemo(() => club180Breakdown.reduce((s, y) => s + y.total, 0), [club180Breakdown]);
 
+  // Same app-tracked + manually-backfilled 180 figure as club180Breakdown above, just grouped by
+  // player instead of by year — powers the "180er" Records tile's ranked list and the leaderboard
+  // sort option, so both stay in exact agreement with the club-wide total shown in the overview.
+  const player180TotalById = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const yearByGame = new Map(filteredGames.map((g) => [g.id, new Date(g.played_at).getFullYear()]));
+    const appTrackedByPlayerYear: Record<string, Record<number, number>> = {};
+    gameLegs.forEach((leg) => {
+      if (!leg.player_id || !filteredIds.has(leg.game_id) || !Array.isArray(leg.throws)) return;
+      const year = yearByGame.get(leg.game_id);
+      if (year === undefined) return;
+      const n = count180s(leg.throws as unknown as DartThrow[]);
+      if (n === 0) return;
+      const byYear = appTrackedByPlayerYear[leg.player_id] ||= {};
+      byYear[year] = (byYear[year] ?? 0) + n;
+    });
+    const result: Record<string, number> = {};
+    Object.entries(appTrackedByPlayerYear).forEach(([playerId, byYear]) => {
+      result[playerId] = Object.values(byYear).reduce((a, b) => a + b, 0);
+    });
+    if (manualEntriesApplicable(filterTime)) {
+      manual180Entries.forEach((e) => {
+        if (filterYear !== "all" && e.year !== Number(filterYear)) return;
+        result[e.player_id] = (result[e.player_id] ?? 0) + e.count;
+      });
+    }
+    return result;
+  }, [filteredGames, gameLegs, manual180Entries, filterTime, filterYear]);
+
+  const bestOneEighties = useMemo(() => {
+    return players.reduce((best, p) => {
+      const val = player180TotalById[p.id] ?? 0;
+      return val > best.val ? { name: p.name, val, emoji: p.emoji } : best;
+    }, { name: "-", val: 0, emoji: "" });
+  }, [players, player180TotalById]);
+
   const leaderboard = useMemo(() => {
     // Any active filter (season, time range, mode, ...) switches the leaderboard from
     // lifetime totals to stats recomputed for just the filtered games.
@@ -409,11 +458,53 @@ const StatisticsPage = () => {
         return (advancedByPlayer[b.id]?.checkout.percentage ?? 0) - (advancedByPlayer[a.id]?.checkout.percentage ?? 0);
       }
       if (sortBy === "points") return b.games_won * 2 - a.games_won * 2;
-      return (b.elo_rating ?? 1000) - (a.elo_rating ?? 1000); // sortBy === "elo", the only remaining case
+      if (sortBy === "one_eighties") return (player180TotalById[b.id] ?? 0) - (player180TotalById[a.id] ?? 0);
+      if (sortBy === "highest_checkout") {
+        return (advancedByPlayer[b.id]?.checkout.highestCheckout ?? 0) - (advancedByPlayer[a.id]?.checkout.highestCheckout ?? 0);
+      }
+      if (sortBy === "mpr") return (cricketByPlayer[b.id]?.cricket.mpr ?? 0) - (cricketByPlayer[a.id]?.cricket.mpr ?? 0);
+      if (sortBy === "best_game_avg") return (playerBestGameAvgById[b.id] ?? 0) - (playerBestGameAvgById[a.id] ?? 0);
+      return (b.elo_rating ?? 1000) - (a.elo_rating ?? 1000); // sortBy === "elo", the last remaining case
     });
-  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive]);
+  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive, player180TotalById, cricketByPlayer, playerBestGameAvgById]);
 
   const pagedLeaderboard = usePagedList(leaderboard);
+
+  // Shared between the condensed leaderboard row and the full-page ranking-focus view, so a
+  // stat's column header and its per-row value can never drift apart depending on which one
+  // happens to be showing at the time.
+  const sortByLabel = (key: typeof sortBy): string => {
+    switch (key) {
+      case "points": return t("stats.pointsSeason");
+      case "elo": return t("recap.eloRating");
+      case "average": return t("stats.average");
+      case "games_won": return t("game.winsLabel");
+      case "win_rate": return t("stats.winRatePercent");
+      case "high_score": return "Highscore";
+      case "checkout": return "Checkout %";
+      case "one_eighties": return t("stats.oneEighties");
+      case "highest_checkout": return t("stats.highestFinish");
+      case "mpr": return "MPR";
+      case "best_game_avg": return t("stats.bestGameAverage");
+    }
+  };
+
+  const sortValueFor = (p: PlayerStats): string | number => {
+    const winRate = p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
+    switch (sortBy) {
+      case "average": return Number(p.average).toFixed(1);
+      case "games_won": return p.games_won;
+      case "high_score": return p.high_score;
+      case "win_rate": return `${winRate}%`;
+      case "checkout": return `${(advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0)}%`;
+      case "points": return `${p.games_won * 2} Pkt`;
+      case "one_eighties": return player180TotalById[p.id] ?? 0;
+      case "highest_checkout": return advancedByPlayer[p.id]?.checkout.highestCheckout ?? 0;
+      case "mpr": return (cricketByPlayer[p.id]?.cricket.mpr ?? 0).toFixed(2);
+      case "best_game_avg": return (playerBestGameAvgById[p.id] ?? 0).toFixed(1);
+      default: return Math.round(p.elo_rating ?? 1000); // elo
+    }
+  };
 
   const exportLeaderboardCsv = () => {
     const header = [t("stats.rank"), "Name", t("stats.games"), t("game.winsLabel"), t("game.points"), "Elo", "Average", "Highscore", "Checkout %"];
@@ -1002,6 +1093,40 @@ const StatisticsPage = () => {
       {/* OVERVIEW TAB */}
       {activeTab === "overview" && (
         <>
+        {rankingFocusKey ? (
+          <div className="bg-card rounded-xl border border-border p-4">
+            <button onClick={() => setRankingFocusKey(null)} className="mb-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <ArrowLeft className="w-3.5 h-3.5" /> {t("stats.backToOverview")}
+            </button>
+            <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
+              <Trophy className="w-4 h-4" /> {sortByLabel(rankingFocusKey)}
+            </h3>
+            <p className="text-[10px] text-muted-foreground mb-3">
+              {filtersActive ? t("stats.valuesForFilteredPeriod") : t("stats.lifetimeValues")}
+            </p>
+            {leaderboard.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">{t("stats.noPlayersYet")}</p>
+            ) : (
+              <div className="space-y-1">
+                {leaderboard.map((p, i) => (
+                  <button key={p.id} onClick={() => { setSelectedPlayerId(p.id); setActiveTab("players"); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-muted/80 ${i < 3 ? "bg-muted/50" : ""}`}>
+                    <span className={`w-6 text-center font-display text-sm ${i === 0 ? "text-accent" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-orange-400" : "text-muted-foreground"}`}>
+                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
+                    </span>
+                    <span className="text-lg">{p.emoji}</span>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-semibold truncate">{p.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{p.games_played} {t("stats.games")} · {Math.round(p.elo_rating ?? 1000)} Elo</p>
+                    </div>
+                    <span className="font-display text-lg text-primary">{sortValueFor(p)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
           {/* Club overview cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
@@ -1009,7 +1134,6 @@ const StatisticsPage = () => {
               { labelKey: "stats.members", value: clubStats.totalPlayers, icon: Users, color: "text-secondary" },
               { labelKey: "stats.clubAverage", value: clubStats.avgOfAverages.toFixed(1), icon: TrendingUp, color: "text-accent" },
               { labelKey: "stats.dartsThrown", value: clubStats.totalDarts.toLocaleString(), icon: Hash, color: "text-primary" },
-              { labelKey: "stats.oneEighties", value: club180Total, icon: Target, color: "text-accent" },
             ].map(s => (
               <div key={s.labelKey} className="bg-card rounded-xl p-4 border border-border">
                 <s.icon className={`w-4 h-4 ${s.color} mb-1`} />
@@ -1019,23 +1143,27 @@ const StatisticsPage = () => {
             ))}
           </div>
 
-          {/* Records */}
+          {/* Records — each tile doubles as a link into the full ranked list for that stat
+              (clicking sets sortBy to match and opens the focused ranking view above), so a club
+              record is never just a dead-end single number. */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
-              { labelKey: "stats.highestScore", value: clubStats.bestHighscore.val, sub: clubStats.bestHighscore.name, icon: Trophy, color: "text-accent" },
-              { labelKey: "stats.bestAverage", value: clubStats.bestAvg.val.toFixed(1), sub: clubStats.bestAvg.name, icon: Flame, color: "text-destructive" },
-              { labelKey: "stats.bestGameAverage", value: clubStats.highestGameAvg.val.toFixed(1), sub: clubStats.highestGameAvg.name, icon: Zap, color: "text-secondary" },
-              { labelKey: "stats.mostWins", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, color: "text-primary" },
-              { labelKey: "stats.highestFinish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, color: "text-accent" },
-              { labelKey: "stats.bestCheckoutPct", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, color: "text-secondary" },
-              { labelKey: "stats.bestMpr", value: bestMpr.val ? bestMpr.val.toFixed(2) : "-", sub: bestMpr.name, icon: Target, color: "text-accent" },
+              { labelKey: "stats.oneEighties", value: club180Total, sub: bestOneEighties.name, icon: Target, color: "text-accent", sortKey: "one_eighties" as const },
+              { labelKey: "stats.highestScore", value: clubStats.bestHighscore.val, sub: clubStats.bestHighscore.name, icon: Trophy, color: "text-accent", sortKey: "high_score" as const },
+              { labelKey: "stats.bestAverage", value: clubStats.bestAvg.val.toFixed(1), sub: clubStats.bestAvg.name, icon: Flame, color: "text-destructive", sortKey: "average" as const },
+              { labelKey: "stats.bestGameAverage", value: clubStats.highestGameAvg.val.toFixed(1), sub: clubStats.highestGameAvg.name, icon: Zap, color: "text-secondary", sortKey: "best_game_avg" as const },
+              { labelKey: "stats.mostWins", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, color: "text-primary", sortKey: "games_won" as const },
+              { labelKey: "stats.highestFinish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, color: "text-accent", sortKey: "highest_checkout" as const },
+              { labelKey: "stats.bestCheckoutPct", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, color: "text-secondary", sortKey: "checkout" as const },
+              { labelKey: "stats.bestMpr", value: bestMpr.val ? bestMpr.val.toFixed(2) : "-", sub: bestMpr.name, icon: Target, color: "text-accent", sortKey: "mpr" as const },
             ].map(s => (
-              <div key={s.labelKey} className="bg-card rounded-xl p-3 border border-border">
+              <button key={s.labelKey} onClick={() => { setSortBy(s.sortKey); setRankingFocusKey(s.sortKey); }}
+                className="bg-card rounded-xl p-3 border border-border text-left hover:border-primary/40 transition-colors">
                 <s.icon className={`w-4 h-4 ${s.color} mb-1`} />
                 <p className="text-xl font-display">{s.value}</p>
                 <p className="text-[10px] text-muted-foreground">{t(s.labelKey)}</p>
                 <p className="text-[10px] text-primary">{s.sub}</p>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -1150,6 +1278,10 @@ const StatisticsPage = () => {
                     <SelectItem value="win_rate">{t("stats.winRatePercent")}</SelectItem>
                     <SelectItem value="high_score">Highscore</SelectItem>
                     <SelectItem value="checkout">Checkout %</SelectItem>
+                    <SelectItem value="one_eighties">{t("stats.oneEighties")}</SelectItem>
+                    <SelectItem value="highest_checkout">{t("stats.highestFinish")}</SelectItem>
+                    <SelectItem value="mpr">MPR</SelectItem>
+                    <SelectItem value="best_game_avg">{t("stats.bestGameAverage")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1170,12 +1302,7 @@ const StatisticsPage = () => {
                   // True rank in the full standings, not the index within this page/slice.
                   const i = leaderboard.indexOf(p);
                   const winRate = p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
-                  const sortVal = sortBy === "average" ? Number(p.average).toFixed(1) :
-                    sortBy === "games_won" ? p.games_won : sortBy === "high_score" ? p.high_score :
-                    sortBy === "win_rate" ? `${winRate}%` :
-                    sortBy === "checkout" ? `${(advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0)}%` :
-                    sortBy === "points" ? `${p.games_won * 2} Pkt` :
-                    Math.round(p.elo_rating ?? 1000); // sortBy === "elo", the only remaining case
+                  const sortVal = sortValueFor(p);
                   return (
                     <button key={p.id} onClick={() => { setSelectedPlayerId(p.id); setActiveTab("players"); }}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-muted/80 ${i < 3 ? "bg-muted/50" : ""}`}>
@@ -1185,7 +1312,7 @@ const StatisticsPage = () => {
                       <span className="text-lg">{p.emoji}</span>
                       <div className="flex-1 min-w-0 text-left">
                         <p className="text-sm font-semibold truncate">{p.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{p.games_played} Spiele · {winRate}% · {Math.round(p.elo_rating ?? 1000)} Elo</p>
+                        <p className="text-[10px] text-muted-foreground">{p.games_played} {t("stats.games")} · {winRate}% · {Math.round(p.elo_rating ?? 1000)} Elo</p>
                       </div>
                       <span className="font-display text-lg text-primary">{sortVal}</span>
                     </button>
@@ -1195,6 +1322,8 @@ const StatisticsPage = () => {
               </div>
             )}
           </div>
+          </>
+        )}
         </>
       )}
 
@@ -1244,6 +1373,37 @@ const StatisticsPage = () => {
                   ))}
                 </div>
               </div>
+
+              {/* 180s: app-tracked + manually backfilled, combined per year. Placed right after
+                  the header (not buried below checkout/cricket/aim-bias) and accent-highlighted
+                  since it's the club's single most-hyped stat. Always shown for your own profile
+                  (even at 0) since that's also where the backfill editor lives; hidden for
+                  someone else's profile when there's nothing to show. */}
+              {(player180Total > 0 || playerDetailStats.player.user_id === session?.user?.id) && (
+                <div className="bg-card rounded-xl border border-accent/40 bg-accent/5 p-4 mb-4">
+                  <h3 className="font-display text-sm uppercase mb-1 text-accent flex items-center gap-2">
+                    <Target className="w-4 h-4" /> {t("stats.oneEighties")}
+                  </h3>
+                  <p className="font-display text-4xl text-accent">{player180Total}</p>
+                  {player180Breakdown.length > 0 && (
+                    <div className="mt-2 space-y-0.5">
+                      {player180Breakdown.map((y) => (
+                        <div key={y.year} className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{y.year}</span>
+                          <span>{y.total}{y.manual > 0 && ` (${t("stats.ofWhichBackfilled")} ${y.manual} ${t("stats.backfilledSuffix")})`}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {playerDetailStats.player.user_id === session?.user?.id && (
+                    <Manual180Editor
+                      playerId={selectedPlayerId}
+                      entries={manual180Entries.filter((e) => e.player_id === selectedPlayerId)}
+                      onChanged={fetchData}
+                    />
+                  )}
+                </div>
+              )}
 
               {/* Achievements */}
               {playerAchievements.length > 0 && (
@@ -1328,35 +1488,6 @@ const StatisticsPage = () => {
 
               {playerAimBias && <AimBiasCard bias={playerAimBias} />}
               {playerClutchStats && <ClutchCard stats={playerClutchStats} />}
-
-              {/* 180s: app-tracked + manually backfilled, combined per year. Always shown for
-                  your own profile (even at 0) since that's also where the backfill editor lives;
-                  hidden for someone else's profile when there's nothing to show. */}
-              {(player180Total > 0 || playerDetailStats.player.user_id === session?.user?.id) && (
-                <div className="bg-card rounded-xl border border-border p-4 mb-4">
-                  <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
-                    <Target className="w-4 h-4" /> {t("stats.oneEighties")}
-                  </h3>
-                  <p className="font-display text-3xl">{player180Total}</p>
-                  {player180Breakdown.length > 0 && (
-                    <div className="mt-2 space-y-0.5">
-                      {player180Breakdown.map((y) => (
-                        <div key={y.year} className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{y.year}</span>
-                          <span>{y.total}{y.manual > 0 && ` (${t("stats.ofWhichBackfilled")} ${y.manual} ${t("stats.backfilledSuffix")})`}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {playerDetailStats.player.user_id === session?.user?.id && (
-                    <Manual180Editor
-                      playerId={selectedPlayerId}
-                      entries={manual180Entries.filter((e) => e.player_id === selectedPlayerId)}
-                      onChanged={fetchData}
-                    />
-                  )}
-                </div>
-              )}
 
               {/* Throw heatmap — only camera-scored throws carry a tip position */}
               {playerHeatmapPoints.length > 0 && (
