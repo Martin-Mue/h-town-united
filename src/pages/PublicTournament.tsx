@@ -191,21 +191,37 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   }, []);
 
   const renderMatch = (m: Match, side: "left" | "right" | "center", isLast: boolean) => {
-    const live = !m.winner && isPlayable(m);
+    // `playable` (both players known, no winner yet) used to be the ONLY signal driving both
+    // the glow AND the label "live" — meaning a match nobody had actually started yet, just
+    // waiting for a free board, glowed exactly the same as one being played right now. Playable
+    // still earns the glow (it's genuinely "ready to go" and worth a glance), but the real
+    // in-progress state now gets its own distinct accent pulse + live leg count, same as
+    // Tournament.tsx's own bracket already does for the organizer.
+    const playable = !m.winner && isPlayable(m);
+    const liveFresh = playable && isLiveSnapshotFresh(m.live);
     return (
-      <div key={m.id} className={`bg-card border rounded-xl overflow-hidden relative ${m.winner ? "border-border" : live ? "border-primary/60 glow-cyan" : "border-border/50"}`}>
+      <div key={m.id} className={`bg-card border rounded-xl overflow-hidden relative ${m.winner ? "border-border" : playable ? "border-primary/60 glow-cyan" : "border-border/50"}`}>
         {!isLast && side === "left" && <span aria-hidden className="absolute top-1/2 -right-4 w-4 h-px bg-border" />}
         {!isLast && side === "right" && <span aria-hidden className="absolute top-1/2 -left-4 w-4 h-px bg-border" />}
         {[m.player1, m.player2].map((player, idx) => (
           <div key={idx} className={`${compact ? "px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"} flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
             <span className="truncate uppercase tracking-wide">{player || "TBD"}</span>
-            <span className={`font-display ${compact ? "text-sm" : "text-base"}`}>{idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0}</span>
+            <span className={`font-display ${compact ? "text-sm" : "text-base"} ${liveFresh ? "text-accent" : ""}`}>
+              {liveFresh ? (idx === 0 ? m.live!.legs1 : m.live!.legs2) : (idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0)}
+            </span>
           </div>
         ))}
-        {!m.winner && (m.scorekeeper || m.scorekeeperRule || m.board) && (
+        {!m.winner && (m.scorekeeper || m.scorekeeperRule || m.board || liveFresh) && (
           <div className={`px-2 py-0.5 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[9px] text-muted-foreground ${compact ? "" : "px-3 py-1 text-[10px]"}`}>
             <span className="truncate">✍️ {keeperLabel(m, matches) || "–"}</span>
-            {m.board ? <span className="font-mono">{t("camera.board")} {m.board}</span> : null}
+            <span className="flex items-center gap-2 shrink-0">
+              {liveFresh && (
+                <span className="flex items-center gap-1 text-accent">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
+                </span>
+              )}
+              {m.board ? <span className="font-mono">{t("camera.board")} {m.board}</span> : null}
+            </span>
           </div>
         )}
       </div>
@@ -355,21 +371,34 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
             </div>
             {liveList.length > 0 && (
               <div className="divide-y divide-border">
-                {liveList.map(m => (
-                  <div key={m.id} className="px-4 py-2.5 flex items-center gap-3 text-sm bg-primary/5">
-                    {[m.player1, m.player2].map((player, idx) => (
-                      <span key={idx} className={`flex-1 min-w-0 truncate uppercase tracking-wide ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
-                        {player || "TBD"}
+                {liveList.map(m => {
+                  // Same distinction as LiveBracket's renderMatch — "playable" (this row's own
+                  // membership test) just means ready to go, not actually being played right
+                  // now. Show the real leg count once a live snapshot is actually fresh, the
+                  // static 0:0 placeholder otherwise, so a match still waiting for a board
+                  // doesn't look like it's already underway.
+                  const liveFresh = isLiveSnapshotFresh(m.live);
+                  return (
+                    <div key={m.id} className="px-4 py-2.5 flex items-center gap-3 text-sm bg-primary/5">
+                      {[m.player1, m.player2].map((player, idx) => (
+                        <span key={idx} className={`flex-1 min-w-0 truncate uppercase tracking-wide ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
+                          {player || "TBD"}
+                        </span>
+                      ))}
+                      <span className={`shrink-0 font-display text-base tabular-nums ${liveFresh ? "text-accent" : ""}`}>
+                        {liveFresh ? `${m.live!.legs1}:${m.live!.legs2}` : `${m.score1 ?? 0}:${m.score2 ?? 0}`}
                       </span>
-                    ))}
-                    <span className="shrink-0 font-display text-base tabular-nums">
-                      {m.score1 ?? 0}:{m.score2 ?? 0}
-                    </span>
-                    {m.board ? (
-                      <span className="shrink-0 font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5">{t("camera.board")} {m.board}</span>
-                    ) : null}
-                  </div>
-                ))}
+                      {liveFresh && (
+                        <span className="shrink-0 flex items-center gap-1 text-[10px] text-accent">
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
+                        </span>
+                      )}
+                      {m.board ? (
+                        <span className="shrink-0 font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5">{t("camera.board")} {m.board}</span>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             )}
             {otherList.length > 0 && (
