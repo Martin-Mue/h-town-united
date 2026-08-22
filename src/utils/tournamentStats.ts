@@ -84,6 +84,21 @@ export interface ParticipantStatsRow {
 
 const BIG_TRIPLE_NUMBERS = new Set([16, 17, 18, 19, 20]);
 
+/** Shared "biggest highlight first" ranking, used by both computeTournamentHighlights (dart-based
+ *  tallies only) and mergeTournamentStats (which layers tournamentAverage on top as one more,
+ *  final tiebreak) — one function so the two can't silently drift the way they already had here
+ *  (the merged list had picked up a `bulls` tiebreak the highlights-only sort never got). */
+function compareByHighlightMagnitude(
+  a: { oneEighties: number; checkout170: number; checkout160Plus: number; checkout140Plus: number; checkout120Plus: number; checkout100Plus: number; bigTriples: number; bulls: number },
+  b: typeof a,
+): number {
+  return (
+    b.oneEighties - a.oneEighties || b.checkout170 - a.checkout170 || b.checkout160Plus - a.checkout160Plus ||
+    b.checkout140Plus - a.checkout140Plus || b.checkout120Plus - a.checkout120Plus || b.checkout100Plus - a.checkout100Plus ||
+    b.bigTriples - a.bigTriples || b.bulls - a.bulls
+  );
+}
+
 /**
  * Pools every dart from a tournament's legs into a board-wide heatmap plus a per-participant
  * highlight tally (big triples, bulls, 180s, checkout tiers) — the handful of stats exciting
@@ -125,11 +140,7 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
 
   const participants = [...byKey.values()]
     .filter((p) => p.bigTriples || p.bulls || p.oneEighties || p.checkout100Plus)
-    .sort((a, b) =>
-      b.oneEighties - a.oneEighties || b.checkout170 - a.checkout170 || b.checkout160Plus - a.checkout160Plus ||
-      b.checkout140Plus - a.checkout140Plus || b.checkout120Plus - a.checkout120Plus || b.checkout100Plus - a.checkout100Plus ||
-      b.bigTriples - a.bigTriples
-    );
+    .sort(compareByHighlightMagnitude);
 
   return { heatmapPoints, participants };
 }
@@ -196,10 +207,6 @@ export function mergeTournamentStats(highlights: TournamentHighlights, averages:
   // Ranked by highlight magnitude, biggest first — this is the Highlights table, not the
   // leaderboard, so someone with real highlight-worthy darts (even a single 180) belongs above
   // someone who just has a higher average but nothing highlight-worthy at all. tournamentAverage
-  // is the tiebreak, not the primary key. Mirrors computeTournamentHighlights' own internal sort.
-  return [...byKey.values()].sort((a, b) =>
-    b.oneEighties - a.oneEighties || b.checkout170 - a.checkout170 || b.checkout160Plus - a.checkout160Plus ||
-    b.checkout140Plus - a.checkout140Plus || b.checkout120Plus - a.checkout120Plus || b.checkout100Plus - a.checkout100Plus ||
-    b.bigTriples - a.bigTriples || b.bulls - a.bulls || b.tournamentAverage - a.tournamentAverage
-  );
+  // is one more tiebreak on top of compareByHighlightMagnitude, not the primary key.
+  return [...byKey.values()].sort((a, b) => compareByHighlightMagnitude(a, b) || b.tournamentAverage - a.tournamentAverage);
 }

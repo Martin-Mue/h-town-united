@@ -1158,9 +1158,17 @@ const TournamentPage = () => {
   /** Check-in state is independent of match results/withdrawal — just who's physically here. */
   const toggleAttendance = async (name: string) => {
     if (!activeTournament) return;
-    const next = { ...(activeTournament.attendance || {}), [name]: !(activeTournament.attendance?.[name]) };
+    const prev = activeTournament.attendance || {};
+    const next = { ...prev, [name]: !prev[name] };
     setActiveTournament({ ...activeTournament, attendance: next });
-    await supabase.from("tournaments").update({ attendance: next as unknown as Json }).eq("id", activeTournament.id);
+    const { error } = await supabase.from("tournaments").update({ attendance: next as unknown as Json }).eq("id", activeTournament.id);
+    if (error) {
+      // Revert the optimistic flip — otherwise a failed write (flaky connection, stale RLS)
+      // leaves the checkbox showing a state that was never actually saved, with no indication
+      // anything went wrong until the next reload silently reverts it.
+      setActiveTournament((curr) => curr ? { ...curr, attendance: prev } : curr);
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    }
   };
 
   /** Manually set (and lock) the scorekeeper of a single match. */
@@ -1352,10 +1360,15 @@ const TournamentPage = () => {
   // participants list's "Turnier-Average" column is populated as soon as there's anything to
   // show — status is always "active" or "finished" here (there's no separate not-yet-started
   // state; a tournament gets its bracket the moment it's created), so this isn't gated on status.
+  // Gated on isOwner specifically because that participants list (the only thing this eager load
+  // is FOR) is itself owner-only — a non-owner opening this page has nowhere to see the result
+  // unless they separately expand the Highlights panel, which already does its own lazy load via
+  // toggleHighlights, so firing this unconditionally for every viewer was a query nobody but the
+  // owner could ever see the answer to.
   useEffect(() => {
-    if (!activeTournament || tournamentAverages) return;
+    if (!activeTournament || tournamentAverages || !isOwner) return;
     loadTournamentAverages(activeTournament.id);
-  }, [activeTournament, tournamentAverages, loadTournamentAverages]);
+  }, [activeTournament, tournamentAverages, isOwner, loadTournamentAverages]);
 
   /** Lazily fetches + computes this tournament's highlights on first expand, then just toggles
    *  visibility on subsequent clicks — cheap since the source data can't change for a match that's

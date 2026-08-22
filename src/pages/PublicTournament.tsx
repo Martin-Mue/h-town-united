@@ -842,6 +842,9 @@ const PublicTournamentPage = () => {
   // regardless of outcome), so this stays null there and that view just shows no status dot.
   // A player can only lose once in single elimination, so "eliminated" never needs re-checking
   // once set; the champion is applied last so it wins over the (never-true-for-them) default.
+  // Plain const, not useMemo — this sits after the loading/notFound early returns above (like
+  // every other derived value in this component), and a hook can't live there without breaking
+  // React's rules-of-hooks ordering guarantee across the loading/notFound/loaded renders.
   const eliminationStatus: Record<string, "active" | "eliminated" | "champion"> | null = isKo
     ? (() => {
         const status: Record<string, "active" | "eliminated" | "champion"> = {};
@@ -998,35 +1001,32 @@ const PublicTournamentPage = () => {
         <div className="px-4 pb-6">
           <div className="rounded-xl border border-border bg-card p-3">
             <h3 className="font-display uppercase text-sm mb-2 text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
-            {!tournamentAverages ? (
-              <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
-            ) : (
-              // Grid, not a single scrolling column — this view specifically is meant to fit a
-              // full field (up to 64) on screen at once on a propped-up TV/tablet, the same way
-              // the board overview does. Column count scales with viewport width; row height
-              // stays minimal (compact padding/text) so more of them actually fit vertically.
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
-                {t.players.map((p) => {
-                  const avgRow = tournamentAverages?.participants.find((pa) => pa.key === p || pa.name === p);
-                  const status = eliminationStatus?.[p];
-                  // Green border = still in, grayed out = eliminated, no label text to parse from
-                  // across a room. Champion keeps its own gold tint (a positive end-state, not
-                  // part of the still-in/out binary).
-                  const borderColor =
-                    status === "champion" ? "border-l-accent" :
-                    status === "eliminated" ? "border-l-muted-foreground/30" :
-                    status === "active" ? "border-l-secondary" : "border-l-transparent";
-                  return (
-                    <div key={p} className={`rounded-lg bg-muted/30 border-l-4 ${borderColor} px-2 py-1.5 min-w-0 ${status === "eliminated" ? "opacity-60" : ""}`}>
-                      <p className="truncate text-xs font-medium">{status === "champion" && "🏆 "}{p}</p>
-                      <p className="font-display text-sm text-primary leading-tight">
-                        {avgRow && avgRow.tournamentAverage > 0 ? `Ø ${avgRow.tournamentAverage.toFixed(1)}` : "–"}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            {/* No longer gated on tournamentAverages — names + elimination-status coloring need
+                no network data at all (eliminationStatus is derived straight from the bracket
+                already in hand), so blocking the whole grid behind that RPC used to show a
+                spinner instead of the one thing that was actually ready immediately. Each card's
+                own Ø average just reads "–" until averages load in, same as before. */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
+              {t.players.map((p) => {
+                const avgRow = tournamentAverages?.participants.find((pa) => pa.key === p || pa.name === p);
+                const status = eliminationStatus?.[p];
+                // Green border = still in, grayed out = eliminated, no label text to parse from
+                // across a room. Champion keeps its own gold tint (a positive end-state, not
+                // part of the still-in/out binary).
+                const borderColor =
+                  status === "champion" ? "border-l-accent" :
+                  status === "eliminated" ? "border-l-muted-foreground/30" :
+                  status === "active" ? "border-l-secondary" : "border-l-transparent";
+                return (
+                  <div key={p} className={`rounded-lg bg-muted/30 border-l-4 ${borderColor} px-2 py-1.5 min-w-0 ${status === "eliminated" ? "opacity-60" : ""}`}>
+                    <p className="truncate text-xs font-medium">{status === "champion" && "🏆 "}{p}</p>
+                    <p className="font-display text-sm text-primary leading-tight">
+                      {avgRow && avgRow.tournamentAverage > 0 ? `Ø ${avgRow.tournamentAverage.toFixed(1)}` : "–"}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       ) : view === "boards" ? (
@@ -1133,8 +1133,12 @@ const PublicTournamentPage = () => {
         )}
       </div>
       )}
-      </div>
 
+      {/* Inside viewWrapRef (not a sibling after it) so it still shows up while fullscreened —
+          the Fullscreen API only paints descendants of the fullscreened element, and this used
+          to sit just outside that wrapper, meaning "X beats Y" would go on firing but never be
+          seen by anyone who'd fullscreened any of the other views. position:fixed keeps its
+          normal viewport-relative placement regardless of DOM nesting either way. */}
       {flash && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
           <div className="rounded-2xl border-2 border-accent bg-card/95 backdrop-blur px-8 py-5 text-center glow-gold shadow-2xl">
@@ -1148,6 +1152,7 @@ const PublicTournamentPage = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };
