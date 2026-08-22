@@ -1745,15 +1745,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
           <div className="mx-auto grid w-32 grid-cols-3 gap-1">
             <div />
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, -0.005)}>▲</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, -0.005)} title={t("camera.nudgeUp")} aria-label={t("camera.nudgeUp")}>▲</Button>
             <div />
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(-0.005, 0)}>◀</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(-0.005, 0)} title={t("camera.nudgeLeft")} aria-label={t("camera.nudgeLeft")}>◀</Button>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setActiveTap(null)} title={t("camera.resetPoint")}>
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0.005, 0)}>▶</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0.005, 0)} title={t("camera.nudgeRight")} aria-label={t("camera.nudgeRight")}>▶</Button>
             <div />
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, 0.005)}>▼</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, 0.005)} title={t("camera.nudgeDown")} aria-label={t("camera.nudgeDown")}>▼</Button>
             <div />
           </div>
           <Button size="sm" className="mt-2 w-full gap-1 font-display uppercase" onClick={confirmActiveTap}>
@@ -1768,10 +1768,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             {t("game.dartCounterLabel")} {repositioningIndex + 1} ({dartLabel(accumulated[repositioningIndex])}) — {t("camera.tapInImageThenConfirm")}
           </div>
           <div className="flex items-center justify-center gap-1">
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, -0.01)}>▲</Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(-0.01, 0)}>◀</Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0.01, 0)}>▶</Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, 0.01)}>▼</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, -0.01)} title={t("camera.nudgeUp")} aria-label={t("camera.nudgeUp")}>▲</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(-0.01, 0)} title={t("camera.nudgeLeft")} aria-label={t("camera.nudgeLeft")}>◀</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0.01, 0)} title={t("camera.nudgeRight")} aria-label={t("camera.nudgeRight")}>▶</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, 0.01)} title={t("camera.nudgeDown")} aria-label={t("camera.nudgeDown")}>▼</Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={cancelReposition} title={t("common.cancel")}>
               <X className="h-4 w-4" />
             </Button>

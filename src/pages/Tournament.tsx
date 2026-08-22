@@ -2174,7 +2174,7 @@ const TournamentPage = () => {
                         <button
                           onClick={() => toggleAttendance(p)}
                           role="checkbox" aria-checked={present} aria-label={`${p} ${t("tournament.attendancePresent")}`}
-                          className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors ${present ? "bg-secondary border-secondary text-secondary-foreground" : "border-muted-foreground/40"}`}
+                          className={`shrink-0 w-9 h-9 rounded-md border-2 flex items-center justify-center transition-colors ${present ? "bg-secondary border-secondary text-secondary-foreground" : "border-muted-foreground/40"}`}
                         >
                           {present && <Check className="w-4 h-4" />}
                         </button>

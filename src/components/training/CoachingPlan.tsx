@@ -23,7 +23,10 @@ interface PlayerStats {
   avg: number;
   doubleRate: number;
   highscore: number;
-  recentAvg: number;
+  /** null = no recent games to average at all — distinct from a genuine 0, which (rare, but
+   *  real for a badly-logged game row) is actually the most severe possible form dip and must
+   *  not be treated the same as "nothing to compare yet". */
+  recentAvg: number | null;
   /** null = not enough camera-scored darts yet for a reliable reading — see aimBias.ts. */
   aimBias: AimBiasResult | null;
 }
@@ -97,7 +100,7 @@ const buildRecommendations = (s: PlayerStats | null, t: (key: string) => string)
   } else if (s.avg < 60) {
     recs.push({
       drillId: "target-grind",
-      title: "T20 Grind",
+      title: "Target Grind",
       reason: `${t("coach.avgLowPrefix")} ${s.avg.toFixed(1)} ${t("coach.avgMidSuffix")}`,
       metric: `Ø ${s.avg.toFixed(1)}`,
       priority: 2,
@@ -115,7 +118,7 @@ const buildRecommendations = (s: PlayerStats | null, t: (key: string) => string)
   }
 
   // Form / recent vs lifetime
-  if (s.recentAvg && s.recentAvg < s.avg - 5) {
+  if (s.recentAvg !== null && s.recentAvg < s.avg - 5) {
     recs.push({
       drillId: "pressure-training",
       title: "Pressure Training",
@@ -127,7 +130,7 @@ const buildRecommendations = (s: PlayerStats | null, t: (key: string) => string)
   } else if (s.highscore < 100) {
     recs.push({
       drillId: "target-grind",
-      title: "T20 Grind",
+      title: "Target Grind",
       reason: `${t("coach.highscorePrefix")} ${s.highscore}${t("coach.highscoreSuffix")}`,
       metric: `${t("coach.hsMetric")} ${s.highscore}`,
       priority: 3,
@@ -156,7 +159,7 @@ const buildRecommendations = (s: PlayerStats | null, t: (key: string) => string)
   const fallback: CoachRecommendation[] = [
     { drillId: "around-the-clock", title: "Around the Clock", reason: t("coach.fallbackAllround"), metric: t("coach.basisMetric"), priority: 9, icon: RotateCw },
     { drillId: "doubles-only", title: "Doubles Only", reason: t("coach.fallbackDoubles"), metric: t("coach.basisMetric"), priority: 9, icon: Target },
-    { drillId: "t20-grind", title: "T20 Grind", reason: t("coach.fallbackScoring"), metric: t("coach.basisMetric"), priority: 9, icon: Trophy },
+    { drillId: "target-grind", title: "Target Grind", reason: t("coach.fallbackScoring"), metric: t("coach.basisMetric"), priority: 9, icon: Trophy },
   ];
   for (const f of fallback) {
     if (unique.length >= 3) break;
@@ -225,7 +228,7 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
             avg: count ? avgSum / count : 0,
             doubleRate: count ? drSum / count : 0,
             highscore: hs,
-            recentAvg: recentCount ? recentSum / recentCount : 0,
+            recentAvg: recentCount ? recentSum / recentCount : null,
             aimBias,
           });
           setLoading(false);

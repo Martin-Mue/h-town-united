@@ -32,6 +32,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "header.notificationsOff": { de: "Benachrichtigungen aktivieren (z. B. Turnier-Erinnerung)", en: "Enable notifications (e.g. tournament reminders)", fr: "Activer les notifications (p. ex. rappel de tournoi)", pl: "Włącz powiadomienia (np. przypomnienie o turnieju)", nl: "Meldingen inschakelen (bijv. toernooiherinnering)", tr: "Bildirimleri etkinleştir (örn. turnuva hatırlatması)" },
   "header.notifications": { de: "Benachrichtigungen", en: "Notifications", fr: "Notifications", pl: "Powiadomienia", nl: "Meldingen", tr: "Bildirimler" },
   "header.offline": { de: "offline", en: "offline", fr: "hors ligne", pl: "offline", nl: "offline", tr: "çevrimdışı" },
+  "header.offlinePendingTooltip": { de: "Offline gespeicherte Spiele — werden automatisch synchronisiert, sobald wieder eine Verbindung besteht.", en: "Offline-saved games — will sync automatically once a connection is back.", fr: "Parties enregistrées hors ligne — seront synchronisées automatiquement dès qu'une connexion sera rétablie.", pl: "Gry zapisane offline — zsynchronizują się automatycznie, gdy tylko połączenie wróci.", nl: "Offline opgeslagen potjes — worden automatisch gesynchroniseerd zodra er weer verbinding is.", tr: "Çevrimdışı kaydedilen oyunlar — bağlantı geri geldiğinde otomatik olarak senkronize edilecek." },
   "header.settings": { de: "Einstellungen", en: "Settings", fr: "Paramètres", pl: "Ustawienia", nl: "Instellingen", tr: "Ayarlar" },
   "header.signOut": { de: "Abmelden", en: "Sign out", fr: "Déconnexion", pl: "Wyloguj się", nl: "Afmelden", tr: "Çıkış yap" },
 
@@ -383,6 +384,10 @@ export const translations: Record<string, Record<Language, string>> = {
   "camera.cameraForBoard": { de: "Kamera für Board", en: "Camera for board", fr: "Caméra pour la cible", pl: "Kamera dla tarczy", nl: "Camera voor bord", tr: "Tahta için kamera" },
   "camera.auto": { de: "Automatisch", en: "Automatic", fr: "Automatique", pl: "Automatycznie", nl: "Automatisch", tr: "Otomatik" },
   "camera.multiboardExplain": { de: "Jedes Board hat seine eigene Kalibrierung — praktisch, wenn dasselbe Tablet an mehreren Boards eines Vereinsabends läuft.", en: "Each board has its own calibration — handy when the same tablet moves between several boards over a club night.", fr: "Chaque cible a son propre étalonnage — pratique quand la même tablette circule entre plusieurs cibles au cours d'une soirée club.", pl: "Każda tarcza ma własną kalibrację — przydatne, gdy ten sam tablet krąży między kilkoma tarczami podczas wieczoru klubowego.", nl: "Elk bord heeft zijn eigen kalibratie — handig als dezelfde tablet tussen meerdere borden op een clubavond wisselt.", tr: "Her tahtanın kendi kalibrasyonu vardır — aynı tabletin bir kulüp gecesinde birden fazla tahta arasında dolaşması durumunda kullanışlıdır." },
+  "camera.nudgeUp": { de: "Punkt nach oben verschieben", en: "Nudge point up", fr: "Déplacer le point vers le haut", pl: "Przesuń punkt w górę", nl: "Punt omhoog verschuiven", tr: "Noktayı yukarı kaydır" },
+  "camera.nudgeDown": { de: "Punkt nach unten verschieben", en: "Nudge point down", fr: "Déplacer le point vers le bas", pl: "Przesuń punkt w dół", nl: "Punt omlaag verschuiven", tr: "Noktayı aşağı kaydır" },
+  "camera.nudgeLeft": { de: "Punkt nach links verschieben", en: "Nudge point left", fr: "Déplacer le point vers la gauche", pl: "Przesuń punkt w lewo", nl: "Punt naar links verschuiven", tr: "Noktayı sola kaydır" },
+  "camera.nudgeRight": { de: "Punkt nach rechts verschieben", en: "Nudge point right", fr: "Déplacer le point vers la droite", pl: "Przesuń punkt w prawo", nl: "Punt naar rechts verschuiven", tr: "Noktayı sağa kaydır" },
   "camera.horizontal": { de: "Horizontal", en: "Horizontal", fr: "Horizontal", pl: "Poziomo", nl: "Horizontaal", tr: "Yatay" },
   "camera.vertical": { de: "Vertikal", en: "Vertical", fr: "Vertical", pl: "Pionowo", nl: "Verticaal", tr: "Dikey" },
   "camera.size": { de: "Größe", en: "Size", fr: "Taille", pl: "Rozmiar", nl: "Grootte", tr: "Boyut" },
@@ -795,12 +800,14 @@ export const translations: Record<string, Record<Language, string>> = {
   "training.cameraScoring": { de: "Kamera-Scoring", en: "Camera scoring", fr: "Score par caméra", pl: "Wynik z kamery", nl: "Camera-scoring", tr: "Kamera skoru" },
 
   "training.roundTheClockWin": { de: "Rund um die Uhr! 🎉", en: "Round the clock! 🎉", fr: "Autour de l'horloge ! 🎉", pl: "Dookoła zegara! 🎉", nl: "Rond de klok! 🎉", tr: "Tam tur! 🎉" },
+  "training.shanghaiWin": { de: "Shanghai! 🎉", en: "Shanghai! 🎉", fr: "Shanghai ! 🎉", pl: "Shanghai! 🎉", nl: "Shanghai! 🎉", tr: "Shanghai! 🎉" },
   "training.accountEmpty": { de: "Konto leer 💸", en: "Account empty 💸", fr: "Compte vide 💸", pl: "Konto puste 💸", nl: "Rekening leeg 💸", tr: "Hesap boş 💸" },
   "training.doneGeneric": { de: "Geschafft! 🎯", en: "Done! 🎯", fr: "Réussi ! 🎯", pl: "Udało się! 🎯", nl: "Gelukt! 🎯", tr: "Başardın! 🎯" },
 
   "training.hitThe": { de: "Triff die", en: "Hit the", fr: "Touche le", pl: "Trafiaj", nl: "Raak", tr: "Vur:" },
   "training.hitDouble": { de: "Triff Double", en: "Hit double", fr: "Touche le double", pl: "Trafiaj double", nl: "Raak dubbel", tr: "Çifti vur" },
   "training.completedOutOf10": { de: "Geschafft:", en: "Completed:", fr: "Réussi :", pl: "Ukończono:", nl: "Voltooid:", tr: "Tamamlandı:" },
+  "training.checkoutLabel": { de: "Checkout", en: "Checkout", fr: "Checkout", pl: "Checkout", nl: "Checkout", tr: "Checkout" },
   "training.hitTripleOfCurrentTarget": { de: "Treffer", en: "Hits", fr: "Réussites", pl: "Trafienia", nl: "Treffers", tr: "İsabetler" },
   "training.hitSingleRoundOf3": { de: "Triff Single · Runde:", en: "Hit single · round:", fr: "Touche simple · manche :", pl: "Trafiaj single · runda:", nl: "Raak single · ronde:", tr: "Single vur · tur:" },
   "training.hitsOf3": { de: "Treffer", en: "hits", fr: "réussites", pl: "trafień", nl: "treffers", tr: "isabet" },

@@ -73,7 +73,7 @@ const SettingsPage = () => {
       .eq("id", impressum.id);
     setSaving(false);
     if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
       return;
     }
     setImpressum({ ...impressum, ...form });
@@ -146,7 +146,7 @@ const SettingsPage = () => {
           </h3>
           {isAdmin && impressum && !editing && (
             <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={startEdit}>
-              <Pencil className="w-3.5 h-3.5" /> Bearbeiten
+              <Pencil className="w-3.5 h-3.5" /> {t("common.edit")}
             </Button>
           )}
         </div>
@@ -172,7 +172,7 @@ const SettingsPage = () => {
             <div className="flex gap-2 justify-end pt-1">
               <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={saving}><X className="w-3.5 h-3.5" /></Button>
               <Button size="sm" onClick={saveImpressum} disabled={saving} className="gap-1.5">
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Speichern
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} {t("game.save")}
               </Button>
             </div>
           </div>

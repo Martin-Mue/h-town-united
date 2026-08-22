@@ -991,7 +991,7 @@ const TrainingPage = () => {
               <CheckCircle className="w-12 h-12 text-secondary mx-auto mb-3" />
             )}
             <h3 className="text-2xl font-display uppercase mb-2">
-              {drillState.shanghaiWin ? "SHANGHAI! 🎉" : drillState.rtcWin ? t("training.roundTheClockWin") : bobsBusted ? t("training.accountEmpty") : t("training.doneGeneric")}
+              {drillState.shanghaiWin ? t("training.shanghaiWin") : drillState.rtcWin ? t("training.roundTheClockWin") : bobsBusted ? t("training.accountEmpty") : t("training.doneGeneric")}
             </h3>
             {brokeRecord ? (
               <div className="mb-4 rounded-lg border border-accent bg-accent/15 px-3 py-2 text-accent font-display uppercase text-sm flex items-center justify-center gap-2 animate-pulse-glow">
@@ -1109,11 +1109,11 @@ const TrainingPage = () => {
               )}
               {isCheckoutDrill && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Checkout</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t("training.checkoutLabel")}</p>
                   <p className="text-5xl font-display text-primary">{drillState.remaining}</p>
                   {selectedDrill.id === "pressure-training" && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Checkout {drillState.targetIndex + 1} / {drillState.targetList.length}
+                      {t("training.checkoutLabel")} {drillState.targetIndex + 1} / {drillState.targetList.length}
                     </p>
                   )}
                   {selectedDrill.id === "random-finish" && (
