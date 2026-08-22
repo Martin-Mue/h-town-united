@@ -94,6 +94,7 @@ const StatisticsPage = () => {
   const [cleanupDays, setCleanupDays] = useState("90");
   const [cleaningUpClips, setCleaningUpClips] = useState(false);
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
+  const [confirmDeleteClipId, setConfirmDeleteClipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo" | "one_eighties" | "highest_checkout" | "mpr" | "best_game_avg">("average");
   const [rankingFocusKey, setRankingFocusKey] = useState<typeof sortBy | null>(null);
@@ -1849,11 +1850,27 @@ const StatisticsPage = () => {
                     )}
                     <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                       <span>{clip.points} {t("game.points")} · {new Date(clip.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
-                      <button onClick={() => deleteClip(clip)} disabled={deletingClipId === clip.id}
-                        className="p-2 -m-2 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
-                        title={t("stats.deleteClip")} aria-label={t("stats.deleteClip")}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <AlertDialog open={confirmDeleteClipId === clip.id} onOpenChange={(open) => setConfirmDeleteClipId(open ? clip.id : null)}>
+                        <AlertDialogTrigger asChild>
+                          <button disabled={deletingClipId === clip.id}
+                            className="p-2 -m-2 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
+                            title={t("stats.deleteClip")} aria-label={t("stats.deleteClip")}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>{t("stats.deleteClipConfirmTitle")}</AlertDialogTitle>
+                            <AlertDialogDescription>{t("stats.deleteClipConfirmDesc")}</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => { setConfirmDeleteClipId(null); deleteClip(clip); }}>
+                              {deletingClipId === clip.id ? t("stats.deleting") : t("stats.delete")}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                 </div>

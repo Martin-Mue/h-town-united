@@ -1,8 +1,9 @@
 /** Supported game mode identifiers */
 export type GameMode = "501" | "301" | "cricket" | "custom";
 
-/** Bot difficulty levels (approximate 3-dart averages) */
-export type BotLevel = "easy" | "medium" | "hard";
+/** Bot difficulty levels (approximate 3-dart averages) — internal ids only, display names (Lucky
+ *  Luke/Robin Hood/The Machine/Dart Vader/The Prodigy) live in translations.ts's game.botLv1-5. */
+export type BotLevel = "easy" | "medium" | "hard" | "elite" | "legendary";
 
 /** Single dart throw with full metadata */
 export interface DartThrow {

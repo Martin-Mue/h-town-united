@@ -51,6 +51,8 @@ const BOT_PROFILES: Record<BotLevel, { nameKey: string; average: string }> = {
   easy: { nameKey: "game.botLv1", average: "25–30" },
   medium: { nameKey: "game.botLv2", average: "45–50" },
   hard: { nameKey: "game.botLv3", average: "68–75" },
+  elite: { nameKey: "game.botLv4", average: "88–95" },
+  legendary: { nameKey: "game.botLv5", average: "140+" },
 };
 import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
@@ -1974,8 +1976,12 @@ const GamePage = () => {
 
                 {playerIsBot[i] && (
                   <>
-                    <div className={`grid gap-1.5 ${mode !== "cricket" && !teamMode ? "grid-cols-4" : "grid-cols-3"}`}>
-                      {(["easy", "medium", "hard"] as BotLevel[]).map((lvl) => (
+                    {/* 3 columns fits both cases cleanly: 5 bot levels + Ghost = 6 (two full
+                        rows) when Ghost is offered, or 5 alone (a 3+2 last row) when it isn't
+                        (cricket/team mode) — no longer needs a mode-conditional column count now
+                        that there are 2 more bot levels than Ghost had columns to spare for. */}
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(["easy", "medium", "hard", "elite", "legendary"] as BotLevel[]).map((lvl) => (
                         <button key={lvl} onClick={() => {
                           setPlayerBotLevel(prev => prev.map((v, idx) => idx === i ? lvl : v));
                           setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? "off" : v));

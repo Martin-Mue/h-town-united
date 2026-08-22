@@ -4,10 +4,14 @@ import { isBustThrow, pointsFor } from "@/utils/x01Rules";
 
 /**
  * Bot tuning. Targets roughly these 3-dart averages:
- *   easy   ≈ 25–30
- *   medium ≈ 45–50
- *   hard   ≈ 68–75
- * (Club-realistic range of ~20–80 requested by the users.)
+ *   easy      (Lucky Luke)  ≈ 25–30
+ *   medium    (Robin Hood)  ≈ 45–50
+ *   hard      (The Machine) ≈ 68–75
+ *   elite     (Dart Vader)  ≈ 88–95
+ *   legendary (The Prodigy) ≈ 140+ (nine-dart-leg pace)
+ * The bottom 3 were hand-tuned to "feel right" against real club play; elite/legendary
+ * extrapolate the same miss/aimedTriple/doubleHitChance trend and are unverified against real
+ * play the same way — they were Ghost-mode-only until becoming selectable bot levels too.
  */
 export interface LevelConfig {
   /** probability of a complete miss on a scoring dart */
@@ -26,15 +30,9 @@ const LEVEL_CONFIG: Record<BotLevel, LevelConfig> = {
   easy: { miss: 0.35, randomSingle: 0.45, aimedSingle: 0.17, aimedTriple: 0.03, doubleHitChance: 0.10 },
   medium: { miss: 0.18, randomSingle: 0.42, aimedSingle: 0.30, aimedTriple: 0.10, doubleHitChance: 0.20 },
   hard: { miss: 0.10, randomSingle: 0.30, aimedSingle: 0.38, aimedTriple: 0.22, doubleHitChance: 0.32 },
+  elite: { miss: 0.04, randomSingle: 0.15, aimedSingle: 0.31, aimedTriple: 0.50, doubleHitChance: 0.55 },
+  legendary: { miss: 0.01, randomSingle: 0.05, aimedSingle: 0.14, aimedTriple: 0.80, doubleHitChance: 0.75 },
 };
-
-// Two more tiers, above "hard", used ONLY by Ghost mode's bot opponent (never offered as a
-// normal selectable bot level — see Game.tsx's per-player bot picker) — extrapolating the same
-// miss/aimedTriple/doubleHitChance trend easy→medium→hard continues, unverified against real
-// play the same way the three tiers above were originally hand-tuned to "feel right" rather than
-// measured. "elite" targets a strong tournament-level average, "legendary" a nine-dart-leg pace.
-const ELITE_CONFIG: LevelConfig = { miss: 0.04, randomSingle: 0.15, aimedSingle: 0.31, aimedTriple: 0.50, doubleHitChance: 0.55 };
-const LEGENDARY_CONFIG: LevelConfig = { miss: 0.01, randomSingle: 0.05, aimedSingle: 0.14, aimedTriple: 0.80, doubleHitChance: 0.75 };
 
 /** Picks a bot config whose rough 3-dart average is closest to `avgPerRound` — used to make a
  *  Ghost-mode bot opponent's overall pace feel roughly like the target it's meant to embody
@@ -42,8 +40,8 @@ const LEGENDARY_CONFIG: LevelConfig = { miss: 0.01, randomSingle: 0.05, aimedSin
  *  dart-by-dart sequence (which risks landing on a remaining score with no valid double-out
  *  finish at all, mid-game — a real risk of stalling a match, not just an approximation). */
 export function configForAverage(avgPerRound: number): LevelConfig {
-  if (avgPerRound >= 140) return LEGENDARY_CONFIG;
-  if (avgPerRound >= 90) return ELITE_CONFIG;
+  if (avgPerRound >= 140) return LEVEL_CONFIG.legendary;
+  if (avgPerRound >= 90) return LEVEL_CONFIG.elite;
   if (avgPerRound >= 55) return LEVEL_CONFIG.hard;
   if (avgPerRound >= 35) return LEVEL_CONFIG.medium;
   return LEVEL_CONFIG.easy;

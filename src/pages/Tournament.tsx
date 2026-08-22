@@ -837,7 +837,21 @@ const TournamentPage = () => {
 
   const addPlayers = (names: string[]) => {
     const cleaned = names.map((name) => name.trim()).filter(Boolean);
+    // Read off the closure's own `players` (already how effectiveSize etc. read it elsewhere in
+    // this component) rather than only inside the updater — needed here specifically to know
+    // what actually landed for the toast below, not just to compute the new list.
+    const newOnes = cleaned.filter((name) => !players.includes(name));
+    const added = Math.min(newOnes.length, Math.max(0, 64 - players.length));
     setPlayers((prev) => [...prev, ...cleaned.filter((name) => !prev.includes(name))].slice(0, 64));
+    // Used to silently drop duplicates and anything past the 64-player cap — the input field
+    // still cleared as if every name had been accepted, with no indication anything didn't stick.
+    if (added < cleaned.length) {
+      toast({
+        title: t("tournament.notAllPlayersAdded"),
+        description: `${added} / ${cleaned.length} ${t("tournament.playersAddedDupOrLimitSuffix")}`,
+        variant: added === 0 ? "destructive" : undefined,
+      });
+    }
   };
 
   const addPlayer = () => {
@@ -1505,7 +1519,17 @@ const TournamentPage = () => {
               <div key={tourn.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
                 <button onClick={() => openTournament(tourn)} className="flex-1 text-left">
                   <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${tourn.status === "active" ? "bg-secondary animate-pulse" : tourn.status === "finished" ? "bg-accent" : "bg-muted-foreground"}`} />
+                    {/* The dot alone used to be the only status signal — a tiny unlabeled color
+                        (worse still for colorblind users) next to a list that spells out the
+                        champion in full text right below. Text label for the two real statuses;
+                        the fallback branch's dot color is kept as a harmless default with no
+                        invented label, since tournament status is otherwise always one of these
+                        two (a tournament gets its bracket the moment it's created). */}
+                    <span className="flex items-center gap-1.5 shrink-0">
+                      <span className={`w-2 h-2 rounded-full ${tourn.status === "active" ? "bg-secondary animate-pulse" : tourn.status === "finished" ? "bg-accent" : "bg-muted-foreground"}`} />
+                      {tourn.status === "active" && <span className="text-[10px] uppercase tracking-wide text-secondary">{t("tournament.live")}</span>}
+                      {tourn.status === "finished" && <span className="text-[10px] uppercase tracking-wide text-accent">{t("pt.finished")}</span>}
+                    </span>
                     <div>
                       <p className="font-semibold text-sm">{tourn.name}</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">

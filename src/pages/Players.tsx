@@ -330,14 +330,27 @@ const PlayersPage = () => {
       );
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "AI generation failed");
+        // A gateway timeout/502/504 (this call can genuinely take a while) returns an HTML/plain
+        // error page, not JSON — .json() on that throws its own opaque SyntaxError, which used to
+        // surface to the user verbatim instead of the friendly message below.
+        let message: string | undefined;
+        try {
+          message = (await response.json())?.error;
+        } catch {
+          /* non-JSON error body — fall through to the generic message */
+        }
+        throw new Error(message || "AI generation failed");
       }
 
       const data = await response.json();
       if (data.imageBase64) {
         setGeneratedPortrait(data.imageBase64);
         toast({ title: t("players.portraitGenerated"), description: t("players.aiPortraitReady") });
+      } else {
+        // A 200 with no image (content filtered, empty provider result) used to leave the button
+        // silently reverting to normal with zero feedback — no way to tell "still working",
+        // "failed", or "misclicked" apart.
+        toast({ title: t("players.aiErrorTitle"), description: t("players.portraitGenerationFailed"), variant: "destructive" });
       }
     } catch (err) {
       console.error("AI portrait error:", err);
@@ -890,7 +903,7 @@ const PlayersPage = () => {
       ) : filteredPlayers.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Target className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">{t("players.noMembersYet")}</p>
+          <p className="text-sm">{search.trim() ? t("players.noSearchMatches") : t("players.noMembersYet")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
