@@ -235,7 +235,7 @@ const TournamentSeriesPage = () => {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+        <div role="status" aria-label={t("common.loading")} className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
       ) : series.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Layers className="w-12 h-12 mx-auto mb-3 opacity-30" />

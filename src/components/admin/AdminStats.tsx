@@ -76,8 +76,8 @@ const AdminStats = () => {
 
   if (loading) {
     return (
-      <div className="py-12 flex justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <div role="status" aria-label="Lädt …" className="py-12 flex justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }

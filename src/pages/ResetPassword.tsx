@@ -87,8 +87,8 @@ const ResetPassword = () => {
         </div>
         <div className="bg-card border border-border rounded-xl p-6">
           {!ready ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <div role="status" aria-label="Lädt …" className="flex items-center justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : linkExpired ? (
             <div className="space-y-4 text-center">

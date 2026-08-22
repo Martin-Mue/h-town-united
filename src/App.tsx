@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import Layout from "./components/Layout";
 import Auth from "./pages/Auth";
 import { Loader2 } from "lucide-react";
@@ -26,11 +26,14 @@ const TournamentSeries = lazy(() => import("./pages/TournamentSeries"));
 const PublicTournament = lazy(() => import("./pages/PublicTournament"));
 const Settings = lazy(() => import("./pages/Settings"));
 
-const RouteFallback = () => (
-  <div className="min-h-screen flex items-center justify-center bg-background">
-    <Loader2 className="w-8 h-8 animate-spin text-primary" />
-  </div>
-);
+const RouteFallback = () => {
+  const { t } = useLanguage();
+  return (
+    <div role="status" aria-label={t("common.loading")} className="min-h-screen flex items-center justify-center bg-background">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
+};
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();

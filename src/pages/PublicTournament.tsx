@@ -504,7 +504,7 @@ const BoardOverview = ({
     <div className="p-4 sm:p-6 bg-background min-h-[60vh]">
       <div className="flex items-center justify-between mb-4">
         <p className="text-[clamp(0.7rem,1.2vw,0.9rem)] uppercase tracking-[0.3em] text-primary flex items-center gap-2">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-primary animate-pulse" /> {t("pt.boardOverview")} · {t("tournament.live")}
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> {t("pt.boardOverview")} · {t("tournament.live")}
         </p>
       </div>
 
@@ -536,10 +536,10 @@ const BoardOverview = ({
                 )}
               </div>
               {isLiveSnapshotFresh(c.live) && (
-                <div className="mt-2 rounded-lg bg-destructive/10 border border-destructive/30 px-2.5 py-1.5">
+                <div className="mt-2 rounded-lg bg-accent/10 border border-accent/30 px-2.5 py-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-destructive flex items-center gap-1.5">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" /> {t("tournament.live")}
+                    <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-accent flex items-center gap-1.5">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
                     </span>
                     <span className="font-display text-[clamp(1rem,1.8vw,1.4rem)]">
                       <AnimatedScore value={c.live!.remaining1 ?? 0} /> : <AnimatedScore value={c.live!.remaining2 ?? 0} />
@@ -832,7 +832,7 @@ const PublicTournamentPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div role="status" aria-label={tr("common.loading")} className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -900,11 +900,11 @@ const PublicTournamentPage = () => {
               <span className="inline-flex items-center gap-2 shrink-0">
                 {t.champion ? (
                   <>
-                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground" /> {tr("pt.finished")}
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground" /> {tr("pt.finished")}
                   </>
                 ) : (
                   <>
-                    <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse" /> {tr("tournament.live")}
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-secondary animate-pulse" /> {tr("tournament.live")}
                   </>
                 )}
               </span>

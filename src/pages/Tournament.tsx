@@ -1530,7 +1530,7 @@ const TournamentPage = () => {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          <div role="status" aria-label={t("common.loading")} className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
         ) : tournaments.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -1549,7 +1549,7 @@ const TournamentPage = () => {
                         invented label, since tournament status is otherwise always one of these
                         two (a tournament gets its bracket the moment it's created). */}
                     <span className="flex items-center gap-1.5 shrink-0">
-                      <span className={`w-2 h-2 rounded-full ${tourn.status === "active" ? "bg-secondary animate-pulse" : tourn.status === "finished" ? "bg-accent" : "bg-muted-foreground"}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full ${tourn.status === "active" ? "bg-secondary animate-pulse" : tourn.status === "finished" ? "bg-accent" : "bg-muted-foreground"}`} />
                       {tourn.status === "active" && <span className="text-[10px] uppercase tracking-wide text-secondary">{t("tournament.live")}</span>}
                       {tourn.status === "finished" && <span className="text-[10px] uppercase tracking-wide text-accent">{t("pt.finished")}</span>}
                     </span>
@@ -2024,7 +2024,7 @@ const TournamentPage = () => {
         {activeTournament.public_view && activeTournament.public_slug && (
           <div className="container mb-2">
             <div className="bg-gradient-to-r from-secondary/10 via-primary/10 to-accent/10 border border-secondary/30 rounded-xl px-4 py-1.5 text-xs flex items-center gap-2">
-              <span className="inline-block h-2 w-2 rounded-full bg-secondary animate-pulse shrink-0" />
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-secondary animate-pulse shrink-0" />
               <span className="text-muted-foreground shrink-0 hidden sm:inline">{t("tournament.projectorLink")}</span>
               <code className="font-mono text-secondary truncate">{window.location.origin}/live/{activeTournament.public_slug}</code>
               <div className="flex items-center gap-1.5 ml-auto shrink-0">

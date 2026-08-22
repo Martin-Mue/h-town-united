@@ -559,6 +559,7 @@ export const translations: Record<string, Record<Language, string>> = {
   // Tournament.tsx — TournamentPage toasts.
   "common.error": { de: "Fehler", en: "Error", fr: "Erreur", pl: "Błąd", nl: "Fout", tr: "Hata" },
   "common.notice": { de: "Hinweis", en: "Notice", fr: "Remarque", pl: "Uwaga", nl: "Let op", tr: "Bildirim" },
+  "common.loading": { de: "Lädt …", en: "Loading …", fr: "Chargement …", pl: "Ładowanie …", nl: "Laden …", tr: "Yükleniyor …" },
   "tournament.publicViewToggleFailed": { de: "Öffentliche Ansicht konnte nicht geändert werden.", en: "Couldn't change the public view.", fr: "Impossible de modifier la vue publique.", pl: "Nie udało się zmienić widoku publicznego.", nl: "Kon de openbare weergave niet wijzigen.", tr: "Herkese açık görünüm değiştirilemedi." },
   "tournament.liveViewActive": { de: "Live-Ansicht aktiv", en: "Live view active", fr: "Vue en direct active", pl: "Widok na żywo aktywny", nl: "Live-weergave actief", tr: "Canlı görünüm aktif" },
   "tournament.liveViewDeactivated": { de: "Live-Ansicht deaktiviert", en: "Live view deactivated", fr: "Vue en direct désactivée", pl: "Widok na żywo dezaktywowany", nl: "Live-weergave gedeactiveerd", tr: "Canlı görünüm devre dışı" },
