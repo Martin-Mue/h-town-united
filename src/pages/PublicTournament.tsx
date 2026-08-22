@@ -509,9 +509,10 @@ const BoardOverview = ({
       </div>
 
       {now.length === 0 ? (
-        <p className="text-[clamp(1rem,2vw,1.5rem)] text-muted-foreground text-center py-12">
-          {t("pt.noOngoingMatches")}
-        </p>
+        <div className="text-muted-foreground text-center py-12">
+          <Monitor className="w-[clamp(2.5rem,5vw,4rem)] h-[clamp(2.5rem,5vw,4rem)] mx-auto mb-3 opacity-30" />
+          <p className="text-[clamp(1rem,2vw,1.5rem)]">{t("pt.noOngoingMatches")}</p>
+        </div>
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 320px), 1fr))` }}>
           {now.map((c) => (
@@ -927,24 +928,24 @@ const PublicTournamentPage = () => {
           rotation, or exiting fullscreen never requires leaving fullscreen first. */}
       <div ref={viewWrapRef} className="px-4 pt-4 bg-background">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border overflow-hidden">
-            <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+          <div className="inline-flex rounded-lg border border-border overflow-x-auto max-w-full">
+            <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
               <Monitor className="w-3.5 h-3.5" /> {tr("pt.boardOverview")}
             </button>
             {isKo && (
               <>
-                <button onClick={() => selectView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <button onClick={() => selectView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
                   <Network className="w-3.5 h-3.5" /> {tr("tournament.bracketTreeTab")}
                 </button>
-                <button onClick={() => selectView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <button onClick={() => selectView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
                   <Rows3 className="w-3.5 h-3.5" /> {tr("pt.roundList")}
                 </button>
               </>
             )}
-            <button onClick={() => selectView("participants")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "participants" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+            <button onClick={() => selectView("participants")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "participants" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
               <Users className="w-3.5 h-3.5" /> {tr("pt.participantsView")}
             </button>
-            <button onClick={() => selectView("highlights")} className={`px-3 py-1.5 text-xs flex items-center gap-1 border-l border-border ${view === "highlights" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+            <button onClick={() => selectView("highlights")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "highlights" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
               <Target className="w-3.5 h-3.5" /> {tr("pt.highlightsLabel")}
             </button>
           </div>

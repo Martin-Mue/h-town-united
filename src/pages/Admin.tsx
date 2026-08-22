@@ -128,6 +128,7 @@ const AdminPage = () => {
       </p>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr className="text-left text-xs uppercase text-muted-foreground">
@@ -232,6 +233,7 @@ const AdminPage = () => {
             })}
           </tbody>
         </table>
+        </div>
         <ListPaginationFooter list={pagedUsers} />
       </div>
         </TabsContent>

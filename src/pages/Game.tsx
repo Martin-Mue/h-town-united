@@ -1869,7 +1869,7 @@ const GamePage = () => {
 
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{teamMode ? t("game.playersPerTeam") : t("game.numPlayers")}</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {(teamMode ? [4, 6, 8] : Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2)).map((n) => (
                 <button key={n} onClick={() => setNumPlayers(n)}
                   className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-card border-border text-muted-foreground"}`}>
@@ -2316,7 +2316,10 @@ const GamePage = () => {
   const currentRemaining = game.currentLeg.remaining[activeTeamIdx];
   const currentThrows = game.currentLeg.throws[activeIdx];
   const scoreLabels = game.teams ? game.teams.map((tm) => tm.name) : game.players.map((p) => p.name);
-  const numCols = scoreLabels.length <= 2 ? "grid-cols-2" : scoreLabels.length === 3 ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4";
+  // 4 stays a plain 2x2 on mobile (already balanced); 5+ gets 3 columns instead of 2 even
+  // below md — otherwise a 6/7/8-player game stacks 3-4 rows tall on a phone, pushing the dart
+  // pad below the thumb-reachable zone before a single dart's been thrown.
+  const numCols = scoreLabels.length <= 2 ? "grid-cols-2" : scoreLabels.length === 3 ? "grid-cols-3" : scoreLabels.length === 4 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3 md:grid-cols-4";
   const awaitingDoubleIn = !isCricket && (currentPlayer?.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[activeTeamIdx] ?? true);
 
   const doubleInBanner = awaitingDoubleIn ? (

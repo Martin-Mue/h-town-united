@@ -2074,11 +2074,11 @@ const TournamentPage = () => {
 
         {/* View switcher + tournament management */}
         <div className="container mb-2 flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border overflow-hidden">
-            <button onClick={() => setBracketView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${bracketView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+          <div className="inline-flex rounded-lg border border-border overflow-x-auto max-w-full">
+            <button onClick={() => setBracketView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${bracketView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
               <Network className="w-3.5 h-3.5" /> {t("tournament.bracketTreeTab")}
             </button>
-            <button onClick={() => setBracketView("schedule")} className={`px-3 py-1.5 text-xs flex items-center gap-1 ${bracketView === "schedule" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+            <button onClick={() => setBracketView("schedule")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${bracketView === "schedule" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
               <ListOrdered className="w-3.5 h-3.5" /> {t("tournament.scheduleAndScorekeeper")}
             </button>
           </div>

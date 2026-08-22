@@ -219,7 +219,7 @@ const TournamentSeriesPage = () => {
           </div>
           <div>
             <label className="text-sm text-muted-foreground mb-2 block">{t("series.pointDistribution")}</label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
               {(["champion", "runnerUp", "semi", "quarter", "participation"] as const).map((k) => (
                 <div key={k}>
                   <label className="text-[10px] uppercase text-muted-foreground">{k === "champion" ? "1." : k === "runnerUp" ? "2." : k === "semi" ? t("series.semifinalAbbrev") : k === "quarter" ? t("series.quarterfinalAbbrev") : t("series.participationAbbrev")}</label>

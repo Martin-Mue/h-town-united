@@ -1665,9 +1665,9 @@ const StatisticsPage = () => {
                   )}
 
                   <div className="grid grid-cols-3 gap-2 text-center text-xs mb-4">
-                    <div className="font-semibold text-primary">{h2hRecords.p1.emoji} {h2hRecords.p1.name}</div>
+                    <div className="font-semibold text-primary min-w-0 truncate">{h2hRecords.p1.emoji} {h2hRecords.p1.name}</div>
                     <div className="text-muted-foreground">vs</div>
-                    <div className="font-semibold text-secondary">{h2hRecords.p2.emoji} {h2hRecords.p2.name}</div>
+                    <div className="font-semibold text-secondary min-w-0 truncate">{h2hRecords.p2.emoji} {h2hRecords.p2.name}</div>
                     {[
                       { label: t("stats.overallAverage"), v1: h2hRecords.p1.games_played > 0 ? Number(h2hRecords.p1.average).toFixed(1) : "–", v2: h2hRecords.p2.games_played > 0 ? Number(h2hRecords.p2.average).toFixed(1) : "–" },
                       { label: t("game.duelAverage"), v1: h2hRecords.p1AvgH2H, v2: h2hRecords.p2AvgH2H },
@@ -1730,8 +1730,10 @@ const StatisticsPage = () => {
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <span className="text-xs bg-muted px-2 py-0.5 rounded-md font-mono shrink-0">{g.mode}</span>
                         <div className="min-w-0">
-                          <span className="text-sm block truncate">
-                            {g.player1_name} <span className="text-muted-foreground">vs</span> {g.player2_name}
+                          <span className="text-sm flex items-center gap-1 min-w-0">
+                            <span className="truncate flex-1 min-w-0">{g.player1_name}</span>
+                            <span className="text-muted-foreground shrink-0">vs</span>
+                            <span className="truncate flex-1 min-w-0">{g.player2_name}</span>
                           </span>
                           <div className="text-[10px] text-muted-foreground">
                             Ø {Number(g.player1_average).toFixed(1)} - {Number(g.player2_average).toFixed(1)} · {g.player1_legs_won}:{g.player2_legs_won} {t("game.legsSuffix")}
