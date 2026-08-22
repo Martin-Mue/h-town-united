@@ -1738,11 +1738,21 @@ const GamePage = () => {
         });
       }
       setQueuedOffline(true);
+      // Genuinely offline (the explicit check above, before any network call was even attempted)
+      // vs. some OTHER failure while apparently online (a dropped mid-request connection, a
+      // server error, an expired session) used to get the identical "no connection, syncs once
+      // back online" message — actively misleading for the second case: the device might already
+      // BE online, so promising a sync "once back online" sets an expectation that can never be
+      // met, and if the real cause is e.g. an expired session, the retry queue keeps failing
+      // identically forever with no indication why. Doesn't try to detect the exact cause (a
+      // fragile heuristic to get right blind) — just stops asserting "offline" when we know
+      // that's not true.
+      const genuinelyOffline = err instanceof Error && err.message === "offline";
       toast({
-        title: t("game.savedOfflineTitle"),
-        description: link
-          ? t("game.savedOfflineWithLinkDesc")
-          : t("game.savedOfflineNoLinkDesc"),
+        title: genuinelyOffline ? t("game.savedOfflineTitle") : t("game.saveFailedQueuedTitle"),
+        description: genuinelyOffline
+          ? (link ? t("game.savedOfflineWithLinkDesc") : t("game.savedOfflineNoLinkDesc"))
+          : t("game.saveFailedQueuedDesc"),
       });
     }
     // Only now — either branch above has already gotten this game durably somewhere (Supabase
