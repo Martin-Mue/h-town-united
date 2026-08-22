@@ -673,6 +673,9 @@ const TournamentPage = () => {
   // setup (harmless, pre-draw), this forfeits every remaining match for a real participant,
   // often live at the venue. Same chip-based UI as setup made the two easy to confuse.
   const [confirmWithdraw, setConfirmWithdraw] = useState<string | null>(null);
+  /** Round-robin's played-match reset confirmation — separate from BracketViewport's own
+   *  confirmResetId (that one's scoped to the KO sub-component, this view isn't). */
+  const [confirmResetRrId, setConfirmResetRrId] = useState<string | null>(null);
   const [playerInput, setPlayerInput] = useState("");
   const [nicknameInput, setNicknameInput] = useState("");
   const [guestCount, setGuestCount] = useState(8);
@@ -1070,11 +1073,21 @@ const TournamentPage = () => {
     // yet, and diffing against the stale copy would make it look "newly playable" again here too.
     newlyPlayableMatches(freshBracket, withKeepers).forEach(notifyMatchReady);
 
-    await supabase.from("tournaments").update({
+    const { error } = await supabase.from("tournaments").update({
       bracket: withKeepers as unknown as Json,
       champion,
       status: champion ? "finished" : "active",
     }).eq("id", activeTournament.id);
+    // Every bracket mutation (set winner, +1 leg, reset a match, reassign a scorekeeper, edit
+    // round-1 players) goes through this one function — it used to apply the optimistic local
+    // update unconditionally, so a write that failed on flaky venue WiFi would show as "saved"
+    // right up until the next reload/poll silently reverted it, with no error ever shown. Skip
+    // the optimistic update on failure instead, so what's on screen stays honest about what
+    // actually made it to the DB.
+    if (error) {
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      return;
+    }
     setActiveTournament({ ...activeTournament, bracket: withKeepers, players: freshPlayers, champion, status: champion ? "finished" : "active" });
     if (champion && seenCeremonyFor !== activeTournament.id) {
       setCeremonyChampion(champion);
@@ -1326,17 +1339,49 @@ const TournamentPage = () => {
       champion = standings[0]?.name || null;
     }
 
-    await supabase.from("tournaments").update({
+    const { error } = await supabase.from("tournaments").update({
       bracket: bracket as unknown as Json,
       champion,
       status: champion ? "finished" : "active",
     }).eq("id", activeTournament.id);
+    // Same reasoning as persistBracket (the KO equivalent of this function) — don't apply the
+    // optimistic update on a failed write, or the screen keeps showing a result that was never
+    // actually saved.
+    if (error) {
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      return;
+    }
 
     setActiveTournament({ ...activeTournament, bracket, champion });
     if (champion && seenCeremonyFor !== activeTournament.id) {
       setCeremonyChampion(champion);
       setSeenCeremonyFor(activeTournament.id);
     }
+  };
+
+  /** Round-robin's equivalent of resetKoMatch — a mis-tapped setRrWinner had no way back at all
+   *  (unlike the KO bracket, which always had a confirmed Reset control). Recomputes champion/
+   *  status from scratch rather than just clearing them: undoing the result that happened to be
+   *  the table's last one un-finishes the tournament, but if a DIFFERENT match still completes it
+   *  the tournament should stay finished with whichever standings that leaves. */
+  const resetRrMatch = async (matchId: string) => {
+    if (!activeTournament) return;
+    const { data: freshRow } = await supabase.from("tournaments").select("bracket").eq("id", activeTournament.id).single();
+    const freshBracket = (freshRow?.bracket as unknown as RoundRobinMatch[] | undefined) ?? (activeTournament.bracket as RoundRobinMatch[]);
+    const bracket = freshBracket.map(m => m.id === matchId ? { ...m, winner: undefined, played: false } : m);
+    const allPlayed = bracket.every(m => m.played);
+    const champion = allPlayed ? (calcStandings(bracket)[0]?.name || null) : null;
+
+    const { error } = await supabase.from("tournaments").update({
+      bracket: bracket as unknown as Json,
+      champion,
+      status: champion ? "finished" : "active",
+    }).eq("id", activeTournament.id);
+    if (error) {
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      return;
+    }
+    setActiveTournament({ ...activeTournament, bracket, champion });
   };
 
   const openTournament = (t: TournamentRecord) => {
@@ -2383,7 +2428,30 @@ const TournamentPage = () => {
             {pagedRrPlayed.visible.map(m => (
               <div key={m.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
                 <span>{m.player1} vs {m.player2}</span>
-                <span className="text-xs text-secondary font-medium">{m.winner} ✓</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-xs text-secondary font-medium">{m.winner} ✓</span>
+                  {canEditResults && (
+                    <AlertDialog open={confirmResetRrId === m.id} onOpenChange={(open) => setConfirmResetRrId(open ? m.id : null)}>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{t("tournament.resetMatchConfirm")}</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {m.player1} vs. {m.player2}: {t("tournament.resetMatchWarning")}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => resetRrMatch(m.id)}>{t("tournament.resetCapital")}</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </span>
               </div>
             ))}
           </div>

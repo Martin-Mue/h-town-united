@@ -271,6 +271,8 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.soundOff": { de: "Sound ausschalten", en: "Turn sound off", fr: "Désactiver le son", pl: "Wyłącz dźwięk", nl: "Geluid uitschakelen", tr: "Sesi kapat" },
   "game.soundOn": { de: "Sound einschalten", en: "Turn sound on", fr: "Activer le son", pl: "Włącz dźwięk", nl: "Geluid inschakelen", tr: "Sesi aç" },
   "game.cancelGame": { de: "Spiel abbrechen", en: "Cancel game", fr: "Annuler la partie", pl: "Anuluj grę", nl: "Potje afbreken", tr: "Oyunu iptal et" },
+  "game.cancelGameConfirmTitle": { de: "Spiel wirklich abbrechen?", en: "Cancel this game?", fr: "Annuler cette partie ?", pl: "Na pewno anulować grę?", nl: "Dit potje echt afbreken?", tr: "Bu oyun iptal edilsin mi?" },
+  "game.cancelGameConfirmDesc": { de: "Der bisherige Spielstand geht verloren und wird nicht gespeichert.", en: "Your current progress will be lost and won't be saved.", fr: "La progression actuelle sera perdue et ne sera pas enregistrée.", pl: "Dotychczasowy postęp zostanie utracony i nie zostanie zapisany.", nl: "De huidige voortgang gaat verloren en wordt niet opgeslagen.", tr: "Mevcut ilerleme kaybolacak ve kaydedilmeyecek." },
   "game.undo": { de: "Rückgängig", en: "Undo", fr: "Annuler", pl: "Cofnij", nl: "Ongedaan maken", tr: "Geri al" },
   "game.liveCameraScoring": { de: "Live-Kamera-Scoring", en: "Live camera scoring", fr: "Score par caméra en direct", pl: "Wynik na żywo z kamery", nl: "Live camera-scoring", tr: "Canlı kamera skoru" },
   "game.cam": { de: "Cam", en: "Cam", fr: "Cam", pl: "Kamera", nl: "Cam", tr: "Kam" },
@@ -858,6 +860,7 @@ export const translations: Record<string, Record<Language, string>> = {
 
   // Players.tsx
   "players.errorTitle": { de: "Fehler", en: "Error", fr: "Erreur", pl: "Błąd", nl: "Fout", tr: "Hata" },
+  "players.deleteNotPermitted": { de: "Entfernen nicht möglich — dir fehlt gerade die Berechtigung dafür.", en: "Couldn't remove — you don't currently have permission to do that.", fr: "Suppression impossible — tu n'as pas les droits nécessaires en ce moment.", pl: "Nie można usunąć — obecnie nie masz do tego uprawnień.", nl: "Verwijderen niet mogelijk — je hebt daar op dit moment geen rechten voor.", tr: "Kaldırılamadı — şu anda bunun için yetkin yok." },
   "players.loadFailed": { de: "Spieler konnten nicht geladen werden.", en: "Players could not be loaded.", fr: "Impossible de charger les joueurs.", pl: "Nie udało się załadować graczy.", nl: "Spelers konden niet worden geladen.", tr: "Oyuncular yüklenemedi." },
   "players.memberRemoved": { de: "Mitglied entfernt", en: "Member removed", fr: "Membre supprimé", pl: "Usunięto członka", nl: "Lid verwijderd", tr: "Üye kaldırıldı" },
   "players.memberRemovedDesc": { de: "wurde aus dem Verein entfernt.", en: "was removed from the club.", fr: "a été retiré du club.", pl: "został usunięty z klubu.", nl: "is verwijderd uit de club.", tr: "kulüpten çıkarıldı." },

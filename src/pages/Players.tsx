@@ -124,6 +124,14 @@ const PlayersPage = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  /** Your own linked profile, always — plus, for an admin, any UNLINKED (walk-in, no account)
+   *  profile. Without this, a walk-in player's name/photo could never be fixed at all (user_id
+   *  is null, so it can never equal anyone's auth.uid()) — the only "fix" was delete + recreate,
+   *  which silently nulls that player out of every historical game via ON DELETE SET NULL. The
+   *  DB trigger (restrict_player_profile_edits_to_owner) has the matching exception — this is
+   *  just the UI-side mirror of it, not the actual enforcement. */
+  const canEditPlayer = (player: PlayerProfile) => player.user_id === user?.id || (isAdmin && !player.user_id);
+
   const ownPlayerProfile = useMemo(
     () => players.find((player) => player.user_id === user?.id),
     [players, user?.id]
@@ -197,9 +205,15 @@ const PlayersPage = () => {
    *  can never match them). Games/stats referencing this player_id are untouched. */
   const deletePlayer = async (player: PlayerProfile) => {
     setDeletingId(player.id);
-    const { error } = await supabase.from("players").delete().eq("id", player.id);
+    // .select() so a row-count of 0 is distinguishable from an actual success — a DELETE that RLS
+    // silently blocks (e.g. admin role was revoked from this session moments ago, cache still says
+    // isAdmin) returns error: null with nothing deleted, not an error, so `error` alone can't tell
+    // "removed" apart from "no-op that's about to reappear on the next fetch."
+    const { data: deletedRows, error } = await supabase.from("players").delete().eq("id", player.id).select("id");
     if (error) {
       toast({ title: t("players.errorTitle"), description: error.message, variant: "destructive" });
+    } else if (!deletedRows || deletedRows.length === 0) {
+      toast({ title: t("players.errorTitle"), description: t("players.deleteNotPermitted"), variant: "destructive" });
     } else {
       toast({ title: t("players.memberRemoved"), description: `${player.name} ${t("players.memberRemovedDesc")}` });
       setPlayers((prev) => prev.filter((p) => p.id !== player.id));
@@ -533,7 +547,7 @@ const PlayersPage = () => {
               </p>
             )}
           </div>
-          {selectedPlayer.user_id === user?.id && (
+          {canEditPlayer(selectedPlayer) && (
             <Button variant="outline" size="sm" className="ml-auto gap-2" onClick={() => openEditProfile(selectedPlayer)}>
               <Pencil className="w-3.5 h-3.5" /> {t("players.editProfile")}
             </Button>
@@ -900,7 +914,7 @@ const PlayersPage = () => {
                           {player.favorite_double && <Badge variant="outline">{player.favorite_double}</Badge>}
                         </div>
                       </div>
-                      {player.user_id === user?.id && (
+                      {canEditPlayer(player) && (
                         <Button variant="ghost" size="icon" onClick={() => openEditProfile(player)} title={t("players.editProfile")}>
                           <Pencil className="w-4 h-4" />
                         </Button>

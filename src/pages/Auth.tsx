@@ -43,12 +43,26 @@ const AuthPage = () => {
         if (error) throw error;
         navigate(from || "/", { replace: true });
       } else if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
+        // signUp() only returns a live session immediately when email confirmation is off for
+        // this project (currently the case, verified against auth.users — every account's
+        // email_confirmed_at matches created_at to the millisecond, i.e. auto-confirmed). If that
+        // account setting is ever flipped on, session comes back null instead — navigating to a
+        // protected route as if logged in would just bounce straight back to /auth, contradicting
+        // the "welcome" toast. Branch on what actually came back rather than assuming.
+        if (!data.session) {
+          toast({
+            title: "Fast geschafft!",
+            description: "Bitte bestätige deine E-Mail-Adresse über den Link, den wir dir geschickt haben.",
+          });
+          setMode("login");
+          return;
+        }
         toast({
           title: "Willkommen im Verein! 🎯",
           description: "Lege jetzt dein Spielerprofil an.",

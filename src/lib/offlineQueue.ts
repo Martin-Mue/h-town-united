@@ -68,7 +68,12 @@ function createQueue<T extends { id: string; createdAt: number; attempts: number
 
   const list = async (): Promise<T[]> => {
     try {
-      return await withStore<T[]>(storeName, "readonly", (store) => store.getAll());
+      const items = await withStore<T[]>(storeName, "readonly", (store) => store.getAll());
+      // getAll() returns IndexedDB key order (this store's key is `id`, a random UUID) — not
+      // insertion order. Replaying game-saves out of chronological order silently corrupts Elo
+      // (deltas are computed from each player's *current* rating, re-read at replay time, so the
+      // result is order-dependent) even though every individual replay itself succeeds cleanly.
+      return items.sort((a, b) => a.createdAt - b.createdAt);
     } catch {
       return [];
     }

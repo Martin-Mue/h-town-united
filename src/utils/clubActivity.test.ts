@@ -9,7 +9,7 @@ const dart = (points: number): DartThrow => ({ baseValue: points, multiplier: 1,
 const dartsOf = (...points: number[]): DartThrow[] => points.map(dart);
 
 const game = (over: Partial<ActivityGameRow> & { id: string; played_at: string }): ActivityGameRow => ({
-  player1_id: "p1", player2_id: "p2", player1_name: "Martin", player2_name: "Kevin",
+  mode: "501", player1_id: "p1", player2_id: "p2", player1_name: "Martin", player2_name: "Kevin",
   player1_average: 50, player2_average: 45, winner_id: "p1",
   ...over,
 });
@@ -67,6 +67,22 @@ describe("computeClubActivity", () => {
     ];
     const events = computeClubActivity(games, [], 14);
     expect(events.some((e) => e.type === "pb_average")).toBe(false);
+  });
+
+  it("does not let a cricket game's raw points-average count toward or block an X01 personal best", () => {
+    const games = [
+      game({ id: "g1", mode: "501", played_at: daysAgo(40), player1_average: 45 }),
+      game({ id: "g2", mode: "501", played_at: daysAgo(30), player1_average: 45 }),
+      game({ id: "g3", mode: "501", played_at: daysAgo(20), player1_average: 45 }),
+      // A cricket score way above any real X01 average — must not become the new "best" a later
+      // genuinely-better X01 average would need to beat.
+      game({ id: "g4", mode: "cricket", played_at: daysAgo(10), player1_average: 90 }),
+      game({ id: "g5", mode: "501", played_at: daysAgo(2), player1_average: 55 }), // real X01 PB
+    ];
+    const events = computeClubActivity(games, [], 14);
+    const pb = events.find((e) => e.type === "pb_average");
+    expect(pb).toBeDefined();
+    expect(pb!.detail).toContain("55.0");
   });
 
   it("reports a win-streak milestone but not an in-between count", () => {

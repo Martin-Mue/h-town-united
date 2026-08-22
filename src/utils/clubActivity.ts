@@ -2,6 +2,7 @@ import { count180s, computeCheckoutStats, type DartThrow } from "@/utils/dartSta
 
 export interface ActivityGameRow {
   id: string;
+  mode: string;
   player1_id: string | null;
   player2_id: string | null;
   player1_name: string;
@@ -93,13 +94,20 @@ export function computeClubActivity(
       const gp = (gamesPlayed.get(side.id) ?? 0) + 1;
       gamesPlayed.set(side.id, gp);
 
-      const prevBest = bestAvg.get(side.id);
-      const isNewBestAvg = prevBest === undefined || side.avg > prevBest;
-      if (isNewBestAvg) {
-        if (isRecent && prevBest !== undefined && gp > MIN_GAMES_FOR_PB) {
-          events.push({ id: `pb-avg-${g.id}-${side.id}`, type: "pb_average", playerName: side.name, playedAt: g.played_at, detail: translator.newAverageRecord(side.avg.toFixed(1)) });
+      // Cricket's "average" is raw points-per-3-darts, not a checkout-race score — it's stored in
+      // the same player1_average/player2_average column as every other mode (see gameSync.ts) but
+      // isn't comparable to one at all (clustering on T20/Bull alone easily beats a genuinely
+      // excellent 501 average). Mixing it into the same running "personal best" would let one
+      // strong Cricket score permanently block real X01 PBs from ever registering again.
+      if (g.mode !== "cricket") {
+        const prevBest = bestAvg.get(side.id);
+        const isNewBestAvg = prevBest === undefined || side.avg > prevBest;
+        if (isNewBestAvg) {
+          if (isRecent && prevBest !== undefined && gp > MIN_GAMES_FOR_PB) {
+            events.push({ id: `pb-avg-${g.id}-${side.id}`, type: "pb_average", playerName: side.name, playedAt: g.played_at, detail: translator.newAverageRecord(side.avg.toFixed(1)) });
+          }
+          bestAvg.set(side.id, side.avg);
         }
-        bestAvg.set(side.id, side.avg);
       }
 
       const won = g.winner_id === side.id;

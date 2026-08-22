@@ -5,6 +5,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import DartScoreInput, { type DartInputMode } from "@/components/game/DartScoreInput";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
@@ -387,9 +397,13 @@ const GamePage = () => {
     // mid-visit (after game changed but before either was re-derived) could be saved with stale
     // values; tournamentLinkRef is a ref so its current value doesn't need to be a dependency.
   }, [game, phase, dartsThisRound, turnStartRemaining]);
-  useEffect(() => {
-    if (game?.isFinished) clearActiveGameSnapshot();
-  }, [game?.isFinished]);
+  // Clearing used to happen here, in its own effect keyed only on isFinished — which fires (and
+  // React runs effects in declaration order, so this ran) BEFORE saveGame's own isFinished effect
+  // even starts its several-awaited-calls-deep save. If a PWA update's location.reload() landed in
+  // that window, the crash-recovery copy was already gone and the pending save was torn down
+  // mid-flight with no trace anywhere — a finished match lost outright. Moved into saveGame()
+  // itself now, cleared only once the game is durably somewhere (Supabase, or the offline queue on
+  // failure) — see the end of that function.
   /** Set once on mount when this game was launched from a tournament bracket match ("Spiel starten") — used to tag the saved game and write the result back into the bracket on finish. Restored from the crash-recovery snapshot too, so a mid-game reload doesn't sever the link (see loadActiveGameSnapshot's doc comment). */
   const tournamentLinkRef = useRef<{ tournamentId: string; matchId: string; tournamentName?: string } | null>(initialSnapshot?.tournamentLink ?? null);
   const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(() =>
@@ -444,6 +458,11 @@ const GamePage = () => {
   // While the camera is on, the game view becomes a fixed, non-scrolling window — the
   // manual number pad isn't needed for scoring then, so it's tucked behind this toggle.
   const [showManualInput, setShowManualInput] = useState(false);
+  // "Cancel Game" wipes an in-progress match outright — every other destructive action in the
+  // app (delete player, delete tournament, withdraw, reset a KO match) confirms first, this one
+  // didn't. Shared by both the camera-on and camera-off layouts below (mutually exclusive
+  // branches of the same render), one dialog instead of two copies.
+  const [confirmCancelGame, setConfirmCancelGame] = useState(false);
   // Generated up front (before the game row exists) so highlight clips captured
   // mid-game can already reference the game they'll end up saved under.
   const pendingGameIdRef = useRef<string>(crypto.randomUUID());
@@ -1734,6 +1753,9 @@ const GamePage = () => {
           : t("game.savedOfflineNoLinkDesc"),
       });
     }
+    // Only now — either branch above has already gotten this game durably somewhere (Supabase
+    // directly, or the offline queue) — is it actually safe to drop the crash-recovery copy.
+    clearActiveGameSnapshot();
     setGameSaved(true);
     savingRef.current = false;
   }, [game, gameSaved, session, toast, t]);
@@ -2704,7 +2726,7 @@ const GamePage = () => {
               onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
             />
 
-            <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
+            <Button variant="ghost" onClick={() => setConfirmCancelGame(true)} className="w-full mt-3 text-muted-foreground">
               <RotateCcw className="w-4 h-4 mr-2" /> {t("game.cancelGame")}
             </Button>
           </div>
@@ -2780,11 +2802,24 @@ const GamePage = () => {
             onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
           />
 
-          <Button variant="ghost" onClick={resetGame} className="w-full mt-3 text-muted-foreground">
+          <Button variant="ghost" onClick={() => setConfirmCancelGame(true)} className="w-full mt-3 text-muted-foreground">
             <RotateCcw className="w-4 h-4 mr-2" /> {t("game.cancelGame")}
           </Button>
         </>
       )}
+
+      <AlertDialog open={confirmCancelGame} onOpenChange={setConfirmCancelGame}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("game.cancelGameConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("game.cancelGameConfirmDesc")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={resetGame}>{t("game.cancelGame")}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

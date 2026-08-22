@@ -141,7 +141,12 @@ export async function saveGameRecord(
   // first attempt either, since the client-side throw happened right after the insert call).
   // Fix: check whether the row already exists before inserting, and skip straight to
   // legs/stats (which — in exactly this failure mode — never ran) instead of re-inserting.
-  const { data: existingGame } = await supabase.from("games").select("id").eq("id", pendingGameId).maybeSingle();
+  const { data: existingGame, error: existingGameErr } = await supabase.from("games").select("id").eq("id", pendingGameId).maybeSingle();
+  // If THIS check fails, the row's primary key still stops an actual double-insert (pendingGameId
+  // is the same id either way) — but rather than let that surface as an opaque duplicate-key
+  // error with no idea why, fail fast and clearly here so a retry gets a real shot at the SELECT
+  // succeeding instead of repeating the same doomed insert-then-conflict cycle.
+  if (existingGameErr) throw existingGameErr;
   let insertedGameId: string | null = existingGame?.id ?? null;
 
   if (!insertedGameId) {
