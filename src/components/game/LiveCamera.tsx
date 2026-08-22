@@ -324,8 +324,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const clipRecorderRef = useRef<MediaRecorder | null>(null);
   const clipChunksRef = useRef<BlobPart[]>([]);
   const clipMimeRef = useRef<string>("video/webm");
-  const lastClipRef = useRef<{ blob: Blob; mime: string } | null>(null);
+  const lastClipRef = useRef<{ seq: number; blob: Blob; mime: string } | null>(null);
   const clipSegmentTimerRef = useRef<number | null>(null);
+  // Every recorded segment gets a sequence number, and getRecentClip() only ever returns the
+  // segment whose number matches pinnedClipSeqRef — see the pinning logic in the watcher loop
+  // below (restartClipSegment call site) for why this indirection exists.
+  const clipSegmentSeqRef = useRef(0);
+  const pinnedClipSeqRef = useRef<number | null>(null);
 
   // Frame state
   const prevSigRef = useRef<number[] | null>(null);
@@ -480,6 +485,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const mime = pickClipMimeType();
     clipMimeRef.current = mime;
     clipChunksRef.current = [];
+    clipSegmentSeqRef.current += 1;
+    const mySeq = clipSegmentSeqRef.current;
     let recorder: MediaRecorder;
     try {
       // Modest bitrate — this is a short highlight replay, not archival footage, and
@@ -493,7 +500,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     recorder.ondataavailable = (e) => { if (e.data.size > 0) clipChunksRef.current.push(e.data); };
     recorder.onstop = () => {
       if (clipChunksRef.current.length > 0) {
-        lastClipRef.current = { blob: new Blob(clipChunksRef.current, { type: mime }), mime };
+        lastClipRef.current = { seq: mySeq, blob: new Blob(clipChunksRef.current, { type: mime }), mime };
       }
       // Immediately roll into the next segment for continuous coverage.
       if (clipRecorderRef.current === recorder) startClipSegment();
@@ -509,8 +516,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    *  next one is about to begin". Stopping here (not via stopClipRecorder, which deliberately
    *  suppresses the auto-chain for a real shutdown) lets the recorder's own onstop finalize this
    *  segment into lastClipRef and immediately start the next one, so segment boundaries track
-   *  actual visit boundaries instead of an arbitrary fixed interval. */
-  const restartClipSegment = useCallback(() => {
+   *  actual visit boundaries instead of an arbitrary fixed interval. Returns the (about to be
+   *  finalized) segment's sequence number so the caller can pin it — see pinnedClipSeqRef. */
+  const restartClipSegment = useCallback((): number => {
+    const endedSeq = clipSegmentSeqRef.current;
     if (clipSegmentTimerRef.current) {
       window.clearTimeout(clipSegmentTimerRef.current);
       clipSegmentTimerRef.current = null;
@@ -521,12 +530,19 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     } else {
       startClipSegment();
     }
+    return endedSeq;
   }, [startClipSegment]);
 
   useImperativeHandle(ref, () => ({
     getRecentClip: () => {
       const clip = lastClipRef.current;
-      if (!clip) return null;
+      // Only ever hand back the segment actually pinned to the round currently under review /
+      // just committed — never just "whatever finished recording most recently". Without this,
+      // a highlight round left sitting unconfirmed (needsReview) while ANY later board activity
+      // (the opponent's next visit, a stray practice throw) gets recorded and pulled would have
+      // its clip silently stolen by that later segment by the time Übernehmen is finally tapped —
+      // exactly the "checkout clip shows the opponent's throw" report this was built to prevent.
+      if (!clip || clip.seq !== pinnedClipSeqRef.current) return null;
       return { url: URL.createObjectURL(clip.blob), mime: clip.mime, blob: clip.blob };
     },
   }), []);
@@ -1200,7 +1216,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           // (about to trigger runPullScan below) or "still idle, nothing thrown yet", either way
           // a new visit starts from here. Cut the clip segment here so its footage lines up with
           // real throws instead of an arbitrary timer (see restartClipSegment/CLIP_SEGMENT_MS).
-          restartClipSegment();
+          const endedClipSeq = restartClipSegment();
           const hasPreRemovalCapture = !!preRemovalImageDataRef.current;
           // A still-unreviewed round (accumulated darts awaiting Übernehmen/Verwerfen) must not
           // be silently overwritten by a new scan — if the player throws/pulls a second round
@@ -1213,6 +1229,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           if (throwsSeenRef.current > 0 && hasPreRemovalCapture && !needsReviewRef.current) {
             if (performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
               scanLockRef.current = true;
+              // Pin the clip to THIS visit now, at detection time — not whenever the player
+              // eventually taps Übernehmen. Same needsReview guard as above keeps this from
+              // being reassigned to a later, unrelated visit while this one still sits
+              // awaiting review (see getRecentClip's doc comment for the bug this fixes).
+              pinnedClipSeqRef.current = endedClipSeq;
               void runPullScan();
               return;
             }
