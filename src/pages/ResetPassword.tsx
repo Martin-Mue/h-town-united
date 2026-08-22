@@ -16,8 +16,20 @@ const ResetPassword = () => {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // An expired or already-used recovery link redirects here with
+  // #error=access_denied&error_code=otp_expired&error_description=... in the hash instead of a
+  // real session — previously never checked, so the form showed as fully live regardless, and the
+  // only sign anything was wrong was a generic "Auth session missing" error on submit with no
+  // explanation and no offer to request a fresh link.
+  const [linkExpired, setLinkExpired] = useState(false);
 
   useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (hashParams.get("error")) {
+      setLinkExpired(true);
+      setReady(true);
+      return;
+    }
     // Supabase recovery link drops tokens in the URL hash and triggers a
     // PASSWORD_RECOVERY event. We wait for a session to be available.
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
@@ -77,6 +89,13 @@ const ResetPassword = () => {
           {!ready ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : linkExpired ? (
+            <div className="space-y-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                Dieser Link ist abgelaufen oder wurde bereits verwendet. Fordere über "Passwort vergessen" auf der Login-Seite einen neuen Link an.
+              </p>
+              <Button className="w-full" onClick={() => navigate("/auth")}>Zur Anmeldung</Button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">

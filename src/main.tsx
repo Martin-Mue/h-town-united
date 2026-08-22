@@ -24,10 +24,22 @@ const hasActiveGame = () => !!window.localStorage.getItem(ACTIVE_GAME_KEY);
 // that snapshot clears (game finished, abandoned, or reset) instead of yanking the page out from
 // under someone mid-throw, but still shows the toast immediately so the update isn't a surprise.
 if ("serviceWorker" in navigator) {
-  const hadController = !!navigator.serviceWorker.controller;
+  let hadController = !!navigator.serviceWorker.controller;
   let handled = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (!hadController || handled) return;
+    if (!hadController) {
+      // The very first controllerchange this page ever sees is just this tab's first-ever SW
+      // activation (fresh install, or a fresh load before any worker existed yet) — nothing
+      // stale to reload from, correctly suppressed. But this used to stay `false` for the whole
+      // rest of the tab's lifetime, so a SECOND deploy landing while this same tab stayed open
+      // (exactly the long-lived-session pattern forceUpdateCheck below is built for) fired
+      // controllerchange again yet got silently swallowed by this same check — no toast, no
+      // reload, ever, for that update. Flipping it here means every controllerchange after this
+      // first one is correctly treated as a real update instead.
+      hadController = true;
+      return;
+    }
+    if (handled) return;
     handled = true;
 
     if (!hasActiveGame()) {
