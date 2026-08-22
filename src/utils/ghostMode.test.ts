@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ghostRemainingSequence, compareToGhost, buildBenchmarkSequence } from "./ghostMode";
+import { ghostRemainingSequence, compareToGhost } from "./ghostMode";
 import type { DartThrow } from "@/types/game";
 
 const dart = (points: number): DartThrow => ({ baseValue: points, multiplier: 1, points });
@@ -42,23 +42,5 @@ describe("compareToGhost", () => {
   it("returns null before any dart has been thrown or with no ghost data", () => {
     expect(compareToGhost(0, 501, ghost)).toBeNull();
     expect(compareToGhost(3, 301, [])).toBeNull();
-  });
-});
-
-describe("buildBenchmarkSequence", () => {
-  it("lands on exactly 0 at the final dart, for any start score / dart count", () => {
-    expect(buildBenchmarkSequence(501, 9)[8]).toBe(0);
-    expect(buildBenchmarkSequence(301, 15)[14]).toBe(0);
-  });
-
-  it("returns the right number of entries and decreases monotonically", () => {
-    const seq = buildBenchmarkSequence(501, 12);
-    expect(seq).toHaveLength(12);
-    for (let i = 1; i < seq.length; i++) expect(seq[i]).toBeLessThan(seq[i - 1]);
-  });
-
-  it("paces a 501/9 benchmark close to the real classic 9-darter shape (~60/dart)", () => {
-    const seq = buildBenchmarkSequence(501, 9);
-    expect(seq[0]).toBeCloseTo(501 - 501 / 9, 0); // ~445, i.e. roughly a 56-avg opening dart
   });
 });

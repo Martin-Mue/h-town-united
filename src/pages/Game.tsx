@@ -65,7 +65,7 @@ import { effectiveStartScore } from "@/utils/handicap";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
-import { ghostRemainingSequence, compareToGhost, buildBenchmarkSequence, GHOST_BENCHMARKS } from "@/utils/ghostMode";
+import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
 import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 
 const WALKON_PREF_KEY = "dart-walkon-enabled";
@@ -344,10 +344,10 @@ const GamePage = () => {
   // progress compared against it turn by turn. Index-aligned with players; only meaningful for a
   // player marked isBot with botLevel effectively "ghost" (tracked here rather than in BotLevel
   // itself, to avoid touching that type everywhere it's exhaustively handled elsewhere).
-  // "own-pb" races the HUMAN opponent's own best-ever leg at this start score; a number races a
-  // named dart-count benchmark (see GHOST_BENCHMARKS) — a synthetic even-pace target, not a real
-  // recorded performance, so it's available even against a brand new opponent with no history yet.
-  const [playerGhostTarget, setPlayerGhostTarget] = useState<("off" | "own-pb" | number)[]>(Array(MAX_PLAYERS).fill("off"));
+  // "own-pb" races the HUMAN opponent's own best-ever leg at this start score — the only target
+  // Ghost mode offers (a named dart-count benchmark option used to exist alongside it, removed
+  // 2026-08-23: one less choice to make, Ghost now always just means "beat yourself").
+  const [playerGhostTarget, setPlayerGhostTarget] = useState<("off" | "own-pb")[]>(Array(MAX_PLAYERS).fill("off"));
   // Index-aligned with players — each entry is what THAT player is racing against (their live
   // pace compared to it turn by turn), not what they themselves embody. For a Geist-bot's human
   // opponent, this is the bot's target sequence; the bot's own slot stays null (no comparison
@@ -615,11 +615,7 @@ const GamePage = () => {
    *  wherever a bot's name would otherwise appear (setup preview, in-game scoreboard, saved
    *  game record). */
   const botDisplayName = (i: number): string => {
-    const target = playerGhostTarget[i];
-    if (target !== "off") {
-      const label = typeof target === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === target)?.label ?? t("game.ghost") : t("game.ghostRecord");
-      return `👻 ${label}`;
-    }
+    if (playerGhostTarget[i] !== "off") return `👻 ${t("game.ghostRecord")}`;
     return t(BOT_PROFILES[playerBotLevel[i] ?? "medium"].nameKey);
   };
 
@@ -670,14 +666,8 @@ const GamePage = () => {
       setGhostSequences(players.map(() => null));
       return;
     }
-    const target = playerGhostTarget[ghostBotIdx];
     const assignToHumans = (seq: number[] | null) => setGhostSequences(players.map((p) => (p.isBot ? null : seq)));
-    if (typeof target === "number") {
-      // Benchmark target: synchronous, synthetic — no DB round-trip.
-      assignToHumans(buildBenchmarkSequence(startScore, target));
-      return;
-    }
-    // "own-pb": the HUMAN opponent races their own best-ever WON leg at this exact start score
+    // "own-pb" (the only target Ghost mode offers): the HUMAN opponent races their own best-ever WON leg at this exact start score
     // (fewest darts) — the Geist-bot embodies it back at them. Small data volumes here (a club's
     // total leg count, not the whole games table) — picking the shortest client-side rather than
     // needing a jsonb-array-length order clause PostgREST can't express directly.
@@ -2001,22 +1991,6 @@ const GamePage = () => {
                         </button>
                       )}
                     </div>
-                    {playerGhostTarget[i] !== "off" && (
-                      <div className="flex flex-wrap gap-1.5 -mt-0.5">
-                        <button
-                          onClick={() => setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? "own-pb" : v))}
-                          className={`rounded-lg px-2.5 py-1 text-[11px] font-display transition-colors ${playerGhostTarget[i] === "own-pb" ? "bg-accent text-accent-foreground" : "bg-background border border-border text-muted-foreground"}`}>
-                          {t("game.ownRecord")}
-                        </button>
-                        {GHOST_BENCHMARKS.filter((b) => getStartScore() / b.darts <= 60).map((b) => (
-                          <button key={b.darts}
-                            onClick={() => setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? b.darts : v))}
-                            className={`rounded-lg px-2.5 py-1 text-[11px] font-display transition-colors ${playerGhostTarget[i] === b.darts ? "bg-accent text-accent-foreground" : "bg-background border border-border text-muted-foreground"}`}>
-                            {b.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </>
                 )}
 
@@ -2521,9 +2495,7 @@ const GamePage = () => {
           const teamIdx = teamIndexFor(game.teams, currentIdx);
           const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);
           if (!cmp) return null;
-          const ghostBotIdx = game.players.findIndex((p, i) => p.isBot && playerGhostTarget[i] !== "off");
-          const ghostBotTarget = ghostBotIdx !== -1 ? playerGhostTarget[ghostBotIdx] : "own-pb";
-          const targetLabel = typeof ghostBotTarget === "number" ? GHOST_BENCHMARKS.find((b) => b.darts === ghostBotTarget)?.label ?? t("game.target") : t("game.yourRecordPace");
+          const targetLabel = t("game.yourRecordPace");
           return (
             <p className={`text-[10px] mt-1 font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
               👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} ${t("game.pointsAhead")} ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} ${t("game.pointsBehind")} ${targetLabel}` : `${t("game.exactlyOnPace")} ${targetLabel}`}

@@ -636,10 +636,18 @@ const PlayersPage = () => {
           ))}
         </div>
 
-        {/* Charts */}
-        <Suspense fallback={<div className="h-[180px] mb-6 flex items-center justify-center text-muted-foreground text-sm">{t("players.loadingCharts")}</div>}>
-          <PlayerStatsCharts skillRadarData={skillRadarData} winLossData={winLossData} />
-        </Suspense>
+        {/* Charts — at 0 games every value in both datasets is 0, which renders as a collapsed
+            radar (a single invisible point) and two zero-width bars: just axis labels over blank
+            space, reading as broken rather than "no data yet". */}
+        {selectedPlayer.games_played === 0 ? (
+          <div className="bg-card rounded-xl border border-border p-4 mb-6 text-center text-sm text-muted-foreground">
+            {t("players.noStatsYetForCharts")}
+          </div>
+        ) : (
+          <Suspense fallback={<div className="h-[180px] mb-6 flex items-center justify-center text-muted-foreground text-sm">{t("players.loadingCharts")}</div>}>
+            <PlayerStatsCharts skillRadarData={skillRadarData} winLossData={winLossData} />
+          </Suspense>
+        )}
       </div>
     );
   }

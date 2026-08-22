@@ -14,35 +14,6 @@ export function ghostRemainingSequence(throws: DartThrow[], startScore: number):
   return seq;
 }
 
-/** Named dart-count benchmarks offered as a ghost target alongside "your own best leg". Only
- *  offered to the player when mathematically reachable for the game's start score (needs an
- *  average of 60 or less per dart — 60 being the highest a single dart can ever score — checked
- *  by the caller via `startScore / darts <= 60`, not hardcoded here since it depends on the
- *  game's own start score). */
-export const GHOST_BENCHMARKS = [
-  { darts: 9, label: "9-Darter" },
-  { darts: 12, label: "12-Darter" },
-  { darts: 15, label: "15-Darter" },
-  { darts: 18, label: "18-Darter" },
-] as const;
-
-/**
- * A synthetic, evenly-paced target sequence for "finish in exactly N darts" — deliberately NOT
- * an attempt to recreate a realistic dart-by-dart visit pattern (that would need to fabricate
- * specific throw values and present them as if some real performance actually went that way,
- * which this explicitly avoids). It's a smooth pace curve: after dart i of totalDarts, you'd
- * need to be at startScore * (1 - i/totalDarts) to be exactly on pace to finish at dart
- * totalDarts. Framed to the player as a named challenge ("Schlage den 15-Darter"), not
- * attributed to any real person or match.
- */
-export function buildBenchmarkSequence(startScore: number, totalDarts: number): number[] {
-  const seq: number[] = [];
-  for (let i = 1; i <= totalDarts; i++) {
-    seq.push(i === totalDarts ? 0 : Math.max(1, Math.round(startScore * (1 - i / totalDarts))));
-  }
-  return seq;
-}
-
 export interface GhostComparison {
   /** Positive = ahead of the ghost's pace at this many darts in (scored more so far), negative = behind. */
   aheadBy: number;

@@ -669,6 +669,7 @@ const TournamentPage = () => {
   const [editRoundMode, setEditRoundMode] = useState("501");
   const [editRoundBestOf, setEditRoundBestOf] = useState(3);
   const [savingRoundMode, setSavingRoundMode] = useState(false);
+  const [savingMatchPlayers, setSavingMatchPlayers] = useState(false);
   // Confirm before withdrawing a player mid-tournament — unlike removing a typo'd name during
   // setup (harmless, pre-draw), this forfeits every remaining match for a real participant,
   // often live at the venue. Same chip-based UI as setup made the two easy to confuse.
@@ -1145,21 +1146,30 @@ const TournamentPage = () => {
 
   /** Replace the two participants of a first-round match (late changes, no-shows …). */
   const saveMatchPlayers = async () => {
-    if (!activeTournament || !editMatch) return;
-    const p1 = editP1.trim() || BYE;
-    const p2 = editP2.trim() || BYE;
-    const patch = (fresh: Match[]) => fresh.map(m =>
-      m.id === editMatch.id ? { ...m, player1: p1, player2: p2, winner: undefined, score1: undefined, score2: undefined } : { ...m }
-    );
-    const preview = patch(activeTournament.bracket as Match[]);
-    const nextPlayers = Array.from(new Set(
-      preview.filter(m => m.round === 1).flatMap(m => [m.player1, m.player2]).filter(isRealPlayer) as string[]
-    ));
-    await supabase.from("tournaments").update({ players: nextPlayers as unknown as Json }).eq("id", activeTournament.id);
-    setActiveTournament({ ...activeTournament, players: nextPlayers });
-    await persistBracket(patch);
-    setEditMatch(null);
-    toast({ title: t("tournament.bracketUpdated") });
+    if (!activeTournament || !editMatch || savingMatchPlayers) return;
+    setSavingMatchPlayers(true);
+    try {
+      const p1 = editP1.trim() || BYE;
+      const p2 = editP2.trim() || BYE;
+      const patch = (fresh: Match[]) => fresh.map(m =>
+        m.id === editMatch.id ? { ...m, player1: p1, player2: p2, winner: undefined, score1: undefined, score2: undefined } : { ...m }
+      );
+      const preview = patch(activeTournament.bracket as Match[]);
+      const nextPlayers = Array.from(new Set(
+        preview.filter(m => m.round === 1).flatMap(m => [m.player1, m.player2]).filter(isRealPlayer) as string[]
+      ));
+      const { error } = await supabase.from("tournaments").update({ players: nextPlayers as unknown as Json }).eq("id", activeTournament.id);
+      if (error) {
+        toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+        return;
+      }
+      setActiveTournament({ ...activeTournament, players: nextPlayers });
+      await persistBracket(patch);
+      setEditMatch(null);
+      toast({ title: t("tournament.bracketUpdated") });
+    } finally {
+      setSavingMatchPlayers(false);
+    }
   };
 
   /** Withdraw a player: only *unplayed* matches are adjusted, results stay untouched. */

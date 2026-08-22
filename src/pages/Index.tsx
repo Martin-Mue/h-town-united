@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, Crosshair } from "lucide-react";
+import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, Crosshair, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow, type ActivityTranslator } from "@/utils/clubActivity";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -38,18 +38,27 @@ interface RecentGame {
 const DashboardPage = () => {
   const { language, t } = useLanguage();
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
+  const [loadingGames, setLoadingGames] = useState(true);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const pagedRecentGames = usePagedList(recentGames);
   const pagedActivity = usePagedList(activity);
 
   useEffect(() => {
+    // Guards both fetches below against a fast repeated language switch: two overlapping
+    // effect runs could otherwise resolve out of order and the STALE one (built with the
+    // previous language's translator, in loadActivity's case) could land last and overwrite
+    // the fresher one.
+    let cancelled = false;
     const load = async () => {
+      setLoadingGames(true);
       const { data } = await supabase
         .from("games")
         .select("id, mode, player1_name, player2_name, winner_name, played_at")
         .order("played_at", { ascending: false })
         .limit(100);
+      if (cancelled) return;
       if (data) setRecentGames(data);
+      setLoadingGames(false);
     };
     load();
 
@@ -71,11 +80,13 @@ const DashboardPage = () => {
         supabase.from("games").select("id, mode, player1_id, player2_id, player1_name, player2_name, player1_average, player2_average, winner_id, played_at"),
         supabase.from("game_legs").select("game_id, player_id, player_name, throws, starting_score, won"),
       ]);
+      if (cancelled) return;
       if (games && legs) {
         setActivity(computeClubActivity(games, legs as unknown as ActivityLegRow[], 14, translator));
       }
     };
     loadActivity();
+    return () => { cancelled = true; };
     // `language` (not `t`) is the real dependency — `t` is a fresh closure every render (see
     // LanguageContext), so listing it would refetch on every render instead of only when the
     // language actually changes.
@@ -175,7 +186,9 @@ const DashboardPage = () => {
 
       {/* Recent games feed */}
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("home.recentGames")}</h2>
-      {recentGames.length === 0 ? (
+      {loadingGames ? (
+        <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+      ) : recentGames.length === 0 ? (
         <Link to="/game" className="block bg-card border border-border hover:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-colors">
           {t("home.noGamesYet")} <span className="text-primary font-medium">{t("home.startFirstGame")}</span>
         </Link>
