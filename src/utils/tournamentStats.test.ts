@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  computeTournamentHighlights, computeTournamentAverages, mergeTournamentStats,
+  computeTournamentHighlights, computeTournamentAverages, mergeTournamentStats, sortParticipants,
   type TournamentStatsLegRow, type TournamentStatsGameRow,
 } from "./tournamentStats";
 import type { DartThrow } from "./dartStats";
@@ -167,5 +167,33 @@ describe("mergeTournamentStats", () => {
     expect(merged).toHaveLength(1);
     expect(merged[0].tournamentAverage).toBe(0);
     expect(merged[0].oneEighties).toBe(1);
+  });
+});
+
+describe("sortParticipants", () => {
+  const players = ["Martin", "kevin", "Zoe", "Abdul"];
+
+  it("sorts alphabetically, case-insensitively, regardless of averages passed in", () => {
+    expect(sortParticipants(players, "alpha", null)).toEqual(["Abdul", "kevin", "Martin", "Zoe"]);
+  });
+
+  it("ranks by average descending in \"average\" mode", () => {
+    const averages = computeTournamentAverages([
+      { id: "g1", player1_id: "p1", player1_name: "Martin", player1_average: 45, player2_id: "p2", player2_name: "kevin", player2_average: 60 },
+    ]);
+    expect(sortParticipants(["Martin", "kevin"], "average", averages)).toEqual(["kevin", "Martin"]);
+  });
+
+  it("sorts players with no average yet to the end, alphabetically among themselves", () => {
+    const averages = computeTournamentAverages([
+      { id: "g1", player1_id: "p1", player1_name: "Zoe", player1_average: 50, player2_id: "p2", player2_name: "Abdul", player2_average: 0 },
+    ]);
+    // Martin and kevin never appear in a game row at all — same "no average yet" bucket as
+    // Abdul, who has a game row but a 0 average (e.g. hasn't actually thrown yet).
+    expect(sortParticipants(players, "average", averages)).toEqual(["Zoe", "Abdul", "kevin", "Martin"]);
+  });
+
+  it("falls back to alphabetical-only behavior when there's no averages data at all yet", () => {
+    expect(sortParticipants(players, "average", null)).toEqual(["Abdul", "kevin", "Martin", "Zoe"]);
   });
 });

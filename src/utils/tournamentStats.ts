@@ -210,3 +210,22 @@ export function mergeTournamentStats(highlights: TournamentHighlights, averages:
   // is one more tiebreak on top of compareByHighlightMagnitude, not the primary key.
   return [...byKey.values()].sort((a, b) => compareByHighlightMagnitude(a, b) || b.tournamentAverage - a.tournamentAverage);
 }
+
+export type ParticipantSortMode = "alpha" | "average";
+
+/** Orders a tournament's player-name list for display — shared by Tournament.tsx's "Teilnehmer
+ *  verwalten" and PublicTournament.tsx's live Teilnehmer grid so the two sorts can't drift apart
+ *  the way the checkout-tier ranking already had. "average" ranks by Ø tournament average, best
+ *  first; anyone with no average yet (still loading, or hasn't played a scored leg) sorts after
+ *  everyone who has one rather than mixing in at 0 — same alphabetical order either way among
+ *  people who tie, so the list doesn't visibly shuffle position as more averages arrive. */
+export function sortParticipants(
+  players: string[],
+  mode: ParticipantSortMode,
+  averages: TournamentAverages | null,
+): string[] {
+  if (mode === "alpha") return [...players].sort((a, b) => a.localeCompare(b));
+  const averageFor = (name: string) =>
+    averages?.participants.find((pa) => pa.key === name || pa.name === name)?.tournamentAverage || 0;
+  return [...players].sort((a, b) => averageFor(b) - averageFor(a) || a.localeCompare(b));
+}

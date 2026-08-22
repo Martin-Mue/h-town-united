@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check } from "lucide-react";
-import { computeTournamentHighlights, computeTournamentAverages, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
+import { computeTournamentHighlights, computeTournamentAverages, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import {
   roundLabelFor,
@@ -583,6 +583,12 @@ const BoardOverview = ({
 // so one link/QR code can pin a specific screen to a specific view regardless of history.
 const VIEW_PREF_KEY = "dart-live-view-pref";
 const AUTO_ROTATE_PREF_KEY = "dart-live-autorotate-pref";
+/** Defaults to "average" here specifically (unlike Tournament.tsx's own Teilnehmer list, which
+ *  defaults to alphabetical) — this is the unattended spectator screen, and leading with "who's
+ *  actually playing best today" reads more like a live leaderboard than an alphabetical roster
+ *  does. Persisted per-device like the other view prefs, since whoever sets up the TV/tablet
+ *  picks this once, not per session. */
+const PARTICIPANTS_SORT_PREF_KEY = "dart-live-participants-sort";
 const AUTO_ROTATE_MS = 15000;
 /** Which of the 4 rotation-eligible slots ("bracket" covers both tree and list — they're two
  *  presentations of the same data, never both in the rotation at once) auto-rotate should cycle
@@ -682,6 +688,15 @@ const PublicTournamentPage = () => {
     const next = !autoRotate;
     setAutoRotateRaw(next);
     if (typeof window !== "undefined") window.localStorage.setItem(AUTO_ROTATE_PREF_KEY, next ? "1" : "0");
+  };
+
+  const [participantSort, setParticipantSortRaw] = useState<ParticipantSortMode>(() => {
+    if (typeof window === "undefined") return "average";
+    return window.localStorage.getItem(PARTICIPANTS_SORT_PREF_KEY) === "alpha" ? "alpha" : "average";
+  });
+  const setParticipantSort = (next: ParticipantSortMode) => {
+    setParticipantSortRaw(next);
+    if (typeof window !== "undefined") window.localStorage.setItem(PARTICIPANTS_SORT_PREF_KEY, next);
   };
 
   /** Anonymous spectators can't read games/game_legs directly (authenticated-only RLS) — this
@@ -1000,14 +1015,32 @@ const PublicTournamentPage = () => {
       ) : view === "participants" ? (
         <div className="px-4 pb-6">
           <div className="rounded-xl border border-border bg-card p-3">
-            <h3 className="font-display uppercase text-sm mb-2 text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="font-display uppercase text-sm text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
+              <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
+                <button
+                  onClick={() => setParticipantSort("alpha")}
+                  className={`px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide ${participantSort === "alpha" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  A-Z
+                </button>
+                <button
+                  onClick={() => setParticipantSort("average")}
+                  className={`px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide border-l border-border ${participantSort === "average" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Ø
+                </button>
+              </div>
+            </div>
             {/* No longer gated on tournamentAverages — names + elimination-status coloring need
                 no network data at all (eliminationStatus is derived straight from the bracket
                 already in hand), so blocking the whole grid behind that RPC used to show a
                 spinner instead of the one thing that was actually ready immediately. Each card's
-                own Ø average just reads "–" until averages load in, same as before. */}
+                own Ø average just reads "–" until averages load in, same as before — and once
+                they do, an Ø-sorted grid will visibly reorder itself as the tournament goes on,
+                same as a live leaderboard would. */}
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
-              {t.players.map((p) => {
+              {sortParticipants(t.players, participantSort, tournamentAverages).map((p) => {
                 const avgRow = tournamentAverages?.participants.find((pa) => pa.key === p || pa.name === p);
                 const status = eliminationStatus?.[p];
                 // Green border = still in, grayed out = eliminated, no label text to parse from

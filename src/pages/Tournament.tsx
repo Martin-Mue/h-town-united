@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target } from "lucide-react";
-import { computeTournamentHighlights, computeTournamentAverages, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
+import { computeTournamentHighlights, computeTournamentAverages, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import { Button } from "@/components/ui/button";
@@ -623,6 +623,10 @@ const TournamentPage = () => {
   const [tournamentAverages, setTournamentAverages] = useState<TournamentAverages | null>(null);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
   const [showHighlights, setShowHighlights] = useState(false);
+  /** How the "Teilnehmer verwalten" list orders players — an active management tool the
+   *  organizer is looking something up in, so alphabetical (find-a-name-fast) is the sensible
+   *  default; Ø average is there for "who's actually playing well today" at a glance. */
+  const [participantSort, setParticipantSort] = useState<"alpha" | "average">("alpha");
   const [activeTournament, setActiveTournament] = useState<TournamentRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [ceremonyChampion, setCeremonyChampion] = useState<string | null>(null);
@@ -2098,10 +2102,26 @@ const TournamentPage = () => {
 
             {isOwner && (
               <div className="bg-card border border-border rounded-xl p-4">
-                <h3 className="font-display uppercase text-sm mb-2 flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h3 className="font-display uppercase text-sm flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
+                  <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
+                    <button
+                      onClick={() => setParticipantSort("alpha")}
+                      className={`px-2 py-1 text-[10px] font-medium uppercase tracking-wide ${participantSort === "alpha" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      A-Z
+                    </button>
+                    <button
+                      onClick={() => setParticipantSort("average")}
+                      className={`px-2 py-1 text-[10px] font-medium uppercase tracking-wide border-l border-border ${participantSort === "average" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      Ø
+                    </button>
+                  </div>
+                </div>
                 <p className="text-[11px] text-muted-foreground mb-3">{t("tournament.withdrawHint")}</p>
                 <div className="space-y-1.5">
-                  {activeTournament.players.map(p => {
+                  {sortParticipants(activeTournament.players, participantSort, tournamentAverages).map(p => {
                     const avgRow = tournamentAverages?.participants.find(pa => pa.key === p || pa.name === p);
                     const present = !!activeTournament.attendance?.[p];
                     return (
