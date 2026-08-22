@@ -1,4 +1,5 @@
 import type { GameState } from "@/types/game";
+import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
@@ -127,7 +128,7 @@ export async function saveGameRecord(
     player1_double_rate: doubleRates[top1], player2_double_rate: top2 !== undefined ? doubleRates[top2] : 0,
     player1_total_throws: throwsByPlayer[top1].length, player2_total_throws: top2 !== undefined ? throwsByPlayer[top2].length : 0,
     winner_name: game.winnerName!, winner_id: winnerMatch?.id || null,
-    detail_stats: { players: game.players.map((_, i) => detailFor(i)) } as any,
+    detail_stats: { players: game.players.map((_, i) => detailFor(i)) } as unknown as Json,
     tournament_id: tournamentLink?.tournamentId ?? null,
     ...(tournamentLink ? { match_id: tournamentLink.matchId } : {}),
   };
@@ -176,12 +177,12 @@ export async function saveGameRecord(
           player_name: p.name,
           player_id: findDbPlayer(p.name)?.id || null,
           starting_score: effectiveStartScore(game.startScore, game.players, i, game.teams),
-          throws: leg.throws[i] ?? [],
+          throws: (leg.throws[i] ?? []) as unknown as Json,
           won: leg.winnerIndex === teamIndexFor(game.teams, i),
         }))
       );
       if (legRows.length > 0) {
-        const { error: legsErr } = await supabase.from("game_legs").insert(legRows as any);
+        const { error: legsErr } = await supabase.from("game_legs").insert(legRows);
         if (legsErr) throw legsErr;
       }
     }

@@ -3,7 +3,9 @@
  * Uses Web Audio API for zero-latency sounds.
  */
 
-const audioCtx = typeof window !== "undefined" ? new (window.AudioContext || (window as any).webkitAudioContext)() : null;
+const audioCtx = typeof window !== "undefined"
+  ? new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+  : null;
 
 function playTone(frequency: number, duration: number, type: OscillatorType = "sine", volume = 0.15) {
   if (!audioCtx) return;

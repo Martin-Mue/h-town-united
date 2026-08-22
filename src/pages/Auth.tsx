@@ -67,8 +67,8 @@ const AuthPage = () => {
         setMode("login");
         return;
       }
-    } catch (err: any) {
-      const raw: string = err?.message || "";
+    } catch (err: unknown) {
+      const raw: string = err instanceof Error ? err.message : "";
       const msg = raw.includes("Invalid login credentials")
         ? "E-Mail oder Passwort falsch. Tipp: Passwort mit dem Auge prüfen."
         : raw.includes("User already registered")

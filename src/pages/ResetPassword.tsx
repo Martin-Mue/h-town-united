@@ -51,10 +51,10 @@ const ResetPassword = () => {
       toast({ title: "Passwort aktualisiert", description: "Du kannst dich jetzt einloggen." });
       await supabase.auth.signOut();
       navigate("/auth", { replace: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Fehler",
-        description: err?.message || "Passwort konnte nicht zurückgesetzt werden.",
+        description: err instanceof Error ? err.message : "Passwort konnte nicht zurückgesetzt werden.",
         variant: "destructive",
       });
     } finally {
