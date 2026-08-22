@@ -213,8 +213,12 @@ interface RecordEntry {
  *  sustained 30-round 93%. Segmenting the record by round count keeps each comparison apples-to-
  *  apples; every other recordable drill is either fixed-length or gated by `completedFully`, so
  *  no variant is needed for them. */
-function recordVariant(drillId: string, ctx: { maxRounds?: number; rtcStart?: number }): string | undefined {
-  if (drillId === "target-grind") return String(ctx.maxRounds ?? 10);
+function recordVariant(drillId: string, ctx: { maxRounds?: number; rtcStart?: number; targetBase?: number; targetMul?: number }): string | undefined {
+  // Round count alone used to be the whole key — a trivial-target run (e.g. Single-1) hitting
+  // 93% at 10 rounds would overwrite a genuinely hard T20 record at the same round count, since
+  // both hashed to the same variant. Which target was actually practiced matters at least as much
+  // as how many rounds, so it's part of the key too now.
+  if (drillId === "target-grind") return `${ctx.targetMul ?? 3}x${ctx.targetBase ?? 20}:${ctx.maxRounds ?? 10}`;
   // Shanghai RTC's difficulty depends on BOTH where it starts (fewer numbers left from 20) and
   // whether a round cap is set — a 5-round-capped run starting at 19 (just 2 numbers) isn't a
   // fair comparison against an uncapped full run from 1, so both go into the variant key.
@@ -383,9 +387,9 @@ const TrainingPage = () => {
   // pre-start screen and the finished-summary screen). Also reacts to the round-cap picker for
   // Target Grind, so the shown record tracks whichever variant is currently selected.
   useEffect(() => {
-    const variant = selectedDrill ? recordVariant(selectedDrill.id, { maxRounds: drillConfig.maxRounds, rtcStart: drillConfig.rtcStart }) : undefined;
+    const variant = selectedDrill ? recordVariant(selectedDrill.id, { maxRounds: drillConfig.maxRounds, rtcStart: drillConfig.rtcStart, targetBase: drillConfig.targetBase, targetMul: drillConfig.targetMul }) : undefined;
     setCurrentRecord(selectedDrill ? loadRecord(selectedDrill.id, variant) : null);
-  }, [selectedDrill, drillConfig.maxRounds, drillConfig.rtcStart]);
+  }, [selectedDrill, drillConfig.maxRounds, drillConfig.rtcStart, drillConfig.targetBase, drillConfig.targetMul]);
 
   // Compare + persist the instant a run finishes.
   useEffect(() => {
@@ -395,7 +399,7 @@ const TrainingPage = () => {
       setBrokeRecord(false);
       return;
     }
-    const variant = recordVariant(selectedDrill.id, { maxRounds: drillState.maxRounds, rtcStart: drillState.targetList?.[0] });
+    const variant = recordVariant(selectedDrill.id, { maxRounds: drillState.maxRounds, rtcStart: drillState.targetList?.[0], targetBase: drillState.targetBase, targetMul: drillState.targetMul });
     const existing = loadRecord(selectedDrill.id, variant);
     const isNew = !existing || (candidate.higherIsBetter ? candidate.value > existing.value : candidate.value < existing.value);
     if (isNew) {
@@ -1439,7 +1443,14 @@ const TrainingPage = () => {
                     <select
                       className="flex-1 bg-background border border-border rounded-md px-2 py-1.5 text-sm"
                       value={drillConfig.targetMul ?? 3}
-                      onChange={(e) => setDrillConfig((c) => ({ ...c, targetMul: Number(e.target.value) }))}
+                      onChange={(e) => {
+                        const mul = Number(e.target.value);
+                        // There's no triple-bull ring — nothing in the app can ever register that
+                        // hit (DartScoreInput's bull buttons only emit multiplier 1/2, and
+                        // LiveCamera explicitly folds 25×3 back to 25×1), so a "Triple Bull"
+                        // session used to run at a guaranteed, unwarned 0% hit rate.
+                        setDrillConfig((c) => ({ ...c, targetMul: mul, targetBase: mul === 3 && c.targetBase === 25 ? 20 : c.targetBase }));
+                      }}
                     >
                       <option value={1}>{t("training.singleOption")}</option>
                       <option value={2}>{t("training.doubleOption")}</option>
@@ -1450,9 +1461,11 @@ const TrainingPage = () => {
                       value={drillConfig.targetBase ?? 20}
                       onChange={(e) => setDrillConfig((c) => ({ ...c, targetBase: Number(e.target.value) }))}
                     >
-                      {[20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 25].map((n) => (
-                        <option key={n} value={n}>{n === 25 ? t("game.bull") : n}</option>
-                      ))}
+                      {[20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 25]
+                        .filter((n) => n !== 25 || (drillConfig.targetMul ?? 3) !== 3)
+                        .map((n) => (
+                          <option key={n} value={n}>{n === 25 ? t("game.bull") : n}</option>
+                        ))}
                     </select>
                   </div>
                 </div>

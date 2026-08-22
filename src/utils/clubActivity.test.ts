@@ -17,7 +17,7 @@ const game = (over: Partial<ActivityGameRow> & { id: string; played_at: string }
 describe("computeClubActivity", () => {
   it("reports a 180 within the recent window", () => {
     const legs: ActivityLegRow[] = [
-      { game_id: "g1", player_id: "p1", player_name: "Martin", throws: dartsOf(60, 60, 60), starting_score: 501, won: false },
+      { game_id: "g1", leg_number: 1, player_id: "p1", player_name: "Martin", throws: dartsOf(60, 60, 60), starting_score: 501, won: false },
     ];
     const events = computeClubActivity([game({ id: "g1", played_at: daysAgo(1) })], legs);
     expect(events.some((e) => e.type === "180" && e.playerName === "Martin")).toBe(true);
@@ -25,7 +25,7 @@ describe("computeClubActivity", () => {
 
   it("does not report a 180 outside the recent window", () => {
     const legs: ActivityLegRow[] = [
-      { game_id: "g1", player_id: "p1", player_name: "Martin", throws: dartsOf(60, 60, 60), starting_score: 501, won: false },
+      { game_id: "g1", leg_number: 1, player_id: "p1", player_name: "Martin", throws: dartsOf(60, 60, 60), starting_score: 501, won: false },
     ];
     const events = computeClubActivity([game({ id: "g1", played_at: daysAgo(30) })], legs, 14);
     expect(events.some((e) => e.type === "180")).toBe(false);
@@ -33,7 +33,7 @@ describe("computeClubActivity", () => {
 
   it("credits a 180 even for a guest with no linked player_id", () => {
     const legs: ActivityLegRow[] = [
-      { game_id: "g1", player_id: null, player_name: "Gast Uwe", throws: dartsOf(60, 60, 60), starting_score: 501, won: false },
+      { game_id: "g1", leg_number: 1, player_id: null, player_name: "Gast Uwe", throws: dartsOf(60, 60, 60), starting_score: 501, won: false },
     ];
     const events = computeClubActivity([game({ id: "g1", played_at: daysAgo(1), player1_id: null, player1_name: "Gast Uwe" })], legs);
     expect(events.some((e) => e.type === "180" && e.playerName === "Gast Uwe")).toBe(true);
@@ -115,8 +115,8 @@ describe("computeClubActivity", () => {
 
   it("reports a new best checkout only once there's a prior one to beat", () => {
     const legs: ActivityLegRow[] = [
-      { game_id: "g1", player_id: "p1", player_name: "Martin", throws: dartsOf(60, 60, 40), starting_score: 160, won: true }, // checkout 160? not realistic but fine for the arithmetic test
-      { game_id: "g2", player_id: "p1", player_name: "Martin", throws: dartsOf(20, 20, 40), starting_score: 80, won: true },
+      { game_id: "g1", leg_number: 1, player_id: "p1", player_name: "Martin", throws: dartsOf(60, 60, 40), starting_score: 160, won: true }, // checkout 160? not realistic but fine for the arithmetic test
+      { game_id: "g2", leg_number: 1, player_id: "p1", player_name: "Martin", throws: dartsOf(20, 20, 40), starting_score: 80, won: true },
     ];
     const games = [
       game({ id: "g1", played_at: daysAgo(10) }),
@@ -125,5 +125,19 @@ describe("computeClubActivity", () => {
     const events = computeClubActivity(games, legs, 14);
     // Second checkout (80) is lower than the first (160) — should NOT be reported as a new best.
     expect(events.some((e) => e.type === "pb_checkout")).toBe(false);
+  });
+
+  it("gives two 180s in different legs of the same game distinct ids", () => {
+    // A best-of-3+ match where the same player hits a 180 in leg 1 AND leg 3 used to produce two
+    // events sharing one id (game_id + player_id, no leg discriminator) — a React key collision
+    // that could make one of the two silently fail to render.
+    const legs: ActivityLegRow[] = [
+      { game_id: "g1", leg_number: 1, player_id: "p1", player_name: "Martin", throws: dartsOf(60, 60, 60), starting_score: 501, won: false },
+      { game_id: "g1", leg_number: 3, player_id: "p1", player_name: "Martin", throws: dartsOf(60, 60, 60), starting_score: 501, won: false },
+    ];
+    const events = computeClubActivity([game({ id: "g1", played_at: daysAgo(1) })], legs);
+    const oneEighties = events.filter((e) => e.type === "180" && e.playerName === "Martin");
+    expect(oneEighties).toHaveLength(2);
+    expect(oneEighties[0].id).not.toBe(oneEighties[1].id);
   });
 });

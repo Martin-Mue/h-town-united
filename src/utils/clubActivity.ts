@@ -15,6 +15,10 @@ export interface ActivityGameRow {
 
 export interface ActivityLegRow {
   game_id: string;
+  /** Distinguishes this player's multiple legs within the same game (best-of-3+) — without it, a
+   *  180 or a new best checkout in leg 3 shared an id with the same event from leg 1, a React key
+   *  collision that could make one of the two silently fail to render. */
+  leg_number: number;
   player_id: string | null;
   player_name: string;
   throws: DartThrow[];
@@ -126,7 +130,7 @@ export function computeClubActivity(
       const n180 = count180s(leg.throws);
       if (isRecent && n180 > 0) {
         events.push({
-          id: `180-${g.id}-${leg.player_id ?? leg.player_name}`,
+          id: `180-${g.id}-${leg.leg_number}-${leg.player_id ?? leg.player_name}`,
           type: "180",
           playerName: leg.player_name,
           playedAt: g.played_at,
@@ -140,7 +144,7 @@ export function computeClubActivity(
         const isNewBestCo = checkout > 0 && (prevBestCo === undefined || checkout > prevBestCo);
         if (isNewBestCo) {
           if (isRecent && prevBestCo !== undefined && prevBestCo > 0) {
-            events.push({ id: `pb-co-${g.id}-${leg.player_id}`, type: "pb_checkout", playerName: leg.player_name, playedAt: g.played_at, detail: translator.newBestFinish(checkout) });
+            events.push({ id: `pb-co-${g.id}-${leg.leg_number}-${leg.player_id}`, type: "pb_checkout", playerName: leg.player_name, playedAt: g.played_at, detail: translator.newBestFinish(checkout) });
           }
           bestCheckout.set(leg.player_id, checkout);
         }

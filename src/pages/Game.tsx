@@ -2175,7 +2175,10 @@ const GamePage = () => {
     const isDuel = names.length === 2;
     return (
       <div
+        role="button" tabIndex={0}
         onClick={() => setPhase(walkonHasStats(game) ? "stats" : "playing")}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPhase(walkonHasStats(game) ? "stats" : "playing"); } }}
+        aria-label={t("game.tapToSkip")}
         className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-6 cursor-pointer overflow-hidden"
       >
         <div className="absolute inset-0 gradient-hero" />
@@ -2249,7 +2252,10 @@ const GamePage = () => {
     );
     return (
       <div
+        role="button" tabIndex={0}
         onClick={() => setPhase("playing")}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPhase("playing"); } }}
+        aria-label={t("game.tapToSkip")}
         className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-4 cursor-pointer overflow-hidden"
       >
         <div className="absolute inset-0 gradient-hero" />
