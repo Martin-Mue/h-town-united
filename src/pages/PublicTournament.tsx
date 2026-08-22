@@ -980,15 +980,15 @@ const PublicTournamentPage = () => {
                 {t.players.map((p) => {
                   const avgRow = tournamentAverages?.participants.find((pa) => pa.key === p || pa.name === p);
                   const status = eliminationStatus?.[p];
-                  // Plain traffic-light read — green still in, red eliminated, no label text to
-                  // parse from across a room. Champion keeps its own gold tint (a positive
-                  // end-state, not part of the still-in/out binary).
-                  const statusColor =
-                    status === "champion" ? "border-l-accent bg-accent/10" :
-                    status === "eliminated" ? "border-l-destructive bg-destructive/10" :
-                    status === "active" ? "border-l-secondary bg-secondary/10" : "border-l-transparent bg-muted/30";
+                  // Green border = still in, grayed out = eliminated, no label text to parse from
+                  // across a room. Champion keeps its own gold tint (a positive end-state, not
+                  // part of the still-in/out binary).
+                  const borderColor =
+                    status === "champion" ? "border-l-accent" :
+                    status === "eliminated" ? "border-l-muted-foreground/30" :
+                    status === "active" ? "border-l-secondary" : "border-l-transparent";
                   return (
-                    <div key={p} className={`rounded-lg border-l-4 ${statusColor} px-2 py-1.5 min-w-0`}>
+                    <div key={p} className={`rounded-lg bg-muted/30 border-l-4 ${borderColor} px-2 py-1.5 min-w-0 ${status === "eliminated" ? "opacity-60" : ""}`}>
                       <p className="truncate text-xs font-medium">{status === "champion" && "🏆 "}{p}</p>
                       <p className="font-display text-sm text-primary leading-tight">
                         {avgRow && avgRow.tournamentAverage > 0 ? `Ø ${avgRow.tournamentAverage.toFixed(1)}` : "–"}
