@@ -7,6 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
+import { Badge } from "@/components/ui/badge";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem-color.png";
 
@@ -197,7 +198,7 @@ const DashboardPage = () => {
           {pagedRecentGames.visible.map((game) => (
             <div key={game.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-xs bg-muted px-2 py-0.5 rounded-md font-mono">{game.mode}</span>
+                <Badge variant="outline" className="text-xs bg-muted px-2 py-0.5 font-mono border-transparent">{game.mode}</Badge>
                 <span className="text-sm">
                   {game.player1_name} <span className="text-muted-foreground">vs</span> {game.player2_name}
                 </span>

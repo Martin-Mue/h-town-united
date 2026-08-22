@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download, FileText, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -1728,7 +1729,7 @@ const StatisticsPage = () => {
                       className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <span className="text-xs bg-muted px-2 py-0.5 rounded-md font-mono shrink-0">{g.mode}</span>
+                        <Badge variant="outline" className="text-xs bg-muted text-foreground px-2 py-0.5 font-mono shrink-0 border-transparent">{g.mode}</Badge>
                         <div className="min-w-0">
                           <span className="text-sm flex items-center gap-1 min-w-0">
                             <span className="truncate flex-1 min-w-0">{g.player1_name}</span>
@@ -1845,7 +1846,7 @@ const StatisticsPage = () => {
                   <div className="p-2.5">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-display uppercase truncate">{clip.player_name}</span>
-                      <span className="text-[10px] rounded-full bg-accent/15 text-accent px-2 py-0.5 shrink-0 ml-1">{clipKindLabel(clip.kind)}</span>
+                      <Badge variant="outline" className="text-[10px] bg-accent/15 text-accent px-2 py-0.5 shrink-0 ml-1 border-transparent">{clipKindLabel(clip.kind)}</Badge>
                     </div>
                     {clipGameLabel(clip) && (
                       <p className="text-[10px] text-primary/80 truncate mb-1">{clipGameLabel(clip)}</p>

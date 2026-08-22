@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
+import { Badge } from "@/components/ui/badge";
 import {
   roundLabelFor,
   currentBoardSchedule,
@@ -394,7 +395,7 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
                         </span>
                       )}
                       {m.board ? (
-                        <span className="shrink-0 font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5">{t("camera.board")} {m.board}</span>
+                        <Badge variant="outline" className="shrink-0 font-mono text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 border-transparent">{t("camera.board")} {m.board}</Badge>
                       ) : null}
                     </div>
                   );
@@ -560,7 +561,7 @@ const BoardOverview = ({
           <div className="flex flex-wrap gap-2">
             {onDeck.map((c) => (
               <div key={c.id} className="rounded-xl border border-border bg-card/60 px-3 py-2 flex items-center gap-2">
-                <span className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] bg-primary/10 text-primary rounded px-1.5 py-0.5 shrink-0">{t("camera.board")} {c.board}</span>
+                <Badge variant="outline" className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] bg-primary/10 text-primary px-1.5 py-0.5 shrink-0 border-transparent">{t("camera.board")} {c.board}</Badge>
                 <span className="text-[clamp(0.85rem,1.4vw,1.05rem)] uppercase tracking-wide">
                   {c.player1} <span className="text-muted-foreground normal-case">vs</span> {c.player2}
                 </span>
@@ -1119,9 +1120,9 @@ const PublicTournamentPage = () => {
                   <ul className="space-y-1.5">
                     {onDeck.map(({ board, match: m }) => (
                       <li key={m.id} className="flex items-center gap-2 text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">
-                        <span className="font-mono text-[10px] bg-primary/10 text-primary rounded px-1.5 py-0.5 shrink-0">
+                        <Badge variant="outline" className="font-mono text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 shrink-0 border-transparent">
                           {tr("camera.board")} {board}
-                        </span>
+                        </Badge>
                         <span className="truncate uppercase tracking-wide">
                           {m.player1} <span className="text-muted-foreground normal-case">vs</span> {m.player2}
                         </span>

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Loader2, Shield, ShieldOff, Trash2, UserCog } from "lucide-react";
 import {
   AlertDialog,
@@ -151,16 +152,17 @@ const AdminPage = () => {
                   <td className="px-4 py-3">
                     {u.roles?.length ? (
                       u.roles.map((r) => (
-                        <span
+                        <Badge
                           key={r}
-                          className={`text-[10px] uppercase px-1.5 py-0.5 rounded mr-1 ${
+                          variant="outline"
+                          className={`text-[10px] uppercase px-1.5 py-0.5 mr-1 border-transparent ${
                             r === "admin"
                               ? "bg-primary/15 text-primary"
                               : "bg-muted text-muted-foreground"
                           }`}
                         >
                           {r}
-                        </span>
+                        </Badge>
                       ))
                     ) : (
                       <span className="text-xs text-muted-foreground">–</span>

@@ -4,6 +4,7 @@ import { computeTournamentHighlights, computeTournamentAverages, sortParticipant
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -1556,7 +1557,7 @@ const TournamentPage = () => {
                     <div>
                       <p className="font-semibold text-sm">{tourn.name}</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="bg-muted px-1.5 py-0.5 rounded font-mono">{tourn.mode === "round-robin" ? t("tournament.roundRobin") : "K.O."}</span>
+                        <Badge variant="outline" className="bg-muted text-muted-foreground px-1.5 py-0.5 text-xs font-mono border-transparent">{tourn.mode === "round-robin" ? t("tournament.roundRobin") : "K.O."}</Badge>
                         <span><Users className="w-3 h-3 inline" /> {tourn.players.length}</span>
                         <span>{new Date(tourn.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language])}</span>
                       </div>
@@ -2131,7 +2132,7 @@ const TournamentPage = () => {
                   <div className="divide-y divide-border">
                     {open.filter(e => e.slot === slot).map(e => (
                       <div key={e.match.id} className="px-4 py-2.5 flex items-center gap-3 text-sm">
-                        <span className="font-mono text-xs bg-primary/10 text-primary rounded px-2 py-0.5 shrink-0">{t("camera.board")} {e.board}</span>
+                        <Badge variant="outline" className="font-mono text-xs bg-primary/10 text-primary px-2 py-0.5 shrink-0 border-transparent">{t("camera.board")} {e.board}</Badge>
                         <span className="flex-1 truncate uppercase tracking-wide">
                           <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
                         </span>

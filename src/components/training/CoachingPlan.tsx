@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Sparkles, Loader2, Play, TrendingUp, Target, Crosshair, Zap, RotateCw, Trophy, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -277,7 +278,7 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-display uppercase text-muted-foreground">{t("coach.step")} {idx + 1}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">{rec.metric}</span>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 bg-primary/15 text-primary border-transparent">{rec.metric}</Badge>
                   </div>
                   <p className="font-semibold text-sm truncate">{rec.title}</p>
                   <p className="text-xs text-muted-foreground line-clamp-2">{rec.reason}</p>

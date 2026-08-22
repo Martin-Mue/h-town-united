@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, Share2, Trophy, Target, TrendingUp, Flame, Crosshair, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { shareOrDownloadSeasonRecap } from "@/utils/seasonRecapImage";
 import type { HighlightClipRecord } from "@/pages/Statistics";
@@ -124,7 +125,7 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
                     <div className="w-full aspect-video bg-muted animate-pulse" />
                   )}
                   <div className="p-2.5 flex items-center justify-between text-xs">
-                    <span className="rounded-full bg-accent/15 text-accent px-2 py-0.5 text-[10px]">{highlightKindLabel(clip.kind, undefined, t("game.points"))}</span>
+                    <Badge variant="outline" className="bg-accent/15 text-accent px-2 py-0.5 text-[10px] border-transparent">{highlightKindLabel(clip.kind, undefined, t("game.points"))}</Badge>
                     <span className="text-muted-foreground">{clip.points} {t("game.points")}</span>
                   </div>
                 </div>

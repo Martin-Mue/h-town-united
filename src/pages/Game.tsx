@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
@@ -2651,13 +2652,13 @@ const GamePage = () => {
                 </p>
                 <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
                   {pendingCheckoutChoice.darts.map((t, idx) => (
-                    <span key={idx} className={`rounded px-1.5 py-0.5 text-[10px] font-display ring-1 ${
+                    <Badge key={idx} variant="outline" className={`px-1.5 py-0.5 text-[10px] font-display ${
                       pendingCheckoutChoice.doubleIndexes.includes(idx)
-                        ? "bg-accent/20 text-accent ring-accent/40"
-                        : "bg-muted text-muted-foreground ring-border"
+                        ? "bg-accent/20 text-accent border-accent/40"
+                        : "bg-muted text-muted-foreground border-border"
                     }`}>
                       {dartLabel(t)}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
                 <div className="mt-3 flex flex-wrap justify-center gap-1.5">
