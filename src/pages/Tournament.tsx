@@ -669,6 +669,19 @@ const TournamentPage = () => {
   const [editRoundMode, setEditRoundMode] = useState("501");
   const [editRoundBestOf, setEditRoundBestOf] = useState(3);
   const [savingRoundMode, setSavingRoundMode] = useState(false);
+  // Both editMatch/editingRound modals are hand-rolled overlays (not the shared Dialog
+  // primitive, which gets Escape-to-close for free) — clicking the backdrop already closes
+  // them, Escape didn't, the one dismissal keyboard users instinctively reach for.
+  useEffect(() => {
+    if (!editMatch && editingRound === null) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setEditMatch(null);
+      setEditingRound(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [editMatch, editingRound]);
   const [savingMatchPlayers, setSavingMatchPlayers] = useState(false);
   // Confirm before withdrawing a player mid-tournament — unlike removing a typo'd name during
   // setup (harmless, pre-draw), this forfeits every remaining match for a real participant,
