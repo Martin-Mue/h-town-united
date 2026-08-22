@@ -1037,7 +1037,7 @@ const PlayersPage = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="mt-3 w-full justify-center gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          className="mt-3 w-full justify-center gap-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           disabled={deletingId === player.id}
                         >
                           <Trash2 className="w-3.5 h-3.5" /> {t("players.removeProfile")}

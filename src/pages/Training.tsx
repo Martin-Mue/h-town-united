@@ -1008,14 +1008,14 @@ const TrainingPage = () => {
             ) : null}
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
               {selectedDrill.id === "shanghai" ? (
-                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                <div className="bg-card rounded-xl border border-border p-3 col-span-2">
                   <p className="text-2xl font-display">{drillState.shanghaiScore ?? 0}</p>
                   <p className="text-xs text-muted-foreground">
                     {drillState.shanghaiWin ? `${t("training.shanghaiOnNumberRound")} ${drillState.currentTarget}, ${t("tournament.roundLabel")} ${drillState.targetIndex + 1}!` : t("training.scoreAfter20Rounds")}
                   </p>
                 </div>
               ) : selectedDrill.id === "shanghai-rtc" ? (
-                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                <div className="bg-card rounded-xl border border-border p-3 col-span-2">
                   <p className="text-2xl font-display">{drillState.rtcWin ? t("training.number20") : drillState.currentTarget}</p>
                   <p className="text-xs text-muted-foreground">
                     {drillState.rtcWin
@@ -1024,19 +1024,19 @@ const TrainingPage = () => {
                   </p>
                 </div>
               ) : selectedDrill.id === "halve-it" ? (
-                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                <div className="bg-card rounded-xl border border-border p-3 col-span-2">
                   <p className="text-2xl font-display">{drillState.remaining}</p>
                   <p className="text-xs text-muted-foreground">{t("training.finalScoreAfter10Rounds")}</p>
                 </div>
               ) : selectedDrill.id === "bobs-27" ? (
-                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                <div className="bg-card rounded-xl border border-border p-3 col-span-2">
                   <p className="text-2xl font-display">{Math.max(0, drillState.remaining)}</p>
                   <p className="text-xs text-muted-foreground">
                     {bobsBusted ? `${t("training.bustInRound")} ${drillState.targetIndex + 1}` : t("training.finalScoreAfter20Rounds")}
                   </p>
                 </div>
               ) : selectedDrill.id === "bull-control" ? (
-                <div className="bg-muted/50 rounded-lg p-3 col-span-2">
+                <div className="bg-card rounded-xl border border-border p-3 col-span-2">
                   <p className="text-2xl font-display text-secondary">{drillState.bcWinner ?? "—"}</p>
                   <p className="text-xs text-muted-foreground mb-2">{t("training.winner")}</p>
                   <div className="space-y-1 text-left">
@@ -1050,11 +1050,11 @@ const TrainingPage = () => {
                 </div>
               ) : (
                 <>
-                  <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="bg-card rounded-xl border border-border p-3">
                     <p className="text-2xl font-display">{drillState.dartsThrown}</p>
                     <p className="text-xs text-muted-foreground">{t("training.dartsThrownLabel")}</p>
                   </div>
-                  <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="bg-card rounded-xl border border-border p-3">
                     <p className="text-2xl font-display">{drillState.hits}</p>
                     <p className="text-xs text-muted-foreground">{t("training.hitsLabel")}</p>
                   </div>
@@ -1062,13 +1062,13 @@ const TrainingPage = () => {
               )}
               {selectedDrill.id === "target-grind" && (
                 <>
-                  <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="bg-card rounded-xl border border-border p-3">
                     <p className="text-2xl font-display">
                       {drillState.dartsThrown > 0 ? Math.round((drillState.hits / drillState.dartsThrown) * 100) : 0}%
                     </p>
                     <p className="text-xs text-muted-foreground">{t("stats.hitRate")}</p>
                   </div>
-                  <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="bg-card rounded-xl border border-border p-3">
                     <p className="text-2xl font-display">
                       {drillState.roundScores.length > 0
                         ? Math.round((drillState.roundScores.reduce((a, b) => a + b, 0) / drillState.roundScores.length) * 3)

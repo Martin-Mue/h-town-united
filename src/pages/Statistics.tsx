@@ -1109,9 +1109,9 @@ const StatisticsPage = () => {
         <>
         {rankingFocusKey ? (
           <div className="bg-card rounded-xl border border-border p-4">
-            <button onClick={() => setRankingFocusKey(null)} className="mb-3 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <ArrowLeft className="w-3.5 h-3.5" /> {t("stats.backToOverview")}
-            </button>
+            <Button variant="ghost" size="sm" onClick={() => setRankingFocusKey(null)} className="mb-3 -ml-2 h-auto py-1 text-xs text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="w-4 h-4" /> {t("stats.backToOverview")}
+            </Button>
             <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
               <Trophy className="w-4 h-4" /> {sortByLabel(rankingFocusKey)}
             </h3>
@@ -1377,7 +1377,7 @@ const StatisticsPage = () => {
                   {[
                     { label: t("stats.average"), value: playerDetailStats.player.games_played > 0 ? Number(playerDetailStats.player.average).toFixed(1) : "–", color: "text-primary" },
                     { label: "Highscore", value: playerDetailStats.player.high_score, color: "text-accent" },
-                    { label: t("stats.streak"), value: `${playerDetailStats.currentStreak}🔥`, color: "text-destructive" },
+                    { label: t("stats.streak"), value: `${playerDetailStats.currentStreak}🔥`, color: "text-accent" },
                     { label: t("stats.bestStreak"), value: playerDetailStats.bestStreak, color: "text-secondary" },
                   ].map(s => (
                     <div key={s.label} className="text-center">

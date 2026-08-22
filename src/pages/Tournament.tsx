@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
@@ -1603,7 +1603,7 @@ const TournamentPage = () => {
   if (phase === "setup") {
     return (
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
-        <Button variant="ghost" onClick={() => { setEditingId(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm">← {t("common.back")}</Button>
+        <Button variant="ghost" onClick={() => { setEditingId(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm"><ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}</Button>
         <div className="mb-6 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> {t("tournament.bigEventMode")}</div>
           <h2 className="text-2xl font-display uppercase">{editingId ? t("tournament.editTournamentHeading") : t("tournament.createTournamentHeading")}</h2>

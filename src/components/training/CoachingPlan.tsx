@@ -300,7 +300,7 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
 };
 
 const Stat = ({ label, value }: { label: string; value: string }) => (
-  <div className="bg-muted/40 rounded-lg py-2">
+  <div className="bg-muted/40 border border-border/60 rounded-lg py-2">
     <p className="font-display text-lg leading-none">{value}</p>
     <p className="text-[10px] text-muted-foreground mt-1">{label}</p>
   </div>

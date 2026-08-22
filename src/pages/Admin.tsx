@@ -197,7 +197,7 @@ const AdminPage = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-destructive hover:bg-destructive/10"
+                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                             disabled={isSelf || busyId === u.user_id}
                             title={isSelf ? "Du kannst dich nicht selbst löschen" : "Mitglied entfernen"}
                           >
