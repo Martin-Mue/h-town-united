@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, Loader2, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,6 +105,11 @@ const PlayersPage = () => {
   const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [generatingPortrait, setGeneratingPortrait] = useState(false);
+  // Bumped whenever an in-flight AI-portrait request should no longer be trusted (a different
+  // photo was picked, or the dialog closed/reopened for a different player) — generateAiPortrait
+  // checks this is still its own value before applying anything it fetched, so a slow request
+  // that's since been superseded can't overwrite a newer pick or attach to the wrong player.
+  const portraitRequestIdRef = useRef(0);
   const [generatedPortrait, setGeneratedPortrait] = useState<string | null>(null);
   // Optional profile fields
   const [newBio, setNewBio] = useState("");
@@ -238,6 +243,7 @@ const PlayersPage = () => {
   };
 
   const resetForm = () => {
+    portraitRequestIdRef.current++;
     setNewName(EMPTY_PLAYER_FORM.name);
     setNewNickname(EMPTY_PLAYER_FORM.nickname);
     setNewEmoji(EMPTY_PLAYER_FORM.emoji);
@@ -302,6 +308,10 @@ const PlayersPage = () => {
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Any AI-portrait request already in flight was generated from the PREVIOUS photo — picking
+    // a new one invalidates it, otherwise a slow response could resurrect the old photo's result
+    // right after the user deliberately moved on from it.
+    portraitRequestIdRef.current++;
     setUploadedFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => setUploadedPhoto(ev.target?.result as string);
@@ -311,6 +321,8 @@ const PlayersPage = () => {
 
   /** Calls AI edge function to generate dart jersey portrait */
   const generateAiPortrait = async () => {
+    const requestId = ++portraitRequestIdRef.current;
+    const isStale = () => portraitRequestIdRef.current !== requestId;
     setGeneratingPortrait(true);
     try {
       const response = await fetch(
@@ -343,6 +355,10 @@ const PlayersPage = () => {
       }
 
       const data = await response.json();
+      // A slow response arriving after the user picked a different photo, or closed/reopened the
+      // dialog for a different player, must not resurrect stale content or (worse) get attached
+      // to the wrong player's profile once "Save" is hit with a since-changed editingPlayerId.
+      if (isStale()) return;
       if (data.imageBase64) {
         setGeneratedPortrait(data.imageBase64);
         toast({ title: t("players.portraitGenerated"), description: t("players.aiPortraitReady") });
@@ -353,10 +369,11 @@ const PlayersPage = () => {
         toast({ title: t("players.aiErrorTitle"), description: t("players.portraitGenerationFailed"), variant: "destructive" });
       }
     } catch (err) {
+      if (isStale()) return;
       console.error("AI portrait error:", err);
       toast({ title: t("players.aiErrorTitle"), description: err instanceof Error ? err.message : t("players.portraitGenerationFailed"), variant: "destructive" });
     } finally {
-      setGeneratingPortrait(false);
+      if (!isStale()) setGeneratingPortrait(false);
     }
   };
 
@@ -415,21 +432,36 @@ const PlayersPage = () => {
 
       let avatarUrl: string | null = null;
       let aiPortraitUrl: string | null = null;
+      // uploadImageToStorage swallows its own errors (returns null) and the URL-attach update
+      // below wasn't checked either — a failed upload used to still show the plain success toast,
+      // with only a console.error nobody sees hinting anything went wrong.
+      let photoFailed = false;
 
-      if (uploadedPhoto) avatarUrl = await uploadImageToStorage(uploadedPhoto, editingPlayerId, "avatar");
-      if (generatedPortrait) aiPortraitUrl = await uploadImageToStorage(generatedPortrait, editingPlayerId, "ai-portrait");
+      if (uploadedPhoto) {
+        avatarUrl = await uploadImageToStorage(uploadedPhoto, editingPlayerId, "avatar");
+        if (!avatarUrl) photoFailed = true;
+      }
+      if (generatedPortrait) {
+        aiPortraitUrl = await uploadImageToStorage(generatedPortrait, editingPlayerId, "ai-portrait");
+        if (!aiPortraitUrl) photoFailed = true;
+      }
 
       if (avatarUrl || aiPortraitUrl) {
-        await supabase.from("players").update({
+        const { error: linkError } = await supabase.from("players").update({
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
           ...(aiPortraitUrl ? { ai_portrait_url: aiPortraitUrl } : {}),
         }).eq("id", editingPlayerId);
+        if (linkError) photoFailed = true;
       }
 
       resetForm();
       setDialogOpen(false);
       fetchPlayers();
-      toast({ title: t("players.profileUpdated"), description: t("players.playerCardUpdated") });
+      if (photoFailed) {
+        toast({ title: t("players.profileUpdated"), description: t("players.photoUploadFailedDesc"), variant: "destructive" });
+      } else {
+        toast({ title: t("players.profileUpdated"), description: t("players.playerCardUpdated") });
+      }
       return;
     }
 
@@ -461,27 +493,35 @@ const PlayersPage = () => {
     // Upload photos if available
     let avatarUrl: string | null = null;
     let aiPortraitUrl: string | null = null;
+    let photoFailed = false;
 
     if (uploadedPhoto) {
       avatarUrl = await uploadImageToStorage(uploadedPhoto, inserted.id, "avatar");
+      if (!avatarUrl) photoFailed = true;
     }
     if (generatedPortrait) {
       aiPortraitUrl = await uploadImageToStorage(generatedPortrait, inserted.id, "ai-portrait");
+      if (!aiPortraitUrl) photoFailed = true;
     }
 
     // Update player with image URLs
     if (avatarUrl || aiPortraitUrl) {
-      await supabase.from("players").update({
+      const { error: linkError } = await supabase.from("players").update({
         avatar_url: avatarUrl,
         ai_portrait_url: aiPortraitUrl,
       }).eq("id", inserted.id);
+      if (linkError) photoFailed = true;
     }
 
     // Reset form
     resetForm();
     setDialogOpen(false);
     fetchPlayers();
-    toast({ title: t("players.memberAdded"), description: `${newName} ${t("players.nowInClub")}` });
+    if (photoFailed) {
+      toast({ title: t("players.memberAdded"), description: t("players.photoUploadFailedDesc"), variant: "destructive" });
+    } else {
+      toast({ title: t("players.memberAdded"), description: `${newName} ${t("players.nowInClub")}` });
+    }
     } finally {
       setSavingPlayer(false);
     }
