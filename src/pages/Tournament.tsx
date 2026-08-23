@@ -2056,6 +2056,14 @@ const TournamentPage = () => {
       };
 
       if (boardParam === "pick") {
+        // No server-side registry of "which device already claimed board N" exists — this is
+        // just a heads-up, not a hard block, using the same live-snapshot freshness the manual
+        // "Spiel starten" button already warns with (isLiveSnapshotFresh). Picking an
+        // already-active board still works; it's on the scorekeeper to notice and pick another.
+        const pickerSchedule = currentBoardSchedule(matches, boardCount);
+        const activeBoards = new Set(
+          pickerSchedule.now.filter((e) => isLiveSnapshotFresh(e.match.live)).map((e) => e.board)
+        );
         return (
           <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
             <Monitor className="w-10 h-10 text-primary mx-auto mb-3" />
@@ -2064,8 +2072,13 @@ const TournamentPage = () => {
             <div className="grid grid-cols-2 gap-3">
               {Array.from({ length: boardCount }, (_, i) => i + 1).map((n) => (
                 <button key={n} onClick={() => pickBoard(n)}
-                  className="rounded-xl border-2 border-border bg-card py-6 text-2xl font-display hover:border-primary hover:text-primary transition-colors">
+                  className="relative rounded-xl border-2 border-border bg-card py-6 text-2xl font-display hover:border-primary hover:text-primary transition-colors">
                   {t("camera.board")} {n}
+                  {activeBoards.has(n) && (
+                    <span className="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-full bg-secondary/15 text-secondary px-1.5 py-0.5 text-[9px] font-normal normal-case">
+                      <span className="h-1.5 w-1.5 rounded-full bg-secondary animate-pulse" /> {t("tournament.boardLikelyActive")}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

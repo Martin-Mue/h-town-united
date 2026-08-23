@@ -141,6 +141,10 @@ const WALKON_DURATION_MS = 3200;
 /** How long the follow-up stat-comparison screen stays up (ms) — longer than the walk-on
  *  card itself since there's actually something to read this time. */
 const STATS_DURATION_MS = 4500;
+/** How long a board-mode match's confirmation screen counts down before auto-starting (ms) —
+ *  longer than the walk-on/stats beats above since this actually commits to starting a real
+ *  match, not just skipping a cosmetic intro; "Bearbeiten" cancels it at any point. */
+const AUTOSTART_DELAY_MS = 5000;
 const MAX_PLAYERS = 8;
 
 function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, players: PlayerSlot[], teams?: TeamSlot[]): LegState {
@@ -480,6 +484,13 @@ const GamePage = () => {
   const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(() =>
     initialSnapshot?.tournamentLink ? (initialSnapshot.tournamentLink.tournamentName || "Turnier") : null
   );
+  // Board-mode auto-start: a board-linked match counts down to starting itself instead of
+  // waiting for a tap on "Spiel starten" — "Bearbeiten" (below) cancels it for the rare case
+  // something (handicap, warmup, ...) needs adjusting first. Not persisted in the crash-recovery
+  // snapshot on purpose — a reload mid-countdown should re-show the confirmation, not silently
+  // resume counting down toward starting a match nobody's looking at yet.
+  const [autoStartCanceled, setAutoStartCanceled] = useState(false);
+  const [autoStartSecondsLeft, setAutoStartSecondsLeft] = useState(0);
   const savingRef = useRef(false);
   // Mirrors game.currentLeg.remaining, updated synchronously the instant a throw is processed —
   // not just on the next render. handleX01Throw reads from this instead of the `game` closure
@@ -568,11 +579,19 @@ const GamePage = () => {
     const mid = searchParams.get("mid");
     if (!tid || !mid) return;
     const tname = searchParams.get("tname") || undefined;
-    // Set only when this match was launched from a board-mode "Los geht's" tap (see
-    // Tournament.tsx's startFromBoard) — routes "Zurück zum Turnier" straight back to that
-    // board's next-match view instead of the flat bracket, closing the loop board-mode exists for.
+    // Routes "Zurück zum Turnier" straight back to a board's next-match view instead of the flat
+    // bracket, closing the loop board-mode exists for — set either from an explicit board-mode
+    // "Los geht's" tap (Tournament.tsx's startFromBoard appends ?board=N), OR, when this match was
+    // reached some other way (a QR-code scan, a manual bracket tap), falling back to whichever
+    // board THIS device last bound to for THIS tournament — the whole point of board-mode is that
+    // one device only ever plays one board, so any match for that tournament on this device almost
+    // certainly belongs there too, not just the ones launched through the board-mode button itself.
     const boardParam = parseInt(searchParams.get("board") || "", 10);
-    const board = Number.isFinite(boardParam) && boardParam > 0 ? boardParam : undefined;
+    let board = Number.isFinite(boardParam) && boardParam > 0 ? boardParam : undefined;
+    if (board === undefined && typeof window !== "undefined") {
+      const savedBoard = parseInt(window.localStorage.getItem(`dart-tournament-board-${tid}`) || "", 10);
+      if (Number.isFinite(savedBoard) && savedBoard > 0) board = savedBoard;
+    }
     tournamentLinkRef.current = { tournamentId: tid, matchId: mid, tournamentName: tname, board };
     setTournamentLinkName(tname || "Turnier");
 
@@ -841,6 +860,21 @@ const GamePage = () => {
       enterMatch();
     }
   };
+
+  // Board-mode auto-start countdown — a board-linked match starts itself instead of waiting for
+  // a tap; "Bearbeiten" (setAutoStartCanceled) opts out for the rare case something needs
+  // adjusting first. Depends on tournamentLinkName (state), not tournamentLinkRef.current.board
+  // directly — the ref is set in the same prefill effect that sets tournamentLinkName, but
+  // mutating a ref doesn't itself trigger a re-render/re-check, so this needs a real state
+  // dependency guaranteed to change in that same tick to reliably see the board value.
+  useEffect(() => {
+    if (phase !== "setup" || !tournamentLinkRef.current?.board || autoStartCanceled) return;
+    setAutoStartSecondsLeft(Math.ceil(AUTOSTART_DELAY_MS / 1000));
+    const tick = window.setInterval(() => setAutoStartSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    const finish = window.setTimeout(() => startGame(), AUTOSTART_DELAY_MS);
+    return () => { window.clearInterval(tick); window.clearTimeout(finish); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, autoStartCanceled, tournamentLinkName]);
 
   /** Goes from setup/warm-up into the actual match — via the walk-on intro if enabled. Wrapped in
    *  useCallback so its identity only changes when walkonEnabled does — a plain function here
@@ -1914,6 +1948,31 @@ const GamePage = () => {
     // tournament's own data model (double-out, handicap, bot, warmup, who-starts) stays freely
     // editable, same as a casual game.
     const isTournamentMatch = !!tournamentLinkName;
+
+    // Board-mode confirmation: a compact "here's the match, starting in Xs" screen instead of
+    // the full form below — mode/players/best-of are already correct from the bracket, so there's
+    // nothing to review there; "Bearbeiten" reveals the full form for the rare case something
+    // else (handicap, warmup, who-starts) needs a look first.
+    if (tournamentLinkRef.current?.board && !autoStartCanceled) {
+      return (
+        <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
+          <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 mb-6">
+            <p className="text-xs text-primary font-medium">🏆 {t("game.tournamentMatch")} · {tournamentLinkName}</p>
+          </div>
+          <p className="text-lg font-display mb-1 truncate">{playerNames[0]}</p>
+          <p className="text-xs text-muted-foreground mb-1">vs.</p>
+          <p className="text-lg font-display mb-4 truncate">{playerNames[1]}</p>
+          <p className="text-xs text-muted-foreground mb-8">{mode} · {t("stats.bestOf")} {bestOfLegs}</p>
+          <div className="font-display text-5xl text-primary tabular-nums mb-2">{autoStartSecondsLeft}</div>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-6">{t("game.autoStartingIn")}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setAutoStartCanceled(true)}>{t("common.edit")}</Button>
+            <Button className="flex-1 font-display uppercase" onClick={startGame}>{t("game.startGame")}</Button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
         <h2 className="text-2xl font-display uppercase mb-1 text-center">{t("home.newGame")}</h2>
