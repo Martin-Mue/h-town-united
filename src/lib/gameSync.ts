@@ -194,22 +194,31 @@ export async function saveGameRecord(
   }
   if (legsAlreadyExisted) return;
 
+  // games_played/average/high_score/double_rate are now written EXCLUSIVELY by this RPC, which
+  // recomputes them itself from the real game_legs throws rather than trusting the client-
+  // computed `averages`/`highs`/`doubleRates` arrays above (still used below, and for
+  // gameInsertPayload's own player1/2 summary columns, but no longer for the players-table
+  // rollup) — see 20260823140000_server_side_player_stat_rollup.sql. A plain client UPDATE to
+  // those four columns on someone else's row is rejected by the DB now, so this call isn't
+  // optional/best-effort: skipping it would leave games_played etc. never incrementing.
+  if (insertedGameId) {
+    const { error: statsErr } = await supabase.rpc("apply_game_player_stats", { p_game_id: insertedGameId });
+    if (statsErr) throw statsErr;
+  }
+
+  // games_won and elo_rating stay client-computed and client-written: crediting a win correctly
+  // needs team-membership and tiebreak-resolution context that isn't persisted anywhere (see the
+  // migration's own comment), and Elo needs every participant's pre-game rating + placement,
+  // already computed together above as eloDeltas.
   for (let i = 0; i < n; i++) {
     const match = findDbPlayer(game.players[i].name);
     if (match && !game.players[i].isBot) {
-      const { data: current, error: curErr } = await supabase.from("players").select("*").eq("id", match.id).single();
+      const { data: current, error: curErr } = await supabase.from("players").select("games_won, elo_rating").eq("id", match.id).single();
       if (curErr) throw curErr;
       if (current) {
-        const gp = current.games_played + 1;
-        const newAvg = (Number(current.average) * current.games_played + averages[i]) / gp;
-        const newDoubleRate = game.mode === "cricket"
-          ? Number(current.double_rate) || 0
-          : (Number(current.double_rate) * current.games_played + doubleRates[i]) / gp;
         const newElo = Math.round((Number(current.elo_rating) || 1000) + (eloDeltas[match.id] ?? 0));
         const { error: updErr } = await supabase.from("players").update({
-          games_played: gp, games_won: current.games_won + (game.winnerIndex === teamIndexFor(game.teams, i) ? 1 : 0),
-          average: Math.round(newAvg * 10) / 10, high_score: Math.max(current.high_score, highs[i]),
-          double_rate: Math.round(newDoubleRate * 10) / 10,
+          games_won: current.games_won + (game.winnerIndex === teamIndexFor(game.teams, i) ? 1 : 0),
           elo_rating: newElo,
         }).eq("id", match.id);
         if (updErr) throw updErr;

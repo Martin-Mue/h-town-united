@@ -643,6 +643,7 @@ export type Database = {
     }
     Functions: {
       update_match_live_snapshot: { Args: { p_tournament_id: string; p_match_id: string; p_snapshot: Json }; Returns: undefined }
+      apply_game_player_stats: { Args: { p_game_id: string }; Returns: undefined }
       admin_delete_user: { Args: { _user_id: string }; Returns: undefined }
       admin_list_users: {
         Args: never
