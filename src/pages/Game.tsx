@@ -77,6 +77,7 @@ import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 
 const WALKON_PREF_KEY = "dart-walkon-enabled";
 const INPUT_MODE_PREF_KEY = "dart-input-mode";
+const SOUND_PREF_KEY = "dart-sound-enabled";
 /** How long the walk-on intro stays up before auto-advancing (ms) — also the window
  *  during which a tap skips straight to the match. */
 const WALKON_DURATION_MS = 3200;
@@ -323,7 +324,11 @@ const GamePage = () => {
   const [warmupTotal, setWarmupTotal] = useState(0);
   const [playerIsBot, setPlayerIsBot] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
   const [playerBotLevel, setPlayerBotLevel] = useState<BotLevel[]>(Array(MAX_PLAYERS).fill("medium"));
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const raw = window.localStorage.getItem(SOUND_PREF_KEY);
+    return raw ? raw !== "false" : true;
+  });
   const [callerVoice, setCallerVoiceState] = useState<CallerVoice>(() => getCallerVoice());
   // Derived, not its own state — "off" is now just the caller-voice picker's 4th option instead
   // of a separate Switch, so every existing `if (speechEnabled)` gate below keeps working
@@ -586,6 +591,11 @@ const GamePage = () => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(INPUT_MODE_PREF_KEY, dartInputMode);
   }, [dartInputMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SOUND_PREF_KEY, JSON.stringify(soundEnabled));
+  }, [soundEnabled]);
 
   useEffect(() => {
     return () => {
