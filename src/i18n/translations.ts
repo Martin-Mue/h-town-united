@@ -974,6 +974,8 @@ export const translations: Record<string, Record<Language, string>> = {
   "players.skillProfile": { de: "Skill Profil", en: "Skill profile", fr: "Profil de compétences", pl: "Profil umiejętności", nl: "Vaardighedenprofiel", tr: "Yetenek profili" },
 
   "tournament.attendancePresent": { de: "anwesend", en: "present", fr: "présent", pl: "obecny", nl: "aanwezig", tr: "mevcut" },
+  "tournament.markAllPresent": { de: "Alle anwesend", en: "Mark all present", fr: "Tous présents", pl: "Wszyscy obecni", nl: "Allen aanwezig", tr: "Tümü mevcut" },
+  "tournament.clearAllPresent": { de: "Alle zurücksetzen", en: "Clear all", fr: "Tout réinitialiser", pl: "Wyczyść wszystko", nl: "Alles wissen", tr: "Tümünü temizle" },
   "tournament.tournamentAverage": { de: "Turnier-Average", en: "Tournament average", fr: "Moyenne du tournoi", pl: "Średnia turniejowa", nl: "Toernooigemiddelde", tr: "Turnuva ortalaması" },
   "pt.participantsView": { de: "Teilnehmer", en: "Participants", fr: "Participants", pl: "Uczestnicy", nl: "Deelnemers", tr: "Katılımcılar" },
   "pt.rotationSettingsTooltip": { de: "Auto-Wechsel anpassen", en: "Customize auto-rotate", fr: "Personnaliser la rotation auto", pl: "Dostosuj automatyczne przełączanie", nl: "Automatisch wisselen aanpassen", tr: "Otomatik geçişi özelleştir" },

@@ -1248,6 +1248,21 @@ const TournamentPage = () => {
     }
   };
 
+  /** Bulk check-in/out — same optimistic-update + revert-on-error pattern as toggleAttendance,
+   *  just for every current participant at once instead of a single name. */
+  const setAllAttendance = async (present: boolean) => {
+    if (!activeTournament) return;
+    const prevAttendance = activeTournament.attendance || {};
+    const next: Record<string, boolean> = {};
+    activeTournament.players.forEach((p) => { next[p] = present; });
+    setActiveTournament({ ...activeTournament, attendance: next });
+    const { error } = await supabase.from("tournaments").update({ attendance: next as unknown as Json }).eq("id", activeTournament.id);
+    if (error) {
+      setActiveTournament((curr) => curr ? { ...curr, attendance: prevAttendance } : curr);
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    }
+  };
+
   /** Manually set (and lock) the scorekeeper of a single match. */
   const setMatchScorekeeper = async (matchId: string, keeper: string) => {
     if (!activeTournament) return;
@@ -2244,6 +2259,14 @@ const TournamentPage = () => {
                   </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground mb-3">{t("tournament.withdrawHint")}</p>
+                <div className="flex gap-2 mb-3">
+                  <Button size="sm" variant="outline" className="flex-1 gap-1.5 text-xs" onClick={() => setAllAttendance(true)}>
+                    <Check className="w-3.5 h-3.5" /> {t("tournament.markAllPresent")}
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1 text-xs text-muted-foreground" onClick={() => setAllAttendance(false)}>
+                    {t("tournament.clearAllPresent")}
+                  </Button>
+                </div>
                 <div className="space-y-1.5">
                   {sortParticipants(activeTournament.players, participantSort, tournamentAverages).map(p => {
                     const avgRow = tournamentAverages?.participants.find(pa => pa.key === p || pa.name === p);
