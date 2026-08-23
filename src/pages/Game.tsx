@@ -2694,7 +2694,12 @@ const GamePage = () => {
                 <Share2 className="w-4 h-4" /> {sharingResult ? "…" : t("game.share")}
               </Button>
               {tournamentLinkName ? (
-                <Button onClick={() => navigate("/tournament")} className="flex-1 font-display uppercase">{t("game.backToTournament")}</Button>
+                <Button
+                  onClick={() => navigate(tournamentLinkRef.current ? `/tournament/${tournamentLinkRef.current.tournamentId}` : "/tournament")}
+                  className="flex-1 font-display uppercase"
+                >
+                  {t("game.backToTournament")}
+                </Button>
               ) : (
                 <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">{t("home.newGame")}</Button>
               )}

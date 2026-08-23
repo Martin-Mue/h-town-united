@@ -70,6 +70,7 @@ const App = () => (
                           <Route path="/players" element={<Players />} />
                           <Route path="/game" element={<Game />} />
                           <Route path="/tournament" element={<Tournament />} />
+                          <Route path="/tournament/:id" element={<Tournament />} />
                           <Route path="/tournaments/series" element={<TournamentSeries />} />
                           <Route path="/tournaments/series/:id" element={<TournamentSeries />} />
                           <Route path="/training" element={<Training />} />

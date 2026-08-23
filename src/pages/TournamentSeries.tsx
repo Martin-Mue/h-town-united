@@ -178,7 +178,7 @@ const TournamentSeriesPage = () => {
           ) : (
             <div className="space-y-2">
               {pagedSeriesTourneys.visible.map((t) => (
-                <Link key={t.id} to="/tournament" className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted transition-colors">
+                <Link key={t.id} to={`/tournament/${t.id}`} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted transition-colors">
                   <span className="text-sm font-medium">{t.name}</span>
                   {t.champion && <span className="text-xs text-accent">🏆 {t.champion}</span>}
                 </Link>

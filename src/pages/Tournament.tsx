@@ -26,7 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import htuEmblem from "@/assets/club-emblem.png";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   type Match,
   type RoundRobinMatch,
@@ -703,6 +703,7 @@ const TournamentPage = () => {
   const { session } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { id: routeTournamentId } = useParams();
   /** True tournament SETTINGS edits (name, mode, round_configs, players, public_view, …) are
    *  creator-only, DB-enforced via the 20260815170000 migration's trigger — this just keeps the
    *  UI from showing controls that would fail server-side. `isOwnerOf` for the list view (many
@@ -794,6 +795,25 @@ const TournamentPage = () => {
   }, []);
 
   useEffect(() => { fetchTournaments(); fetchDbPlayers(); fetchSeries(); }, [fetchTournaments, fetchDbPlayers, fetchSeries]);
+
+  // Deep link: /tournament/:id opens straight into that tournament's bracket instead of the flat
+  // list — every "back to tournament" link (post-game, series view) now points here instead of
+  // the list. Only reacts to the URL, never writes it (openTournament/closeTournament do that) —
+  // otherwise this would fight those on every render. Waits for `loading` to clear so a real
+  // no-longer-exists id (deleted tournament, bad link) doesn't get treated as "not found yet".
+  useEffect(() => {
+    if (!routeTournamentId || loading || activeTournament?.id === routeTournamentId) return;
+    const match = tournaments.find((t) => t.id === routeTournamentId);
+    if (match) {
+      setActiveTournament(match);
+      setBracketView(defaultBracketView(match.bracket as Match[]));
+      setPhase("bracket");
+    } else {
+      toast({ title: t("common.error"), description: t("tournament.tournamentNotFound"), variant: "destructive" });
+      navigate("/tournament", { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeTournamentId, loading, tournaments]);
 
   // Keep the open bracket live across devices — a match started via "Spiel starten" on one
   // board's tablet (or a plain manual edit on another) should show up here without a manual
@@ -1024,6 +1044,7 @@ const TournamentPage = () => {
       setPhase("bracket");
       setPlayers([]);
       setTournamentName("");
+      navigate(`/tournament/${rec.id}`);
       fetchTournaments();
       toast({ title: t("tournament.tournamentUpdated") });
       return;
@@ -1071,6 +1092,7 @@ const TournamentPage = () => {
     setPhase("bracket");
     setPlayers([]);
     setTournamentName("");
+    navigate(`/tournament/${record.id}`);
     fetchTournaments();
     } finally {
       setSavingTournament(false);
@@ -1429,6 +1451,15 @@ const TournamentPage = () => {
     setShowHighlights(false);
     setTournamentHighlights(null);
     setTournamentAverages(null);
+    navigate(`/tournament/${t.id}`);
+  };
+
+  /** Mirror of openTournament for leaving the bracket view — keeps the URL in sync with `phase`
+   *  so a refresh, share, or browser-back lands somewhere sensible instead of a stale deep link. */
+  const closeTournament = () => {
+    setActiveTournament(null);
+    setPhase("list");
+    navigate("/tournament");
   };
 
   /** Just the cheap half of toggleHighlights below (games rows only, no per-dart legs) — split
@@ -1481,7 +1512,7 @@ const TournamentPage = () => {
   const deleteTournament = async (id: string) => {
     await supabase.from("tournaments").delete().eq("id", id);
     fetchTournaments();
-    if (activeTournament?.id === id) { setActiveTournament(null); setPhase("list"); }
+    if (activeTournament?.id === id) { closeTournament(); }
   };
 
   const roundLabel = (round: number, total: number) => roundLabelFor(round, total, t);
@@ -2016,7 +2047,7 @@ const TournamentPage = () => {
                 {t("common.edit")}
               </Button>
             )}
-            <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
+            <Button variant="ghost" size="sm" onClick={() => { closeTournament(); }}>
               ← {t("tournament.overview")}
             </Button>
           </div>
@@ -2366,7 +2397,7 @@ const TournamentPage = () => {
           <p className="text-xs text-muted-foreground">{t("tournament.roundRobin")} · {activeTournament.players.length} {t("game.playersSuffix")}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { setActiveTournament(null); setPhase("list"); }}>
+          <Button variant="ghost" size="sm" onClick={() => { closeTournament(); }}>
             ← {t("tournament.overview")}
           </Button>
         </div>
