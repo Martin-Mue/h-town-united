@@ -43,6 +43,10 @@ import {
   computeCheckoutStats,
   combineCheckoutStats,
   isAchievableVisitTotal,
+  scoreTierBreakdown,
+  segmentBreakdown,
+  segmentCount,
+  SEGMENT_NUMBERS,
 } from "@/utils/dartStats";
 
 /** Bot personas with their target 3-dart average. `nameKey` (not a literal string) since this is
@@ -1799,6 +1803,10 @@ const GamePage = () => {
       return {
         name: p.name,
         average: calculateAverage(throws),
+        // Per-leg averages — only populated once there's more than one leg to compare (a
+        // single-leg match's leg average and match average are the same number, so showing
+        // both would just be visual noise).
+        legAverages: allLegs.length > 1 ? allLegs.map((leg) => calculateAverage(leg.throws[i] ?? [])) : [],
         highscore: getHighest3DartRound(throws),
         totalThrows: throws.length,
         checkout,
@@ -1808,11 +1816,23 @@ const GamePage = () => {
         first9: getFirst9Average(throws),
         totalPoints: throws.reduce((s, t) => s + t.points, 0),
         legs: game.legsWon[teamIndexFor(game.teams, i)],
+        tierBreakdown: scoreTierBreakdown(throws),
+        segments: segmentBreakdown(throws),
       };
     });
     // No code path calls setGame again once isFinished is true (every scoring handler guards on
     // `!game.isFinished`), so depending on `game` recomputes exactly once, same as today.
   }, [game]);
+
+  // Which SEGMENT_NUMBERS rows are worth a line in the field-breakdown grid — hoisted out of
+  // the per-player JSX map below so it's computed once for the whole comparison, not once per
+  // player card.
+  const visibleSegmentRows = useMemo(() => {
+    if (!postGameStats) return [];
+    return SEGMENT_NUMBERS.filter((n) =>
+      postGameStats.some((p) => segmentCount(p.segments, n, 1) + segmentCount(p.segments, n, 2) + segmentCount(p.segments, n, 3) > 0)
+    );
+  }, [postGameStats]);
 
   // ─── SETUP PHASE ───────────────────────────────
   if (phase === "setup") {
@@ -2547,12 +2567,39 @@ const GamePage = () => {
                   <div key={p.name} className="bg-muted/50 rounded-lg p-3 text-xs space-y-1">
                     <p className="font-semibold text-sm truncate">{p.name}</p>
                     <p className="text-muted-foreground">Ø <span className="text-foreground font-bold">{p.average.toFixed(1)}</span></p>
+                    {p.legAverages.length > 1 && (
+                      <p className="text-muted-foreground text-[10px]">
+                        {p.legAverages.map((a, li) => `${t("game.leg")} ${li + 1}: ${a.toFixed(1)}`).join(" · ")}
+                      </p>
+                    )}
                     <p className="text-muted-foreground">High <span className="text-foreground font-bold">{p.highscore}</span></p>
                     <p className="text-muted-foreground">First 9 <span className="text-foreground font-bold">{p.first9.toFixed(1)}</span></p>
                     {p.s180 > 0 && <p className="text-accent font-bold">🎯 {p.s180}× 180!</p>}
-                    {p.tonPlus > 0 && <p className="text-muted-foreground">100+ <span className="text-foreground font-bold">{p.tonPlus}×</span></p>}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Round-score distribution (40+ through 180) — always visible, not gated behind
+                "detaillierte Statistiken", since seeing HOW an average was built up (a run of
+                steady 60s vs. one lucky 180) is exactly what a post-match glance is for. */}
+            {postGameStats && postGameStats.some((p) => p.tierBreakdown.some((tier) => tier.count > 0)) && (
+              <div className="bg-muted/30 rounded-lg p-3 mb-4 text-xs overflow-x-auto">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 text-left">{t("game.scoreDistribution")}</p>
+                <div className="grid gap-y-1" style={{ gridTemplateColumns: `1fr repeat(${postGameStats.length}, 1fr)` }}>
+                  <span />
+                  {postGameStats.map((p) => <span key={p.name} className="font-semibold text-primary text-center truncate">{p.name}</span>)}
+                  {postGameStats[0].tierBreakdown.map((tier, ti) => (
+                    <span key={tier.label} className="contents">
+                      <span className="text-left text-muted-foreground">{tier.label}</span>
+                      {postGameStats.map((p) => (
+                        <span key={p.name} className={`text-center font-display ${tier.label === "180" && p.tierBreakdown[ti].count > 0 ? "text-accent font-bold" : ""}`}>
+                          {p.tierBreakdown[ti].count || "–"}
+                        </span>
+                      ))}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -2585,6 +2632,45 @@ const GamePage = () => {
                     </span>
                   ))}
                 </div>
+
+                {/* Individual-field breakdown — exactly which segments (Triple 20, Single 1, ...)
+                    were hit and how often. Only the numbers that actually got hit by anyone get a
+                    row, since most matches leave most of the board untouched. */}
+                {visibleSegmentRows.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-border/40">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 text-left">{t("game.fieldBreakdown")}</p>
+                    <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${postGameStats.length}, 1fr)` }}>
+                      {postGameStats.map((p) => (
+                        <div key={p.name}>
+                          <p className="text-[10px] font-semibold text-primary text-center truncate mb-1">{p.name}</p>
+                          <table className="w-full text-[10px]">
+                            <thead>
+                              <tr className="text-muted-foreground">
+                                <th className="text-left font-normal"> </th>
+                                <th className="font-normal">S</th>
+                                <th className="font-normal">D</th>
+                                <th className="font-normal">T</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {visibleSegmentRows.map((n) => (
+                                <tr key={n}>
+                                  <td className="text-left text-muted-foreground">{n === 25 ? "Bull" : n}</td>
+                                  <td className="text-center font-display">{segmentCount(p.segments, n, 1) || "·"}</td>
+                                  <td className="text-center font-display">{segmentCount(p.segments, n, 2) || "·"}</td>
+                                  <td className="text-center font-display">{n === 25 ? <span className="text-muted-foreground/40">–</span> : (segmentCount(p.segments, n, 3) || "·")}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {p.segments.misses > 0 && (
+                            <p className="text-[9px] text-muted-foreground text-center mt-1">Miss ×{p.segments.misses}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

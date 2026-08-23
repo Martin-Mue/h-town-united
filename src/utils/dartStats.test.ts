@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isAchievableVisitTotal } from "./dartStats";
+import { isAchievableVisitTotal, scoreTierBreakdown, segmentBreakdown, segmentCount, type DartThrow } from "./dartStats";
 
 describe("isAchievableVisitTotal", () => {
   it("accepts common achievable totals", () => {
@@ -18,5 +18,87 @@ describe("isAchievableVisitTotal", () => {
     expect(isAchievableVisitTotal(-1)).toBe(false);
     expect(isAchievableVisitTotal(181)).toBe(false);
     expect(isAchievableVisitTotal(50.5)).toBe(false);
+  });
+});
+
+const d = (baseValue: number, multiplier: number): DartThrow => ({
+  baseValue, multiplier, points: baseValue === 25 && multiplier === 3 ? 0 : baseValue * multiplier,
+});
+const visit = (...darts: DartThrow[]) => darts;
+const throwsOf = (...visits: DartThrow[][]) => visits.flat();
+
+describe("scoreTierBreakdown", () => {
+  it("returns every tier at 0 for no throws", () => {
+    const tiers = scoreTierBreakdown([]);
+    expect(tiers.map((t) => t.label)).toEqual(["40+", "60+", "80+", "100+", "120+", "140+", "160+", "180"]);
+    expect(tiers.every((t) => t.count === 0)).toBe(true);
+  });
+
+  it("leaves a sub-40 visit uncounted in every tier", () => {
+    const throws = throwsOf(visit(d(5, 1), d(5, 1), d(5, 1))); // 15 points
+    const tiers = scoreTierBreakdown(throws);
+    expect(tiers.every((t) => t.count === 0)).toBe(true);
+  });
+
+  it("buckets band boundaries inclusively (60 and 79 both land in 60+)", () => {
+    const throws = throwsOf(
+      visit(d(20, 1), d(20, 1), d(20, 1)), // 60
+      visit(d(20, 3), d(19, 1), d(0, 1)),  // 60+19 = 79
+    );
+    const tiers = scoreTierBreakdown(throws);
+    expect(tiers.find((t) => t.label === "60+")!.count).toBe(2);
+    expect(tiers.find((t) => t.label === "40+")!.count).toBe(0);
+    expect(tiers.find((t) => t.label === "80+")!.count).toBe(0);
+  });
+
+  it("counts a 180 only in the 180 tier, not also in 160+", () => {
+    const throws = throwsOf(visit(d(20, 3), d(20, 3), d(20, 3))); // 180
+    const tiers = scoreTierBreakdown(throws);
+    expect(tiers.find((t) => t.label === "180")!.count).toBe(1);
+    expect(tiers.find((t) => t.label === "160+")!.count).toBe(0);
+  });
+
+  it("counts a short trailing checkout visit (fewer than 3 darts)", () => {
+    // Final visit of a leg: T20 + D20 = 100, checked out in 2 darts.
+    const throws = throwsOf(visit(d(20, 3), d(20, 2)));
+    const tiers = scoreTierBreakdown(throws);
+    expect(tiers.find((t) => t.label === "100+")!.count).toBe(1);
+  });
+
+  it("keeps per-tier counts independent across multiple visits", () => {
+    const throws = throwsOf(
+      visit(d(15, 1), d(15, 1), d(15, 1)), // 45 -> 40+
+      visit(d(15, 1), d(15, 1), d(15, 1)), // 45 -> 40+
+      visit(d(20, 3), d(20, 3), d(20, 2)), // 20*3 + 20*3 + 20*2 = 160 -> 160+
+    );
+    const tiers = scoreTierBreakdown(throws);
+    expect(tiers.find((t) => t.label === "40+")!.count).toBe(2);
+    expect(tiers.find((t) => t.label === "160+")!.count).toBe(1);
+  });
+});
+
+describe("segmentBreakdown / segmentCount", () => {
+  it("counts each exact baseValue+multiplier combination separately", () => {
+    const throws = throwsOf(visit(d(20, 3), d(20, 3), d(1, 1)), visit(d(20, 3), d(16, 1), d(0, 1)));
+    const sb = segmentBreakdown(throws);
+    expect(segmentCount(sb, 20, 3)).toBe(3); // Triple 20 x3
+    expect(segmentCount(sb, 1, 1)).toBe(1); // Single 1 x1
+    expect(segmentCount(sb, 16, 1)).toBe(1); // Single 16 x1
+    expect(segmentCount(sb, 20, 1)).toBe(0); // Single 20 never hit
+  });
+
+  it("tracks misses separately from scoring hits", () => {
+    const throws = throwsOf(visit(d(0, 1), d(0, 1), d(20, 1)));
+    const sb = segmentBreakdown(throws);
+    expect(sb.misses).toBe(2);
+    expect(segmentCount(sb, 20, 1)).toBe(1);
+  });
+
+  it("distinguishes outer bull (25) from bullseye (50)", () => {
+    const throws = throwsOf(visit(d(25, 1), d(25, 2), d(25, 1)));
+    const sb = segmentBreakdown(throws);
+    expect(segmentCount(sb, 25, 1)).toBe(2); // outer bull
+    expect(segmentCount(sb, 25, 2)).toBe(1); // bullseye
+    expect(segmentCount(sb, 25, 3)).toBe(0); // no triple-bull ring
   });
 });

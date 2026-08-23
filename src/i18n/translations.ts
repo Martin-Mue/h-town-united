@@ -236,6 +236,8 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.legsSuffix": { de: "Legs", en: "Legs", fr: "Legs", pl: "Legi", nl: "Legs", tr: "Legler" },
   "game.lessStats": { de: "Weniger anzeigen", en: "Show less", fr: "Voir moins", pl: "Pokaż mniej", nl: "Minder tonen", tr: "Daha az göster" },
   "game.detailedStats": { de: "Detaillierte Statistiken", en: "Detailed statistics", fr: "Statistiques détaillées", pl: "Szczegółowe statystyki", nl: "Gedetailleerde statistieken", tr: "Detaylı istatistikler" },
+  "game.scoreDistribution": { de: "Rundenverteilung", en: "Round distribution", fr: "Répartition des tours", pl: "Rozkład rund", nl: "Rondeverdeling", tr: "Tur dağılımı" },
+  "game.fieldBreakdown": { de: "Einzelfelder", en: "Field breakdown", fr: "Détail des zones touchées", pl: "Podział pól", nl: "Veldverdeling", tr: "Alan dağılımı" },
   "game.statistic": { de: "Statistik", en: "Statistic", fr: "Statistique", pl: "Statystyka", nl: "Statistiek", tr: "İstatistik" },
   "game.throwsCount": { de: "Würfe", en: "Throws", fr: "Lancers", pl: "Rzuty", nl: "Worpen", tr: "Atışlar" },
   "game.checkoutRate": { de: "Checkout-Quote", en: "Checkout rate", fr: "Taux de checkout", pl: "Wskaźnik checkoutu", nl: "Checkout-percentage", tr: "Checkout oranı" },

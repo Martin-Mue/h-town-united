@@ -21,7 +21,8 @@ import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import {
   first9Average, average, highestVisit, count180s, computeCheckoutStats, combineCheckoutStats,
   computeCricketStats, combineCricketStats, experienceScore,
-  type DartThrow, type CheckoutStats, type CricketStats,
+  scoreTierBreakdown, segmentBreakdown, segmentCount, SEGMENT_NUMBERS,
+  type DartThrow, type CheckoutStats, type CricketStats, type ScoreTierCount, type SegmentCounts,
 } from "@/utils/dartStats";
 import { highlightKindLabel } from "@/utils/x01Rules";
 import { generateSeasonReportPdf } from "@/utils/seasonReport";
@@ -103,6 +104,7 @@ const StatisticsPage = () => {
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   const [showSeasonRecap, setShowSeasonRecap] = useState(false);
+  const [showFieldBreakdown, setShowFieldBreakdown] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "players" | "h2h" | "history" | "highlights">("overview");
   const [viewScope, setViewScope] = useState<"club" | "personal">(() => {
     if (typeof window === "undefined") return "club";
@@ -258,6 +260,27 @@ const StatisticsPage = () => {
         checkout: combineCheckoutStats(v.checkouts),
         first9: v.first9s.length ? v.first9s.reduce((a, b) => a + b, 0) / v.first9s.length : 0,
       };
+    });
+    return result;
+  }, [gameLegs, filteredGames, games]);
+
+  // Round-score distribution (40+ through 180) + individual-field hit breakdown — same
+  // X01-only scope as advancedByPlayer above (Cricket's "points" don't carry the round-quality
+  // meaning these two stats are about), built from the same dart-by-dart game_legs data.
+  const scoringBreakdownByPlayer = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const modeById = new Map(games.map((g) => [g.id, g.mode]));
+    const byPlayer: Record<string, { name: string; throws: DartThrow[] }> = {};
+    gameLegs.forEach((leg) => {
+      if (!filteredIds.has(leg.game_id)) return;
+      if (modeById.get(leg.game_id) === "cricket") return;
+      if (!leg.player_id || !Array.isArray(leg.throws) || leg.throws.length === 0) return;
+      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, throws: [] });
+      bucket.throws.push(...leg.throws);
+    });
+    const result: Record<string, { name: string; tiers: ScoreTierCount[]; segments: SegmentCounts }> = {};
+    Object.entries(byPlayer).forEach(([id, v]) => {
+      result[id] = { name: v.name, tiers: scoreTierBreakdown(v.throws), segments: segmentBreakdown(v.throws) };
     });
     return result;
   }, [gameLegs, filteredGames, games]);
@@ -983,6 +1006,13 @@ const StatisticsPage = () => {
     return <div role="status" aria-label={t("stats.loadingStats")} className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
 
+  // Which SEGMENT_NUMBERS rows are worth a line for the currently-shown player detail — most
+  // of the board goes untouched over any given filtered range, so only hit numbers get a row.
+  const playerScoringBreakdown = playerDetailStats ? scoringBreakdownByPlayer[playerDetailStats.player.id] : undefined;
+  const visibleFieldRows = playerScoringBreakdown
+    ? SEGMENT_NUMBERS.filter((n) => segmentCount(playerScoringBreakdown.segments, n, 1) + segmentCount(playerScoringBreakdown.segments, n, 2) + segmentCount(playerScoringBreakdown.segments, n, 3) > 0)
+    : [];
+
   const clubTabs = [
     { key: "overview" as const, labelKey: "stats.tabOverview", icon: BarChart3 },
     { key: "players" as const, labelKey: "stats.tabPlayers", icon: Users },
@@ -1477,6 +1507,68 @@ const StatisticsPage = () => {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Round-score distribution (40+ through 180) — same X01-only scope as the
+                  checkout/first-9 card above, respects the active time/year/mode/best-of filters. */}
+              {playerScoringBreakdown && playerScoringBreakdown.tiers.some((tier) => tier.count > 0) && (
+                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4" /> {t("game.scoreDistribution")}
+                  </h3>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={playerScoringBreakdown.tiers}>
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      <Bar dataKey="count" fill="hsl(185 85% 48%)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Individual-field breakdown — optional/opt-in extra detail on exactly which
+                  segments (Triple 20, Single 1, ...) were hit and how often. */}
+              {playerScoringBreakdown && (
+                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                  <button onClick={() => setShowFieldBreakdown(!showFieldBreakdown)} className="w-full flex items-center justify-between gap-2 text-left">
+                    <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
+                      <Crosshair className="w-4 h-4" /> {t("game.fieldBreakdown")}
+                    </h3>
+                    {showFieldBreakdown ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+                  </button>
+                  {showFieldBreakdown && (
+                    visibleFieldRows.length > 0 ? (
+                      <div className="mt-3">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-muted-foreground">
+                              <th className="text-left font-normal"> </th>
+                              <th className="font-normal">S</th>
+                              <th className="font-normal">D</th>
+                              <th className="font-normal">T</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visibleFieldRows.map((n) => (
+                              <tr key={n} className="border-t border-border/30">
+                                <td className="text-left text-muted-foreground py-1">{n === 25 ? "Bull" : n}</td>
+                                <td className="text-center font-display py-1">{segmentCount(playerScoringBreakdown.segments, n, 1) || "·"}</td>
+                                <td className="text-center font-display py-1">{segmentCount(playerScoringBreakdown.segments, n, 2) || "·"}</td>
+                                <td className="text-center font-display py-1">{n === 25 ? <span className="text-muted-foreground/40">–</span> : (segmentCount(playerScoringBreakdown.segments, n, 3) || "·")}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {playerScoringBreakdown.segments.misses > 0 && (
+                          <p className="text-[10px] text-muted-foreground text-center mt-2">Miss ×{playerScoringBreakdown.segments.misses}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-3">{t("stats.noDataYet")}</p>
+                    )
+                  )}
                 </div>
               )}
 

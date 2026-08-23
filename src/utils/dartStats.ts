@@ -52,6 +52,62 @@ export const tonPlusCount = (throws: DartThrow[]): number =>
 export const count180s = (throws: DartThrow[]): number =>
   visits(throws).filter((v) => v.reduce((s, t) => s + t.points, 0) === 180).length;
 
+// ─── Round-score distribution ────────────────────────────────────────
+export interface ScoreTierCount {
+  label: string;
+  count: number;
+}
+
+/** 20-point bands from 40 up to the 180 max. Visits below 40 are the normal case (not the
+ *  point of this view) and simply fall through uncounted, rather than being lumped into a
+ *  dominant "0-39" bucket that would dwarf every other bar. */
+const SCORE_TIER_BOUNDS: readonly [label: string, min: number, max: number][] = [
+  ["40+", 40, 59], ["60+", 60, 79], ["80+", 80, 99], ["100+", 100, 119],
+  ["120+", 120, 139], ["140+", 140, 159], ["160+", 160, 179], ["180", 180, 180],
+];
+
+/** Histogram of 3-dart visit totals across the bands above — how many rounds were "just a
+ *  40" vs. "a 140", not just the single average number. */
+export function scoreTierBreakdown(throws: DartThrow[]): ScoreTierCount[] {
+  const counts = SCORE_TIER_BOUNDS.map(() => 0);
+  for (const v of visits(throws)) {
+    const points = v.reduce((s, t) => s + t.points, 0);
+    const idx = SCORE_TIER_BOUNDS.findIndex(([, min, max]) => points >= min && points <= max);
+    if (idx >= 0) counts[idx]++;
+  }
+  return SCORE_TIER_BOUNDS.map(([label], i) => ({ label, count: counts[i] }));
+}
+
+// ─── Individual-field breakdown ──────────────────────────────────────
+/** Board numbers worth a row in a field-hit breakdown, highest first then the bull — same
+ *  ordering convention as CRICKET_NUMBERS/the in-game Cricket marks table. */
+export const SEGMENT_NUMBERS = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 25] as const;
+
+export interface SegmentCounts {
+  /** hits[baseValue][multiplier] — baseValue 1-20 or 25, multiplier 1(single)/2(double)/3(triple);
+   *  25 has no triple, there's no triple-bull ring). */
+  hits: Record<number, Record<number, number>>;
+  misses: number;
+}
+
+/** How often each exact board segment (Triple 20, Single 1, Bullseye, ...) was hit. Kept
+ *  separate from the tier/average stats above since this is meant to be opt-in extra detail,
+ *  not part of the at-a-glance comparison. */
+export function segmentBreakdown(throws: DartThrow[]): SegmentCounts {
+  const hits: Record<number, Record<number, number>> = {};
+  let misses = 0;
+  for (const t of throws) {
+    if (t.baseValue === 0) { misses++; continue; }
+    const byMult = hits[t.baseValue] || (hits[t.baseValue] = {});
+    byMult[t.multiplier] = (byMult[t.multiplier] || 0) + 1;
+  }
+  return { hits, misses };
+}
+
+export function segmentCount(sb: SegmentCounts, baseValue: number, multiplier: number): number {
+  return sb.hits[baseValue]?.[multiplier] ?? 0;
+}
+
 export interface CheckoutStats {
   /** Visits where the player started on a possible checkout (remaining <= 170). */
   attempts: number;
