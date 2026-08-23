@@ -49,6 +49,9 @@ import {
   combineScoreTiers,
   combineSegmentCounts,
   SEGMENT_NUMBERS,
+  type CheckoutStats,
+  type ScoreTierCount,
+  type SegmentCounts,
 } from "@/utils/dartStats";
 
 /** Bot personas with their target 3-dart average. `nameKey` (not a literal string) since this is
@@ -74,6 +77,60 @@ import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
 import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
 import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
+
+/** Every post-game number for one player, scoped to either a single leg or the whole match — see
+ *  computeLegStatBundle/combineStatBundles below. Backs the post-game screen's per-leg tabs. */
+interface StatBundle {
+  average: number;
+  highscore: number;
+  first9: number;
+  totalThrows: number;
+  totalPoints: number;
+  triples: number;
+  tonPlus: number;
+  s180: number;
+  checkout: CheckoutStats;
+  tierBreakdown: ScoreTierCount[];
+  segments: SegmentCounts;
+}
+
+/** Safe to compute directly from one leg's own throws — a single leg is one continuous sequence
+ *  for that player, so chunking into 3-dart visits (tonPlus/s180/tierBreakdown/segments) never
+ *  crosses a boundary it shouldn't. */
+const computeLegStatBundle = (throws: DartThrow[], startingScore: number, isCricket: boolean): StatBundle => ({
+  average: calculateAverage(throws),
+  highscore: getHighest3DartRound(throws),
+  first9: getFirst9Average(throws),
+  totalThrows: throws.length,
+  totalPoints: throws.reduce((s, t) => s + t.points, 0),
+  triples: throws.filter(t => t.multiplier === 3).length,
+  tonPlus: countTonPlusRounds(throws),
+  s180: count180s(throws),
+  checkout: isCricket ? { attempts: 0, hits: 0, percentage: 0, highestCheckout: 0 } : computeCheckoutStats(throws, startingScore),
+  tierBreakdown: scoreTierBreakdown(throws),
+  segments: segmentBreakdown(throws),
+});
+
+/** Combines per-leg bundles into the match-wide "Gesamt" view. average/first9 are recomputed
+ *  from the flattened cross-leg throws directly — both are pure sum/count ratios (first9 = the
+ *  first 9 elements from the start = leg 1's own first 9 darts, since legs are concatenated in
+ *  play order), unaffected by the chunk-boundary issue below. Everything else that chunks darts
+ *  into 3-dart visits (tonPlus/s180/highscore/tierBreakdown/segments/checkout) is summed/maxed
+ *  from each leg's own safe-to-chunk bundle instead — see combineScoreTiers' own comment for why
+ *  recomputing those from the flattened array would be wrong. */
+const combineStatBundles = (bundles: StatBundle[], overallThrows: DartThrow[]): StatBundle => ({
+  average: calculateAverage(overallThrows),
+  first9: getFirst9Average(overallThrows),
+  highscore: bundles.reduce((m, b) => Math.max(m, b.highscore), 0),
+  totalThrows: bundles.reduce((s, b) => s + b.totalThrows, 0),
+  totalPoints: bundles.reduce((s, b) => s + b.totalPoints, 0),
+  triples: bundles.reduce((s, b) => s + b.triples, 0),
+  tonPlus: bundles.reduce((s, b) => s + b.tonPlus, 0),
+  s180: bundles.reduce((s, b) => s + b.s180, 0),
+  checkout: combineCheckoutStats(bundles.map(b => b.checkout)),
+  tierBreakdown: combineScoreTiers(bundles.map(b => b.tierBreakdown)),
+  segments: combineSegmentCounts(bundles.map(b => b.segments)),
+});
 
 const WALKON_PREF_KEY = "dart-walkon-enabled";
 const INPUT_MODE_PREF_KEY = "dart-input-mode";
@@ -1603,7 +1660,7 @@ const GamePage = () => {
           mode: game.mode === "custom" ? `Custom ${game.startScore}` : game.mode,
           winnerName: game.winnerName ?? "?",
           bestOfLegs: game.bestOfLegs,
-          players: postGameStats.map((p) => ({ name: p.name, average: p.average, highscore: p.highscore, s180: p.s180, legs: p.legs })),
+          players: postGameStats.map((p) => ({ name: p.name, average: p.overall.average, highscore: p.overall.highscore, s180: p.overall.s180, legs: p.legs })),
         },
         `ergebnis-${new Date().toISOString().slice(0, 10)}.png`
       );
@@ -1617,6 +1674,7 @@ const GamePage = () => {
     botPlanRef.current = null;
     clearActiveGameSnapshot();
     setPhase("setup"); setGame(null); setGameSaved(false); setShowDetailedStats(false);
+    setSelectedLegTab("all");
     setDartsThisRound(0); setUndoStack([]);
   };
 
@@ -1804,40 +1862,28 @@ const GamePage = () => {
   const postGameStats = useMemo(() => {
     if (!game || !game.isFinished) return null;
     const allLegs = [...game.completedLegs, game.currentLeg];
+    const isCricket = game.mode === "cricket";
     return game.players.map((p, i) => {
-      const throws = allLegs.flatMap(l => l.throws[i] ?? []);
-      // Checkout-Quote: tatsächliche Checkouts / Visits, in denen ein Checkout überhaupt
-      // möglich war (remaining <= 170) — pro Leg berechnet, da "remaining" bei jedem Leg neu
-      // beginnt (ein einzelner Wurf-Flatten über alle Legs würde den Rest-Score verfälschen).
-      const checkout = game.mode === "cricket"
-        ? { attempts: 0, hits: 0, percentage: 0, highestCheckout: 0 }
-        : combineCheckoutStats(allLegs.map((leg) => computeCheckoutStats(leg.throws[i] ?? [], effectiveStartScore(game.startScore, game.players, i, game.teams))));
+      const startingScore = effectiveStartScore(game.startScore, game.players, i, game.teams);
+      const perLeg = allLegs.map((leg) => computeLegStatBundle(leg.throws[i] ?? [], startingScore, isCricket));
+      const overall = combineStatBundles(perLeg, allLegs.flatMap((leg) => leg.throws[i] ?? []));
       return {
         name: p.name,
-        average: calculateAverage(throws),
-        // Per-leg averages — only populated once there's more than one leg to compare (a
-        // single-leg match's leg average and match average are the same number, so showing
-        // both would just be visual noise).
-        legAverages: allLegs.length > 1 ? allLegs.map((leg) => calculateAverage(leg.throws[i] ?? [])) : [],
-        highscore: getHighest3DartRound(throws),
-        totalThrows: throws.length,
-        checkout,
-        triples: throws.filter(t => t.multiplier === 3).length,
-        tonPlus: countTonPlusRounds(throws),
-        s180: count180s(throws),
-        first9: getFirst9Average(throws),
-        totalPoints: throws.reduce((s, t) => s + t.points, 0),
         legs: game.legsWon[teamIndexFor(game.teams, i)],
-        // Same "per leg, then combine" reasoning as checkout above, for the same underlying
-        // reason: chunking into 3-dart visits must never cross a leg boundary, or the tail of
-        // one leg and the head of the next get merged into a visit that was never thrown.
-        tierBreakdown: combineScoreTiers(allLegs.map((leg) => scoreTierBreakdown(leg.throws[i] ?? []))),
-        segments: combineSegmentCounts(allLegs.map((leg) => segmentBreakdown(leg.throws[i] ?? []))),
+        perLeg,
+        overall,
       };
     });
     // No code path calls setGame again once isFinished is true (every scoring handler guards on
     // `!game.isFinished`), so depending on `game` recomputes exactly once, same as today.
   }, [game]);
+
+  /** Which leg's numbers the post-game screen currently shows — "all" (match-wide) or a 0-based
+   *  leg index. Reset on every new game via resetGame so a stale leg selection doesn't survive
+   *  into the next match's (possibly single-leg) result. */
+  const [selectedLegTab, setSelectedLegTab] = useState<number | "all">("all");
+  const statFor = (p: NonNullable<typeof postGameStats>[number]): StatBundle =>
+    selectedLegTab === "all" ? p.overall : (p.perLeg[selectedLegTab] ?? p.overall);
 
   // Which SEGMENT_NUMBERS rows are worth a line in the field-breakdown grid — hoisted out of
   // the per-player JSX map below so it's computed once for the whole comparison, not once per
@@ -1845,9 +1891,13 @@ const GamePage = () => {
   const visibleSegmentRows = useMemo(() => {
     if (!postGameStats) return [];
     return SEGMENT_NUMBERS.filter((n) =>
-      postGameStats.some((p) => segmentCount(p.segments, n, 1) + segmentCount(p.segments, n, 2) + segmentCount(p.segments, n, 3) > 0)
+      postGameStats.some((p) => {
+        const segments = statFor(p).segments;
+        return segmentCount(segments, n, 1) + segmentCount(segments, n, 2) + segmentCount(segments, n, 3) > 0;
+      })
     );
-  }, [postGameStats]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postGameStats, selectedLegTab]);
 
   // ─── SETUP PHASE ───────────────────────────────
   if (phase === "setup") {
@@ -2586,42 +2636,61 @@ const GamePage = () => {
             <p className="text-accent font-display text-xl uppercase mb-4">{t("game.wins")}</p>
             {game.bestOfLegs > 1 && <p className="text-sm text-muted-foreground mb-4">{game.legsWon.join(" : ")} {t("game.legsSuffix")}</p>}
 
+            {/* Leg filter — every stat block below (cards, distribution, detailed table, field
+                breakdown) reads through statFor(p), which reacts to this tab. Only shown once
+                there's more than one leg to actually distinguish. */}
+            {postGameStats && postGameStats[0].perLeg.length > 1 && (
+              <div className="flex flex-wrap justify-center gap-1.5 mb-4">
+                <button onClick={() => setSelectedLegTab("all")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${selectedLegTab === "all" ? "bg-primary/15 text-primary" : "bg-muted/40 text-muted-foreground hover:text-foreground"}`}>
+                  {t("game.overallTab")}
+                </button>
+                {postGameStats[0].perLeg.map((_, li) => (
+                  <button key={li} onClick={() => setSelectedLegTab(li)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${selectedLegTab === li ? "bg-primary/15 text-primary" : "bg-muted/40 text-muted-foreground hover:text-foreground"}`}>
+                    {t("game.leg")} {li + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {postGameStats && (
               <div className="grid grid-cols-2 gap-3 mb-4 text-left">
-                {postGameStats.map((p) => (
-                  <div key={p.name} className="bg-muted/50 rounded-lg p-3 text-xs space-y-1">
-                    <p className="font-semibold text-sm truncate">{p.name}</p>
-                    <p className="text-muted-foreground">Ø <span className="text-foreground font-bold">{p.average.toFixed(1)}</span></p>
-                    {p.legAverages.length > 1 && (
-                      <p className="text-muted-foreground text-[10px]">
-                        {p.legAverages.map((a, li) => `${t("game.leg")} ${li + 1}: ${a.toFixed(1)}`).join(" · ")}
-                      </p>
-                    )}
-                    <p className="text-muted-foreground">High <span className="text-foreground font-bold">{p.highscore}</span></p>
-                    <p className="text-muted-foreground">First 9 <span className="text-foreground font-bold">{p.first9.toFixed(1)}</span></p>
-                    {p.s180 > 0 && <p className="text-accent font-bold">🎯 {p.s180}× 180!</p>}
-                  </div>
-                ))}
+                {postGameStats.map((p) => {
+                  const s = statFor(p);
+                  return (
+                    <div key={p.name} className="bg-muted/50 rounded-lg p-3 text-xs space-y-1">
+                      <p className="font-semibold text-sm truncate">{p.name}</p>
+                      <p className="text-muted-foreground">Ø <span className="text-foreground font-bold">{s.average.toFixed(1)}</span></p>
+                      <p className="text-muted-foreground">High <span className="text-foreground font-bold">{s.highscore}</span></p>
+                      <p className="text-muted-foreground">First 9 <span className="text-foreground font-bold">{s.first9.toFixed(1)}</span></p>
+                      {s.s180 > 0 && <p className="text-accent font-bold">🎯 {s.s180}× 180!</p>}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
             {/* Round-score distribution (40+ through 180) — always visible, not gated behind
                 "detaillierte Statistiken", since seeing HOW an average was built up (a run of
                 steady 60s vs. one lucky 180) is exactly what a post-match glance is for. */}
-            {postGameStats && postGameStats.some((p) => p.tierBreakdown.some((tier) => tier.count > 0)) && (
+            {postGameStats && postGameStats.some((p) => statFor(p).tierBreakdown.some((tier) => tier.count > 0)) && (
               <div className="bg-muted/30 rounded-lg p-3 mb-4 text-xs overflow-x-auto">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 text-left">{t("game.scoreDistribution")}</p>
                 <div className="grid gap-y-1" style={{ gridTemplateColumns: `1fr repeat(${postGameStats.length}, 1fr)` }}>
                   <span />
                   {postGameStats.map((p) => <span key={p.name} className="font-semibold text-primary text-center truncate">{p.name}</span>)}
-                  {postGameStats[0].tierBreakdown.map((tier, ti) => (
+                  {statFor(postGameStats[0]).tierBreakdown.map((tier, ti) => (
                     <span key={tier.label} className="contents">
                       <span className="text-left text-muted-foreground">{tier.label}</span>
-                      {postGameStats.map((p) => (
-                        <span key={p.name} className={`text-center font-display ${tier.label === "180" && p.tierBreakdown[ti].count > 0 ? "text-accent font-bold" : ""}`}>
-                          {p.tierBreakdown[ti].count || "–"}
-                        </span>
-                      ))}
+                      {postGameStats.map((p) => {
+                        const count = statFor(p).tierBreakdown[ti].count;
+                        return (
+                          <span key={p.name} className={`text-center font-display ${tier.label === "180" && count > 0 ? "text-accent font-bold" : ""}`}>
+                            {count || "–"}
+                          </span>
+                        );
+                      })}
                     </span>
                   ))}
                 </div>
@@ -2634,6 +2703,9 @@ const GamePage = () => {
               </button>
             )}
 
+            {/* Detailed stats deliberately does NOT repeat Ø/First9/Highscore/100+/180! — those
+                are already visible above (the cards and the distribution table), so this only
+                adds numbers that aren't shown anywhere else yet. */}
             {showDetailedStats && postGameStats && (
               <div className="bg-muted/30 rounded-lg p-4 mb-4 text-xs overflow-x-auto">
                 <div className="grid gap-y-2" style={{ gridTemplateColumns: `1fr repeat(${postGameStats.length}, 1fr)` }}>
@@ -2641,15 +2713,13 @@ const GamePage = () => {
                   {postGameStats.map(p => <span key={p.name} className="font-semibold text-primary text-center truncate">{p.name}</span>)}
 
                   {[
-                    { l: "Ø Average", v: (p: typeof postGameStats[number]) => p.average.toFixed(1) },
-                    { l: "First 9 Ø", v: (p: typeof postGameStats[number]) => p.first9.toFixed(1) },
-                    { l: "Highscore", v: (p: typeof postGameStats[number]) => p.highscore },
-                    { l: t("game.throwsCount"), v: (p: typeof postGameStats[number]) => p.totalThrows },
-                    { l: t("game.checkoutRate"), v: (p: typeof postGameStats[number]) => p.checkout.attempts > 0 ? `${p.checkout.hits}/${p.checkout.attempts} (${p.checkout.percentage.toFixed(0)}%)` : "–" },
-                    { l: t("game.triplesLabel"), v: (p: typeof postGameStats[number]) => p.triples },
-                    { l: "100+", v: (p: typeof postGameStats[number]) => p.tonPlus },
-                    { l: "180!", v: (p: typeof postGameStats[number]) => p.s180 },
-                    { l: t("game.points"), v: (p: typeof postGameStats[number]) => p.totalPoints },
+                    { l: t("game.throwsCount"), v: (p: typeof postGameStats[number]) => statFor(p).totalThrows },
+                    { l: t("game.checkoutRate"), v: (p: typeof postGameStats[number]) => {
+                        const c = statFor(p).checkout;
+                        return c.attempts > 0 ? `${c.hits}/${c.attempts} (${c.percentage.toFixed(0)}%)` : "–";
+                      } },
+                    { l: t("game.triplesLabel"), v: (p: typeof postGameStats[number]) => statFor(p).triples },
+                    { l: t("game.points"), v: (p: typeof postGameStats[number]) => statFor(p).totalPoints },
                   ].map(row => (
                     <span key={row.l} className="contents">
                       <span className="text-left text-muted-foreground">{row.l}</span>
@@ -2665,34 +2735,37 @@ const GamePage = () => {
                   <div className="mt-4 pt-3 border-t border-border/40">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 text-left">{t("game.fieldBreakdown")}</p>
                     <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${postGameStats.length}, 1fr)` }}>
-                      {postGameStats.map((p) => (
-                        <div key={p.name}>
-                          <p className="text-[10px] font-semibold text-primary text-center truncate mb-1">{p.name}</p>
-                          <table className="w-full text-[10px]">
-                            <thead>
-                              <tr className="text-muted-foreground">
-                                <th className="text-left font-normal"> </th>
-                                <th className="font-normal">S</th>
-                                <th className="font-normal">D</th>
-                                <th className="font-normal">T</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {visibleSegmentRows.map((n) => (
-                                <tr key={n}>
-                                  <td className="text-left text-muted-foreground">{n === 25 ? "Bull" : n}</td>
-                                  <td className="text-center font-display">{segmentCount(p.segments, n, 1) || "·"}</td>
-                                  <td className="text-center font-display">{segmentCount(p.segments, n, 2) || "·"}</td>
-                                  <td className="text-center font-display">{n === 25 ? <span className="text-muted-foreground/40">–</span> : (segmentCount(p.segments, n, 3) || "·")}</td>
+                      {postGameStats.map((p) => {
+                        const segments = statFor(p).segments;
+                        return (
+                          <div key={p.name}>
+                            <p className="text-[10px] font-semibold text-primary text-center truncate mb-1">{p.name}</p>
+                            <table className="w-full text-[10px]">
+                              <thead>
+                                <tr className="text-muted-foreground">
+                                  <th className="text-left font-normal"> </th>
+                                  <th className="font-normal">S</th>
+                                  <th className="font-normal">D</th>
+                                  <th className="font-normal">T</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          {p.segments.misses > 0 && (
-                            <p className="text-[9px] text-muted-foreground text-center mt-1">Miss ×{p.segments.misses}</p>
-                          )}
-                        </div>
-                      ))}
+                              </thead>
+                              <tbody>
+                                {visibleSegmentRows.map((n) => (
+                                  <tr key={n}>
+                                    <td className="text-left text-muted-foreground">{n === 25 ? "Bull" : n}</td>
+                                    <td className="text-center font-display">{segmentCount(segments, n, 1) || "·"}</td>
+                                    <td className="text-center font-display">{segmentCount(segments, n, 2) || "·"}</td>
+                                    <td className="text-center font-display">{n === 25 ? <span className="text-muted-foreground/40">–</span> : (segmentCount(segments, n, 3) || "·")}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {segments.misses > 0 && (
+                              <p className="text-[9px] text-muted-foreground text-center mt-1">Miss ×{segments.misses}</p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

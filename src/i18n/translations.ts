@@ -227,6 +227,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.turnLabel": { de: "dran", en: "turn", fr: "tour", pl: "kolej", nl: "aan zet", tr: "sırası" },
   "game.dartCounterLabel": { de: "Dart", en: "Dart", fr: "Fléchette", pl: "Lotka", nl: "Dart", tr: "Dart" },
   "game.leg": { de: "Leg", en: "Leg", fr: "Leg", pl: "Leg", nl: "Leg", tr: "Leg" },
+  "game.overallTab": { de: "Gesamt", en: "Overall", fr: "Total", pl: "Ogółem", nl: "Totaal", tr: "Genel" },
   "game.startsFirst": { de: "fängt an", en: "starts first", fr: "commence", pl: "zaczyna", nl: "begint", tr: "başlıyor" },
   "game.pointsAhead": { de: "Punkte vor", en: "points ahead of", fr: "points d'avance sur", pl: "punktów przed", nl: "punten voor op", tr: "puan önde" },
   "game.pointsBehind": { de: "Punkte hinter", en: "points behind", fr: "points de retard sur", pl: "punktów za", nl: "punten achter op", tr: "puan geride" },
