@@ -295,7 +295,7 @@ interface ActiveGameSnapshot {
   game: GameState;
   dartsThisRound: number;
   turnStartRemaining: number;
-  tournamentLink: { tournamentId: string; matchId: string; tournamentName?: string } | null;
+  tournamentLink: { tournamentId: string; matchId: string; tournamentName?: string; board?: number } | null;
 }
 
 /**
@@ -476,7 +476,7 @@ const GamePage = () => {
   // itself now, cleared only once the game is durably somewhere (Supabase, or the offline queue on
   // failure) — see the end of that function.
   /** Set once on mount when this game was launched from a tournament bracket match ("Spiel starten") — used to tag the saved game and write the result back into the bracket on finish. Restored from the crash-recovery snapshot too, so a mid-game reload doesn't sever the link (see loadActiveGameSnapshot's doc comment). */
-  const tournamentLinkRef = useRef<{ tournamentId: string; matchId: string; tournamentName?: string } | null>(initialSnapshot?.tournamentLink ?? null);
+  const tournamentLinkRef = useRef<{ tournamentId: string; matchId: string; tournamentName?: string; board?: number } | null>(initialSnapshot?.tournamentLink ?? null);
   const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(() =>
     initialSnapshot?.tournamentLink ? (initialSnapshot.tournamentLink.tournamentName || "Turnier") : null
   );
@@ -568,7 +568,12 @@ const GamePage = () => {
     const mid = searchParams.get("mid");
     if (!tid || !mid) return;
     const tname = searchParams.get("tname") || undefined;
-    tournamentLinkRef.current = { tournamentId: tid, matchId: mid, tournamentName: tname };
+    // Set only when this match was launched from a board-mode "Los geht's" tap (see
+    // Tournament.tsx's startFromBoard) — routes "Zurück zum Turnier" straight back to that
+    // board's next-match view instead of the flat bracket, closing the loop board-mode exists for.
+    const boardParam = parseInt(searchParams.get("board") || "", 10);
+    const board = Number.isFinite(boardParam) && boardParam > 0 ? boardParam : undefined;
+    tournamentLinkRef.current = { tournamentId: tid, matchId: mid, tournamentName: tname, board };
     setTournamentLinkName(tname || "Turnier");
 
     const p1 = searchParams.get("p1");
@@ -2778,7 +2783,11 @@ const GamePage = () => {
               </Button>
               {tournamentLinkName ? (
                 <Button
-                  onClick={() => navigate(tournamentLinkRef.current ? `/tournament/${tournamentLinkRef.current.tournamentId}` : "/tournament")}
+                  onClick={() => {
+                    const link = tournamentLinkRef.current;
+                    if (!link) { navigate("/tournament"); return; }
+                    navigate(link.board ? `/tournament/${link.tournamentId}?board=${link.board}` : `/tournament/${link.tournamentId}`);
+                  }}
                   className="flex-1 font-display uppercase"
                 >
                   {t("game.backToTournament")}

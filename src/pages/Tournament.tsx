@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target, Smartphone } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
@@ -26,7 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import htuEmblem from "@/assets/club-emblem.png";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   type Match,
   type RoundRobinMatch,
@@ -704,6 +704,7 @@ const TournamentPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { id: routeTournamentId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   /** True tournament SETTINGS edits (name, mode, round_configs, players, public_view, …) are
    *  creator-only, DB-enforced via the 20260815170000 migration's trigger — this just keeps the
    *  UI from showing controls that would fail server-side. `isOwnerOf` for the list view (many
@@ -2038,6 +2039,99 @@ const TournamentPage = () => {
     const matches = activeTournament.bracket as Match[];
     const totalRounds = totalRoundsOf(matches);
 
+    // ─── BOARD MODE ────────────────────────────────
+    // A device binds once to a board number (remembered in localStorage per tournament) and
+    // then only ever shows THAT board's current match, with a single tap to start it — the
+    // tournament-day workflow this was built for: a tablet at each board that never needs
+    // anyone to go find-and-tap the right bracket card again between matches. Round-robin has
+    // no board/schedule concept at all (canStartLiveGame already treats it as "anything goes"),
+    // so this only applies to isKo.
+    const boardParam = searchParams.get("board");
+    if (boardParam) {
+      const boardCount = activeTournament.boards || 2;
+      const exitBoardMode = () => setSearchParams({});
+      const pickBoard = (n: number) => {
+        window.localStorage.setItem(`dart-tournament-board-${activeTournament.id}`, String(n));
+        setSearchParams({ board: String(n) });
+      };
+
+      if (boardParam === "pick") {
+        return (
+          <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
+            <Monitor className="w-10 h-10 text-primary mx-auto mb-3" />
+            <h2 className="text-xl font-display uppercase mb-1">{t("tournament.whichBoard")}</h2>
+            <p className="text-xs text-muted-foreground mb-6">{t("tournament.whichBoardDesc")}</p>
+            <div className="grid grid-cols-2 gap-3">
+              {Array.from({ length: boardCount }, (_, i) => i + 1).map((n) => (
+                <button key={n} onClick={() => pickBoard(n)}
+                  className="rounded-xl border-2 border-border bg-card py-6 text-2xl font-display hover:border-primary hover:text-primary transition-colors">
+                  {t("camera.board")} {n}
+                </button>
+              ))}
+            </div>
+            <button onClick={exitBoardMode} className="mt-6 text-xs text-muted-foreground hover:text-foreground">
+              ← {t("tournament.overview")}
+            </button>
+          </div>
+        );
+      }
+
+      const myBoard = parseInt(boardParam, 10);
+      const schedule = currentBoardSchedule(matches, boardCount);
+      const current = schedule.now.find((e) => e.board === myBoard);
+      const next = schedule.onDeck.find((e) => e.board === myBoard);
+      const startFromBoard = (match: Match) => {
+        const path = koLiveGamePath(match);
+        if (path) navigate(`${path}&board=${myBoard}`);
+      };
+
+      return (
+        <div className="container py-8 max-w-sm mx-auto text-center animate-slide-up">
+          <div className="flex items-center justify-between mb-6">
+            <button onClick={exitBoardMode} className="text-xs text-muted-foreground hover:text-foreground">← {t("tournament.overview")}</button>
+            <button onClick={() => setSearchParams({ board: "pick" })} className="text-xs text-muted-foreground hover:text-foreground">
+              {t("camera.board")} {myBoard} · {t("tournament.changeBoard")}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground mb-1 truncate">{activeTournament.name}</p>
+          <h2 className="text-2xl font-display uppercase mb-6">{t("camera.board")} {myBoard}</h2>
+
+          {activeTournament.champion ? (
+            <div className="bg-card border-2 border-accent rounded-2xl p-8 glow-gold">
+              <Trophy className="w-8 h-8 text-accent mx-auto mb-2" />
+              <p className="font-display uppercase text-sm">{activeTournament.champion}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t("tournament.championSuffix")}</p>
+            </div>
+          ) : current ? (
+            <div className="bg-card border-2 border-primary/40 rounded-2xl p-6 glow-cyan">
+              <p className="text-[10px] uppercase tracking-wider text-primary mb-3">{roundLabel(current.match.round, totalRounds)}</p>
+              <p className="text-lg font-display mb-1">{current.match.player1}</p>
+              <p className="text-xs text-muted-foreground mb-1">vs.</p>
+              <p className="text-lg font-display mb-4">{current.match.player2}</p>
+              <p className="text-xs text-muted-foreground mb-4">
+                {resolveRoundMode(current.match.round)} · {t("stats.bestOf")} {resolveRoundBestOf(current.match.round)}
+              </p>
+              <Button onClick={() => startFromBoard(current.match)} className="w-full font-display uppercase text-base py-6 gap-2">
+                <Play className="w-5 h-5" /> {t("game.startGame")}
+              </Button>
+            </div>
+          ) : (
+            <div className="bg-muted/30 border border-border rounded-2xl p-8">
+              <Loader2 className="w-6 h-6 text-muted-foreground mx-auto mb-3 animate-spin" />
+              <p className="text-sm text-muted-foreground">{t("tournament.waitingForNextMatch")}</p>
+              {next ? (
+                <p className="text-xs text-muted-foreground mt-3">
+                  {t("tournament.upNext")}: {next.match.player1} vs. {next.match.player2}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-3">{t("tournament.allBoardMatchesDone")}</p>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="py-2 animate-slide-up">
         <div className="container flex items-center justify-between mb-2">
@@ -2137,6 +2231,16 @@ const TournamentPage = () => {
           <span className="text-[11px] text-muted-foreground flex items-center gap-1">
             <Monitor className="w-3.5 h-3.5" /> {activeTournament.boards || 2} {t("camera.board")}s
           </span>
+          <Button
+            size="sm" variant="outline" className="h-8 text-xs gap-1 ml-auto"
+            title={t("tournament.boardModeDesc")}
+            onClick={() => {
+              const saved = window.localStorage.getItem(`dart-tournament-board-${activeTournament.id}`);
+              setSearchParams({ board: saved || "pick" });
+            }}
+          >
+            <Smartphone className="w-3.5 h-3.5" /> {t("tournament.boardMode")}
+          </Button>
         </div>
 
         {bracketView === "tree" ? (
