@@ -104,6 +104,11 @@ const PlayersPage = () => {
   const [newEmoji, setNewEmoji] = useState("🎯");
   const [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  // The player-being-edited's CURRENT photo (already-signed URL, straight from the fetched
+  // `players` row) — shown as a preview instead of always defaulting to the empty dropzone
+  // prompt. Separate from uploadedPhoto (a NEW pick this session, which takes priority once set).
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
+  const [removeExistingPhoto, setRemoveExistingPhoto] = useState(false);
   const [generatingPortrait, setGeneratingPortrait] = useState(false);
   // Bumped whenever an in-flight AI-portrait request should no longer be trusted (a different
   // photo was picked, or the dialog closed/reopened for a different player) — generateAiPortrait
@@ -249,6 +254,8 @@ const PlayersPage = () => {
     setNewEmoji(EMPTY_PLAYER_FORM.emoji);
     setUploadedPhoto(null);
     setUploadedFile(null);
+    setExistingPhotoUrl(null);
+    setRemoveExistingPhoto(false);
     setGeneratedPortrait(null);
     setNewBio(EMPTY_PLAYER_FORM.bio);
     setNewHand(EMPTY_PLAYER_FORM.hand);
@@ -297,6 +304,10 @@ const PlayersPage = () => {
     setUploadedPhoto(null);
     setUploadedFile(null);
     setGeneratedPortrait(null);
+    // Same priority order the roster card/detail view use elsewhere (ai_portrait_url wins over
+    // avatar_url) — already a signed URL at this point, resolved once when `players` was fetched.
+    setExistingPhotoUrl(player.ai_portrait_url || player.avatar_url || null);
+    setRemoveExistingPhoto(false);
     setDialogOpen(true);
   };
 
@@ -317,6 +328,21 @@ const PlayersPage = () => {
     reader.onload = (ev) => setUploadedPhoto(ev.target?.result as string);
     reader.readAsDataURL(file);
     setGeneratedPortrait(null);
+    setRemoveExistingPhoto(false); // a fresh pick supersedes an earlier "remove" click
+  };
+
+  /** Clears whatever photo is currently shown in the dropzone — a NEW pick this session just
+   *  reverts to blank, while removing an untouched EXISTING photo instead flags it for deletion
+   *  on save (see addPlayer's photoPayload). */
+  const clearPhoto = () => {
+    if (uploadedPhoto || generatedPortrait) {
+      portraitRequestIdRef.current++;
+      setUploadedPhoto(null);
+      setUploadedFile(null);
+      setGeneratedPortrait(null);
+    } else if (existingPhotoUrl) {
+      setRemoveExistingPhoto(true);
+    }
   };
 
   /** Calls AI edge function to generate dart jersey portrait */
@@ -446,11 +472,16 @@ const PlayersPage = () => {
         if (!aiPortraitUrl) photoFailed = true;
       }
 
-      if (avatarUrl || aiPortraitUrl) {
-        const { error: linkError } = await supabase.from("players").update({
-          ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
-          ...(aiPortraitUrl ? { ai_portrait_url: aiPortraitUrl } : {}),
-        }).eq("id", editingPlayerId);
+      // A fresh upload for a slot wins; otherwise an explicit "remove" clears that slot; a slot
+      // touched by neither is left alone (omitted, not overwritten with null).
+      const photoPayload: Record<string, string | null> = {};
+      if (avatarUrl) photoPayload.avatar_url = avatarUrl;
+      else if (removeExistingPhoto) photoPayload.avatar_url = null;
+      if (aiPortraitUrl) photoPayload.ai_portrait_url = aiPortraitUrl;
+      else if (removeExistingPhoto) photoPayload.ai_portrait_url = null;
+
+      if (Object.keys(photoPayload).length > 0) {
+        const { error: linkError } = await supabase.from("players").update(photoPayload).eq("id", editingPlayerId);
         if (linkError) photoFailed = true;
       }
 
@@ -805,6 +836,8 @@ const PlayersPage = () => {
                   <input type="file" accept="image/*" onChange={handlePhotoSelect} className="hidden" />
                   {uploadedPhoto ? (
                     <img src={uploadedPhoto} alt="Preview" className="h-20 w-20 object-cover rounded-lg" />
+                  ) : existingPhotoUrl && !removeExistingPhoto ? (
+                    <img src={existingPhotoUrl} alt={t("players.currentPhoto")} className="h-20 w-20 object-cover rounded-lg" />
                   ) : (
                     <div className="text-center">
                       <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
@@ -812,6 +845,11 @@ const PlayersPage = () => {
                     </div>
                   )}
                 </label>
+                {(uploadedPhoto || (existingPhotoUrl && !removeExistingPhoto)) && (
+                  <button type="button" onClick={clearPhoto} className="text-xs text-destructive hover:underline mt-1.5">
+                    {t("players.removePhoto")}
+                  </button>
+                )}
               </div>
 
               {/* AI Portrait Generation */}
