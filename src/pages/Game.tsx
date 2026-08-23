@@ -1852,19 +1852,29 @@ const GamePage = () => {
   // ─── SETUP PHASE ───────────────────────────────
   if (phase === "setup") {
     const activePlayerCount = numPlayers;
+    // Mode/team-mode/player-count/best-of are exactly the fields the tournament bracket already
+    // fixed for this match (see the tid/mid prefill effect above) — editing them here wouldn't
+    // just be pointless, it'd silently desync this game from the bracket entry it's supposed to
+    // report back to. Locked whenever a match is tournament-linked; everything NOT tracked by the
+    // tournament's own data model (double-out, handicap, bot, warmup, who-starts) stays freely
+    // editable, same as a casual game.
+    const isTournamentMatch = !!tournamentLinkName;
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
         <h2 className="text-2xl font-display uppercase mb-1 text-center">{t("home.newGame")}</h2>
         {tournamentLinkName && (
-          <p className="text-xs text-center text-primary mb-5">
-            {t("game.tournamentMatch")} · {tournamentLinkName} {t("game.tournamentMatchNote")}
-          </p>
+          <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 mb-5 text-center">
+            <p className="text-xs text-primary font-medium">
+              🏆 {t("game.tournamentMatch")} · {tournamentLinkName}
+            </p>
+            <p className="text-[10px] text-primary/70 mt-0.5">{t("game.tournamentMatchNote")}</p>
+          </div>
         )}
         {!tournamentLinkName && <div className="mb-6" />}
         <div className="space-y-4">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{t("game.gameMode")}</label>
-            <Select value={mode} onValueChange={(v) => setMode(v as GameMode)}>
+            <Select value={mode} onValueChange={(v) => setMode(v as GameMode)} disabled={isTournamentMatch}>
               <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="501">501</SelectItem>
@@ -1888,7 +1898,7 @@ const GamePage = () => {
               <Label htmlFor="team-mode" className="text-sm">{t("game.teamMode")}</Label>
               <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.teamModeDesc")}</p>
             </div>
-            <Switch id="team-mode" checked={teamMode} onCheckedChange={(v) => {
+            <Switch id="team-mode" checked={teamMode} disabled={isTournamentMatch} onCheckedChange={(v) => {
               setTeamMode(v);
               if (v && (numPlayers < 4 || numPlayers % 2 !== 0)) setNumPlayers(4);
             }} />
@@ -1907,8 +1917,8 @@ const GamePage = () => {
             <label className="text-sm text-muted-foreground mb-1 block">{teamMode ? t("game.playersPerTeam") : t("game.numPlayers")}</label>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {(teamMode ? [4, 6, 8] : Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2)).map((n) => (
-                <button key={n} onClick={() => setNumPlayers(n)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-card border-border text-muted-foreground"}`}>
+                <button key={n} onClick={() => setNumPlayers(n)} disabled={isTournamentMatch}
+                  className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-card border-border text-muted-foreground"} ${isTournamentMatch ? "opacity-50 cursor-not-allowed" : ""}`}>
                   {teamMode ? `${n / 2} vs ${n / 2}` : `${n} ${t("game.playersSuffix")}`}
                 </button>
               ))}
@@ -1929,7 +1939,7 @@ const GamePage = () => {
             <>
               <div>
                 <label className="text-sm text-muted-foreground mb-1 block">{t("game.bestOfLegs")}</label>
-                <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))}>
+                <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))} disabled={isTournamentMatch}>
                   <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     {[1, 3, 5, 7, 9, 11].map((n) => (
