@@ -371,9 +371,6 @@ const GamePage = () => {
   const [starterIndex, setStarterIndex] = useState(0);
   const [teamNames, setTeamNames] = useState<[string, string]>(["Team 1", "Team 2"]);
   const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
-  // Which player slot is currently mid-"add as member" request — guards against a double-click
-  // inserting the same guest twice, and drives the small inline spinner on that slot's prompt.
-  const [addingGuestIndex, setAddingGuestIndex] = useState<number | null>(null);
   const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(Array(MAX_PLAYERS).fill(true));
   const [playerDoubleIn, setPlayerDoubleIn] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
   const [playerHandicap, setPlayerHandicap] = useState<number[]>(Array(MAX_PLAYERS).fill(0));
@@ -562,29 +559,6 @@ const GamePage = () => {
   useEffect(() => {
     fetchClubPlayers().then(setDbPlayers).catch((err) => console.error("fetchClubPlayers failed", err));
   }, []);
-
-  /** Quick "add this typed-in guest as a real roster entry" shortcut, offered inline next to the
-   *  name field once it doesn't match anyone in dbPlayers — deliberately opt-in (an explicit tap),
-   *  never automatic. Only sets `name`; the row is owned by whoever's logged in and running this
-   *  device (there's no "unlinked/claimable" insert path today — RLS requires auth.uid() = the
-   *  new row's user_id — so the actual guest can't later "claim" this profile via their own
-   *  account until a claim flow exists; simplest correct option available right now). */
-  const addGuestAsMember = async (index: number) => {
-    const name = playerNames[index]?.trim();
-    if (!name || !session?.user?.id || addingGuestIndex !== null) return;
-    setAddingGuestIndex(index);
-    try {
-      const { error } = await supabase.from("players").insert({ name, user_id: session.user.id });
-      if (error) {
-        toast({ title: t("game.addAsMemberFailed"), variant: "destructive" });
-        return;
-      }
-      setDbPlayers(await fetchClubPlayers());
-      toast({ title: t("game.addedAsMember"), description: name });
-    } finally {
-      setAddingGuestIndex(null);
-    }
-  };
 
   // Prefill from "Spiel starten" on a tournament bracket match — reads the launch query
   // string once on mount. Everything it sets stays a normal, editable setup value; only
@@ -2095,17 +2069,6 @@ const GamePage = () => {
                     <Bot className="w-3.5 h-3.5" /> {t("game.bot")}
                   </button>
                 </div>
-
-                {!playerIsBot[i] && playerNames[i]?.trim() &&
-                  !dbPlayers.some((dp) => dp.name.trim().toLowerCase() === playerNames[i].trim().toLowerCase()) && (
-                  <button onClick={() => addGuestAsMember(i)} disabled={addingGuestIndex !== null}
-                    className="text-[10px] text-primary hover:underline disabled:opacity-50 flex items-center gap-1">
-                    <Plus className="w-3 h-3 shrink-0" />
-                    {addingGuestIndex === i
-                      ? t("game.addingMember")
-                      : <>"{playerNames[i].trim()}" {t("game.addAsMemberPrompt")}</>}
-                  </button>
-                )}
 
                 {playerIsBot[i] && (
                   <>
