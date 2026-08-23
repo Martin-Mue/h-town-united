@@ -21,7 +21,7 @@ import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import {
   first9Average, average, highestVisit, count180s, computeCheckoutStats, combineCheckoutStats,
   computeCricketStats, combineCricketStats, experienceScore,
-  scoreTierBreakdown, segmentBreakdown, segmentCount, SEGMENT_NUMBERS,
+  scoreTierBreakdown, segmentBreakdown, segmentCount, combineScoreTiers, combineSegmentCounts, SEGMENT_NUMBERS,
   type DartThrow, type CheckoutStats, type CricketStats, type ScoreTierCount, type SegmentCounts,
 } from "@/utils/dartStats";
 import { highlightKindLabel } from "@/utils/x01Rules";
@@ -270,17 +270,23 @@ const StatisticsPage = () => {
   const scoringBreakdownByPlayer = useMemo(() => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
     const modeById = new Map(games.map((g) => [g.id, g.mode]));
-    const byPlayer: Record<string, { name: string; throws: DartThrow[] }> = {};
+    // Tier/segment breakdowns are computed PER LEG and combined below, not from throws
+    // concatenated across legs first — a leg's throw count is only a multiple of 3 for the
+    // player who didn't check out, so chunking a cross-leg-concatenated array into 3-dart
+    // visits would merge the tail of one leg with the head of the next into a visit that was
+    // never actually thrown, silently corrupting the bucket near every leg boundary.
+    const byPlayer: Record<string, { name: string; tiers: ScoreTierCount[][]; segments: SegmentCounts[] }> = {};
     gameLegs.forEach((leg) => {
       if (!filteredIds.has(leg.game_id)) return;
       if (modeById.get(leg.game_id) === "cricket") return;
       if (!leg.player_id || !Array.isArray(leg.throws) || leg.throws.length === 0) return;
-      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, throws: [] });
-      bucket.throws.push(...leg.throws);
+      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, tiers: [], segments: [] });
+      bucket.tiers.push(scoreTierBreakdown(leg.throws));
+      bucket.segments.push(segmentBreakdown(leg.throws));
     });
     const result: Record<string, { name: string; tiers: ScoreTierCount[]; segments: SegmentCounts }> = {};
     Object.entries(byPlayer).forEach(([id, v]) => {
-      result[id] = { name: v.name, tiers: scoreTierBreakdown(v.throws), segments: segmentBreakdown(v.throws) };
+      result[id] = { name: v.name, tiers: combineScoreTiers(v.tiers), segments: combineSegmentCounts(v.segments) };
     });
     return result;
   }, [gameLegs, filteredGames, games]);

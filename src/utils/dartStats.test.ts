@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { isAchievableVisitTotal, scoreTierBreakdown, segmentBreakdown, segmentCount, type DartThrow } from "./dartStats";
+import {
+  isAchievableVisitTotal, scoreTierBreakdown, segmentBreakdown, segmentCount,
+  combineScoreTiers, combineSegmentCounts, type DartThrow,
+} from "./dartStats";
 
 describe("isAchievableVisitTotal", () => {
   it("accepts common achievable totals", () => {
@@ -100,5 +103,52 @@ describe("segmentBreakdown / segmentCount", () => {
     expect(segmentCount(sb, 25, 1)).toBe(2); // outer bull
     expect(segmentCount(sb, 25, 2)).toBe(1); // bullseye
     expect(segmentCount(sb, 25, 3)).toBe(0); // no triple-bull ring
+  });
+});
+
+describe("combineScoreTiers / combineSegmentCounts (cross-leg boundary safety)", () => {
+  // Regression for a real bug (2026-08-23): a player who LOSES a leg doesn't necessarily throw a
+  // multiple of 3 darts in it (their opponent may check out first, e.g. after the loser's own
+  // last visit was only 2 darts). Concatenating that leg's throws with the next leg's BEFORE
+  // chunking into 3-dart visits merges the tail of one leg with the head of the next into a
+  // visit that was never thrown, corrupting the bucket near every leg boundary — this is exactly
+  // how a real, confirmed 160 disappeared from a player's round-score distribution while still
+  // correctly showing in their (independently-computed) lifetime highscore.
+  const unevenLeg1 = throwsOf(visit(d(20, 3), d(19, 3))); // T20 T19 = 117, only 2 darts -> real tier "100+"
+  const leg2Throws = throwsOf(visit(d(20, 2), d(5, 1), d(5, 1))); // D20 S5 S5 = 50, leg2's own real visit -> "40+"
+
+  it("naive flatten-then-chunk loses leg1's real visit and fabricates a different one", () => {
+    const broken = scoreTierBreakdown([...unevenLeg1, ...leg2Throws]);
+    // leg1's real 117 ("100+") is gone: its 2 darts merged with leg2's first dart (D20) into a
+    // fake T20 T19 D20 = 157 "visit" ("140+") that was never thrown.
+    expect(broken.find((t) => t.label === "100+")!.count).toBe(0);
+    expect(broken.find((t) => t.label === "140+")!.count).toBe(1);
+  });
+
+  it("combineScoreTiers recovers leg1's real visit and doesn't fabricate the seam visit", () => {
+    const combined = combineScoreTiers([scoreTierBreakdown(unevenLeg1), scoreTierBreakdown(leg2Throws)]);
+    expect(combined.find((t) => t.label === "100+")!.count).toBe(1); // leg1's real 117
+    expect(combined.find((t) => t.label === "40+")!.count).toBe(1); // leg2's real 50
+    expect(combined.find((t) => t.label === "140+")!.count).toBe(0); // no fabricated 157
+  });
+
+  it("combineScoreTiers sums matching tiers across legs and preserves every label", () => {
+    const oneEighty = throwsOf(visit(d(20, 3), d(20, 3), d(20, 3)));
+    const combined = combineScoreTiers([scoreTierBreakdown(oneEighty), scoreTierBreakdown(oneEighty)]);
+    expect(combined.map((t) => t.label)).toEqual(["40+", "60+", "80+", "100+", "120+", "140+", "160+", "180"]);
+    expect(combined.find((t) => t.label === "180")!.count).toBe(2);
+  });
+
+  it("combineScoreTiers on zero legs returns the full zeroed label set, not an empty array", () => {
+    expect(combineScoreTiers([]).length).toBe(8);
+  });
+
+  it("combineSegmentCounts sums hits and misses across legs independently", () => {
+    const legA = segmentBreakdown(throwsOf(visit(d(20, 3), d(0, 1), d(1, 1))));
+    const legB = segmentBreakdown(throwsOf(visit(d(20, 3), d(1, 1), d(1, 1))));
+    const combined = combineSegmentCounts([legA, legB]);
+    expect(segmentCount(combined, 20, 3)).toBe(2);
+    expect(segmentCount(combined, 1, 1)).toBe(3);
+    expect(combined.misses).toBe(1);
   });
 });

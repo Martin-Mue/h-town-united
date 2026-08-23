@@ -108,6 +108,39 @@ export function segmentCount(sb: SegmentCounts, baseValue: number, multiplier: n
   return sb.hits[baseValue]?.[multiplier] ?? 0;
 }
 
+/**
+ * Combines per-leg tier/segment breakdowns into one totals object — callers with multiple legs
+ * MUST compute `scoreTierBreakdown`/`segmentBreakdown` once per leg and combine the results
+ * rather than concatenating raw throws across legs first. A leg's throw count only has to be a
+ * multiple of 3 for the player who DIDN'T check out; concatenating across a leg boundary then
+ * chunking by 3 silently merges the tail of one leg with the head of the next into a "visit"
+ * that was never actually thrown, corrupting both legs' real visits near the seam. (Legs
+ * themselves are always internally safe to chunk — a single leg's throws are one continuous
+ * sequence of that player's own rounds.)
+ */
+export function combineScoreTiers(perLeg: ScoreTierCount[][]): ScoreTierCount[] {
+  if (perLeg.length === 0) return scoreTierBreakdown([]);
+  return perLeg[0].map((tier, i) => ({
+    label: tier.label,
+    count: perLeg.reduce((s, legTiers) => s + legTiers[i].count, 0),
+  }));
+}
+
+export function combineSegmentCounts(perLeg: SegmentCounts[]): SegmentCounts {
+  const hits: Record<number, Record<number, number>> = {};
+  let misses = 0;
+  for (const sb of perLeg) {
+    misses += sb.misses;
+    for (const [bv, byMult] of Object.entries(sb.hits)) {
+      const target = hits[Number(bv)] || (hits[Number(bv)] = {});
+      for (const [mult, count] of Object.entries(byMult)) {
+        target[Number(mult)] = (target[Number(mult)] || 0) + count;
+      }
+    }
+  }
+  return { hits, misses };
+}
+
 export interface CheckoutStats {
   /** Visits where the player started on a possible checkout (remaining <= 170). */
   attempts: number;

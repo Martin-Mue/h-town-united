@@ -46,6 +46,8 @@ import {
   scoreTierBreakdown,
   segmentBreakdown,
   segmentCount,
+  combineScoreTiers,
+  combineSegmentCounts,
   SEGMENT_NUMBERS,
 } from "@/utils/dartStats";
 
@@ -1816,8 +1818,11 @@ const GamePage = () => {
         first9: getFirst9Average(throws),
         totalPoints: throws.reduce((s, t) => s + t.points, 0),
         legs: game.legsWon[teamIndexFor(game.teams, i)],
-        tierBreakdown: scoreTierBreakdown(throws),
-        segments: segmentBreakdown(throws),
+        // Same "per leg, then combine" reasoning as checkout above, for the same underlying
+        // reason: chunking into 3-dart visits must never cross a leg boundary, or the tail of
+        // one leg and the head of the next get merged into a visit that was never thrown.
+        tierBreakdown: combineScoreTiers(allLegs.map((leg) => scoreTierBreakdown(leg.throws[i] ?? []))),
+        segments: combineSegmentCounts(allLegs.map((leg) => segmentBreakdown(leg.throws[i] ?? []))),
       };
     });
     // No code path calls setGame again once isFinished is true (every scoring handler guards on
