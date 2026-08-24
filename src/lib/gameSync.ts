@@ -163,11 +163,7 @@ export async function saveGameRecord(
   }
 
   // Same reasoning for game_legs: only insert if none exist yet for this game. If they do,
-  // this is (at earliest) a retry that got past the legs step before failing — the player-stat
-  // updates below are a read-modify-write (increments games_played/average/elo in place, not an
-  // upsert), so re-running them on a retry would double-count that game. Skipping both together
-  // when legs already exist favors "possibly miss one update" over "silently double-apply it" —
-  // the safer failure mode of the two.
+  // this is (at earliest) a retry that got past the legs step before failing.
   let legsAlreadyExisted = false;
   if (insertedGameId) {
     const { count } = await supabase.from("game_legs").select("id", { count: "exact", head: true }).eq("game_id", insertedGameId);
@@ -192,7 +188,6 @@ export async function saveGameRecord(
       }
     }
   }
-  if (legsAlreadyExisted) return;
 
   // games_played/average/high_score/double_rate are now written EXCLUSIVELY by this RPC, which
   // recomputes them itself from the real game_legs throws rather than trusting the client-
@@ -201,15 +196,25 @@ export async function saveGameRecord(
   // rollup) — see 20260823140000_server_side_player_stat_rollup.sql. A plain client UPDATE to
   // those four columns on someone else's row is rejected by the DB now, so this call isn't
   // optional/best-effort: skipping it would leave games_played etc. never incrementing.
+  //
+  // Deliberately called BEFORE the legsAlreadyExisted early-return below, unlike the games_won/
+  // elo loop: the RPC guards its own idempotency server-side (games.stats_applied), so re-running
+  // it on a retry is a safe no-op — but skipping it on a retry (as a previous version of this
+  // function did) would mean any transient failure AFTER game_legs already committed (a dropped
+  // response, this RPC erroring, ...) permanently loses that game's stat rollup: the retry would
+  // find legs already there and return before ever reaching this call again.
   if (insertedGameId) {
     const { error: statsErr } = await supabase.rpc("apply_game_player_stats", { p_game_id: insertedGameId });
     if (statsErr) throw statsErr;
   }
 
+  if (legsAlreadyExisted) return;
+
   // games_won and elo_rating stay client-computed and client-written: crediting a win correctly
   // needs team-membership and tiebreak-resolution context that isn't persisted anywhere (see the
   // migration's own comment), and Elo needs every participant's pre-game rating + placement,
-  // already computed together above as eloDeltas.
+  // already computed together above as eloDeltas. Unlike the RPC above, re-running this
+  // read-modify-write loop on a retry WOULD double-count, so it still stays behind the guard.
   for (let i = 0; i < n; i++) {
     const match = findDbPlayer(game.players[i].name);
     if (match && !game.players[i].isBot) {
