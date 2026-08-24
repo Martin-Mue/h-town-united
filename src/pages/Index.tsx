@@ -34,6 +34,10 @@ interface RecentGame {
   player2_name: string;
   winner_name: string;
   played_at: string;
+  /** Every real participant's name, in player_index order — only set when a game had more than
+   *  2 players (a free-for-all), since player1_name/player2_name (whoever ranked top-2) already
+   *  covers the plain 1v1 case exactly. */
+  participantNames?: string[];
 }
 
 const DashboardPage = () => {
@@ -41,6 +45,7 @@ const DashboardPage = () => {
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set());
   const pagedRecentGames = usePagedList(recentGames);
   const pagedActivity = usePagedList(activity);
 
@@ -60,6 +65,30 @@ const DashboardPage = () => {
       if (cancelled) return;
       if (data) setRecentGames(data);
       setLoadingGames(false);
+
+      // player1_name/player2_name only ever cover the top-2 finishers (see gameSync.ts's
+      // `ranking`) — for a free-for-all with more real players than that, this second pass
+      // pulls every participant's name from game_legs and attaches the full list, so the feed
+      // can reveal who else actually played instead of silently dropping them.
+      if (data && data.length > 0) {
+        const { data: legs } = await supabase
+          .from("game_legs")
+          .select("game_id, player_index, player_name")
+          .in("game_id", data.map((g) => g.id));
+        if (cancelled || !legs) return;
+        const namesByGame = new Map<string, Map<number, string>>();
+        legs.forEach((l) => {
+          const byIndex = namesByGame.get(l.game_id) ?? new Map<number, string>();
+          byIndex.set(l.player_index, l.player_name);
+          namesByGame.set(l.game_id, byIndex);
+        });
+        setRecentGames((prev) => prev.map((g) => {
+          const byIndex = namesByGame.get(g.id);
+          if (!byIndex || byIndex.size <= 2) return g;
+          const participantNames = [...byIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, name]) => name);
+          return { ...g, participantNames };
+        }));
+      }
     };
     load();
 
@@ -195,20 +224,43 @@ const DashboardPage = () => {
         </Link>
       ) : (
         <div className="space-y-2">
-          {pagedRecentGames.visible.map((game) => (
-            <div key={game.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Badge variant="outline" className="text-xs bg-muted px-2 py-0.5 font-mono border-transparent">{game.mode}</Badge>
-                <span className="text-sm">
-                  {game.player1_name} <span className="text-muted-foreground">vs</span> {game.player2_name}
-                </span>
+          {pagedRecentGames.visible.map((game) => {
+            const extra = game.participantNames && game.participantNames.length > 2 ? game.participantNames : null;
+            const isExpanded = extra ? expandedGames.has(game.id) : false;
+            return (
+              <div key={game.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <Badge variant="outline" className="text-xs bg-muted px-2 py-0.5 font-mono border-transparent shrink-0">{game.mode}</Badge>
+                  {isExpanded && extra ? (
+                    <span className="text-sm min-w-0 truncate">{extra.join(", ")}</span>
+                  ) : (
+                    <span className="text-sm min-w-0 truncate">
+                      {game.player1_name} <span className="text-muted-foreground">vs</span> {game.player2_name}
+                    </span>
+                  )}
+                  {extra && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedGames((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(game.id)) next.delete(game.id); else next.add(game.id);
+                        return next;
+                      })}
+                      title={isExpanded ? t("common.showLess") : t("common.showMore")}
+                      aria-label={isExpanded ? t("common.showLess") : `${t("common.showMore")} (+${extra.length - 2})`}
+                      className="shrink-0 text-xs font-mono text-primary hover:underline"
+                    >
+                      {isExpanded ? "−" : `+${extra.length - 2}`}
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-muted-foreground">{formatDate(game.played_at)}</span>
+                  <span className="text-xs text-secondary font-medium">{game.winner_name} ✓</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{formatDate(game.played_at)}</span>
-                <span className="text-xs text-secondary font-medium">{game.winner_name} ✓</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           <ListPaginationFooter list={pagedRecentGames} />
         </div>
       )}
