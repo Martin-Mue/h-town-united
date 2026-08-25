@@ -468,6 +468,7 @@ export type Database = {
           mode: string
           name: string
           players: Json
+          prestart_views: Json
           public_slug: string | null
           public_view: boolean
           round_configs: Json
@@ -490,6 +491,7 @@ export type Database = {
           mode?: string
           name: string
           players?: Json
+          prestart_views?: Json
           public_slug?: string | null
           public_view?: boolean
           round_configs?: Json
@@ -512,6 +514,7 @@ export type Database = {
           mode?: string
           name?: string
           players?: Json
+          prestart_views?: Json
           public_slug?: string | null
           public_view?: boolean
           round_configs?: Json
@@ -594,6 +597,7 @@ export type Database = {
     Views: {
       tournaments_public: {
         Row: {
+          attendance: Json | null
           best_of_legs: number | null
           boards: number | null
           bracket: Json | null
@@ -603,12 +607,14 @@ export type Database = {
           mode: string | null
           name: string | null
           players: Json | null
+          prestart_views: Json | null
           public_slug: string | null
           public_view: boolean | null
           round_configs: Json | null
           status: string | null
         }
         Insert: {
+          attendance?: Json | null
           best_of_legs?: number | null
           boards?: number | null
           bracket?: Json | null
@@ -618,12 +624,14 @@ export type Database = {
           mode?: string | null
           name?: string | null
           players?: Json | null
+          prestart_views?: Json | null
           public_slug?: string | null
           public_view?: boolean | null
           round_configs?: Json | null
           status?: string | null
         }
         Update: {
+          attendance?: Json | null
           best_of_legs?: number | null
           boards?: number | null
           bracket?: Json | null
@@ -633,6 +641,7 @@ export type Database = {
           mode?: string | null
           name?: string | null
           players?: Json | null
+          prestart_views?: Json | null
           public_slug?: string | null
           public_view?: boolean | null
           round_configs?: Json | null
