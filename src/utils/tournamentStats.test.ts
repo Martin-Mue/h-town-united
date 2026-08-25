@@ -99,6 +99,40 @@ describe("computeTournamentHighlights", () => {
     const { participants } = computeTournamentHighlights(legs);
     expect(participants[0].name).toBe("OneEighty");
   });
+
+  it("tracks the tournament's top checkout, only counting won legs", () => {
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 170, won: true, throws: [dart(20, 3), dart(20, 3), dart(25, 2)] },
+      { player_id: "p2", player_name: "Kevin", starting_score: 40, won: true, throws: [dart(20, 2)] },
+      // Same 170 shape as Martin's but lost — must not become the new top checkout.
+      { player_id: "p3", player_name: "NotAWin", starting_score: 170, won: false, throws: [dart(20, 3), dart(20, 3), dart(25, 2)] },
+    ];
+    const { topCheckout } = computeTournamentHighlights(legs);
+    expect(topCheckout).toEqual({ name: "Martin", value: 170 });
+  });
+
+  it("tracks the tournament's shortest won leg by dart count", () => {
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 170, won: true, throws: [dart(20, 3), dart(20, 3), dart(25, 2)] },
+      {
+        player_id: "p2", player_name: "Kevin", starting_score: 501, won: true,
+        throws: [dart(20, 3), dart(20, 3), dart(20, 3), dart(20, 3), dart(20, 3), dart(1, 1)],
+      },
+      // Fewer darts than Martin's leg, but LOST — must not become the new shortest leg.
+      { player_id: "p3", player_name: "TooFast", starting_score: 40, won: false, throws: [dart(20, 2)] },
+    ];
+    const { shortestLeg } = computeTournamentHighlights(legs);
+    expect(shortestLeg).toEqual({ name: "Martin", darts: 3 });
+  });
+
+  it("leaves topCheckout and shortestLeg null when nobody has won a leg yet", () => {
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [dart(20, 3), dart(20, 3), dart(20, 3)] },
+    ];
+    const { topCheckout, shortestLeg } = computeTournamentHighlights(legs);
+    expect(topCheckout).toBeNull();
+    expect(shortestLeg).toBeNull();
+  });
 });
 
 const game = (over: Partial<TournamentStatsGameRow> & { id: string }): TournamentStatsGameRow => ({

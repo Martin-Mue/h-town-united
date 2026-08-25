@@ -32,6 +32,11 @@ export interface ParticipantHighlight {
 export interface TournamentHighlights {
   heatmapPoints: { u: number; v: number; points: number }[];
   participants: ParticipantHighlight[];
+  /** Highest checkout of the whole tournament so far — null until at least one leg has been won. */
+  topCheckout: { name: string; value: number } | null;
+  /** Fewest darts to finish a leg so far (a "nine-darter"-style stat, not tied to any specific
+   *  starting score) — null until at least one leg has been won. */
+  shortestLeg: { name: string; darts: number } | null;
 }
 
 export interface TournamentStatsGameRow {
@@ -108,6 +113,8 @@ function compareByHighlightMagnitude(
 export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): TournamentHighlights {
   const heatmapPoints: { u: number; v: number; points: number }[] = [];
   const byKey = new Map<string, ParticipantHighlight>();
+  let topCheckout: { name: string; value: number } | null = null;
+  let shortestLeg: { name: string; darts: number } | null = null;
 
   for (const leg of legs) {
     if (!Array.isArray(leg.throws) || leg.throws.length === 0) continue;
@@ -133,6 +140,12 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
       if (highestCheckout >= 140) entry.checkout140Plus++;
       if (highestCheckout >= 160) entry.checkout160Plus++;
       if (highestCheckout === 170) entry.checkout170++;
+      if (highestCheckout > 0 && (!topCheckout || highestCheckout > topCheckout.value)) {
+        topCheckout = { name: leg.player_name, value: highestCheckout };
+      }
+      if (!shortestLeg || leg.throws.length < shortestLeg.darts) {
+        shortestLeg = { name: leg.player_name, darts: leg.throws.length };
+      }
     }
 
     byKey.set(key, entry);
@@ -142,7 +155,7 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
     .filter((p) => p.bigTriples || p.bulls || p.oneEighties || p.checkout100Plus)
     .sort(compareByHighlightMagnitude);
 
-  return { heatmapPoints, participants };
+  return { heatmapPoints, participants, topCheckout, shortestLeg };
 }
 
 /**

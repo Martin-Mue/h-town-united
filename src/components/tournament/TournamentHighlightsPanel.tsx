@@ -93,11 +93,47 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
     </div>
   );
 
+  const leadingAverage = averages.participants[0]?.tournamentAverage > 0 ? averages.participants[0] : null;
+  const mostOneEighties = highlights.participants[0]?.oneEighties ? highlights.participants[0] : null;
+  const hasHeadline = leadingAverage || mostOneEighties || highlights.topCheckout || highlights.shortestLeg;
+
   return (
     <div className="space-y-4">
       {showHeatmap && highlights.heatmapPoints.length > 0 && (
         <div className="flex justify-center">
           <DartboardHeatmap points={highlights.heatmapPoints} />
+        </div>
+      )}
+      {hasHeadline && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {leadingAverage && (
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-center">
+              <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.leadingAverage")}</p>
+              <p className="font-display text-lg text-primary">{leadingAverage.tournamentAverage.toFixed(1)}</p>
+              <p className={`${rowText} truncate text-muted-foreground`}>{leadingAverage.name}</p>
+            </div>
+          )}
+          {mostOneEighties && (
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-center">
+              <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.mostOneEighties")}</p>
+              <p className="font-display text-lg text-primary">{mostOneEighties.oneEighties}</p>
+              <p className={`${rowText} truncate text-muted-foreground`}>{mostOneEighties.name}</p>
+            </div>
+          )}
+          {highlights.topCheckout && (
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-center">
+              <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.bestCheckout")}</p>
+              <p className="font-display text-lg text-primary">{highlights.topCheckout.value}</p>
+              <p className={`${rowText} truncate text-muted-foreground`}>{highlights.topCheckout.name}</p>
+            </div>
+          )}
+          {highlights.shortestLeg && (
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-center">
+              <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.shortestLegLabel")}</p>
+              <p className="font-display text-lg text-primary">{highlights.shortestLeg.darts} <span className="text-xs font-sans">{t("game.dartsSuffix")}</span></p>
+              <p className={`${rowText} truncate text-muted-foreground`}>{highlights.shortestLeg.name}</p>
+            </div>
+          )}
         </div>
       )}
       {paged.visible.length > 0 && (

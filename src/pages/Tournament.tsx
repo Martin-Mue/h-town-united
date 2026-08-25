@@ -1521,7 +1521,7 @@ const TournamentPage = () => {
     setLoadingHighlights(true);
     const gameRows = await loadTournamentAverages(activeTournament.id);
     const gameIds = gameRows.map((g) => g.id);
-    if (gameIds.length === 0) { setTournamentHighlights({ heatmapPoints: [], participants: [] }); setLoadingHighlights(false); return; }
+    if (gameIds.length === 0) { setTournamentHighlights({ heatmapPoints: [], participants: [], topCheckout: null, shortestLeg: null }); setLoadingHighlights(false); return; }
     const { data: legs } = await supabase.from("game_legs")
       .select("player_id, player_name, starting_score, throws, won")
       .in("game_id", gameIds);

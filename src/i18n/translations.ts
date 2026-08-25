@@ -1003,6 +1003,10 @@ export const translations: Record<string, Record<Language, string>> = {
   "tournament.bigTriplesAbbrev": { de: "T16-20", en: "T16-20", fr: "T16-20", pl: "T16-20", nl: "T16-20", tr: "T16-20" },
   "tournament.bigTriplesTooltip": { de: "Große Tripler (T16–T20)", en: "Big triples (T16–T20)", fr: "Gros triples (T16–T20)", pl: "Duże triple (T16–T20)", nl: "Grote triples (T16–T20)", tr: "Büyük tripleler (T16–T20)" },
   "tournament.bigFishTooltip": { de: "170 · Big Fish (Maximum-Checkout)", en: "170 · Big Fish (maximum checkout)", fr: "170 · Big Fish (checkout maximum)", pl: "170 · Big Fish (maksymalny checkout)", nl: "170 · Big Fish (maximale checkout)", tr: "170 · Big Fish (maksimum checkout)" },
+  "tournament.leadingAverage": { de: "Bester Ø", en: "Leading average", fr: "Meilleure moyenne", pl: "Najlepsza średnia", nl: "Beste gemiddelde", tr: "En iyi ortalama" },
+  "tournament.mostOneEighties": { de: "Meiste 180er", en: "Most 180s", fr: "Le plus de 180", pl: "Najwięcej 180", nl: "Meeste 180's", tr: "En çok 180" },
+  "tournament.bestCheckout": { de: "Bester Checkout", en: "Best checkout", fr: "Meilleur checkout", pl: "Najlepszy checkout", nl: "Beste checkout", tr: "En iyi checkout" },
+  "tournament.shortestLegLabel": { de: "Kürzestes Leg", en: "Shortest leg", fr: "Leg le plus court", pl: "Najkrótszy leg", nl: "Kortste leg", tr: "En kısa leg" },
 
   // aimBias.ts + AimBiasCard.tsx
   "aimBias.tipAimCloser": { de: "ziel bewusst etwas näher zur Mitte", en: "aim deliberately a bit closer to the center", fr: "vise délibérément un peu plus près du centre", pl: "celuj świadomie nieco bliżej środka", nl: "richt bewust wat dichter bij het midden", tr: "bilinçli olarak merkeze biraz daha yakın nişan al" },
