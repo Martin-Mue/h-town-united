@@ -2190,12 +2190,35 @@ const TournamentPage = () => {
             {/* Live-Spiel an/aus lives in the tournament edit form only now — a per-tournament
                 setting, not something toggled casually from the bracket toolbar. Both this and
                 Bearbeiten change tournament settings, which only the creator may (DB-enforced). */}
-            {isOwner && (
-              <Button variant={activeTournament.public_view ? "default" : "outline"} size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
-                <Radio className={`w-3.5 h-3.5 ${activeTournament.public_view ? "animate-pulse" : ""}`} />
-                {activeTournament.public_view ? t("tournament.liveOn") : t("tournament.liveView")}
+            {isOwner && (activeTournament.public_view ? (
+              // Turning OFF goes through a confirm dialog (the app's usual pattern for anything
+              // impactful, see the reset-match/delete-tournament/withdraw dialogs below) — this
+              // used to fire straight off one click, with any beamer/tablet currently showing the
+              // live view going blank within seconds and no warning beforehand at all.
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="default" size="sm" disabled={publicToggling} className="gap-1">
+                    <Radio className="w-3.5 h-3.5 animate-pulse" />
+                    {t("tournament.liveOn")}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t("tournament.disableLiveViewConfirm")}</AlertDialogTitle>
+                    <AlertDialogDescription>{t("tournament.disableLiveViewWarning")}</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction onClick={togglePublicView}>{t("tournament.deactivate")}</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <Button variant="outline" size="sm" onClick={togglePublicView} disabled={publicToggling} className="gap-1">
+                <Radio className="w-3.5 h-3.5" />
+                {t("tournament.liveView")}
               </Button>
-            )}
+            ))}
             {/* Link/QR live here only, in the "Beamer-Link" banner below — having them here
                 too duplicated the exact same link/QR right on top of each other. */}
             {!hasStarted(activeTournament) && isOwner && (
