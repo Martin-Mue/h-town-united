@@ -863,23 +863,6 @@ const TournamentPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, activeTournament?.id]);
 
-  // Auto-generate round configs when target size or defaults change
-  useEffect(() => {
-    if (tournamentMode === "round-robin") return;
-    // "auto" picks whichever main bracket size (see chooseAutoMainSize) keeps the
-    // fewest players affected by a preliminary round or BYEs, unless the organizer overrode
-    // that tie-break via autoSizePreference.
-    const size = targetSize === "auto" ? chooseAutoMainSize(players.length, autoSizePreference) : Number(targetSize);
-    const totalRounds = Math.log2(nextPowerOfTwo(size));
-    setRoundConfigs((prev) => {
-      const next: RoundConfig[] = [];
-      for (let i = 0; i < totalRounds; i++) {
-        next.push(prev[i] || { mode: gameMode, bestOf: bestOfLegs });
-      }
-      return next;
-    });
-  }, [targetSize, autoSizePreference, tournamentMode, gameMode, bestOfLegs, players.length]);
-
   /**
    * Effective MAIN bracket size (excludes any preliminary round): automatic mode uses
    * chooseAutoMainSize (honoring autoSizePreference) to minimize how many players are stuck with
@@ -888,12 +871,41 @@ const TournamentPage = () => {
    * SMALLER than the player count on purpose actually produces a preliminary round instead of
    * silently snapping back up to the next size that would need BYEs instead — buildSeeding already
    * supports any main size below the player count, this was just never exposed reliably before.
+   * Declared before the round-configs effect below (not just usage order — TS's block-scope
+   * check flags a `const` referenced by an effect textually above its own declaration even though
+   * the effect only actually runs after this render's already assigned it).
    */
   const effectiveSize = useMemo(() => {
     if (targetSize === "auto") return chooseAutoMainSize(players.length, autoSizePreference);
     const floor = lowerPowerOfTwo(Math.max(players.length, 2));
     return Math.min(64, Math.max(floor, Number(targetSize)));
   }, [targetSize, autoSizePreference, players.length]);
+
+  // Auto-generate round configs when target size or defaults change. Reads effectiveSize
+  // directly (rather than re-deriving a size from targetSize/autoSizePreference independently,
+  // as this used to) so this array's length always actually matches the bracket that gets
+  // generated — effectiveSize's own manual-mode floor (lowerPowerOfTwo, see its doc comment)
+  // could otherwise diverge from a size recomputed here without that same clamp.
+  useEffect(() => {
+    if (tournamentMode === "round-robin") return;
+    const totalRounds = Math.log2(effectiveSize);
+    const hasPrelim = players.length > effectiveSize;
+    setRoundConfigs((prev) => {
+      const next: RoundConfig[] = [];
+      for (let i = 0; i < totalRounds; i++) {
+        next.push(prev[i] || { mode: gameMode, bestOf: bestOfLegs });
+      }
+      if (hasPrelim) {
+        // Round 0 (preliminary round)'s own config lives one slot past the last real round —
+        // see roundConfigIndex's doc comment for why. Defaults to round 1's OWN current best-of
+        // (not necessarily the tournament-wide default) per the organizer's ask: a preliminary
+        // round should start out oriented on round 1, since round 1 may already have been
+        // customized away from the tournament's base best-of.
+        next.push(prev[totalRounds] || { mode: next[0]?.mode ?? gameMode, bestOf: next[0]?.bestOf ?? bestOfLegs });
+      }
+      return next;
+    });
+  }, [effectiveSize, tournamentMode, gameMode, bestOfLegs, players.length]);
 
   const addPlayers = (names: string[]) => {
     const cleaned = names.map((name) => name.trim()).filter(Boolean);
@@ -1521,12 +1533,18 @@ const TournamentPage = () => {
   /** Just the cheap half of toggleHighlights below (games rows only, no per-dart legs) — split
    *  out so the participants list can show each entrant's live tournament average right away
    *  without needing the heavier Highlights panel opened first. */
-  const loadTournamentAverages = useCallback(async (tournamentId: string) => {
+  const loadTournamentAverages = useCallback(async (tournamentId: string, roster: string[]) => {
     const { data: games } = await supabase.from("games")
       .select("id, player1_id, player1_name, player1_average, player2_id, player2_name, player2_average")
       .eq("tournament_id", tournamentId);
     const gameRows = (games || []) as unknown as TournamentStatsGameRow[];
-    setTournamentAverages(computeTournamentAverages(gameRows));
+    const activeRoster = new Set(roster);
+    const averages = computeTournamentAverages(gameRows);
+    // A withdrawn player's past games are real rows in the DB but shouldn't keep showing up in
+    // the averages ranking once they're no longer actually in the tournament — a games row
+    // covers both players at once, so filter the computed per-participant list rather than the
+    // raw rows (that would also drop the other, still-active player's own data).
+    setTournamentAverages({ ...averages, participants: averages.participants.filter((p) => activeRoster.has(p.name)) });
     return gameRows;
   }, []);
 
@@ -1541,7 +1559,7 @@ const TournamentPage = () => {
   // owner could ever see the answer to.
   useEffect(() => {
     if (!activeTournament || tournamentAverages || !isOwner) return;
-    loadTournamentAverages(activeTournament.id);
+    loadTournamentAverages(activeTournament.id, activeTournament.players);
   }, [activeTournament, tournamentAverages, isOwner, loadTournamentAverages]);
 
   /** Lazily fetches + computes this tournament's highlights on first expand, then just toggles
@@ -1555,13 +1573,16 @@ const TournamentPage = () => {
     setShowHighlights(next);
     if (!next || tournamentHighlights || !activeTournament) return;
     setLoadingHighlights(true);
-    const gameRows = await loadTournamentAverages(activeTournament.id);
+    const gameRows = await loadTournamentAverages(activeTournament.id, activeTournament.players);
     const gameIds = gameRows.map((g) => g.id);
     if (gameIds.length === 0) { setTournamentHighlights({ heatmapPoints: [], participants: [], topCheckout: null, shortestLeg: null }); setLoadingHighlights(false); return; }
     const { data: legs } = await supabase.from("game_legs")
       .select("player_id, player_name, starting_score, throws, won")
       .in("game_id", gameIds);
-    setTournamentHighlights(computeTournamentHighlights((legs || []) as unknown as TournamentStatsLegRow[]));
+    const activeRoster = new Set(activeTournament.players);
+    // Same withdrawn-player filter as loadTournamentAverages above — one leg row per player per
+    // leg, so this cleanly drops just their own contributions.
+    setTournamentHighlights(computeTournamentHighlights(((legs || []) as unknown as TournamentStatsLegRow[]).filter((l) => activeRoster.has(l.player_name))));
     setLoadingHighlights(false);
   };
 
@@ -1838,8 +1859,13 @@ const TournamentPage = () => {
               <CollapsibleContent className="px-3 pb-3">
               <div className="space-y-2">
                 {roundConfigs.map((cfg, idx) => {
-                  const total = roundConfigs.length;
-                  const label = roundLabelFor(idx + 1, total, t);
+                  // A trailing slot past the last real round is round 0 (preliminary round) — see
+                  // the round-configs generation effect's comment for why it's appended there
+                  // instead of taking index 0.
+                  const hasPrelimSlot = players.length > effectiveSize;
+                  const total = hasPrelimSlot ? roundConfigs.length - 1 : roundConfigs.length;
+                  const isPrelimSlot = hasPrelimSlot && idx === total;
+                  const label = roundLabelFor(isPrelimSlot ? 0 : idx + 1, total, t);
                   return (
                     <div key={idx} className="grid grid-cols-[80px_1fr_1fr] gap-2 items-center">
                       <span className="text-xs font-display uppercase text-muted-foreground">{label}</span>
@@ -2021,7 +2047,13 @@ const TournamentPage = () => {
                 </div>
                 <div className="text-[11px] text-muted-foreground space-y-1">
                   <p>
-                    {t("tournament.modeProgression")} {roundConfigs.map((c, i) => `${roundLabelFor(i + 1, roundConfigs.length, t)}: ${c.mode} BO${c.bestOf}`).join(" · ")}
+                    {t("tournament.modeProgression")} {roundConfigs.map((c, i) => {
+                      // Same trailing-slot-is-round-0 convention as the "Modus pro Runde" editor
+                      // above — roundConfigs may have one more entry than `rounds` when a
+                      // preliminary round applies.
+                      const isPrelimSlot = seeding.prelimPairs.length > 0 && i === rounds;
+                      return `${roundLabelFor(isPrelimSlot ? 0 : i + 1, rounds, t)}: ${c.mode} BO${c.bestOf}`;
+                    }).join(" · ")}
                   </p>
                   <p>
                     {drawMode === "random"
