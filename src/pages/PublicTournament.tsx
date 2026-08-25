@@ -502,8 +502,24 @@ const CheckoutBadges = ({ player1, player2, live }: { player1: string; player2: 
 const WaitingSplash = ({ name }: { name: string }) => {
   const { t } = useLanguage();
   return (
-    <div className="flex flex-col items-center justify-center text-center py-16 px-4 min-h-[60vh]">
-      <img src={htuEmblem} alt="" className="w-36 h-36 sm:w-48 sm:h-48 object-contain opacity-90 mb-6" />
+    <div className="flex flex-col items-center justify-center text-center py-10 px-4 min-h-[60vh]">
+      {/* Same combined club-emblem + Darts-badge layering as the Home page hero (Index.tsx) — the
+       *  large muted tree emblem behind, the sharp glowing circular Darts badge overlapping its
+       *  lower trunk in front — so the live view's waiting screen reads as the same club identity
+       *  a member already recognizes from the app, not a second, different logo treatment. */}
+      <div className="relative mb-4 h-[196px] sm:h-[240px] w-full max-w-md">
+        <img
+          src={htuEmblem}
+          alt="H-Town United e.V. Vereinsemblem"
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[180px] h-[180px] sm:w-[220px] sm:h-[220px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
+        />
+        <div className="absolute left-1/2 -translate-x-1/2 top-[104px] sm:top-[128px]">
+          <div className="absolute inset-0 rounded-full bg-primary/25 blur-xl scale-125" />
+          <div className="relative w-[92px] h-[92px] sm:w-[112px] sm:h-[112px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+            <img src={htuLogo} alt="H-Town United Darts Vereinswappen" className="w-full h-full object-cover" />
+          </div>
+        </div>
+      </div>
       <h2 className="font-display text-2xl uppercase tracking-widest mb-3">{name}</h2>
       <p className="text-sm text-muted-foreground flex items-center gap-2">
         <Hourglass className="w-4 h-4" /> {t("pt.waitingSubtitle")}
@@ -836,13 +852,20 @@ const PublicTournamentPage = () => {
    *  expects one row per game. Shared by the Highlights panel and the participants rotation view
    *  — there's no cheaper "averages only" endpoint for anonymous spectators, so both draw on the
    *  same one-time fetch instead of hitting the RPC twice. */
-  const loadHighlightsAndAverages = useCallback(async (tournamentId: string) => {
+  const loadHighlightsAndAverages = useCallback(async (tournamentId: string, roster: string[]) => {
     const { data } = await supabase.rpc("public_tournament_highlights", { _tournament_id: tournamentId });
     const rows = (data || []) as unknown as (TournamentStatsLegRow & {
       game_id: string; player1_id: string | null; player1_name: string; player1_average: number;
       player2_id: string | null; player2_name: string; player2_average: number;
     })[];
-    setTournamentHighlights(computeTournamentHighlights(rows));
+    const activeRoster = new Set(roster);
+    // A withdrawn player's historical legs/games are still real rows in the DB (their past
+    // results genuinely happened) but shouldn't keep surfacing in highlights once they're no
+    // longer actually in the tournament. Filtering the raw leg rows by the CURRENT roster (one
+    // row per player per leg) correctly drops exactly their own contributions while keeping
+    // their past opponents' own rows intact — this also cascades into topCheckout/shortestLeg,
+    // not just the participants table.
+    setTournamentHighlights(computeTournamentHighlights(rows.filter((r) => activeRoster.has(r.player_name))));
     const gamesByGameId = new Map<string, TournamentStatsGameRow>();
     rows.forEach((r) => {
       if (!gamesByGameId.has(r.game_id)) {
@@ -853,19 +876,26 @@ const PublicTournamentPage = () => {
         });
       }
     });
-    setTournamentAverages(computeTournamentAverages([...gamesByGameId.values()]));
+    const averages = computeTournamentAverages([...gamesByGameId.values()]);
+    // Games rows cover both players at once, so dropping the row (like above) would also lose
+    // the other, still-active player's data — filter the computed per-participant list instead.
+    setTournamentAverages({ ...averages, participants: averages.participants.filter((p) => activeRoster.has(p.name)) });
   }, []);
 
   // Only when the participants or highlights view is actually (or about to be, via rotation) on
   // screen — most spectators just watch the board/bracket view and never touch either of the
   // stats surfaces, so firing this RPC unconditionally for every page load would be a lot of
   // wasted per-dart throw data fetched for nothing on what's often a multi-viewer live-event page.
+  // Re-fires on every `t` refresh (the same ~8s poll/realtime cadence as the rest of the live
+  // view) rather than just once — it used to only ever fetch a single time per page visit
+  // (gated behind `!tournamentAverages`), so a spectator who opened Highlights early in the
+  // event kept seeing the same frozen numbers for the rest of it.
   useEffect(() => {
-    if (!t || tournamentAverages) return;
+    if (!t) return;
     const willShowStats = view === "participants" || view === "highlights" || (autoRotate && (rotationSlots.participants || rotationSlots.highlights));
     if (!willShowStats) return;
-    loadHighlightsAndAverages(t.id);
-  }, [t, tournamentAverages, view, autoRotate, rotationSlots, loadHighlightsAndAverages]);
+    loadHighlightsAndAverages(t.id, t.players);
+  }, [t, view, autoRotate, rotationSlots, loadHighlightsAndAverages]);
 
   /** The slot a given `view` value belongs to — tree/list both count as "bracket" since they're
    *  two presentations of the same data, never independently rotation-eligible. Also the shared
@@ -886,6 +916,12 @@ const PublicTournamentPage = () => {
   const started = t ? hasStarted(t) : false;
   const prestartViews = t?.prestart_views?.length ? t.prestart_views : DEFAULT_PRESTART_VIEWS;
   const isLocked = (v: ViewKey) => !started && !prestartViews.includes(slotOf(v));
+  // A plain string, not `prestartViews` itself, as the effects' dependency below — `t` (and with
+  // it `t.prestart_views`) gets a brand-new array reference on every ~8s poll tick even when its
+  // actual content hasn't changed, which was resetting the 15s rotation interval before it ever
+  // got to fire a single switch. Content-derived strings compare by value, so this only changes
+  // when the configured pre-start pages actually do.
+  const prestartViewsKey = prestartViews.join(",");
 
   useEffect(() => {
     if (!autoRotate) return;
@@ -901,7 +937,8 @@ const PublicTournamentPage = () => {
       });
     }, AUTO_ROTATE_MS);
     return () => window.clearInterval(id);
-  }, [autoRotate, rotationSlots, started, prestartViews]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRotate, rotationSlots, started, prestartViewsKey]);
 
   // If the currently-shown view's slot gets unchecked (or locked) while auto-rotating, jump to
   // the next enabled one immediately instead of waiting out the rest of the interval.
@@ -911,7 +948,7 @@ const PublicTournamentPage = () => {
     const enabledSlots = ROTATION_ORDER.filter((s) => rotationSlots[s] && (started || prestartViews.includes(s)));
     if (enabledSlots.length > 0) setViewRaw(viewForSlot(enabledSlots[0]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rotationSlots, autoRotate, started, prestartViews]);
+  }, [rotationSlots, autoRotate, started, prestartViewsKey]);
 
   // Two defaults, only when nothing already chose a view explicitly (URL param or a remembered
   // device preference), and only running once so neither ever overrides a view picked by hand
@@ -930,7 +967,8 @@ const PublicTournamentPage = () => {
     const ms = (t.bracket as Match[]) || [];
     const rounds = isKoNow && ms.length > 0 ? Math.max(...ms.map(m => m.round)) : 0;
     if (rounds >= 5) { setViewRaw("list"); bracketViewRef.current = "list"; }
-  }, [t, hadExplicitViewPref, started, prestartViews]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, hadExplicitViewPref, started, prestartViewsKey]);
 
   useEffect(() => {
     if (!t) return;
