@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check, QrCode, Hourglass } from "lucide-react";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check, QrCode, Hourglass, Lock } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
   isPlayable,
   totalRoundsOf,
   hasStarted,
+  DEFAULT_PRESTART_VIEWS,
   type Match,
   type RoundRobinMatch,
   type RoundRobinStanding,
@@ -875,9 +876,22 @@ const PublicTournamentPage = () => {
   const viewForSlot = (slot: RotationSlot): ViewKey =>
     slot === "bracket" ? bracketViewRef.current : slot;
 
+  // Computed here rather than after the loading/notFound early returns below — the auto-rotation
+  // effects right below need it, and hooks must run unconditionally on every render regardless of
+  // loading state, so `t` may still be null at this point during the initial load. Client-side
+  // only: `view` was already driven entirely by local state/localStorage/the `?view=` param with
+  // zero server enforcement before this, and still is — a curious visitor can still force a
+  // locked view via that same URL param. A UI nicety appropriate for a club event, not a real
+  // access boundary.
+  const started = t ? hasStarted(t) : false;
+  const prestartViews = t?.prestart_views?.length ? t.prestart_views : DEFAULT_PRESTART_VIEWS;
+  const isLocked = (v: ViewKey) => !started && !prestartViews.includes(slotOf(v));
+
   useEffect(() => {
     if (!autoRotate) return;
-    const enabledSlots = ROTATION_ORDER.filter((s) => rotationSlots[s]);
+    // Pre-start, don't rotate through locked slots — an unattended screen shouldn't spend 15s
+    // showing a lock-hint panel nobody asked to see.
+    const enabledSlots = ROTATION_ORDER.filter((s) => rotationSlots[s] && (started || prestartViews.includes(s)));
     if (enabledSlots.length === 0) return;
     const id = window.setInterval(() => {
       setViewRaw((v) => {
@@ -887,30 +901,36 @@ const PublicTournamentPage = () => {
       });
     }, AUTO_ROTATE_MS);
     return () => window.clearInterval(id);
-  }, [autoRotate, rotationSlots]);
+  }, [autoRotate, rotationSlots, started, prestartViews]);
 
-  // If the currently-shown view's slot gets unchecked while auto-rotating, jump to the next
-  // enabled one immediately instead of waiting out the rest of the interval on a now-excluded view.
+  // If the currently-shown view's slot gets unchecked (or locked) while auto-rotating, jump to
+  // the next enabled one immediately instead of waiting out the rest of the interval.
   useEffect(() => {
     if (!autoRotate) return;
-    if (rotationSlots[slotOf(view)]) return;
-    const enabledSlots = ROTATION_ORDER.filter((s) => rotationSlots[s]);
+    if (rotationSlots[slotOf(view)] && !isLocked(view)) return;
+    const enabledSlots = ROTATION_ORDER.filter((s) => rotationSlots[s] && (started || prestartViews.includes(s)));
     if (enabledSlots.length > 0) setViewRaw(viewForSlot(enabledSlots[0]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rotationSlots, autoRotate]);
+  }, [rotationSlots, autoRotate, started, prestartViews]);
 
-  // A 32+ player mirrored tree can't stay legible at any scale that also fits a
-  // screen — default those straight to the always-readable round list. Only applies when
-  // nothing already chose a view explicitly (URL param or a remembered device preference),
-  // and runs once so it never overrides a view picked by hand afterwards.
+  // Two defaults, only when nothing already chose a view explicitly (URL param or a remembered
+  // device preference), and only running once so neither ever overrides a view picked by hand
+  // afterwards: (1) pre-start, land on the first configured pre-start page instead of a locked
+  // bracket/list — a fresh visitor before doors open shouldn't immediately hit a lock-hint panel;
+  // (2) once started, a 32+ player mirrored tree can't stay legible at any scale that also fits a
+  // screen, so default those straight to the always-readable round list instead.
   useEffect(() => {
     if (autoViewSetRef.current || !t || hadExplicitViewPref) return;
     autoViewSetRef.current = true;
+    if (!started) {
+      const first = prestartViews[0] as ViewKey | undefined;
+      if (first) { setViewRaw(first); return; }
+    }
     const isKoNow = t.mode !== "round-robin";
     const ms = (t.bracket as Match[]) || [];
     const rounds = isKoNow && ms.length > 0 ? Math.max(...ms.map(m => m.round)) : 0;
     if (rounds >= 5) { setViewRaw("list"); bracketViewRef.current = "list"; }
-  }, [t, hadExplicitViewPref]);
+  }, [t, hadExplicitViewPref, started, prestartViews]);
 
   useEffect(() => {
     if (!t) return;
@@ -1005,7 +1025,6 @@ const PublicTournamentPage = () => {
     : null;
   const boardsCount = t.boards ?? 2;
   const roundLabel = (round: number, total: number) => roundLabelFor(round, total, tr);
-  const started = hasStarted(t);
 
   // Board-aware look-ahead — single source of truth shared by the "Jetzt am Board"
   // banner, the "Als Nächstes" sidebar card, and the full-screen board overview.
@@ -1060,32 +1079,32 @@ const PublicTournamentPage = () => {
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border overflow-x-auto max-w-full">
             <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-              <Monitor className="w-3.5 h-3.5" /> {tr("pt.boardOverview")}
+              <Monitor className="w-3.5 h-3.5" /> {tr("pt.boardOverview")} {isLocked("boards") && <Lock className="w-3 h-3" />}
             </button>
             {isKo && (
               <>
                 <button onClick={() => selectView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                  <Network className="w-3.5 h-3.5" /> {tr("tournament.bracketTreeTab")}
+                  <Network className="w-3.5 h-3.5" /> {tr("tournament.bracketTreeTab")} {isLocked("tree") && <Lock className="w-3 h-3" />}
                 </button>
                 <button onClick={() => selectView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-                  <Rows3 className="w-3.5 h-3.5" /> {tr("pt.roundList")}
+                  <Rows3 className="w-3.5 h-3.5" /> {tr("pt.roundList")} {isLocked("list") && <Lock className="w-3 h-3" />}
                 </button>
               </>
             )}
             <button onClick={() => selectView("participants")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "participants" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-              <Users className="w-3.5 h-3.5" /> {tr("pt.participantsView")}
+              <Users className="w-3.5 h-3.5" /> {tr("pt.participantsView")} {isLocked("participants") && <Lock className="w-3 h-3" />}
             </button>
             <button onClick={() => selectView("highlights")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "highlights" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-              <Target className="w-3.5 h-3.5" /> {tr("pt.highlightsLabel")}
+              <Target className="w-3.5 h-3.5" /> {tr("pt.highlightsLabel")} {isLocked("highlights") && <Lock className="w-3 h-3" />}
             </button>
             <button onClick={() => selectView("waiting")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "waiting" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-              <Hourglass className="w-3.5 h-3.5" /> {tr("pt.waitingTab")}
+              <Hourglass className="w-3.5 h-3.5" /> {tr("pt.waitingTab")} {isLocked("waiting") && <Lock className="w-3 h-3" />}
             </button>
             <button onClick={() => selectView("format")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "format" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-              <ListOrdered className="w-3.5 h-3.5" /> {tr("pt.formatTab")}
+              <ListOrdered className="w-3.5 h-3.5" /> {tr("pt.formatTab")} {isLocked("format") && <Lock className="w-3 h-3" />}
             </button>
             <button onClick={() => selectView("qr")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "qr" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
-              <QrCode className="w-3.5 h-3.5" /> {tr("pt.qrTab")}
+              <QrCode className="w-3.5 h-3.5" /> {tr("pt.qrTab")} {isLocked("qr") && <Lock className="w-3 h-3" />}
             </button>
           </div>
           <button
@@ -1140,7 +1159,12 @@ const PublicTournamentPage = () => {
           </div>
         )}
 
-      {view === "highlights" ? (
+      {isLocked(view) ? (
+        <div className="flex flex-col items-center justify-center text-center py-16 px-4 min-h-[40vh]">
+          <Lock className="w-8 h-8 text-muted-foreground mb-3" />
+          <p className="text-sm text-muted-foreground max-w-xs">{tr("pt.lockedViewHint")}</p>
+        </div>
+      ) : view === "highlights" ? (
         <div className="px-4 pb-6">
           {/* No max-w here (used to cap at max-w-2xl) — a TV/tablet propped up for the live
               rotation has the width to spare, and the highlight table only grows as the

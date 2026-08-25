@@ -49,8 +49,8 @@ import {
   newlyPlayableMatches,
   hasStarted,
   boardHasFutureMatch,
-  type RotationSlot,
   DEFAULT_PRESTART_VIEWS,
+  type RotationSlot,
 } from "@/utils/tournament";
 
 interface RoundConfig {
@@ -82,6 +82,9 @@ interface TournamentRecord {
   boards?: number;
   /** Off = pure bracket display + manual result entry, no "Spiel starten" button anywhere. Defaults on. */
   live_play_enabled?: boolean;
+  /** Which live-view pages stay visible before the first real match has a result — see
+   *  DEFAULT_PRESTART_VIEWS for the fallback when a tournament hasn't set its own. */
+  prestart_views?: string[];
   /** Who's actually shown up, keyed by participant name (same name-keyed space as `players`/
    *  `bracket`) — organizer-only check-in state, independent of match results. */
   attendance?: Record<string, boolean> | null;
@@ -776,6 +779,7 @@ const TournamentPage = () => {
     boards: t.boards ?? 2,
     live_play_enabled: t.live_play_enabled ?? true,
     attendance: (t.attendance as unknown as Record<string, boolean>) || {},
+    prestart_views: (t.prestart_views as unknown as string[]) || DEFAULT_PRESTART_VIEWS,
   });
 
   const fetchTournaments = useCallback(async () => {
@@ -1058,6 +1062,7 @@ const TournamentPage = () => {
         boards: upd.boards ?? boards,
         live_play_enabled: upd.live_play_enabled ?? livePlayEnabled,
         attendance: (upd.attendance as unknown as Record<string, boolean>) || {},
+        prestart_views: (upd.prestart_views as unknown as string[]) || DEFAULT_PRESTART_VIEWS,
       };
       setActiveTournament(rec);
       setEditingId(null);
@@ -1107,6 +1112,7 @@ const TournamentPage = () => {
       boards: data.boards ?? boards,
       live_play_enabled: data.live_play_enabled ?? livePlayEnabled,
       attendance: (data.attendance as unknown as Record<string, boolean>) || {},
+      prestart_views: (data.prestart_views as unknown as string[]) || DEFAULT_PRESTART_VIEWS,
     };
     setActiveTournament(record);
     setBracketView(defaultBracketView(record.bracket as Match[]));
@@ -1280,6 +1286,20 @@ const TournamentPage = () => {
     const { error } = await supabase.from("tournaments").update({ attendance: next as unknown as Json }).eq("id", activeTournament.id);
     if (error) {
       setActiveTournament((curr) => curr ? { ...curr, attendance: prevAttendance } : curr);
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    }
+  };
+
+  /** Which live-view pages stay visible before the first real match has a result — same
+   *  optimistic-update + revert-on-error pattern as toggleAttendance/setAllAttendance above. */
+  const togglePrestartView = async (slot: RotationSlot) => {
+    if (!activeTournament) return;
+    const prev = activeTournament.prestart_views?.length ? activeTournament.prestart_views : DEFAULT_PRESTART_VIEWS;
+    const next = prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot];
+    setActiveTournament({ ...activeTournament, prestart_views: next });
+    const { error } = await supabase.from("tournaments").update({ prestart_views: next as unknown as Json }).eq("id", activeTournament.id);
+    if (error) {
+      setActiveTournament((curr) => curr ? { ...curr, prestart_views: prev } : curr);
       toast({ title: t("common.error"), description: error.message, variant: "destructive" });
     }
   };
@@ -2310,6 +2330,36 @@ const TournamentPage = () => {
                 />
               </div>
             </div>
+            {!hasStarted(activeTournament) && (
+              <div className="rounded-xl border border-border bg-card/60 px-4 py-2.5 mt-1.5">
+                <p className="text-[11px] text-muted-foreground mb-2">{t("tournament.prestartViewsLabel")}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { slot: "waiting" as const, label: t("pt.waitingTab") },
+                    { slot: "format" as const, label: t("pt.formatTab") },
+                    { slot: "qr" as const, label: t("pt.qrTab") },
+                    { slot: "boards" as const, label: t("pt.boardOverview") },
+                    { slot: "bracket" as const, label: t("tournament.bracketTreeTab") },
+                    { slot: "participants" as const, label: t("pt.participantsView") },
+                    { slot: "highlights" as const, label: t("pt.highlightsLabel") },
+                  ]).map((opt) => {
+                    const active = (activeTournament.prestart_views?.length ? activeTournament.prestart_views : DEFAULT_PRESTART_VIEWS).includes(opt.slot);
+                    return (
+                      <button
+                        key={opt.slot}
+                        onClick={() => togglePrestartView(opt.slot)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs ${active ? "border-secondary bg-secondary/15 text-secondary" : "border-border text-muted-foreground"}`}
+                      >
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center ${active ? "bg-secondary border-secondary" : "border-muted-foreground/40"}`}>
+                          {active && <Check className="w-3 h-3 text-secondary-foreground" />}
+                        </span>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
