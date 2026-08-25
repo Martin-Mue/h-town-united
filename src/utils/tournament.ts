@@ -452,6 +452,14 @@ export function currentBoardSchedule(matches: Match[], boards: number): CurrentB
   return { now, onDeck, queuedCount };
 }
 
+/** Extra lookahead beyond `currentBoardSchedule`'s "now"/"onDeck": does this exact board still
+ *  have an open (undecided) match anywhere later in the tournament? Lets a board-mode device
+ *  distinguish "waiting for a match that's still coming" from "nothing left for this board,
+ *  ever" instead of collapsing both into one message. */
+export function boardHasFutureMatch(matches: Match[], boards: number, board: number): boolean {
+  return buildSchedule(matches, boards).some((e) => e.board === board && !e.match.winner);
+}
+
 export interface RoundRobinMatch {
   id: string;
   player1: string;
@@ -517,6 +525,25 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
 
   return groupOrder.flatMap((key) => headToHeadRank(groups.get(key)!));
 }
+
+/** A tournament counts as started as soon as a real match (no BYE) has a winner. Shared by
+ *  Tournament.tsx (locks settings-editing) and PublicTournament.tsx (lifts the pre-start
+ *  live-view gate) — previously duplicated as a private helper in Tournament.tsx only. */
+export function hasStarted(t: { mode: string; bracket: Match[] | RoundRobinMatch[] }): boolean {
+  if (t.mode === "round-robin") return ((t.bracket as RoundRobinMatch[]) || []).some((m) => m.played);
+  return ((t.bracket as Match[]) || []).some(
+    (m) => !!m.winner && isRealPlayer(m.player1) && isRealPlayer(m.player2)
+  );
+}
+
+/** Every selectable live-view page, shared between PublicTournament.tsx (rotation + pre-start
+ *  gating) and Tournament.tsx (the organizer's pre-start-visibility checkboxes) so both draw on
+ *  one taxonomy instead of two hand-kept copies. */
+export type RotationSlot = "boards" | "bracket" | "participants" | "highlights" | "waiting" | "format" | "qr";
+
+/** Which pages stay visible before the tournament's first real match has a result, for a
+ *  tournament that hasn't set its own `prestart_views` override yet. */
+export const DEFAULT_PRESTART_VIEWS: RotationSlot[] = ["waiting", "format", "qr"];
 
 /** Pure utility, no access to the language context — callers (all React components) pass their
  *  own t() through. */

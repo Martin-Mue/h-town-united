@@ -47,6 +47,10 @@ import {
   scorekeeperLabel,
   calcStandings,
   newlyPlayableMatches,
+  hasStarted,
+  boardHasFutureMatch,
+  type RotationSlot,
+  DEFAULT_PRESTART_VIEWS,
 } from "@/utils/tournament";
 
 interface RoundConfig {
@@ -1533,14 +1537,6 @@ const TournamentPage = () => {
 
   const roundLabel = (round: number, total: number) => roundLabelFor(round, total, t);
 
-  /** A tournament counts as started as soon as a real match (no BYE) has a winner. */
-  const hasStarted = (t: TournamentRecord) => {
-    if (t.mode === "round-robin") return ((t.bracket as RoundRobinMatch[]) || []).some((m) => m.played);
-    return ((t.bracket as Match[]) || []).some(
-      (m) => !!m.winner && isRealPlayer(m.player1) && isRealPlayer(m.player2)
-    );
-  };
-
   /** Load an unstarted tournament back into the setup screen. */
   const editTournament = (t: TournamentRecord) => {
     setEditingId(t.id);
@@ -2049,7 +2045,14 @@ const TournamentPage = () => {
     const boardParam = searchParams.get("board");
     if (boardParam) {
       const boardCount = activeTournament.boards || 2;
-      const exitBoardMode = () => setSearchParams({});
+      const exitBoardMode = () => {
+        // Actually unbind — previously this only cleared the URL param, so this device stayed
+        // silently redirected into board mode for every later match on this tournament (even
+        // ones reached via the flat bracket or a QR scan), with no way out short of clearing
+        // browser storage by hand.
+        window.localStorage.removeItem(`dart-tournament-board-${activeTournament.id}`);
+        setSearchParams({});
+      };
       const pickBoard = (n: number) => {
         window.localStorage.setItem(`dart-tournament-board-${activeTournament.id}`, String(n));
         setSearchParams({ board: String(n) });
@@ -2090,9 +2093,32 @@ const TournamentPage = () => {
       }
 
       const myBoard = parseInt(boardParam, 10);
+
+      // A board a device bound to earlier can go stale if the organizer later reduces the
+      // tournament's board count — without this check the device just sat on the generic
+      // "waiting" card forever with no indication anything was actually wrong.
+      if (!Number.isFinite(myBoard) || myBoard < 1 || myBoard > boardCount) {
+        return (
+          <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
+            <Monitor className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+            <h2 className="text-xl font-display uppercase mb-1">{t("tournament.boardGone")}</h2>
+            <p className="text-xs text-muted-foreground mb-6">{t("tournament.boardGoneDesc")}</p>
+            <Button onClick={() => setSearchParams({ board: "pick" })}>{t("tournament.pickAnotherBoard")}</Button>
+            <button onClick={exitBoardMode} className="mt-6 block mx-auto text-xs text-muted-foreground hover:text-foreground">
+              ← {t("tournament.overview")}
+            </button>
+          </div>
+        );
+      }
+
       const schedule = currentBoardSchedule(matches, boardCount);
       const current = schedule.now.find((e) => e.board === myBoard);
       const next = schedule.onDeck.find((e) => e.board === myBoard);
+      // Same gate the flat bracket view's "Spiel starten" button already applies
+      // (live_play_enabled + per-round "Extern", see canStartLiveGame above) — board mode used
+      // to bypass both, so a round marked "played externally" (or a live-play-disabled
+      // tournament) could still get auto-started here via Game.tsx's countdown.
+      const currentStartable = current ? canStartLiveGame(current.match) : false;
       const startFromBoard = (match: Match) => {
         const path = koLiveGamePath(match);
         if (path) navigate(`${path}&board=${myBoard}`);
@@ -2124,9 +2150,15 @@ const TournamentPage = () => {
               <p className="text-xs text-muted-foreground mb-4">
                 {resolveRoundMode(current.match.round)} · {t("stats.bestOf")} {resolveRoundBestOf(current.match.round)}
               </p>
-              <Button onClick={() => startFromBoard(current.match)} className="w-full font-display uppercase text-base py-6 gap-2">
-                <Play className="w-5 h-5" /> {t("game.startGame")}
-              </Button>
+              {currentStartable ? (
+                <Button onClick={() => startFromBoard(current.match)} className="w-full font-display uppercase text-base py-6 gap-2">
+                  <Play className="w-5 h-5" /> {t("game.startGame")}
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground bg-muted/30 border border-border rounded-lg px-3 py-2">
+                  {!(activeTournament.live_play_enabled ?? true) ? t("tournament.matchNotLiveDisabled") : t("tournament.matchNotLiveExtern")}
+                </p>
+              )}
             </div>
           ) : (
             <div className="bg-muted/30 border border-border rounded-2xl p-8">
@@ -2136,6 +2168,8 @@ const TournamentPage = () => {
                 <p className="text-xs text-muted-foreground mt-3">
                   {t("tournament.upNext")}: {next.match.player1} vs. {next.match.player2}
                 </p>
+              ) : boardHasFutureMatch(matches, boardCount, myBoard) ? (
+                <p className="text-xs text-muted-foreground mt-3">{t("tournament.moreBoardMatchesLater")}</p>
               ) : (
                 <p className="text-xs text-muted-foreground mt-3">{t("tournament.allBoardMatchesDone")}</p>
               )}

@@ -75,6 +75,7 @@ import { effectiveStartScore } from "@/utils/handicap";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
+import { isLiveSnapshotFresh, totalRoundsOf, type Match } from "@/utils/tournament";
 import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
 import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 
@@ -322,10 +323,25 @@ interface ActiveGameSnapshot {
  * result write on save.
  */
 const ACTIVE_GAME_KEY = "dartcam-active-game-v1";
+
+/** Scoped by tournament+match when this launch is tournament-linked, falling back to the bare
+ *  key for a casual game — a single global key meant two boards played from two tabs of the same
+ *  browser (a realistic stopgap without one iPad per board) continuously clobbered each other's
+ *  in-progress snapshot. Reads the URL directly instead of the useSearchParams hook so it also
+ *  works inside loadActiveGameSnapshot's useState initializer below, which runs before that hook
+ *  is even called. */
+function activeGameKey(): string {
+  if (typeof window === "undefined") return ACTIVE_GAME_KEY;
+  const params = new URLSearchParams(window.location.search);
+  const tid = params.get("tid");
+  const mid = params.get("mid");
+  return tid && mid ? `${ACTIVE_GAME_KEY}:${tid}:${mid}` : ACTIVE_GAME_KEY;
+}
+
 function loadActiveGameSnapshot(): ActiveGameSnapshot | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(ACTIVE_GAME_KEY);
+    const raw = window.localStorage.getItem(activeGameKey());
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     // Snapshots written before this wrapper existed were a bare GameState (recognizable by a
@@ -334,7 +350,19 @@ function loadActiveGameSnapshot(): ActiveGameSnapshot | null {
     if (parsed && typeof parsed === "object" && "currentLeg" in parsed) {
       return { game: parsed as GameState, dartsThisRound: 0, turnStartRemaining: 0, tournamentLink: null };
     }
-    return parsed as ActiveGameSnapshot;
+    const snapshot = parsed as ActiveGameSnapshot;
+    // The scoped key above already keeps different matches from clobbering each other — but the
+    // bare fallback key (no tid/mid in THIS url, e.g. a casual game) could still hold a
+    // tournament-linked snapshot restored from a completely different, unrelated match. Discard
+    // rather than resume into the wrong match's state.
+    const params = new URLSearchParams(window.location.search);
+    const urlTid = params.get("tid");
+    const urlMid = params.get("mid");
+    if (snapshot?.tournamentLink && urlTid && urlMid &&
+      (snapshot.tournamentLink.tournamentId !== urlTid || snapshot.tournamentLink.matchId !== urlMid)) {
+      return null;
+    }
+    return snapshot;
   } catch {
     return null;
   }
@@ -342,14 +370,14 @@ function loadActiveGameSnapshot(): ActiveGameSnapshot | null {
 function saveActiveGameSnapshot(snapshot: ActiveGameSnapshot) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify(snapshot));
+    window.localStorage.setItem(activeGameKey(), JSON.stringify(snapshot));
   } catch {
     /* storage full/unavailable — not fatal, just no crash-recovery this session */
   }
 }
 function clearActiveGameSnapshot() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(ACTIVE_GAME_KEY);
+  window.localStorage.removeItem(activeGameKey());
 }
 
 const GamePage = () => {
@@ -491,6 +519,13 @@ const GamePage = () => {
   // resume counting down toward starting a match nobody's looking at yet.
   const [autoStartCanceled, setAutoStartCanceled] = useState(false);
   const [autoStartSecondsLeft, setAutoStartSecondsLeft] = useState(0);
+  // Board mode used to auto-start regardless of whether this round was marked "Extern" or
+  // live play was switched off tournament-wide, and regardless of whether another device already
+  // had a fresher live snapshot running for the exact same match — both cases the manual "Spiel
+  // starten" button already guards against (canStartLiveGame / isLiveSnapshotFresh in
+  // Tournament.tsx). "checking" until the one-time lookup below resolves; the auto-start effect
+  // only ever arms while this is "clear".
+  const [boardStartGate, setBoardStartGate] = useState<"checking" | "clear" | "blocked-mode" | "blocked-collision">("checking");
   const savingRef = useRef(false);
   // Mirrors game.currentLeg.remaining, updated synchronously the instant a throw is processed —
   // not just on the next render. handleX01Throw reads from this instead of the `game` closure
@@ -617,6 +652,44 @@ const GamePage = () => {
     // change would clobber the scorekeeper's own edits to the setup form.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Board-mode start gate: resolves whether THIS match may actually auto-start, mirroring
+  // Tournament.tsx's canStartLiveGame (live_play_enabled + per-round "Extern") plus the same
+  // isLiveSnapshotFresh collision check the manual "Spiel starten" button already guards with —
+  // board mode's auto-start previously skipped both, so a round marked "Extern" (or a
+  // live-play-disabled tournament) could still auto-start here, and two devices bound to the same
+  // board could both auto-start the same match with no human checkpoint at all. Only relevant
+  // when this launch came from board mode (tournamentLinkRef.current?.board is set); runs once
+  // per tournament-linked mount, keyed off tournamentLinkName the same way the prefill effect
+  // above sets it.
+  useEffect(() => {
+    const link = tournamentLinkRef.current;
+    if (!link?.board) return;
+    let cancelled = false;
+    setBoardStartGate("checking");
+    (async () => {
+      const { data } = await supabase
+        .from("tournaments")
+        .select("bracket, mode, live_play_enabled, round_configs, game_mode, best_of_legs")
+        .eq("id", link.tournamentId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (!data || !(data.live_play_enabled ?? true)) { setBoardStartGate("blocked-mode"); return; }
+      const bracket = ((data.bracket as unknown as Match[]) || []);
+      const match = bracket.find((m) => m.id === link.matchId);
+      if (!match) { setBoardStartGate("blocked-mode"); return; }
+      // Same round_configs[totalRounds]-for-round-0 convention as Tournament.tsx's
+      // resolveRoundMode/roundConfigIndex.
+      const cfgIndex = match.round === 0 ? totalRoundsOf(bracket) : match.round - 1;
+      const cfg = ((data.round_configs as unknown as { mode?: string; bestOf?: number }[]) || [])[cfgIndex];
+      const roundMode = cfg?.mode || data.game_mode || "501";
+      if (roundMode === "Extern") { setBoardStartGate("blocked-mode"); return; }
+      if (isLiveSnapshotFresh(match.live)) { setBoardStartGate("blocked-collision"); return; }
+      setBoardStartGate("clear");
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentLinkName]);
 
   // Pushes a lightweight "score right now" snapshot to the tournament's public live view while
   // a tournament-linked match is being played — debounced so it fires a couple seconds after
@@ -866,15 +939,17 @@ const GamePage = () => {
   // adjusting first. Depends on tournamentLinkName (state), not tournamentLinkRef.current.board
   // directly — the ref is set in the same prefill effect that sets tournamentLinkName, but
   // mutating a ref doesn't itself trigger a re-render/re-check, so this needs a real state
-  // dependency guaranteed to change in that same tick to reliably see the board value.
+  // dependency guaranteed to change in that same tick to reliably see the board value. Also
+  // requires boardStartGate === "clear" — see that effect's comment for why an Extern round,
+  // a live-play-disabled tournament, or a suspected collision must never auto-start unattended.
   useEffect(() => {
-    if (phase !== "setup" || !tournamentLinkRef.current?.board || autoStartCanceled) return;
+    if (phase !== "setup" || !tournamentLinkRef.current?.board || autoStartCanceled || boardStartGate !== "clear") return;
     setAutoStartSecondsLeft(Math.ceil(AUTOSTART_DELAY_MS / 1000));
     const tick = window.setInterval(() => setAutoStartSecondsLeft((s) => Math.max(0, s - 1)), 1000);
     const finish = window.setTimeout(() => startGame(), AUTOSTART_DELAY_MS);
     return () => { window.clearInterval(tick); window.clearTimeout(finish); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, autoStartCanceled, tournamentLinkName]);
+  }, [phase, autoStartCanceled, tournamentLinkName, boardStartGate]);
 
   /** Goes from setup/warm-up into the actual match — via the walk-on intro if enabled. Wrapped in
    *  useCallback so its identity only changes when walkonEnabled does — a plain function here
@@ -1954,6 +2029,33 @@ const GamePage = () => {
     // nothing to review there; "Bearbeiten" reveals the full form for the rare case something
     // else (handicap, warmup, who-starts) needs a look first.
     if (tournamentLinkRef.current?.board && !autoStartCanceled) {
+      // Blocked outcomes never auto-start and never show a countdown — "blocked-mode" (Extern /
+      // live play off) offers no start button at all (this device isn't meant to play it live),
+      // "blocked-collision" requires an explicit tap, same intent as the flat view's window.confirm
+      // adapted to a real button since a countdown screen shouldn't confirm() mid-render.
+      if (boardStartGate === "blocked-mode" || boardStartGate === "blocked-collision") {
+        return (
+          <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
+            <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 mb-6">
+              <p className="text-xs text-primary font-medium">🏆 {t("game.tournamentMatch")} · {tournamentLinkName}</p>
+            </div>
+            <p className="text-lg font-display mb-1 truncate">{playerNames[0]}</p>
+            <p className="text-xs text-muted-foreground mb-1">vs.</p>
+            <p className="text-lg font-display mb-4 truncate">{playerNames[1]}</p>
+            <p className="text-sm text-muted-foreground bg-muted/30 border border-border rounded-lg px-3 py-3 mb-6">
+              {boardStartGate === "blocked-collision"
+                ? `${playerNames[0]} vs. ${playerNames[1]} ${t("tournament.matchAlreadyRunningConfirm")}`
+                : t("game.boardStartBlocked")}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setAutoStartCanceled(true)}>{t("common.edit")}</Button>
+              {boardStartGate === "blocked-collision" && (
+                <Button className="flex-1 font-display uppercase" onClick={startGame}>{t("game.startGame")}</Button>
+              )}
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
           <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 mb-6">
@@ -1963,7 +2065,7 @@ const GamePage = () => {
           <p className="text-xs text-muted-foreground mb-1">vs.</p>
           <p className="text-lg font-display mb-4 truncate">{playerNames[1]}</p>
           <p className="text-xs text-muted-foreground mb-8">{mode} · {t("stats.bestOf")} {bestOfLegs}</p>
-          <div className="font-display text-5xl text-primary tabular-nums mb-2">{autoStartSecondsLeft}</div>
+          <div className="font-display text-5xl text-primary tabular-nums mb-2">{boardStartGate === "clear" ? autoStartSecondsLeft : "…"}</div>
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-6">{t("game.autoStartingIn")}</p>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => setAutoStartCanceled(true)}>{t("common.edit")}</Button>
