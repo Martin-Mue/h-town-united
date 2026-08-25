@@ -105,11 +105,18 @@ const lowerPowerOfTwo = (count: number) => Math.pow(2, Math.floor(Math.log2(Math
  * 34 players is the opposite case — 2 preliminary matches (4 players) beats a 64er
  * bracket with 30 BYE slots.
  */
-const chooseAutoMainSize = (count: number): number => {
+/** `preference` lets an organizer override the tie-break: "prelim" always takes the smaller main
+ *  bracket (a preliminary round instead of padding with BYEs), "byes" always takes the next size
+ *  up (more BYEs, no preliminary round). "auto" (the default) keeps the original "touches fewer
+ *  players" heuristic below. Only meaningful once count > lower — below that there's only one
+ *  possible size regardless of preference. */
+const chooseAutoMainSize = (count: number, preference: "auto" | "prelim" | "byes" = "auto"): number => {
   const lower = Math.min(64, lowerPowerOfTwo(Math.max(count, 2)));
   if (count <= lower) return lower;
   const upper = lower * 2;
   if (upper > 64) return lower; // 64 is the largest supported bracket — no bigger option to compare against
+  if (preference === "prelim") return lower;
+  if (preference === "byes") return upper;
   const excess = count - lower;
   const prelimPlayers = excess * 2;
   const byesIfUpper = upper - count;
@@ -656,6 +663,10 @@ const TournamentPage = () => {
   const [gameMode, setGameMode] = useState("501");
   const [bestOfLegs, setBestOfLegs] = useState(3);
   const [targetSize, setTargetSize] = useState("auto");
+  // Only consulted while targetSize === "auto" — lets the organizer see and override the
+  // preliminary-round-vs-BYEs tie-break chooseAutoMainSize otherwise makes silently. Deliberately
+  // not persisted (matches targetSize itself, which editTournament also doesn't restore).
+  const [autoSizePreference, setAutoSizePreference] = useState<"auto" | "prelim" | "byes">("auto");
   const [seriesId, setSeriesId] = useState<string>("none");
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
@@ -852,8 +863,9 @@ const TournamentPage = () => {
   useEffect(() => {
     if (tournamentMode === "round-robin") return;
     // "auto" picks whichever main bracket size (see chooseAutoMainSize) keeps the
-    // fewest players affected by a preliminary round or BYEs.
-    const size = targetSize === "auto" ? chooseAutoMainSize(players.length) : Number(targetSize);
+    // fewest players affected by a preliminary round or BYEs, unless the organizer overrode
+    // that tie-break via autoSizePreference.
+    const size = targetSize === "auto" ? chooseAutoMainSize(players.length, autoSizePreference) : Number(targetSize);
     const totalRounds = Math.log2(nextPowerOfTwo(size));
     setRoundConfigs((prev) => {
       const next: RoundConfig[] = [];
@@ -862,18 +874,22 @@ const TournamentPage = () => {
       }
       return next;
     });
-  }, [targetSize, tournamentMode, gameMode, bestOfLegs, players.length]);
+  }, [targetSize, autoSizePreference, tournamentMode, gameMode, bestOfLegs, players.length]);
 
   /**
    * Effective MAIN bracket size (excludes any preliminary round): automatic mode uses
-   * chooseAutoMainSize to minimize how many players are stuck with an "irregular" slot
-   * (preliminary match or BYE); a manual override always pads with BYEs as before.
+   * chooseAutoMainSize (honoring autoSizePreference) to minimize how many players are stuck with
+   * an "irregular" slot (preliminary match or BYE), or to follow the organizer's explicit choice.
+   * A manual fixed-size override floors at lowerPowerOfTwo (not nextPowerOfTwo) so picking a size
+   * SMALLER than the player count on purpose actually produces a preliminary round instead of
+   * silently snapping back up to the next size that would need BYEs instead — buildSeeding already
+   * supports any main size below the player count, this was just never exposed reliably before.
    */
   const effectiveSize = useMemo(() => {
-    if (targetSize === "auto") return chooseAutoMainSize(players.length);
-    const auto = nextPowerOfTwo(Math.max(players.length, 2));
-    return Math.min(64, Math.max(auto, Number(targetSize)));
-  }, [targetSize, players.length]);
+    if (targetSize === "auto") return chooseAutoMainSize(players.length, autoSizePreference);
+    const floor = lowerPowerOfTwo(Math.max(players.length, 2));
+    return Math.min(64, Math.max(floor, Number(targetSize)));
+  }, [targetSize, autoSizePreference, players.length]);
 
   const addPlayers = (names: string[]) => {
     const cleaned = names.map((name) => name.trim()).filter(Boolean);
@@ -1720,6 +1736,34 @@ const TournamentPage = () => {
               </p>
             </div>
           )}
+
+          {tournamentMode !== "round-robin" && targetSize === "auto" && (() => {
+            // Only a real choice once the player count actually sits between two bracket
+            // sizes — below/at a clean power of two (or once 64 is already the ceiling with
+            // nothing bigger to compare against) chooseAutoMainSize has nothing to decide either
+            // way, so showing this control would just be noise.
+            const sizeLower = lowerPowerOfTwo(Math.max(players.length, 2));
+            const sizeUpper = sizeLower * 2;
+            if (players.length <= sizeLower || sizeUpper > 64) return null;
+            const recommendsPrelim = chooseAutoMainSize(players.length, "auto") === sizeLower;
+            const recommendedSize = recommendsPrelim ? sizeLower : sizeUpper;
+            return (
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.sizePreferenceLabel")}</label>
+                <Select value={autoSizePreference} onValueChange={(v) => setAutoSizePreference(v as "auto" | "prelim" | "byes")}>
+                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="auto">{t("tournament.sizePreferenceAuto")}</SelectItem>
+                    <SelectItem value="prelim">{t("tournament.sizePreferencePrelim")}</SelectItem>
+                    <SelectItem value="byes">{t("tournament.sizePreferenceByes")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {players.length} {t("tournament.participants")} → {t("tournament.recommendationArrowLabel")}: {recommendsPrelim ? t("tournament.sizePreferencePrelim") : t("tournament.sizePreferenceByes")} ({recommendedSize}{t("tournament.playerBracketSuffix")})
+                </p>
+              </div>
+            );
+          })()}
 
           <div>
             <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> {t("tournament.availableBoards")}</label>
