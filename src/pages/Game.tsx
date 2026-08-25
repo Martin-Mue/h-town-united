@@ -688,7 +688,6 @@ const GamePage = () => {
       setBoardStartGate("clear");
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tournamentLinkName]);
 
   // Pushes a lightweight "score right now" snapshot to the tournament's public live view while

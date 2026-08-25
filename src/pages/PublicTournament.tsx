@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check } from "lucide-react";
+import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check, QrCode, Hourglass } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import { Badge } from "@/components/ui/badge";
@@ -14,14 +14,17 @@ import {
   isRealPlayer,
   isPlayable,
   totalRoundsOf,
+  hasStarted,
   type Match,
   type RoundRobinMatch,
   type RoundRobinStanding,
   type LiveSnapshot,
+  type RotationSlot,
 } from "@/utils/tournament";
 import AnimatedScore from "@/components/AnimatedScore";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
+import { generateQrDataUrl } from "@/lib/qrcode";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
 
@@ -30,7 +33,15 @@ interface TournamentRow {
   champion: string | null; players: string[]; bracket: Match[];
   game_mode?: string; best_of_legs?: number; boards?: number;
   round_configs?: { mode: string; bestOf: number }[];
+  attendance?: Record<string, boolean> | null;
+  prestart_views?: string[];
 }
+
+/** All 8 selectable live-view pages — the 5 original ones plus the 3 added for the waiting
+ *  period (waiting/logo splash, format/status, QR invite). Kept as one union (not split by
+ *  purpose) since the toolbar/rotation/gating logic all switch on it uniformly. */
+type ViewKey = "tree" | "list" | "boards" | "participants" | "highlights" | "waiting" | "format" | "qr";
+const ALL_VIEW_KEYS: ViewKey[] = ["tree", "list", "boards", "participants", "highlights", "waiting", "format", "qr"];
 
 /** Read-only round-robin standings + match list — mirrors the admin Tabelle view. */
 const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
@@ -485,6 +496,116 @@ const CheckoutBadges = ({ player1, player2, live }: { player1: string; player2: 
   );
 };
 
+/** Branded splash for downtime (before the first game starts, or between rounds) — no live
+ *  data of its own, just enough presence that a beamer/tablet showing it doesn't look broken. */
+const WaitingSplash = ({ name }: { name: string }) => {
+  const { t } = useLanguage();
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-16 px-4 min-h-[60vh]">
+      <img src={htuEmblem} alt="" className="w-36 h-36 sm:w-48 sm:h-48 object-contain opacity-90 mb-6" />
+      <h2 className="font-display text-2xl uppercase tracking-widest mb-3">{name}</h2>
+      <p className="text-sm text-muted-foreground flex items-center gap-2">
+        <Hourglass className="w-4 h-4" /> {t("pt.waitingSubtitle")}
+      </p>
+    </div>
+  );
+};
+
+/** Registration/format overview — participant + check-in counts, legs-per-round, and a
+ *  preliminary-round note. Meant to answer "how big is this thing and how's it structured"
+ *  during the pre-start waiting period, without needing any match to have started yet. */
+const FormatStatusPage = ({
+  tournament, matches, isKo, totalRounds, started,
+}: {
+  tournament: TournamentRow;
+  matches: Match[];
+  isKo: boolean;
+  totalRounds: number;
+  started: boolean;
+}) => {
+  const { t } = useLanguage();
+  const roundLabel = (round: number, total: number) => roundLabelFor(round, total, t);
+  const attendanceEntries = tournament.attendance ? Object.keys(tournament.attendance).length : 0;
+  const checkedIn = attendanceEntries > 0 ? Object.values(tournament.attendance!).filter(Boolean).length : null;
+  const hasPrelim = isKo && matches.some((m) => m.round === 0);
+  const rounds = isKo ? [...(hasPrelim ? [0] : []), ...Array.from({ length: totalRounds }, (_, i) => i + 1)] : [];
+
+  return (
+    <div className="max-w-lg mx-auto py-6 px-4 space-y-4">
+      <div className={`grid gap-3 ${checkedIn !== null ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className="rounded-xl border border-border bg-card p-4 text-center">
+          <p className="font-display text-3xl text-primary">{tournament.players.length}</p>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{t("tournament.participants")}</p>
+        </div>
+        {checkedIn !== null && (
+          <div className="rounded-xl border border-border bg-card p-4 text-center">
+            <p className="font-display text-3xl text-secondary">{checkedIn} / {tournament.players.length}</p>
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{t("pt.checkedInLabel")}</p>
+          </div>
+        )}
+      </div>
+
+      {isKo ? (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h3 className="font-display uppercase text-sm text-muted-foreground mb-2">{t("pt.formatLabel")}</h3>
+          <ul className="space-y-1.5 text-sm">
+            {rounds.map((r) => {
+              const cfg = (tournament.round_configs || [])[r === 0 ? totalRounds : r - 1];
+              return (
+                <li key={r} className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{roundLabel(r, totalRounds)}</span>
+                  <span className="font-mono text-primary">{cfg?.mode || tournament.game_mode} · BO{cfg?.bestOf || tournament.best_of_legs}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">{t("pt.formatLabel")}</span>
+          <span className="font-mono text-primary">{tournament.game_mode} · BO{tournament.best_of_legs}</span>
+        </div>
+      )}
+
+      {hasPrelim ? (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-center">
+          {t("tournament.preliminaryRound")}
+        </div>
+      ) : isKo && !started ? (
+        <p className="text-xs text-muted-foreground text-center">{t("pt.formatMayStillChange")}</p>
+      ) : null}
+    </div>
+  );
+};
+
+/** Full-page QR invite — a spectator scans this to open the exact same live view on their own
+ *  phone. Deliberately its own dedicated rotating page (not the small per-view "jump here"
+ *  button that used to live on Board-Übersicht and was removed) — generateQrDataUrl is the
+ *  same client-side generator the organizer's own QR buttons already use, just rendered
+ *  full-page here instead of inside a dialog. */
+const QrInvitePage = ({ url, name }: { url: string; name: string }) => {
+  const { t } = useLanguage();
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    generateQrDataUrl(url, 480).then((d) => { if (!cancelled) setDataUrl(d); });
+    return () => { cancelled = true; };
+  }, [url]);
+
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-10 px-4 min-h-[60vh]">
+      <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-1">{name}</p>
+      <h2 className="font-display text-xl uppercase mb-6 flex items-center gap-2"><QrCode className="w-5 h-5" /> {t("pt.qrInviteTitle")}</h2>
+      {dataUrl ? (
+        <img src={dataUrl} alt={t("pt.qrInviteTitle")} className="rounded-2xl border-4 border-primary/30 bg-white p-3 w-full max-w-[420px]" />
+      ) : (
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      )}
+      <p className="text-sm text-muted-foreground mt-6 max-w-sm">{t("pt.qrInviteDesc")}</p>
+    </div>
+  );
+};
+
 /**
  * Full-bleed, large-type board grid for TV/projector mirroring at club nights — shows
  * every board's current pairing + last known leg score at a glance from across the room,
@@ -596,10 +717,14 @@ const AUTO_ROTATE_MS = 15000;
  *  presentations of the same data, never both in the rotation at once) auto-rotate should cycle
  *  through. Persisted per-device like the view/autorotate prefs above; defaults to everything on
  *  so an existing device's behavior doesn't change until someone deliberately narrows it down. */
-type RotationSlot = "boards" | "bracket" | "participants" | "highlights";
-const ROTATION_ORDER: RotationSlot[] = ["boards", "bracket", "participants", "highlights"];
+// RotationSlot itself now comes from utils/tournament.ts (shared with Tournament.tsx's
+// pre-start-visibility checkboxes, see the prestartViews gating further below).
+const ROTATION_ORDER: RotationSlot[] = ["boards", "bracket", "participants", "highlights", "waiting", "format", "qr"];
 const ROTATION_SLOTS_PREF_KEY = "dart-live-rotation-slots";
-const DEFAULT_ROTATION_SLOTS: Record<RotationSlot, boolean> = { boards: true, bracket: true, participants: true, highlights: true };
+const DEFAULT_ROTATION_SLOTS: Record<RotationSlot, boolean> = {
+  boards: true, bracket: true, participants: true, highlights: true,
+  waiting: true, format: true, qr: true,
+};
 
 const PublicTournamentPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -633,14 +758,15 @@ const PublicTournamentPage = () => {
   // handy for a TV/projector screen's own corner QR, or one printed specifically for a
   // board. Falls back to this device's last manually-picked view, then the usual default.
   const urlView = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
+  const isViewKey = (v: string | null): v is ViewKey => !!v && (ALL_VIEW_KEYS as string[]).includes(v);
   const hadExplicitViewPref =
-    urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "participants" || urlView === "highlights" || urlView === "auto" ||
+    isViewKey(urlView) || urlView === "auto" ||
     (typeof window !== "undefined" && !!window.localStorage.getItem(VIEW_PREF_KEY));
-  const [view, setViewRaw] = useState<"tree" | "list" | "boards" | "participants" | "highlights">(() => {
+  const [view, setViewRaw] = useState<ViewKey>(() => {
     if (typeof window === "undefined") return "tree";
-    if (urlView === "boards" || urlView === "tree" || urlView === "list" || urlView === "participants" || urlView === "highlights") return urlView;
+    if (isViewKey(urlView)) return urlView;
     const stored = window.localStorage.getItem(VIEW_PREF_KEY);
-    if (stored === "boards" || stored === "tree" || stored === "list" || stored === "participants" || stored === "highlights") return stored;
+    if (isViewKey(stored)) return stored;
     return window.innerWidth < 900 ? "list" : "tree";
   });
   const [rotationSlots, setRotationSlots] = useState<Record<RotationSlot, boolean>>(() => {
@@ -676,7 +802,7 @@ const PublicTournamentPage = () => {
 
   /** User-driven view change — persists the pick and turns off auto-rotate (picking a
    *  view by hand means "show me this now", not "keep rotating"). */
-  const selectView = (next: "tree" | "list" | "boards" | "participants" | "highlights") => {
+  const selectView = (next: ViewKey) => {
     if (next === "tree" || next === "list") bracketViewRef.current = next;
     setViewRaw(next);
     setAutoRotateRaw(false);
@@ -741,11 +867,13 @@ const PublicTournamentPage = () => {
   }, [t, tournamentAverages, view, autoRotate, rotationSlots, loadHighlightsAndAverages]);
 
   /** The slot a given `view` value belongs to — tree/list both count as "bracket" since they're
-   *  two presentations of the same data, never independently rotation-eligible. */
-  const slotOf = (v: "tree" | "list" | "boards" | "participants" | "highlights"): RotationSlot =>
-    v === "boards" ? "boards" : v === "participants" ? "participants" : v === "highlights" ? "highlights" : "bracket";
-  const viewForSlot = (slot: RotationSlot): "tree" | "list" | "boards" | "participants" | "highlights" =>
-    slot === "boards" ? "boards" : slot === "participants" ? "participants" : slot === "highlights" ? "highlights" : bracketViewRef.current;
+   *  two presentations of the same data, never independently rotation-eligible. Also the shared
+   *  taxonomy the pre-start gate (further below) checks against, via the same RotationSlot type
+   *  the organizer's prestart_views checkboxes in Tournament.tsx use. */
+  const slotOf = (v: ViewKey): RotationSlot =>
+    v === "boards" || v === "participants" || v === "highlights" || v === "waiting" || v === "format" || v === "qr" ? v : "bracket";
+  const viewForSlot = (slot: RotationSlot): ViewKey =>
+    slot === "bracket" ? bracketViewRef.current : slot;
 
   useEffect(() => {
     if (!autoRotate) return;
@@ -877,6 +1005,7 @@ const PublicTournamentPage = () => {
     : null;
   const boardsCount = t.boards ?? 2;
   const roundLabel = (round: number, total: number) => roundLabelFor(round, total, tr);
+  const started = hasStarted(t);
 
   // Board-aware look-ahead — single source of truth shared by the "Jetzt am Board"
   // banner, the "Als Nächstes" sidebar card, and the full-screen board overview.
@@ -949,6 +1078,15 @@ const PublicTournamentPage = () => {
             <button onClick={() => selectView("highlights")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "highlights" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
               <Target className="w-3.5 h-3.5" /> {tr("pt.highlightsLabel")}
             </button>
+            <button onClick={() => selectView("waiting")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "waiting" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+              <Hourglass className="w-3.5 h-3.5" /> {tr("pt.waitingTab")}
+            </button>
+            <button onClick={() => selectView("format")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "format" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+              <ListOrdered className="w-3.5 h-3.5" /> {tr("pt.formatTab")}
+            </button>
+            <button onClick={() => selectView("qr")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "qr" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+              <QrCode className="w-3.5 h-3.5" /> {tr("pt.qrTab")}
+            </button>
           </div>
           <button
             onClick={toggleAutoRotate}
@@ -983,6 +1121,9 @@ const PublicTournamentPage = () => {
                 { slot: "bracket" as const, label: isKo ? tr("tournament.bracketTreeTab") : tr("pt.standings") },
                 { slot: "participants" as const, label: tr("pt.participantsView") },
                 { slot: "highlights" as const, label: tr("pt.highlightsLabel") },
+                { slot: "waiting" as const, label: tr("pt.waitingTab") },
+                { slot: "format" as const, label: tr("pt.formatTab") },
+                { slot: "qr" as const, label: tr("pt.qrTab") },
               ]).map((opt) => (
                 <button
                   key={opt.slot}
@@ -1066,6 +1207,12 @@ const PublicTournamentPage = () => {
         </div>
       ) : view === "boards" ? (
         <BoardOverview now={boardCardsNow} onDeck={boardCardsOnDeck} queuedCount={boardCardsQueued} totalRounds={totalRounds} />
+      ) : view === "waiting" ? (
+        <WaitingSplash name={t.name} />
+      ) : view === "format" ? (
+        <FormatStatusPage tournament={t} matches={matches} isKo={isKo} totalRounds={totalRounds} started={started} />
+      ) : view === "qr" ? (
+        <QrInvitePage url={typeof window !== "undefined" ? window.location.href.split("?")[0] : ""} name={t.name} />
       ) : (
       <div className={`grid gap-4 p-4 ${view === "tree" ? "" : "lg:grid-cols-[1fr_320px]"}`}>
         <div className="min-w-0">
