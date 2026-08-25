@@ -57,11 +57,14 @@ const DashboardPage = () => {
     let cancelled = false;
     const load = async () => {
       setLoadingGames(true);
+      // Just the 5 actually shown by default (usePagedList's own collapseAt) — this widget isn't
+      // meant to be paginated/expanded like the app's other long lists, so there's no reason to
+      // pull 100 rows (and 100 games' worth of legs below) just to let them pile up unused.
       const { data } = await supabase
         .from("games")
         .select("id, mode, player1_name, player2_name, winner_name, played_at")
         .order("played_at", { ascending: false })
-        .limit(100);
+        .limit(5);
       if (cancelled) return;
       if (data) setRecentGames(data);
       setLoadingGames(false);
