@@ -337,6 +337,7 @@ export function assignScorekeepers(
       if (
         opts.keepExisting &&
         m.scorekeeper &&
+        pool.includes(m.scorekeeper) &&
         definitelyFree(m.scorekeeper) &&
         !busy.has(m.scorekeeper) &&
         !taken.has(m.scorekeeper)

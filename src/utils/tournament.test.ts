@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recomputeBracket, calcStandings, BYE, type Match, type RoundRobinMatch } from "./tournament";
+import { recomputeBracket, calcStandings, assignScorekeepers, BYE, type Match, type RoundRobinMatch } from "./tournament";
 
 describe("recomputeBracket", () => {
   it("propagates round winners into the next round", () => {
@@ -55,6 +55,19 @@ describe("recomputeBracket", () => {
     expect(final.player1).toBe("A");
     expect(final.player2).toBe("C");
     expect(final.winner).toBe("C");
+  });
+});
+
+describe("assignScorekeepers", () => {
+  it("does not keep a withdrawn player's existing unlocked scorekeeper assignment", () => {
+    const matches: Match[] = [
+      { id: "r1-0", round: 1, position: 0, player1: "A", player2: "B", winner: "A" },
+      // Stale state: B was auto-assigned here before withdrawing — no longer in `participants`
+      // below, but still sitting in scorekeeper from the last assignment run.
+      { id: "r1-1", round: 1, position: 1, player1: "C", player2: "D", scorekeeper: "B" },
+    ];
+    const result = assignScorekeepers(matches, ["A", "C", "D"], { boards: 1, keepExisting: true });
+    expect(result.find((m) => m.id === "r1-1")!.scorekeeper).not.toBe("B");
   });
 });
 
