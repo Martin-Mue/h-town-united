@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
 import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target, Smartphone } from "lucide-react";
-import { computeTournamentHighlights, computeTournamentAverages, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
+import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import { Button } from "@/components/ui/button";
@@ -1595,12 +1595,20 @@ const TournamentPage = () => {
     const gameIds = gameRows.map((g) => g.id);
     if (gameIds.length === 0) { setTournamentHighlights({ heatmapPoints: [], participants: [], topCheckout: null, shortestLeg: null }); setLoadingHighlights(false); return; }
     const { data: legs } = await supabase.from("game_legs")
-      .select("player_id, player_name, starting_score, throws, won")
+      .select("player_id, player_name, starting_score, throws, won, game_id, leg_number")
       .in("game_id", gameIds);
+    const legRows = (legs || []) as unknown as TournamentStatsLegRow[];
     const activeRoster = new Set(activeTournament.players);
     // Same withdrawn-player filter as loadTournamentAverages above — one leg row per player per
     // leg, so this cleanly drops just their own contributions.
-    setTournamentHighlights(computeTournamentHighlights(((legs || []) as unknown as TournamentStatsLegRow[]).filter((l) => activeRoster.has(l.player_name))));
+    setTournamentHighlights(computeTournamentHighlights(legRows.filter((l) => activeRoster.has(l.player_name))));
+    // Per-leg breakdown intentionally uses the UNFILTERED legRows — a withdrawn player's own
+    // already-played matches still expand to their real leg-by-leg average, same as the match
+    // row itself (tournamentAverages.games) already isn't roster-filtered either. Merged onto
+    // whatever loadTournamentAverages already set, via the updater form so this doesn't race the
+    // state update above.
+    const legAveragesByGame = computeLegAveragesByGame(legRows, gameRows);
+    setTournamentAverages((prev) => prev ? { ...prev, games: prev.games.map((g) => ({ ...g, legs: legAveragesByGame.get(g.gameId) })) } : prev);
     setLoadingHighlights(false);
   };
 

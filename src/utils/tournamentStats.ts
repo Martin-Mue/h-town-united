@@ -1,4 +1,4 @@
-import { count180s, computeCheckoutStats, type DartThrow } from "./dartStats";
+import { count180s, tonPlusCount, average, computeCheckoutStats, type DartThrow } from "./dartStats";
 
 export interface TournamentStatsLegRow {
   player_id: string | null;
@@ -6,6 +6,11 @@ export interface TournamentStatsLegRow {
   starting_score: number;
   throws: DartThrow[];
   won: boolean;
+  /** Which game/match this leg belongs to, and its position within that match — both optional
+   *  since most existing callers/tests only ever cared about per-dart tallies, not per-leg
+   *  drill-down. Only needed for computeLegAveragesByGame below. */
+  game_id?: string;
+  leg_number?: number;
 }
 
 export interface ParticipantHighlight {
@@ -27,6 +32,11 @@ export interface ParticipantHighlight {
    *  included in checkout160Plus above; called out on its own since it's the one score every
    *  darts player instantly recognizes. */
   checkout170: number;
+  /** Visits scoring >=100 in a single turn, regardless of whether that turn won the leg — the
+   *  much more common "scoring power" cousin of the checkoutXPlus tiers above, which only ever
+   *  count a leg-winning finish. Same tonPlusCount already used for a single game's own
+   *  post-match stats (Game.tsx), just pooled across every leg in the tournament here. */
+  tonPlus: number;
 }
 
 export interface TournamentHighlights {
@@ -56,12 +66,21 @@ export interface ParticipantAverage {
   gamesPlayed: number;
 }
 
+export interface GameLegAverage {
+  player1Average: number;
+  player2Average: number;
+}
+
 export interface GameAverageRow {
   gameId: string;
   player1Name: string;
   player1Average: number;
   player2Name: string;
   player2Average: number;
+  /** Per-leg breakdown of this same match, in play order — absent/empty until attached by
+   *  computeLegAveragesByGame (needs the raw leg rows, which computeTournamentAverages alone
+   *  never sees). Never populated for a leg with no recorded throws at all. */
+  legs?: GameLegAverage[];
 }
 
 export interface TournamentAverages {
@@ -77,6 +96,10 @@ export interface ParticipantStatsRow {
   key: string;
   name: string;
   tournamentAverage: number;
+  /** Games played in this tournament so far — shown next to every other column so a small
+   *  sample size (e.g. one game before an early elimination) is visible at a glance instead of
+   *  letting a lucky single-game stat look equivalent to one built on a full run. */
+  gamesPlayed: number;
   bigTriples: number;
   bulls: number;
   oneEighties: number;
@@ -85,6 +108,7 @@ export interface ParticipantStatsRow {
   checkout140Plus: number;
   checkout160Plus: number;
   checkout170: number;
+  tonPlus: number;
 }
 
 const BIG_TRIPLE_NUMBERS = new Set([16, 17, 18, 19, 20]);
@@ -94,13 +118,13 @@ const BIG_TRIPLE_NUMBERS = new Set([16, 17, 18, 19, 20]);
  *  final tiebreak) — one function so the two can't silently drift the way they already had here
  *  (the merged list had picked up a `bulls` tiebreak the highlights-only sort never got). */
 function compareByHighlightMagnitude(
-  a: { oneEighties: number; checkout170: number; checkout160Plus: number; checkout140Plus: number; checkout120Plus: number; checkout100Plus: number; bigTriples: number; bulls: number },
+  a: { oneEighties: number; checkout170: number; checkout160Plus: number; checkout140Plus: number; checkout120Plus: number; checkout100Plus: number; tonPlus: number; bigTriples: number; bulls: number },
   b: typeof a,
 ): number {
   return (
     b.oneEighties - a.oneEighties || b.checkout170 - a.checkout170 || b.checkout160Plus - a.checkout160Plus ||
     b.checkout140Plus - a.checkout140Plus || b.checkout120Plus - a.checkout120Plus || b.checkout100Plus - a.checkout100Plus ||
-    b.bigTriples - a.bigTriples || b.bulls - a.bulls
+    b.tonPlus - a.tonPlus || b.bigTriples - a.bigTriples || b.bulls - a.bulls
   );
 }
 
@@ -121,7 +145,7 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
     const key = leg.player_id ?? leg.player_name;
     const entry = byKey.get(key) ?? {
       key, name: leg.player_name, bigTriples: 0, bulls: 0, oneEighties: 0,
-      checkout100Plus: 0, checkout120Plus: 0, checkout140Plus: 0, checkout160Plus: 0, checkout170: 0,
+      checkout100Plus: 0, checkout120Plus: 0, checkout140Plus: 0, checkout160Plus: 0, checkout170: 0, tonPlus: 0,
     };
 
     for (const t of leg.throws) {
@@ -132,6 +156,7 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
       if (t.baseValue === 25) entry.bulls++;
     }
     entry.oneEighties += count180s(leg.throws);
+    entry.tonPlus += tonPlusCount(leg.throws);
 
     if (leg.won) {
       const { highestCheckout } = computeCheckoutStats(leg.throws, leg.starting_score);
@@ -152,7 +177,7 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
   }
 
   const participants = [...byKey.values()]
-    .filter((p) => p.bigTriples || p.bulls || p.oneEighties || p.checkout100Plus)
+    .filter((p) => p.bigTriples || p.bulls || p.oneEighties || p.checkout100Plus || p.tonPlus)
     .sort(compareByHighlightMagnitude);
 
   return { heatmapPoints, participants, topCheckout, shortestLeg };
@@ -195,26 +220,68 @@ export function computeTournamentAverages(games: TournamentStatsGameRow[]): Tour
   return { participants, games: gameRows };
 }
 
+/**
+ * Groups a tournament's raw leg rows into per-leg average pairs, one ordered list per game_id —
+ * the drill-down behind "average per leg" on each row of the game-average list. Needs real
+ * per-dart throws plus game_id/leg_number (same data the public_tournament_highlights RPC and
+ * game_legs both carry) — a leg missing any of those (no throws recorded, or a caller that never
+ * asked for them) is simply skipped rather than guessed at. Side (player1 vs player2) is resolved
+ * against the matching `games` row's own player1_id/player1_name rather than array order or a
+ * `player_index` column, since this is the only place that already has both pieces of data at
+ * hand and it keeps TournamentStatsLegRow itself free of game-level fields.
+ */
+export function computeLegAveragesByGame(
+  legs: TournamentStatsLegRow[],
+  games: TournamentStatsGameRow[],
+): Map<string, GameLegAverage[]> {
+  const gameById = new Map(games.map((g) => [g.id, g]));
+  const byGame = new Map<string, Map<number, Partial<GameLegAverage>>>();
+
+  for (const l of legs) {
+    if (!l.game_id || l.leg_number === undefined || !Array.isArray(l.throws) || l.throws.length === 0) continue;
+    const g = gameById.get(l.game_id);
+    if (!g) continue;
+    const isPlayer1 = l.player_id ? l.player_id === g.player1_id : l.player_name === g.player1_name;
+    const perLegNum = byGame.get(l.game_id) ?? new Map<number, Partial<GameLegAverage>>();
+    const entry = perLegNum.get(l.leg_number) ?? {};
+    const avg = average(l.throws);
+    if (isPlayer1) entry.player1Average = avg; else entry.player2Average = avg;
+    perLegNum.set(l.leg_number, entry);
+    byGame.set(l.game_id, perLegNum);
+  }
+
+  const result = new Map<string, GameLegAverage[]>();
+  for (const [gameId, perLegNum] of byGame) {
+    const legNumbers = [...perLegNum.keys()].sort((a, b) => a - b);
+    result.set(gameId, legNumbers.map((n) => {
+      const e = perLegNum.get(n)!;
+      return { player1Average: e.player1Average ?? 0, player2Average: e.player2Average ?? 0 };
+    }));
+  }
+  return result;
+}
+
 /** Combines the two independent computations above into the single per-participant row the UI
  *  actually renders. Someone who only appears in one side (e.g. no highlight-worthy darts at
  *  all, which is the common case for a hand-scored tournament) still gets a full row — the other
  *  side's fields just default to 0, not dropped from the table entirely. */
 export function mergeTournamentStats(highlights: TournamentHighlights, averages: TournamentAverages): ParticipantStatsRow[] {
-  const emptyHighlights = { bigTriples: 0, bulls: 0, oneEighties: 0, checkout100Plus: 0, checkout120Plus: 0, checkout140Plus: 0, checkout160Plus: 0, checkout170: 0 };
+  const emptyHighlights = { bigTriples: 0, bulls: 0, oneEighties: 0, checkout100Plus: 0, checkout120Plus: 0, checkout140Plus: 0, checkout160Plus: 0, checkout170: 0, tonPlus: 0 };
   const byKey = new Map<string, ParticipantStatsRow>();
   for (const p of averages.participants) {
-    byKey.set(p.key, { key: p.key, name: p.name, tournamentAverage: p.tournamentAverage, ...emptyHighlights });
+    byKey.set(p.key, { key: p.key, name: p.name, tournamentAverage: p.tournamentAverage, gamesPlayed: p.gamesPlayed, ...emptyHighlights });
   }
   for (const h of highlights.participants) {
-    const entry = byKey.get(h.key) ?? { key: h.key, name: h.name, tournamentAverage: 0, ...emptyHighlights };
+    const entry = byKey.get(h.key) ?? { key: h.key, name: h.name, tournamentAverage: 0, gamesPlayed: 0, ...emptyHighlights };
     entry.bigTriples = h.bigTriples;
     entry.bulls = h.bulls;
     entry.oneEighties = h.oneEighties;
     entry.checkout100Plus = h.checkout100Plus;
     entry.checkout120Plus = h.checkout120Plus;
-    entry.checkout140Plus = h.checkout140Plus;
     entry.checkout160Plus = h.checkout160Plus;
+    entry.checkout140Plus = h.checkout140Plus;
     entry.checkout170 = h.checkout170;
+    entry.tonPlus = h.tonPlus;
     byKey.set(h.key, entry);
   }
   // Ranked by highlight magnitude, biggest first — this is the Highlights table, not the

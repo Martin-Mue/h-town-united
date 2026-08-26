@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check, QrCode, Hourglass, Lock } from "lucide-react";
-import { computeTournamentHighlights, computeTournamentAverages, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
+import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -876,7 +876,7 @@ const PublicTournamentPage = () => {
   const loadHighlightsAndAverages = useCallback(async (tournamentId: string, roster: string[]) => {
     const { data } = await supabase.rpc("public_tournament_highlights", { _tournament_id: tournamentId });
     const rows = (data || []) as unknown as (TournamentStatsLegRow & {
-      game_id: string; player1_id: string | null; player1_name: string; player1_average: number;
+      game_id: string; leg_number: number; player1_id: string | null; player1_name: string; player1_average: number;
       player2_id: string | null; player2_name: string; player2_average: number;
     })[];
     const activeRoster = new Set(roster);
@@ -897,10 +897,18 @@ const PublicTournamentPage = () => {
         });
       }
     });
-    const averages = computeTournamentAverages([...gamesByGameId.values()]);
+    const gameRows = [...gamesByGameId.values()];
+    const averages = computeTournamentAverages(gameRows);
+    // Per-leg breakdown intentionally uses the UNFILTERED rows — a withdrawn player's own
+    // already-played matches still show their real leg-by-leg average when expanded, same as the
+    // match row itself (averages.games below) already isn't roster-filtered either.
+    const legAveragesByGame = computeLegAveragesByGame(rows, gameRows);
     // Games rows cover both players at once, so dropping the row (like above) would also lose
     // the other, still-active player's data — filter the computed per-participant list instead.
-    setTournamentAverages({ ...averages, participants: averages.participants.filter((p) => activeRoster.has(p.name)) });
+    setTournamentAverages({
+      participants: averages.participants.filter((p) => activeRoster.has(p.name)),
+      games: averages.games.map((g) => ({ ...g, legs: legAveragesByGame.get(g.gameId) })),
+    });
   }, []);
 
   // Only when the participants or highlights view is actually (or about to be, via rotation) on

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   computeTournamentHighlights, computeTournamentAverages, mergeTournamentStats, sortParticipants,
-  type TournamentStatsLegRow, type TournamentStatsGameRow,
+  computeLegAveragesByGame, type TournamentStatsLegRow, type TournamentStatsGameRow,
 } from "./tournamentStats";
 import type { DartThrow } from "./dartStats";
 
@@ -125,6 +125,26 @@ describe("computeTournamentHighlights", () => {
     expect(shortestLeg).toEqual({ name: "Martin", darts: 3 });
   });
 
+  it("counts ton-plus (100+) visits on any leg, won or not — unlike the checkout tiers", () => {
+    const legs: TournamentStatsLegRow[] = [
+      // Lost this leg, but still threw a 140 visit along the way.
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [dart(20, 3), dart(20, 3), dart(20, 1)] },
+    ];
+    const { participants } = computeTournamentHighlights(legs);
+    expect(participants[0].tonPlus).toBe(1);
+    expect(participants[0].checkout100Plus).toBe(0);
+  });
+
+  it("includes a participant whose only highlight-worthy dart is a ton-plus visit", () => {
+    // 40 + 40 + 20 = 100 — a ton, but no triple/bull/180/won-checkout in sight.
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [dart(20, 2), dart(20, 2), dart(20, 1)] },
+    ];
+    const { participants } = computeTournamentHighlights(legs);
+    expect(participants).toHaveLength(1);
+    expect(participants[0].tonPlus).toBe(1);
+  });
+
   it("leaves topCheckout and shortestLeg null when nobody has won a leg yet", () => {
     const legs: TournamentStatsLegRow[] = [
       { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [dart(20, 3), dart(20, 3), dart(20, 3)] },
@@ -201,6 +221,41 @@ describe("mergeTournamentStats", () => {
     expect(merged).toHaveLength(1);
     expect(merged[0].tournamentAverage).toBe(0);
     expect(merged[0].oneEighties).toBe(1);
+    expect(merged[0].gamesPlayed).toBe(0);
+  });
+
+  it("carries gamesPlayed through from the averages side", () => {
+    const highlights = computeTournamentHighlights([]);
+    const averages = computeTournamentAverages([game({ id: "g1" }), game({ id: "g2" })]);
+    const merged = mergeTournamentStats(highlights, averages);
+    expect(merged.find((p) => p.key === "p1")!.gamesPlayed).toBe(2);
+  });
+});
+
+describe("computeLegAveragesByGame", () => {
+  const games: TournamentStatsGameRow[] = [game({ id: "g1" })];
+
+  it("pairs legs by leg_number and resolves side against the matching game row", () => {
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: true, game_id: "g1", leg_number: 1, throws: [dart(20, 3), dart(20, 3), dart(20, 3)] }, // 180 avg
+      { player_id: "p2", player_name: "Kevin", starting_score: 501, won: false, game_id: "g1", leg_number: 1, throws: [dart(1, 1), dart(1, 1), dart(1, 1)] }, // 3 avg
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, game_id: "g1", leg_number: 2, throws: [dart(20, 1)] }, // 60 avg
+      { player_id: "p2", player_name: "Kevin", starting_score: 501, won: true, game_id: "g1", leg_number: 2, throws: [dart(20, 2)] }, // 120 avg
+    ];
+    const byGame = computeLegAveragesByGame(legs, games);
+    const legAverages = byGame.get("g1")!;
+    expect(legAverages).toHaveLength(2);
+    expect(legAverages[0]).toEqual({ player1Average: 180, player2Average: 3 });
+    expect(legAverages[1]).toEqual({ player1Average: 60, player2Average: 120 });
+  });
+
+  it("skips legs with no throws recorded or missing game_id/leg_number", () => {
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [] },
+      { player_id: "p2", player_name: "Kevin", starting_score: 501, won: false, throws: [dart(20, 1)] }, // no game_id/leg_number
+    ];
+    const byGame = computeLegAveragesByGame(legs, games);
+    expect(byGame.size).toBe(0);
   });
 });
 

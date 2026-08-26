@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
@@ -32,13 +33,17 @@ function chunkInHalf<T>(items: T[]): T[][] {
 
 /** Shared by Tournament.tsx (full, with heatmap) and PublicTournament.tsx's compact live widget
  *  (table only) — one component so both surfaces stay in sync instead of two hand-kept copies. */
-/** Which headline chip (if any) the stats table below is currently sorted by — "default" keeps
- *  mergeTournamentStats' own ordering (highlight-magnitude, then average as a tiebreak). */
-type StatSortKey = "default" | "average" | "oneEighties" | "checkout";
+/** Which column (if any) the stats table below is currently sorted by — "default" keeps
+ *  mergeTournamentStats' own ordering (highlight-magnitude, then average as a tiebreak).
+ *  "gamesPlayed" exists specifically so someone eliminated round 1 on a single lucky visit
+ *  doesn't sit at the top of every other sort looking like the tournament's best player forever
+ *  — sorting by games played surfaces the small sample size instead of hiding it. */
+type StatSortKey = "default" | "average" | "oneEighties" | "checkout" | "tonPlus" | "gamesPlayed";
 
 const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView }: TournamentHighlightsPanelProps) => {
   const { t } = useLanguage();
   const [sortKey, setSortKey] = useState<StatSortKey>("default");
+  const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set());
   const merged = mergeTournamentStats(highlights, averages);
   const sortedMerged =
     sortKey === "average" ? [...merged].sort((a, b) => b.tournamentAverage - a.tournamentAverage) :
@@ -47,9 +52,16 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
       (b.checkout170 - a.checkout170) || (b.checkout160Plus - a.checkout160Plus) ||
       (b.checkout140Plus - a.checkout140Plus) || (b.checkout120Plus - a.checkout120Plus) ||
       (b.checkout100Plus - a.checkout100Plus)) :
+    sortKey === "tonPlus" ? [...merged].sort((a, b) => b.tonPlus - a.tonPlus) :
+    sortKey === "gamesPlayed" ? [...merged].sort((a, b) => b.gamesPlayed - a.gamesPlayed) :
     merged;
   const paged = usePagedList(sortedMerged, liveView ? { collapseAt: Infinity } : undefined);
   const pagedGames = usePagedList(averages.games, liveView ? { collapseAt: Infinity } : undefined);
+  const toggleGameExpanded = (gameId: string) => setExpandedGames((prev) => {
+    const next = new Set(prev);
+    if (next.has(gameId)) next.delete(gameId); else next.add(gameId);
+    return next;
+  });
 
   if (merged.length === 0 && highlights.heatmapPoints.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-6">{t("tournament.noHighlightsYet")}</p>;
@@ -60,35 +72,55 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
   const statCols = liveView && paged.visible.length > STAT_SPLIT_THRESHOLD ? chunkInHalf(paged.visible) : [paged.visible];
   const gameCols = liveView && pagedGames.visible.length > GAME_SPLIT_THRESHOLD ? chunkInHalf(pagedGames.visible) : [pagedGames.visible];
 
+  // Every sortable header shares the same click-to-sort/click-again-to-reset behavior as the
+  // headline chips below — the 4 checkout tiers all drive the one "checkout" sort key since
+  // they're really the same ranking at different thresholds, so clicking any of them highlights
+  // all 4 together rather than looking like only one took effect.
+  const sortableHeader = (key: StatSortKey, label: string, tooltip: string) => {
+    const active = sortKey === key;
+    return (
+      <th className="py-1 px-1.5 text-center" aria-sort={active ? "descending" : "none"}>
+        <button
+          type="button"
+          title={tooltip}
+          onClick={() => setSortKey((k) => (k === key ? "default" : key))}
+          className={`select-none transition-colors ${active ? "text-primary" : "hover:text-foreground"}`}
+        >
+          {label}{active && <span aria-hidden="true"> ▾</span>}
+        </button>
+      </th>
+    );
+  };
+
   const renderStatsTable = (rows: ParticipantStatsRow[]) => (
     <table className={`w-full ${rowText}`}>
       <thead>
         <tr className={`text-left ${headText} uppercase text-muted-foreground`}>
           <th className="py-1 pr-2">{t("stats.player")}</th>
-          <th className="py-1 px-1.5 text-center" title={t("tournament.tournamentAverage")}>Ø</th>
-          <th className="py-1 px-1.5 text-center" title={t("tournament.oneEightyTooltip")}>180</th>
-          <th className="py-1 px-1.5 text-center" title={t("tournament.checkout100Tooltip")}>100+</th>
-          <th className="py-1 px-1.5 text-center" title={t("tournament.checkout120Tooltip")}>120+</th>
-          <th className="py-1 px-1.5 text-center" title={t("tournament.checkout140Tooltip")}>140+</th>
-          <th className="py-1 px-1.5 text-center" title={t("tournament.checkout160Tooltip")}>160+</th>
-          <th className="py-1 px-1.5 text-center" title={t("tournament.bigFishTooltip")}>170 🐟</th>
-          <th className="py-1 px-1.5 text-center" title={t("tournament.bigTriplesTooltip")}>{t("tournament.bigTriplesAbbrev")}</th>
-          <th className="py-1 pl-1.5 text-center" title={t("tournament.bullTooltip")}>Bull</th>
+          {sortableHeader("gamesPlayed", t("tournament.gamesPlayedAbbrev"), t("tournament.gamesPlayedTooltip"))}
+          {sortableHeader("average", "Ø", t("tournament.tournamentAverage"))}
+          {sortableHeader("oneEighties", "180", t("tournament.oneEightyTooltip"))}
+          {sortableHeader("tonPlus", "Ton+", t("tournament.tonPlusTooltip"))}
+          {sortableHeader("checkout", "100+", t("tournament.checkout100Tooltip"))}
+          {sortableHeader("checkout", "120+", t("tournament.checkout120Tooltip"))}
+          {sortableHeader("checkout", "140+", t("tournament.checkout140Tooltip"))}
+          {sortableHeader("checkout", "160+", t("tournament.checkout160Tooltip"))}
+          <th className="py-1 pl-1.5 text-center" title={t("tournament.bigTriplesTooltip")}>{t("tournament.bigTriplesAbbrev")}</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((p) => (
           <tr key={p.key} className="border-t border-border/60">
             <td className="py-1.5 pr-2 font-medium truncate max-w-[140px]">{p.name}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono text-muted-foreground">{p.gamesPlayed || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono text-primary">{p.tournamentAverage > 0 ? p.tournamentAverage.toFixed(1) : "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono">{p.oneEighties || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.tonPlus || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout100Plus || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout120Plus || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout140Plus || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout160Plus || "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout170 || "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.bigTriples || "–"}</td>
-            <td className="py-1.5 pl-1.5 text-center font-mono">{p.bulls || "–"}</td>
+            <td className="py-1.5 pl-1.5 text-center font-mono">{p.bigTriples || "–"}</td>
           </tr>
         ))}
       </tbody>
@@ -97,13 +129,48 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
 
   const renderGamesList = (rows: GameAverageRow[]) => (
     <div className="space-y-1">
-      {rows.map((g) => (
-        <div key={g.gameId} className={`flex items-center justify-between ${rowText} bg-muted/30 rounded-lg px-2.5 py-1.5`}>
-          <span className="truncate max-w-[35%]">{g.player1Name}</span>
-          <span className="font-mono text-primary shrink-0">{g.player1Average.toFixed(1)} : {g.player2Average.toFixed(1)}</span>
-          <span className="truncate max-w-[35%] text-right">{g.player2Name}</span>
-        </div>
-      ))}
+      {rows.map((g) => {
+        // Only worth expanding when there's more than one leg to actually break down — a
+        // single-leg match's "per leg" average is identical to the match average already shown.
+        const expandable = (g.legs?.length ?? 0) > 1;
+        const expanded = expandedGames.has(g.gameId);
+        const rowContent = (
+          <>
+            {expandable ? (
+              expanded ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            ) : <span className="w-3.5 shrink-0" />}
+            <span className="truncate max-w-[32%]">{g.player1Name}</span>
+            <span className="font-mono text-primary shrink-0">{g.player1Average.toFixed(1)} : {g.player2Average.toFixed(1)}</span>
+            <span className="truncate max-w-[32%] text-right">{g.player2Name}</span>
+          </>
+        );
+        return (
+          <div key={g.gameId} className="bg-muted/30 rounded-lg">
+            {expandable ? (
+              <button
+                type="button"
+                onClick={() => toggleGameExpanded(g.gameId)}
+                className={`w-full flex items-center justify-between gap-2 ${rowText} px-2.5 py-1.5 cursor-pointer`}
+                aria-expanded={expanded}
+              >
+                {rowContent}
+              </button>
+            ) : (
+              <div className={`flex items-center justify-between gap-2 ${rowText} px-2.5 py-1.5`}>{rowContent}</div>
+            )}
+            {expandable && expanded && (
+              <div className="space-y-1 px-2.5 pb-1.5 pl-9">
+                {g.legs!.map((leg, i) => (
+                  <div key={i} className={`flex items-center justify-between ${headText} text-muted-foreground`}>
+                    <span>{t("game.leg")} {i + 1}</span>
+                    <span className="font-mono">{leg.player1Average.toFixed(1)} : {leg.player2Average.toFixed(1)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 
@@ -132,7 +199,7 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
               onClick={() => setSortKey((k) => (k === "average" ? "default" : "average"))}
               className={`rounded-lg border px-3 py-2 text-center transition-colors ${sortKey === "average" ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40"}`}
             >
-              <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.leadingAverage")}</p>
+              <p className={`${headText} uppercase tracking-wide text-muted-foreground`} title={t("tournament.tournamentAverage")}>{t("tournament.leadingAverage")}</p>
               <p className="font-display text-lg text-primary">{leadingAverage.tournamentAverage.toFixed(1)}</p>
               <p className={`${rowText} truncate text-muted-foreground`}>{leadingAverage.name}</p>
             </button>
@@ -168,6 +235,7 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
           )}
         </div>
       )}
+      {hasHeadline && <p className={`${headText} text-muted-foreground`}>{t("tournament.averageScopeHint")}</p>}
       {paged.visible.length > 0 && (
         <div>
           <div className={`grid gap-x-6 gap-y-3 ${statCols.length > 1 ? "xl:grid-cols-2" : ""}`}>
