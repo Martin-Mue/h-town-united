@@ -1,3 +1,4 @@
+import { useState } from "react";
 import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
@@ -31,10 +32,23 @@ function chunkInHalf<T>(items: T[]): T[][] {
 
 /** Shared by Tournament.tsx (full, with heatmap) and PublicTournament.tsx's compact live widget
  *  (table only) — one component so both surfaces stay in sync instead of two hand-kept copies. */
+/** Which headline chip (if any) the stats table below is currently sorted by — "default" keeps
+ *  mergeTournamentStats' own ordering (highlight-magnitude, then average as a tiebreak). */
+type StatSortKey = "default" | "average" | "oneEighties" | "checkout";
+
 const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView }: TournamentHighlightsPanelProps) => {
   const { t } = useLanguage();
+  const [sortKey, setSortKey] = useState<StatSortKey>("default");
   const merged = mergeTournamentStats(highlights, averages);
-  const paged = usePagedList(merged, liveView ? { collapseAt: Infinity } : undefined);
+  const sortedMerged =
+    sortKey === "average" ? [...merged].sort((a, b) => b.tournamentAverage - a.tournamentAverage) :
+    sortKey === "oneEighties" ? [...merged].sort((a, b) => b.oneEighties - a.oneEighties) :
+    sortKey === "checkout" ? [...merged].sort((a, b) =>
+      (b.checkout170 - a.checkout170) || (b.checkout160Plus - a.checkout160Plus) ||
+      (b.checkout140Plus - a.checkout140Plus) || (b.checkout120Plus - a.checkout120Plus) ||
+      (b.checkout100Plus - a.checkout100Plus)) :
+    merged;
+  const paged = usePagedList(sortedMerged, liveView ? { collapseAt: Infinity } : undefined);
   const pagedGames = usePagedList(averages.games, liveView ? { collapseAt: Infinity } : undefined);
 
   if (merged.length === 0 && highlights.heatmapPoints.length === 0) {
@@ -106,26 +120,44 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
       )}
       {hasHeadline && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {/* Average/180s/checkout each double as a sort trigger for the full table below — same
+           *  "tile doubles as a link into the full ranking" idea as the Records tiles on the
+           *  Statistics page, just re-sorting the table already right here instead of navigating
+           *  elsewhere. Tapping the already-active one returns to the default ranking. No natural
+           *  table column to sort by for shortestLeg (only a single tournament-wide record is
+           *  tracked, not a per-player list), so that one stays a plain, non-interactive chip. */}
           {leadingAverage && (
-            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-center">
+            <button
+              type="button"
+              onClick={() => setSortKey((k) => (k === "average" ? "default" : "average"))}
+              className={`rounded-lg border px-3 py-2 text-center transition-colors ${sortKey === "average" ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40"}`}
+            >
               <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.leadingAverage")}</p>
               <p className="font-display text-lg text-primary">{leadingAverage.tournamentAverage.toFixed(1)}</p>
               <p className={`${rowText} truncate text-muted-foreground`}>{leadingAverage.name}</p>
-            </div>
+            </button>
           )}
           {mostOneEighties && (
-            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-center">
+            <button
+              type="button"
+              onClick={() => setSortKey((k) => (k === "oneEighties" ? "default" : "oneEighties"))}
+              className={`rounded-lg border px-3 py-2 text-center transition-colors ${sortKey === "oneEighties" ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40"}`}
+            >
               <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.mostOneEighties")}</p>
               <p className="font-display text-lg text-primary">{mostOneEighties.oneEighties}</p>
               <p className={`${rowText} truncate text-muted-foreground`}>{mostOneEighties.name}</p>
-            </div>
+            </button>
           )}
           {highlights.topCheckout && (
-            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-center">
+            <button
+              type="button"
+              onClick={() => setSortKey((k) => (k === "checkout" ? "default" : "checkout"))}
+              className={`rounded-lg border px-3 py-2 text-center transition-colors ${sortKey === "checkout" ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40"}`}
+            >
               <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.bestCheckout")}</p>
               <p className="font-display text-lg text-primary">{highlights.topCheckout.value}</p>
               <p className={`${rowText} truncate text-muted-foreground`}>{highlights.topCheckout.name}</p>
-            </div>
+            </button>
           )}
           {highlights.shortestLeg && (
             <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-center">
