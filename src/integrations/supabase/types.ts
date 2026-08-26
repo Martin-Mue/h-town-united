@@ -464,6 +464,7 @@ export type Database = {
           game_mode: string
           id: string
           live_play_enabled: boolean
+          manual_release: boolean
           max_rounds_x01: number | null
           mode: string
           name: string
@@ -487,6 +488,7 @@ export type Database = {
           game_mode?: string
           id?: string
           live_play_enabled?: boolean
+          manual_release?: boolean
           max_rounds_x01?: number | null
           mode?: string
           name: string
@@ -510,6 +512,7 @@ export type Database = {
           game_mode?: string
           id?: string
           live_play_enabled?: boolean
+          manual_release?: boolean
           max_rounds_x01?: number | null
           mode?: string
           name?: string
@@ -604,6 +607,7 @@ export type Database = {
           champion: string | null
           game_mode: string | null
           id: string | null
+          manual_release: boolean | null
           mode: string | null
           name: string | null
           players: Json | null
@@ -621,6 +625,7 @@ export type Database = {
           champion?: string | null
           game_mode?: string | null
           id?: string | null
+          manual_release?: boolean | null
           mode?: string | null
           name?: string | null
           players?: Json | null
@@ -638,6 +643,7 @@ export type Database = {
           champion?: string | null
           game_mode?: string | null
           id?: string | null
+          manual_release?: boolean | null
           mode?: string | null
           name?: string | null
           players?: Json | null

@@ -85,6 +85,8 @@ interface TournamentRecord {
   /** Which live-view pages stay visible before the first real match has a result — see
    *  DEFAULT_PRESTART_VIEWS for the fallback when a tournament hasn't set its own. */
   prestart_views?: string[];
+  /** Explicit organizer override that releases the live view early, independent of hasStarted(). */
+  manual_release?: boolean;
   /** Who's actually shown up, keyed by participant name (same name-keyed space as `players`/
    *  `bracket`) — organizer-only check-in state, independent of match results. */
   attendance?: Record<string, boolean> | null;
@@ -780,6 +782,7 @@ const TournamentPage = () => {
     live_play_enabled: t.live_play_enabled ?? true,
     attendance: (t.attendance as unknown as Record<string, boolean>) || {},
     prestart_views: (t.prestart_views as unknown as string[]) || DEFAULT_PRESTART_VIEWS,
+    manual_release: t.manual_release ?? false,
   });
 
   const fetchTournaments = useCallback(async () => {
@@ -1075,6 +1078,7 @@ const TournamentPage = () => {
         live_play_enabled: upd.live_play_enabled ?? livePlayEnabled,
         attendance: (upd.attendance as unknown as Record<string, boolean>) || {},
         prestart_views: (upd.prestart_views as unknown as string[]) || DEFAULT_PRESTART_VIEWS,
+        manual_release: upd.manual_release ?? false,
       };
       setActiveTournament(rec);
       setEditingId(null);
@@ -1125,6 +1129,7 @@ const TournamentPage = () => {
       live_play_enabled: data.live_play_enabled ?? livePlayEnabled,
       attendance: (data.attendance as unknown as Record<string, boolean>) || {},
       prestart_views: (data.prestart_views as unknown as string[]) || DEFAULT_PRESTART_VIEWS,
+      manual_release: data.manual_release ?? false,
     };
     setActiveTournament(record);
     setBracketView(defaultBracketView(record.bracket as Match[]));
@@ -1312,6 +1317,19 @@ const TournamentPage = () => {
     const { error } = await supabase.from("tournaments").update({ prestart_views: next as unknown as Json }).eq("id", activeTournament.id);
     if (error) {
       setActiveTournament((curr) => curr ? { ...curr, prestart_views: prev } : curr);
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    }
+  };
+
+  /** Explicit early release, supplementing the automatic hasStarted()-based gate lift — same
+   *  optimistic-update + revert-on-error pattern as togglePrestartView/toggleAttendance above. */
+  const setManualRelease = async (next: boolean) => {
+    if (!activeTournament) return;
+    const prev = activeTournament.manual_release ?? false;
+    setActiveTournament({ ...activeTournament, manual_release: next });
+    const { error } = await supabase.from("tournaments").update({ manual_release: next }).eq("id", activeTournament.id);
+    if (error) {
+      setActiveTournament((curr) => curr ? { ...curr, manual_release: prev } : curr);
       toast({ title: t("common.error"), description: error.message, variant: "destructive" });
     }
   };
@@ -1787,7 +1805,6 @@ const TournamentPage = () => {
             const sizeUpper = sizeLower * 2;
             if (players.length <= sizeLower || sizeUpper > 64) return null;
             const recommendsPrelim = chooseAutoMainSize(players.length, "auto") === sizeLower;
-            const recommendedSize = recommendsPrelim ? sizeLower : sizeUpper;
             return (
               <div>
                 <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.sizePreferenceLabel")}</label>
@@ -1800,7 +1817,7 @@ const TournamentPage = () => {
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  {players.length} {t("tournament.participants")} → {t("tournament.recommendationArrowLabel")}: {recommendsPrelim ? t("tournament.sizePreferencePrelim") : t("tournament.sizePreferenceByes")} ({recommendedSize}{t("tournament.playerBracketSuffix")})
+                  {t("tournament.recommendationPrefix")} {players.length} {t("tournament.participants")}: {recommendsPrelim ? t("tournament.recommendPrelimPlain") : t("tournament.recommendByesPlain")}
                 </p>
               </div>
             );
@@ -2363,7 +2380,15 @@ const TournamentPage = () => {
               </div>
             </div>
             {!hasStarted(activeTournament) && (
-              <div className="rounded-xl border border-border bg-card/60 px-4 py-2.5 mt-1.5">
+              <div className="rounded-xl border border-border bg-card/60 px-4 py-2.5 mt-1.5 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label htmlFor="manual-release" className="text-xs">{t("tournament.manualReleaseLabel")}</Label>
+                    <p className="text-[11px] text-muted-foreground">{t("tournament.manualReleaseDesc")}</p>
+                  </div>
+                  <Switch id="manual-release" checked={!!activeTournament.manual_release} onCheckedChange={setManualRelease} />
+                </div>
+                <div>
                 <p className="text-[11px] text-muted-foreground mb-2">{t("tournament.prestartViewsLabel")}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {([
@@ -2389,6 +2414,7 @@ const TournamentPage = () => {
                       </button>
                     );
                   })}
+                </div>
                 </div>
               </div>
             )}
@@ -2438,6 +2464,45 @@ const TournamentPage = () => {
             <Smartphone className="w-3.5 h-3.5" /> {t("tournament.boardMode")}
           </Button>
         </div>
+
+        {/* Always-visible board-occupancy strip, regardless of which sub-tab (tree/schedule) is
+         *  open — there's no server-side registry of which physical device is bound to which
+         *  board (Board-Modus binding is pure localStorage, see its own doc comments), so this
+         *  can't prevent two devices from claiming the same board. It's the same
+         *  isLiveSnapshotFresh signal the board-picker's "läuft evtl. schon" hint already uses,
+         *  just surfaced persistently here instead of only in that one sub-screen — a cheap,
+         *  glanceable sanity check, not a real lock. */}
+        {(() => {
+          const boardCount = activeTournament.boards || 2;
+          const boardSchedule = currentBoardSchedule(matches, boardCount);
+          const boards = Array.from({ length: boardCount }, (_, i) => i + 1)
+            .map((n) => ({ board: n, entry: boardSchedule.now.find((e) => e.board === n) }));
+          if (boards.every((b) => !b.entry)) return null;
+          return (
+            <div className="container mb-2 flex flex-wrap gap-1.5">
+              {boards.map(({ board, entry }) => {
+                const live = entry && isLiveSnapshotFresh(entry.match.live);
+                return (
+                  <div key={board} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs ${live ? "border-accent/50 bg-accent/10" : "border-border bg-muted/20"}`}>
+                    <span className="font-mono text-muted-foreground shrink-0">{t("camera.board")} {board}</span>
+                    {entry ? (
+                      <>
+                        <span className="truncate max-w-[240px]">{entry.match.player1} <span className="text-muted-foreground">vs</span> {entry.match.player2}</span>
+                        {live && (
+                          <span className="flex items-center gap-1 text-accent shrink-0">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">{t("tournament.boardIdle")}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {bracketView === "tree" ? (
           <BracketViewport
