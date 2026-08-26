@@ -37,30 +37,23 @@ describe("computeTournamentHighlights", () => {
     expect(participants[0].oneEighties).toBe(1);
   });
 
-  it("only counts checkouts on a WON leg, and a 170 counts toward every tier", () => {
+  it("only counts a highestCheckout on a WON leg", () => {
     const legs: TournamentStatsLegRow[] = [
       { player_id: "p1", player_name: "Martin", starting_score: 170, won: true, throws: [dart(20, 3), dart(20, 3), dart(25, 2)] },
       // Same shape but not actually won — must not count.
       { player_id: "p1", player_name: "Martin", starting_score: 170, won: false, throws: [dart(20, 3), dart(20, 3), dart(25, 2)] },
     ];
     const { participants } = computeTournamentHighlights(legs);
-    expect(participants[0].checkout170).toBe(1);
-    expect(participants[0].checkout160Plus).toBe(1);
-    expect(participants[0].checkout140Plus).toBe(1);
-    expect(participants[0].checkout120Plus).toBe(1);
-    expect(participants[0].checkout100Plus).toBe(1);
+    expect(participants[0].highestCheckout).toBe(170);
   });
 
-  it("counts a 120 checkout toward 100+/120+ but not 140+/160+/170", () => {
+  it("tracks each participant's own highest checkout across multiple won legs, not just the latest", () => {
     const legs: TournamentStatsLegRow[] = [
-      { player_id: "p1", player_name: "Martin", starting_score: 120, won: true, throws: [dart(20, 3), dart(20, 1), dart(20, 2)] },
+      { player_id: "p1", player_name: "Martin", starting_score: 120, won: true, throws: [dart(20, 3), dart(20, 1), dart(20, 2)] }, // 120 checkout
+      { player_id: "p1", player_name: "Martin", starting_score: 40, won: true, throws: [dart(20, 2)] }, // 40 checkout — smaller, must not overwrite
     ];
     const { participants } = computeTournamentHighlights(legs);
-    expect(participants[0].checkout100Plus).toBe(1);
-    expect(participants[0].checkout120Plus).toBe(1);
-    expect(participants[0].checkout140Plus).toBe(0);
-    expect(participants[0].checkout160Plus).toBe(0);
-    expect(participants[0].checkout170).toBe(0);
+    expect(participants[0].highestCheckout).toBe(120);
   });
 
   it("groups guests without a player_id by name instead of merging them together", () => {
@@ -125,24 +118,26 @@ describe("computeTournamentHighlights", () => {
     expect(shortestLeg).toEqual({ name: "Martin", darts: 3 });
   });
 
-  it("counts ton-plus (100+) visits on any leg, won or not — unlike the checkout tiers", () => {
+  it("counts 100+/140+ scoring visits on any leg, won or not — unlike highestCheckout", () => {
     const legs: TournamentStatsLegRow[] = [
       // Lost this leg, but still threw a 140 visit along the way.
       { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [dart(20, 3), dart(20, 3), dart(20, 1)] },
     ];
     const { participants } = computeTournamentHighlights(legs);
-    expect(participants[0].tonPlus).toBe(1);
-    expect(participants[0].checkout100Plus).toBe(0);
+    expect(participants[0].oneHundredPlus).toBe(1);
+    expect(participants[0].oneFortyPlus).toBe(1);
+    expect(participants[0].highestCheckout).toBe(0);
   });
 
-  it("includes a participant whose only highlight-worthy dart is a ton-plus visit", () => {
+  it("counts a 100-119 visit toward oneHundredPlus but not oneFortyPlus", () => {
     // 40 + 40 + 20 = 100 — a ton, but no triple/bull/180/won-checkout in sight.
     const legs: TournamentStatsLegRow[] = [
       { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [dart(20, 2), dart(20, 2), dart(20, 1)] },
     ];
     const { participants } = computeTournamentHighlights(legs);
     expect(participants).toHaveLength(1);
-    expect(participants[0].tonPlus).toBe(1);
+    expect(participants[0].oneHundredPlus).toBe(1);
+    expect(participants[0].oneFortyPlus).toBe(0);
   });
 
   it("leaves topCheckout and shortestLeg null when nobody has won a leg yet", () => {

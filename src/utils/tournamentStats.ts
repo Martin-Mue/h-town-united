@@ -1,4 +1,4 @@
-import { count180s, tonPlusCount, average, computeCheckoutStats, type DartThrow } from "./dartStats";
+import { count180s, tonPlusCount, oneFortyPlusCount, average, computeCheckoutStats, type DartThrow } from "./dartStats";
 
 export interface TournamentStatsLegRow {
   player_id: string | null;
@@ -21,22 +21,20 @@ export interface ParticipantHighlight {
   bigTriples: number;
   bulls: number;
   oneEighties: number;
-  /** Winning-leg checkout THRESHOLDS — each is cumulative ("at least X"), so a 170 finish counts
-   *  toward all five, not just checkout170. Mirrors how darts players actually talk about
-   *  checkouts ("a 140+", "a ton-plus"), and keeps every tier from undercounting the ones above it. */
-  checkout100Plus: number;
-  checkout120Plus: number;
-  checkout140Plus: number;
-  checkout160Plus: number;
-  /** Exactly 170 — the maximum possible checkout, universally nicknamed "Big Fish". Already
-   *  included in checkout160Plus above; called out on its own since it's the one score every
-   *  darts player instantly recognizes. */
-  checkout170: number;
-  /** Visits scoring >=100 in a single turn, regardless of whether that turn won the leg — the
-   *  much more common "scoring power" cousin of the checkoutXPlus tiers above, which only ever
-   *  count a leg-winning finish. Same tonPlusCount already used for a single game's own
-   *  post-match stats (Game.tsx), just pooled across every leg in the tournament here. */
-  tonPlus: number;
+  /** The standard pro-stats scoring tiers alongside 180 — visits scoring >=140/>=100 in a single
+   *  turn, regardless of whether that turn won the leg. Deliberately NOT gated on `won`: these are
+   *  scoring-power stats (how often does this player put up a big number), not checkout stats
+   *  (did this player finish with a big number) — conflating the two was the previous design
+   *  here, and made 100+/140+ read as near-always-zero next to bigTriples/bulls since a winning
+   *  100+/140+ finish is comparatively rare while just scoring that much is common. */
+  oneFortyPlus: number;
+  oneHundredPlus: number;
+  /** This player's own best checkout so far — the per-player counterpart to the tournament-wide
+   *  topCheckout below (that one is "who holds the record right now", this is "what's each
+   *  player's personal best"), same as how tournamentAverage coexists with the single leading-Ø
+   *  headline. Only ever set on a leg this player actually won (a checkout, by definition, means
+   *  finishing the leg). 0 if they haven't won a leg with a real checkout yet. */
+  highestCheckout: number;
 }
 
 export interface TournamentHighlights {
@@ -103,12 +101,9 @@ export interface ParticipantStatsRow {
   bigTriples: number;
   bulls: number;
   oneEighties: number;
-  checkout100Plus: number;
-  checkout120Plus: number;
-  checkout140Plus: number;
-  checkout160Plus: number;
-  checkout170: number;
-  tonPlus: number;
+  oneFortyPlus: number;
+  oneHundredPlus: number;
+  highestCheckout: number;
 }
 
 const BIG_TRIPLE_NUMBERS = new Set([16, 17, 18, 19, 20]);
@@ -118,13 +113,12 @@ const BIG_TRIPLE_NUMBERS = new Set([16, 17, 18, 19, 20]);
  *  final tiebreak) — one function so the two can't silently drift the way they already had here
  *  (the merged list had picked up a `bulls` tiebreak the highlights-only sort never got). */
 function compareByHighlightMagnitude(
-  a: { oneEighties: number; checkout170: number; checkout160Plus: number; checkout140Plus: number; checkout120Plus: number; checkout100Plus: number; tonPlus: number; bigTriples: number; bulls: number },
+  a: { oneEighties: number; oneFortyPlus: number; oneHundredPlus: number; highestCheckout: number; bigTriples: number; bulls: number },
   b: typeof a,
 ): number {
   return (
-    b.oneEighties - a.oneEighties || b.checkout170 - a.checkout170 || b.checkout160Plus - a.checkout160Plus ||
-    b.checkout140Plus - a.checkout140Plus || b.checkout120Plus - a.checkout120Plus || b.checkout100Plus - a.checkout100Plus ||
-    b.tonPlus - a.tonPlus || b.bigTriples - a.bigTriples || b.bulls - a.bulls
+    b.oneEighties - a.oneEighties || b.oneFortyPlus - a.oneFortyPlus || b.oneHundredPlus - a.oneHundredPlus ||
+    b.highestCheckout - a.highestCheckout || b.bigTriples - a.bigTriples || b.bulls - a.bulls
   );
 }
 
@@ -145,7 +139,7 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
     const key = leg.player_id ?? leg.player_name;
     const entry = byKey.get(key) ?? {
       key, name: leg.player_name, bigTriples: 0, bulls: 0, oneEighties: 0,
-      checkout100Plus: 0, checkout120Plus: 0, checkout140Plus: 0, checkout160Plus: 0, checkout170: 0, tonPlus: 0,
+      oneFortyPlus: 0, oneHundredPlus: 0, highestCheckout: 0,
     };
 
     for (const t of leg.throws) {
@@ -156,15 +150,12 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
       if (t.baseValue === 25) entry.bulls++;
     }
     entry.oneEighties += count180s(leg.throws);
-    entry.tonPlus += tonPlusCount(leg.throws);
+    entry.oneFortyPlus += oneFortyPlusCount(leg.throws);
+    entry.oneHundredPlus += tonPlusCount(leg.throws);
 
     if (leg.won) {
       const { highestCheckout } = computeCheckoutStats(leg.throws, leg.starting_score);
-      if (highestCheckout >= 100) entry.checkout100Plus++;
-      if (highestCheckout >= 120) entry.checkout120Plus++;
-      if (highestCheckout >= 140) entry.checkout140Plus++;
-      if (highestCheckout >= 160) entry.checkout160Plus++;
-      if (highestCheckout === 170) entry.checkout170++;
+      if (highestCheckout > entry.highestCheckout) entry.highestCheckout = highestCheckout;
       if (highestCheckout > 0 && (!topCheckout || highestCheckout > topCheckout.value)) {
         topCheckout = { name: leg.player_name, value: highestCheckout };
       }
@@ -177,7 +168,7 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
   }
 
   const participants = [...byKey.values()]
-    .filter((p) => p.bigTriples || p.bulls || p.oneEighties || p.checkout100Plus || p.tonPlus)
+    .filter((p) => p.bigTriples || p.bulls || p.oneEighties || p.oneHundredPlus)
     .sort(compareByHighlightMagnitude);
 
   return { heatmapPoints, participants, topCheckout, shortestLeg };
@@ -266,7 +257,7 @@ export function computeLegAveragesByGame(
  *  all, which is the common case for a hand-scored tournament) still gets a full row — the other
  *  side's fields just default to 0, not dropped from the table entirely. */
 export function mergeTournamentStats(highlights: TournamentHighlights, averages: TournamentAverages): ParticipantStatsRow[] {
-  const emptyHighlights = { bigTriples: 0, bulls: 0, oneEighties: 0, checkout100Plus: 0, checkout120Plus: 0, checkout140Plus: 0, checkout160Plus: 0, checkout170: 0, tonPlus: 0 };
+  const emptyHighlights = { bigTriples: 0, bulls: 0, oneEighties: 0, oneFortyPlus: 0, oneHundredPlus: 0, highestCheckout: 0 };
   const byKey = new Map<string, ParticipantStatsRow>();
   for (const p of averages.participants) {
     byKey.set(p.key, { key: p.key, name: p.name, tournamentAverage: p.tournamentAverage, gamesPlayed: p.gamesPlayed, ...emptyHighlights });
@@ -276,12 +267,9 @@ export function mergeTournamentStats(highlights: TournamentHighlights, averages:
     entry.bigTriples = h.bigTriples;
     entry.bulls = h.bulls;
     entry.oneEighties = h.oneEighties;
-    entry.checkout100Plus = h.checkout100Plus;
-    entry.checkout120Plus = h.checkout120Plus;
-    entry.checkout160Plus = h.checkout160Plus;
-    entry.checkout140Plus = h.checkout140Plus;
-    entry.checkout170 = h.checkout170;
-    entry.tonPlus = h.tonPlus;
+    entry.oneFortyPlus = h.oneFortyPlus;
+    entry.oneHundredPlus = h.oneHundredPlus;
+    entry.highestCheckout = h.highestCheckout;
     byKey.set(h.key, entry);
   }
   // Ranked by highlight magnitude, biggest first — this is the Highlights table, not the

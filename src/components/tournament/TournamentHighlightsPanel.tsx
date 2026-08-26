@@ -38,7 +38,7 @@ function chunkInHalf<T>(items: T[]): T[][] {
  *  "gamesPlayed" exists specifically so someone eliminated round 1 on a single lucky visit
  *  doesn't sit at the top of every other sort looking like the tournament's best player forever
  *  — sorting by games played surfaces the small sample size instead of hiding it. */
-type StatSortKey = "default" | "average" | "oneEighties" | "checkout" | "tonPlus" | "gamesPlayed";
+type StatSortKey = "default" | "average" | "oneEighties" | "oneFortyPlus" | "oneHundredPlus" | "highestCheckout" | "gamesPlayed";
 
 const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView }: TournamentHighlightsPanelProps) => {
   const { t } = useLanguage();
@@ -48,11 +48,9 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
   const sortedMerged =
     sortKey === "average" ? [...merged].sort((a, b) => b.tournamentAverage - a.tournamentAverage) :
     sortKey === "oneEighties" ? [...merged].sort((a, b) => b.oneEighties - a.oneEighties) :
-    sortKey === "checkout" ? [...merged].sort((a, b) =>
-      (b.checkout170 - a.checkout170) || (b.checkout160Plus - a.checkout160Plus) ||
-      (b.checkout140Plus - a.checkout140Plus) || (b.checkout120Plus - a.checkout120Plus) ||
-      (b.checkout100Plus - a.checkout100Plus)) :
-    sortKey === "tonPlus" ? [...merged].sort((a, b) => b.tonPlus - a.tonPlus) :
+    sortKey === "oneFortyPlus" ? [...merged].sort((a, b) => b.oneFortyPlus - a.oneFortyPlus) :
+    sortKey === "oneHundredPlus" ? [...merged].sort((a, b) => b.oneHundredPlus - a.oneHundredPlus) :
+    sortKey === "highestCheckout" ? [...merged].sort((a, b) => b.highestCheckout - a.highestCheckout) :
     sortKey === "gamesPlayed" ? [...merged].sort((a, b) => b.gamesPlayed - a.gamesPlayed) :
     merged;
   const paged = usePagedList(sortedMerged, liveView ? { collapseAt: Infinity } : undefined);
@@ -73,9 +71,7 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
   const gameCols = liveView && pagedGames.visible.length > GAME_SPLIT_THRESHOLD ? chunkInHalf(pagedGames.visible) : [pagedGames.visible];
 
   // Every sortable header shares the same click-to-sort/click-again-to-reset behavior as the
-  // headline chips below — the 4 checkout tiers all drive the one "checkout" sort key since
-  // they're really the same ranking at different thresholds, so clicking any of them highlights
-  // all 4 together rather than looking like only one took effect.
+  // headline chips below.
   const sortableHeader = (key: StatSortKey, label: string, tooltip: string) => {
     const active = sortKey === key;
     return (
@@ -100,11 +96,9 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
           {sortableHeader("gamesPlayed", t("tournament.gamesPlayedAbbrev"), t("tournament.gamesPlayedTooltip"))}
           {sortableHeader("average", "Ø", t("tournament.tournamentAverage"))}
           {sortableHeader("oneEighties", "180", t("tournament.oneEightyTooltip"))}
-          {sortableHeader("tonPlus", "Ton+", t("tournament.tonPlusTooltip"))}
-          {sortableHeader("checkout", "100+", t("tournament.checkout100Tooltip"))}
-          {sortableHeader("checkout", "120+", t("tournament.checkout120Tooltip"))}
-          {sortableHeader("checkout", "140+", t("tournament.checkout140Tooltip"))}
-          {sortableHeader("checkout", "160+", t("tournament.checkout160Tooltip"))}
+          {sortableHeader("oneFortyPlus", "140+", t("tournament.oneFortyPlusTooltip"))}
+          {sortableHeader("oneHundredPlus", "100+", t("tournament.oneHundredPlusTooltip"))}
+          {sortableHeader("highestCheckout", t("tournament.highestCheckoutAbbrev"), t("tournament.highestCheckoutTooltip"))}
           <th className="py-1 pl-1.5 text-center" title={t("tournament.bigTriplesTooltip")}>{t("tournament.bigTriplesAbbrev")}</th>
         </tr>
       </thead>
@@ -115,11 +109,9 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
             <td className="py-1.5 px-1.5 text-center font-mono text-muted-foreground">{p.gamesPlayed || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono text-primary">{p.tournamentAverage > 0 ? p.tournamentAverage.toFixed(1) : "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono">{p.oneEighties || "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.tonPlus || "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout100Plus || "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout120Plus || "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout140Plus || "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.checkout160Plus || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.oneFortyPlus || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.oneHundredPlus || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.highestCheckout || "–"}</td>
             <td className="py-1.5 pl-1.5 text-center font-mono">{p.bigTriples || "–"}</td>
           </tr>
         ))}
@@ -218,8 +210,8 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
           {highlights.topCheckout && (
             <button
               type="button"
-              onClick={() => setSortKey((k) => (k === "checkout" ? "default" : "checkout"))}
-              className={`rounded-lg border px-3 py-2 text-center transition-colors ${sortKey === "checkout" ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40"}`}
+              onClick={() => setSortKey((k) => (k === "highestCheckout" ? "default" : "highestCheckout"))}
+              className={`rounded-lg border px-3 py-2 text-center transition-colors ${sortKey === "highestCheckout" ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40"}`}
             >
               <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.bestCheckout")}</p>
               <p className="font-display text-lg text-primary">{highlights.topCheckout.value}</p>
