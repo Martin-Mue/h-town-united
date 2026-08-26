@@ -36,6 +36,7 @@ interface TournamentRow {
   round_configs?: { mode: string; bestOf: number }[];
   attendance?: Record<string, boolean> | null;
   prestart_views?: string[];
+  manual_release?: boolean;
 }
 
 /** All 8 selectable live-view pages — the 5 original ones plus the 3 added for the waiting
@@ -913,7 +914,9 @@ const PublicTournamentPage = () => {
   // zero server enforcement before this, and still is — a curious visitor can still force a
   // locked view via that same URL param. A UI nicety appropriate for a club event, not a real
   // access boundary.
-  const started = t ? hasStarted(t) : false;
+  // Automatic (first real result) OR an explicit organizer override for releasing early on
+  // purpose, independent of match results.
+  const started = t ? hasStarted(t) || !!t.manual_release : false;
   const prestartViews = t?.prestart_views?.length ? t.prestart_views : DEFAULT_PRESTART_VIEWS;
   const isLocked = (v: ViewKey) => !started && !prestartViews.includes(slotOf(v));
   // A plain string, not `prestartViews` itself, as the effects' dependency below — `t` (and with
@@ -1115,7 +1118,12 @@ const PublicTournamentPage = () => {
           rotation, or exiting fullscreen never requires leaving fullscreen first. */}
       <div ref={viewWrapRef} className="px-4 pt-4 bg-background">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border overflow-x-auto max-w-full">
+          {/* flex-wrap (not overflow-x-auto scroll) — at a phone-width viewport (the actual
+           *  real-world source for a beamer/TV mirror, not just a spectator's own screen) 8
+           *  buttons badly overflowed a single scrollable row: only the first 3 stayed visible,
+           *  requiring the operator to scroll blind to reach the rest. Wrapping shows every
+           *  button always, at any width, instead of hiding most of them off-screen. */}
+          <div className="inline-flex flex-wrap rounded-lg border border-border max-w-full">
             <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
               <Monitor className="w-3.5 h-3.5" /> {tr("pt.boardOverview")} {isLocked("boards") && <Lock className="w-3 h-3" />}
             </button>
