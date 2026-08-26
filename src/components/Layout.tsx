@@ -62,17 +62,24 @@ const Layout = ({ children }: { children: ReactNode }) => {
           top-0` scoreboard inside a page has nothing correct to stick to. */}
       <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overscroll-y-contain">
         <header className="border-b border-border px-4 py-3 flex items-center justify-between bg-background/80 backdrop-blur-sm relative z-10 shrink-0">
-          <Link to="/" className="flex items-center gap-3">
+          {/* min-w-0 on both the link and the text wrapper, plus truncate on the text itself —
+              without it, a flex child's default min-width:auto refuses to shrink below its
+              content's natural width at all, so once zooming (or a narrow window) left too
+              little room for the full "H-Town United e.V." + "Dart Club" text, it wrapped across
+              several lines instead of shrinking, growing the header much taller and dragging the
+              nav pills into an off-looking vertical position alongside it. Truncating with an
+              ellipsis keeps the header a single, predictable row at any zoom/width. */}
+          <Link to="/" className="flex items-center gap-3 min-w-0">
             <img
               src={htuLogo}
               alt="H-Town United e.V. Darts Logo"
-              className="w-12 h-12 rounded-xl object-cover border border-primary/30 glow-cyan"
+              className="w-12 h-12 rounded-xl object-cover border border-primary/30 glow-cyan shrink-0"
             />
-            <div className="leading-tight">
-              <h1 className="text-lg font-display uppercase tracking-widest text-foreground">
+            <div className="leading-tight min-w-0">
+              <h1 className="text-lg font-display uppercase tracking-widest text-foreground truncate">
                 H-Town <span className="text-primary">United</span> <span className="text-muted-foreground text-xs">e.V.</span>
               </h1>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Dart Club</p>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground truncate">Dart Club</p>
             </div>
           </Link>
 
