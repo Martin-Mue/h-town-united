@@ -84,7 +84,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
           <div className="space-y-1.5">
             {unplayed.map((m) => (
               <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2 text-sm">
-                <span className="truncate uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">vs</span> {m.player2}</span>
+                <span className="truncate uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {m.player2}</span>
               </div>
             ))}
           </div>
@@ -97,7 +97,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
           <div className="space-y-1">
             {played.map((m) => (
               <div key={m.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
-                <span className="truncate uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">vs</span> {m.player2}</span>
+                <span className="truncate uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {m.player2}</span>
                 <span className="text-xs text-secondary font-medium shrink-0 ml-2">{m.winner} ✓</span>
               </div>
             ))}
@@ -219,7 +219,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
         {!isLast && side === "right" && <span aria-hidden className="absolute top-1/2 -left-4 w-4 h-px bg-border" />}
         {[m.player1, m.player2].map((player, idx) => (
           <div key={idx} className={`${compact ? "px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"} flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
-            <span className="truncate uppercase tracking-wide">{player || "TBD"}</span>
+            <span className="truncate uppercase tracking-wide">{player || t("tournament.tbdPlaceholder")}</span>
             <span className={`font-display ${compact ? "text-sm" : "text-base"} ${liveFresh ? "text-accent" : ""}`}>
               {liveFresh ? (idx === 0 ? m.live!.legs1 : m.live!.legs2) : (idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0)}
             </span>
@@ -360,7 +360,13 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   const { t } = useLanguage();
   const roundLabel = (round: number, total: number) => roundLabelFor(round, total, t);
   const hasPrelim = matches.some(m => m.round === 0);
-  const rounds = [...(hasPrelim ? [0] : []), ...Array.from({ length: totalRounds }, (_, i) => i + 1)];
+  const allRounds = [...(hasPrelim ? [0] : []), ...Array.from({ length: totalRounds }, (_, i) => i + 1)];
+  // Promote whichever round(s) currently have an undecided, playable match to the very top —
+  // otherwise the round actually worth watching could be buried in the middle of a long list
+  // (up to 7 rounds for a 64-player bracket), and a viewer has to scan for it instead of seeing
+  // it at a glance. Rounds without action keep their normal relative order after that.
+  const roundHasAction = (round: number) => matches.some(m => m.round === round && !m.winner && isPlayable(m));
+  const rounds = [...allRounds.filter(roundHasAction), ...allRounds.filter(r => !roundHasAction(r))];
 
   return (
     <div className="space-y-2">
@@ -377,12 +383,24 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
         // entire round happens to finish.
         const liveList = list.filter(m => !m.winner && isPlayable(m));
         const otherList = list.filter(m => m.winner || !isPlayable(m));
+        const isActive = liveList.length > 0;
+        // A round nobody has reached yet — literally every match still waiting on both feeder
+        // results — has nothing worth looking at; a whole grid of empty "TBD vs TBD" boxes was
+        // just noise competing for attention with the round that actually matters right now.
+        const notReachedYet = list.length > 0 && list.every(m => !isRealPlayer(m.player1) && !isRealPlayer(m.player2));
         return (
-          <div key={round} className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between">
-              <h3 className="font-display uppercase text-sm">{roundLabel(round, totalRounds)}</h3>
+          <div key={round} className={`bg-card border rounded-xl overflow-hidden ${isActive ? "border-primary/50" : "border-border"}`}>
+            <div className={`px-4 py-2 border-b border-border flex items-center justify-between ${isActive ? "bg-primary/10" : "bg-muted/30"}`}>
+              <h3 className="font-display uppercase text-sm flex items-center gap-2">
+                {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />}
+                {roundLabel(round, totalRounds)}
+              </h3>
               <span className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · BO{cfg?.bestOf || fallbackBestOf}</span>
             </div>
+            {notReachedYet ? (
+              <p className="px-4 py-2.5 text-xs text-muted-foreground">{t("pt.roundNotReachedYet")}</p>
+            ) : (
+            <>
             {liveList.length > 0 && (
               <div className="divide-y divide-border">
                 {liveList.map(m => {
@@ -396,7 +414,7 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
                     <div key={m.id} className="px-4 py-2.5 flex items-center gap-3 text-sm bg-primary/5">
                       {[m.player1, m.player2].map((player, idx) => (
                         <span key={idx} className={`flex-1 min-w-0 truncate uppercase tracking-wide ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
-                          {player || "TBD"}
+                          {player || t("tournament.tbdPlaceholder")}
                         </span>
                       ))}
                       <span className={`shrink-0 font-display text-base tabular-nums ${liveFresh ? "text-accent" : ""}`}>
@@ -421,12 +439,14 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
                   <div key={m.id} className="rounded-lg bg-muted/20 px-2 py-1 text-xs min-w-0">
                     {[m.player1, m.player2].map((player, idx) => (
                       <p key={idx} className={`truncate uppercase tracking-wide leading-tight ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
-                        {player || "TBD"}
+                        {player || t("tournament.tbdPlaceholder")}
                       </p>
                     ))}
                   </div>
                 ))}
               </div>
+            )}
+            </>
             )}
           </div>
         );
@@ -549,24 +569,24 @@ const FormatStatusPage = ({
   const rounds = isKo ? [...(hasPrelim ? [0] : []), ...Array.from({ length: totalRounds }, (_, i) => i + 1)] : [];
 
   return (
-    <div className="max-w-lg mx-auto py-6 px-4 space-y-4">
+    <div className="max-w-xl mx-auto py-8 px-4 space-y-5">
       <div className={`grid gap-3 ${checkedIn !== null ? "grid-cols-2" : "grid-cols-1"}`}>
-        <div className="rounded-xl border border-border bg-card p-4 text-center">
-          <p className="font-display text-3xl text-primary">{tournament.players.length}</p>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{t("tournament.participants")}</p>
+        <div className="rounded-xl border border-border bg-card p-5 text-center">
+          <p className="font-display text-4xl text-primary">{tournament.players.length}</p>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground mt-1.5">{t("tournament.participants")}</p>
         </div>
         {checkedIn !== null && (
-          <div className="rounded-xl border border-border bg-card p-4 text-center">
-            <p className="font-display text-3xl text-secondary">{checkedIn} / {tournament.players.length}</p>
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{t("pt.checkedInLabel")}</p>
+          <div className="rounded-xl border border-border bg-card p-5 text-center">
+            <p className="font-display text-4xl text-secondary">{checkedIn} / {tournament.players.length}</p>
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mt-1.5">{t("pt.checkedInLabel")}</p>
           </div>
         )}
       </div>
 
       {isKo ? (
-        <div className="rounded-xl border border-border bg-card p-4">
-          <h3 className="font-display uppercase text-sm text-muted-foreground mb-2">{t("pt.formatLabel")}</h3>
-          <ul className="space-y-1.5 text-sm">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h3 className="font-display uppercase text-base text-muted-foreground mb-3">{t("pt.formatLabel")}</h3>
+          <ul className="space-y-2.5 text-base">
             {rounds.map((r) => {
               const cfg = (tournament.round_configs || [])[r === 0 ? totalRounds : r - 1];
               return (
@@ -579,18 +599,18 @@ const FormatStatusPage = ({
           </ul>
         </div>
       ) : (
-        <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between text-sm">
+        <div className="rounded-xl border border-border bg-card p-5 flex items-center justify-between text-base">
           <span className="text-muted-foreground">{t("pt.formatLabel")}</span>
           <span className="font-mono text-primary">{tournament.game_mode} · BO{tournament.best_of_legs}</span>
         </div>
       )}
 
       {hasPrelim ? (
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-center">
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 text-base text-center">
           {t("tournament.preliminaryRound")}
         </div>
       ) : isKo && !started ? (
-        <p className="text-xs text-muted-foreground text-center">{t("pt.formatMayStillChange")}</p>
+        <p className="text-sm text-muted-foreground text-center">{t("pt.formatMayStillChange")}</p>
       ) : null}
     </div>
   );
@@ -663,7 +683,7 @@ const BoardOverview = ({
               </div>
               <p className="font-display uppercase leading-tight text-[clamp(1.3rem,3.2vw,2.4rem)]">
                 {c.player1}
-                <span className="block text-muted-foreground text-[clamp(0.8rem,1.6vw,1.1rem)] normal-case my-0.5">vs</span>
+                <span className="block text-muted-foreground text-[clamp(0.8rem,1.6vw,1.1rem)] normal-case my-0.5">{t("common.vs")}</span>
                 {c.player2}
               </p>
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
@@ -702,7 +722,7 @@ const BoardOverview = ({
               <div key={c.id} className="rounded-xl border border-border bg-card/60 px-3 py-2 flex items-center gap-2">
                 <Badge variant="outline" className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] bg-primary/10 text-primary px-1.5 py-0.5 shrink-0 border-transparent">{t("camera.board")} {c.board}</Badge>
                 <span className="text-[clamp(0.85rem,1.4vw,1.05rem)] uppercase tracking-wide">
-                  {c.player1} <span className="text-muted-foreground normal-case">vs</span> {c.player2}
+                  {c.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {c.player2}
                 </span>
               </div>
             ))}
@@ -749,7 +769,7 @@ const PublicTournamentPage = () => {
   // Aliased to `tr` (not the usual `t`) — this component already uses `t` for the tournament
   // record itself (a name from long before this page had any translations, too widely
   // referenced below to rename instead).
-  const { t: tr } = useLanguage();
+  const { t: tr, language, setLanguage } = useLanguage();
   const [t, setT] = useState<TournamentRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -1176,6 +1196,25 @@ const PublicTournamentPage = () => {
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             {isFullscreen ? tr("pt.exitFullscreen") : tr("pt.fullscreenShort")}
           </button>
+          {/* DE/EN only here (not the app's full 6-language list) — a spectator following a QR
+           *  code cold has no prior language preference at all, and this is the one page in the
+           *  app anonymous visitors actually reach. Shares the same LanguageContext/localStorage
+           *  key as the rest of the app, just with a compact 2-option control instead of Settings'
+           *  full dropdown. */}
+          <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
+            <button
+              onClick={() => setLanguage("de")}
+              className={`px-2.5 py-1.5 text-xs font-medium ${language === "de" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              DE
+            </button>
+            <button
+              onClick={() => setLanguage("en")}
+              className={`px-2.5 py-1.5 text-xs font-medium border-l border-border ${language === "en" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              EN
+            </button>
+          </div>
         </div>
         {showRotationSettings && (
           <div className="mb-2 rounded-xl border border-border bg-card p-3 max-w-xl">
@@ -1313,7 +1352,12 @@ const PublicTournamentPage = () => {
         </div>
 
         {view !== "tree" && (
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-4 self-start">
+        /* order-first below lg — "Als Nächstes"/Live-Ticker used to always sit AFTER the main
+         *  content in DOM order, which only reads as a side column once there's room for the 2-col
+         *  grid (lg+). Below that (the actual real-world case: a phone's own narrow viewport
+         *  mirrored to a beamer/TV, not a wide desktop) it just stacked BELOW the whole round
+         *  list/tree instead, so "who's up next" was scrolled well out of view on first glance. */
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-4 self-start order-first lg:order-none">
           {isKo && (
             <div className="bg-card border border-border rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
@@ -1341,7 +1385,7 @@ const PublicTournamentPage = () => {
                           {tr("camera.board")} {board}
                         </Badge>
                         <span className="truncate uppercase tracking-wide">
-                          {m.player1} <span className="text-muted-foreground normal-case">vs</span> {m.player2}
+                          {m.player1} <span className="text-muted-foreground normal-case">{tr("common.vs")}</span> {m.player2}
                         </span>
                       </li>
                     ))}
@@ -1358,16 +1402,16 @@ const PublicTournamentPage = () => {
 
           <div className="bg-card border border-border rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Zap className="w-4 h-4 text-accent" />
-              <h3 className="font-display uppercase text-sm">{tr("pt.liveTicker")}</h3>
+              <Zap className="w-5 h-5 text-accent" />
+              <h3 className="font-display uppercase text-base">{tr("pt.liveTicker")}</h3>
             </div>
             {completed.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{tr("pt.noCompletedMatches")}</p>
+              <p className="text-sm text-muted-foreground">{tr("pt.noCompletedMatches")}</p>
             ) : (
-              <ol className="space-y-2">
+              <ol className="space-y-2.5">
                 {completed.map(m => (
-                  <li key={m.id} className="text-xs border-l-2 border-primary/40 pl-2">
-                    <p className="font-display text-sm uppercase">
+                  <li key={m.id} className="text-sm border-l-2 border-primary/40 pl-2.5">
+                    <p className="font-display text-base uppercase">
                       <span className="text-secondary">{m.winner}</span>
                       <span className="text-muted-foreground normal-case"> {tr("tournament.beats")} </span>
                       {m.winner === m.player1 ? m.player2 : m.player1}

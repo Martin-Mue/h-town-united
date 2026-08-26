@@ -66,14 +66,14 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
         <tr className={`text-left ${headText} uppercase text-muted-foreground`}>
           <th className="py-1 pr-2">{t("stats.player")}</th>
           <th className="py-1 px-1.5 text-center" title={t("tournament.tournamentAverage")}>Ø</th>
-          <th className="py-1 px-1.5 text-center" title="180er">180</th>
-          <th className="py-1 px-1.5 text-center" title="Checkout ≥100">100+</th>
-          <th className="py-1 px-1.5 text-center" title="Checkout ≥120">120+</th>
-          <th className="py-1 px-1.5 text-center" title="Checkout ≥140">140+</th>
-          <th className="py-1 px-1.5 text-center" title="Checkout ≥160">160+</th>
+          <th className="py-1 px-1.5 text-center" title={t("tournament.oneEightyTooltip")}>180</th>
+          <th className="py-1 px-1.5 text-center" title={t("tournament.checkout100Tooltip")}>100+</th>
+          <th className="py-1 px-1.5 text-center" title={t("tournament.checkout120Tooltip")}>120+</th>
+          <th className="py-1 px-1.5 text-center" title={t("tournament.checkout140Tooltip")}>140+</th>
+          <th className="py-1 px-1.5 text-center" title={t("tournament.checkout160Tooltip")}>160+</th>
           <th className="py-1 px-1.5 text-center" title={t("tournament.bigFishTooltip")}>170 🐟</th>
           <th className="py-1 px-1.5 text-center" title={t("tournament.bigTriplesTooltip")}>{t("tournament.bigTriplesAbbrev")}</th>
-          <th className="py-1 pl-1.5 text-center" title="Bull">Bull</th>
+          <th className="py-1 pl-1.5 text-center" title={t("tournament.bullTooltip")}>Bull</th>
         </tr>
       </thead>
       <tbody>
