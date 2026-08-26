@@ -10,13 +10,13 @@ const dart = (baseValue: number, multiplier: number, boardU?: number, boardV?: n
 });
 
 describe("computeTournamentHighlights", () => {
-  it("counts big triples (T16-T20) but not smaller ones", () => {
+  it("counts big triples (T15-T20) but not smaller ones", () => {
     const legs: TournamentStatsLegRow[] = [{
       player_id: "p1", player_name: "Martin", starting_score: 501, won: false,
-      throws: [dart(20, 3), dart(19, 3), dart(5, 3), dart(20, 1)],
+      throws: [dart(20, 3), dart(19, 3), dart(15, 3), dart(14, 3), dart(5, 3), dart(20, 1)],
     }];
     const { participants } = computeTournamentHighlights(legs);
-    expect(participants[0].bigTriples).toBe(2);
+    expect(participants[0].bigTriples).toBe(3);
   });
 
   it("counts bull hits regardless of single/double", () => {
@@ -129,7 +129,7 @@ describe("computeTournamentHighlights", () => {
     expect(participants[0].highestCheckout).toBe(0);
   });
 
-  it("counts a 100-119 visit toward oneHundredPlus but not oneFortyPlus", () => {
+  it("counts a 100-119 visit toward oneHundredPlus but not oneTwentyPlus/oneFortyPlus", () => {
     // 40 + 40 + 20 = 100 — a ton, but no triple/bull/180/won-checkout in sight.
     const legs: TournamentStatsLegRow[] = [
       { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [dart(20, 2), dart(20, 2), dart(20, 1)] },
@@ -137,7 +137,30 @@ describe("computeTournamentHighlights", () => {
     const { participants } = computeTournamentHighlights(legs);
     expect(participants).toHaveLength(1);
     expect(participants[0].oneHundredPlus).toBe(1);
+    expect(participants[0].oneTwentyPlus).toBe(0);
     expect(participants[0].oneFortyPlus).toBe(0);
+  });
+
+  it("counts a 120-139 visit toward oneTwentyPlus but not oneFortyPlus", () => {
+    // 60 + 40 + 20 = 120
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [dart(20, 3), dart(20, 2), dart(20, 1)] },
+    ];
+    const { participants } = computeTournamentHighlights(legs);
+    expect(participants[0].oneTwentyPlus).toBe(1);
+    expect(participants[0].oneFortyPlus).toBe(0);
+  });
+
+  it("counts a 160+ visit toward every lower tier too", () => {
+    // 60 + 60 + 40 = 160
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: false, throws: [dart(20, 3), dart(20, 3), dart(20, 2)] },
+    ];
+    const { participants } = computeTournamentHighlights(legs);
+    expect(participants[0].oneSixtyPlus).toBe(1);
+    expect(participants[0].oneFortyPlus).toBe(1);
+    expect(participants[0].oneTwentyPlus).toBe(1);
+    expect(participants[0].oneHundredPlus).toBe(1);
   });
 
   it("leaves topCheckout and shortestLeg null when nobody has won a leg yet", () => {

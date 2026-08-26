@@ -1,4 +1,4 @@
-import { count180s, tonPlusCount, oneFortyPlusCount, average, computeCheckoutStats, type DartThrow } from "./dartStats";
+import { count180s, tonPlusCount, oneTwentyPlusCount, oneFortyPlusCount, oneSixtyPlusCount, average, computeCheckoutStats, type DartThrow } from "./dartStats";
 
 export interface TournamentStatsLegRow {
   player_id: string | null;
@@ -16,18 +16,20 @@ export interface TournamentStatsLegRow {
 export interface ParticipantHighlight {
   key: string;
   name: string;
-  /** Triple 16-20 — the "big" trebles that actually matter for a highlight reel, as opposed to
+  /** Triple 15-20 — the "big" trebles that actually matter for a highlight reel, as opposed to
    *  every treble including e.g. T5. */
   bigTriples: number;
   bulls: number;
   oneEighties: number;
-  /** The standard pro-stats scoring tiers alongside 180 — visits scoring >=140/>=100 in a single
-   *  turn, regardless of whether that turn won the leg. Deliberately NOT gated on `won`: these are
+  /** Scoring tiers alongside 180 — visits scoring >=160/>=140/>=120/>=100 in a single turn,
+   *  regardless of whether that turn won the leg. Deliberately NOT gated on `won`: these are
    *  scoring-power stats (how often does this player put up a big number), not checkout stats
    *  (did this player finish with a big number) — conflating the two was the previous design
-   *  here, and made 100+/140+ read as near-always-zero next to bigTriples/bulls since a winning
-   *  100+/140+ finish is comparatively rare while just scoring that much is common. */
+   *  here, and made these tiers read as near-always-zero next to bigTriples/bulls since a winning
+   *  big-number finish is comparatively rare while just scoring that much is common. */
+  oneSixtyPlus: number;
   oneFortyPlus: number;
+  oneTwentyPlus: number;
   oneHundredPlus: number;
   /** This player's own best checkout so far — the per-player counterpart to the tournament-wide
    *  topCheckout below (that one is "who holds the record right now", this is "what's each
@@ -101,24 +103,27 @@ export interface ParticipantStatsRow {
   bigTriples: number;
   bulls: number;
   oneEighties: number;
+  oneSixtyPlus: number;
   oneFortyPlus: number;
+  oneTwentyPlus: number;
   oneHundredPlus: number;
   highestCheckout: number;
 }
 
-const BIG_TRIPLE_NUMBERS = new Set([16, 17, 18, 19, 20]);
+const BIG_TRIPLE_NUMBERS = new Set([15, 16, 17, 18, 19, 20]);
 
 /** Shared "biggest highlight first" ranking, used by both computeTournamentHighlights (dart-based
  *  tallies only) and mergeTournamentStats (which layers tournamentAverage on top as one more,
  *  final tiebreak) — one function so the two can't silently drift the way they already had here
  *  (the merged list had picked up a `bulls` tiebreak the highlights-only sort never got). */
 function compareByHighlightMagnitude(
-  a: { oneEighties: number; oneFortyPlus: number; oneHundredPlus: number; highestCheckout: number; bigTriples: number; bulls: number },
+  a: { oneEighties: number; oneSixtyPlus: number; oneFortyPlus: number; oneTwentyPlus: number; oneHundredPlus: number; highestCheckout: number; bigTriples: number; bulls: number },
   b: typeof a,
 ): number {
   return (
-    b.oneEighties - a.oneEighties || b.oneFortyPlus - a.oneFortyPlus || b.oneHundredPlus - a.oneHundredPlus ||
-    b.highestCheckout - a.highestCheckout || b.bigTriples - a.bigTriples || b.bulls - a.bulls
+    b.oneEighties - a.oneEighties || b.oneSixtyPlus - a.oneSixtyPlus || b.oneFortyPlus - a.oneFortyPlus ||
+    b.oneTwentyPlus - a.oneTwentyPlus || b.oneHundredPlus - a.oneHundredPlus || b.highestCheckout - a.highestCheckout ||
+    b.bigTriples - a.bigTriples || b.bulls - a.bulls
   );
 }
 
@@ -139,7 +144,7 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
     const key = leg.player_id ?? leg.player_name;
     const entry = byKey.get(key) ?? {
       key, name: leg.player_name, bigTriples: 0, bulls: 0, oneEighties: 0,
-      oneFortyPlus: 0, oneHundredPlus: 0, highestCheckout: 0,
+      oneSixtyPlus: 0, oneFortyPlus: 0, oneTwentyPlus: 0, oneHundredPlus: 0, highestCheckout: 0,
     };
 
     for (const t of leg.throws) {
@@ -150,7 +155,9 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
       if (t.baseValue === 25) entry.bulls++;
     }
     entry.oneEighties += count180s(leg.throws);
+    entry.oneSixtyPlus += oneSixtyPlusCount(leg.throws);
     entry.oneFortyPlus += oneFortyPlusCount(leg.throws);
+    entry.oneTwentyPlus += oneTwentyPlusCount(leg.throws);
     entry.oneHundredPlus += tonPlusCount(leg.throws);
 
     if (leg.won) {
@@ -257,7 +264,7 @@ export function computeLegAveragesByGame(
  *  all, which is the common case for a hand-scored tournament) still gets a full row — the other
  *  side's fields just default to 0, not dropped from the table entirely. */
 export function mergeTournamentStats(highlights: TournamentHighlights, averages: TournamentAverages): ParticipantStatsRow[] {
-  const emptyHighlights = { bigTriples: 0, bulls: 0, oneEighties: 0, oneFortyPlus: 0, oneHundredPlus: 0, highestCheckout: 0 };
+  const emptyHighlights = { bigTriples: 0, bulls: 0, oneEighties: 0, oneSixtyPlus: 0, oneFortyPlus: 0, oneTwentyPlus: 0, oneHundredPlus: 0, highestCheckout: 0 };
   const byKey = new Map<string, ParticipantStatsRow>();
   for (const p of averages.participants) {
     byKey.set(p.key, { key: p.key, name: p.name, tournamentAverage: p.tournamentAverage, gamesPlayed: p.gamesPlayed, ...emptyHighlights });
@@ -267,7 +274,9 @@ export function mergeTournamentStats(highlights: TournamentHighlights, averages:
     entry.bigTriples = h.bigTriples;
     entry.bulls = h.bulls;
     entry.oneEighties = h.oneEighties;
+    entry.oneSixtyPlus = h.oneSixtyPlus;
     entry.oneFortyPlus = h.oneFortyPlus;
+    entry.oneTwentyPlus = h.oneTwentyPlus;
     entry.oneHundredPlus = h.oneHundredPlus;
     entry.highestCheckout = h.highestCheckout;
     byKey.set(h.key, entry);

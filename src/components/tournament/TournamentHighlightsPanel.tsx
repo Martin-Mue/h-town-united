@@ -38,7 +38,7 @@ function chunkInHalf<T>(items: T[]): T[][] {
  *  "gamesPlayed" exists specifically so someone eliminated round 1 on a single lucky visit
  *  doesn't sit at the top of every other sort looking like the tournament's best player forever
  *  — sorting by games played surfaces the small sample size instead of hiding it. */
-type StatSortKey = "default" | "average" | "oneEighties" | "oneFortyPlus" | "oneHundredPlus" | "highestCheckout" | "gamesPlayed";
+type StatSortKey = "default" | "average" | "oneEighties" | "oneSixtyPlus" | "oneFortyPlus" | "oneTwentyPlus" | "oneHundredPlus" | "highestCheckout" | "gamesPlayed";
 
 const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView }: TournamentHighlightsPanelProps) => {
   const { t } = useLanguage();
@@ -48,7 +48,9 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
   const sortedMerged =
     sortKey === "average" ? [...merged].sort((a, b) => b.tournamentAverage - a.tournamentAverage) :
     sortKey === "oneEighties" ? [...merged].sort((a, b) => b.oneEighties - a.oneEighties) :
+    sortKey === "oneSixtyPlus" ? [...merged].sort((a, b) => b.oneSixtyPlus - a.oneSixtyPlus) :
     sortKey === "oneFortyPlus" ? [...merged].sort((a, b) => b.oneFortyPlus - a.oneFortyPlus) :
+    sortKey === "oneTwentyPlus" ? [...merged].sort((a, b) => b.oneTwentyPlus - a.oneTwentyPlus) :
     sortKey === "oneHundredPlus" ? [...merged].sort((a, b) => b.oneHundredPlus - a.oneHundredPlus) :
     sortKey === "highestCheckout" ? [...merged].sort((a, b) => b.highestCheckout - a.highestCheckout) :
     sortKey === "gamesPlayed" ? [...merged].sort((a, b) => b.gamesPlayed - a.gamesPlayed) :
@@ -95,11 +97,13 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
           <th className="py-1 pr-2">{t("stats.player")}</th>
           {sortableHeader("gamesPlayed", t("tournament.gamesPlayedAbbrev"), t("tournament.gamesPlayedTooltip"))}
           {sortableHeader("average", "Ø", t("tournament.tournamentAverage"))}
-          {sortableHeader("oneEighties", "180", t("tournament.oneEightyTooltip"))}
-          {sortableHeader("oneFortyPlus", "140+", t("tournament.oneFortyPlusTooltip"))}
           {sortableHeader("oneHundredPlus", "100+", t("tournament.oneHundredPlusTooltip"))}
+          {sortableHeader("oneTwentyPlus", "120+", t("tournament.oneTwentyPlusTooltip"))}
+          {sortableHeader("oneFortyPlus", "140+", t("tournament.oneFortyPlusTooltip"))}
+          {sortableHeader("oneSixtyPlus", "160+", t("tournament.oneSixtyPlusTooltip"))}
+          {sortableHeader("oneEighties", "180", t("tournament.oneEightyTooltip"))}
+          <th className="py-1 px-1.5 text-center" title={t("tournament.bigTriplesTooltip")}>{t("tournament.bigTriplesAbbrev")}</th>
           {sortableHeader("highestCheckout", t("tournament.highestCheckoutAbbrev"), t("tournament.highestCheckoutTooltip"))}
-          <th className="py-1 pl-1.5 text-center" title={t("tournament.bigTriplesTooltip")}>{t("tournament.bigTriplesAbbrev")}</th>
         </tr>
       </thead>
       <tbody>
@@ -108,11 +112,13 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
             <td className="py-1.5 pr-2 font-medium truncate max-w-[140px]">{p.name}</td>
             <td className="py-1.5 px-1.5 text-center font-mono text-muted-foreground">{p.gamesPlayed || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono text-primary">{p.tournamentAverage > 0 ? p.tournamentAverage.toFixed(1) : "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.oneEighties || "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.oneFortyPlus || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono">{p.oneHundredPlus || "–"}</td>
-            <td className="py-1.5 px-1.5 text-center font-mono">{p.highestCheckout || "–"}</td>
-            <td className="py-1.5 pl-1.5 text-center font-mono">{p.bigTriples || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.oneTwentyPlus || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.oneFortyPlus || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.oneSixtyPlus || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.oneEighties || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.bigTriples || "–"}</td>
+            <td className="py-1.5 pl-1.5 text-center font-mono">{p.highestCheckout || "–"}</td>
           </tr>
         ))}
       </tbody>

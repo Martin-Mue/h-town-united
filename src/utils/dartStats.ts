@@ -51,9 +51,13 @@ const visitsScoringAtLeast = (throws: DartThrow[], threshold: number): number =>
 
 export const tonPlusCount = (throws: DartThrow[]): number => visitsScoringAtLeast(throws, 100);
 
-/** The other standard pro-stats scoring tier alongside tons and 180s — visits scoring >=140,
+/** The other scoring tiers alongside tons and 180s — visits scoring >=120/>=140/>=160,
  *  regardless of whether that visit won the leg (a scoring-power stat, not a checkout one). */
+export const oneTwentyPlusCount = (throws: DartThrow[]): number => visitsScoringAtLeast(throws, 120);
+
 export const oneFortyPlusCount = (throws: DartThrow[]): number => visitsScoringAtLeast(throws, 140);
+
+export const oneSixtyPlusCount = (throws: DartThrow[]): number => visitsScoringAtLeast(throws, 160);
 
 export const count180s = (throws: DartThrow[]): number =>
   visits(throws).filter((v) => v.reduce((s, t) => s + t.points, 0) === 180).length;
