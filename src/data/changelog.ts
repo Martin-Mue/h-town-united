@@ -1,0 +1,77 @@
+import type { Language } from "@/i18n/translations";
+
+export interface ChangelogEntry {
+  /** Stable, sortable ID — also the "have you seen this yet" comparison key (see
+   *  WhatsNewBanner.tsx), so once published, NEVER change or reuse an id, only append new ones. */
+  id: string;
+  /** ISO date, just for display under the title. */
+  date: string;
+  title: Record<Language, string>;
+  description: Record<Language, string>;
+}
+
+/** Short, non-technical "what's new" entries shown to returning users — see WhatsNewBanner.tsx
+ *  for how these get bundled and dismissed. Newest last; the banner sorts by id itself, but
+ *  keeping the file in chronological order makes it easier to append the next entry correctly. */
+export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: "2026-08-26-highlights",
+    date: "2026-08-26",
+    title: {
+      de: "Turnier-Highlights überarbeitet",
+      en: "Tournament highlights overhauled",
+      fr: "Highlights du tournoi revus",
+      pl: "Odświeżone najlepsze momenty turnieju",
+      nl: "Toernooi-highlights vernieuwd",
+      tr: "Turnuva öne çıkanları yenilendi",
+    },
+    description: {
+      de: "Neue Spalten (100+ bis 180, Checkout, Darts bis zum Checkout), anklickbare Spaltenköpfe zum Sortieren, und jede Partie lässt sich jetzt Leg für Leg aufklappen.",
+      en: "New columns (100+ through 180, checkout, darts to checkout), clickable column headers to sort, and every match can now be expanded leg by leg.",
+      fr: "Nouvelles colonnes (100+ à 180, checkout, fléchettes jusqu'au checkout), en-têtes de colonnes cliquables pour trier, et chaque match peut désormais être développé leg par leg.",
+      pl: "Nowe kolumny (100+ do 180, checkout, lotki do checkoutu), klikalne nagłówki kolumn do sortowania, a każdy mecz można teraz rozwinąć leg po legu.",
+      nl: "Nieuwe kolommen (100+ t/m 180, checkout, darts tot checkout), klikbare kolomkoppen om te sorteren, en elke wedstrijd is nu leg voor leg uit te klappen.",
+      tr: "Yeni sütunlar (100+'dan 180'e, checkout, checkout'a kadar dart), sıralamak için tıklanabilir sütun başlıkları ve artık her maç leg leg açılabiliyor.",
+    },
+  },
+  {
+    id: "2026-08-26-darts-to-checkout",
+    date: "2026-08-26",
+    title: {
+      de: "Darts bis zum Checkout überall sichtbar",
+      en: "Darts-to-checkout everywhere",
+      fr: "Fléchettes jusqu'au checkout partout",
+      pl: "Lotki do checkoutu wszędzie widoczne",
+      nl: "Darts tot checkout overal zichtbaar",
+      tr: "Checkout'a kadar dart her yerde görünür",
+    },
+    description: {
+      de: "Vereinsstatistik, Spielstatistik und Turnier-Highlights zeigen jetzt, wie wenige Darts jemand bis zum Checkout gebraucht hat — inklusive persönlichem Bestwert in der Rangliste.",
+      en: "Club stats, post-match stats, and tournament highlights now show how few darts it took someone to check out — including a personal-best ranking.",
+      fr: "Les statistiques du club, les statistiques post-match et les highlights du tournoi affichent désormais le nombre de fléchettes nécessaires pour un checkout — avec un classement du meilleur score personnel.",
+      pl: "Statystyki klubu, statystyki po meczu i najlepsze momenty turnieju pokazują teraz, ile lotek potrzeba było do checkoutu — wraz z rankingiem rekordu osobistego.",
+      nl: "Clubstatistieken, statistieken na de wedstrijd en toernooi-highlights tonen nu hoe weinig darts iemand nodig had om uit te checken — inclusief een persoonlijk-beste ranglijst.",
+      tr: "Kulüp istatistikleri, maç sonrası istatistikler ve turnuva öne çıkanları artık birinin checkout için kaç dart attığını gösteriyor — kişisel en iyi sıralamasıyla birlikte.",
+    },
+  },
+  {
+    id: "2026-08-26-bot-variance",
+    date: "2026-08-26",
+    title: {
+      de: "Bots fühlen sich echter an",
+      en: "Bots feel more real",
+      fr: "Les bots semblent plus réels",
+      pl: "Boty czują się bardziej realistyczne",
+      nl: "Bots voelen echter aan",
+      tr: "Botlar daha gerçek hissettiriyor",
+    },
+    description: {
+      de: "Jeder Bot-Gegner hat jetzt bessere und schlechtere Legs, statt jedes Mal exakt gleich zu spielen — genau wie ein echter Gegner auch mal einen besseren oder schlechteren Tag hat.",
+      en: "Every bot opponent now has better and worse legs instead of always playing exactly the same — just like a real opponent has a better or worse day sometimes.",
+      fr: "Chaque adversaire bot a désormais des legs meilleurs et moins bons au lieu de toujours jouer exactement pareil — tout comme un vrai adversaire a parfois un meilleur ou moins bon jour.",
+      pl: "Każdy przeciwnik-bot ma teraz lepsze i gorsze legi, zamiast zawsze grać dokładnie tak samo — tak jak prawdziwy przeciwnik miewa lepsze i gorsze dni.",
+      nl: "Elke bot-tegenstander heeft nu betere en slechtere legs in plaats van steeds precies hetzelfde te spelen — net als een echte tegenstander wel eens een betere of slechtere dag heeft.",
+      tr: "Her bot rakip artık her zaman aynı şekilde oynamak yerine daha iyi ve daha kötü leg'lere sahip — tıpkı gerçek bir rakibin bazen daha iyi ya da daha kötü bir günü olması gibi.",
+    },
+  },
+];

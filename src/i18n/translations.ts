@@ -35,6 +35,9 @@ export const translations: Record<string, Record<Language, string>> = {
   "header.offlinePendingTooltip": { de: "Offline gespeicherte Spiele — werden automatisch synchronisiert, sobald wieder eine Verbindung besteht.", en: "Offline-saved games — will sync automatically once a connection is back.", fr: "Parties enregistrées hors ligne — seront synchronisées automatiquement dès qu'une connexion sera rétablie.", pl: "Gry zapisane offline — zsynchronizują się automatycznie, gdy tylko połączenie wróci.", nl: "Offline opgeslagen potjes — worden automatisch gesynchroniseerd zodra er weer verbinding is.", tr: "Çevrimdışı kaydedilen oyunlar — bağlantı geri geldiğinde otomatik olarak senkronize edilecek." },
   "header.settings": { de: "Einstellungen", en: "Settings", fr: "Paramètres", pl: "Ustawienia", nl: "Instellingen", tr: "Ayarlar" },
   "header.signOut": { de: "Abmelden", en: "Sign out", fr: "Déconnexion", pl: "Wyloguj się", nl: "Afmelden", tr: "Çıkış yap" },
+  "whatsNew.heading": { de: "Neu", en: "New", fr: "Nouveau", pl: "Nowość", nl: "Nieuw", tr: "Yeni" },
+  "whatsNew.dismiss": { de: "Schließen", en: "Dismiss", fr: "Fermer", pl: "Zamknij", nl: "Sluiten", tr: "Kapat" },
+  "whatsNew.gotIt": { de: "Verstanden", en: "Got it", fr: "Compris", pl: "Rozumiem", nl: "Begrepen", tr: "Anladım" },
 
   // Settings.tsx
   "settings.title": { de: "Einstellungen", en: "Settings", fr: "Paramètres", pl: "Ustawienia", nl: "Instellingen", tr: "Ayarlar" },

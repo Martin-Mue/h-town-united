@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useOfflineGameQueue } from "@/hooks/useOfflineGameQueue";
 import { useOfflineMatchResultQueue } from "@/hooks/useOfflineMatchResultQueue";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import WhatsNewBanner from "@/components/WhatsNewBanner";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
 
@@ -141,6 +142,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
           </div>
         </header>
 
+        <WhatsNewBanner />
         <main className="flex-1 pb-20 md:pb-6">{children}</main>
       </div>
 
