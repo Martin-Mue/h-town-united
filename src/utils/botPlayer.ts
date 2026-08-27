@@ -5,19 +5,25 @@ import { isBustThrow, pointsFor } from "@/utils/x01Rules";
 /**
  * Bot tuning. 3-dart averages below are MEASURED, not aspirational — simulated 8000 visits per
  * config against a huge remaining score (so scoring behavior is never contaminated by
- * checkout-seeking) via the harness this comment's history came from, not hand-guessed:
+ * checkout-seeking) via the harness this comment's history came from, not hand-guessed. The whole
+ * ladder was deliberately pulled DOWN and tightened, not spread out — a club bot opponent has no
+ * use for a 150+ average, that's professional nine-dart-leg pace nobody here needs to play
+ * against:
  *   easy      (Lucky Luke)  ≈ 30  (unchanged)
- *   medium    (Robin Hood)  ≈ 38  (was ≈50 — lowered to actually cover the 30-45 range, which
- *                                  no bot's real average used to land in at all)
- *   hard      (The Machine) ≈ 58  (was ≈72 — lowered the same way for the 50-68 range)
- *   elite     (Dart Vader)  ≈ 128 (was ≈113 — raised to reach into where legendary used to
- *                                  start, since legendary itself is rarely the right pick for
- *                                  club-level play and didn't need to anchor that territory alone)
- *   legendary (The Prodigy) ≈ 170 (was ≈154 — pushed further out into genuinely rare
- *                                  near-perfect-leg pace now that elite covers the rest)
- * Easy/medium/hard were originally hand-tuned to "feel right" against real club play before this
- * reshuffle; elite/legendary were extrapolated the same way, unverified — both are now pinned to
- * real simulated numbers instead, so retuning any one tier only needs re-running that same
+ *   medium    (Robin Hood)  ≈ 44  (was ≈50 — nudged down a little, not into the old 30-45 gap
+ *                                  outright, since The Machine below now covers that territory)
+ *   hard      (The Machine) ≈ 57  (a new tier filling the real gap between Robin Hood and Dart
+ *                                  Vader below — previously nothing sat in the 50-68 range)
+ *   elite     (Dart Vader)  ≈ 71  (now literally the OLD hard/"The Machine" config — reused
+ *                                  verbatim, not re-derived, since that number was already right)
+ *   legendary (The Prodigy) ≈ 87  (was ≈154 — now targets what the doc comment always CLAIMED
+ *                                  the old elite/"Dart Vader" tier was, ≈88-95; the old elite
+ *                                  config itself actually simulated to ≈113, a real config never
+ *                                  matched that claimed number, so this tier is freshly derived
+ *                                  to actually land there rather than reusing that config as-is)
+ * Easy/medium/hard were originally hand-tuned to "feel right" against real club play before any
+ * of this; elite/legendary were extrapolated the same way, unverified. Every tier here is now
+ * pinned to a real simulated number, so retuning any one of them only needs re-running that same
  * measurement, not re-guessing from scratch.
  */
 export interface LevelConfig {
@@ -35,10 +41,10 @@ export interface LevelConfig {
 
 const LEVEL_CONFIG: Record<BotLevel, LevelConfig> = {
   easy: { miss: 0.35, randomSingle: 0.45, aimedSingle: 0.17, aimedTriple: 0.03, doubleHitChance: 0.10 },
-  medium: { miss: 0.28, randomSingle: 0.44, aimedSingle: 0.22, aimedTriple: 0.06, doubleHitChance: 0.16 },
+  medium: { miss: 0.23, randomSingle: 0.42, aimedSingle: 0.27, aimedTriple: 0.08, doubleHitChance: 0.17 },
   hard: { miss: 0.15, randomSingle: 0.36, aimedSingle: 0.35, aimedTriple: 0.14, doubleHitChance: 0.25 },
-  elite: { miss: 0.03, randomSingle: 0.10, aimedSingle: 0.27, aimedTriple: 0.60, doubleHitChance: 0.62 },
-  legendary: { miss: 0.005, randomSingle: 0.015, aimedSingle: 0.06, aimedTriple: 0.92, doubleHitChance: 0.80 },
+  elite: { miss: 0.10, randomSingle: 0.30, aimedSingle: 0.38, aimedTriple: 0.22, doubleHitChance: 0.32 },
+  legendary: { miss: 0.08, randomSingle: 0.24, aimedSingle: 0.35, aimedTriple: 0.33, doubleHitChance: 0.41 },
 };
 
 /** Picks a bot config whose rough 3-dart average is closest to `avgPerRound` — used to make a
@@ -48,10 +54,10 @@ const LEVEL_CONFIG: Record<BotLevel, LevelConfig> = {
  *  finish at all, mid-game — a real risk of stalling a match, not just an approximation).
  *  Cutoffs sit at the midpoint between each pair of tiers' own measured averages above. */
 export function configForAverage(avgPerRound: number): LevelConfig {
-  if (avgPerRound >= 149) return LEVEL_CONFIG.legendary;
-  if (avgPerRound >= 93) return LEVEL_CONFIG.elite;
-  if (avgPerRound >= 48) return LEVEL_CONFIG.hard;
-  if (avgPerRound >= 34) return LEVEL_CONFIG.medium;
+  if (avgPerRound >= 79) return LEVEL_CONFIG.legendary;
+  if (avgPerRound >= 64) return LEVEL_CONFIG.elite;
+  if (avgPerRound >= 50) return LEVEL_CONFIG.hard;
+  if (avgPerRound >= 37) return LEVEL_CONFIG.medium;
   return LEVEL_CONFIG.easy;
 }
 
