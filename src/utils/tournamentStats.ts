@@ -40,7 +40,11 @@ export interface ParticipantHighlight {
   /** This player's own fewest darts to finish a leg so far — the per-player counterpart to the
    *  tournament-wide shortestLeg below, same relationship highestCheckout has to topCheckout.
    *  Only ever set on a leg this player actually won. 0 if they haven't won a leg yet (a real
-   *  checkout is never 0 darts, so 0 doubles safely as "no data"). */
+   *  checkout is never 0 darts, so 0 doubles safely as "no data").
+   *  KNOWN LIMITATION: pools legs regardless of starting_score, unlike Statistics.tsx's own
+   *  fewest-darts record which is scoped by the active mode filter (301 needs fewer darts than
+   *  501 purely by arithmetic, not skill) — fine for a tournament using one mode throughout
+   *  (the common case), misleading for one whose round_configs actually mix modes. */
   shortestLeg: number;
 }
 

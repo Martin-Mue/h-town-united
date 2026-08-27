@@ -481,7 +481,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
                 {t("tournament.preliminaryRound")}
               </p>
-              <p className="text-[10px] text-primary/80 font-mono">{prelimMode} · BO{prelimBestOf}</p>
+              <p className="text-[10px] text-primary/80 font-mono">{prelimMode} · FT{Math.ceil(prelimBestOf / 2)}</p>
             </div>
             {canEditPrelim && (
               <button
@@ -547,7 +547,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
                 <div className={`mb-1 flex items-center gap-1 ${align === "center" ? "justify-center" : align === "right" ? "justify-end" : "justify-start"}`}>
                   <div className={align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"}>
                     <h3 className="text-xs font-display uppercase text-muted-foreground">{roundLabel(round, totalRounds)}</h3>
-                    <p className="text-[10px] text-primary/80 font-mono">{roundMode} · BO{roundBestOf}</p>
+                    <p className="text-[10px] text-primary/80 font-mono">{roundMode} · FT{Math.ceil(roundBestOf / 2)}</p>
                   </div>
                   {canEditRound && (
                     <button
@@ -1778,11 +1778,11 @@ const TournamentPage = () => {
               </Select>
             </div>
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.bestOfLegsLabel")}</label>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.firstToLegsLabel")}</label>
               <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
                 <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>)}
+                  {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -1906,7 +1906,7 @@ const TournamentPage = () => {
                       <Select value={String(cfg.bestOf)} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, bestOf: Number(v) } : c))}>
                         <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-card border-border">
-                          {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>)}
+                          {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -2077,7 +2077,7 @@ const TournamentPage = () => {
                       // above — roundConfigs may have one more entry than `rounds` when a
                       // preliminary round applies.
                       const isPrelimSlot = seeding.prelimPairs.length > 0 && i === rounds;
-                      return `${roundLabelFor(isPrelimSlot ? 0 : i + 1, rounds, t)}: ${c.mode} BO${c.bestOf}`;
+                      return `${roundLabelFor(isPrelimSlot ? 0 : i + 1, rounds, t)}: ${c.mode} FT${Math.ceil(c.bestOf / 2)}`;
                     }).join(" · ")}
                   </p>
                   <p>
@@ -2269,7 +2269,7 @@ const TournamentPage = () => {
               <p className="text-xs text-muted-foreground mb-1">vs.</p>
               <p className="text-lg font-display mb-4">{current.match.player2}</p>
               <p className="text-xs text-muted-foreground mb-4">
-                {resolveRoundMode(current.match.round)} · {t("stats.bestOf")} {resolveRoundBestOf(current.match.round)}
+                {resolveRoundMode(current.match.round)} · {t("stats.firstTo")} {Math.ceil(resolveRoundBestOf(current.match.round) / 2)}
               </p>
               {currentStartable ? (
                 <Button onClick={() => startFromBoard(current.match)} className="w-full font-display uppercase text-base py-6 gap-2">
@@ -2305,7 +2305,7 @@ const TournamentPage = () => {
         <div className="container flex items-center justify-between mb-2">
           <div>
             <h2 className="text-lg font-display uppercase leading-tight">{activeTournament.name}</h2>
-            <p className="text-xs text-muted-foreground">{t("tournament.koSystem")} · {activeTournament.players.length} {t("game.playersSuffix")} · {activeTournament.game_mode} · {t("stats.bestOf")} {activeTournament.best_of_legs}</p>
+            <p className="text-xs text-muted-foreground">{t("tournament.koSystem")} · {activeTournament.players.length} {t("game.playersSuffix")} · {activeTournament.game_mode} · {t("stats.firstTo")} {Math.ceil(activeTournament.best_of_legs / 2)}</p>
           </div>
           <div className="flex items-center gap-2">
             {/* Live-Spiel an/aus lives in the tournament edit form only now — a per-tournament
@@ -2725,11 +2725,11 @@ const TournamentPage = () => {
                   </Select>
                 </div>
                 <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.bestOfLegsLabel")}</label>
+                  <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.firstToLegsLabel")}</label>
                   <Select value={String(editRoundBestOf)} onValueChange={(v) => setEditRoundBestOf(Number(v))}>
                     <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-card border-border">
-                      {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>)}
+                      {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

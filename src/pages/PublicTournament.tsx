@@ -247,7 +247,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     return (
       <div className={`mb-1 ${align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"}`}>
         <h3 className="text-xs font-display uppercase text-muted-foreground">{roundLabel(round, totalRounds)}</h3>
-        <p className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · BO{cfg?.bestOf || fallbackBestOf}</p>
+        <p className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · FT{Math.ceil((cfg?.bestOf || fallbackBestOf) / 2)}</p>
       </div>
     );
   };
@@ -395,7 +395,7 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
                 {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />}
                 {roundLabel(round, totalRounds)}
               </h3>
-              <span className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · BO{cfg?.bestOf || fallbackBestOf}</span>
+              <span className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · FT{Math.ceil((cfg?.bestOf || fallbackBestOf) / 2)}</span>
             </div>
             {notReachedYet ? (
               <p className="px-4 py-2.5 text-xs text-muted-foreground">{t("pt.roundNotReachedYet")}</p>
@@ -592,7 +592,7 @@ const FormatStatusPage = ({
               return (
                 <li key={r} className="flex items-center justify-between">
                   <span className="text-muted-foreground">{roundLabel(r, totalRounds)}</span>
-                  <span className="font-mono text-primary">{cfg?.mode || tournament.game_mode} · BO{cfg?.bestOf || tournament.best_of_legs}</span>
+                  <span className="font-mono text-primary">{cfg?.mode || tournament.game_mode} · FT{Math.ceil((cfg?.bestOf || tournament.best_of_legs) / 2)}</span>
                 </li>
               );
             })}
@@ -601,7 +601,7 @@ const FormatStatusPage = ({
       ) : (
         <div className="rounded-xl border border-border bg-card p-5 flex items-center justify-between text-base">
           <span className="text-muted-foreground">{t("pt.formatLabel")}</span>
-          <span className="font-mono text-primary">{tournament.game_mode} · BO{tournament.best_of_legs}</span>
+          <span className="font-mono text-primary">{tournament.game_mode} · FT{Math.ceil(tournament.best_of_legs / 2)}</span>
         </div>
       )}
 
@@ -1127,7 +1127,7 @@ const PublicTournamentPage = () => {
                   </>
                 )}
               </span>
-              <span>{t.players.length} {tr("game.playersSuffix")} · {t.game_mode} BO{t.best_of_legs} · {boardsCount} {tr("camera.board")}{boardsCount > 1 ? "s" : ""}</span>
+              <span>{t.players.length} {tr("game.playersSuffix")} · {t.game_mode} FT{Math.ceil(t.best_of_legs / 2)} · {boardsCount} {tr("camera.board")}{boardsCount > 1 ? "s" : ""}</span>
             </p>
           </div>
         </div>

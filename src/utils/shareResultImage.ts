@@ -43,7 +43,7 @@ export async function renderResultImage(params: ShareResultParams): Promise<Blob
   ctx.fillText("H-TOWN UNITED", W / 2, 60);
   ctx.fillStyle = COLORS.muted;
   ctx.font = "16px sans-serif";
-  ctx.fillText(params.mode.toUpperCase() + (params.bestOfLegs > 1 ? ` · BEST OF ${params.bestOfLegs}` : ""), W / 2, 90);
+  ctx.fillText(params.mode.toUpperCase() + (params.bestOfLegs > 1 ? ` · FIRST TO ${Math.ceil(params.bestOfLegs / 2)}` : ""), W / 2, 90);
 
   ctx.fillStyle = COLORS.accent;
   ctx.font = "bold 52px sans-serif";

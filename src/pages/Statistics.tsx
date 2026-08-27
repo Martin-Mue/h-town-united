@@ -1152,10 +1152,10 @@ const StatisticsPage = () => {
             </Select>
           )}
           <Select value={filterBestOf} onValueChange={setFilterBestOf}>
-            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder={t("stats.bestOf")} /></SelectTrigger>
+            <SelectTrigger className="h-10 bg-muted border-border text-xs"><SelectValue placeholder={t("stats.firstTo")} /></SelectTrigger>
             <SelectContent className="bg-card border-border">
               <SelectItem value="all">{t("stats.allFormats")}</SelectItem>
-              {availableBestOf.map(n => <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>)}
+              {availableBestOf.map(n => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -1191,6 +1191,17 @@ const StatisticsPage = () => {
             <p className="text-[10px] text-muted-foreground mb-3">
               {filtersActive ? t("stats.valuesForFilteredPeriod") : t("stats.lifetimeValues")}
             </p>
+            {/* Fewer darts to checkout is the one ranking here that ISN'T comparable across
+               different starting scores (301 needs fewer darts than 501 purely by arithmetic,
+               nothing to do with skill) — every other stat on this leaderboard (average,
+               checkout %, ...) is fine either way. Point at the mode filter in the bar above
+               rather than duplicating a second mode picker down here. */}
+            {rankingFocusKey === "fewest_darts" && (
+              <p className="text-[10px] text-accent mb-3 flex items-center gap-1">
+                <Filter className="w-3 h-3 shrink-0" />
+                {filterMode !== "all" ? `${t("stats.fewestDartsModeScoped")} ${filterMode}` : t("stats.fewestDartsPickModeHint")}
+              </p>
+            )}
             {leaderboard.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">{t("stats.noPlayersYet")}</p>
             ) : (

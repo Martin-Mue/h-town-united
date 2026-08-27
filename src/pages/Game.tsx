@@ -389,7 +389,7 @@ const GamePage = () => {
     initialSnapshot ? "playing" : "setup"
   );
   const [mode, setMode] = useState<GameMode>("501");
-  const [bestOfLegs, setBestOfLegs] = useState(1);
+  const [bestOfLegs, setBestOfLegs] = useState(3);
   const [maxRoundsX01, setMaxRoundsX01] = useState<number>(0); // 0 = unlimited
   const [customStartScore, setCustomStartScore] = useState(501);
   const [numPlayers, setNumPlayers] = useState(2);
@@ -605,6 +605,25 @@ const GamePage = () => {
   useEffect(() => {
     fetchClubPlayers().then(setDbPlayers).catch((err) => console.error("fetchClubPlayers failed", err));
   }, []);
+
+  // Defaults player slot 1 to whoever's actually logged in (once their own claimed club profile
+  // — players.user_id — is known), so starting a casual game doesn't require re-picking yourself
+  // from the club-member popover every time. Skipped outright for a tournament-match launch,
+  // which always carries its own two named players via the prefill effect below and must win
+  // unconditionally — and only fires while slot 1 is still the untouched "Spieler 1" placeholder,
+  // so it can never clobber a name the user (or that same prefill effect) already set.
+  useEffect(() => {
+    if (searchParams.get("tid")) return;
+    const myId = session?.user?.id;
+    if (!myId || dbPlayers.length === 0) return;
+    const me = dbPlayers.find((p) => p.user_id === myId);
+    if (!me) return;
+    setPlayerNames((prev) => (prev[0] === DEFAULT_NAMES[0] ? [me.name, ...prev.slice(1)] : prev));
+    // searchParams is intentionally excluded — this is a one-time default-fill the moment both
+    // the session and club roster are known, not something that should re-run on every
+    // navigation-driven searchParams identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, dbPlayers]);
 
   // Prefill from "Spiel starten" on a tournament bracket match — reads the launch query
   // string once on mount. Everything it sets stays a normal, editable setup value; only
@@ -2063,7 +2082,7 @@ const GamePage = () => {
           <p className="text-lg font-display mb-1 truncate">{playerNames[0]}</p>
           <p className="text-xs text-muted-foreground mb-1">vs.</p>
           <p className="text-lg font-display mb-4 truncate">{playerNames[1]}</p>
-          <p className="text-xs text-muted-foreground mb-8">{mode} · {t("stats.bestOf")} {bestOfLegs}</p>
+          <p className="text-xs text-muted-foreground mb-8">{mode} · {t("stats.firstTo")} {Math.ceil(bestOfLegs / 2)}</p>
           <div className="font-display text-5xl text-primary tabular-nums mb-2">{boardStartGate === "clear" ? autoStartSecondsLeft : "…"}</div>
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-6">{t("game.autoStartingIn")}</p>
           <div className="flex gap-2">
@@ -2153,12 +2172,12 @@ const GamePage = () => {
           {mode !== "cricket" && (
             <>
               <div>
-                <label className="text-sm text-muted-foreground mb-1 block">{t("game.bestOfLegs")}</label>
+                <label className="text-sm text-muted-foreground mb-1 block">{t("game.firstToLegs")}</label>
                 <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))} disabled={isTournamentMatch}>
                   <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     {[1, 3, 5, 7, 9, 11].map((n) => (
-                      <SelectItem key={n} value={String(n)}>{t("stats.bestOf")} {n}</SelectItem>
+                      <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
