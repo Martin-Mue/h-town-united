@@ -629,10 +629,17 @@ const TournamentPage = () => {
   const { t, language } = useLanguage();
   const [phase, setPhase] = useState<"list" | "setup" | "bracket">("list");
   const [tournaments, setTournaments] = useState<TournamentRecord[]>([]);
+  // Which half of the list-phase overview is showing — finished tournaments used to pile up
+  // forever in the same flat list as the ones still being played, pushing the tournament you
+  // actually care about further down every time one wrapped up. Defaults to "active" since
+  // that's the one worth landing on; a fresh club has nothing "finished" yet either way.
+  const [tournamentListTab, setTournamentListTab] = useState<"active" | "finished">("active");
+  const activeTournamentsList = tournaments.filter((tn) => tn.status !== "finished");
+  const finishedTournamentsList = tournaments.filter((tn) => tn.status === "finished");
   // Hook call stays unconditional (top-level, not inside the "list" phase's early return) since
   // this component branches on `phase` with early returns — a hook called only inside one of
   // those branches would violate the rules of hooks the moment `phase` itself changes.
-  const pagedTournaments = usePagedList(tournaments);
+  const pagedTournaments = usePagedList(tournamentListTab === "active" ? activeTournamentsList : finishedTournamentsList);
   // Tournament-wide highlights (heatmap + per-participant 180s/big triples/bull/ton-plus
   // finishes) — fetched lazily on first expand rather than every time a tournament opens, since
   // it pulls every leg's full throw history for the tournament and most opens never look at it.
@@ -1656,12 +1663,34 @@ const TournamentPage = () => {
           </div>
         </div>
 
+        {!loading && tournaments.length > 0 && (
+          <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0 mb-4">
+            <button
+              onClick={() => setTournamentListTab("active")}
+              className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wide ${tournamentListTab === "active" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {t("tournament.tabActive")} ({activeTournamentsList.length})
+            </button>
+            <button
+              onClick={() => setTournamentListTab("finished")}
+              className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wide border-l border-border ${tournamentListTab === "finished" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {t("tournament.tabFinished")} ({finishedTournamentsList.length})
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div role="status" aria-label={t("common.loading")} className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
         ) : tournaments.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p className="text-sm">{t("tournament.noTournamentsYet")}</p>
+          </div>
+        ) : (tournamentListTab === "active" ? activeTournamentsList : finishedTournamentsList).length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">{tournamentListTab === "active" ? t("tournament.noActiveTournaments") : t("tournament.noFinishedTournaments")}</p>
           </div>
         ) : (
           <div className="space-y-3">

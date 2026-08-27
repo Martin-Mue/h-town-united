@@ -603,6 +603,10 @@ export const translations: Record<string, Record<Language, string>> = {
   "tournament.series": { de: "Serien", en: "Series", fr: "Séries", pl: "Serie", nl: "Reeksen", tr: "Seriler" },
   "tournament.newTournament": { de: "Neues Turnier", en: "New tournament", fr: "Nouveau tournoi", pl: "Nowy turniej", nl: "Nieuw toernooi", tr: "Yeni turnuva" },
   "tournament.noTournamentsYet": { de: "Noch keine Turniere. Erstelle dein erstes!", en: "No tournaments yet. Create your first one!", fr: "Pas encore de tournois. Crée le premier !", pl: "Jeszcze żadnych turniejów. Stwórz swój pierwszy!", nl: "Nog geen toernooien. Maak je eerste aan!", tr: "Henüz turnuva yok. İlkini oluştur!" },
+  "tournament.tabActive": { de: "Aktiv", en: "Active", fr: "Actifs", pl: "Aktywne", nl: "Actief", tr: "Aktif" },
+  "tournament.tabFinished": { de: "Abgeschlossen", en: "Finished", fr: "Terminés", pl: "Zakończone", nl: "Afgerond", tr: "Tamamlanan" },
+  "tournament.noActiveTournaments": { de: "Keine aktiven Turniere.", en: "No active tournaments.", fr: "Aucun tournoi actif.", pl: "Brak aktywnych turniejów.", nl: "Geen actieve toernooien.", tr: "Aktif turnuva yok." },
+  "tournament.noFinishedTournaments": { de: "Noch keine abgeschlossenen Turniere.", en: "No finished tournaments yet.", fr: "Aucun tournoi terminé pour l'instant.", pl: "Jeszcze żadnych zakończonych turniejów.", nl: "Nog geen afgeronde toernooien.", tr: "Henüz tamamlanan turnuva yok." },
 
   // Tournament.tsx — setup form.
   "common.back": { de: "Zurück", en: "Back", fr: "Retour", pl: "Wstecz", nl: "Terug", tr: "Geri" },
