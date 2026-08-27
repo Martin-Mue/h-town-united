@@ -74,4 +74,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Her bot rakip artık her zaman aynı şekilde oynamak yerine daha iyi ve daha kötü leg'lere sahip — tıpkı gerçek bir rakibin bazen daha iyi ya da daha kötü bir günü olması gibi.",
     },
   },
+  {
+    id: "2026-08-26-tournament-tabs",
+    date: "2026-08-26",
+    title: {
+      de: "Turnierliste: Aktiv & Abgeschlossen",
+      en: "Tournament list: Active & Finished",
+      fr: "Liste des tournois : actifs et terminés",
+      pl: "Lista turniejów: aktywne i zakończone",
+      nl: "Toernooilijst: actief & afgerond",
+      tr: "Turnuva listesi: Aktif ve Tamamlanan",
+    },
+    description: {
+      de: "Abgeschlossene Turniere landen jetzt in einem eigenen Tab, statt sich mit den laufenden in einer Liste zu stapeln.",
+      en: "Finished tournaments now live in their own tab instead of piling up together with the ones still running.",
+      fr: "Les tournois terminés ont désormais leur propre onglet au lieu de s'accumuler avec ceux en cours.",
+      pl: "Zakończone turnieje mają teraz własną zakładkę, zamiast piętrzyć się razem z trwającymi.",
+      nl: "Afgeronde toernooien staan nu in een eigen tab in plaats van zich op te stapelen bij de lopende.",
+      tr: "Tamamlanan turnuvalar artık devam edenlerle üst üste yığılmak yerine kendi sekmesinde yer alıyor.",
+    },
+  },
 ];
