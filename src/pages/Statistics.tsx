@@ -98,7 +98,7 @@ const StatisticsPage = () => {
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
   const [confirmDeleteClipId, setConfirmDeleteClipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo" | "one_eighties" | "highest_checkout" | "mpr" | "best_game_avg">("average");
+  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo" | "one_eighties" | "highest_checkout" | "mpr" | "best_game_avg" | "fewest_darts">("average");
   const [rankingFocusKey, setRankingFocusKey] = useState<typeof sortBy | null>(null);
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
@@ -352,6 +352,33 @@ const StatisticsPage = () => {
       .reduce((best, p) => (p.checkout.highestCheckout > best.val ? { name: p.name, val: p.checkout.highestCheckout } : best), { name: "-", val: 0 });
   }, [advancedByPlayer]);
 
+  // Fewest darts needed to finish a leg — the classic "how fast can you close it out" record.
+  // Same X01-only/filtered-games/real-player-id scope as advancedByPlayer above; only WON legs
+  // count (a checkout, by definition, means finishing the leg) — a lost leg has no "darts to
+  // checkout" of its own. 0 doubles as "no won leg yet" since a real checkout is never 0 darts.
+  const playerShortestLegById = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const modeById = new Map(games.map((g) => [g.id, g.mode]));
+    const result: Record<string, number> = {};
+    gameLegs.forEach((leg) => {
+      if (!filteredIds.has(leg.game_id) || !leg.player_id || !leg.won) return;
+      if (modeById.get(leg.game_id) === "cricket") return;
+      if (!Array.isArray(leg.throws) || leg.throws.length === 0) return;
+      if (result[leg.player_id] === undefined || leg.throws.length < result[leg.player_id]) {
+        result[leg.player_id] = leg.throws.length;
+      }
+    });
+    return result;
+  }, [gameLegs, filteredGames, games]);
+
+  const bestShortestLeg = useMemo(() => {
+    return Object.entries(playerShortestLegById).reduce((best, [id, darts]) => {
+      const p = players.find((pl) => pl.id === id);
+      if (!p) return best;
+      return best.val === 0 || darts < best.val ? { name: p.name, val: darts } : best;
+    }, { name: "-", val: 0 });
+  }, [playerShortestLegById, players]);
+
   // Cricket-specific stats (MPR, hit rate) — separate from the X01-only checkout/first-9 bucket above.
   const cricketByPlayer = useMemo(() => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
@@ -508,9 +535,16 @@ const StatisticsPage = () => {
       }
       if (sortBy === "mpr") return (cricketByPlayer[b.id]?.cricket.mpr ?? 0) - (cricketByPlayer[a.id]?.cricket.mpr ?? 0);
       if (sortBy === "best_game_avg") return (playerBestGameAvgById[b.id] ?? 0) - (playerBestGameAvgById[a.id] ?? 0);
+      if (sortBy === "fewest_darts") {
+        // Fewer is better here, unlike every other stat above — nobody's own value at all
+        // (never won a leg yet) sorts to the very end instead of tying for first at 0.
+        const da = playerShortestLegById[a.id] ?? Infinity;
+        const db = playerShortestLegById[b.id] ?? Infinity;
+        return da - db;
+      }
       return (b.elo_rating ?? 1000) - (a.elo_rating ?? 1000); // sortBy === "elo", the last remaining case
     });
-  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive, player180TotalById, cricketByPlayer, playerBestGameAvgById]);
+  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive, player180TotalById, cricketByPlayer, playerBestGameAvgById, playerShortestLegById]);
 
   const pagedLeaderboard = usePagedList(leaderboard);
 
@@ -530,6 +564,7 @@ const StatisticsPage = () => {
       case "highest_checkout": return t("stats.highestFinish");
       case "mpr": return "MPR";
       case "best_game_avg": return t("stats.bestGameAverage");
+      case "fewest_darts": return t("stats.fewestDartsToCheckout");
     }
   };
 
@@ -546,6 +581,7 @@ const StatisticsPage = () => {
       case "highest_checkout": return advancedByPlayer[p.id]?.checkout.highestCheckout ?? 0;
       case "mpr": return (cricketByPlayer[p.id]?.cricket.mpr ?? 0).toFixed(2);
       case "best_game_avg": return (playerBestGameAvgById[p.id] ?? 0).toFixed(1);
+      case "fewest_darts": return playerShortestLegById[p.id] ?? "–";
       default: return Math.round(p.elo_rating ?? 1000); // elo
     }
   };
@@ -1207,6 +1243,7 @@ const StatisticsPage = () => {
               { labelKey: "stats.highestFinish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, color: "text-accent", sortKey: "highest_checkout" as const },
               { labelKey: "stats.bestCheckoutPct", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, color: "text-secondary", sortKey: "checkout" as const },
               { labelKey: "stats.bestMpr", value: bestMpr.val ? bestMpr.val.toFixed(2) : "-", sub: bestMpr.name, icon: Target, color: "text-accent", sortKey: "mpr" as const },
+              { labelKey: "stats.fewestDartsToCheckout", value: bestShortestLeg.val || "-", sub: bestShortestLeg.name, icon: Hash, color: "text-destructive", sortKey: "fewest_darts" as const },
             ].map(s => (
               <button key={s.labelKey} onClick={() => { setSortBy(s.sortKey); setRankingFocusKey(s.sortKey); }}
                 className="bg-card rounded-xl p-3 border border-border text-left hover:border-primary/40 transition-colors">

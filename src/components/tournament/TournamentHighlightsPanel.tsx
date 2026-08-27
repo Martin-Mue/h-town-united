@@ -38,7 +38,7 @@ function chunkInHalf<T>(items: T[]): T[][] {
  *  "gamesPlayed" exists specifically so someone eliminated round 1 on a single lucky visit
  *  doesn't sit at the top of every other sort looking like the tournament's best player forever
  *  — sorting by games played surfaces the small sample size instead of hiding it. */
-type StatSortKey = "default" | "average" | "oneEighties" | "oneSixtyPlus" | "oneFortyPlus" | "oneTwentyPlus" | "oneHundredPlus" | "highestCheckout" | "gamesPlayed";
+type StatSortKey = "default" | "average" | "oneEighties" | "oneSixtyPlus" | "oneFortyPlus" | "oneTwentyPlus" | "oneHundredPlus" | "highestCheckout" | "shortestLeg" | "gamesPlayed";
 
 const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView }: TournamentHighlightsPanelProps) => {
   const { t } = useLanguage();
@@ -53,6 +53,9 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
     sortKey === "oneTwentyPlus" ? [...merged].sort((a, b) => b.oneTwentyPlus - a.oneTwentyPlus) :
     sortKey === "oneHundredPlus" ? [...merged].sort((a, b) => b.oneHundredPlus - a.oneHundredPlus) :
     sortKey === "highestCheckout" ? [...merged].sort((a, b) => b.highestCheckout - a.highestCheckout) :
+    // Fewer is better here, unlike every other stat above — nobody's own value at all (never
+    // won a leg yet) sorts to the very end instead of tying for first at 0.
+    sortKey === "shortestLeg" ? [...merged].sort((a, b) => (a.shortestLeg || Infinity) - (b.shortestLeg || Infinity)) :
     sortKey === "gamesPlayed" ? [...merged].sort((a, b) => b.gamesPlayed - a.gamesPlayed) :
     merged;
   const paged = usePagedList(sortedMerged, liveView ? { collapseAt: Infinity } : undefined);
@@ -104,6 +107,7 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
           {sortableHeader("oneEighties", "180", t("tournament.oneEightyTooltip"))}
           <th className="py-1 px-1.5 text-center" title={t("tournament.bigTriplesTooltip")}>{t("tournament.bigTriplesAbbrev")}</th>
           {sortableHeader("highestCheckout", t("tournament.highestCheckoutAbbrev"), t("tournament.highestCheckoutTooltip"))}
+          {sortableHeader("shortestLeg", t("tournament.shortestLegAbbrev"), t("tournament.shortestLegTooltip"))}
         </tr>
       </thead>
       <tbody>
@@ -118,7 +122,8 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
             <td className="py-1.5 px-1.5 text-center font-mono">{p.oneSixtyPlus || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono">{p.oneEighties || "–"}</td>
             <td className="py-1.5 px-1.5 text-center font-mono">{p.bigTriples || "–"}</td>
-            <td className="py-1.5 pl-1.5 text-center font-mono">{p.highestCheckout || "–"}</td>
+            <td className="py-1.5 px-1.5 text-center font-mono">{p.highestCheckout || "–"}</td>
+            <td className="py-1.5 pl-1.5 text-center font-mono">{p.shortestLeg || "–"}</td>
           </tr>
         ))}
       </tbody>
@@ -157,11 +162,27 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
               <div className={`flex items-center justify-between gap-2 ${rowText} px-2.5 py-1.5`}>{rowContent}</div>
             )}
             {expandable && expanded && (
-              <div className="space-y-1 px-2.5 pb-1.5 pl-9">
+              <div className="space-y-1.5 px-2.5 pb-1.5 pl-9">
                 {g.legs!.map((leg, i) => (
-                  <div key={i} className={`flex items-center justify-between ${headText} text-muted-foreground`}>
-                    <span>{t("game.leg")} {i + 1}</span>
-                    <span className="font-mono">{leg.player1Average.toFixed(1)} : {leg.player2Average.toFixed(1)}</span>
+                  <div key={i}>
+                    <div className={`flex items-center justify-between ${headText} text-muted-foreground`}>
+                      <span>{t("game.leg")} {i + 1}</span>
+                      <span className="font-mono">{leg.player1Average.toFixed(1)} : {leg.player2Average.toFixed(1)}</span>
+                    </div>
+                    {/* Darts/Runden this leg took each side — the winner's count is "darts to
+                       checkout", the loser's is "darts thrown before the opponent's checkout";
+                       same raw number either way, so the winner's side is just highlighted
+                       rather than given separate wording that wouldn't fit here anyway. */}
+                    <div className={`flex items-center justify-between ${headText} text-muted-foreground/70`}>
+                      <span>{t("game.throwsCount")} / {t("game.rounds")}</span>
+                      <span className="font-mono">
+                        <span className={leg.winner === 1 ? "text-primary" : ""}>{leg.player1Darts}</span>
+                        {" ("}{Math.ceil(leg.player1Darts / 3)}{")"}
+                        {" : "}
+                        <span className={leg.winner === 2 ? "text-primary" : ""}>{leg.player2Darts}</span>
+                        {" ("}{Math.ceil(leg.player2Darts / 3)}{")"}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -185,12 +206,10 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
       )}
       {hasHeadline && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {/* Average/180s/checkout each double as a sort trigger for the full table below — same
-           *  "tile doubles as a link into the full ranking" idea as the Records tiles on the
-           *  Statistics page, just re-sorting the table already right here instead of navigating
-           *  elsewhere. Tapping the already-active one returns to the default ranking. No natural
-           *  table column to sort by for shortestLeg (only a single tournament-wide record is
-           *  tracked, not a per-player list), so that one stays a plain, non-interactive chip. */}
+          {/* Every chip doubles as a sort trigger for the full table below — same "tile doubles
+           *  as a link into the full ranking" idea as the Records tiles on the Statistics page,
+           *  just re-sorting the table already right here instead of navigating elsewhere.
+           *  Tapping the already-active one returns to the default ranking. */}
           {leadingAverage && (
             <button
               type="button"
@@ -225,11 +244,15 @@ const TournamentHighlightsPanel = ({ highlights, averages, showHeatmap, liveView
             </button>
           )}
           {highlights.shortestLeg && (
-            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-center">
+            <button
+              type="button"
+              onClick={() => setSortKey((k) => (k === "shortestLeg" ? "default" : "shortestLeg"))}
+              className={`rounded-lg border px-3 py-2 text-center transition-colors ${sortKey === "shortestLeg" ? "border-primary bg-primary/10" : "border-border bg-muted/20 hover:border-primary/40"}`}
+            >
               <p className={`${headText} uppercase tracking-wide text-muted-foreground`}>{t("tournament.shortestLegLabel")}</p>
               <p className="font-display text-lg text-primary">{highlights.shortestLeg.darts} <span className="text-xs font-sans">{t("game.dartsSuffix")}</span></p>
               <p className={`${rowText} truncate text-muted-foreground`}>{highlights.shortestLeg.name}</p>
-            </div>
+            </button>
           )}
         </div>
       )}

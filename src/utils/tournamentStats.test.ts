@@ -56,6 +56,16 @@ describe("computeTournamentHighlights", () => {
     expect(participants[0].highestCheckout).toBe(120);
   });
 
+  it("tracks each participant's own fewest darts to checkout, ignoring lost legs", () => {
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: true, throws: [dart(20, 3), dart(20, 3), dart(20, 3), dart(20, 3), dart(20, 3), dart(1, 1)] }, // 6 darts
+      { player_id: "p1", player_name: "Martin", starting_score: 40, won: true, throws: [dart(20, 2)] }, // 1 dart — new personal best
+      { player_id: "p1", player_name: "Martin", starting_score: 40, won: false, throws: [dart(20, 1)] }, // lost, must not count as a 1-darter
+    ];
+    const { participants } = computeTournamentHighlights(legs);
+    expect(participants[0].shortestLeg).toBe(1);
+  });
+
   it("groups guests without a player_id by name instead of merging them together", () => {
     const legs: TournamentStatsLegRow[] = [
       { player_id: null, player_name: "Gast Uwe", starting_score: 501, won: false, throws: [dart(20, 3), dart(20, 3), dart(20, 3)] },
@@ -263,8 +273,8 @@ describe("computeLegAveragesByGame", () => {
     const byGame = computeLegAveragesByGame(legs, games);
     const legAverages = byGame.get("g1")!;
     expect(legAverages).toHaveLength(2);
-    expect(legAverages[0]).toEqual({ player1Average: 180, player2Average: 3 });
-    expect(legAverages[1]).toEqual({ player1Average: 60, player2Average: 120 });
+    expect(legAverages[0]).toEqual({ player1Average: 180, player2Average: 3, player1Darts: 3, player2Darts: 3, winner: 1 });
+    expect(legAverages[1]).toEqual({ player1Average: 60, player2Average: 120, player1Darts: 1, player2Darts: 1, winner: 2 });
   });
 
   it("skips legs with no throws recorded or missing game_id/leg_number", () => {

@@ -2879,6 +2879,7 @@ const GamePage = () => {
 
                   {[
                     { l: t("game.throwsCount"), v: (p: typeof postGameStats[number]) => statFor(p).totalThrows },
+                    { l: t("game.rounds"), v: (p: typeof postGameStats[number]) => Math.ceil(statFor(p).totalThrows / 3) },
                     { l: t("game.checkoutRate"), v: (p: typeof postGameStats[number]) => {
                         const c = statFor(p).checkout;
                         return c.attempts > 0 ? `${c.hits}/${c.attempts} (${c.percentage.toFixed(0)}%)` : "–";
