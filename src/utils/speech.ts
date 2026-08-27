@@ -134,11 +134,16 @@ export interface SpeechPart {
 // just appends, it doesn't interrupt) — speakSequence used to defeat that on every single call
 // by cancel()-ing unconditionally, which is what cut announcements off mid-sentence the moment a
 // second one fired shortly after (reported 2026-08-18: bot turns following right behind a human
-// round). Letting the natural queue do its job fixes that; this cap only exists so a fast burst
-// of rounds (several bot turns in a row) can't leave the caller narrating further and further
-// behind live play — once too much has piled up, jump the queue instead of drifting later and
-// later out of sync.
-const MAX_QUEUED_SEQUENCES = 1;
+// round). Letting the natural queue do its job fixed that, but allowing even ONE full sequence to
+// queue behind the current one turned out to be too generous in a genuinely fast-paced game
+// (reported 2026-08-26: the caller talking almost nonstop and steadily falling further behind
+// live play) — two whole announcements' worth of utterances is enough delay to visibly drift.
+// 0 means a new announcement always jumps the queue the moment ANYTHING is still pending (even
+// mid-utterance), trading a rarer mid-sentence cut-off for never accumulating a backlog — the
+// right side of that tradeoff for a caller that's supposed to be reacting live, not narrating a
+// replay. A normal-paced game (one round's speech finishing well before the next round starts)
+// never touches this path at all; it only fires once events are genuinely outrunning the voice.
+const MAX_QUEUED_SEQUENCES = 0;
 let pendingSequenceCount = 0;
 
 export function speakSequence(parts: SpeechPart[], lang = "de-DE") {
