@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
 import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
-import { simulateBotVisit, simulateBotCricketDart, configForAverage, type LevelConfig } from "@/utils/botPlayer";
+import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, type LevelConfig } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
   highestVisit as getHighest3DartRound,
@@ -586,6 +586,11 @@ const GamePage = () => {
   const [botThinking, setBotThinking] = useState(false);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const botPlanRef = useRef<{ key: string; darts: DartThrow[]; applied: number } | null>(null);
+  // A rolled-per-leg bot config, keyed by "${playerIndex}-${legNumber}" — see rollConfigForLevel's
+  // doc comment for why this exists (a real opponent doesn't play the exact same average every
+  // leg). Never explicitly cleared between legs (a new leg number is simply a cache miss, which
+  // rolls its own fresh entry) — only reset on a genuinely new game, same as botPlanRef.
+  const botLegConfigRef = useRef<Record<string, LevelConfig>>({});
   const [checkoutRates, setCheckoutRates] = useState<Record<string, number>>({});
   // Mirrors checkoutRates for the "already fetched this player" guard below — read via the ref
   // (not the checkoutRates closure) specifically so that effect doesn't need checkoutRates in its
@@ -940,6 +945,7 @@ const GamePage = () => {
     setTurnStartRemaining(newGame.currentLeg.remaining[starter] ?? startScore);
     setUndoStack([]);
     botPlanRef.current = null;
+    botLegConfigRef.current = {};
     pendingGameIdRef.current = crypto.randomUUID();
     setQueuedOffline(false);
     if (warmupEnabled) {
@@ -1804,6 +1810,7 @@ const GamePage = () => {
   const resetGame = () => {
     if (botTimerRef.current) { clearTimeout(botTimerRef.current); botTimerRef.current = null; }
     botPlanRef.current = null;
+    botLegConfigRef.current = {};
     clearActiveGameSnapshot();
     setPhase("setup"); setGame(null); setGameSaved(false); setShowDetailedStats(false);
     setSelectedLegTab("all");
@@ -1845,6 +1852,13 @@ const GamePage = () => {
         if (seq && seq.length > 0) avgPerRound = (game.startScore / seq.length) * 3;
       }
       if (avgPerRound !== null) botConfig = configForAverage(avgPerRound);
+    } else if (mode !== "cricket") {
+      // Not a Geist-bot: still don't play the exact same average every leg — a real opponent
+      // has better and worse legs too. Rolled once per (player, leg) and cached, not re-rolled
+      // per dart, so a leg stays internally consistent while the NEXT leg gets its own fresh
+      // "how's this leg going for them" roll. See rollConfigForLevel's own doc comment.
+      const legKey = `${idx}-${game.currentLeg.legNumber}`;
+      botConfig = botLegConfigRef.current[legKey] ??= rollConfigForLevel(level);
     }
 
     botTimerRef.current = setTimeout(() => {

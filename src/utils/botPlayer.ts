@@ -3,28 +3,23 @@ import { getCheckoutSuggestion } from "@/utils/checkoutTable";
 import { isBustThrow, pointsFor } from "@/utils/x01Rules";
 
 /**
- * Bot tuning. 3-dart averages below are MEASURED, not aspirational — simulated 8000 visits per
+ * Bot tuning. 3-dart averages below are MEASURED, not aspirational — simulated 16000 visits per
  * config against a huge remaining score (so scoring behavior is never contaminated by
  * checkout-seeking) via the harness this comment's history came from, not hand-guessed. The whole
- * ladder was deliberately pulled DOWN and tightened, not spread out — a club bot opponent has no
- * use for a 150+ average, that's professional nine-dart-leg pace nobody here needs to play
- * against:
- *   easy      (Lucky Luke)  ≈ 30  (unchanged)
- *   medium    (Robin Hood)  ≈ 44  (was ≈50 — nudged down a little, not into the old 30-45 gap
- *                                  outright, since The Machine below now covers that territory)
- *   hard      (The Machine) ≈ 57  (a new tier filling the real gap between Robin Hood and Dart
- *                                  Vader below — previously nothing sat in the 50-68 range)
- *   elite     (Dart Vader)  ≈ 71  (now literally the OLD hard/"The Machine" config — reused
- *                                  verbatim, not re-derived, since that number was already right)
- *   legendary (The Prodigy) ≈ 87  (was ≈154 — now targets what the doc comment always CLAIMED
- *                                  the old elite/"Dart Vader" tier was, ≈88-95; the old elite
- *                                  config itself actually simulated to ≈113, a real config never
- *                                  matched that claimed number, so this tier is freshly derived
- *                                  to actually land there rather than reusing that config as-is)
- * Easy/medium/hard were originally hand-tuned to "feel right" against real club play before any
- * of this; elite/legendary were extrapolated the same way, unverified. Every tier here is now
- * pinned to a real simulated number, so retuning any one of them only needs re-running that same
- * measurement, not re-guessing from scratch.
+ * ladder densely covers 30-100 — the club's actual most-commonly-played average range — with each
+ * level's own config sitting at the CENTER of a real per-level RANGE (see BOT_LEVEL_RANGES below),
+ * not a single fixed number:
+ *   easy      (Lucky Luke)  ≈ 37, range 30-40
+ *   medium    (Robin Hood)  ≈ 44, range 40-50
+ *   hard      (The Machine) ≈ 55, range 50-60
+ *   elite     (Dart Vader)  ≈ 71, range 60-80
+ *   legendary (The Prodigy) ≈ 89, range 80-100
+ * A real opponent doesn't play the exact same average every leg — some legs go better, some
+ * worse — so a bot's EFFECTIVE config for a given leg is rolled fresh from a random point in its
+ * level's range (rollConfigForLevel below), not pinned to the anchor config above every time.
+ * configForAverage interpolates smoothly between the five anchors instead of snapping to the
+ * nearest one, so a rolled in-between target (or a Ghost-mode target average) actually lands
+ * close to where it should, not wherever the nearest fixed tier happens to sit.
  */
 export interface LevelConfig {
   /** probability of a complete miss on a scoring dart */
@@ -40,25 +35,85 @@ export interface LevelConfig {
 }
 
 const LEVEL_CONFIG: Record<BotLevel, LevelConfig> = {
-  easy: { miss: 0.35, randomSingle: 0.45, aimedSingle: 0.17, aimedTriple: 0.03, doubleHitChance: 0.10 },
-  medium: { miss: 0.23, randomSingle: 0.42, aimedSingle: 0.27, aimedTriple: 0.08, doubleHitChance: 0.17 },
-  hard: { miss: 0.15, randomSingle: 0.36, aimedSingle: 0.35, aimedTriple: 0.14, doubleHitChance: 0.25 },
-  elite: { miss: 0.10, randomSingle: 0.30, aimedSingle: 0.38, aimedTriple: 0.22, doubleHitChance: 0.32 },
-  legendary: { miss: 0.08, randomSingle: 0.24, aimedSingle: 0.35, aimedTriple: 0.33, doubleHitChance: 0.41 },
+  easy: { miss: 0.30, randomSingle: 0.44, aimedSingle: 0.20, aimedTriple: 0.06, doubleHitChance: 0.13 },
+  medium: { miss: 0.22, randomSingle: 0.42, aimedSingle: 0.28, aimedTriple: 0.08, doubleHitChance: 0.18 },
+  hard: { miss: 0.16, randomSingle: 0.37, aimedSingle: 0.34, aimedTriple: 0.13, doubleHitChance: 0.24 },
+  elite: { miss: 0.105, randomSingle: 0.305, aimedSingle: 0.375, aimedTriple: 0.215, doubleHitChance: 0.315 },
+  legendary: { miss: 0.075, randomSingle: 0.23, aimedSingle: 0.355, aimedTriple: 0.34, doubleHitChance: 0.43 },
 };
 
-/** Picks a bot config whose rough 3-dart average is closest to `avgPerRound` — used to make a
- *  Ghost-mode bot opponent's overall pace feel roughly like the target it's meant to embody
- *  (own record or a named benchmark), without trying to reconstruct the target's exact recorded
- *  dart-by-dart sequence (which risks landing on a remaining score with no valid double-out
- *  finish at all, mid-game — a real risk of stalling a match, not just an approximation).
- *  Cutoffs sit at the midpoint between each pair of tiers' own measured averages above. */
+/** The target-average band each named bot level rolls within (see rollConfigForLevel) — the
+ *  club's own most-played range, split into five contiguous, non-overlapping bands so there's no
+ *  gap ANY commonly-played average could fall outside of. */
+export const BOT_LEVEL_RANGES: Record<BotLevel, [number, number]> = {
+  easy: [30, 40],
+  medium: [40, 50],
+  hard: [50, 60],
+  elite: [60, 80],
+  legendary: [80, 100],
+};
+
+/** One config beyond LEVEL_CONFIG.legendary's own ≈89 center, purely so interpolation has
+ *  somewhere real to reach TOWARD for a roll landing in the upper half of legendary's declared
+ *  80-100 range — without this, anything requested above ≈89 would just clamp to the same
+ *  center config, and the top of that range would never actually feel any different. Not a
+ *  selectable tier of its own, just an extra control point. */
+const LEGENDARY_CEILING: LevelConfig = { miss: 0.06, randomSingle: 0.19, aimedSingle: 0.33, aimedTriple: 0.42, doubleHitChance: 0.50 };
+
+/** The LEVEL_CONFIG anchors paired with their own measured average, ascending — the control
+ *  points configForAverage interpolates between. Order matters (binary-search-able by avg). */
+const TIER_ANCHORS: { avg: number; cfg: LevelConfig }[] = [
+  { avg: 36.6, cfg: LEVEL_CONFIG.easy },
+  { avg: 44.4, cfg: LEVEL_CONFIG.medium },
+  { avg: 55.3, cfg: LEVEL_CONFIG.hard },
+  { avg: 70.9, cfg: LEVEL_CONFIG.elite },
+  { avg: 89.4, cfg: LEVEL_CONFIG.legendary },
+  { avg: 101.0, cfg: LEGENDARY_CEILING },
+];
+
+const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+/** Linearly blends every field between two configs — used to interpolate smoothly between two
+ *  adjacent tier anchors rather than snapping to whichever one is closer. */
+function lerpConfig(lo: LevelConfig, hi: LevelConfig, t: number): LevelConfig {
+  return {
+    miss: lerp(lo.miss, hi.miss, t),
+    randomSingle: lerp(lo.randomSingle, hi.randomSingle, t),
+    aimedSingle: lerp(lo.aimedSingle, hi.aimedSingle, t),
+    aimedTriple: lerp(lo.aimedTriple, hi.aimedTriple, t),
+    doubleHitChance: lerp(lo.doubleHitChance, hi.doubleHitChance, t),
+  };
+}
+
+/** Builds a config whose 3-dart average lands close to `avgPerRound` by interpolating between the
+ *  two nearest tier anchors (clamped to the lowest/highest anchor beyond either end) — used both
+ *  for Ghost-mode's target-matching (an opponent's own recorded average, or a named benchmark) and
+ *  by rollConfigForLevel below (a random point within a named level's own range), so an in-between
+ *  target actually lands close to where it should instead of snapping to whichever fixed tier
+ *  happens to be nearest. */
 export function configForAverage(avgPerRound: number): LevelConfig {
-  if (avgPerRound >= 79) return LEVEL_CONFIG.legendary;
-  if (avgPerRound >= 64) return LEVEL_CONFIG.elite;
-  if (avgPerRound >= 50) return LEVEL_CONFIG.hard;
-  if (avgPerRound >= 37) return LEVEL_CONFIG.medium;
-  return LEVEL_CONFIG.easy;
+  if (avgPerRound <= TIER_ANCHORS[0].avg) return TIER_ANCHORS[0].cfg;
+  const last = TIER_ANCHORS[TIER_ANCHORS.length - 1];
+  if (avgPerRound >= last.avg) return last.cfg;
+  for (let i = 0; i < TIER_ANCHORS.length - 1; i++) {
+    const lo = TIER_ANCHORS[i];
+    const hi = TIER_ANCHORS[i + 1];
+    if (avgPerRound <= hi.avg) {
+      return lerpConfig(lo.cfg, hi.cfg, (avgPerRound - lo.avg) / (hi.avg - lo.avg));
+    }
+  }
+  return last.cfg; // unreachable — satisfies the type checker
+}
+
+/** Rolls a fresh config from somewhere within `level`'s own target-average range — one bot
+ *  "having a better or worse day" than the last time it was played, the same leg-to-leg variance
+ *  a real opponent brings to the board, without losing what makes that level recognizably itself
+ *  (still interpolated from the same anchor configs, just landing at a different point on the
+ *  curve). Call once per LEG, not once per dart or the "day" would reset every visit — see
+ *  Game.tsx's own per-leg cache around its bot-turn effect for where this gets called from. */
+export function rollConfigForLevel(level: BotLevel): LevelConfig {
+  const [min, max] = BOT_LEVEL_RANGES[level];
+  return configForAverage(min + Math.random() * (max - min));
 }
 
 function rand(): number {
