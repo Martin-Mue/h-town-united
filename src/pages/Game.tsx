@@ -3183,8 +3183,11 @@ const GamePage = () => {
         // (a full 20-number grid) can exceed what's left after the header on some devices. Grid
         // avoids that: portrait just grows/scrolls the whole page instead of squeezing anything,
         // and landscape's `landscape:overflow-y-auto` on the pad/history cells is an explicit,
-        // contained safety net for that same case, not an accidental side effect.
-        <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[2fr_3fr] landscape:grid-rows-[auto_1fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden">
+        // contained safety net for that same case, not an accidental side effect — the number
+        // grid itself (DartScoreInput's own landscape:grid-cols-10) is what actually keeps that
+        // safety net from engaging in the normal case, by laying the pad out wide-not-tall
+        // instead of just reusing portrait's arrangement at a bigger size.
+        <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[1fr_2fr] landscape:grid-rows-[auto_1fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden">
           <div className="sticky top-0 z-20 bg-background px-4 landscape:col-span-2 landscape:row-start-1">
             {scoreboardBlock}
             {doubleInBanner}
@@ -3194,11 +3197,19 @@ const GamePage = () => {
             {cricketBoard}
           </div>
 
-          {/* Pad — the number pad and its action row are the primary, most-frequently-tapped
-              controls, so they sit right after the header in every orientation (not after the
-              throw history, which can grow arbitrarily long). In landscape it's the right half of
-              the row below the full-width header, wide enough for DartScoreInput's landscape:
-              classes to make the buttons genuinely bigger there, not just rearranged. */}
+          {/* Pad — the number pad is the primary, most-frequently-tapped control, so it sits right
+              after the header in every orientation (not after the throw history, which can grow
+              arbitrarily long). In landscape it's the wider of the two columns below the
+              full-width header (1fr history : 2fr pad). DartScoreInput's own landscape:grid-cols-10
+              (2 wide rows instead of 5 tall ones) is what actually keeps Undo/Cam/Sound on screen
+              without scrolling in practice — verified zero scroll needed on iPad-sized landscape.
+              Tried pinning Undo/Cam/Sound as a separate non-scrolling sibling below the pad card
+              first, so it'd stay reachable even in the rare case the pad card alone doesn't fit —
+              reverted: keeping this cell's own automatic minimum unprotected (needed for THAT to
+              work) reintroduced the same overlap failure as the header/pad split one level up, one
+              level deeper. A single `overflow-y-auto` covering the whole column (pad + actions
+              together) doesn't have that failure mode — worst case, on the shortest landscape
+              phones, reaching Undo needs a short scroll within this column, not a silent overlap. */}
           <div className="px-4 pt-3 pb-3 landscape:col-start-2 landscape:row-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
             <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
               onThrow={throwDart}
@@ -3227,7 +3238,9 @@ const GamePage = () => {
 
           {/* History — the one block with genuinely unbounded height (a leg can run 20+ rounds),
               so it's last in both orientations and the one that scrolls/grows into leftover space
-              instead of pushing the header or the pad around. */}
+              instead of pushing the header or the pad around. Cancel Game sits at the very end,
+              right-aligned and de-emphasized rather than a full-width centered bar — it's a rare,
+              destructive action and shouldn't visually compete with everything above it. */}
           <div className="px-4 pb-3 landscape:col-start-1 landscape:row-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
             <ThrowHistoryEditor
               throws={currentThrows}
@@ -3239,9 +3252,11 @@ const GamePage = () => {
               onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
               onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
             />
-            <Button variant="ghost" onClick={() => setConfirmCancelGame(true)} className="w-full mt-3 text-muted-foreground">
-              <RotateCcw className="w-4 h-4 mr-2" /> {t("game.cancelGame")}
-            </Button>
+            <div className="flex justify-end mt-3">
+              <Button variant="ghost" size="sm" onClick={() => setConfirmCancelGame(true)} className="text-xs text-muted-foreground gap-1.5">
+                <RotateCcw className="w-3.5 h-3.5" /> {t("game.cancelGame")}
+              </Button>
+            </div>
           </div>
         </div>
       )}

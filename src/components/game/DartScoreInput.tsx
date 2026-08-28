@@ -110,12 +110,12 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
         <>
           {/* Number grid — 4 wide so each card has real room; Single dominates, Double/Triple sit
               below as their own full-width-of-card buttons. One tap anywhere submits immediately.
-              landscape:grid-cols-5 divides the 20 numbers into 4 clean rows instead of 5 — in
-              landscape the pad has its own dedicated column (see Game.tsx's playing-phase layout)
-              with real width to spare, so this also makes each cell noticeably bigger, not just
-              differently arranged (landscape:py-3/text-xl below), per the "buttons may be bigger
-              in landscape" ask. */}
-          <div className="grid grid-cols-4 landscape:grid-cols-5 gap-1.5 landscape:gap-2 mb-2">
+              landscape:grid-cols-10 lays the 20 numbers out as 2 wide rows instead of 5 tall
+              ones — landscape has width to spare but not much height (its own dedicated column,
+              see Game.tsx's playing-phase layout), and 2 rows is what actually leaves enough of
+              that height for the mode tabs, special-targets row, and undo/cam/sound to all stay
+              on screen without scrolling, not just a cosmetic rearrangement. */}
+          <div className="grid grid-cols-4 landscape:grid-cols-10 gap-1.5 landscape:gap-1.5 mb-2">
             {BOARD_NUMBERS.map((v) => (
               <div key={v} className="rounded-xl overflow-hidden border border-border/60">
                 <button
@@ -176,7 +176,9 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
       )}
 
       {effectiveMode === "quick" && onQuickRound && (
-        <div className="grid grid-cols-5 landscape:grid-cols-6 gap-1.5 landscape:gap-2">
+        // landscape:grid-cols-11 — same "wide, not tall" reasoning as the single-dart grid above:
+        // 22 values fit exactly 2 rows at 11 columns instead of ~4 rows at 6.
+        <div className="grid grid-cols-5 landscape:grid-cols-11 gap-1.5">
           {QUICK_ROUNDS.map((v) => (
             <button
               key={v}
