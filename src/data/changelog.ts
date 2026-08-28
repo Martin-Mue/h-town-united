@@ -114,4 +114,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Yatay modda (ör. iPad'de) skor girişi telefon genişliğinde kalıyordu ve checkout önerileri kaydırırken görünmez olabiliyordu. Ekran artık tam genişliği kullanıyor, önemli her şey görünür kalıyor ve hızlı girişte 66, 62 ve 96 gibi daha yaygın sayılar var.",
     },
   },
+  {
+    id: "2026-08-28-score-readability",
+    date: "2026-08-28",
+    title: {
+      de: "Punkteanzeige besser lesbar aus der Ferne",
+      en: "Score display easier to read from a distance",
+      fr: "Affichage du score plus lisible à distance",
+      pl: "Wyświetlacz wyniku czytelniejszy z odległości",
+      nl: "Scoreweergave beter leesbaar op afstand",
+      tr: "Skor ekranı uzaktan daha okunaklı",
+    },
+    description: {
+      de: "Die aktuelle Punktzahl, Checkout-Vorschläge und die geworfenen Darts dieser Aufnahme sind jetzt deutlich größer — gut lesbar auch etwas weiter vom Gerät entfernt. Außerdem lässt sich die Seite während eines laufenden Spiels nicht mehr versehentlich per Wisch-Geste neu laden.",
+      en: "The current score, checkout suggestions, and this round's thrown darts are now noticeably bigger — easy to read even a bit further from the device. Also, the page can no longer be accidentally reloaded mid-game with a swipe gesture.",
+      fr: "Le score actuel, les suggestions de checkout et les fléchettes lancées ce tour sont désormais nettement plus grands — faciles à lire même un peu plus loin de l'appareil. De plus, la page ne peut plus être rechargée accidentellement en cours de partie par un geste de balayage.",
+      pl: "Aktualny wynik, podpowiedzi checkoutu i lotki rzucone w tej turze są teraz wyraźnie większe — dobrze czytelne nawet z pewnej odległości od urządzenia. Dodatkowo strony nie da się już przypadkowo odświeżyć gestem przesunięcia w trakcie gry.",
+      nl: "De huidige score, checkout-suggesties en de darts die deze ronde zijn gegooid, zijn nu duidelijk groter — goed leesbaar, ook iets verder van het apparaat vandaan. Daarnaast kan de pagina tijdens een lopende partij niet meer per ongeluk via een veegbeweging opnieuw worden geladen.",
+      tr: "Güncel skor, checkout önerileri ve bu turda atılan dartlar artık belirgin şekilde daha büyük — cihazdan biraz uzaktan bile rahatça okunabiliyor. Ayrıca oyun sürerken sayfa artık kaydırma hareketiyle yanlışlıkla yeniden yüklenemiyor.",
+    },
+  },
 ];
