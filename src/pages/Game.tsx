@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
 import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
-import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, type LevelConfig } from "@/utils/botPlayer";
+import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
   highestVisit as getHighest3DartRound,
@@ -54,15 +54,23 @@ import {
   type SegmentCounts,
 } from "@/utils/dartStats";
 
-/** Bot personas with their target 3-dart average. `nameKey` (not a literal string) since this is
- *  a module-level constant with no access to the language context — resolved via t() at each
- *  call site instead. */
+/** Bot personas with their target 3-dart average range. `nameKey` (not a literal string) since
+ *  this is a module-level constant with no access to the language context — resolved via t() at
+ *  each call site instead. `average` is derived from botPlayer.ts's own BOT_LEVEL_RANGES rather
+ *  than a second hand-typed copy of the same numbers — this exact pair silently drifted out of
+ *  sync once already (the picker kept showing 25–30/45–50/68–75/88–95/140+ long after the actual
+ *  ranges were retuned to 30-40/40-50/50-60/60-80/80-100, since nothing tied this label to the
+ *  real source of truth), which is precisely the class of bug deriving it removes for good. */
+const botRangeLabel = (level: BotLevel): string => {
+  const [min, max] = BOT_LEVEL_RANGES[level];
+  return `${min}–${max}`;
+};
 const BOT_PROFILES: Record<BotLevel, { nameKey: string; average: string }> = {
-  easy: { nameKey: "game.botLv1", average: "25–30" },
-  medium: { nameKey: "game.botLv2", average: "45–50" },
-  hard: { nameKey: "game.botLv3", average: "68–75" },
-  elite: { nameKey: "game.botLv4", average: "88–95" },
-  legendary: { nameKey: "game.botLv5", average: "140+" },
+  easy: { nameKey: "game.botLv1", average: botRangeLabel("easy") },
+  medium: { nameKey: "game.botLv2", average: botRangeLabel("medium") },
+  hard: { nameKey: "game.botLv3", average: botRangeLabel("hard") },
+  elite: { nameKey: "game.botLv4", average: botRangeLabel("elite") },
+  legendary: { nameKey: "game.botLv5", average: botRangeLabel("legendary") },
 };
 import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
