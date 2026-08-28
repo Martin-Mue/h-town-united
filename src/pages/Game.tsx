@@ -3164,29 +3164,28 @@ const GamePage = () => {
           </div>
         </>
       ) : (
-        // Manual entry: a CSS grid, not a scrolling page — 1 column in portrait (natural stacking
-        // order: header, pad, history), 2 columns in landscape (header+history on the left, pad
-        // spanning the full height on the right — see the row/col placement on each block below).
-        // A grid (not nested flex) is what lets the SAME three blocks keep portrait's natural
-        // DOM order — pad right after the header, history last, since it's the one part of this
-        // screen with genuinely unbounded height — while ALSO regrouping header+history into one
-        // visual column in landscape, without duplicating any markup per orientation.
+        // Manual entry: a CSS grid, not a scrolling page. Portrait: 1 column, natural stacking
+        // order (header, pad, history). Landscape: the header — scoreboard, checkout suggestion,
+        // cricket board — spans the FULL width as its own fixed top row (wider player cards, per
+        // the user's ask, instead of being squeezed into a narrow side column), and only the pad
+        // and throw history split into two columns underneath it.
         //
         // The header block is `sticky top-0` within whichever ancestor actually scrolls — this
         // grid itself in portrait (so the page scrolls the same way it always did, but now the
-        // header can never leave the screen while it does), or its own column in landscape (see
-        // below) — so the checkout suggestion and this round's thrown darts (shown on the
-        // scoreboard cards) can no longer disappear by scrolling, which was the actual bug.
+        // header can never leave the screen while it does), or this grid again in landscape too
+        // now that the header spans both columns instead of living inside just one of them — so
+        // the checkout suggestion and this round's thrown darts (shown on the scoreboard cards)
+        // can no longer disappear by scrolling, which was the original bug.
         //
         // Deliberately nothing here is forced smaller than its natural content size (no bare
         // `min-h-0` on a shared-axis container) — that was tried first and silently overlapped
         // the header with the pad on a narrow+short phone, because the pad's own natural height
         // (a full 20-number grid) can exceed what's left after the header on some devices. Grid
         // avoids that: portrait just grows/scrolls the whole page instead of squeezing anything,
-        // and landscape's `landscape:overflow-y-auto` on the pad column is an explicit, contained
-        // safety net for that same case, not an accidental side effect.
+        // and landscape's `landscape:overflow-y-auto` on the pad/history cells is an explicit,
+        // contained safety net for that same case, not an accidental side effect.
         <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[2fr_3fr] landscape:grid-rows-[auto_1fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden">
-          <div className="sticky top-0 z-20 bg-background px-4 landscape:col-start-1 landscape:row-start-1">
+          <div className="sticky top-0 z-20 bg-background px-4 landscape:col-span-2 landscape:row-start-1">
             {scoreboardBlock}
             {doubleInBanner}
             {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && (
@@ -3197,10 +3196,10 @@ const GamePage = () => {
 
           {/* Pad — the number pad and its action row are the primary, most-frequently-tapped
               controls, so they sit right after the header in every orientation (not after the
-              throw history, which can grow arbitrarily long) and get their own full-height column
-              in landscape, wide enough for DartScoreInput's landscape: classes to make the
-              buttons genuinely bigger there, not just rearranged. */}
-          <div className="px-4 pt-3 pb-3 landscape:col-start-2 landscape:row-start-1 landscape:row-span-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
+              throw history, which can grow arbitrarily long). In landscape it's the right half of
+              the row below the full-width header, wide enough for DartScoreInput's landscape:
+              classes to make the buttons genuinely bigger there, not just rearranged. */}
+          <div className="px-4 pt-3 pb-3 landscape:col-start-2 landscape:row-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
             <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
               onThrow={throwDart}
               onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
