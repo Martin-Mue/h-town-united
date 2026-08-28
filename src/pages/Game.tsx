@@ -2728,7 +2728,7 @@ const GamePage = () => {
           const isFlashing = scoreFlash?.slot === card.key;
           return (
             <div key={card.key}
-              className={`bg-card rounded-xl p-4 landscape:p-2 border-2 transition-all text-center ${isActive ? "border-primary glow-cyan" : "border-border opacity-80"}`}>
+              className={`bg-card rounded-xl p-4 landscape:p-3 border-2 transition-all text-center ${isActive ? "border-primary glow-cyan" : "border-border opacity-80"}`}>
               <div className="flex items-center justify-center gap-1.5">
                 {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse-glow" />}
                 {card.isBot && <Bot className="w-3 h-3 text-secondary shrink-0" />}
@@ -2742,7 +2742,11 @@ const GamePage = () => {
               {isActive && card.isBot && botThinking ? (
                 <p className="text-sm font-display mt-1 text-secondary animate-pulse">Bot {t("game.isThrowing")}…</p>
               ) : (
-                <p className={`text-4xl landscape:text-2xl font-display mt-1 landscape:mt-0 transition-colors ${
+                // Deliberately the SAME size in both orientations (no landscape: shrink) — this is
+                // the number a player reads from throwing distance, not from right up close, and
+                // landscape has its own dedicated column now (see the playing-phase layout below)
+                // with room to spare, so there's no longer a reason to make it smaller there.
+                <p className={`text-5xl font-display mt-1 transition-colors ${
                   isFlashing ? "text-accent animate-pulse-glow" : showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
                 }`}>
                   <AnimatedScore value={isCricket ? card.cricketPoints : displayRemaining} />
@@ -2759,22 +2763,22 @@ const GamePage = () => {
                   (the number pad, mid-tap) down and forcing a scroll. Reserving the space up
                   front keeps the layout stable across the whole round instead of just after it starts. */}
               {isActive && cameraEnabled && (
-                <div className="mt-1 flex min-h-6 items-center justify-center gap-1 flex-wrap">
+                <div className="mt-1 flex min-h-8 items-center justify-center gap-1.5 flex-wrap">
                   {pendingCameraDarts.map((t, idx) => (
-                    <span key={idx} className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-display text-accent ring-1 ring-accent/40">
+                    <span key={idx} className="rounded bg-accent/20 px-2 py-1 text-sm font-display text-accent ring-1 ring-accent/40">
                       {dartLabel(t)}
                     </span>
                   ))}
                 </div>
               )}
               {isActive && (
-                <div className="mt-1 flex min-h-6 items-center justify-center gap-1 flex-wrap">
+                <div className="mt-1 flex min-h-8 items-center justify-center gap-1.5 flex-wrap">
                   {activeRound.map((t, idx) => (
-                    <span key={idx} className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-display text-primary">
+                    <span key={idx} className="rounded bg-primary/15 px-2 py-1 text-sm font-display text-primary">
                       {dartLabel(t)}
                     </span>
                   ))}
-                  {activeRound.length > 0 && <span className="ml-1 text-[10px] font-display text-accent">+{currentRoundTotal}</span>}
+                  {activeRound.length > 0 && <span className="ml-1 text-sm font-display text-accent">+{currentRoundTotal}</span>}
                 </div>
               )}
               <div className="flex justify-center flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
@@ -2844,7 +2848,7 @@ const GamePage = () => {
       {confettiKey !== null && <ConfettiBurst triggerKey={confettiKey} />}
       {/* Winner overlay */}
       {game.isFinished && (
-        <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto py-8">
+        <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto overscroll-y-contain py-8">
           <div className="bg-card border border-primary/30 rounded-2xl p-8 text-center animate-scale-in max-w-md mx-4 glow-cyan">
             <Trophy className="w-16 h-16 text-accent mx-auto mb-4" />
             <h2 className="text-3xl font-display uppercase mb-1">{game.winnerName}</h2>
@@ -3045,7 +3049,7 @@ const GamePage = () => {
           {/* The scoreboard now scrolls WITH everything else in this region (sticky to ITS top,
               not fixed above it) — the outer window (and the page behind it) still never scrolls
               while the camera is open, only this one region does. */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 pb-3">
             {scoreboardBlock}
             {doubleInBanner}
             {pendingCheckoutChoice && (
@@ -3181,7 +3185,7 @@ const GamePage = () => {
         // avoids that: portrait just grows/scrolls the whole page instead of squeezing anything,
         // and landscape's `landscape:overflow-y-auto` on the pad column is an explicit, contained
         // safety net for that same case, not an accidental side effect.
-        <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[2fr_3fr] landscape:grid-rows-[auto_1fr] overflow-y-auto landscape:overflow-hidden">
+        <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[2fr_3fr] landscape:grid-rows-[auto_1fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden">
           <div className="sticky top-0 z-20 bg-background px-4 landscape:col-start-1 landscape:row-start-1">
             {scoreboardBlock}
             {doubleInBanner}
@@ -3196,7 +3200,7 @@ const GamePage = () => {
               throw history, which can grow arbitrarily long) and get their own full-height column
               in landscape, wide enough for DartScoreInput's landscape: classes to make the
               buttons genuinely bigger there, not just rearranged. */}
-          <div className="px-4 pt-3 pb-3 landscape:col-start-2 landscape:row-start-1 landscape:row-span-2 landscape:min-h-0 landscape:overflow-y-auto">
+          <div className="px-4 pt-3 pb-3 landscape:col-start-2 landscape:row-start-1 landscape:row-span-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
             <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
               onThrow={throwDart}
               onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
@@ -3225,7 +3229,7 @@ const GamePage = () => {
           {/* History — the one block with genuinely unbounded height (a leg can run 20+ rounds),
               so it's last in both orientations and the one that scrolls/grows into leftover space
               instead of pushing the header or the pad around. */}
-          <div className="px-4 pb-3 landscape:col-start-1 landscape:row-start-2 landscape:min-h-0 landscape:overflow-y-auto">
+          <div className="px-4 pb-3 landscape:col-start-1 landscape:row-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
             <ThrowHistoryEditor
               throws={currentThrows}
               playerName={currentPlayerName}

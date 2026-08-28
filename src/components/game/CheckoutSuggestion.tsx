@@ -25,21 +25,24 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate }: Che
     <div className={`grid transition-all duration-200 ease-out ${route ? "grid-rows-[1fr] opacity-100 mt-3 mb-3" : "grid-rows-[0fr] opacity-0"}`}>
       <div className="overflow-hidden">
         {route && (
-          <div className="bg-muted/50 rounded-lg px-3 py-2 border border-primary/20">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="bg-muted/50 rounded-lg px-4 py-3 border border-primary/20">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">
                 Checkout · {playerName}
               </p>
               {personalCheckoutRate != null && (
-                <p className="text-[10px] text-muted-foreground" title={t("game.checkoutRateTooltip")}>
+                <p className="text-xs text-muted-foreground" title={t("game.checkoutRateTooltip")}>
                   {t("game.rateLabel")} <span className="text-foreground font-semibold">{personalCheckoutRate.toFixed(0)}%</span>
                 </p>
               )}
             </div>
-            <div className="flex items-center gap-1.5">
+            {/* The route itself is the whole point of this card — sized to read from throwing
+                distance, not just from up close, same as the scoreboard's own remaining-score
+                number. */}
+            <div className="flex items-center gap-2">
               {route.map((dart, i) => (
-                <span key={i}>
-                  <span className={`text-sm font-bold ${
+                <span key={i} className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${
                     dart.startsWith("D") ? "text-secondary" :
                     dart.startsWith("T") ? "text-primary" :
                     dart === "Bull" ? "text-accent" :
@@ -47,10 +50,10 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate }: Che
                   }`}>
                     {dart}
                   </span>
-                  {i < route.length - 1 && <span className="text-muted-foreground mx-0.5">→</span>}
+                  {i < route.length - 1 && <span className="text-lg text-muted-foreground">→</span>}
                 </span>
               ))}
-              <span className="text-xs text-muted-foreground ml-auto">{remaining}</span>
+              <span className="text-sm text-muted-foreground ml-auto">{remaining}</span>
             </div>
           </div>
         )}
