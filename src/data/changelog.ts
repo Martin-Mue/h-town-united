@@ -94,4 +94,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Tamamlanan turnuvalar artık devam edenlerle üst üste yığılmak yerine kendi sekmesinde yer alıyor.",
     },
   },
+  {
+    id: "2026-08-28-score-entry-layout",
+    date: "2026-08-28",
+    title: {
+      de: "Punkteingabe passt sich jedem Gerät an",
+      en: "Score entry adapts to every device",
+      fr: "La saisie des scores s'adapte à chaque appareil",
+      pl: "Wprowadzanie wyników dopasowuje się do każdego urządzenia",
+      nl: "Scoreinvoer past zich aan elk apparaat aan",
+      tr: "Skor girişi her cihaza uyum sağlıyor",
+    },
+    description: {
+      de: "Im Querformat (z. B. auf dem iPad) war die Punkteingabe bisher schmal wie auf dem Handy, und Checkout-Vorschläge konnten beim Scrollen aus dem Blick geraten. Jetzt nutzt die Ansicht die volle Breite, alles Wichtige bleibt sichtbar, und die Schnelleingabe hat mehr gängige Zahlen wie 66, 62 und 96.",
+      en: "In landscape (e.g. on an iPad), score entry used to stay phone-narrow, and checkout suggestions could scroll out of view. The screen now uses the full width, everything important stays visible, and quick-entry has more common numbers like 66, 62, and 96.",
+      fr: "En mode paysage (par ex. sur iPad), la saisie des scores restait aussi étroite que sur téléphone, et les suggestions de checkout pouvaient disparaître en faisant défiler. L'écran utilise désormais toute la largeur, tout l'essentiel reste visible, et la saisie rapide propose plus de nombres courants comme 66, 62 et 96.",
+      pl: "W trybie poziomym (np. na iPadzie) wprowadzanie wyników pozostawało wąskie jak na telefonie, a podpowiedzi checkoutu mogły znikać podczas przewijania. Ekran wykorzystuje teraz pełną szerokość, wszystko ważne pozostaje widoczne, a szybkie wprowadzanie ma więcej typowych liczb, jak 66, 62 i 96.",
+      nl: "In liggende stand (bijv. op een iPad) bleef de scoreinvoer smal als op een telefoon, en checkout-suggesties konden tijdens het scrollen uit beeld verdwijnen. Het scherm gebruikt nu de volle breedte, alles belangrijks blijft zichtbaar, en snelinvoer heeft meer gangbare getallen zoals 66, 62 en 96.",
+      tr: "Yatay modda (ör. iPad'de) skor girişi telefon genişliğinde kalıyordu ve checkout önerileri kaydırırken görünmez olabiliyordu. Ekran artık tam genişliği kullanıyor, önemli her şey görünür kalıyor ve hızlı girişte 66, 62 ve 96 gibi daha yaygın sayılar var.",
+    },
+  },
 ];

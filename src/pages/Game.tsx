@@ -2676,9 +2676,12 @@ const GamePage = () => {
   ) : null;
 
   // Scoreboard — extracted so it can render in two different DOM positions depending on mode
-  // (see the PLAYING PHASE return below) while staying sticky to whichever region actually
-  // scrolls: the page itself in manual mode, or the camera window's own scrollable content area
-  // in camera mode. It used to sit OUTSIDE that scrollable area entirely in camera mode (a
+  // (see the PLAYING PHASE return below) while staying `shrink-0` pinned above whichever region
+  // actually scrolls in that mode (the info column's throw-history tail in manual mode, or the
+  // camera window's own scrollable content area in camera mode). The sticky/will-change classes
+  // below are harmless when it isn't inside a scrolling ancestor (manual mode's own wrapper is
+  // `shrink-0`, not scrolling) — kept anyway since this same block is shared with camera mode,
+  // where it still matters: it used to sit OUTSIDE that scrollable area entirely there (a
   // `shrink-0` flex sibling above it, not sticky within it) — visually indistinguishable from
   // "sticky", but reported as the numbers scrolling separately from the rest of the page, since
   // the camera window itself is a fixed, non-page-scrolling overlay.
@@ -2828,10 +2831,16 @@ const GamePage = () => {
   );
 
   // ─── PLAYING PHASE ─────────────────────────────────
+  // Always a fixed, full-viewport shell now, not the page's own document flow — camera mode
+  // already proved this pattern out (see the memory of its scroll fixes). Manual entry used to
+  // fall back to "container ... max-w-lg mx-auto", a plain block that (a) capped width at 512px
+  // no matter the device or orientation, which is exactly why it stayed phone-narrow on an iPad
+  // in landscape, and (b) had no scroll boundary of its own at all — only the scoreboard was
+  // sticky, so once the page scrolled far enough to reach the number pad, the checkout suggestion
+  // and thrown-darts badges above it were simply gone. See the manual-entry branch below for the
+  // landscape/portrait split this now enables.
   return (
-    <div className={cameraEnabled
-      ? "fixed inset-0 z-40 bg-background flex flex-col animate-slide-up"
-      : "container py-4 animate-slide-up max-w-lg mx-auto"}>
+    <div className="fixed inset-0 z-40 bg-background flex flex-col animate-slide-up overflow-hidden">
       {confettiKey !== null && <ConfettiBurst triggerKey={confettiKey} />}
       {/* Winner overlay */}
       {game.isFinished && (
@@ -3007,11 +3016,6 @@ const GamePage = () => {
         </div>
       )}
 
-      {/* Non-camera mode: scoreboard renders here, sticky to the page's own scroll. Camera mode
-          renders it inside the scrollable content area below instead (see cameraEnabled branch) —
-          see scoreboardBlock's own comment for why. */}
-      {!cameraEnabled && scoreboardBlock}
-
       {pendingTiebreak && (
         <div className="mx-4 mb-3 rounded-lg border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
           <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.tiebreakReached")}</p>
@@ -3156,54 +3160,87 @@ const GamePage = () => {
           </div>
         </>
       ) : (
-        <>
-          {/* Checkout suggestion */}
-          {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />}
-
-          {/* Cricket scoreboard */}
-          {cricketBoard}
-
-          {/* Score input — disabled during a bot's turn */}
-          <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
-            onThrow={throwDart}
-            onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
-            inputMode={dartInputMode} onInputModeChange={setDartInputMode}
-            dartsThisRound={dartsThisRound} />
-
-          {/* Undo & actions row */}
-          <div className="flex gap-2 mt-3">
-            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak} className="flex-1 gap-1">
-              <Undo2 className="w-4 h-4" /> {t("game.undo")}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => { cameraWantedRef.current = true; setCameraEnabled(true); }}
-              disabled={!!currentPlayer?.isBot}
-              className="gap-1"
-              title={t("game.liveCameraScoring")}
-            >
-              <Camera className="w-4 h-4" /> {t("game.cam")}
-            </Button>
-            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </Button>
+        // Manual entry: a CSS grid, not a scrolling page — 1 column in portrait (natural stacking
+        // order: header, pad, history), 2 columns in landscape (header+history on the left, pad
+        // spanning the full height on the right — see the row/col placement on each block below).
+        // A grid (not nested flex) is what lets the SAME three blocks keep portrait's natural
+        // DOM order — pad right after the header, history last, since it's the one part of this
+        // screen with genuinely unbounded height — while ALSO regrouping header+history into one
+        // visual column in landscape, without duplicating any markup per orientation.
+        //
+        // The header block is `sticky top-0` within whichever ancestor actually scrolls — this
+        // grid itself in portrait (so the page scrolls the same way it always did, but now the
+        // header can never leave the screen while it does), or its own column in landscape (see
+        // below) — so the checkout suggestion and this round's thrown darts (shown on the
+        // scoreboard cards) can no longer disappear by scrolling, which was the actual bug.
+        //
+        // Deliberately nothing here is forced smaller than its natural content size (no bare
+        // `min-h-0` on a shared-axis container) — that was tried first and silently overlapped
+        // the header with the pad on a narrow+short phone, because the pad's own natural height
+        // (a full 20-number grid) can exceed what's left after the header on some devices. Grid
+        // avoids that: portrait just grows/scrolls the whole page instead of squeezing anything,
+        // and landscape's `landscape:overflow-y-auto` on the pad column is an explicit, contained
+        // safety net for that same case, not an accidental side effect.
+        <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[2fr_3fr] landscape:grid-rows-[auto_1fr] overflow-y-auto landscape:overflow-hidden">
+          <div className="sticky top-0 z-20 bg-background px-4 landscape:col-start-1 landscape:row-start-1">
+            {scoreboardBlock}
+            {doubleInBanner}
+            {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && (
+              <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />
+            )}
+            {cricketBoard}
           </div>
 
-          <ThrowHistoryEditor
-            throws={currentThrows}
-            playerName={currentPlayerName}
-            editModeOn={editingThrowIdx !== null}
-            onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
-            openChipIdx={editingChipIdx}
-            onOpenChipChange={setEditingChipIdx}
-            onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
-            onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
-          />
+          {/* Pad — the number pad and its action row are the primary, most-frequently-tapped
+              controls, so they sit right after the header in every orientation (not after the
+              throw history, which can grow arbitrarily long) and get their own full-height column
+              in landscape, wide enough for DartScoreInput's landscape: classes to make the
+              buttons genuinely bigger there, not just rearranged. */}
+          <div className="px-4 pt-3 pb-3 landscape:col-start-2 landscape:row-start-1 landscape:row-span-2 landscape:min-h-0 landscape:overflow-y-auto">
+            <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
+              onThrow={throwDart}
+              onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
+              inputMode={dartInputMode} onInputModeChange={setDartInputMode}
+              dartsThisRound={dartsThisRound} />
 
-          <Button variant="ghost" onClick={() => setConfirmCancelGame(true)} className="w-full mt-3 text-muted-foreground">
-            <RotateCcw className="w-4 h-4 mr-2" /> {t("game.cancelGame")}
-          </Button>
-        </>
+            <div className="flex gap-2 mt-3">
+              <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak} className="flex-1 gap-1">
+                <Undo2 className="w-4 h-4" /> {t("game.undo")}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { cameraWantedRef.current = true; setCameraEnabled(true); }}
+                disabled={!!currentPlayer?.isBot}
+                className="gap-1"
+                title={t("game.liveCameraScoring")}
+              >
+                <Camera className="w-4 h-4" /> {t("game.cam")}
+              </Button>
+              <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
+                {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* History — the one block with genuinely unbounded height (a leg can run 20+ rounds),
+              so it's last in both orientations and the one that scrolls/grows into leftover space
+              instead of pushing the header or the pad around. */}
+          <div className="px-4 pb-3 landscape:col-start-1 landscape:row-start-2 landscape:min-h-0 landscape:overflow-y-auto">
+            <ThrowHistoryEditor
+              throws={currentThrows}
+              playerName={currentPlayerName}
+              editModeOn={editingThrowIdx !== null}
+              onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
+              openChipIdx={editingChipIdx}
+              onOpenChipChange={setEditingChipIdx}
+              onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
+              onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
+            />
+            <Button variant="ghost" onClick={() => setConfirmCancelGame(true)} className="w-full mt-3 text-muted-foreground">
+              <RotateCcw className="w-4 h-4 mr-2" /> {t("game.cancelGame")}
+            </Button>
+          </div>
+        </div>
       )}
 
       <AlertDialog open={confirmCancelGame} onOpenChange={setConfirmCancelGame}>

@@ -9,8 +9,11 @@ const BOARD_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 
 /** Common 3-dart round scores for one-tap entry — deliberately not just the high/maximum ones
  *  (180/140/121/100), so a scorekeeper racing through an ordinary visit (not just a big one) can
- *  still one-tap it. Order is roughly high-to-low, matching how a scorekeeper scans for a value. */
-const QUICK_ROUNDS = [180, 170, 140, 121, 100, 85, 81, 60, 45, 41, 40, 32, 26, 9, 0];
+ *  still one-tap it. Order is roughly high-to-low, matching how a scorekeeper scans for a value.
+ *  The 66/62/58/44/43/96/164 additions fill in the everyday-common range that was under-covered —
+ *  the original set leaned toward milestones (180/170/140/121/100/85/81) with only a thin band of
+ *  ordinary totals (60/45/41/40/32/26) beneath them. */
+const QUICK_ROUNDS = [180, 170, 164, 140, 121, 100, 96, 85, 81, 66, 62, 60, 58, 45, 44, 43, 41, 40, 32, 26, 9, 0];
 
 export type DartInputMode = "single" | "quick" | "total";
 
@@ -106,15 +109,20 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
       {effectiveMode === "single" && (
         <>
           {/* Number grid — 4 wide so each card has real room; Single dominates, Double/Triple sit
-              below as their own full-width-of-card buttons. One tap anywhere submits immediately. */}
-          <div className="grid grid-cols-4 gap-1.5 mb-2">
+              below as their own full-width-of-card buttons. One tap anywhere submits immediately.
+              landscape:grid-cols-5 divides the 20 numbers into 4 clean rows instead of 5 — in
+              landscape the pad has its own dedicated column (see Game.tsx's playing-phase layout)
+              with real width to spare, so this also makes each cell noticeably bigger, not just
+              differently arranged (landscape:py-3/text-xl below), per the "buttons may be bigger
+              in landscape" ask. */}
+          <div className="grid grid-cols-4 landscape:grid-cols-5 gap-1.5 landscape:gap-2 mb-2">
             {BOARD_NUMBERS.map((v) => (
               <div key={v} className="rounded-xl overflow-hidden border border-border/60">
                 <button
                   onClick={() => onThrow(v, 1)}
                   disabled={isDisabled}
                   title={`${t("game.simple")} ${v}`}
-                  className="w-full py-2 text-lg font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+                  className="w-full py-2 landscape:py-3 text-lg landscape:text-xl font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
                 >
                   {v}
                 </button>
@@ -123,7 +131,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
                     onClick={() => onThrow(v, 3)}
                     disabled={isDisabled}
                     title={`${t("game.triple")} ${v}`}
-                    className="py-1.5 text-xs font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+                    className="py-1.5 landscape:py-2 text-xs landscape:text-sm font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
                   >
                     T
                   </button>
@@ -131,7 +139,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
                     onClick={() => onThrow(v, 2)}
                     disabled={isDisabled}
                     title={`${t("game.double")} ${v}`}
-                    className="py-1.5 text-xs font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
+                    className="py-1.5 landscape:py-2 text-xs landscape:text-sm font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
                   >
                     D
                   </button>
@@ -148,7 +156,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
               already uses, and cricket's own targetNumber/hitsToAdd math already special-cased
               baseValue===50 to behave identically to 25×2 — so this doesn't change cricket scoring,
               it just makes that special-case dead code (points: 25*2=50, targetNumber: 25 either way). */}
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 landscape:gap-2">
             {[
               { value: 0, mul: 1 as const, label: t("game.miss") },
               { value: 25, mul: 1 as const, label: `${t("game.bull")} (25)` },
@@ -158,7 +166,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
                 key={target.label}
                 onClick={() => onThrow(target.value, target.mul)}
                 disabled={isDisabled}
-                className="flex-1 px-2 py-2 rounded-lg text-sm font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40"
+                className="flex-1 px-2 py-2 landscape:py-3 rounded-lg text-sm landscape:text-base font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40"
               >
                 {target.label}
               </button>
@@ -168,13 +176,13 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
       )}
 
       {effectiveMode === "quick" && onQuickRound && (
-        <div className="grid grid-cols-5 gap-1.5">
+        <div className="grid grid-cols-5 landscape:grid-cols-6 gap-1.5 landscape:gap-2">
           {QUICK_ROUNDS.map((v) => (
             <button
               key={v}
               onClick={() => onQuickRound(v)}
               disabled={isDisabled}
-              className="py-3 rounded-lg text-sm font-bold bg-secondary/20 text-foreground hover:bg-secondary/40 active:scale-95 transition-all disabled:opacity-40"
+              className="py-3 landscape:py-4 rounded-lg text-sm landscape:text-base font-bold bg-secondary/20 text-foreground hover:bg-secondary/40 active:scale-95 transition-all disabled:opacity-40"
             >
               {v}
             </button>
