@@ -736,6 +736,53 @@ export type Database = {
         }
         Returns: boolean
       }
+      admin_list_active_tournaments: {
+        Args: never
+        Returns: {
+          attendance: Json
+          best_of_legs: number
+          boards: number
+          bracket: Json
+          champion: string | null
+          created_at: string
+          game_mode: string
+          id: string
+          live_play_enabled: boolean
+          manual_release: boolean
+          max_rounds_x01: number | null
+          mode: string
+          name: string
+          players: Json
+          prestart_views: Json
+          public_slug: string | null
+          public_view: boolean
+          round_configs: Json
+          series_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
+      admin_tournament_forecast_mode_stats: {
+        Args: never
+        Returns: {
+          mode: string
+          best_of_legs: number
+          avg_legs_per_match: number | null
+          match_count: number
+          avg_darts_per_leg: number | null
+          leg_count: number
+        }[]
+      }
+      admin_tournament_forecast_player_stats: {
+        Args: never
+        Returns: {
+          player_name: string
+          mode: string
+          avg_darts_per_leg: number
+          leg_count: number
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "member"
