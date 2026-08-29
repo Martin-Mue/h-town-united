@@ -47,7 +47,7 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
           const roundTotal = roundThrows.reduce((s, dart) => s + dart.points, 0);
           const is180 = roundTotal === 180 && roundThrows.length === 3;
           return (
-            <div key={roundIdx} className={`flex items-center gap-1.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
+            <div key={roundIdx} className={`flex items-center gap-2.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
               <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
               {roundThrows.map((dart, i) => {
                 const globalIdx = roundIdx * 3 + i;
@@ -95,10 +95,17 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
                       </Popover>
                     ) : chip}
                     {editModeOn && (
+                      // The hit area is deliberately bigger than the visible red dot (a common
+                      // accessible-touch-target pattern) — at the dot's own size this sat right on
+                      // top of the (much bigger) number chip underneath, and a slightly-off tap
+                      // meant to hit one or the other landed on the wrong control, exactly the
+                      // "fehleranfällig" complaint from a real tournament's scorekeepers.
                       <button onClick={() => onDeleteThrow(globalIdx)}
                         title={t("game.deleteThrow")} aria-label={t("game.deleteThrow")}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
-                        <X className="w-2.5 h-2.5 text-destructive-foreground" />
+                        className="absolute -top-2.5 -right-2.5 w-6 h-6 flex items-center justify-center">
+                        <span className="w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
+                          <X className="w-2.5 h-2.5 text-destructive-foreground" />
+                        </span>
                       </button>
                     )}
                   </div>

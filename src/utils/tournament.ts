@@ -437,19 +437,30 @@ export interface CurrentBoardSchedule {
  * truth shared by the public live view's banner + sidebar (previously computed twice,
  * slightly differently, in each spot). Not used by the admin schedule tab, which needs
  * every open slot (not just the next two) for planning/scorekeeper editing.
+ *
+ * Each board advances independently: board N's "now" is the earliest undecided entry
+ * assigned to board N, regardless of whether OTHER boards' current slot has finished yet.
+ * An earlier version grouped by `slot` instead (all boards in the lowest still-open slot) —
+ * since a slot only clears once EVERY board in it is decided, a board that finished early
+ * sat idle waiting for a sibling board's still-running match instead of picking up its own
+ * next one, which is exactly the "everyone waits for the slowest board" bug this replaced.
  */
 export function currentBoardSchedule(matches: Match[], boards: number): CurrentBoardSchedule {
   const schedule = buildSchedule(matches, boards);
-  const open = schedule.filter((e) => !e.match.winner);
-  const slots = [...new Set(open.map((e) => e.slot))].sort((a, b) => a - b);
-  const [nowSlot, nextSlot] = slots;
-  const collect = (slot: number | undefined): BoardScheduleEntry[] =>
-    slot === undefined
-      ? []
-      : open.filter((e) => e.slot === slot).sort((a, b) => a.board - b.board).map((e) => ({ board: e.board, match: e.match }));
-  const now = collect(nowSlot);
-  const onDeck = collect(nextSlot);
-  const queuedCount = open.filter((e) => e.slot !== nowSlot && e.slot !== nextSlot).length;
+  const b = Math.max(1, boards);
+  const now: BoardScheduleEntry[] = [];
+  const onDeck: BoardScheduleEntry[] = [];
+  const claimed = new Set<string>();
+
+  for (let board = 1; board <= b; board++) {
+    const openForBoard = schedule
+      .filter((e) => e.board === board && !e.match.winner)
+      .sort((a, c) => a.slot - c.slot);
+    if (openForBoard[0]) { now.push({ board, match: openForBoard[0].match }); claimed.add(openForBoard[0].match.id); }
+    if (openForBoard[1]) { onDeck.push({ board, match: openForBoard[1].match }); claimed.add(openForBoard[1].match.id); }
+  }
+
+  const queuedCount = schedule.filter((e) => !e.match.winner && !claimed.has(e.match.id)).length;
   return { now, onDeck, queuedCount };
 }
 

@@ -154,4 +154,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Oyun kurulumunda yeni bir anahtar: bitiriş rotası artık gizlenebilir. Turnuva maçlarında artık varsayılan olarak kapalı, ancak maç bazında yine de değiştirilebilir.",
     },
   },
+  {
+    id: "2026-08-29-board-and-score-reliability",
+    date: "2026-08-29",
+    title: {
+      de: "Turnierboards und Punktestand zuverlässiger",
+      en: "Tournament boards and score display more reliable",
+      fr: "Boards de tournoi et affichage du score plus fiables",
+      pl: "Boardy turniejowe i wyświetlacz wyniku bardziej niezawodne",
+      nl: "Toernooiborden en scoreweergave betrouwbaarder",
+      tr: "Turnuva board'ları ve skor ekranı daha güvenilir",
+    },
+    description: {
+      de: "Jedes Board bekommt jetzt sofort das nächste Match, sobald es fertig ist — ohne auf andere Boards zu warten. Außerdem zeigt die Punktzahl während des Spiels immer den aktuellen Stand, auch direkt nach dem Korrigieren eines Wurfs.",
+      en: "Each board now picks up its next match as soon as it's free, instead of waiting for other boards to finish first. The score display also always shows the current value right away, including right after correcting a throw.",
+      fr: "Chaque board reçoit désormais son prochain match dès qu'il est libre, sans attendre que les autres boards aient terminé. L'affichage du score montre aussi toujours la valeur actuelle immédiatement, y compris juste après la correction d'une fléchette.",
+      pl: "Każdy board otrzymuje teraz kolejny mecz, jak tylko się zwolni, bez czekania na inne boardy. Wyświetlacz wyniku zawsze też od razu pokazuje aktualną wartość, także zaraz po poprawieniu rzutu.",
+      nl: "Elk board krijgt nu direct de volgende wedstrijd zodra het vrij is, zonder te wachten op andere boards. De scoreweergave toont ook altijd meteen de actuele stand, ook vlak na het corrigeren van een worp.",
+      tr: "Her board artık boşa çıkar çıkmaz bir sonraki maçını alıyor, diğer board'ların bitmesini beklemeden. Skor ekranı da her zaman güncel değeri anında gösteriyor, bir atışı düzelttikten hemen sonra bile.",
+    },
+  },
 ];

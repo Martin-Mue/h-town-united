@@ -2737,12 +2737,13 @@ const GamePage = () => {
             ? Math.max(0, card.remaining - pendingTotal)
             : card.remaining;
           const showPreview = pendingTotal > 0 && !isCricket;
-          // Manual entry: hold the big number at the turn's starting score while darts are
-          // still landing (the small "this round" badges below already show what's been hit
-          // and the running total) — it only jumps to the true new value once the round ends,
-          // which is also the moment scoreFlash briefly highlights it.
-          const roundInProgress = isActive && !isCricket && !showPreview && dartsThisRound > 0;
-          const displayRemaining = roundInProgress ? turnStartRemaining : previewRemaining;
+          // Used to hold at turnStartRemaining (the pre-round value) for manual entry until all
+          // 3 darts landed, only jumping at round-end. That masked any change to `remaining` made
+          // mid-round — including a scorekeeper correcting an earlier throw via ThrowHistoryEditor,
+          // whose effect then silently didn't show until the in-progress round happened to finish.
+          // Always showing the true live value trades away the end-of-round "reveal" but means the
+          // number on screen is never stale.
+          const displayRemaining = previewRemaining;
           const isFlashing = scoreFlash?.slot === card.key;
           return (
             <div key={card.key}

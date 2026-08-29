@@ -1382,23 +1382,23 @@ const PublicTournamentPage = () => {
                   {nowBoards.length === 0 ? tr("pt.noPairingsYet") : tr("pt.allKnownPairingsRunning")}
                 </p>
               ) : (
-                <>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
-                    {roundLabel(onDeck[0].match.round, totalRounds)}
-                  </p>
-                  <ul className="space-y-1.5">
-                    {onDeck.map(({ board, match: m }) => (
-                      <li key={m.id} className="flex items-center gap-2 text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">
-                        <Badge variant="outline" className="font-mono text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 shrink-0 border-transparent">
-                          {tr("camera.board")} {board}
-                        </Badge>
-                        <span className="truncate uppercase tracking-wide">
-                          {m.player1} <span className="text-muted-foreground normal-case">{tr("common.vs")}</span> {m.player2}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
+                // Each board now advances independently (see currentBoardSchedule), so this list
+                // can mix rounds — one board can already be on-deck for round 2 while another is
+                // still finishing round 1. A single shared header used to label the whole list off
+                // just the first entry's round, which is only ever wrong once boards drift apart.
+                <ul className="space-y-1.5">
+                  {onDeck.map(({ board, match: m }) => (
+                    <li key={m.id} className="flex items-center gap-2 text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">
+                      <Badge variant="outline" className="font-mono text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 shrink-0 border-transparent">
+                        {tr("camera.board")} {board}
+                      </Badge>
+                      <span className="truncate uppercase tracking-wide flex-1">
+                        {m.player1} <span className="text-muted-foreground normal-case">{tr("common.vs")}</span> {m.player2}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground normal-case shrink-0">{roundLabel(m.round, totalRounds)}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
               {queuedCount > 0 && (
                 <p className="mt-2.5 pt-2 border-t border-border/60 text-[10px] uppercase tracking-widest text-muted-foreground">

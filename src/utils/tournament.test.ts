@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recomputeBracket, calcStandings, assignScorekeepers, BYE, type Match, type RoundRobinMatch } from "./tournament";
+import { recomputeBracket, calcStandings, assignScorekeepers, currentBoardSchedule, BYE, type Match, type RoundRobinMatch } from "./tournament";
 
 describe("recomputeBracket", () => {
   it("propagates round winners into the next round", () => {
@@ -68,6 +68,39 @@ describe("assignScorekeepers", () => {
     ];
     const result = assignScorekeepers(matches, ["A", "C", "D"], { boards: 1, keepExisting: true });
     expect(result.find((m) => m.id === "r1-1")!.scorekeeper).not.toBe("B");
+  });
+});
+
+describe("currentBoardSchedule", () => {
+  it("advances a board to its own next match as soon as it's decided, without waiting for a sibling board", () => {
+    // 4 first-round matches, 2 boards: m0/m1 share the first slot (board 1/2), m2/m3 the second.
+    const matches: Match[] = [
+      { id: "m0", round: 1, position: 0, player1: "A", player2: "B" },
+      { id: "m1", round: 1, position: 1, player1: "C", player2: "D" },
+      { id: "m2", round: 1, position: 2, player1: "E", player2: "F" },
+      { id: "m3", round: 1, position: 3, player1: "G", player2: "H" },
+    ];
+    // Board 1's opening match (m0) finishes while board 2's (m1) is still undecided — this used
+    // to leave board 1 stuck showing nothing until m1 *also* finished, because both were grouped
+    // into the same "slot" and a slot only advanced once every board in it was decided (the real
+    // bug: several boards at a tournament had to wait on each other instead of each picking up
+    // its own next match).
+    const decided = matches.map((m) => (m.id === "m0" ? { ...m, winner: "A" } : m));
+    const schedule = currentBoardSchedule(decided, 2);
+
+    expect(schedule.now.find((e) => e.board === 1)?.match.id).toBe("m2");
+    expect(schedule.now.find((e) => e.board === 2)?.match.id).toBe("m1");
+    expect(schedule.onDeck.find((e) => e.board === 2)?.match.id).toBe("m3");
+    expect(schedule.queuedCount).toBe(0);
+  });
+
+  it("keeps both boards on their first match before anything is decided", () => {
+    const matches: Match[] = [
+      { id: "m0", round: 1, position: 0, player1: "A", player2: "B" },
+      { id: "m1", round: 1, position: 1, player1: "C", player2: "D" },
+    ];
+    const schedule = currentBoardSchedule(matches, 2);
+    expect(schedule.now.map((e) => e.match.id).sort()).toEqual(["m0", "m1"]);
   });
 });
 
