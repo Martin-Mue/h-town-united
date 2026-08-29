@@ -200,6 +200,8 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.startsAt": { de: "Startet bei", en: "Starts at", fr: "Démarre à", pl: "Zaczyna od", nl: "Start op", tr: "Başlangıç" },
   "game.insteadOf": { de: "statt", en: "instead of", fr: "au lieu de", pl: "zamiast", nl: "in plaats van", tr: "yerine" },
   "game.soundHaptics": { de: "Sound & Haptik", en: "Sound & haptics", fr: "Son & vibrations", pl: "Dźwięk i wibracje", nl: "Geluid & trilling", tr: "Ses ve titreşim" },
+  "game.checkoutSuggestions": { de: "Checkout-Vorschläge", en: "Checkout suggestions", fr: "Suggestions de finish", pl: "Podpowiedzi checkout", nl: "Checkout-suggesties", tr: "Checkout önerileri" },
+  "game.checkoutSuggestionsDesc": { de: "Zeigt die Auslege-Route bei X01. In Turnierspielen standardmäßig deaktiviert, bleibt aber änderbar.", en: "Shows the finishing route for X01. Off by default in tournament matches, but still adjustable.", fr: "Affiche le chemin de finish en X01. Désactivé par défaut en tournoi, mais reste modifiable.", pl: "Pokazuje sugerowaną drogę zamknięcia w X01. Domyślnie wyłączone w meczach turniejowych, ale można to zmienić.", nl: "Toont de uitgooiroute bij X01. Standaard uit bij toernooiwedstrijden, maar aanpasbaar.", tr: "X01'de bitiriş rotasını gösterir. Turnuva maçlarında varsayılan olarak kapalıdır, yine de değiştirilebilir." },
   "game.callerVoice": { de: "Caller-Stimme", en: "Caller voice", fr: "Voix de l'annonceur", pl: "Głos spikera", nl: "Omroeperstem", tr: "Anons sesi" },
   "game.voiceMale": { de: "Männlich", en: "Male", fr: "Masculine", pl: "Męski", nl: "Mannelijk", tr: "Erkek" },
   "game.voiceFemale": { de: "Weiblich", en: "Female", fr: "Féminine", pl: "Żeński", nl: "Vrouwelijk", tr: "Kadın" },

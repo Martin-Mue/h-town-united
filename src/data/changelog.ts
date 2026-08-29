@@ -134,4 +134,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Güncel skor, checkout önerileri ve bu turda atılan dartlar artık belirgin şekilde daha büyük — cihazdan biraz uzaktan bile rahatça okunabiliyor. Ayrıca oyun sürerken sayfa artık kaydırma hareketiyle yanlışlıkla yeniden yüklenemiyor.",
     },
   },
+  {
+    id: "2026-08-29-checkout-suggestions-toggle",
+    date: "2026-08-29",
+    title: {
+      de: "Checkout-Vorschläge abschaltbar",
+      en: "Checkout suggestions can be turned off",
+      fr: "Suggestions de finish désactivables",
+      pl: "Możliwość wyłączenia podpowiedzi checkout",
+      nl: "Checkout-suggesties uit te schakelen",
+      tr: "Checkout önerileri kapatılabilir",
+    },
+    description: {
+      de: "Neuer Schalter im Spiel-Setup: Die Auslege-Route lässt sich jetzt ausblenden. In Turnierspielen ist das jetzt der Standard (kein Vorschlag), bleibt dort aber pro Match änderbar.",
+      en: "New switch in the game setup: the finishing route can now be hidden. Tournament matches now default to it being off, but it stays adjustable per match there too.",
+      fr: "Nouvel interrupteur dans la configuration de partie : le chemin de finish peut désormais être masqué. Dans les matchs de tournoi, il est maintenant désactivé par défaut, mais reste modifiable par match.",
+      pl: "Nowy przełącznik w ustawieniach gry: sugerowaną drogę zamknięcia można teraz ukryć. W meczach turniejowych jest teraz domyślnie wyłączona, ale nadal można to zmienić dla każdego meczu.",
+      nl: "Nieuwe schakelaar in de spelinstellingen: de uitgooiroute kan nu worden verborgen. Bij toernooiwedstrijden staat dit voortaan standaard uit, maar blijft per wedstrijd aanpasbaar.",
+      tr: "Oyun kurulumunda yeni bir anahtar: bitiriş rotası artık gizlenebilir. Turnuva maçlarında artık varsayılan olarak kapalı, ancak maç bazında yine de değiştirilebilir.",
+    },
+  },
 ];

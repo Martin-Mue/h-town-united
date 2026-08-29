@@ -520,6 +520,15 @@ const GamePage = () => {
   const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(() =>
     initialSnapshot?.tournamentLink ? (initialSnapshot.tournamentLink.tournamentName || "Turnier") : null
   );
+  /** Whether the CheckoutSuggestion card shows during play. Defaults off for a tournament match
+   *  (competitive play shouldn't hint the route) and on otherwise, but stays freely toggleable
+   *  either way — this is a default, not a lock, unlike the fields the bracket actually fixes.
+   *  Not persisted to localStorage on purpose: a per-preference key would leak a tournament
+   *  override into the next casual game's default (or vice versa) instead of each context
+   *  re-deriving its own sensible default every time. Seeded from initialSnapshot here so a
+   *  crash-recovery resume of a tournament match (which skips "setup" entirely) still gets the
+   *  right default; the fresh-launch path sets it again in the tid/mid prefill effect below. */
+  const [checkoutSuggestionEnabled, setCheckoutSuggestionEnabled] = useState(() => !initialSnapshot?.tournamentLink);
   // Board-mode auto-start: a board-linked match counts down to starting itself instead of
   // waiting for a tap on "Spiel starten" — "Bearbeiten" (below) cancels it for the rare case
   // something (handicap, warmup, ...) needs adjusting first. Not persisted in the crash-recovery
@@ -661,6 +670,7 @@ const GamePage = () => {
     }
     tournamentLinkRef.current = { tournamentId: tid, matchId: mid, tournamentName: tname, board };
     setTournamentLinkName(tname || "Turnier");
+    setCheckoutSuggestionEnabled(false);
 
     const p1 = searchParams.get("p1");
     const p2 = searchParams.get("p2");
@@ -2218,6 +2228,14 @@ const GamePage = () => {
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-1">{t("game.roundLimitDesc")}</p>
               </div>
+
+              <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
+                <div className="min-w-0">
+                  <Label className="text-sm font-medium">{t("game.checkoutSuggestions")}</Label>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.checkoutSuggestionsDesc")}</p>
+                </div>
+                <Switch checked={checkoutSuggestionEnabled} onCheckedChange={setCheckoutSuggestionEnabled} />
+              </div>
             </>
           )}
 
@@ -3081,7 +3099,7 @@ const GamePage = () => {
                 </div>
               </div>
             )}
-            {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />}
+            {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />}
 
             {!currentPlayer?.isBot && (
               <LiveCamera
@@ -3191,7 +3209,7 @@ const GamePage = () => {
           <div className="sticky top-0 z-20 bg-background px-4 landscape:col-span-2 landscape:row-start-1">
             {scoreboardBlock}
             {doubleInBanner}
-            {!isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && (
+            {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && (
               <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />
             )}
             {cricketBoard}
