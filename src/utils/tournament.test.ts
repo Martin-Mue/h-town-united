@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recomputeBracket, calcStandings, assignScorekeepers, currentBoardSchedule, BYE, type Match, type RoundRobinMatch } from "./tournament";
+import { recomputeBracket, calcStandings, assignScorekeepers, currentBoardSchedule, fillByeSlot, BYE, type Match, type RoundRobinMatch } from "./tournament";
 
 describe("recomputeBracket", () => {
   it("propagates round winners into the next round", () => {
@@ -101,6 +101,42 @@ describe("currentBoardSchedule", () => {
     ];
     const schedule = currentBoardSchedule(matches, 2);
     expect(schedule.now.map((e) => e.match.id).sort()).toEqual(["m0", "m1"]);
+  });
+});
+
+describe("fillByeSlot", () => {
+  it("fills the open BYE slot and undoes its auto-walkover, without touching any other match", () => {
+    const matches: Match[] = [
+      { id: "r1-0", round: 1, position: 0, player1: "A", player2: "B" },
+      { id: "r1-1", round: 1, position: 1, player1: "C", player2: BYE },
+      { id: "r2-0", round: 2, position: 0 },
+    ];
+    // Recompute first so r1-1 auto-resolves to a C walkover and r2-0 already shows it pending —
+    // exactly the state a real, already-published bracket would be in when a late sign-up shows up.
+    let bracket = recomputeBracket(matches);
+    expect(bracket.find((m) => m.id === "r1-1")!.winner).toBe("C");
+    expect(bracket.find((m) => m.id === "r2-0")!.player2).toBe("C");
+
+    const filled = fillByeSlot(bracket, "E")!;
+    expect(filled).not.toBeNull();
+    const patched = filled.find((m) => m.id === "r1-1")!;
+    expect(patched.player1).toBe("C");
+    expect(patched.player2).toBe("E");
+    expect(patched.winner).toBeUndefined();
+    // r1-0 (the other match) is untouched — this is the whole point: only the one open slot changes.
+    expect(filled.find((m) => m.id === "r1-0")).toEqual(bracket.find((m) => m.id === "r1-0"));
+
+    // Re-running recomputeBracket clears the now-invalid walkover that had propagated forward.
+    bracket = recomputeBracket(filled);
+    expect(bracket.find((m) => m.id === "r2-0")!.player2).toBeUndefined();
+  });
+
+  it("returns null when there is no open BYE slot to fill", () => {
+    const matches: Match[] = [
+      { id: "r1-0", round: 1, position: 0, player1: "A", player2: "B" },
+      { id: "r1-1", round: 1, position: 1, player1: "C", player2: "D" },
+    ];
+    expect(fillByeSlot(matches, "E")).toBeNull();
   });
 });
 

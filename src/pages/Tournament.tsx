@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, Monitor, QrCode, RefreshCcw, Target, Smartphone } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, UserPlus, Monitor, QrCode, RefreshCcw, Target, Smartphone } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
@@ -34,6 +34,7 @@ import {
   BYE,
   isRealPlayer,
   isPlayable,
+  fillByeSlot,
   recomputeBracket,
   bracketChampion,
   buildSchedule,
@@ -715,6 +716,11 @@ const TournamentPage = () => {
   // setup (harmless, pre-draw), this forfeits every remaining match for a real participant,
   // often live at the venue. Same chip-based UI as setup made the two easy to confuse.
   const [confirmWithdraw, setConfirmWithdraw] = useState<string | null>(null);
+  // Late sign-up, added from the already-generated bracket (see addParticipant) rather than
+  // re-running the setup form's full draw — separate from the setup form's own playerInput so
+  // the two never cross-talk (that one has its own club-roster autocomplete/Enter handling).
+  const [newParticipantName, setNewParticipantName] = useState("");
+  const [addingParticipant, setAddingParticipant] = useState(false);
   /** Round-robin's played-match reset confirmation — separate from BracketViewport's own
    *  confirmResetId (that one's scoped to the KO sub-component, this view isn't). */
   const [confirmResetRrId, setConfirmResetRrId] = useState<string | null>(null);
@@ -1281,6 +1287,55 @@ const TournamentPage = () => {
     setActiveTournament({ ...activeTournament, players: nextPlayers });
     await persistBracket(patch);
     toast({ title: `${name} ${t("tournament.withdrawn")}`, description: t("tournament.withdrawnDesc") });
+  };
+
+  /**
+   * Slots a late sign-up into the ALREADY-GENERATED bracket instead of re-running the setup
+   * form's draw — the fix for "someone registered right before the tournament started, and
+   * re-drawing to fit them in reshuffled every other pairing too". Fills the first open round-1
+   * BYE (fillByeSlot); everything else in the bracket stays byte-for-byte the same. A single
+   * combined DB write (unlike withdrawPlayer's two separate ones) so a missing BYE slot never
+   * leaves `players` listing someone the bracket has no slot for at all.
+   */
+  const addParticipant = async (name: string) => {
+    if (!activeTournament) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (activeTournament.players.includes(trimmed)) {
+      toast({ title: t("common.error"), description: t("tournament.playerAlreadyRegistered"), variant: "destructive" });
+      return;
+    }
+    setAddingParticipant(true);
+    try {
+      const { data: freshRow } = await supabase.from("tournaments").select("bracket, players").eq("id", activeTournament.id).single();
+      const freshBracket = (freshRow?.bracket as unknown as Match[] | undefined) ?? (activeTournament.bracket as Match[]);
+      const freshPlayers = (freshRow?.players as unknown as string[] | undefined) ?? activeTournament.players;
+      const filled = fillByeSlot(freshBracket, trimmed);
+      if (!filled) {
+        toast({ title: t("common.error"), description: t("tournament.noOpenSlotForNewPlayer"), variant: "destructive" });
+        return;
+      }
+      const nextPlayers = [...freshPlayers, trimmed];
+      const recomputed = recomputeBracket(filled, nextPlayers);
+      const withKeepers = assignScorekeepers(recomputed, nextPlayers, { boards: activeTournament.boards || 2, keepExisting: true });
+      const champion = bracketChampion(withKeepers);
+      const { error } = await supabase.from("tournaments").update({
+        players: nextPlayers as unknown as Json,
+        bracket: withKeepers as unknown as Json,
+        champion,
+        status: champion ? "finished" : "active",
+      }).eq("id", activeTournament.id);
+      if (error) {
+        toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+        return;
+      }
+      newlyPlayableMatches(freshBracket, withKeepers).forEach(notifyMatchReady);
+      setActiveTournament({ ...activeTournament, players: nextPlayers, bracket: withKeepers, champion, status: champion ? "finished" : "active" });
+      setNewParticipantName("");
+      toast({ title: `${trimmed} ${t("tournament.addedToBracket")}`, description: t("tournament.addedToBracketDesc") });
+    } finally {
+      setAddingParticipant(false);
+    }
   };
 
   /** Check-in state is independent of match results/withdrawal — just who's physically here. */
@@ -2661,6 +2716,22 @@ const TournamentPage = () => {
                   </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground mb-3">{t("tournament.withdrawHint")}</p>
+                <form
+                  onSubmit={(e) => { e.preventDefault(); if (!addingParticipant) addParticipant(newParticipantName); }}
+                  className="flex gap-2 mb-1"
+                >
+                  <Input
+                    value={newParticipantName}
+                    onChange={(e) => setNewParticipantName(e.target.value)}
+                    placeholder={t("tournament.addParticipantPlaceholder")}
+                    className="bg-background border-border text-sm"
+                  />
+                  <Button type="submit" size="sm" disabled={!newParticipantName.trim() || addingParticipant} className="gap-1.5 shrink-0">
+                    {addingParticipant ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                    {t("tournament.addParticipant")}
+                  </Button>
+                </form>
+                <p className="text-[11px] text-muted-foreground mb-3">{t("tournament.addParticipantHint")}</p>
                 <div className="flex gap-2 mb-3">
                   <Button size="sm" variant="outline" className="flex-1 gap-1.5 text-xs" onClick={() => setAllAttendance(true)}>
                     <Check className="w-3.5 h-3.5" /> {t("tournament.markAllPresent")}

@@ -185,6 +185,37 @@ export interface ScheduleEntry {
 /** Playable = both slots known, both real players, no winner yet. */
 export const isPlayable = (m: Match) => isRealPlayer(m.player1) && isRealPlayer(m.player2);
 
+/**
+ * Slots a newly-added participant into an EXISTING bracket by filling the first open round-1
+ * BYE slot, instead of regenerating (and thereby re-shuffling every pairing in) the whole
+ * bracket — the fix for a late tournament-day sign-up: only the one open slot should change,
+ * every other match stays exactly as already announced. Only round 1 ever holds a literal BYE
+ * (see buildSeeding/distributeByes — a preliminary round has none, and BYE never appears in
+ * round 2+ except via a genuine bye-vs-bye cascade, which this deliberately leaves alone rather
+ * than bumping a new player straight into a later round). Returns `null` when there's no open
+ * BYE slot to fill (bracket is already full, or the free slot is prelim-shaped) — the caller
+ * should tell the admin a full re-draw is needed rather than silently doing nothing.
+ */
+export function fillByeSlot(matches: Match[], playerName: string): Match[] | null {
+  const target = matches
+    .filter((m) => m.round === 1)
+    .sort((a, b) => a.position - b.position)
+    .find((m) => m.player1 === BYE || m.player2 === BYE);
+  if (!target) return null;
+  return matches.map((m) => {
+    if (m.id !== target.id) return m;
+    const fillsPlayer1 = m.player1 === BYE;
+    return {
+      ...m,
+      player1: fillsPlayer1 ? playerName : m.player1,
+      player2: fillsPlayer1 ? m.player2 : playerName,
+      winner: undefined,
+      score1: undefined,
+      score2: undefined,
+    };
+  });
+}
+
 /** Which of a match's two players have a linked account, resolved from any roster-shaped list
  *  (the full name→user_id shape, not just ClubPlayer specifically — Tournament.tsx passes its
  *  already-loaded dbPlayers state, tournamentMatchSync.ts passes a batch-fetched query result,

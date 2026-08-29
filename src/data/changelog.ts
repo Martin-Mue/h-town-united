@@ -174,4 +174,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Her board artık boşa çıkar çıkmaz bir sonraki maçını alıyor, diğer board'ların bitmesini beklemeden. Skor ekranı da her zaman güncel değeri anında gösteriyor, bir atışı düzelttikten hemen sonra bile.",
     },
   },
+  {
+    id: "2026-08-29-add-participant",
+    date: "2026-08-29",
+    title: {
+      de: "Teilnehmer nachträglich hinzufügen, ohne neu auszulosen",
+      en: "Add a late participant without reshuffling the bracket",
+      fr: "Ajouter un participant tardif sans retirer au sort",
+      pl: "Dodaj spóźnionego uczestnika bez ponownego losowania",
+      nl: "Deelnemer achteraf toevoegen zonder opnieuw te loten",
+      tr: "Tabloyu yeniden karıştırmadan geç katılımcı ekle",
+    },
+    description: {
+      de: "Neuer \"Hinzufügen\"-Button bei Teilnehmer verwalten: Ein spät angemeldeter Teilnehmer bekommt den nächsten freien Platz im bereits ausgelosten Turnierbaum — alle anderen Paarungen bleiben unverändert, statt wie bisher komplett neu gemischt zu werden.",
+      en: "New \"Add\" button under Manage participants: a late sign-up gets the next open slot in the already-drawn bracket — every other pairing stays exactly as it was, instead of the whole bracket reshuffling like before.",
+      fr: "Nouveau bouton « Ajouter » dans Gérer les participants : un inscrit tardif reçoit la prochaine place libre dans le tableau déjà tiré au sort — tous les autres appariements restent inchangés, au lieu que tout le tableau soit remélangé comme avant.",
+      pl: "Nowy przycisk „Dodaj” w Zarządzaj uczestnikami: spóźniony zgłoszony gracz otrzymuje kolejne wolne miejsce w już wylosowanej drabince — wszystkie pozostałe pary pozostają bez zmian, zamiast losować całą drabinkę od nowa jak dotychczas.",
+      nl: "Nieuwe knop \"Toevoegen\" bij Deelnemers beheren: een laat aangemelde deelnemer krijgt de eerstvolgende vrije plek in het al geloot schema — alle andere koppelingen blijven ongewijzigd, in plaats van dat het hele schema opnieuw wordt gemixt zoals voorheen.",
+      tr: "Katılımcıları Yönet bölümünde yeni \"Ekle\" düğmesi: geç kaydolan bir katılımcı, zaten kurası çekilmiş tabloda bir sonraki boş yeri alır — diğer tüm eşleşmeler, öncekinin aksine tüm tablo yeniden karıştırılmadan aynı kalır.",
+    },
+  },
 ];
