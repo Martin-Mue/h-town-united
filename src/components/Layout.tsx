@@ -3,12 +3,12 @@ import { Link, useLocation } from "react-router-dom";
 import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3, UserCog, CloudOff, RefreshCw, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { Button } from "@/components/ui/button";
 import { useOfflineGameQueue } from "@/hooks/useOfflineGameQueue";
 import { useOfflineMatchResultQueue } from "@/hooks/useOfflineMatchResultQueue";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import WhatsNewBanner from "@/components/WhatsNewBanner";
-import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
 
 const NAV_ITEMS = [
@@ -24,6 +24,12 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
   const { signOut, user } = useAuth();
   const isAdmin = useIsAdmin(user?.id);
+  const { club, name: clubName, logoUrl } = useClubBranding();
+  // Until a club uploads its own logo, each slot keeps its ORIGINAL bundled artwork (the
+  // watermark and the header badge were always two different images) so the app stays
+  // pixel-identical to today — only once logo_path is set do all slots switch to the one
+  // uploaded image.
+  const watermarkSrc = club?.logo_path ? logoUrl : htuEmblem;
   const [signingOut, setSigningOut] = useState(false);
   const gameQueue = useOfflineGameQueue();
   const matchResultQueue = useOfflineMatchResultQueue();
@@ -45,7 +51,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
     <div className="h-[100dvh] bg-background flex flex-col relative overflow-hidden">
       {/* Subtle full-page watermark so plainer list/empty-state pages don't feel bare */}
       <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden flex items-center justify-center">
-        <img src={htuEmblem} alt="" aria-hidden="true" className="w-[140vw] max-w-none opacity-[0.03] select-none" />
+        <img src={watermarkSrc} alt="" aria-hidden="true" className="w-[140vw] max-w-none opacity-[0.03] select-none" />
       </div>
 
       {/* This div — not html/body — owns scrolling and overscroll containment. On iOS Safari,
@@ -66,28 +72,27 @@ const Layout = ({ children }: { children: ReactNode }) => {
           {/* min-w-0 on both the link and the text wrapper, plus truncate on the text itself —
               without it, a flex child's default min-width:auto refuses to shrink below its
               content's natural width at all, so once zooming (or a narrow window) left too
-              little room for the full "H-Town United e.V." + "Dart Club" text, it wrapped across
-              several lines instead of shrinking, growing the header much taller and dragging the
-              nav pills into an off-looking vertical position alongside it. Truncating with an
-              ellipsis keeps the header a single, predictable row at any zoom/width. */}
+              little room for the full club name text, it wrapped across several lines instead
+              of shrinking, growing the header much taller and dragging the nav pills into an
+              off-looking vertical position alongside it. Truncating with an ellipsis keeps the
+              header a single, predictable row at any zoom/width. */}
           <Link to="/" className="flex items-center gap-3 min-w-0">
             <img
-              src={htuLogo}
-              alt="H-Town United e.V. Darts Logo"
+              src={logoUrl}
+              alt={clubName}
               className="w-12 h-12 rounded-xl object-cover border border-primary/30 glow-cyan shrink-0"
             />
             <div className="leading-tight min-w-0">
               <h1 className="text-lg font-display uppercase tracking-widest text-foreground truncate">
-                H-Town <span className="text-primary">United</span> <span className="text-muted-foreground text-xs">e.V.</span>
+                {clubName}
               </h1>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground truncate">Dart Club</p>
             </div>
           </Link>
 
           <div className="flex items-center gap-1">
             <img
-              src={htuEmblem}
-              alt="H-Town United e.V. Vereinsemblem"
+              src={watermarkSrc}
+              alt={t("players.clubEmblemAlt")}
               className="hidden sm:block w-9 h-9 object-contain opacity-60 mr-2"
             />
             <nav className="hidden md:flex items-center gap-1">
@@ -159,7 +164,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
                 isActive ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <item.icon className={`w-5 h-5 ${isActive ? "drop-shadow-[0_0_6px_hsl(185,85%,48%)]" : ""}`} />
+              <item.icon className={`w-5 h-5 ${isActive ? "drop-shadow-[0_0_6px_hsl(var(--primary))]" : ""}`} />
               {t(item.labelKey)}
             </Link>
           );

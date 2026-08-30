@@ -25,7 +25,7 @@ const PlayerStatsCharts = ({ skillRadarData, winLossData }: { skillRadarData: Sk
           <PolarGrid stroke="hsl(222 18% 14%)" />
           <PolarAngleAxis dataKey="skill" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} />
           <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
-          <Radar dataKey="value" stroke="hsl(185 85% 48%)" fill="hsl(185 85% 48%)" fillOpacity={0.15} strokeWidth={2} />
+          <Radar dataKey="value" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.15} strokeWidth={2} />
         </RadarChart>
       </ResponsiveContainer>
     </div>

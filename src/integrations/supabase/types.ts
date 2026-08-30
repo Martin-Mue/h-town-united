@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      clubs: {
+        Row: {
+          created_at: string
+          id: string
+          logo_path: string | null
+          name: string
+          tagline: string | null
+          theme_preset: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          logo_path?: string | null
+          name: string
+          tagline?: string | null
+          theme_preset?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          logo_path?: string | null
+          name?: string
+          tagline?: string | null
+          theme_preset?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       games: {
         Row: {
           best_of_legs: number

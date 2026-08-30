@@ -4,11 +4,11 @@ import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, C
 import { supabase } from "@/integrations/supabase/client";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow, type ActivityTranslator } from "@/utils/clubActivity";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Badge } from "@/components/ui/badge";
-import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem-color.png";
 
 const EVENT_ICON: Record<ActivityEvent["type"], typeof Target> = {
@@ -42,6 +42,11 @@ interface RecentGame {
 
 const DashboardPage = () => {
   const { language, t } = useLanguage();
+  const { club, name: clubName, tagline, logoUrl } = useClubBranding();
+  // Until a club uploads its own logo, the hero watermark keeps its ORIGINAL bundled artwork
+  // (a different image from the circular badge below it) so the page stays pixel-identical to
+  // today — only once logo_path is set does it switch to the one uploaded image.
+  const watermarkSrc = club?.logo_path ? logoUrl : htuEmblem;
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
@@ -145,30 +150,33 @@ const DashboardPage = () => {
           concentric layering (badge centered over the tree) specifically because that hid too
           much of the tree behind the badge to read as a tree at all. */}
       <div className="gradient-hero rounded-2xl p-5 sm:p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(185_85%_48%/0.1),transparent_65%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.1),transparent_65%)]" />
         <div className="relative flex flex-col items-center">
           <div className="relative mb-2 h-[196px] sm:h-[220px] w-full">
             <img
-              src={htuEmblem}
-              alt="H-Town United e.V. Vereinsemblem"
+              src={watermarkSrc}
+              alt={t("players.clubEmblemAlt")}
               className="absolute top-0 left-1/2 -translate-x-1/2 w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
             />
             <div className="absolute left-1/2 -translate-x-1/2 top-[104px] sm:top-[115px] group">
               <div className="absolute inset-0 rounded-full bg-primary/25 blur-xl scale-125" />
               <div className="relative w-[92px] h-[92px] sm:w-[102px] sm:h-[102px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-700 group-hover:-rotate-[6deg]">
                 <img
-                  src={htuLogo}
-                  alt="H-Town United Darts Vereinswappen"
+                  src={logoUrl}
+                  alt={clubName}
                   className="w-full h-full object-cover"
                 />
               </div>
             </div>
           </div>
-          {/* Deliberately not translated — it's a wordplay on the town name (Heiligenhaus),
-              not descriptive copy; an English rendering would just lose the point of it. */}
-          <p className="font-graffiti text-xl sm:text-2xl leading-tight -rotate-1 select-none text-primary drop-shadow-[0_0_14px_hsl(185_85%_48%/0.45)]">
-            Von Heiligenhausern, für Heiligenhaus
-          </p>
+          {/* Optional per-club tagline (DB column, nullable) — this club's is a wordplay on its
+              town name (Heiligenhaus), deliberately not translated since an English rendering
+              would just lose the point of it. Rendered only when a club has set one. */}
+          {tagline && (
+            <p className="font-graffiti text-xl sm:text-2xl leading-tight -rotate-1 select-none text-primary drop-shadow-[0_0_14px_hsl(var(--primary)/0.45)]">
+              {tagline}
+            </p>
+          )}
           <p className="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-muted-foreground font-display mt-2">
             {t("home.tagline")}
           </p>

@@ -6,6 +6,7 @@ import { ThemeProvider } from "next-themes";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
+import { ClubBrandingProvider } from "@/contexts/ClubBrandingContext";
 import Layout from "./components/Layout";
 import Auth from "./pages/Auth";
 import { Loader2 } from "lucide-react";
@@ -49,6 +50,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
     <LanguageProvider>
+    <ClubBrandingProvider>
     <AuthProvider>
       <TooltipProvider>
         <Toaster />
@@ -89,6 +91,7 @@ const App = () => (
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
+    </ClubBrandingProvider>
     </LanguageProvider>
   </ThemeProvider>
 );

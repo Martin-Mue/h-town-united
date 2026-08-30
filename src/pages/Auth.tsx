@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -15,6 +16,7 @@ const AuthPage = () => {
   // logged out. Falls back to the homepage for a direct/bookmarked visit to /auth.
   const from = (location.state as { from?: string } | null)?.from;
   const { user, loading: authLoading } = useAuth();
+  const { club, name: clubName, logoUrl } = useClubBranding();
   const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -106,13 +108,18 @@ const AuthPage = () => {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
-            <span className="font-display text-primary font-bold text-3xl">H</span>
-          </div>
-          <h1 className="text-3xl font-display uppercase">
-            H-Town <span className="text-primary">United</span>
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Dart Club</p>
+          {club?.logo_path ? (
+            <img
+              src={logoUrl}
+              alt={clubName}
+              className="w-16 h-16 rounded-xl object-cover border border-primary/30 mx-auto mb-4 glow-cyan"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
+              <span className="font-display text-primary font-bold text-3xl">{clubName.charAt(0).toUpperCase()}</span>
+            </div>
+          )}
+          <h1 className="text-3xl font-display uppercase">{clubName}</h1>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-6">

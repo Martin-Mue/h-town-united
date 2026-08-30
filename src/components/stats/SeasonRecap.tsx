@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { shareOrDownloadSeasonRecap } from "@/utils/seasonRecapImage";
 import type { HighlightClipRecord } from "@/pages/Statistics";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { highlightKindLabel } from "@/utils/x01Rules";
 
 export interface SeasonRecapData {
@@ -35,6 +36,7 @@ interface SeasonRecapProps {
  *  gesture or timing behavior no camera-less environment could ever verify actually feels right. */
 const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
   const { t } = useLanguage();
+  const { name: clubName } = useClubBranding();
   const [clipUrls, setClipUrls] = useState<Record<string, string>>({});
   const [sharing, setSharing] = useState(false);
 
@@ -55,7 +57,7 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
     try {
       await shareOrDownloadSeasonRecap(
         {
-          clubName: "H-Town United",
+          clubName,
           playerName: recap.player.name,
           emoji: recap.player.emoji,
           periodLabel: recap.periodLabel,

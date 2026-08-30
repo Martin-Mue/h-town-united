@@ -78,6 +78,7 @@ import {
 } from "@/utils/sounds";
 import { speakSequence, buildRoundAnnouncement, getCallerVoice, setCallerVoice, type CallerVoice } from "@/utils/speech";
 import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
 import { saveGameRecord } from "@/lib/gameSync";
@@ -480,6 +481,7 @@ const GamePage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useLanguage();
+  const { name: clubName } = useClubBranding();
   const [searchParams] = useSearchParams();
   // Declared up here (rather than alongside their other in-game-HUD state further down) because
   // the crash-recovery save effect just below needs them in its dependency array, which is
@@ -1813,6 +1815,7 @@ const GamePage = () => {
     try {
       await shareOrDownloadResultImage(
         {
+          clubName,
           mode: game.mode === "custom" ? `Custom ${game.startScore}` : game.mode,
           winnerName: game.winnerName ?? "?",
           bestOfLegs: game.bestOfLegs,

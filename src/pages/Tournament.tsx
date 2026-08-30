@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
@@ -277,6 +278,8 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
   // overflow, manual zoom, and "fit to screen" as a one-time on-demand measurement instead of
   // a background process that could render at the wrong scale depending on layout timing.
   const { t } = useLanguage();
+  const { club, logoUrl } = useClubBranding();
+  const watermarkSrc = club?.logo_path ? logoUrl : htuEmblem;
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [userZoom, setUserZoom] = useState(1);
@@ -524,7 +527,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
             className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden"
           >
             <img
-              src={htuEmblem}
+              src={watermarkSrc}
               alt=""
               className="w-[70%] max-w-[900px] object-contain opacity-[0.06]"
             />

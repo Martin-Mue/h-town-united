@@ -28,6 +28,7 @@ import { getCheckoutSuggestion } from "@/utils/checkoutTable";
 import { generateQrDataUrl } from "@/lib/qrcode";
 import htuLogo from "@/assets/htu-logo.jpg";
 import htuEmblem from "@/assets/club-emblem.png";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 
 interface TournamentRow {
   id: string; name: string; mode: string; status: string;
@@ -117,6 +118,8 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   fallbackBestOf?: number;
 }) => {
   const { t } = useLanguage();
+  const { club, logoUrl } = useClubBranding();
+  const watermarkSrc = club?.logo_path ? logoUrl : htuEmblem;
   const roundLabel = (round: number, total: number) => roundLabelFor(round, total, t);
   // v2 — no continuous auto-measurement. The old version re-measured the tree on every
   // resize/orientation change and multiplied a computed "fit" scale into the zoom, which
@@ -333,7 +336,7 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
           style={{ transform: `scale(${userZoom})`, transformOrigin: "top left", width: "max-content" }}
         >
           <div aria-hidden className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center overflow-hidden">
-            <img src={htuEmblem} alt="" className="w-[65%] max-w-[900px] object-contain opacity-[0.07]" />
+            <img src={watermarkSrc} alt="" className="w-[65%] max-w-[900px] object-contain opacity-[0.07]" />
           </div>
           <div className="relative z-10 flex items-stretch gap-4 p-4">
             {body()}
@@ -522,6 +525,8 @@ const CheckoutBadges = ({ player1, player2, live }: { player1: string; player2: 
  *  data of its own, just enough presence that a beamer/tablet showing it doesn't look broken. */
 const WaitingSplash = ({ name }: { name: string }) => {
   const { t } = useLanguage();
+  const { club, name: clubName, logoUrl } = useClubBranding();
+  const watermarkSrc = club?.logo_path ? logoUrl : htuEmblem;
   return (
     <div className="flex flex-col items-center justify-center text-center py-10 px-4 min-h-[60vh]">
       {/* Same combined club-emblem + Darts-badge layering as the Home page hero (Index.tsx) — the
@@ -530,14 +535,14 @@ const WaitingSplash = ({ name }: { name: string }) => {
        *  a member already recognizes from the app, not a second, different logo treatment. */}
       <div className="relative mb-4 h-[196px] sm:h-[240px] w-full max-w-md">
         <img
-          src={htuEmblem}
-          alt="H-Town United e.V. Vereinsemblem"
+          src={watermarkSrc}
+          alt={clubName}
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[180px] h-[180px] sm:w-[220px] sm:h-[220px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
         />
         <div className="absolute left-1/2 -translate-x-1/2 top-[104px] sm:top-[128px]">
           <div className="absolute inset-0 rounded-full bg-primary/25 blur-xl scale-125" />
           <div className="relative w-[92px] h-[92px] sm:w-[112px] sm:h-[112px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
-            <img src={htuLogo} alt="H-Town United Darts Vereinswappen" className="w-full h-full object-cover" />
+            <img src={logoUrl} alt={clubName} className="w-full h-full object-cover" />
           </div>
         </div>
       </div>
@@ -770,6 +775,7 @@ const PublicTournamentPage = () => {
   // record itself (a name from long before this page had any translations, too widely
   // referenced below to rename instead).
   const { t: tr, language, setLanguage } = useLanguage();
+  const { logoUrl } = useClubBranding();
   const [t, setT] = useState<TournamentRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -1112,7 +1118,7 @@ const PublicTournamentPage = () => {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-primary/10 via-transparent to-accent/10">
         <div className="flex items-center gap-3 min-w-0">
-          <img src={htuLogo} alt="Logo" className="w-12 h-12 rounded-xl object-cover border border-primary/30 shrink-0" />
+          <img src={logoUrl} alt="Logo" className="w-12 h-12 rounded-xl object-cover border border-primary/30 shrink-0" />
           <div className="min-w-0">
             <h1 className="font-display text-[clamp(1.1rem,2.4vw,2rem)] uppercase tracking-widest truncate">{t.name}</h1>
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">

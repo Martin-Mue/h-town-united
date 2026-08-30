@@ -77,9 +77,9 @@ const DartboardHeatmap = ({ points }: DartboardHeatmapProps) => {
           cx={CENTER + p.u * BOARD_RADIUS}
           cy={CENTER + p.v * BOARD_RADIUS}
           r={5}
-          fill="hsl(185 85% 55%)"
+          fill="hsl(var(--primary))"
           fillOpacity={0.16}
-          stroke="hsl(185 85% 55%)"
+          stroke="hsl(var(--primary))"
           strokeOpacity={0.25}
           strokeWidth={0.5}
         />

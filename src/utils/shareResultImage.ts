@@ -7,6 +7,7 @@ export interface ShareResultPlayer {
 }
 
 export interface ShareResultParams {
+  clubName: string;
   mode: string;
   winnerName: string;
   bestOfLegs: number;
@@ -40,7 +41,7 @@ export async function renderResultImage(params: ShareResultParams): Promise<Blob
   ctx.fillStyle = COLORS.primary;
   ctx.font = "bold 28px sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("H-TOWN UNITED", W / 2, 60);
+  ctx.fillText(params.clubName.toUpperCase(), W / 2, 60);
   ctx.fillStyle = COLORS.muted;
   ctx.font = "16px sans-serif";
   ctx.fillText(params.mode.toUpperCase() + (params.bestOfLegs > 1 ? ` · FIRST TO ${Math.ceil(params.bestOfLegs / 2)}` : ""), W / 2, 90);

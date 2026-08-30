@@ -33,6 +33,7 @@ import ClutchCard from "@/components/stats/ClutchCard";
 import { combine180Breakdown, manualEntriesApplicable, type Manual180Entry } from "@/utils/manual180";
 import Manual180Editor from "@/components/stats/Manual180Editor";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import SeasonRecap from "@/components/stats/SeasonRecap";
 import { usePagedList } from "@/hooks/usePagedList";
@@ -75,12 +76,14 @@ export interface HighlightClipRecord {
   kind: string; points: number; darts: DartThrow[]; storage_path: string; mime: string; created_at: string;
 }
 
+// First 3 track the active club theme (primary/secondary/accent); the rest are fixed extra
+// hues for series overflow, since there's no 4th/5th/6th brand role to derive them from.
 const CHART_COLORS = [
-  "hsl(185 85% 48%)", "hsl(155 65% 42%)", "hsl(45 100% 58%)",
+  "hsl(var(--primary))", "hsl(var(--secondary))", "hsl(var(--accent))",
   "hsl(280 70% 55%)", "hsl(0 72% 51%)", "hsl(200 80% 55%)",
 ];
 
-const TOOLTIP_STYLE = { background: "hsl(222 25% 9%)", border: "1px solid hsl(222 18% 14%)", borderRadius: 8, fontSize: 12 };
+const TOOLTIP_STYLE = { background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 };
 
 const StatisticsPage = () => {
   const { toast } = useToast();
@@ -122,6 +125,7 @@ const StatisticsPage = () => {
   const [filterYear, setFilterYear] = useState<string>("all");
   const { session } = useAuth();
   const { t, language } = useLanguage();
+  const { name: clubName } = useClubBranding();
 
   const fetchData = useCallback(async () => {
     const [gamesRes, playersRes, legsRes, clipsRes, manual180Res] = await Promise.all([
@@ -606,7 +610,7 @@ const StatisticsPage = () => {
   const exportSeasonPdf = () => {
     const periodLabel = filterYear !== "all" ? `${t("stats.season")} ${filterYear}` : t("stats.overall");
     generateSeasonReportPdf({
-      clubName: "H-Town United e.V. · Darts Club",
+      clubName: `${clubName} · Darts Club`,
       periodLabel,
       totalGames: clubStats.totalGames,
       totalPlayers: clubStats.totalPlayers,
@@ -1277,7 +1281,7 @@ const StatisticsPage = () => {
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} interval={4} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Bar dataKey="count" fill="hsl(185 85% 48%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1308,7 +1312,7 @@ const StatisticsPage = () => {
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Bar dataKey="value" fill="hsl(155 65% 42%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="value" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
               {trebleStats.perPlayer.length > 1 && (
@@ -1576,7 +1580,7 @@ const StatisticsPage = () => {
                       <XAxis dataKey="label" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} allowDecimals={false} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} />
-                      <Bar dataKey="count" fill="hsl(185 85% 48%)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1673,16 +1677,16 @@ const StatisticsPage = () => {
                     <AreaChart data={playerDetailStats.averageTrend}>
                       <defs>
                         <linearGradient id="avgGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(185 85% 48%)" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="hsl(185 85% 48%)" stopOpacity={0} />
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} domain={["auto", "auto"]} />
                       <Tooltip contentStyle={TOOLTIP_STYLE} />
                       <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
-                      <Area type="monotone" dataKey="average" stroke="hsl(185 85% 48%)" fill="url(#avgGrad)" strokeWidth={2} name={t("stats.gameAverageSeries")} />
-                      <Line type="monotone" dataKey="runningAvg" stroke="hsl(155 65% 42%)" strokeWidth={2} strokeDasharray="5 3" dot={false} name={t("stats.runningAverageSeries")} />
+                      <Area type="monotone" dataKey="average" stroke="hsl(var(--primary))" fill="url(#avgGrad)" strokeWidth={2} name={t("stats.gameAverageSeries")} />
+                      <Line type="monotone" dataKey="runningAvg" stroke="hsl(var(--secondary))" strokeWidth={2} strokeDasharray="5 3" dot={false} name={t("stats.runningAverageSeries")} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -1835,8 +1839,8 @@ const StatisticsPage = () => {
                       <PolarGrid stroke="hsl(222 18% 14%)" />
                       <PolarAngleAxis dataKey="skill" tick={{ fontSize: 13, fill: "hsl(222 12% 50%)" }} />
                       <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
-                      <Radar dataKey="p1" name={h2hRecords.p1.name} stroke="hsl(185 85% 48%)" fill="hsl(185 85% 48%)" fillOpacity={0.15} strokeWidth={2} />
-                      <Radar dataKey="p2" name={h2hRecords.p2.name} stroke="hsl(155 65% 42%)" fill="hsl(155 65% 42%)" fillOpacity={0.15} strokeWidth={2} />
+                      <Radar dataKey="p1" name={h2hRecords.p1.name} stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.15} strokeWidth={2} />
+                      <Radar dataKey="p2" name={h2hRecords.p2.name} stroke="hsl(var(--secondary))" fill="hsl(var(--secondary))" fillOpacity={0.15} strokeWidth={2} />
                       <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
                     </RadarChart>
                   </ResponsiveContainer>

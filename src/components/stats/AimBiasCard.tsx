@@ -61,19 +61,19 @@ const AimBiasCard = ({ bias }: AimBiasCardProps) => {
         <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-28 h-28 shrink-0" role="img" aria-label={t("aimBias.title")}>
           <circle cx={CENTER} cy={CENTER} r={RING.doubleOuter * BOARD_RADIUS} fill="hsl(222 20% 12%)" stroke="hsl(222 18% 22%)" strokeWidth={1} />
           <circle cx={CENTER} cy={CENTER} r={RING.doubleInner * BOARD_RADIUS} fill="none" stroke="hsl(222 18% 22%)" strokeWidth={0.5} strokeDasharray="2 2" />
-          <circle cx={CENTER} cy={CENTER} r={RING.trebleOuter * BOARD_RADIUS} fill="none" stroke="hsl(185 85% 48%)" strokeOpacity={0.35} strokeWidth={0.5} />
-          <circle cx={CENTER} cy={CENTER} r={RING.trebleInner * BOARD_RADIUS} fill="none" stroke="hsl(185 85% 48%)" strokeOpacity={0.35} strokeWidth={0.5} />
+          <circle cx={CENTER} cy={CENTER} r={RING.trebleOuter * BOARD_RADIUS} fill="none" stroke="hsl(var(--primary))" strokeOpacity={0.35} strokeWidth={0.5} />
+          <circle cx={CENTER} cy={CENTER} r={RING.trebleInner * BOARD_RADIUS} fill="none" stroke="hsl(var(--primary))" strokeOpacity={0.35} strokeWidth={0.5} />
           <circle cx={CENTER} cy={CENTER} r={RING.bullOuter * BOARD_RADIUS} fill="hsl(150 55% 32%)" fillOpacity={0.4} />
           <defs>
             <marker id="aimArrow" markerWidth={6} markerHeight={6} refX={5} refY={3} orient="auto">
               <path d="M0,0 L6,3 L0,6 Z" fill="hsl(0 75% 58%)" />
             </marker>
           </defs>
-          <circle cx={ix} cy={iy} r={3} fill="hsl(185 85% 48%)" />
+          <circle cx={ix} cy={iy} r={3} fill="hsl(var(--primary))" />
           <line x1={ix} y1={iy} x2={ax} y2={ay} stroke="hsl(0 75% 58%)" strokeWidth={2} markerEnd="url(#aimArrow)" />
           {/* Grouping radius — same MAGNIFY scale as the arrow, so the circle and the offset it's
               drawn around stay visually consistent with each other. */}
-          <circle cx={ax} cy={ay} r={bias.groupingRadius * MAGNIFY * BOARD_RADIUS} fill="hsl(45 100% 58%)" fillOpacity={0.12} stroke="hsl(45 100% 58%)" strokeOpacity={0.6} strokeWidth={1} strokeDasharray="3 2" />
+          <circle cx={ax} cy={ay} r={bias.groupingRadius * MAGNIFY * BOARD_RADIUS} fill="hsl(var(--accent))" fillOpacity={0.12} stroke="hsl(var(--accent))" strokeOpacity={0.6} strokeWidth={1} strokeDasharray="3 2" />
         </svg>
         <div className="flex-1 space-y-1.5 text-xs">
           <p><span className="text-muted-foreground">{t("aimBias.radial")}: </span><span className="font-semibold">{fmtMm(bias.radialOffsetMm)}</span> <span className="text-muted-foreground">({radialWord})</span></p>

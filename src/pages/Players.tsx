@@ -22,7 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import htuLogo from "@/assets/htu-logo.jpg";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 
 // recharts (~390KB) is only needed once a player's detail view is open, not for browsing
 // the roster list — split into its own chunk instead of loading it for every /players visit.
@@ -88,6 +88,7 @@ const EMPTY_PLAYER_FORM = {
  */
 const PlayersPage = () => {
   const { t } = useLanguage();
+  const { name: clubName, logoUrl } = useClubBranding();
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -608,7 +609,7 @@ const PlayersPage = () => {
     ];
 
     const winLossData = [
-      { label: t("game.winsLabel"), value: selectedPlayer.games_won, fill: "hsl(155 65% 42%)" },
+      { label: t("game.winsLabel"), value: selectedPlayer.games_won, fill: "hsl(var(--secondary))" },
       { label: t("players.losses"), value: selectedPlayer.games_played - selectedPlayer.games_won, fill: "hsl(0 72% 51%)" },
     ];
 
@@ -742,7 +743,7 @@ const PlayersPage = () => {
 
       {/* Decorative watermark logo */}
       <img
-        src={htuLogo}
+        src={logoUrl}
         alt=""
         aria-hidden
         className="absolute right-0 top-32 w-[500px] h-[500px] object-contain opacity-[0.04] pointer-events-none select-none hidden md:block"
@@ -750,13 +751,13 @@ const PlayersPage = () => {
 
       {/* Club emblem header — interactive spinning logo with live stats */}
       <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-card via-card to-primary/5 p-6 mb-6">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(185_85%_48%/0.08),transparent_70%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.08),transparent_70%)]" />
         <div className="relative flex items-center gap-5">
           <div className="relative shrink-0 group cursor-pointer">
             <div className="absolute inset-0 rounded-full bg-primary/30 blur-xl group-hover:bg-primary/50 transition-colors duration-500" />
             <div className="absolute -inset-1 rounded-full border border-primary/40 group-hover:rotate-180 transition-transform duration-[2000ms]" />
             <img
-              src={htuLogo}
+              src={logoUrl}
               alt={t("players.clubEmblemAlt")}
               className="relative w-24 h-24 md:w-28 md:h-28 rounded-full object-cover border-2 border-primary/50 glow-cyan group-hover:scale-105 group-active:scale-95 transition-transform duration-300"
             />
@@ -764,7 +765,7 @@ const PlayersPage = () => {
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase tracking-[0.3em] text-primary font-display mb-1">{t("players.clubManagement")}</p>
             <h2 className="text-2xl md:text-3xl font-display uppercase leading-tight">
-              H-Town United <span className="text-muted-foreground text-base">e.V.</span>
+              {clubName}
             </h2>
             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
