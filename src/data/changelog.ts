@@ -194,4 +194,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Katılımcıları Yönet bölümünde yeni \"Ekle\" düğmesi: geç kaydolan bir katılımcı, zaten kurası çekilmiş tabloda bir sonraki boş yeri alır — diğer tüm eşleşmeler, öncekinin aksine tüm tablo yeniden karıştırılmadan aynı kalır.",
     },
   },
+  {
+    id: "2026-08-30-club-branding",
+    date: "2026-08-30",
+    title: {
+      de: "Vereinsdesign in den Einstellungen",
+      en: "Club branding in Settings",
+      fr: "Identité du club dans les paramètres",
+      pl: "Wygląd klubu w ustawieniach",
+      nl: "Clubuitstraling in instellingen",
+      tr: "Ayarlarda kulüp görünümü",
+    },
+    description: {
+      de: "Admins können Vereinsname, Logo und eines von vier Farbschemata jetzt direkt in den Einstellungen anpassen — die Änderung wirkt sofort auf die ganze App, von der Anmeldung bis zur Live-Ansicht.",
+      en: "Admins can now set the club's name, logo, and one of four color schemes right from Settings — the change applies instantly across the whole app, from the login screen to the live view.",
+      fr: "Les admins peuvent désormais définir le nom du club, le logo et l'une des quatre palettes de couleurs directement dans les paramètres — le changement s'applique aussitôt à toute l'application, de l'écran de connexion à la vue en direct.",
+      pl: "Administratorzy mogą teraz ustawić nazwę klubu, logo i jeden z czterech schematów kolorów bezpośrednio w ustawieniach — zmiana obowiązuje natychmiast w całej aplikacji, od ekranu logowania po widok na żywo.",
+      nl: "Beheerders kunnen nu de clubnaam, het logo en een van vier kleurenschema's rechtstreeks in de instellingen aanpassen — de wijziging geldt meteen voor de hele app, van het inlogscherm tot de live-weergave.",
+      tr: "Yöneticiler artık kulüp adını, logosunu ve dört renk şemasından birini doğrudan Ayarlar'dan belirleyebilir — değişiklik giriş ekranından canlı yayın görünümüne kadar tüm uygulamada anında geçerli olur.",
+    },
+  },
 ];
