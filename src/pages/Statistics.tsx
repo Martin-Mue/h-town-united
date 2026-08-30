@@ -654,7 +654,21 @@ const StatisticsPage = () => {
     const player = players.find(p => p.id === selectedPlayerId);
     if (!player) return null;
     const playerGames = filteredGames.filter(g => g.player1_id === selectedPlayerId || g.player2_id === selectedPlayerId);
-    const winRate = player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0;
+    // Bug fix: the header card used to show player.average/player.high_score/winRate straight
+    // from the lifetime `players` row while every other number on this same view (averageTrend,
+    // recentForm, bestGameAvg, totalGames, ...) was already correctly recomputed from the
+    // filtered `playerGames` — so applying a season/date filter changed some numbers on screen
+    // but silently left others (average, highscore, win rate) at their lifetime value, which
+    // read as "the filter doesn't work". `average`/`highScore` below reuse the exact same
+    // per-game columns/convention as bestGameAvg/worstGameAvg further down (mean/max of each
+    // game's own player1_average/player1_highscore), so all of them agree with each other.
+    const gameAverages = playerGames.map(g => Number(g.player1_id === selectedPlayerId ? g.player1_average : g.player2_average));
+    const average = gameAverages.length > 0 ? gameAverages.reduce((a, b) => a + b, 0) / gameAverages.length : 0;
+    const highScore = playerGames.length > 0
+      ? Math.max(...playerGames.map(g => g.player1_id === selectedPlayerId ? g.player1_highscore : g.player2_highscore))
+      : 0;
+    const wins = playerGames.filter(g => g.winner_name === (g.player1_id === selectedPlayerId ? g.player1_name : g.player2_name)).length;
+    const winRate = playerGames.length > 0 ? Math.round((wins / playerGames.length) * 100) : 0;
 
     // Average trend (oldest first)
     let runningAvg = 0;
@@ -719,7 +733,7 @@ const StatisticsPage = () => {
       return rate > bestRate ? { name, losses: r.losses, wins: r.wins } : best;
     }, null);
 
-    return { player, winRate, averageTrend, currentStreak, bestStreak, recentForm, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: playerGames.length };
+    return { player, average, highScore, winRate, averageTrend, currentStreak, bestStreak, recentForm, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: playerGames.length };
   }, [selectedPlayerId, filteredGames, players, language]);
 
   const pagedRecentForm = usePagedList(playerDetailStats?.recentForm ?? []);
@@ -1464,8 +1478,8 @@ const StatisticsPage = () => {
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { label: t("stats.average"), value: playerDetailStats.player.games_played > 0 ? Number(playerDetailStats.player.average).toFixed(1) : "–", color: "text-primary" },
-                    { label: "Highscore", value: playerDetailStats.player.high_score, color: "text-accent" },
+                    { label: t("stats.average"), value: playerDetailStats.totalGames > 0 ? playerDetailStats.average.toFixed(1) : "–", color: "text-primary" },
+                    { label: "Highscore", value: playerDetailStats.totalGames > 0 ? playerDetailStats.highScore : "–", color: "text-accent" },
                     { label: t("stats.streak"), value: `${playerDetailStats.currentStreak}🔥`, color: "text-accent" },
                     { label: t("stats.bestStreak"), value: playerDetailStats.bestStreak, color: "text-secondary" },
                   ].map(s => (
