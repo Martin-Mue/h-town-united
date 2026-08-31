@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 
 interface ManualEntryRow {
   id: string;
@@ -25,6 +26,7 @@ const CURRENT_YEAR = new Date().getFullYear();
  *  same restriction server-side regardless. */
 const Manual180Editor = ({ playerId, entries, onChanged }: Manual180EditorProps) => {
   const { toast } = useToast();
+  const { clubId } = useClubBranding();
   const [editingYear, setEditingYear] = useState<number | null>(null);
   const [yearInput, setYearInput] = useState(String(CURRENT_YEAR));
   const [countInput, setCountInput] = useState("");
@@ -60,7 +62,7 @@ const Manual180Editor = ({ playerId, entries, onChanged }: Manual180EditorProps)
     }
     setSaving(true);
     const { error } = await supabase.from("manual_180_entries")
-      .upsert({ player_id: playerId, year, count }, { onConflict: "player_id,year" });
+      .upsert({ player_id: playerId, club_id: clubId, year, count }, { onConflict: "player_id,year" });
     setSaving(false);
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });

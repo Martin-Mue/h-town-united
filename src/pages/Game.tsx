@@ -481,7 +481,7 @@ const GamePage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useLanguage();
-  const { name: clubName } = useClubBranding();
+  const { name: clubName, clubId } = useClubBranding();
   const [searchParams] = useSearchParams();
   // Declared up here (rather than alongside their other in-game-HUD state further down) because
   // the crash-recovery save effect just below needs them in its dependency array, which is
@@ -1371,6 +1371,7 @@ const GamePage = () => {
       const playerMatch = dbPlayers.find(p => p.name === params.playerName);
       const { error: insErr } = await supabase.from("highlight_clips").insert({
         user_id: userId,
+        club_id: clubId,
         game_id: pendingGameIdRef.current,
         player_id: playerMatch?.id || null,
         player_name: params.playerName,
@@ -1930,7 +1931,7 @@ const GamePage = () => {
     const link = tournamentLinkRef.current ?? undefined;
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
-      await saveGameRecord(game, session?.user?.id, pendingGameIdRef.current, link);
+      await saveGameRecord(game, session?.user?.id, clubId, pendingGameIdRef.current, link);
       if (game.players.length > 2) {
         toast({ title: t("game.gameSavedTitle"), description: t("game.gameSavedAllPlayersDesc") });
       }
@@ -1968,7 +1969,7 @@ const GamePage = () => {
       // eventual insert idempotent even if this fires more than once. The tournament bracket
       // write-back gets its own queue entry for the same reason — it needs a live read of the
       // bracket, so it can't just be retried as part of the game-save replay.
-      await enqueueGameSave({ id: pendingGameIdRef.current, game, userId: session?.user?.id, tournamentLink: link });
+      await enqueueGameSave({ id: pendingGameIdRef.current, game, userId: session?.user?.id, clubId, tournamentLink: link });
       if (link) {
         await enqueueMatchResult({
           id: `${pendingGameIdRef.current}-match`,
@@ -2002,7 +2003,7 @@ const GamePage = () => {
     clearActiveGameSnapshot();
     setGameSaved(true);
     savingRef.current = false;
-  }, [game, gameSaved, session, toast, t]);
+  }, [game, gameSaved, session, clubId, toast, t]);
 
   useEffect(() => {
     if (game?.isFinished && !gameSaved && session?.user?.id) saveGame();

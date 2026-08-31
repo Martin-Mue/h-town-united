@@ -50,8 +50,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
     <LanguageProvider>
-    <ClubBrandingProvider>
     <AuthProvider>
+    <ClubBrandingProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -90,8 +90,8 @@ const App = () => (
           </Suspense>
         </BrowserRouter>
       </TooltipProvider>
-    </AuthProvider>
     </ClubBrandingProvider>
+    </AuthProvider>
     </LanguageProvider>
   </ThemeProvider>
 );

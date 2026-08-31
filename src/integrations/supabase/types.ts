@@ -47,6 +47,7 @@ export type Database = {
       games: {
         Row: {
           best_of_legs: number
+          club_id: string | null
           created_at: string
           detail_stats: Json
           id: string
@@ -75,6 +76,7 @@ export type Database = {
         }
         Insert: {
           best_of_legs?: number
+          club_id?: string | null
           created_at?: string
           detail_stats?: Json
           id?: string
@@ -103,6 +105,7 @@ export type Database = {
         }
         Update: {
           best_of_legs?: number
+          club_id?: string | null
           created_at?: string
           detail_stats?: Json
           id?: string
@@ -169,6 +172,7 @@ export type Database = {
       }
       game_legs: {
         Row: {
+          club_id: string | null
           created_at: string
           game_id: string
           id: string
@@ -182,6 +186,7 @@ export type Database = {
           won: boolean
         }
         Insert: {
+          club_id?: string | null
           created_at?: string
           game_id: string
           id?: string
@@ -195,6 +200,7 @@ export type Database = {
           won?: boolean
         }
         Update: {
+          club_id?: string | null
           created_at?: string
           game_id?: string
           id?: string
@@ -226,6 +232,7 @@ export type Database = {
       }
       highlight_clips: {
         Row: {
+          club_id: string | null
           created_at: string
           darts: Json
           game_id: string | null
@@ -239,6 +246,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          club_id?: string | null
           created_at?: string
           darts?: Json
           game_id?: string | null
@@ -252,6 +260,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          club_id?: string | null
           created_at?: string
           darts?: Json
           game_id?: string | null
@@ -278,6 +287,7 @@ export type Database = {
         Row: {
           address: string
           city: string
+          club_id: string | null
           club_name: string
           email: string
           id: string
@@ -290,6 +300,7 @@ export type Database = {
         Insert: {
           address?: string
           city?: string
+          club_id?: string | null
           club_name?: string
           email?: string
           id?: string
@@ -302,6 +313,7 @@ export type Database = {
         Update: {
           address?: string
           city?: string
+          club_id?: string | null
           club_name?: string
           email?: string
           id?: string
@@ -315,6 +327,7 @@ export type Database = {
       }
       manual_180_entries: {
         Row: {
+          club_id: string | null
           count: number
           created_at: string
           id: string
@@ -322,6 +335,7 @@ export type Database = {
           year: number
         }
         Insert: {
+          club_id?: string | null
           count: number
           created_at?: string
           id?: string
@@ -329,6 +343,7 @@ export type Database = {
           year: number
         }
         Update: {
+          club_id?: string | null
           count?: number
           created_at?: string
           id?: string
@@ -352,6 +367,7 @@ export type Database = {
           average: number
           bio: string | null
           birthday: string | null
+          club_id: string | null
           created_at: string
           dart_weight_g: number | null
           double_rate: number
@@ -377,6 +393,7 @@ export type Database = {
           average?: number
           bio?: string | null
           birthday?: string | null
+          club_id?: string | null
           created_at?: string
           dart_weight_g?: number | null
           double_rate?: number
@@ -402,6 +419,7 @@ export type Database = {
           average?: number
           bio?: string | null
           birthday?: string | null
+          club_id?: string | null
           created_at?: string
           dart_weight_g?: number | null
           double_rate?: number
@@ -426,6 +444,7 @@ export type Database = {
       push_subscriptions: {
         Row: {
           auth: string
+          club_id: string | null
           created_at: string
           endpoint: string
           id: string
@@ -434,6 +453,7 @@ export type Database = {
         }
         Insert: {
           auth: string
+          club_id?: string | null
           created_at?: string
           endpoint: string
           id?: string
@@ -442,6 +462,7 @@ export type Database = {
         }
         Update: {
           auth?: string
+          club_id?: string | null
           created_at?: string
           endpoint?: string
           id?: string
@@ -452,6 +473,7 @@ export type Database = {
       }
       tournament_series: {
         Row: {
+          club_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -462,6 +484,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          club_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -472,6 +495,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          club_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -490,6 +514,7 @@ export type Database = {
           boards: number
           bracket: Json
           champion: string | null
+          club_id: string | null
           created_at: string
           game_mode: string
           id: string
@@ -514,6 +539,7 @@ export type Database = {
           boards?: number
           bracket?: Json
           champion?: string | null
+          club_id?: string | null
           created_at?: string
           game_mode?: string
           id?: string
@@ -538,6 +564,7 @@ export type Database = {
           boards?: number
           bracket?: Json
           champion?: string | null
+          club_id?: string | null
           created_at?: string
           game_mode?: string
           id?: string
@@ -607,18 +634,21 @@ export type Database = {
       }
       user_roles: {
         Row: {
+          club_id: string
           created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
+          club_id: string
           created_at?: string
           id?: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
+          club_id?: string
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
@@ -687,6 +717,7 @@ export type Database = {
       }
     }
     Functions: {
+      current_club_id: { Args: Record<PropertyKey, never>; Returns: string }
       update_match_live_snapshot: { Args: { p_tournament_id: string; p_match_id: string; p_snapshot: Json }; Returns: undefined }
       apply_game_player_stats: { Args: { p_game_id: string }; Returns: undefined }
       admin_delete_user: { Args: { _user_id: string }; Returns: undefined }

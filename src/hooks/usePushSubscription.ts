@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { getCurrentPushSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from "@/lib/push";
 
 export function usePushSubscription(userId: string | undefined) {
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const { toast } = useToast();
+  const { clubId } = useClubBranding();
   const supported = isPushSupported();
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export function usePushSubscription(userId: string | undefined) {
         setEnabled(false);
         toast({ title: "Benachrichtigungen deaktiviert" });
       } else {
-        const ok = await subscribeToPush(userId);
+        const ok = await subscribeToPush(userId, clubId);
         setEnabled(ok);
         if (ok) {
           toast({ title: "Benachrichtigungen aktiviert", description: "z. B. wenn dein Turnierspiel als Nächstes dran ist." });

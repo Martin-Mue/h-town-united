@@ -21,6 +21,7 @@ import {
 export async function saveGameRecord(
   game: GameState,
   userId: string | undefined,
+  clubId: string | null,
   pendingGameId: string,
   tournamentLink?: { tournamentId: string; matchId: string }
 ): Promise<void> {
@@ -118,7 +119,7 @@ export async function saveGameRecord(
 
   const gameInsertPayload = {
     id: pendingGameId,
-    user_id: userId, mode: game.mode, start_score: game.startScore,
+    user_id: userId, club_id: clubId, mode: game.mode, start_score: game.startScore,
     best_of_legs: game.bestOfLegs,
     player1_name: player1Name, player2_name: player2Name,
     player1_id: p1Match?.id || null, player2_id: p2Match?.id || null,
@@ -173,6 +174,7 @@ export async function saveGameRecord(
         game.players.map((p, i) => ({
           game_id: insertedGameId,
           user_id: userId,
+          club_id: clubId,
           leg_number: leg.legNumber,
           player_index: i,
           player_name: p.name,

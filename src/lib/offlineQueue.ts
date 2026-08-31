@@ -17,6 +17,11 @@ export interface QueuedGameSave {
   id: string;
   game: GameState;
   userId: string | undefined;
+  /** The club the game was played in AT THE TIME it was queued — captured here rather than
+   *  re-resolved at replay time, so a device that's offline for a while still tags the game
+   *  correctly even if (in a future multi-club world) whatever the app resolves as "current
+   *  club" could theoretically have changed by the time connectivity comes back. */
+  clubId: string | null;
   /** Set when the game was started from a tournament bracket match, so the replay can still tag the saved row. */
   tournamentLink?: { tournamentId: string; matchId: string };
   createdAt: number;
@@ -144,9 +149,9 @@ export const subscribeQueueCount = gameQueue.subscribeCount;
 export const getQueueCount = gameQueue.count;
 
 export async function flushGameSaveQueue(
-  replay: (game: GameState, userId: string | undefined, pendingGameId: string, tournamentLink?: { tournamentId: string; matchId: string }) => Promise<void>
+  replay: (game: GameState, userId: string | undefined, clubId: string | null, pendingGameId: string, tournamentLink?: { tournamentId: string; matchId: string }) => Promise<void>
 ): Promise<{ synced: number; failed: number }> {
-  return gameQueue.flush((item) => replay(item.game, item.userId, item.id, item.tournamentLink));
+  return gameQueue.flush((item) => replay(item.game, item.userId, item.clubId ?? null, item.id, item.tournamentLink));
 }
 
 const matchResultQueue = createQueue<QueuedMatchResult>(MATCH_RESULT_STORE);

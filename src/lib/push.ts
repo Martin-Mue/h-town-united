@@ -25,7 +25,7 @@ export async function getCurrentPushSubscription(): Promise<PushSubscription | n
 
 /** Requests notification permission, subscribes via the service worker, and stores the
  *  subscription server-side so edge functions can push to this device later. */
-export async function subscribeToPush(userId: string): Promise<boolean> {
+export async function subscribeToPush(userId: string, clubId: string | null): Promise<boolean> {
   if (!isPushSupported()) return false;
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return false;
@@ -42,7 +42,7 @@ export async function subscribeToPush(userId: string): Promise<boolean> {
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return false;
 
   const { error } = await supabase.from("push_subscriptions").upsert(
-    { user_id: userId, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth },
+    { user_id: userId, club_id: clubId, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth },
     { onConflict: "endpoint" }
   );
   return !error;

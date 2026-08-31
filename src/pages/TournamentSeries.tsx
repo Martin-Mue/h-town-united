@@ -11,6 +11,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { type Match, isRealPlayer, totalRoundsOf } from "@/utils/tournament";
@@ -53,6 +54,7 @@ const DEFAULT_SCORING: Scoring = { champion: 100, runnerUp: 70, semi: 50, quarte
 const TournamentSeriesPage = () => {
   const { id } = useParams();
   const { session } = useAuth();
+  const { clubId } = useClubBranding();
   const { toast } = useToast();
   const { t, language } = useLanguage();
   const [series, setSeries] = useState<Series[]>([]);
@@ -95,7 +97,7 @@ const TournamentSeriesPage = () => {
             name: name.trim(), description: desc.trim() || null, scoring: scoring as unknown as Json,
           }).eq("id", editingId)
         : await supabase.from("tournament_series").insert({
-            user_id: session.user.id, name: name.trim(), description: desc.trim() || null, scoring: scoring as unknown as Json,
+            user_id: session.user.id, club_id: clubId, name: name.trim(), description: desc.trim() || null, scoring: scoring as unknown as Json,
           });
       if (error) { toast({ title: t("common.error"), description: error.message, variant: "destructive" }); return; }
       resetForm();

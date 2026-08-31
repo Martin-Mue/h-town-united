@@ -737,6 +737,7 @@ const TournamentPage = () => {
   const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
 
   const { session } = useAuth();
+  const { clubId } = useClubBranding();
   const { toast } = useToast();
   const navigate = useNavigate();
   const { id: routeTournamentId } = useParams();
@@ -1114,6 +1115,7 @@ const TournamentPage = () => {
       game_mode: gameMode,
       best_of_legs: bestOfLegs,
       user_id: session?.user?.id as string,
+      club_id: clubId,
       players: players as unknown as Json,
       bracket: bracket as unknown as Json,
       status: "active",

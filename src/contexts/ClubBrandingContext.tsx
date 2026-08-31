@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import { useTheme } from "next-themes";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveClubTheme, DEFAULT_CLUB_THEME_PRESET_ID } from "@/lib/clubThemePresets";
 import htuLogoFallback from "@/assets/htu-logo.jpg";
@@ -14,6 +15,7 @@ interface ClubRow {
 
 interface ClubBrandingContextType {
   club: ClubRow | null;
+  clubId: string | null;
   name: string;
   tagline: string | null;
   logoUrl: string;
@@ -27,6 +29,7 @@ const FALLBACK_NAME = "H-Town United e.V.";
 
 const ClubBrandingContext = createContext<ClubBrandingContextType>({
   club: null,
+  clubId: null,
   name: FALLBACK_NAME,
   tagline: null,
   logoUrl: htuLogoFallback,
@@ -40,16 +43,41 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
   const [club, setClub] = useState<ClubRow | null>(null);
   const [loading, setLoading] = useState(true);
   const { resolvedTheme } = useTheme();
+  const { user, loading: authLoading } = useAuth();
 
   const fetchClub = async () => {
-    const { data } = await supabase.from("clubs").select("*").limit(1).maybeSingle();
+    setLoading(true);
+    if (user) {
+      // Authenticated: resolve the caller's OWN club via their membership row, not just
+      // "whichever club happens to exist" -- this is what makes branding correct once a
+      // second club exists. Two plain queries (not a PostgREST embed) to match this codebase's
+      // existing convention of joining client-side rather than relying on embedded selects.
+      const { data: roleRow } = await supabase.from("user_roles").select("club_id").eq("user_id", user.id).maybeSingle();
+      if (roleRow?.club_id) {
+        const { data: clubRow } = await supabase.from("clubs").select("*").eq("id", roleRow.club_id).maybeSingle();
+        if (clubRow) {
+          setClub(clubRow);
+          setLoading(false);
+          return;
+        }
+      }
+      // Authenticated but no membership row yet (mid-onboarding, or a pre-Phase-2 edge case) --
+      // falls through to the same "first club" lookup as an anonymous visitor below.
+    }
+    // Anonymous visitor (or a clubless authenticated one): today there's only ever one club, so
+    // this always resolves to it -- same behavior as before this rework. Once a real multi-club
+    // landing exists for a cold, un-invited visitor, this is the spot to swap in a neutral,
+    // non-club-specific identity instead.
+    const { data } = await supabase.from("clubs").select("*").order("created_at", { ascending: true }).limit(1).maybeSingle();
     if (data) setClub(data);
     setLoading(false);
   };
 
   useEffect(() => {
+    if (authLoading) return;
     fetchClub();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authLoading]);
 
   // Re-apply CSS vars whenever the preset or the resolved light/dark mode changes.
   useEffect(() => {
@@ -75,6 +103,7 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
 
   const value: ClubBrandingContextType = {
     club,
+    clubId: club?.id ?? null,
     name: club?.name ?? FALLBACK_NAME,
     tagline: club?.tagline ?? null,
     logoUrl,

@@ -88,7 +88,7 @@ const EMPTY_PLAYER_FORM = {
  */
 const PlayersPage = () => {
   const { t } = useLanguage();
-  const { name: clubName, logoUrl } = useClubBranding();
+  const { name: clubName, clubId, logoUrl } = useClubBranding();
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -505,6 +505,7 @@ const PlayersPage = () => {
         nickname: newNickname.trim() || null,
         emoji: newEmoji,
         user_id: session?.user?.id,
+        club_id: clubId,
         bio: newBio.trim() || null,
         throwing_hand: newHand || null,
         dart_weight_g: newWeight ? parseInt(newWeight) : null,
