@@ -20,12 +20,18 @@ interface ClubBrandingContextType {
   tagline: string | null;
   logoUrl: string;
   loading: boolean;
+  /** True only after a network/query error resolving an AUTHENTICATED user's own membership,
+   *  and every automatic retry has also failed. RequireClub (App.tsx) must treat this the same
+   *  as still-loading, NEVER as "confirmed no club" -- see the resolved flag below for why this
+   *  distinction exists at all. */
+  membershipError: boolean;
   refetch: () => Promise<void>;
 }
 
 // Pre-fetch / fetch-error fallback only -- matches the seed row so a network hiccup never
 // leaves the app looking broken or blank for existing members.
 const FALLBACK_NAME = "H-Town United e.V.";
+const RETRY_DELAY_MS = 2000;
 
 const ClubBrandingContext = createContext<ClubBrandingContextType>({
   club: null,
@@ -34,6 +40,7 @@ const ClubBrandingContext = createContext<ClubBrandingContextType>({
   tagline: null,
   logoUrl: htuLogoFallback,
   loading: true,
+  membershipError: false,
   refetch: async () => {},
 });
 
@@ -42,28 +49,45 @@ export const useClubBranding = () => useContext(ClubBrandingContext);
 export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
   const [club, setClub] = useState<ClubRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [membershipError, setMembershipError] = useState(false);
   const { resolvedTheme } = useTheme();
   const { user, loading: authLoading } = useAuth();
 
-  const fetchClub = async () => {
-    setLoading(true);
+  const fetchClub = async (isRetry = false) => {
+    if (!isRetry) setLoading(true);
     if (user) {
       // Authenticated: resolve the caller's OWN club via their membership row, not just
       // "whichever club happens to exist" -- this is what makes branding correct once a
       // second club exists. Two plain queries (not a PostgREST embed) to match this codebase's
       // existing convention of joining client-side rather than relying on embedded selects.
-      const { data: roleRow } = await supabase.from("user_roles").select("club_id").eq("user_id", user.id).maybeSingle();
-      if (roleRow?.club_id) {
-        const { data: clubRow } = await supabase.from("clubs").select("*").eq("id", roleRow.club_id).maybeSingle();
-        setClub(clubRow ?? null);
-      } else {
-        // Authenticated but genuinely no membership row (mid-onboarding, right after signup) --
-        // stays null rather than falling back to "the first club" the way an anonymous visitor
-        // does below. This null is exactly the signal RequireClub (App.tsx) uses to redirect to
-        // /create-club -- silently showing them some other club's branding here would both be
-        // misleading and mask that redirect from ever firing.
-        setClub(null);
+      const { data: roleRow, error: roleError } = await supabase.from("user_roles").select("club_id").eq("user_id", user.id).maybeSingle();
+      const { data: clubRow, error: clubError } = roleError
+        ? { data: null, error: null }
+        : roleRow?.club_id
+          ? await supabase.from("clubs").select("*").eq("id", roleRow.club_id).maybeSingle()
+          : { data: null, error: null };
+
+      // A query ERROR (RLS hiccup, dropped connection, ...) must NEVER be treated the same as a
+      // genuinely-empty result -- RequireClub (App.tsx) reads `!club` as "this account has no
+      // club" and redirects to /create-club. Confusing "we don't know yet" with "confirmed
+      // clubless" would wrongly bounce an EXISTING member there on a transient failure. One
+      // automatic retry after a short delay; if that also fails, membershipError stays set (never
+      // resolved as clubless) until something succeeds -- RequireClub keeps showing a fallback
+      // instead of ever redirecting in this state.
+      if (roleError || clubError) {
+        if (!isRetry) {
+          setTimeout(() => fetchClub(true), RETRY_DELAY_MS);
+          return;
+        }
+        setMembershipError(true);
+        setLoading(false);
+        return;
       }
+
+      setMembershipError(false);
+      // roleRow being null/no club_id (with NO error) is the one legitimate "genuinely clubless"
+      // case -- mid-onboarding, right after signup, before /create-club or an invite has run.
+      setClub(clubRow ?? null);
       setLoading(false);
       return;
     }
@@ -112,7 +136,8 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
     tagline: club?.tagline ?? null,
     logoUrl,
     loading,
-    refetch: fetchClub,
+    membershipError,
+    refetch: () => fetchClub(),
   };
 
   return <ClubBrandingContext.Provider value={value}>{children}</ClubBrandingContext.Provider>;

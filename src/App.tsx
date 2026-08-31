@@ -55,8 +55,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
  *  /create-club instead -- see ClubBrandingContext's fetchClub for why `club` is reliably null
  *  in exactly this case, not silently defaulted to some other club. */
 const RequireClub = ({ children }: { children: React.ReactNode }) => {
-  const { club, loading } = useClubBranding();
-  if (loading) return <RouteFallback />;
+  const { club, loading, membershipError } = useClubBranding();
+  // membershipError means the membership lookup itself failed (RLS hiccup, dropped connection),
+  // not that it succeeded and came back empty -- treating it as "confirmed no club" would wrongly
+  // redirect an EXISTING member to /create-club on a transient failure. Show the same fallback as
+  // still-loading instead; ClubBrandingContext keeps retrying in the background.
+  if (loading || membershipError) return <RouteFallback />;
   if (!club) return <Navigate to="/create-club" replace />;
   return <>{children}</>;
 };
