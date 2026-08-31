@@ -108,6 +108,7 @@ export type Database = {
           id: string
           logo_path: string | null
           name: string
+          plan_tier: string
           tagline: string | null
           theme_preset: string
           updated_at: string
@@ -117,6 +118,7 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name: string
+          plan_tier?: string
           tagline?: string | null
           theme_preset?: string
           updated_at?: string
@@ -126,6 +128,7 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name?: string
+          plan_tier?: string
           tagline?: string | null
           theme_preset?: string
           updated_at?: string
@@ -746,6 +749,30 @@ export type Database = {
       }
     }
     Views: {
+      clubs_public: {
+        Row: {
+          id: string | null
+          logo_path: string | null
+          name: string | null
+          tagline: string | null
+          theme_preset: string | null
+        }
+        Insert: {
+          id?: string | null
+          logo_path?: string | null
+          name?: string | null
+          tagline?: string | null
+          theme_preset?: string | null
+        }
+        Update: {
+          id?: string | null
+          logo_path?: string | null
+          name?: string | null
+          tagline?: string | null
+          theme_preset?: string | null
+        }
+        Relationships: []
+      }
       tournaments_public: {
         Row: {
           attendance: Json | null

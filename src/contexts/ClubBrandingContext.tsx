@@ -67,10 +67,12 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
       return;
     }
-    // Anonymous visitor: today there's only ever one club, so this always resolves to it -- same
-    // behavior as before this rework. Once a real multi-club landing exists for a cold,
-    // un-invited visitor, this is the spot to swap in a neutral, non-club-specific identity instead.
-    const { data } = await supabase.from("clubs").select("*").order("created_at", { ascending: true }).limit(1).maybeSingle();
+    // Anonymous visitor: reads the public-safe view (the base `clubs` table's SELECT is
+    // authenticated-members-only, see the plan_tier migration) -- today there's only ever one
+    // club, so this always resolves to it, same behavior as before this rework. Once a real
+    // multi-club landing exists for a cold, un-invited visitor, this is the spot to swap in a
+    // neutral, non-club-specific identity instead.
+    const { data } = await supabase.from("clubs_public").select("*").limit(1).maybeSingle();
     if (data) setClub(data);
     setLoading(false);
   };

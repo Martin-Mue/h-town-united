@@ -31,7 +31,7 @@ const JoinClubPage = () => {
 
   useEffect(() => {
     if (!clubId) return;
-    supabase.from("clubs").select("id, name, tagline, logo_path").eq("id", clubId).maybeSingle().then(({ data }) => {
+    supabase.from("clubs_public").select("id, name, tagline, logo_path").eq("id", clubId).maybeSingle().then(({ data }) => {
       setClub(data ?? "not_found");
       setLoading(false);
     });
