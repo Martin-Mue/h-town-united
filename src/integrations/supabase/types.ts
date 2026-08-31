@@ -14,6 +14,94 @@ export type Database = {
   }
   public: {
     Tables: {
+      club_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          club_id: string
+          created_at: string
+          created_by: string
+          email: string
+          expires_at: string
+          id: string
+          revoked_at: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          club_id: string
+          created_at?: string
+          created_by: string
+          email: string
+          expires_at?: string
+          id?: string
+          revoked_at?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          token?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          club_id?: string
+          created_at?: string
+          created_by?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          revoked_at?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_invites_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      club_join_requests: {
+        Row: {
+          club_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          club_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          club_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_join_requests_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clubs: {
         Row: {
           created_at: string
@@ -718,6 +806,24 @@ export type Database = {
     }
     Functions: {
       current_club_id: { Args: Record<PropertyKey, never>; Returns: string }
+      create_club: { Args: { _name: string; _tagline?: string | null }; Returns: string }
+      get_invite_preview: {
+        Args: { _token: string }
+        Returns: {
+          club_name: string
+          tagline: string | null
+          logo_path: string | null
+          expired: boolean
+          already_accepted: boolean
+        }[]
+      }
+      accept_club_invite: { Args: { _token: string }; Returns: string }
+      request_to_join_club: { Args: { _club_id: string }; Returns: string }
+      respond_to_join_request: { Args: { _request_id: string; _approve: boolean }; Returns: undefined }
+      admin_list_join_requests: {
+        Args: Record<PropertyKey, never>
+        Returns: { id: string; user_id: string; email: string; created_at: string }[]
+      }
       update_match_live_snapshot: { Args: { p_tournament_id: string; p_match_id: string; p_snapshot: Json }; Returns: undefined }
       apply_game_player_stats: { Args: { p_game_id: string }; Returns: undefined }
       admin_delete_user: { Args: { _user_id: string }; Returns: undefined }

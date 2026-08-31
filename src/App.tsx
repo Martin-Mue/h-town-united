@@ -6,7 +6,7 @@ import { ThemeProvider } from "next-themes";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
-import { ClubBrandingProvider } from "@/contexts/ClubBrandingContext";
+import { ClubBrandingProvider, useClubBranding } from "@/contexts/ClubBrandingContext";
 import Layout from "./components/Layout";
 import Auth from "./pages/Auth";
 import { Loader2 } from "lucide-react";
@@ -26,6 +26,9 @@ const Admin = lazy(() => import("./pages/Admin"));
 const TournamentSeries = lazy(() => import("./pages/TournamentSeries"));
 const PublicTournament = lazy(() => import("./pages/PublicTournament"));
 const Settings = lazy(() => import("./pages/Settings"));
+const CreateClub = lazy(() => import("./pages/CreateClub"));
+const InvitePage = lazy(() => import("./pages/InvitePage"));
+const JoinClubPage = lazy(() => import("./pages/JoinClubPage"));
 
 const RouteFallback = () => {
   const { t } = useLanguage();
@@ -47,6 +50,17 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+/** Gates the main app behind club membership, inside ProtectedRoute (needs a session first).
+ *  An authenticated account with no club yet (fresh signup, not via an invite) lands on
+ *  /create-club instead -- see ClubBrandingContext's fetchClub for why `club` is reliably null
+ *  in exactly this case, not silently defaulted to some other club. */
+const RequireClub = ({ children }: { children: React.ReactNode }) => {
+  const { club, loading } = useClubBranding();
+  if (loading) return <RouteFallback />;
+  if (!club) return <Navigate to="/create-club" replace />;
+  return <>{children}</>;
+};
+
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
     <LanguageProvider>
@@ -61,10 +75,14 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/live/:slug" element={<PublicTournament />} />
+              <Route path="/invite/:token" element={<InvitePage />} />
+              <Route path="/join/:clubId" element={<JoinClubPage />} />
+              <Route path="/create-club" element={<ProtectedRoute><CreateClub /></ProtectedRoute>} />
               <Route
                 path="/*"
                 element={
                   <ProtectedRoute>
+                    <RequireClub>
                     <Layout>
                       <Suspense fallback={<RouteFallback />}>
                         <Routes>
@@ -83,6 +101,7 @@ const App = () => (
                         </Routes>
                       </Suspense>
                     </Layout>
+                    </RequireClub>
                   </ProtectedRoute>
                 }
               />

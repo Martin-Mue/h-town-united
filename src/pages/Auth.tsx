@@ -69,7 +69,7 @@ const AuthPage = () => {
           title: "Willkommen im Verein! 🎯",
           description: "Lege jetzt dein Spielerprofil an.",
         });
-        navigate("/players?createProfile=1", { replace: true });
+        navigate(from || "/players?createProfile=1", { replace: true });
         return;
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {

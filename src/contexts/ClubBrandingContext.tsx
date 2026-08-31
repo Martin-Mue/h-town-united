@@ -55,19 +55,21 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
       const { data: roleRow } = await supabase.from("user_roles").select("club_id").eq("user_id", user.id).maybeSingle();
       if (roleRow?.club_id) {
         const { data: clubRow } = await supabase.from("clubs").select("*").eq("id", roleRow.club_id).maybeSingle();
-        if (clubRow) {
-          setClub(clubRow);
-          setLoading(false);
-          return;
-        }
+        setClub(clubRow ?? null);
+      } else {
+        // Authenticated but genuinely no membership row (mid-onboarding, right after signup) --
+        // stays null rather than falling back to "the first club" the way an anonymous visitor
+        // does below. This null is exactly the signal RequireClub (App.tsx) uses to redirect to
+        // /create-club -- silently showing them some other club's branding here would both be
+        // misleading and mask that redirect from ever firing.
+        setClub(null);
       }
-      // Authenticated but no membership row yet (mid-onboarding, or a pre-Phase-2 edge case) --
-      // falls through to the same "first club" lookup as an anonymous visitor below.
+      setLoading(false);
+      return;
     }
-    // Anonymous visitor (or a clubless authenticated one): today there's only ever one club, so
-    // this always resolves to it -- same behavior as before this rework. Once a real multi-club
-    // landing exists for a cold, un-invited visitor, this is the spot to swap in a neutral,
-    // non-club-specific identity instead.
+    // Anonymous visitor: today there's only ever one club, so this always resolves to it -- same
+    // behavior as before this rework. Once a real multi-club landing exists for a cold,
+    // un-invited visitor, this is the spot to swap in a neutral, non-club-specific identity instead.
     const { data } = await supabase.from("clubs").select("*").order("created_at", { ascending: true }).limit(1).maybeSingle();
     if (data) setClub(data);
     setLoading(false);
