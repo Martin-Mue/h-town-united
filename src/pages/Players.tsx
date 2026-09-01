@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { SectionCard, StatTile } from "@/components/stats/StatPrimitives";
 
 // recharts (~390KB) is only needed once a player's detail view is open, not for browsing
 // the roster list — split into its own chunk instead of loading it for every /players visit.
@@ -622,7 +623,9 @@ const PlayersPage = () => {
 
         {/* Player header with portrait */}
         <div className="flex items-center gap-4 mb-6">
-          <PlayerAvatar player={selectedPlayer} size="lg" />
+          <div className="rounded-xl ring-2 ring-primary/40 shadow-[0_0_24px_hsl(var(--primary)/0.2)]">
+            <PlayerAvatar player={selectedPlayer} size="lg" />
+          </div>
           <div>
             <h2 className="text-2xl font-display uppercase">{selectedPlayer.name}</h2>
             {selectedPlayer.nickname && <p className="text-primary text-sm font-medium">"{selectedPlayer.nickname}"</p>}
@@ -660,35 +663,29 @@ const PlayersPage = () => {
         {(selectedPlayer.throwing_hand || selectedPlayer.dart_weight_g || selectedPlayer.favorite_double || selectedPlayer.birthday) && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {selectedPlayer.throwing_hand && (
-              <div className="bg-card rounded-xl p-3 border border-border">
-                <Hand className="w-4 h-4 text-primary mb-1" />
-                <p className="text-sm font-display">{
-                  selectedPlayer.throwing_hand === "right" ? t("players.right") :
-                  selectedPlayer.throwing_hand === "left" ? t("players.left") : t("players.ambidextrous")
-                }</p>
-                <p className="text-[10px] text-muted-foreground">{t("players.throwingHand")}</p>
-              </div>
+              <SectionCard>
+                <StatTile
+                  icon={Hand}
+                  tone="primary"
+                  value={selectedPlayer.throwing_hand === "right" ? t("players.right") : selectedPlayer.throwing_hand === "left" ? t("players.left") : t("players.ambidextrous")}
+                  label={t("players.throwingHand")}
+                />
+              </SectionCard>
             )}
             {selectedPlayer.dart_weight_g && (
-              <div className="bg-card rounded-xl p-3 border border-border">
-                <Target className="w-4 h-4 text-primary mb-1" />
-                <p className="text-sm font-display">{selectedPlayer.dart_weight_g} g</p>
-                <p className="text-[10px] text-muted-foreground">{t("players.dartWeight")}</p>
-              </div>
+              <SectionCard>
+                <StatTile icon={Target} tone="primary" value={`${selectedPlayer.dart_weight_g} g`} label={t("players.dartWeight")} />
+              </SectionCard>
             )}
             {selectedPlayer.favorite_double && (
-              <div className="bg-card rounded-xl p-3 border border-border">
-                <Trophy className="w-4 h-4 text-primary mb-1" />
-                <p className="text-sm font-display">{selectedPlayer.favorite_double}</p>
-                <p className="text-[10px] text-muted-foreground">{t("players.favoriteDouble")}</p>
-              </div>
+              <SectionCard>
+                <StatTile icon={Trophy} tone="primary" value={selectedPlayer.favorite_double} label={t("players.favoriteDouble")} />
+              </SectionCard>
             )}
             {selectedPlayer.birthday && (
-              <div className="bg-card rounded-xl p-3 border border-border">
-                <Calendar className="w-4 h-4 text-primary mb-1" />
-                <p className="text-sm font-display">{new Date(selectedPlayer.birthday).toLocaleDateString("de-DE")}</p>
-                <p className="text-[10px] text-muted-foreground">{t("players.birthday")}</p>
-              </div>
+              <SectionCard>
+                <StatTile icon={Calendar} tone="primary" value={new Date(selectedPlayer.birthday).toLocaleDateString("de-DE")} label={t("players.birthday")} />
+              </SectionCard>
             )}
           </div>
         )}
@@ -701,11 +698,9 @@ const PlayersPage = () => {
             { label: "Highscore", value: selectedPlayer.high_score, icon: TrendingUp },
             { label: t("stats.average"), value: selectedPlayer.games_played > 0 ? Number(selectedPlayer.average).toFixed(1) : "–", icon: BarChart3 },
           ].map((stat) => (
-            <div key={stat.label} className="bg-card rounded-xl p-4 border border-border">
-              <stat.icon className="w-4 h-4 text-primary mb-1" />
-              <p className="text-2xl font-display">{stat.value}</p>
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
-            </div>
+            <SectionCard key={stat.label}>
+              <StatTile icon={stat.icon} value={stat.value} label={stat.label} tone="primary" />
+            </SectionCard>
           ))}
         </div>
 
@@ -1022,18 +1017,15 @@ const PlayersPage = () => {
                       )}
                     </div>
 
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-lg bg-muted/40 px-2 py-2">
-                        <p className="text-sm font-display">{player.high_score || 0}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase">High</p>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <div className="rounded-lg bg-muted/40 py-2">
+                        <StatTile value={player.high_score || 0} label="High" />
                       </div>
-                      <div className="rounded-lg bg-muted/40 px-2 py-2">
-                        <p className="text-sm font-display">{player.games_played > 0 ? Number(player.average).toFixed(1) : "–"}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase">Ø</p>
+                      <div className="rounded-lg bg-muted/40 py-2">
+                        <StatTile value={player.games_played > 0 ? Number(player.average).toFixed(1) : "–"} label="Ø" />
                       </div>
-                      <div className="rounded-lg bg-muted/40 px-2 py-2">
-                        <p className="text-sm font-display">{player.throwing_hand === "left" ? t("players.left") : player.throwing_hand === "right" ? t("players.right") : player.throwing_hand === "ambi" ? t("players.both") : "–"}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase">Hand</p>
+                      <div className="rounded-lg bg-muted/40 py-2">
+                        <StatTile value={player.throwing_hand === "left" ? t("players.left") : player.throwing_hand === "right" ? t("players.right") : player.throwing_hand === "ambi" ? t("players.both") : "–"} label="Hand" />
                       </div>
                     </div>
                   </div>
