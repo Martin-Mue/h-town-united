@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   isAchievableVisitTotal, scoreTierBreakdown, segmentBreakdown, segmentCount,
-  combineScoreTiers, combineSegmentCounts, type DartThrow,
+  combineScoreTiers, combineSegmentCounts, first9Average,
+  computeLegStatBundle, combineStatBundles, type DartThrow,
 } from "./dartStats";
 
 describe("isAchievableVisitTotal", () => {
@@ -150,5 +151,46 @@ describe("combineScoreTiers / combineSegmentCounts (cross-leg boundary safety)",
     expect(segmentCount(combined, 20, 3)).toBe(2);
     expect(segmentCount(combined, 1, 1)).toBe(3);
     expect(combined.misses).toBe(1);
+  });
+});
+
+describe("combineStatBundles first9 (cross-leg boundary safety)", () => {
+  // Regression (2026-09-01): first9 was recomputed via first9Average(overallThrows) — slicing the
+  // first 9 elements off the flattened cross-leg array. Since legs are concatenated in play order,
+  // that slice is always exactly leg 1's own first 9 darts, silently mislabeled as the whole
+  // match's First 9 average — every other leg's real start was never looked at.
+  const leg1Throws = throwsOf(visit(d(20, 1), d(20, 1), d(20, 1)), visit(d(20, 1), d(20, 1), d(20, 1)), visit(d(20, 1), d(20, 1), d(20, 1))); // 9 darts, all S20 -> first9 = 60
+  const leg2Throws = throwsOf(visit(d(5, 1), d(5, 1), d(5, 1)), visit(d(5, 1), d(5, 1), d(5, 1))); // only 6 darts, all S5 -> first9 = 15 (a rate, unaffected by being a shorter leg)
+
+  it("naive first9Average(overallThrows) returns only leg1's first9, ignoring leg2 entirely", () => {
+    const overall = [...leg1Throws, ...leg2Throws];
+    expect(first9Average(overall)).toBe(first9Average(leg1Throws)); // 60 — leg2's real 15 never seen
+  });
+
+  it("combineStatBundles averages each leg's own first9 instead", () => {
+    const bundle1 = computeLegStatBundle(leg1Throws, 501, false);
+    const bundle2 = computeLegStatBundle(leg2Throws, 501, false);
+    const overall = combineStatBundles([bundle1, bundle2], [...leg1Throws, ...leg2Throws]);
+    expect(bundle1.first9).toBe(60);
+    expect(bundle2.first9).toBe(15);
+    expect(overall.first9).toBe(37.5); // (60 + 15) / 2, not leg1's 60
+  });
+
+  it("excludes a leg the player never threw in, rather than averaging in a spurious 0", () => {
+    const bundle1 = computeLegStatBundle(leg1Throws, 501, false);
+    const neverThrew = computeLegStatBundle([], 501, false); // opponent finished before this player's turn
+    const overall = combineStatBundles([bundle1, neverThrew], [...leg1Throws]);
+    expect(overall.first9).toBe(60); // not (60 + 0) / 2 = 30
+  });
+
+  it("match average is a real dart-weighted total, unlike first9's unweighted per-leg mean", () => {
+    const bundle1 = computeLegStatBundle(leg1Throws, 501, false);
+    const bundle2 = computeLegStatBundle(leg2Throws, 501, false);
+    const overall = combineStatBundles([bundle1, bundle2], [...leg1Throws, ...leg2Throws]);
+    // Legs are different lengths (9 vs 6 darts), so these two intentionally diverge: average
+    // weighs leg2's 6 darts less than leg1's 9 (42 = 210 total points / 15 darts * 3), while
+    // first9 treats both legs' rates as equally-weighted data points (37.5 = (60+15)/2).
+    expect(overall.average).toBe(42);
+    expect(overall.first9).toBe(37.5);
   });
 });

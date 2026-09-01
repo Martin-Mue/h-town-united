@@ -264,3 +264,73 @@ export function combineCricketStats(all: CricketStats[]): CricketStats {
     totalDarts,
   };
 }
+
+// ─── Per-leg / whole-match stat bundles ────────────────────────────────
+/** Every post-game number for one player, scoped to either a single leg or the whole match.
+ *  Shared by Game.tsx's live post-match screen and Statistics.tsx's retrospective game-history
+ *  view — both need the exact same leg-boundary-safe aggregation (see combineStatBundles). */
+export interface StatBundle {
+  average: number;
+  highscore: number;
+  first9: number;
+  totalThrows: number;
+  totalPoints: number;
+  triples: number;
+  tonPlus: number;
+  s180: number;
+  checkout: CheckoutStats;
+  tierBreakdown: ScoreTierCount[];
+  segments: SegmentCounts;
+}
+
+/** Safe to compute directly from one leg's own throws — a single leg is one continuous sequence
+ *  for that player, so chunking into 3-dart visits (tonPlus/s180/tierBreakdown/segments) never
+ *  crosses a boundary it shouldn't. */
+export const computeLegStatBundle = (throws: DartThrow[], startingScore: number, isCricket: boolean): StatBundle => ({
+  average: average(throws),
+  highscore: highestVisit(throws),
+  first9: first9Average(throws),
+  totalThrows: throws.length,
+  totalPoints: throws.reduce((s, t) => s + t.points, 0),
+  triples: throws.filter(t => t.multiplier === 3).length,
+  tonPlus: tonPlusCount(throws),
+  s180: count180s(throws),
+  checkout: isCricket ? { attempts: 0, hits: 0, percentage: 0, highestCheckout: 0 } : computeCheckoutStats(throws, startingScore),
+  tierBreakdown: scoreTierBreakdown(throws),
+  segments: segmentBreakdown(throws),
+});
+
+/** Combines per-leg bundles into a match-wide ("Gesamt") view. `average` is safe to recompute
+ *  from the flattened cross-leg throws directly — it's a pure sum/count ratio, unaffected by leg
+ *  order or boundaries. `first9` is NOT: it's inherently a "start of THIS leg" concept, so slicing
+ *  the first 9 elements off a flattened cross-leg array only ever returns leg 1's own first 9
+ *  darts, silently mislabeled as the whole match's (this was a real bug — every match's displayed
+ *  First 9 average was actually just leg 1's). The fix mirrors every other per-visit stat below:
+ *  average each leg's OWN first9 (already computed correctly in its bundle) across the legs this
+ *  player actually threw in — a leg they never got a turn in (e.g. an opponent finishing on their
+ *  very first visit) contributes no throws and is excluded, rather than dragging the mean down
+ *  with a spurious 0.
+ *
+ *  Everything else that chunks darts into 3-dart visits (tonPlus/s180/highscore/tierBreakdown/
+ *  segments/checkout) is summed/maxed from each leg's own safe-to-chunk bundle instead of being
+ *  recomputed from the flattened array — see combineScoreTiers' own comment for why that would be
+ *  wrong (concatenating raw throws across a leg boundary then chunking by 3 merges the tail of one
+ *  leg with the head of the next into a "visit" that was never actually thrown). */
+export const combineStatBundles = (bundles: StatBundle[], overallThrows: DartThrow[]): StatBundle => {
+  const legsWithThrows = bundles.filter((b) => b.totalThrows > 0);
+  return {
+    average: average(overallThrows),
+    first9: legsWithThrows.length
+      ? legsWithThrows.reduce((s, b) => s + b.first9, 0) / legsWithThrows.length
+      : 0,
+    highscore: bundles.reduce((m, b) => Math.max(m, b.highscore), 0),
+    totalThrows: bundles.reduce((s, b) => s + b.totalThrows, 0),
+    totalPoints: bundles.reduce((s, b) => s + b.totalPoints, 0),
+    triples: bundles.reduce((s, b) => s + b.triples, 0),
+    tonPlus: bundles.reduce((s, b) => s + b.tonPlus, 0),
+    s180: bundles.reduce((s, b) => s + b.s180, 0),
+    checkout: combineCheckoutStats(bundles.map(b => b.checkout)),
+    tierBreakdown: combineScoreTiers(bundles.map(b => b.tierBreakdown)),
+    segments: combineSegmentCounts(bundles.map(b => b.segments)),
+  };
+};

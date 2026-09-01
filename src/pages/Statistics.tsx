@@ -22,7 +22,8 @@ import {
   first9Average, average, highestVisit, count180s, computeCheckoutStats, combineCheckoutStats,
   computeCricketStats, combineCricketStats, experienceScore,
   scoreTierBreakdown, segmentBreakdown, segmentCount, combineScoreTiers, combineSegmentCounts, SEGMENT_NUMBERS,
-  type DartThrow, type CheckoutStats, type CricketStats, type ScoreTierCount, type SegmentCounts,
+  computeLegStatBundle, combineStatBundles,
+  type DartThrow, type CheckoutStats, type CricketStats, type ScoreTierCount, type SegmentCounts, type StatBundle,
 } from "@/utils/dartStats";
 import { highlightKindLabel } from "@/utils/x01Rules";
 import { generateSeasonReportPdf } from "@/utils/seasonReport";
@@ -974,6 +975,34 @@ const StatisticsPage = () => {
     return result;
   }, [gameLegs, games]);
 
+  // Full match-total stat bundle per player (checkout%, 180s, highscore — not just the per-leg
+  // average/first9 legsByGame above already shows), from the same game_legs data via the exact
+  // leg-boundary-safe aggregation Game.tsx's own post-match screen uses. Cricket games are skipped
+  // — checkout/tier stats don't apply there, legsByGame's MPR/hitRate already covers that mode.
+  const gameTotalsByGame = useMemo(() => {
+    const byGame: Record<string, GameLegRecord[]> = {};
+    gameLegs.forEach((leg) => {
+      (byGame[leg.game_id] ||= []).push(leg);
+    });
+    const gameById = new Map(games.map((g) => [g.id, g]));
+    const result: Record<string, { name: string; won: boolean; bundle: StatBundle }[]> = {};
+    Object.entries(byGame).forEach(([gameId, legs]) => {
+      if ((gameById.get(gameId)?.mode || "501") === "cricket") return;
+      const byPlayerIndex: Record<number, GameLegRecord[]> = {};
+      legs.forEach((l) => { (byPlayerIndex[l.player_index] ||= []).push(l); });
+      result[gameId] = Object.values(byPlayerIndex).map((rows) => {
+        const sorted = [...rows].sort((a, b) => a.leg_number - b.leg_number);
+        const perLeg = sorted.map((r) => computeLegStatBundle(r.throws, r.starting_score, false));
+        return {
+          name: sorted[0].player_name,
+          won: sorted.some((r) => r.won),
+          bundle: combineStatBundles(perLeg, sorted.flatMap((r) => r.throws)),
+        };
+      });
+    });
+    return result;
+  }, [gameLegs, games]);
+
   const filteredClips = useMemo(() => {
     const now = Date.now();
     const dayMs = 86_400_000;
@@ -1921,6 +1950,24 @@ const StatisticsPage = () => {
                     {isExpanded && (
                       legs && legs.length > 0 ? (
                         <div className="px-3 pb-3 space-y-1.5 border-t border-border/60 pt-2">
+                          {gameTotalsByGame[g.id] && (
+                            <div className="rounded-md bg-primary/10 border border-primary/20 px-2.5 py-2">
+                              <p className="text-[10px] uppercase tracking-wider text-primary mb-1">{t("stats.matchTotal")}</p>
+                              <div className="space-y-1">
+                                {gameTotalsByGame[g.id].map((p) => (
+                                  <div key={p.name} className="flex items-center justify-between text-xs">
+                                    <span className={`truncate ${p.won ? "text-secondary font-semibold" : "text-foreground"}`}>
+                                      {p.won && "🏆 "}{p.name}
+                                    </span>
+                                    <span className="text-muted-foreground font-mono shrink-0 ml-2">
+                                      Ø {p.bundle.average.toFixed(1)} · F9 {p.bundle.first9.toFixed(1)} · CO {p.bundle.checkout.percentage.toFixed(0)}%
+                                      {p.bundle.s180 > 0 && ` · ${p.bundle.s180}×180`}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           {legs.map((leg) => (
                             <div key={leg.legNumber} className="rounded-md bg-background/60 px-2.5 py-2">
                               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{t("game.leg")} {leg.legNumber}</p>

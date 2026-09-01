@@ -36,22 +36,15 @@ import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, p
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
-  highestVisit as getHighest3DartRound,
-  first9Average as getFirst9Average,
-  tonPlusCount as countTonPlusRounds,
   count180s,
   computeCheckoutStats,
   combineCheckoutStats,
   isAchievableVisitTotal,
-  scoreTierBreakdown,
-  segmentBreakdown,
   segmentCount,
-  combineScoreTiers,
-  combineSegmentCounts,
   SEGMENT_NUMBERS,
-  type CheckoutStats,
-  type ScoreTierCount,
-  type SegmentCounts,
+  computeLegStatBundle,
+  combineStatBundles,
+  type StatBundle,
 } from "@/utils/dartStats";
 
 /** Bot personas with their target 3-dart average range. `nameKey` (not a literal string) since
@@ -87,60 +80,6 @@ import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/reposi
 import { isLiveSnapshotFresh, totalRoundsOf, type Match } from "@/utils/tournament";
 import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
 import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
-
-/** Every post-game number for one player, scoped to either a single leg or the whole match — see
- *  computeLegStatBundle/combineStatBundles below. Backs the post-game screen's per-leg tabs. */
-interface StatBundle {
-  average: number;
-  highscore: number;
-  first9: number;
-  totalThrows: number;
-  totalPoints: number;
-  triples: number;
-  tonPlus: number;
-  s180: number;
-  checkout: CheckoutStats;
-  tierBreakdown: ScoreTierCount[];
-  segments: SegmentCounts;
-}
-
-/** Safe to compute directly from one leg's own throws — a single leg is one continuous sequence
- *  for that player, so chunking into 3-dart visits (tonPlus/s180/tierBreakdown/segments) never
- *  crosses a boundary it shouldn't. */
-const computeLegStatBundle = (throws: DartThrow[], startingScore: number, isCricket: boolean): StatBundle => ({
-  average: calculateAverage(throws),
-  highscore: getHighest3DartRound(throws),
-  first9: getFirst9Average(throws),
-  totalThrows: throws.length,
-  totalPoints: throws.reduce((s, t) => s + t.points, 0),
-  triples: throws.filter(t => t.multiplier === 3).length,
-  tonPlus: countTonPlusRounds(throws),
-  s180: count180s(throws),
-  checkout: isCricket ? { attempts: 0, hits: 0, percentage: 0, highestCheckout: 0 } : computeCheckoutStats(throws, startingScore),
-  tierBreakdown: scoreTierBreakdown(throws),
-  segments: segmentBreakdown(throws),
-});
-
-/** Combines per-leg bundles into the match-wide "Gesamt" view. average/first9 are recomputed
- *  from the flattened cross-leg throws directly — both are pure sum/count ratios (first9 = the
- *  first 9 elements from the start = leg 1's own first 9 darts, since legs are concatenated in
- *  play order), unaffected by the chunk-boundary issue below. Everything else that chunks darts
- *  into 3-dart visits (tonPlus/s180/highscore/tierBreakdown/segments/checkout) is summed/maxed
- *  from each leg's own safe-to-chunk bundle instead — see combineScoreTiers' own comment for why
- *  recomputing those from the flattened array would be wrong. */
-const combineStatBundles = (bundles: StatBundle[], overallThrows: DartThrow[]): StatBundle => ({
-  average: calculateAverage(overallThrows),
-  first9: getFirst9Average(overallThrows),
-  highscore: bundles.reduce((m, b) => Math.max(m, b.highscore), 0),
-  totalThrows: bundles.reduce((s, b) => s + b.totalThrows, 0),
-  totalPoints: bundles.reduce((s, b) => s + b.totalPoints, 0),
-  triples: bundles.reduce((s, b) => s + b.triples, 0),
-  tonPlus: bundles.reduce((s, b) => s + b.tonPlus, 0),
-  s180: bundles.reduce((s, b) => s + b.s180, 0),
-  checkout: combineCheckoutStats(bundles.map(b => b.checkout)),
-  tierBreakdown: combineScoreTiers(bundles.map(b => b.tierBreakdown)),
-  segments: combineSegmentCounts(bundles.map(b => b.segments)),
-});
 
 const WALKON_PREF_KEY = "dart-walkon-enabled";
 const INPUT_MODE_PREF_KEY = "dart-input-mode";
