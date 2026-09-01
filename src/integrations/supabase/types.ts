@@ -62,6 +62,13 @@ export type Database = {
             referencedRelation: "clubs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "club_invites_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       club_join_requests: {
@@ -100,6 +107,13 @@ export type Database = {
             referencedRelation: "clubs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "club_join_requests_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       clubs: {
@@ -108,6 +122,7 @@ export type Database = {
           id: string
           logo_path: string | null
           name: string
+          plan_tier: string
           tagline: string | null
           theme_preset: string
           updated_at: string
@@ -117,6 +132,7 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name: string
+          plan_tier?: string
           tagline?: string | null
           theme_preset?: string
           updated_at?: string
@@ -126,6 +142,7 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name?: string
+          plan_tier?: string
           tagline?: string | null
           theme_preset?: string
           updated_at?: string
@@ -181,6 +198,13 @@ export type Database = {
             columns: ["club_id"]
             isOneToOne: false
             referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_legs_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
             referencedColumns: ["id"]
           },
           {
@@ -299,6 +323,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "games_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "games_player1_id_fkey"
             columns: ["player1_id"]
             isOneToOne: false
@@ -387,6 +418,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "highlight_clips_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "highlight_clips_player_id_fkey"
             columns: ["player_id"]
             isOneToOne: false
@@ -443,6 +481,13 @@ export type Database = {
             referencedRelation: "clubs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "impressum_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       manual_180_entries: {
@@ -476,6 +521,13 @@ export type Database = {
             columns: ["club_id"]
             isOneToOne: false
             referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_180_entries_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
             referencedColumns: ["id"]
           },
           {
@@ -574,6 +626,13 @@ export type Database = {
             referencedRelation: "clubs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "players_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       push_subscriptions: {
@@ -610,6 +669,13 @@ export type Database = {
             columns: ["club_id"]
             isOneToOne: false
             referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
             referencedColumns: ["id"]
           },
         ]
@@ -654,6 +720,13 @@ export type Database = {
             columns: ["club_id"]
             isOneToOne: false
             referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_series_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
             referencedColumns: ["id"]
           },
         ]
@@ -743,6 +816,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tournaments_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tournaments_series_id_fkey"
             columns: ["series_id"]
             isOneToOne: false
@@ -820,10 +900,41 @@ export type Database = {
             referencedRelation: "clubs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_roles_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
+      clubs_public: {
+        Row: {
+          id: string | null
+          logo_path: string | null
+          name: string | null
+          tagline: string | null
+          theme_preset: string | null
+        }
+        Insert: {
+          id?: string | null
+          logo_path?: string | null
+          name?: string | null
+          tagline?: string | null
+          theme_preset?: string | null
+        }
+        Update: {
+          id?: string | null
+          logo_path?: string | null
+          name?: string | null
+          tagline?: string | null
+          theme_preset?: string | null
+        }
+        Relationships: []
+      }
       tournaments_public: {
         Row: {
           attendance: Json | null
