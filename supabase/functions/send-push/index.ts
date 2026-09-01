@@ -57,13 +57,24 @@ serve(async (req) => {
 
     // Any club member notifying any other club member's devices needs to read past that
     // recipient's own RLS (push_subscriptions rows are only SELECTable by their owner) —
-    // this is a small single-club app where every authenticated user already has full
-    // read/write on shared data (players, tournaments, ...), so the service role here just
-    // extends that same trust model to "send a push", not a new privilege boundary.
+    // every authenticated user already has full read/write on their OWN club's shared data
+    // (players, tournaments, ...), so the service role here just extends that same trust model
+    // to "send a push", not a new privilege boundary. It's still scoped to the caller's own club
+    // below, though: with more than one club now possible, an unscoped `userIds` filter would let
+    // any authenticated caller target push subscriptions belonging to a different club entirely.
     const serviceClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: callerRole, error: callerRoleError } = await serviceClient
+      .from("user_roles")
+      .select("club_id")
+      .eq("user_id", callerId)
+      .maybeSingle();
+    if (callerRoleError) throw callerRoleError;
+    if (!callerRole?.club_id) return jsonResponse({ error: "Authentication required" }, 401);
+
     const { data: subs, error: subsError } = await serviceClient
       .from("push_subscriptions")
       .select("id, endpoint, p256dh, auth")
+      .eq("club_id", callerRole.club_id)
       .in("user_id", userIds);
     if (subsError) throw subsError;
 
