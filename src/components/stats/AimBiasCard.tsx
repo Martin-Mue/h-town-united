@@ -2,6 +2,7 @@ import { Crosshair, Lightbulb } from "lucide-react";
 import { RING } from "@/utils/dartboardGeometry";
 import { describeAimTip, type AimBiasResult } from "@/utils/aimBias";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { SectionCard, Eyebrow } from "@/components/stats/StatPrimitives";
 
 interface AimBiasCardProps {
   bias: AimBiasResult;
@@ -50,11 +51,9 @@ const AimBiasCard = ({ bias }: AimBiasCardProps) => {
   const tangentialWord = bias.tangentialOffsetMm > 0.5 ? t("aimBias.offsetClockwise") : bias.tangentialOffsetMm < -0.5 ? t("aimBias.offsetCounterClockwise") : t("aimBias.wellHitTangential");
 
   return (
-    <div className="bg-card rounded-xl border border-border p-4 mb-4">
-      <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
-        <Crosshair className="w-4 h-4" /> {t("aimBias.title")}
-      </h3>
-      <p className="text-[10px] text-muted-foreground mb-3">
+    <SectionCard className="mb-4">
+      <Eyebrow icon={Crosshair}>{t("aimBias.title")}</Eyebrow>
+      <p className="text-[10px] text-muted-foreground mb-3 -mt-2">
         {t("aimBias.subtitlePrefix")} {bias.sampleSize} {t("aimBias.subtitleSuffix")}
       </p>
       <div className="flex items-center gap-4">
@@ -86,7 +85,7 @@ const AimBiasCard = ({ bias }: AimBiasCardProps) => {
         <Lightbulb className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
         <p className="text-xs text-accent">{describeAimTip(bias, t)}</p>
       </div>
-    </div>
+    </SectionCard>
   );
 };
 

@@ -552,6 +552,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.lifetimeValues": { de: "Lebenszeit-Werte über alle Spiele.", en: "Lifetime values across all games.", fr: "Valeurs cumulées sur toutes les parties.", pl: "Wartości z całego okresu we wszystkich grach.", nl: "Levenslange waarden over alle potjes.", tr: "Tüm oyunlar boyunca yaşam boyu değerler." },
   "stats.addMember": { de: "Mitglied hinzufügen", en: "Add member", fr: "Ajouter un membre", pl: "Dodaj członka", nl: "Lid toevoegen", tr: "Üye ekle" },
   "stats.leaderboard": { de: "Rangliste", en: "Leaderboard", fr: "Classement", pl: "Ranking", nl: "Ranglijst", tr: "Sıralama" },
+  "stats.clubRecords": { de: "Vereinsrekorde", en: "Club records", fr: "Records du club", pl: "Rekordy klubu", nl: "Clubrecords", tr: "Kulüp rekorları" },
   "stats.filtered": { de: "gefiltert", en: "filtered", fr: "filtré", pl: "filtrowane", nl: "gefilterd", tr: "filtrelendi" },
   "stats.exportAsCsv": { de: "Als CSV exportieren", en: "Export as CSV", fr: "Exporter en CSV", pl: "Eksportuj jako CSV", nl: "Exporteren als CSV", tr: "CSV olarak dışa aktar" },
   "stats.pointsSeason": { de: "Punkte (Saison)", en: "Points (season)", fr: "Points (saison)", pl: "Punkty (sezon)", nl: "Punten (seizoen)", tr: "Puan (sezon)" },

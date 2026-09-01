@@ -40,6 +40,7 @@ import SeasonRecap from "@/components/stats/SeasonRecap";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Sparkles } from "lucide-react";
+import { Eyebrow, SectionCard, StatTile, TrendBadge, Sparkline, RingStat, RankAvatar, RankBadge, TONE_TEXT as TONE_ICON } from "@/components/stats/StatPrimitives";
 
 interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
@@ -1118,21 +1119,23 @@ const StatisticsPage = () => {
 
   return (
     <div className="container py-6 animate-slide-up">
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <BarChart3 className="w-6 h-6 text-primary" />
-          <h2 className="text-2xl font-display uppercase">{t("stats.title")}</h2>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center shadow-[0_0_20px_hsl(var(--primary)/0.18)] shrink-0">
+          <BarChart3 className="w-4.5 h-4.5 text-primary" />
         </div>
-        <div className="flex gap-1 bg-card rounded-lg border border-border p-1">
-          <button onClick={() => setScope("club")}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewScope === "club" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-            {t("nav.club")}
-          </button>
-          <button onClick={() => setScope("personal")}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewScope === "personal" ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-            {t("stats.myself")}
-          </button>
-        </div>
+        <h2 className="text-2xl font-display uppercase leading-none">{t("stats.title")}</h2>
+      </div>
+
+      {/* Primary scope switch — the one fixed decision above everything else: club-wide or mine. */}
+      <div className="flex bg-muted rounded-xl p-1 gap-1 mb-4">
+        <button onClick={() => setScope("club")}
+          className={`flex-1 text-center py-2.5 rounded-lg font-display text-xs uppercase tracking-wide transition-all ${viewScope === "club" ? "bg-card border border-primary/40 text-primary shadow-[0_0_16px_hsl(var(--primary)/0.15)]" : "text-muted-foreground hover:text-foreground"}`}>
+          {t("nav.club")}
+        </button>
+        <button onClick={() => setScope("personal")}
+          className={`flex-1 text-center py-2.5 rounded-lg font-display text-xs uppercase tracking-wide transition-all ${viewScope === "personal" ? "bg-card border border-primary/40 text-primary shadow-[0_0_16px_hsl(var(--primary)/0.15)]" : "text-muted-foreground hover:text-foreground"}`}>
+          {t("stats.myself")}
+        </button>
       </div>
 
       {viewScope === "personal" && !myPlayer && (
@@ -1148,7 +1151,7 @@ const StatisticsPage = () => {
       {(viewScope === "club" || myPlayer) && (
       <>
       {/* Filter bar */}
-      <div className="bg-card rounded-xl border border-border p-3 mb-4">
+      <SectionCard className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <span className="flex items-center gap-1.5 text-xs font-display uppercase tracking-wider text-muted-foreground">
             <Filter className="w-3.5 h-3.5" /> {t("stats.filter")}
@@ -1206,29 +1209,29 @@ const StatisticsPage = () => {
             </SelectContent>
           </Select>
         </div>
-      </div>
+      </SectionCard>
 
-      {/* Tab navigation — on a narrow phone this can genuinely overflow (5 tabs with icon+label
-          in club scope), with nothing before to hint it's scrollable. Edge fades give that hint
-          without needing to track scroll position in JS. */}
+      {/* Sub-navigation for this scope's sections — horizontally scrollable pills instead of an
+          evenly-split bar, so the active pill's width matches its label at any tab count (3 on
+          personal, 5 on club) instead of everything squeezing to fit the widest row. Edge fades
+          hint it's scrollable on a narrow phone without needing to track scroll position in JS. */}
       <div className="relative mb-6">
-        <div className="flex gap-1 bg-card rounded-lg border border-border p-1 overflow-x-auto">
+        <div className="flex gap-2 overflow-x-auto pb-0.5">
           {tabs.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`shrink-0 sm:flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-all ${activeTab === tab.key ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+              className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${activeTab === tab.key ? "bg-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.35)]" : "border border-border text-muted-foreground hover:text-foreground"}`}>
               <tab.icon className="w-3.5 h-3.5 shrink-0" />{t(tab.labelKey)}
             </button>
           ))}
         </div>
-        <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-6 rounded-l-lg bg-gradient-to-r from-card to-transparent sm:hidden" />
-        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-6 rounded-r-lg bg-gradient-to-l from-card to-transparent sm:hidden" />
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent sm:hidden" />
       </div>
 
       {/* OVERVIEW TAB */}
       {activeTab === "overview" && (
         <>
         {rankingFocusKey ? (
-          <div className="bg-card rounded-xl border border-border p-4">
+          <SectionCard>
             <Button variant="ghost" size="sm" onClick={() => setRankingFocusKey(null)} className="mb-3 -ml-2 h-auto py-1 text-xs text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-4 h-4" /> {t("stats.backToOverview")}
             </Button>
@@ -1256,10 +1259,8 @@ const StatisticsPage = () => {
                 {leaderboard.map((p, i) => (
                   <button key={p.id} onClick={() => { setSelectedPlayerId(p.id); setActiveTab("players"); }}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-muted/80 ${i < 3 ? "bg-muted/50" : ""}`}>
-                    <span className={`w-6 text-center font-display text-sm ${i === 0 ? "text-accent" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-orange-400" : "text-muted-foreground"}`}>
-                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
-                    </span>
-                    <span className="text-lg">{p.emoji}</span>
+                    <RankBadge rank={i + 1} />
+                    <RankAvatar emoji={p.emoji} rank={i + 1} />
                     <div className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-semibold truncate">{p.name}</p>
                       <p className="text-[10px] text-muted-foreground">{p.games_played} {t("stats.games")} · {Math.round(p.elo_rating ?? 1000)} Elo</p>
@@ -1269,56 +1270,55 @@ const StatisticsPage = () => {
                 ))}
               </div>
             )}
-          </div>
+          </SectionCard>
         ) : (
           <>
-          {/* Club overview cards */}
+          {/* Club at a glance */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
-              { labelKey: "stats.gamesPlayed", value: clubStats.totalGames, icon: Target, color: "text-primary" },
-              { labelKey: "stats.members", value: clubStats.totalPlayers, icon: Users, color: "text-secondary" },
-              { labelKey: "stats.clubAverage", value: clubStats.avgOfAverages.toFixed(1), icon: TrendingUp, color: "text-accent" },
-              { labelKey: "stats.dartsThrown", value: clubStats.totalDarts.toLocaleString(), icon: Hash, color: "text-primary" },
+              { labelKey: "stats.gamesPlayed", value: clubStats.totalGames, icon: Target, tone: "primary" as const },
+              { labelKey: "stats.members", value: clubStats.totalPlayers, icon: Users, tone: "secondary" as const },
+              { labelKey: "stats.clubAverage", value: clubStats.avgOfAverages.toFixed(1), icon: TrendingUp, tone: "accent" as const },
+              { labelKey: "stats.dartsThrown", value: clubStats.totalDarts.toLocaleString(), icon: Hash, tone: "primary" as const },
             ].map(s => (
-              <div key={s.labelKey} className="bg-card rounded-xl p-4 border border-border">
-                <s.icon className={`w-4 h-4 ${s.color} mb-1`} />
-                <p className="text-2xl font-display">{s.value}</p>
-                <p className="text-xs text-muted-foreground">{t(s.labelKey)}</p>
-              </div>
+              <SectionCard key={s.labelKey}>
+                <StatTile label={t(s.labelKey)} value={s.value} tone={s.tone} icon={s.icon} />
+              </SectionCard>
             ))}
           </div>
 
           {/* Records — each tile doubles as a link into the full ranked list for that stat
               (clicking sets sortBy to match and opens the focused ranking view above), so a club
               record is never just a dead-end single number. */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="mb-2">
+            <Eyebrow icon={Trophy}>{t("stats.clubRecords")}</Eyebrow>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 md:grid-cols-4">
             {[
-              { labelKey: "stats.oneEighties", value: club180Total, sub: bestOneEighties.name, icon: Target, color: "text-accent", sortKey: "one_eighties" as const },
-              { labelKey: "stats.highestScore", value: clubStats.bestHighscore.val, sub: clubStats.bestHighscore.name, icon: Trophy, color: "text-accent", sortKey: "high_score" as const },
-              { labelKey: "stats.bestAverage", value: clubStats.bestAvg.val.toFixed(1), sub: clubStats.bestAvg.name, icon: Flame, color: "text-destructive", sortKey: "average" as const },
-              { labelKey: "stats.bestGameAverage", value: clubStats.highestGameAvg.val.toFixed(1), sub: clubStats.highestGameAvg.name, icon: Zap, color: "text-secondary", sortKey: "best_game_avg" as const },
-              { labelKey: "stats.mostWins", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, color: "text-primary", sortKey: "games_won" as const },
-              { labelKey: "stats.highestFinish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, color: "text-accent", sortKey: "highest_checkout" as const },
-              { labelKey: "stats.bestCheckoutPct", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, color: "text-secondary", sortKey: "checkout" as const },
-              { labelKey: "stats.bestMpr", value: bestMpr.val ? bestMpr.val.toFixed(2) : "-", sub: bestMpr.name, icon: Target, color: "text-accent", sortKey: "mpr" as const },
-              { labelKey: "stats.fewestDartsToCheckout", value: bestShortestLeg.val || "-", sub: bestShortestLeg.name, icon: Hash, color: "text-destructive", sortKey: "fewest_darts" as const },
+              { labelKey: "stats.oneEighties", value: club180Total, sub: bestOneEighties.name, icon: Target, tone: "accent" as const, sortKey: "one_eighties" as const },
+              { labelKey: "stats.highestScore", value: clubStats.bestHighscore.val, sub: clubStats.bestHighscore.name, icon: Trophy, tone: "accent" as const, sortKey: "high_score" as const },
+              { labelKey: "stats.bestAverage", value: clubStats.bestAvg.val.toFixed(1), sub: clubStats.bestAvg.name, icon: Flame, tone: "destructive" as const, sortKey: "average" as const },
+              { labelKey: "stats.bestGameAverage", value: clubStats.highestGameAvg.val.toFixed(1), sub: clubStats.highestGameAvg.name, icon: Zap, tone: "secondary" as const, sortKey: "best_game_avg" as const },
+              { labelKey: "stats.mostWins", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, tone: "primary" as const, sortKey: "games_won" as const },
+              { labelKey: "stats.highestFinish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, tone: "accent" as const, sortKey: "highest_checkout" as const },
+              { labelKey: "stats.bestCheckoutPct", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, tone: "secondary" as const, sortKey: "checkout" as const },
+              { labelKey: "stats.bestMpr", value: bestMpr.val ? bestMpr.val.toFixed(2) : "-", sub: bestMpr.name, icon: Target, tone: "accent" as const, sortKey: "mpr" as const },
+              { labelKey: "stats.fewestDartsToCheckout", value: bestShortestLeg.val || "-", sub: bestShortestLeg.name, icon: Hash, tone: "destructive" as const, sortKey: "fewest_darts" as const },
             ].map(s => (
               <button key={s.labelKey} onClick={() => { setSortBy(s.sortKey); setRankingFocusKey(s.sortKey); }}
-                className="bg-card rounded-xl p-3 border border-border text-left hover:border-primary/40 transition-colors">
-                <s.icon className={`w-4 h-4 ${s.color} mb-1`} />
-                <p className="text-xl font-display">{s.value}</p>
+                className="shrink-0 w-[132px] sm:w-auto bg-card rounded-xl p-3.5 border border-border text-left hover:border-primary/40 hover:-translate-y-0.5 transition-all">
+                <s.icon className={`w-4 h-4 mb-2 ${TONE_ICON[s.tone]}`} />
+                <p className="text-xl font-display mb-1">{s.value}</p>
                 <p className="text-[10px] text-muted-foreground">{t(s.labelKey)}</p>
-                <p className="text-[10px] text-primary">{s.sub}</p>
+                <p className="text-[10px] text-primary truncate">{s.sub}</p>
               </button>
             ))}
           </div>
 
           {/* Games timeline */}
           {gamesTimeline.some(d => d.count > 0) && (
-            <div className="bg-card rounded-xl border border-border p-4 mb-6">
-              <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                <Calendar className="w-4 h-4" /> {t("stats.gamesLast30Days")}
-              </h3>
+            <SectionCard className="mb-6">
+              <Eyebrow icon={Calendar}>{t("stats.gamesLast30Days")}</Eyebrow>
               <ResponsiveContainer width="100%" height={120}>
                 <BarChart data={gamesTimeline}>
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} interval={4} axisLine={false} tickLine={false} />
@@ -1327,15 +1327,13 @@ const StatisticsPage = () => {
                   <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </SectionCard>
           )}
 
           {/* Mode distribution */}
           {trebleStats.hasData && (
-            <div className="bg-card rounded-xl border border-border p-4 mb-6">
-              <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                <Crosshair className="w-4 h-4" /> {t("stats.tripleAnalysis")}
-              </h3>
+            <SectionCard className="mb-6">
+              <Eyebrow icon={Crosshair}>{t("stats.tripleAnalysis")}</Eyebrow>
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="bg-muted/30 rounded-lg p-3">
                   <p className="text-2xl font-display text-destructive">{trebleStats.treblelessRate.toFixed(1)}%</p>
@@ -1374,12 +1372,12 @@ const StatisticsPage = () => {
                   <ListPaginationFooter list={pagedTreblePerPlayer} />
                 </div>
               )}
-            </div>
+            </SectionCard>
           )}
 
           {modeDistribution.length > 0 && (
-            <div className="bg-card rounded-xl border border-border p-4 mb-6">
-              <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("stats.gameModes")}</h3>
+            <SectionCard className="mb-6">
+              <Eyebrow>{t("stats.gameModes")}</Eyebrow>
               <div className="flex items-center gap-6">
                 <ResponsiveContainer width={120} height={120}>
                   <PieChart>
@@ -1398,11 +1396,11 @@ const StatisticsPage = () => {
                   ))}
                 </div>
               </div>
-            </div>
+            </SectionCard>
           )}
 
           {/* Leaderboard */}
-          <div className="bg-card rounded-xl border border-border p-4">
+          <SectionCard>
             <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
               <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
                 <Trophy className="w-4 h-4" /> {t("stats.leaderboard")}{filterYear !== "all" ? ` · ${t("stats.season")} ${filterYear}` : filtersActive ? ` · ${t("stats.filtered")}` : ""}
@@ -1452,10 +1450,8 @@ const StatisticsPage = () => {
                   return (
                     <button key={p.id} onClick={() => { setSelectedPlayerId(p.id); setActiveTab("players"); }}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-muted/80 ${i < 3 ? "bg-muted/50" : ""}`}>
-                      <span className={`w-6 text-center font-display text-sm ${i === 0 ? "text-accent" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-orange-400" : "text-muted-foreground"}`}>
-                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
-                      </span>
-                      <span className="text-lg">{p.emoji}</span>
+                      <RankBadge rank={i + 1} />
+                      <RankAvatar emoji={p.emoji} rank={i + 1} />
                       <div className="flex-1 min-w-0 text-left">
                         <p className="text-sm font-semibold truncate">{p.name}</p>
                         <p className="text-[10px] text-muted-foreground">{p.games_played} {t("stats.games")} · {winRate}% · {Math.round(p.elo_rating ?? 1000)} Elo</p>
@@ -1467,7 +1463,7 @@ const StatisticsPage = () => {
                 <ListPaginationFooter list={pagedLeaderboard} />
               </div>
             )}
-          </div>
+          </SectionCard>
           </>
         )}
         </>
@@ -1491,13 +1487,17 @@ const StatisticsPage = () => {
 
           {playerDetailStats ? (
             <>
-              {/* Player header */}
-              <div className="bg-card rounded-xl border border-border p-4 mb-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-3xl">{playerDetailStats.player.emoji}</span>
+              {/* Player header — hero treatment: the average is this view's one headline number,
+                  everything else (identity, streak, highscore) supports it rather than competing
+                  with it at the same visual weight. */}
+              <SectionCard glow="primary" className="mb-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-14 h-14 rounded-full bg-primary/15 border-2 border-primary/50 flex items-center justify-center shrink-0 shadow-[0_0_20px_hsl(var(--primary)/0.25)]">
+                    <span className="text-2xl">{playerDetailStats.player.emoji}</span>
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-display uppercase">{playerDetailStats.player.name}</h3>
-                    <p className="text-xs text-muted-foreground">{playerDetailStats.totalGames} {t("stats.games")} · {playerDetailStats.winRate}% {t("recap.winRateSuffix")} · {Math.round(playerDetailStats.player.elo_rating ?? 1000)} Elo</p>
+                    <h3 className="text-xl font-display uppercase leading-tight">{playerDetailStats.player.name}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">{playerDetailStats.totalGames} {t("stats.games")} · {playerDetailStats.winRate}% {t("recap.winRateSuffix")} · {Math.round(playerDetailStats.player.elo_rating ?? 1000)} Elo</p>
                   </div>
                   {playerSeasonRecap && (
                     <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={() => setShowSeasonRecap(true)}>
@@ -1505,20 +1505,22 @@ const StatisticsPage = () => {
                     </Button>
                   )}
                 </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { label: t("stats.average"), value: playerDetailStats.totalGames > 0 ? playerDetailStats.average.toFixed(1) : "–", color: "text-primary" },
-                    { label: "Highscore", value: playerDetailStats.totalGames > 0 ? playerDetailStats.highScore : "–", color: "text-accent" },
-                    { label: t("stats.streak"), value: `${playerDetailStats.currentStreak}🔥`, color: "text-accent" },
-                    { label: t("stats.bestStreak"), value: playerDetailStats.bestStreak, color: "text-secondary" },
-                  ].map(s => (
-                    <div key={s.label} className="text-center">
-                      <p className={`text-lg font-display ${s.color}`}>{s.value}</p>
-                      <p className="text-[10px] text-muted-foreground">{s.label}</p>
-                    </div>
-                  ))}
+
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("stats.average")}</p>
+                <p className="font-display text-4xl leading-none mt-1">{playerDetailStats.totalGames > 0 ? playerDetailStats.average.toFixed(1) : "–"}</p>
+
+                {playerDetailStats.averageTrend.length > 1 && (
+                  <div className="mt-3 -mb-1">
+                    <Sparkline values={playerDetailStats.averageTrend.map((d) => Number(d.average))} />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-border/60">
+                  <StatTile label="Highscore" value={playerDetailStats.totalGames > 0 ? playerDetailStats.highScore : "–"} tone="accent" />
+                  <StatTile label={t("stats.streak")} value={`${playerDetailStats.currentStreak}🔥`} tone="accent" />
+                  <StatTile label={t("stats.bestStreak")} value={playerDetailStats.bestStreak} tone="secondary" />
                 </div>
-              </div>
+              </SectionCard>
 
               {/* 180s: app-tracked + manually backfilled, combined per year. Placed right after
                   the header (not buried below checkout/cricket/aim-bias) and accent-highlighted
@@ -1526,11 +1528,9 @@ const StatisticsPage = () => {
                   (even at 0) since that's also where the backfill editor lives; hidden for
                   someone else's profile when there's nothing to show. */}
               {(player180Total > 0 || playerDetailStats.player.user_id === session?.user?.id) && (
-                <div className="bg-card rounded-xl border border-accent/40 bg-accent/5 p-4 mb-4">
-                  <h3 className="font-display text-sm uppercase mb-1 text-accent flex items-center gap-2">
-                    <Target className="w-4 h-4" /> {t("stats.oneEighties")}
-                  </h3>
-                  <p className="font-display text-4xl text-accent">{player180Total}</p>
+                <SectionCard glow="accent" className="mb-4">
+                  <Eyebrow icon={Target} tone="accent">{t("stats.oneEighties")}</Eyebrow>
+                  <p className="font-display text-4xl text-accent -mt-2">{player180Total}</p>
                   {player180Breakdown.length > 0 && (
                     <div className="mt-2 space-y-0.5">
                       {player180Breakdown.map((y) => (
@@ -1548,12 +1548,12 @@ const StatisticsPage = () => {
                       onChanged={fetchData}
                     />
                   )}
-                </div>
+                </SectionCard>
               )}
 
               {/* Achievements */}
               {playerAchievements.length > 0 && (
-                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                <SectionCard className="mb-4">
                   <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
                     <Award className="w-4 h-4" /> {t("stats.achievements")}
                     <span className="text-[10px] normal-case text-muted-foreground/70">
@@ -1572,52 +1572,43 @@ const StatisticsPage = () => {
                       </button>
                     ))}
                   </div>
-                </div>
+                </SectionCard>
               )}
 
               {/* Best/worst game — bestGameAvg/worstGameAvg both default to 0 when there are no
                   games in the current filter, which is indistinguishable from "averaged exactly
                   0" if rendered unconditionally like every other stat here guards for. */}
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-card rounded-xl border border-border p-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">{t("stats.bestGameAverage")}</p>
-                  <p className="text-2xl font-display text-secondary">{playerDetailStats.totalGames > 0 ? playerDetailStats.bestGameAvg.toFixed(1) : "–"}</p>
-                </div>
-                <div className="bg-card rounded-xl border border-border p-3 text-center">
-                  <p className="text-xs text-muted-foreground mb-1">{t("stats.worstGameAverage")}</p>
-                  <p className="text-2xl font-display text-destructive">{playerDetailStats.totalGames > 0 ? playerDetailStats.worstGameAvg.toFixed(1) : "–"}</p>
-                </div>
+                <SectionCard>
+                  <StatTile label={t("stats.bestGameAverage")} value={playerDetailStats.totalGames > 0 ? playerDetailStats.bestGameAvg.toFixed(1) : "–"} tone="secondary" />
+                </SectionCard>
+                <SectionCard>
+                  <StatTile label={t("stats.worstGameAverage")} value={playerDetailStats.totalGames > 0 ? playerDetailStats.worstGameAvg.toFixed(1) : "–"} tone="destructive" />
+                </SectionCard>
               </div>
 
               {/* Checkout & first-9 (from dart-by-dart data — only available for games played since this was added) */}
               {advancedByPlayer[playerDetailStats.player.id] && (
-                <div className="bg-card rounded-xl border border-border p-4 mb-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                    <Crosshair className="w-4 h-4" /> {t("stats.checkoutAndOpening")}
-                  </h3>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { label: "First 9 Ø", value: advancedByPlayer[playerDetailStats.player.id].first9.toFixed(1), color: "text-primary" },
-                      { label: "Checkout %", value: `${advancedByPlayer[playerDetailStats.player.id].checkout.percentage.toFixed(0)}%`, color: "text-secondary" },
-                      { label: t("stats.highestFinish"), value: advancedByPlayer[playerDetailStats.player.id].checkout.highestCheckout, color: "text-accent" },
-                      { label: t("stats.checkoutAttempts"), value: advancedByPlayer[playerDetailStats.player.id].checkout.attempts, color: "text-muted-foreground" },
-                    ].map(s => (
-                      <div key={s.label} className="text-center">
-                        <p className={`text-lg font-display ${s.color}`}>{s.value}</p>
-                        <p className="text-[10px] text-muted-foreground">{s.label}</p>
-                      </div>
-                    ))}
+                <SectionCard className="mb-4">
+                  <Eyebrow icon={Crosshair}>{t("stats.checkoutAndOpening")}</Eyebrow>
+                  <div className="grid grid-cols-4 gap-2 items-start">
+                    <div className="text-center">
+                      <RingStat percent={advancedByPlayer[playerDetailStats.player.id].checkout.percentage} tone="secondary" size={44} />
+                      <p className="font-display text-sm mt-1">{advancedByPlayer[playerDetailStats.player.id].checkout.percentage.toFixed(0)}%</p>
+                      <p className="text-[10px] text-muted-foreground">Checkout %</p>
+                    </div>
+                    <StatTile label="First 9 Ø" value={advancedByPlayer[playerDetailStats.player.id].first9.toFixed(1)} tone="primary" />
+                    <StatTile label={t("stats.highestFinish")} value={advancedByPlayer[playerDetailStats.player.id].checkout.highestCheckout} tone="accent" />
+                    <StatTile label={t("stats.checkoutAttempts")} value={advancedByPlayer[playerDetailStats.player.id].checkout.attempts} tone="muted" />
                   </div>
-                </div>
+                </SectionCard>
               )}
 
               {/* Round-score distribution (40+ through 180) — same X01-only scope as the
                   checkout/first-9 card above, respects the active time/year/mode/best-of filters. */}
               {playerScoringBreakdown && playerScoringBreakdown.tiers.some((tier) => tier.count > 0) && (
-                <div className="bg-card rounded-xl border border-border p-4 mb-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" /> {t("game.scoreDistribution")}
-                  </h3>
+                <SectionCard className="mb-4">
+                  <Eyebrow icon={BarChart3}>{t("game.scoreDistribution")}</Eyebrow>
                   <ResponsiveContainer width="100%" height={140}>
                     <BarChart data={playerScoringBreakdown.tiers}>
                       <XAxis dataKey="label" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
@@ -1626,13 +1617,13 @@ const StatisticsPage = () => {
                       <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
+                </SectionCard>
               )}
 
               {/* Individual-field breakdown — optional/opt-in extra detail on exactly which
                   segments (Triple 20, Single 1, ...) were hit and how often. */}
               {playerScoringBreakdown && (
-                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                <SectionCard className="mb-4">
                   <button onClick={() => setShowFieldBreakdown(!showFieldBreakdown)} className="w-full flex items-center justify-between gap-2 text-left">
                     <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
                       <Crosshair className="w-4 h-4" /> {t("game.fieldBreakdown")}
@@ -1670,28 +1661,19 @@ const StatisticsPage = () => {
                       <p className="text-xs text-muted-foreground mt-3">{t("stats.noDataYet")}</p>
                     )
                   )}
-                </div>
+                </SectionCard>
               )}
 
               {/* Cricket-specific stats (from dart-by-dart data on Cricket legs) */}
               {cricketByPlayer[playerDetailStats.player.id] && (
-                <div className="bg-card rounded-xl border border-border p-4 mb-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                    <Target className="w-4 h-4" /> Cricket
-                  </h3>
+                <SectionCard className="mb-4">
+                  <Eyebrow icon={Target}>Cricket</Eyebrow>
                   <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { label: "MPR", value: cricketByPlayer[playerDetailStats.player.id].cricket.mpr.toFixed(2), color: "text-primary" },
-                      { label: t("stats.hitRate"), value: `${cricketByPlayer[playerDetailStats.player.id].cricket.hitRate.toFixed(0)}%`, color: "text-secondary" },
-                      { label: t("stats.marksTotal"), value: cricketByPlayer[playerDetailStats.player.id].cricket.marks, color: "text-accent" },
-                    ].map(s => (
-                      <div key={s.label} className="text-center">
-                        <p className={`text-lg font-display ${s.color}`}>{s.value}</p>
-                        <p className="text-[10px] text-muted-foreground">{s.label}</p>
-                      </div>
-                    ))}
+                    <StatTile label="MPR" value={cricketByPlayer[playerDetailStats.player.id].cricket.mpr.toFixed(2)} tone="primary" />
+                    <StatTile label={t("stats.hitRate")} value={`${cricketByPlayer[playerDetailStats.player.id].cricket.hitRate.toFixed(0)}%`} tone="secondary" />
+                    <StatTile label={t("stats.marksTotal")} value={cricketByPlayer[playerDetailStats.player.id].cricket.marks} tone="accent" />
                   </div>
-                </div>
+                </SectionCard>
               )}
 
               {playerAimBias && <AimBiasCard bias={playerAimBias} />}
@@ -1699,7 +1681,7 @@ const StatisticsPage = () => {
 
               {/* Throw heatmap — only camera-scored throws carry a tip position */}
               {playerHeatmapPoints.length > 0 && (
-                <div className="bg-card rounded-xl border border-border p-4 mb-4">
+                <SectionCard className="mb-4">
                   <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
                     <Crosshair className="w-4 h-4" /> {t("stats.throwHeatmap")}
                   </h3>
@@ -1707,15 +1689,13 @@ const StatisticsPage = () => {
                     {playerHeatmapPoints.length} {t("stats.cameraThrowsCaptured")}
                   </p>
                   <DartboardHeatmap points={playerHeatmapPoints} />
-                </div>
+                </SectionCard>
               )}
 
               {/* Average trend */}
               {playerDetailStats.averageTrend.length > 0 && (
-                <div className="bg-card rounded-xl border border-border p-4 mb-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4" /> {t("stats.averageTrend")}
-                  </h3>
+                <SectionCard className="mb-4">
+                  <Eyebrow icon={TrendingUp}>{t("stats.averageTrend")}</Eyebrow>
                   <ResponsiveContainer width="100%" height={160}>
                     <AreaChart data={playerDetailStats.averageTrend}>
                       <defs>
@@ -1732,13 +1712,13 @@ const StatisticsPage = () => {
                       <Line type="monotone" dataKey="runningAvg" stroke="hsl(var(--secondary))" strokeWidth={2} strokeDasharray="5 3" dot={false} name={t("stats.runningAverageSeries")} />
                     </AreaChart>
                   </ResponsiveContainer>
-                </div>
+                </SectionCard>
               )}
 
               {/* Recent form */}
               {playerDetailStats.recentForm.length > 0 && (
-                <div className="bg-card rounded-xl border border-border p-4 mb-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("stats.form")}</h3>
+                <SectionCard className="mb-4">
+                  <Eyebrow>{t("stats.form")}</Eyebrow>
                   <div className="flex gap-1 mb-3 flex-wrap">
                     {pagedRecentForm.visible.map((f, i) => (
                       <div key={i} className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold ${f.won ? "bg-secondary/20 text-secondary" : "bg-destructive/20 text-destructive"}`}>
@@ -1757,7 +1737,7 @@ const StatisticsPage = () => {
                     ))}
                   </div>
                   <ListPaginationFooter list={pagedRecentForm} />
-                </div>
+                </SectionCard>
               )}
 
               {/* Nemesis / favorite opponent */}
@@ -1786,8 +1766,8 @@ const StatisticsPage = () => {
 
               {/* Opponents breakdown */}
               {Object.keys(playerDetailStats.opponents).length > 0 && (
-                <div className="bg-card rounded-xl border border-border p-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("stats.opponentRecord")}</h3>
+                <SectionCard>
+                  <Eyebrow>{t("stats.opponentRecord")}</Eyebrow>
                   <div className="space-y-1">
                     {Object.entries(playerDetailStats.opponents)
                       .sort(([, a], [, b]) => (b.wins + b.losses) - (a.wins + a.losses))
@@ -1805,7 +1785,7 @@ const StatisticsPage = () => {
                         </div>
                       ))}
                   </div>
-                </div>
+                </SectionCard>
               )}
             </>
           ) : (
@@ -1821,7 +1801,7 @@ const StatisticsPage = () => {
       {activeTab === "h2h" && (
         <>
           {players.length >= 2 ? (
-            <div className="bg-card rounded-xl border border-border p-4">
+            <SectionCard>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <Select value={compareP1} onValueChange={setCompareP1}>
                   <SelectTrigger className="bg-muted border-border text-sm"><SelectValue placeholder={`${t("stats.player")} 1`} /></SelectTrigger>
@@ -1842,18 +1822,21 @@ const StatisticsPage = () => {
               {h2hRecords && (
                 <>
                   {h2hRecords.h2hGames > 0 && (
-                    <div className="bg-muted/30 rounded-lg p-4 mb-4 text-center">
-                      <p className="text-xs text-muted-foreground mb-2">{h2hRecords.h2hGames} {t("stats.directDuels")}</p>
-                      <div className="flex items-center justify-center gap-6">
-                        <div>
-                          <p className="text-3xl font-display text-primary">{h2hRecords.p1Wins}</p>
-                          <p className="text-xs text-muted-foreground">{h2hRecords.p1.emoji} {h2hRecords.p1.name}</p>
+                    <div className="bg-muted/30 rounded-lg p-4 mb-4">
+                      <p className="text-xs text-muted-foreground mb-3 text-center">{h2hRecords.h2hGames} {t("stats.directDuels")}</p>
+                      <div className="flex items-center justify-center gap-6 mb-3">
+                        <div className="flex flex-col items-center gap-1.5">
+                          <RankAvatar emoji={h2hRecords.p1.emoji} size={44} />
+                          <p className="text-[11px] font-semibold truncate max-w-[90px]">{h2hRecords.p1.name}</p>
                         </div>
-                        <span className="text-2xl text-muted-foreground font-display">:</span>
-                        <div>
-                          <p className="text-3xl font-display text-secondary">{h2hRecords.p2Wins}</p>
-                          <p className="text-xs text-muted-foreground">{h2hRecords.p2.emoji} {h2hRecords.p2.name}</p>
+                        <p className="text-3xl font-display text-primary">{h2hRecords.p1Wins}<span className="text-muted-foreground mx-1.5">:</span><span className="text-secondary">{h2hRecords.p2Wins}</span></p>
+                        <div className="flex flex-col items-center gap-1.5">
+                          <RankAvatar emoji={h2hRecords.p2.emoji} size={44} />
+                          <p className="text-[11px] font-semibold truncate max-w-[90px]">{h2hRecords.p2.name}</p>
                         </div>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden flex">
+                        <div className="h-full bg-primary" style={{ width: `${(h2hRecords.p1Wins / h2hRecords.h2hGames) * 100}%` }} />
                       </div>
                     </div>
                   )}
@@ -1892,7 +1875,7 @@ const StatisticsPage = () => {
               {!h2hRecords && compareP1 && compareP2 && (
                 <p className="text-sm text-muted-foreground text-center py-4">{t("stats.noCommonGamesFound")}</p>
               )}
-            </div>
+            </SectionCard>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-12">{t("stats.needTwoPlayersH2H")}</p>
           )}
@@ -1901,10 +1884,8 @@ const StatisticsPage = () => {
 
       {/* HISTORY TAB */}
       {activeTab === "history" && (
-        <div className="bg-card rounded-xl border border-border p-4">
-          <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-            <Target className="w-4 h-4" /> {t("stats.gameHistory")}
-          </h3>
+        <SectionCard>
+          <Eyebrow icon={Target}>{t("stats.gameHistory")}</Eyebrow>
           {recentGames.length === 0 ? (
             <div className="text-center py-4">
               <p className="text-sm text-muted-foreground mb-3">{t("home.noGamesYet")}</p>
@@ -2001,12 +1982,12 @@ const StatisticsPage = () => {
             </div>
           )}
           <ListPaginationFooter list={pagedRecentGames} />
-        </div>
+        </SectionCard>
       )}
 
       {/* HIGHLIGHTS TAB */}
       {activeTab === "highlights" && (
-        <div className="bg-card rounded-xl border border-border p-4">
+        <SectionCard>
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
               <Video className="w-4 h-4" /> {t("stats.highlightClips")}
@@ -2092,7 +2073,7 @@ const StatisticsPage = () => {
             </div>
           )}
           <ListPaginationFooter list={pagedClips} />
-        </div>
+        </SectionCard>
       )}
       </>
       )}

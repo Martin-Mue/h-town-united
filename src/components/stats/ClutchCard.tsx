@@ -1,6 +1,7 @@
 import { Flame } from "lucide-react";
 import { MIN_CLUTCH_ATTEMPTS, describeClutchTakeaway, type ClutchResult } from "@/utils/clutchStats";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { SectionCard, Eyebrow } from "@/components/stats/StatPrimitives";
 
 interface ClutchCardProps {
   stats: ClutchResult;
@@ -15,23 +16,19 @@ const ClutchCard = ({ stats }: ClutchCardProps) => {
 
   if (clutch.attempts < MIN_CLUTCH_ATTEMPTS) {
     return (
-      <div className="bg-card rounded-xl border border-border p-4 mb-4">
-        <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
-          <Flame className="w-4 h-4" /> {t("clutch.title")}
-        </h3>
-        <p className="text-xs text-muted-foreground">
+      <SectionCard className="mb-4">
+        <Eyebrow icon={Flame}>{t("clutch.title")}</Eyebrow>
+        <p className="text-xs text-muted-foreground -mt-2">
           {t("clutch.notEnoughDataPrefix")} {MIN_CLUTCH_ATTEMPTS} {t("clutch.notEnoughDataSuffix")} {clutch.attempts})
         </p>
-      </div>
+      </SectionCard>
     );
   }
 
   return (
-    <div className="bg-card rounded-xl border border-border p-4 mb-4">
-      <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
-        <Flame className="w-4 h-4" /> {t("clutch.title")}
-      </h3>
-      <p className="text-[10px] text-muted-foreground mb-3">
+    <SectionCard className="mb-4">
+      <Eyebrow icon={Flame}>{t("clutch.title")}</Eyebrow>
+      <p className="text-[10px] text-muted-foreground mb-3 -mt-2">
         {t("clutch.subtitle")}
       </p>
       <div className="flex items-center gap-3">
@@ -50,7 +47,7 @@ const ClutchCard = ({ stats }: ClutchCardProps) => {
         <Flame className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
         <p className="text-xs text-accent">{describeClutchTakeaway(stats, t)}</p>
       </div>
-    </div>
+    </SectionCard>
   );
 };
 

@@ -45,6 +45,12 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    // Visual Studio's own project-index files under .vs/ can be locked by VS itself while it's
+    // open, which crashes Vite's file watcher outright (EBUSY) the moment it tries to watch one
+    // -- excluding the folder avoids depending on VS being closed just to run the dev server.
+    watch: {
+      ignored: ["**/.vs/**"],
+    },
   },
   define: {
     __APP_VERSION__: JSON.stringify(commitSha),
