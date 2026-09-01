@@ -960,6 +960,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.tapForPlayerBreakdown": { de: "Antippen für Aufschlüsselung nach Spieler", en: "Tap for a breakdown by player", fr: "Appuyez pour la répartition par joueur", nl: "Tik voor uitsplitsing per speler", pl: "Dotknij, aby zobaczyć podział na graczy", tr: "Oyuncuya göre dağılım için dokunun" },
   "stats.noOneEightiesYet": { de: "Noch keine 180er erfasst.", en: "No 180s recorded yet.", fr: "Aucun 180 enregistré pour l'instant.", nl: "Nog geen 180's geregistreerd.", pl: "Nie zarejestrowano jeszcze żadnych 180.", tr: "Henüz kaydedilmiş 180 yok." },
   "stats.backToOverview": { de: "Zurück zur Übersicht", en: "Back to overview", fr: "Retour à l'aperçu", pl: "Powrót do przeglądu", nl: "Terug naar overzicht", tr: "Genel bakışa dön" },
+  "stats.moreInListBelow": { de: "weitere in der Liste unten", en: "more in the list below", fr: "autres dans la liste ci-dessous", pl: "kolejnych na liście poniżej", nl: "meer in de lijst hieronder", tr: "tanesi daha aşağıdaki listede" },
 
   // Players.tsx
   "players.errorTitle": { de: "Fehler", en: "Error", fr: "Erreur", pl: "Błąd", nl: "Fout", tr: "Hata" },

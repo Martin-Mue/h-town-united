@@ -57,6 +57,18 @@
     --shadow-glow-cyan: 0 0 30px hsl(185 85% 38% / 0.18);
     --shadow-glow-green: 0 0 30px hsl(155 65% 34% / 0.18);
     --shadow-glow-gold: 0 0 20px hsl(42 95% 45% / 0.15);
+
+    /* Validated categorical series palette (8 slots) for per-player identity coloring in charts
+       (ranking bar chart, etc.) — order is the CVD-safety mechanism, not cosmetic, don't reshuffle.
+       Light steps from the dataviz skill's reference palette. */
+    --chart-1: #2a78d6;
+    --chart-2: #eb6834;
+    --chart-3: #1baf7a;
+    --chart-4: #eda100;
+    --chart-5: #e87ba4;
+    --chart-6: #008300;
+    --chart-7: #4a3aa7;
+    --chart-8: #e34948;
   }
 
   /* Dark theme (original palette, unchanged) — applied via next-themes' `.dark` class on <html>. */
@@ -107,6 +119,16 @@
     --shadow-glow-cyan: 0 0 30px hsl(185 85% 48% / 0.25);
     --shadow-glow-green: 0 0 30px hsl(155 65% 42% / 0.25);
     --shadow-glow-gold: 0 0 20px hsl(45 100% 58% / 0.2);
+
+    /* Same 8 series, stepped for the dark surface — see :root above for what this is for. */
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #c98500;
+    --chart-5: #d55181;
+    --chart-6: #008300;
+    --chart-7: #9085e9;
+    --chart-8: #e66767;
   }
 }
 

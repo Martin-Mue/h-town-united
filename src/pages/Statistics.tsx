@@ -25,6 +25,7 @@ import {
   computeLegStatBundle, combineStatBundles,
   type DartThrow, type CheckoutStats, type CricketStats, type ScoreTierCount, type SegmentCounts, type StatBundle,
 } from "@/utils/dartStats";
+import { RankingBarChart, type RankingBarDatum } from "@/components/stats/RankingBarChart";
 import { highlightKindLabel } from "@/utils/x01Rules";
 import { generateSeasonReportPdf } from "@/utils/seasonReport";
 import { computeAimBias } from "@/utils/aimBias";
@@ -1241,9 +1242,27 @@ const StatisticsPage = () => {
             <Button variant="ghost" size="sm" onClick={() => setRankingFocusKey(null)} className="mb-3 -ml-2 h-auto py-1 text-xs text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-4 h-4" /> {t("stats.backToOverview")}
             </Button>
-            <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
+            <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
               <Trophy className="w-4 h-4" /> {sortByLabel(rankingFocusKey)}
             </h3>
+
+            {/* Stat picker — the bar chart and list below both react live to this, same sortBy
+                state the condensed leaderboard's <Select> further down also drives. */}
+            <div className="relative -mx-4 px-4 sm:mx-0 sm:px-0 mb-3">
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {([
+                  "points", "elo", "average", "games_won", "win_rate", "high_score",
+                  "checkout", "one_eighties", "highest_checkout", "mpr", "best_game_avg", "fewest_darts",
+                ] as const).map((key) => (
+                  <button key={key} onClick={() => { setSortBy(key); setRankingFocusKey(key); }}
+                    className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${rankingFocusKey === key ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+                    {sortByLabel(key)}
+                  </button>
+                ))}
+              </div>
+              <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" />
+            </div>
+
             <p className="text-[10px] text-muted-foreground mb-3">
               {filtersActive ? t("stats.valuesForFilteredPeriod") : t("stats.lifetimeValues")}
             </p>
@@ -1257,6 +1276,20 @@ const StatisticsPage = () => {
                 <Filter className="w-3 h-3 shrink-0" />
                 {filterMode !== "all" ? `${t("stats.fewestDartsModeScoped")} ${filterMode}` : t("stats.fewestDartsPickModeHint")}
               </p>
+            )}
+            {leaderboard.length > 0 && (
+              <div className="mb-5 pb-5 border-b border-border/60">
+                <RankingBarChart
+                  data={leaderboard.map((p): RankingBarDatum => ({
+                    id: p.id,
+                    name: p.name,
+                    emoji: p.emoji,
+                    value: Number.parseFloat(String(sortValueFor(p))),
+                    displayValue: String(sortValueFor(p)),
+                  }))}
+                  moreLabel={(count) => `+ ${count} ${t("stats.moreInListBelow")}`}
+                />
+              </div>
             )}
             {leaderboard.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">{t("stats.noPlayersYet")}</p>
