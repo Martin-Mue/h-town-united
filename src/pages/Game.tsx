@@ -2714,11 +2714,14 @@ const GamePage = () => {
                   <AnimatedScore value={isCricket ? card.cricketPoints : displayRemaining} />
                 </p>
               )}
-              {showPreview && (
-                <p className="text-[10px] text-muted-foreground -mt-1">
-                  ({card.remaining} − {pendingTotal} live)
-                </p>
-              )}
+              {/* min-h reserves this line even while showPreview is false, same reasoning as the
+                  pendingCameraDarts/activeRound block below — without it, this line popping in and
+                  out exactly as a checkout comes into range (pendingTotal only goes positive once a
+                  camera dart lands) shifted the sticky scoreboard's own height on every such dart,
+                  the most visible moment for it to happen. */}
+              <p className="text-[10px] text-muted-foreground -mt-1 min-h-[14px]">
+                {showPreview && `(${card.remaining} − ${pendingTotal} live)`}
+              </p>
               {/* min-h reserves this row's space even before the first dart of the round lands —
                   it used to only exist once pendingCameraDarts/activeRound had content, so the
                   card grew taller the instant the first dart registered, shoving everything below
@@ -3195,14 +3198,25 @@ const GamePage = () => {
               <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
                 {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
               </Button>
+              {/* Regression fix: this used to live only at the very end of the (unbounded-height,
+                  can run 20+ rounds) history block below, which in portrait meant scrolling past
+                  the entire history to reach it — reachable in principle, but not in the way
+                  someone mid-game actually looks for it, unlike landscape's separate history
+                  column. Folded in here instead of a new persistent bar of its own: a new row
+                  would add to this cell's vertical budget, exactly what silently caused an overlap
+                  on short phones the last time that was tried (see the comment above this block) —
+                  this costs no extra height, since it's one more button in a row that already
+                  fits. */}
+              <Button variant="outline" onClick={() => setConfirmCancelGame(true)} className="gap-1 text-muted-foreground hover:text-destructive" title={t("game.cancelGame")} aria-label={t("game.cancelGame")}>
+                <RotateCcw className="w-4 h-4" />
+              </Button>
             </div>
           </div>
 
           {/* History — the one block with genuinely unbounded height (a leg can run 20+ rounds),
               so it's last in both orientations and the one that scrolls/grows into leftover space
-              instead of pushing the header or the pad around. Cancel Game sits at the very end,
-              right-aligned and de-emphasized rather than a full-width centered bar — it's a rare,
-              destructive action and shouldn't visually compete with everything above it. */}
+              instead of pushing the header or the pad around. Cancel Game itself now lives in the
+              always-reachable Undo/Cam/Sound row above — see the comment there. */}
           <div className="px-4 pb-3 landscape:col-start-1 landscape:row-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
             <ThrowHistoryEditor
               throws={currentThrows}
@@ -3214,11 +3228,6 @@ const GamePage = () => {
               onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
               onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
             />
-            <div className="flex justify-end mt-3">
-              <Button variant="ghost" size="sm" onClick={() => setConfirmCancelGame(true)} className="text-xs text-muted-foreground gap-1.5">
-                <RotateCcw className="w-3.5 h-3.5" /> {t("game.cancelGame")}
-              </Button>
-            </div>
           </div>
         </div>
       )}
