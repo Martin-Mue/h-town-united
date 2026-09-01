@@ -5,6 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolveClubTheme, DEFAULT_CLUB_THEME_PRESET_ID } from "@/lib/clubThemePresets";
 import htuLogoFallback from "@/assets/htu-logo.jpg";
 
+// Personal color override: local to this browser only (not synced anywhere), so one member
+// picking a different preset can never change what anyone else sees -- deliberately simpler than
+// a DB column for exactly that reason (see the user's own framing: "solange eine Änderung von
+// jemand anderem meinen Login bzw. meine Ansicht nicht ändert"). Only the 3 accent colors are
+// personal; name/logo/tagline stay admin-only and club-wide, untouched by this.
+const PERSONAL_THEME_KEY = "dart-personal-theme-preset";
+
 interface ClubRow {
   id: string;
   name: string;
@@ -31,6 +38,11 @@ interface ClubBrandingContextType {
    *  CURRENT user -- the only condition under which App.tsx's RequireClub may act on `club`. */
   resolved: boolean;
   refetch: () => Promise<void>;
+  /** This browser's personal color override (see PERSONAL_THEME_KEY above), or null when using
+   *  the club's own default. Never the club's theme_preset itself -- that stays admin-only. */
+  personalThemePreset: string | null;
+  /** Pass null to clear the override and go back to the club default. */
+  setPersonalThemePreset: (presetId: string | null) => void;
 }
 
 // Pre-fetch / fetch-error fallback only -- matches the seed row so a network hiccup never
@@ -46,6 +58,8 @@ const ClubBrandingContext = createContext<ClubBrandingContextType>({
   loading: true,
   resolved: false,
   refetch: async () => {},
+  personalThemePreset: null,
+  setPersonalThemePreset: () => {},
 });
 
 export const useClubBranding = () => useContext(ClubBrandingContext);
@@ -55,6 +69,17 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
   const [status, setStatus] = useState<MembershipStatus>("loading");
   const { resolvedTheme } = useTheme();
   const { user, loading: authLoading } = useAuth();
+
+  const [personalThemePreset, setPersonalThemePresetState] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(PERSONAL_THEME_KEY);
+  });
+  const setPersonalThemePreset = (presetId: string | null) => {
+    setPersonalThemePresetState(presetId);
+    if (typeof window === "undefined") return;
+    if (presetId) window.localStorage.setItem(PERSONAL_THEME_KEY, presetId);
+    else window.localStorage.removeItem(PERSONAL_THEME_KEY);
+  };
 
   // Guards against out-of-order responses: e.g. onAuthStateChange's INITIAL_SESSION callback and
   // AuthContext's own getSession() call can each independently flip `user`/`authLoading`, firing
@@ -130,13 +155,14 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  // Re-apply CSS vars whenever the preset or the resolved light/dark mode changes.
+  // Re-apply CSS vars whenever the preset or the resolved light/dark mode changes. The personal
+  // override (this browser only) wins over the club's own admin-set default when present.
   useEffect(() => {
     const mode = resolvedTheme === "light" ? "light" : "dark";
-    const vars = resolveClubTheme(club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID, mode);
+    const vars = resolveClubTheme(personalThemePreset ?? club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID, mode);
     const root = document.documentElement.style;
     Object.entries(vars).forEach(([key, value]) => root.setProperty(key, value));
-  }, [club?.theme_preset, resolvedTheme]);
+  }, [club?.theme_preset, personalThemePreset, resolvedTheme]);
 
   const logoUrl = useMemo(() => {
     if (!club?.logo_path) return htuLogoFallback;
@@ -161,6 +187,8 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
     loading: status === "loading",
     resolved: status === "resolved",
     refetch: fetchClub,
+    personalThemePreset,
+    setPersonalThemePreset,
   };
 
   return <ClubBrandingContext.Provider value={value}>{children}</ClubBrandingContext.Provider>;

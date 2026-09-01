@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { compressImage } from "@/utils/imageCompression";
 import { SectionCard, StatTile } from "@/components/stats/StatPrimitives";
 
 // recharts (~390KB) is only needed once a player's detail view is open, not for browsing
@@ -68,6 +69,7 @@ interface PlayerProfile {
 }
 
 const EMOJI_AVATARS = ["🎯", "🏆", "⭐", "🔥", "💎", "🦅", "🐉", "🎪"];
+const PHOTO_COMPRESS_THRESHOLD_BYTES = 2 * 1024 * 1024;
 
 const EMPTY_PLAYER_FORM = {
   name: "",
@@ -112,6 +114,7 @@ const PlayersPage = () => {
   const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
   const [removeExistingPhoto, setRemoveExistingPhoto] = useState(false);
   const [generatingPortrait, setGeneratingPortrait] = useState(false);
+  const [compressingPhoto, setCompressingPhoto] = useState(false);
   // Bumped whenever an in-flight AI-portrait request should no longer be trusted (a different
   // photo was picked, or the dialog closed/reopened for a different player) — generateAiPortrait
   // checks this is still its own value before applying anything it fetched, so a slow request
@@ -317,18 +320,24 @@ const PlayersPage = () => {
     setExpandedCards((prev) => ({ ...prev, [playerId]: !prev[playerId] }));
   };
 
-  /** Handles photo file selection and creates preview */
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  /** Handles photo file selection and creates preview. Compresses first when the raw file is
+   *  large (a phone camera routinely produces 8-12MB originals) -- there was never a size limit
+   *  here to trip on, but uploading the raw file straight through was still needlessly slow for
+   *  the uploader and everyone who later loads the roster. */
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     // Any AI-portrait request already in flight was generated from the PREVIOUS photo — picking
     // a new one invalidates it, otherwise a slow response could resurrect the old photo's result
     // right after the user deliberately moved on from it.
     portraitRequestIdRef.current++;
-    setUploadedFile(file);
+    setCompressingPhoto(true);
+    const upload = file.size > PHOTO_COMPRESS_THRESHOLD_BYTES ? await compressImage(file) : file;
+    setCompressingPhoto(false);
+    setUploadedFile(upload);
     const reader = new FileReader();
     reader.onload = (ev) => setUploadedPhoto(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(upload);
     setGeneratedPortrait(null);
     setRemoveExistingPhoto(false); // a fresh pick supersedes an earlier "remove" click
   };
@@ -830,8 +839,13 @@ const PlayersPage = () => {
                 </Label>
                 <p className="text-xs text-muted-foreground mb-2">{t("players.uploadPhotoDesc")}</p>
                 <label className="flex items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 transition-colors bg-muted/30">
-                  <input type="file" accept="image/*" onChange={handlePhotoSelect} className="hidden" />
-                  {uploadedPhoto ? (
+                  <input type="file" accept="image/*" onChange={handlePhotoSelect} disabled={compressingPhoto} className="hidden" />
+                  {compressingPhoto ? (
+                    <div className="text-center">
+                      <Loader2 className="w-6 h-6 text-muted-foreground mx-auto mb-1 animate-spin" />
+                      <span className="text-xs text-muted-foreground">{t("common.loading")}</span>
+                    </div>
+                  ) : uploadedPhoto ? (
                     <img src={uploadedPhoto} alt="Preview" className="h-20 w-20 object-cover rounded-lg" />
                   ) : existingPhotoUrl && !removeExistingPhoto ? (
                     <img src={existingPhotoUrl} alt={t("players.currentPhoto")} className="h-20 w-20 object-cover rounded-lg" />

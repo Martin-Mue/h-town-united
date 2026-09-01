@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Settings as SettingsIcon, Moon, Bell, FileText, TriangleAlert, Languages, Pencil, Check, X, Loader2, Palette, Upload } from "lucide-react";
+import { Settings as SettingsIcon, Moon, Bell, FileText, TriangleAlert, Languages, Pencil, Check, X, Loader2, Palette, Upload, BookOpen, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
@@ -15,6 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LANGUAGES, type Language } from "@/i18n/translations";
 import { CLUB_THEME_PRESETS, resolveClubTheme, DEFAULT_CLUB_THEME_PRESET_ID } from "@/lib/clubThemePresets";
+import GuidesTab from "@/components/settings/GuidesTab";
+import { compressImage } from "@/utils/imageCompression";
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -49,18 +51,20 @@ const SettingsPage = () => {
   const { resolvedTheme, setTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
   const push = usePushSubscription(user?.id);
-  const { club, name: clubName, tagline: clubTagline, logoUrl, refetch: refetchBranding } = useClubBranding();
+  const { club, name: clubName, tagline: clubTagline, logoUrl, refetch: refetchBranding, personalThemePreset, setPersonalThemePreset } = useClubBranding();
 
   const [impressum, setImpressum] = useState<ImpressumRow | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Omit<ImpressumRow, "id">>(EMPTY_IMPRESSUM);
   const [saving, setSaving] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<"settings" | "guides">("settings");
   const [editingBranding, setEditingBranding] = useState(false);
   const [brandingForm, setBrandingForm] = useState({ name: "", tagline: "", theme_preset: DEFAULT_CLUB_THEME_PRESET_ID });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
+  const [compressingLogo, setCompressingLogo] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
 
   useEffect(() => {
@@ -103,18 +107,28 @@ const SettingsPage = () => {
     setEditingBranding(true);
   };
 
-  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!ALLOWED_LOGO_TYPES.includes(file.type) || file.size > MAX_LOGO_BYTES) {
+    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
       setLogoError(t("settings.brandingLogoError"));
       return;
     }
     setLogoError(null);
-    setLogoFile(file);
-    const reader = new FileReader();
-    reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    setCompressingLogo(true);
+    try {
+      // A phone photo routinely runs well past this on its own -- compress client-side instead
+      // of rejecting it outright, so picking "the photo I have" always just works.
+      const upload = file.size > MAX_LOGO_BYTES ? await compressImage(file) : file;
+      setLogoFile(upload);
+      const reader = new FileReader();
+      reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
+      reader.readAsDataURL(upload);
+    } catch {
+      setLogoError(t("settings.brandingLogoCompressError"));
+    } finally {
+      setCompressingLogo(false);
+    }
   };
 
   const saveBranding = async () => {
@@ -164,6 +178,21 @@ const SettingsPage = () => {
         <h2 className="text-2xl font-display uppercase">{t("settings.title")}</h2>
       </div>
 
+      <div className="flex gap-2 mb-6">
+        <button onClick={() => setActiveTab("settings")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full text-xs font-medium transition-all ${activeTab === "settings" ? "bg-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.35)]" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+          <SlidersHorizontal className="w-3.5 h-3.5" /> {t("settings.tabSettings")}
+        </button>
+        <button onClick={() => setActiveTab("guides")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full text-xs font-medium transition-all ${activeTab === "guides" ? "bg-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.35)]" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+          <BookOpen className="w-3.5 h-3.5" /> {t("settings.tabGuides")}
+        </button>
+      </div>
+
+      {activeTab === "guides" && <GuidesTab />}
+
+      {activeTab === "settings" && (
+      <>
       <div className="space-y-3 mb-6">
         <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -210,6 +239,57 @@ const SettingsPage = () => {
             <Switch checked={push.enabled} onCheckedChange={push.toggle} disabled={push.busy} aria-label={t("settings.notifications")} />
           </div>
         )}
+
+        {/* Personal color override — local to this device only (localStorage, see
+            ClubBrandingContext), never written anywhere shared. Everyone gets this, not just
+            admins: only the 3 accent hues are personal, name/logo/tagline stay admin-only below. */}
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Palette className="w-5 h-5 text-muted-foreground shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{t("settings.myColor")}</p>
+              <p className="text-xs text-muted-foreground">{t("settings.myColorDesc")}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPersonalThemePreset(null)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs text-left transition-colors ${
+                !personalThemePreset ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border hover:border-primary/50"
+              }`}
+            >
+              <span className="flex gap-1 shrink-0">
+                {(["--primary", "--secondary", "--accent"] as const).map((key) => {
+                  const vars = resolveClubTheme(club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID, resolvedTheme === "light" ? "light" : "dark");
+                  return <span key={key} className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars[key]})` }} />;
+                })}
+              </span>
+              <span className="truncate">{t("settings.myColorClubDefault")}</span>
+            </button>
+            {CLUB_THEME_PRESETS.map((preset) => {
+              const vars = resolveClubTheme(preset.id, resolvedTheme === "light" ? "light" : "dark");
+              const selected = personalThemePreset === preset.id;
+              return (
+                <button
+                  type="button"
+                  key={preset.id}
+                  onClick={() => setPersonalThemePreset(preset.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs text-left transition-colors ${
+                    selected ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  }`}
+                >
+                  <span className="flex gap-1 shrink-0">
+                    <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--primary"]})` }} />
+                    <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--secondary"]})` }} />
+                    <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--accent"]})` }} />
+                  </span>
+                  <span className="truncate">{preset.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl p-4 mb-3">
@@ -248,10 +328,10 @@ const SettingsPage = () => {
               <Label className="text-xs">{t("settings.brandingLogo")}</Label>
               <p className="text-xs text-muted-foreground mb-1.5">{t("settings.brandingLogoHint")}</p>
               <label className="flex items-center gap-3 w-full h-16 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 transition-colors bg-muted/30 px-3">
-                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoSelect} className="hidden" />
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoSelect} disabled={compressingLogo} className="hidden" />
                 <img src={logoPreview ?? logoUrl} alt="" className="h-10 w-10 rounded-lg object-cover shrink-0" />
                 <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Upload className="w-3.5 h-3.5" /> {t("players.choosePhoto")}
+                  {compressingLogo ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("common.loading")}</> : <><Upload className="w-3.5 h-3.5" /> {t("players.choosePhoto")}</>}
                 </span>
               </label>
               {logoError && <p className="text-xs text-destructive mt-1">{logoError}</p>}
@@ -361,6 +441,8 @@ const SettingsPage = () => {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };

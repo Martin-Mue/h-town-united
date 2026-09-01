@@ -41,6 +41,8 @@ export const translations: Record<string, Record<Language, string>> = {
 
   // Settings.tsx
   "settings.title": { de: "Einstellungen", en: "Settings", fr: "Paramètres", pl: "Ustawienia", nl: "Instellingen", tr: "Ayarlar" },
+  "settings.tabSettings": { de: "Einstellungen", en: "Settings", fr: "Paramètres", pl: "Ustawienia", nl: "Instellingen", tr: "Ayarlar" },
+  "settings.tabGuides": { de: "Anleitungen", en: "Guides", fr: "Guides", pl: "Poradniki", nl: "Handleidingen", tr: "Kılavuzlar" },
   "settings.language": { de: "Sprache", en: "Language", fr: "Langue", pl: "Język", nl: "Taal", tr: "Dil" },
   "settings.languageDesc": { de: "Sprache der App-Oberfläche.", en: "Language of the app interface.", fr: "Langue de l'interface de l'application.", pl: "Język interfejsu aplikacji.", nl: "Taal van de app-interface.", tr: "Uygulama arayüzünün dili." },
   "settings.german": { de: "Deutsch", en: "German", fr: "Allemand", pl: "Niemiecki", nl: "Duits", tr: "Almanca" },
@@ -54,12 +56,16 @@ export const translations: Record<string, Record<Language, string>> = {
   "settings.notifications": { de: "Benachrichtigungen", en: "Notifications", fr: "Notifications", pl: "Powiadomienia", nl: "Meldingen", tr: "Bildirimler" },
   "settings.notificationsDesc": { de: "Z. B. wenn dein Turnierspiel als Nächstes dran ist.", en: "E.g. when your tournament match is coming up next.", fr: "P. ex. quand c'est bientôt à ton tour en tournoi.", pl: "Np. gdy Twój mecz turniejowy jest następny w kolejce.", nl: "Bijv. wanneer je toernooiwedstrijd zo aan de beurt is.", tr: "Örn. turnuva maçın sırada olduğunda." },
   "settings.branding": { de: "Vereinsdesign", en: "Club branding", fr: "Identité visuelle du club", pl: "Wygląd klubu", nl: "Clubuitstraling", tr: "Kulüp görünümü" },
+  "settings.myColor": { de: "Meine Farbe", en: "My color", fr: "Ma couleur", pl: "Mój kolor", nl: "Mijn kleur", tr: "Rengim" },
+  "settings.myColorDesc": { de: "Nur für dich sichtbar — ändert nichts für andere Mitglieder.", en: "Only visible to you — never changes what other members see.", fr: "Visible uniquement par vous — ne change rien pour les autres membres.", pl: "Widoczne tylko dla Ciebie — nie zmienia widoku innych.", nl: "Alleen zichtbaar voor jou — verandert niets voor andere leden.", tr: "Yalnızca sana görünür — diğer üyeler için hiçbir şeyi değiştirmez." },
+  "settings.myColorClubDefault": { de: "Vereinsfarbe", en: "Club color", fr: "Couleur du club", pl: "Kolor klubu", nl: "Clubkleur", tr: "Kulüp rengi" },
   "settings.brandingDesc": { de: "Name, Logo und Farbschema deines Vereins.", en: "Your club's name, logo, and color scheme.", fr: "Le nom, le logo et le jeu de couleurs de ton club.", pl: "Nazwa, logo i schemat kolorów Twojego klubu.", nl: "Naam, logo en kleurenschema van je club.", tr: "Kulübünün adı, logosu ve renk şeması." },
   "settings.brandingClubName": { de: "Vereinsname", en: "Club name", fr: "Nom du club", pl: "Nazwa klubu", nl: "Clubnaam", tr: "Kulüp adı" },
   "settings.brandingTagline": { de: "Leitspruch (optional)", en: "Tagline (optional)", fr: "Devise (facultatif)", pl: "Motto (opcjonalnie)", nl: "Motto (optioneel)", tr: "Slogan (isteğe bağlı)" },
   "settings.brandingLogo": { de: "Vereinslogo", en: "Club logo", fr: "Logo du club", pl: "Logo klubu", nl: "Clublogo", tr: "Kulüp logosu" },
   "settings.brandingLogoHint": { de: "PNG, JPG oder WebP, max. 2 MB", en: "PNG, JPG, or WebP, max. 2 MB", fr: "PNG, JPG ou WebP, 2 Mo max.", pl: "PNG, JPG lub WebP, maks. 2 MB", nl: "PNG, JPG of WebP, max. 2 MB", tr: "PNG, JPG veya WebP, en fazla 2 MB" },
-  "settings.brandingLogoError": { de: "Bitte ein PNG-, JPG- oder WebP-Bild bis 2 MB wählen.", en: "Please choose a PNG, JPG, or WebP image up to 2 MB.", fr: "Veuillez choisir une image PNG, JPG ou WebP de 2 Mo maximum.", pl: "Wybierz obraz PNG, JPG lub WebP o rozmiarze do 2 MB.", nl: "Kies een PNG-, JPG- of WebP-afbeelding tot 2 MB.", tr: "Lütfen 2 MB'a kadar bir PNG, JPG veya WebP görseli seç." },
+  "settings.brandingLogoError": { de: "Bitte ein PNG-, JPG- oder WebP-Bild wählen.", en: "Please choose a PNG, JPG, or WebP image.", fr: "Veuillez choisir une image PNG, JPG ou WebP.", pl: "Wybierz obraz PNG, JPG lub WebP.", nl: "Kies een PNG-, JPG- of WebP-afbeelding.", tr: "Lütfen bir PNG, JPG veya WebP görseli seç." },
+  "settings.brandingLogoCompressError": { de: "Bild konnte nicht verarbeitet werden. Bitte ein anderes Foto probieren.", en: "Couldn't process this image. Please try a different photo.", fr: "Impossible de traiter cette image. Veuillez essayer une autre photo.", pl: "Nie udało się przetworzyć obrazu. Spróbuj innego zdjęcia.", nl: "Afbeelding kon niet worden verwerkt. Probeer een andere foto.", tr: "Görsel işlenemedi. Lütfen başka bir fotoğraf dene." },
   "settings.brandingTheme": { de: "Farbschema", en: "Color scheme", fr: "Palette de couleurs", pl: "Schemat kolorów", nl: "Kleurenschema", tr: "Renk şeması" },
   "settings.impressum": { de: "Impressum", en: "Legal Notice (Impressum)", fr: "Mentions légales (Impressum)", pl: "Nota prawna (Impressum)", nl: "Colofon (Impressum)", tr: "Yasal Bildirim (Impressum)" },
   "settings.impressumWarning": {
