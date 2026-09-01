@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,7 +56,16 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
   const { resolvedTheme } = useTheme();
   const { user, loading: authLoading } = useAuth();
 
+  // Guards against out-of-order responses: e.g. onAuthStateChange's INITIAL_SESSION callback and
+  // AuthContext's own getSession() call can each independently flip `user`/`authLoading`, firing
+  // fetchClub twice in close succession. Without this, a slower first call resolving AFTER a
+  // faster second call would silently overwrite the correct result with a stale one -- including
+  // the one-tick "resolved, no club" case that's enough to strand an existing member on
+  // /create-club (see the safety-net redirect in CreateClub.tsx for the other half of this fix).
+  const requestIdRef = useRef(0);
+
   const fetchClub = async () => {
+    const requestId = ++requestIdRef.current;
     setStatus("loading");
     if (user) {
       // Authenticated: resolve the caller's OWN club via their membership row, not just
@@ -70,6 +79,7 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
       // than needing its own recovery logic; refetch() (called on window focus, see below)
       // naturally retries on the next opportunity.
       const { data: roleRow, error: roleError } = await supabase.from("user_roles").select("club_id").eq("user_id", user.id).maybeSingle();
+      if (requestId !== requestIdRef.current) return;
       if (roleError) {
         setStatus("error");
         return;
@@ -82,6 +92,7 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
       const { data: clubRow, error: clubError } = await supabase.from("clubs").select("*").eq("id", roleRow.club_id).maybeSingle();
+      if (requestId !== requestIdRef.current) return;
       if (clubError) {
         setStatus("error");
         return;
@@ -96,6 +107,7 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
     // multi-club landing exists for a cold, un-invited visitor, this is the spot to swap in a
     // neutral, non-club-specific identity instead.
     const { data } = await supabase.from("clubs_public").select("*").limit(1).maybeSingle();
+    if (requestId !== requestIdRef.current) return;
     if (data) setClub(data);
     setStatus("resolved");
   };

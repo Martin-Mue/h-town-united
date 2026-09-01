@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,18 @@ const CreateClub = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { signOut } = useAuth();
-  const { refetch } = useClubBranding();
+  const { club, refetch } = useClubBranding();
   const [name, setName] = useState("");
   const [tagline, setTagline] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Safety net for RequireClub's redirect: if this account actually does have a club -- an
+  // out-of-order fetch that has since self-corrected, or a stale membership snapshot catching up
+  // -- bounce back the moment ClubBrandingContext confirms it, instead of leaving an existing
+  // member stranded on the "create a club" form.
+  useEffect(() => {
+    if (club) navigate("/", { replace: true });
+  }, [club, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
