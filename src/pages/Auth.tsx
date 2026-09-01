@@ -48,7 +48,11 @@ const AuthPage = () => {
         const { data, error } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          // Redirect back to wherever signup was actually initiated from (e.g. an invite link)
+          // instead of the bare origin — otherwise confirming by email always drops the new
+          // member on "/" with no club yet, losing the invite they came from. Same pattern
+          // resetPasswordForEmail below already uses for its own redirect target.
+          options: { emailRedirectTo: `${window.location.origin}${from || ""}` },
         });
         if (error) throw error;
         // signUp() only returns a live session immediately when email confirmation is off for
