@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2 } from "lucide-react";
+import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -72,6 +72,7 @@ import {
 import { speakSequence, buildRoundAnnouncement, getCallerVoice, setCallerVoice, type CallerVoice } from "@/utils/speech";
 import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
 import { saveGameRecord } from "@/lib/gameSync";
@@ -2081,10 +2082,12 @@ const GamePage = () => {
         )}
         {!tournamentLinkName && <div className="mb-6" />}
         <div className="space-y-4">
+          <SectionCard className="space-y-4">
+          <Eyebrow icon={Target}>{t("game.setupModeSection")}</Eyebrow>
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{t("game.gameMode")}</label>
             <Select value={mode} onValueChange={(v) => setMode(v as GameMode)} disabled={isTournamentMatch}>
-              <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="501">501</SelectItem>
                 <SelectItem value="301">301</SelectItem>
@@ -2098,11 +2101,11 @@ const GamePage = () => {
             <div>
               <label className="text-sm text-muted-foreground mb-1 block">{t("game.startValue")}</label>
               <input type="number" value={customStartScore} onChange={(e) => setCustomStartScore(parseInt(e.target.value) || 0)}
-                className="w-full rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
+                className="w-full rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground" />
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
             <div className="min-w-0">
               <Label htmlFor="team-mode" className="text-sm">{t("game.teamMode")}</Label>
               <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.teamModeDesc")}</p>
@@ -2116,9 +2119,9 @@ const GamePage = () => {
           {teamMode && (
             <div className="grid grid-cols-2 gap-2">
               <input value={teamNames[0]} onChange={(e) => setTeamNames([e.target.value, teamNames[1]])}
-                placeholder={`${t("game.team")} 1`} className="rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
+                placeholder={`${t("game.team")} 1`} className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground" />
               <input value={teamNames[1]} onChange={(e) => setTeamNames([teamNames[0], e.target.value])}
-                placeholder={`${t("game.team")} 2`} className="rounded-lg bg-card border border-border px-3 py-2 text-sm text-foreground" />
+                placeholder={`${t("game.team")} 2`} className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground" />
             </div>
           )}
 
@@ -2127,15 +2130,19 @@ const GamePage = () => {
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {(teamMode ? [4, 6, 8] : Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2)).map((n) => (
                 <button key={n} onClick={() => setNumPlayers(n)} disabled={isTournamentMatch}
-                  className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-card border-border text-muted-foreground"} ${isTournamentMatch ? "opacity-50 cursor-not-allowed" : ""}`}>
+                  className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-muted border-border text-muted-foreground"} ${isTournamentMatch ? "opacity-50 cursor-not-allowed" : ""}`}>
                   {teamMode ? `${n / 2} vs ${n / 2}` : `${n} ${t("game.playersSuffix")}`}
                 </button>
               ))}
             </div>
           </div>
+          </SectionCard>
+
+          <SectionCard className="space-y-4">
+          <Eyebrow icon={Trophy}>{t("game.setupFormatSection")}</Eyebrow>
 
           {mode === "cricket" && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
               <div className="min-w-0">
                 <Label htmlFor="custom-cricket" className="text-sm">{t("game.customCricket")}</Label>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.customCricketDesc")}</p>
@@ -2149,7 +2156,7 @@ const GamePage = () => {
               <div>
                 <label className="text-sm text-muted-foreground mb-1 block">{t("game.firstToLegs")}</label>
                 <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))} disabled={isTournamentMatch}>
-                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     {[1, 3, 5, 7, 9, 11].map((n) => (
                       <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>
@@ -2161,7 +2168,7 @@ const GamePage = () => {
               <div>
                 <label className="text-sm text-muted-foreground mb-1 block">{t("game.roundLimitPerLeg")}</label>
                 <Select value={String(maxRoundsX01)} onValueChange={(v) => setMaxRoundsX01(parseInt(v))}>
-                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     <SelectItem value="0">{t("game.noLimit")}</SelectItem>
                     {[8, 10, 12, 15, 20, 25].map((n) => (
@@ -2172,7 +2179,7 @@ const GamePage = () => {
                 <p className="text-[10px] text-muted-foreground mt-1">{t("game.roundLimitDesc")}</p>
               </div>
 
-              <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
+              <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
                 <div className="min-w-0">
                   <Label className="text-sm font-medium">{t("game.checkoutSuggestions")}</Label>
                   <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.checkoutSuggestionsDesc")}</p>
@@ -2181,11 +2188,15 @@ const GamePage = () => {
               </div>
             </>
           )}
+          </SectionCard>
+
+          <SectionCard className="space-y-3">
+          <Eyebrow icon={Users}>{t("game.setupPlayersSection")}</Eyebrow>
 
           {/* Player slots: name, double-out, bot toggle */}
           <div className="space-y-3">
             {Array.from({ length: activePlayerCount }, (_, i) => (
-              <div key={i} className={`bg-card rounded-lg border px-4 py-3 space-y-2 ${teamMode ? (i % 2 === 0 ? "border-primary/30" : "border-secondary/30") : "border-border"}`}>
+              <div key={i} className={`bg-muted/30 rounded-lg border px-4 py-3 space-y-2 ${teamMode ? (i % 2 === 0 ? "border-primary/30" : "border-secondary/30") : "border-border"}`}>
                 {teamMode && (
                   <p className={`text-[10px] font-display uppercase ${i % 2 === 0 ? "text-primary" : "text-secondary"}`}>
                     {i % 2 === 0 ? (teamNames[0] || "Team 1") : (teamNames[1] || "Team 2")}
@@ -2306,9 +2317,13 @@ const GamePage = () => {
               </div>
             ))}
           </div>
+          </SectionCard>
+
+          <SectionCard className="space-y-4">
+          <Eyebrow icon={Settings2}>{t("game.setupExtrasSection")}</Eyebrow>
 
           {/* Sound toggle */}
-          <div className="flex items-center justify-between bg-card rounded-lg border border-border px-4 py-3">
+          <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
             <div className="flex items-center gap-2">
               {soundEnabled ? <Volume2 className="w-4 h-4 text-primary" /> : <VolumeX className="w-4 h-4 text-muted-foreground" />}
               <Label className="text-sm font-medium">{t("game.soundHaptics")}</Label>
@@ -2316,7 +2331,7 @@ const GamePage = () => {
             <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
           </div>
 
-          <div className="bg-card rounded-lg border border-border px-4 py-3">
+          <div className="bg-muted/30 rounded-lg border border-border px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
               {speechEnabled ? <Mic className="w-4 h-4 text-primary" /> : <MicOff className="w-4 h-4 text-muted-foreground" />}
               <Label className="text-sm font-medium">{t("game.callerVoice")}</Label>
@@ -2341,7 +2356,7 @@ const GamePage = () => {
             </div>
           </div>
 
-          <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
+          <div className="bg-muted/30 rounded-lg border border-border px-4 py-3 space-y-2">
             <Label className="text-sm">{t("game.whoStarts")}</Label>
             <p className="text-[10px] text-muted-foreground -mt-1">{t("game.whoStartsDesc")}</p>
             <div className="grid grid-cols-2 gap-1.5">
@@ -2368,7 +2383,7 @@ const GamePage = () => {
             </div>
           </div>
 
-          <div className="bg-card rounded-lg border border-border px-4 py-3 space-y-2">
+          <div className="bg-muted/30 rounded-lg border border-border px-4 py-3 space-y-2">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <Label htmlFor="warmup-mode" className="text-sm">{t("game.warmupBeforeMatch")}</Label>
@@ -2391,13 +2406,14 @@ const GamePage = () => {
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-3 bg-card rounded-lg border border-border px-4 py-3">
+          <div className="flex items-center justify-between gap-3 bg-muted/30 rounded-lg border border-border px-4 py-3">
             <div className="min-w-0">
               <Label htmlFor="walkon-mode" className="text-sm">{t("game.walkonIntro")}</Label>
               <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.walkonIntroDesc")}</p>
             </div>
             <Switch id="walkon-mode" checked={walkonEnabled} onCheckedChange={setWalkonEnabled} />
           </div>
+          </SectionCard>
 
           <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
             <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? t("game.startWarmup") : t("game.startGame")}
