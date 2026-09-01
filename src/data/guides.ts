@@ -61,6 +61,48 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "funktionsuebersicht",
+    title: "Alle Funktionen im Überblick",
+    teaser: "Ein kompletter Rundgang durch jeden Bereich der App.",
+    sections: [
+      {
+        body: [
+          "Die App deckt den kompletten Dart-Abend ab — von der ersten Aufwärmpartie bis zur Vereinsmeisterschaft. Hier eine grobe Landkarte aller Bereiche, inklusive der Extras, die man leicht übersieht.",
+        ],
+      },
+      {
+        heading: "Spielen",
+        body: [
+          "501, 301 (und weitere X01-Varianten) sowie Cricket, wahlweise mit Kamera-Erkennung (die App zählt eure Würfe automatisch vom Board ab) oder manueller Eingabe über ein großes Zahlenfeld. Dazu: optionale Checkout-Vorschläge, ein Münzwurf-Ersatz vor dem Spiel („Bull-off\") inklusive Stechen bei Gleichstand, Undo für den letzten Wurf, automatische Wiederherstellung falls die App mal abstürzt oder geschlossen wird, und eine Sprachansage der Punkte (mehrere Stimmen wählbar, auch abschaltbar).",
+        ],
+      },
+      {
+        heading: "Turniere",
+        body: [
+          "K.O.-Baum oder Round-Robin, bis zu 64 Teilnehmer, mit Turnierserien über mehrere Events hinweg. Für Zuschauer gibt es eine eigene Live-Ansicht per Link oder QR-Code — ganz ohne Login, mit automatisch rotierenden Perspektiven (laufende Partien, Turnierbaum, Highlights). Der „Board-Modus\" bindet ein Gerät fest an ein bestimmtes Board, das dann selbstständig zur jeweils nächsten anstehenden Partie weiterschaltet. Dazu Anwesenheits-Check-in der Teilnehmer und eine Restzeit-Schätzung für Admins. Alle Details dazu in der eigenen Turnier-Anleitung weiter unten.",
+        ],
+      },
+      {
+        heading: "Statistiken & Auswertungen",
+        body: [
+          "Neben den Grundlagen (Rangliste, Schnitt, Checkout-Quote, direkte Duelle) gibt es tiefere Auswertungen: eine Aim-Bias-Karte zeigt, wohin du tendenziell danebenwirfst, ein Clutch-Faktor misst deine Leistung unter Druck, dazu Rivalitäts-Storylines zwischen häufigen Gegnern, eine paarweise Elo-Wertung, ein Season-Recap als Jahresrückblick, und eigene Statistiken sogar für Gastspieler ohne festes Profil („Walk-on\"). Aus besonderen Momenten (180er, Checkouts) schneidet die Kamera automatisch kurze Highlight-Clips mit.",
+        ],
+      },
+      {
+        heading: "Training",
+        body: [
+          "Ein eigener Trainingsmodus mit Kamera-Kalibrierung sowie gezielten Übungsvorschlägen, die sich direkt auf deine eigene Aim-Bias-Auswertung beziehen.",
+        ],
+      },
+      {
+        heading: "Verein & Einstellungen",
+        body: [
+          "Admins können Vereinsname, Logo und Farbthema anpassen — jedes Mitglied kann zusätzlich unter „Meine Farbe\" eine eigene Akzentfarbe wählen, ganz ohne Auswirkung auf andere. Die App unterstützt mehrere unabhängige Vereine: ein eigener Verein lässt sich anlegen, neue Mitglieder kommen per Einladungslink dazu. Dazu ein editierbares Impressum, ein Admin-Bereich für Nutzerverwaltung, und die App spricht mehrere Sprachen.",
+        ],
+      },
+    ],
+  },
+  {
     id: "statistiken",
     title: "Statistiken verstehen",
     teaser: "Vereinsrangliste, eigene Werte, direkte Duelle.",
@@ -134,8 +176,8 @@ export const GUIDES: Guide[] = [
   },
   {
     id: "turnier-erstellen",
-    title: "Turnier erstellen",
-    teaser: "Vom leeren Formular bis zum fertigen Turnierbaum.",
+    title: "Turniere",
+    teaser: "Vom leeren Formular bis zur Live-Ansicht für Zuschauer.",
     sections: [
       {
         body: [
@@ -164,6 +206,36 @@ export const GUIDES: Guide[] = [
         heading: "Turnier starten",
         body: [
           "Ganz unten „Turnier starten\" legt den Turnierbaum an. Danach lässt sich jederzeit direkt aus dem Baum heraus ein Spiel für die anstehende Partie starten.",
+        ],
+      },
+      {
+        heading: "Aus dem Turnierbaum heraus spielen",
+        body: [
+          "Nach dem Start zeigt der Turnierbaum alle anstehenden Partien. Auf eine Partie tippen startet direkt ein Spiel mit den richtigen Spielern und dem für diese Runde hinterlegten Modus — das Ergebnis trägt sich danach automatisch in den Baum ein. Bracket und Status lassen sich bei Bedarf auch manuell nachkorrigieren.",
+        ],
+      },
+      {
+        heading: "Live-Ansicht für Zuschauer",
+        body: [
+          "Jedes Turnier hat einen eigenen Teilen-Link (und QR-Code) für eine reine Zuschau-Ansicht — ganz ohne Login. Die Ansicht rotiert automatisch zwischen laufenden Partien, dem Turnierbaum und aktuellen Highlights, ideal für einen Bildschirm an der Wand während des Events.",
+        ],
+      },
+      {
+        heading: "Board-Modus",
+        body: [
+          "Ein Tablet oder Handy lässt sich fest einem bestimmten Board zuordnen. Es zeigt dann immer automatisch die als Nächstes anstehende Partie für genau dieses Board an und schaltet nach jedem Ergebnis selbstständig weiter — kein manuelles Suchen der nächsten Partie mehr nötig.",
+        ],
+      },
+      {
+        heading: "Anwesenheit & Turnierserien",
+        body: [
+          "Teilnehmer können sich vor Turnierbeginn per Check-in als anwesend markieren. Mehrere Turniere lassen sich außerdem zu einer Turnierserie zusammenfassen, mit einer eigenen Serienwertung über alle enthaltenen Events hinweg.",
+        ],
+      },
+      {
+        heading: "Nach dem Turnier",
+        body: [
+          "Admins sehen während des laufenden Turniers eine Restzeit-Schätzung fürs Voranschreiten der Runden. Nach Abschluss fasst eine Highlight- und Auswertungsseite die besten Momente und Zahlen des Turniers zusammen.",
         ],
       },
     ],
