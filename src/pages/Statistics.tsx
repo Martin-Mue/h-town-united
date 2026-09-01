@@ -1935,17 +1935,40 @@ const StatisticsPage = () => {
                             <div className="rounded-md bg-primary/10 border border-primary/20 px-2.5 py-2">
                               <p className="text-[10px] uppercase tracking-wider text-primary mb-1">{t("stats.matchTotal")}</p>
                               <div className="space-y-1">
-                                {gameTotalsByGame[g.id].map((p) => (
-                                  <div key={p.name} className="flex items-center justify-between text-xs">
-                                    <span className={`truncate ${p.won ? "text-secondary font-semibold" : "text-foreground"}`}>
-                                      {p.won && "🏆 "}{p.name}
-                                    </span>
-                                    <span className="text-muted-foreground font-mono shrink-0 ml-2">
-                                      Ø {p.bundle.average.toFixed(1)} · F9 {p.bundle.first9.toFixed(1)} · CO {p.bundle.checkout.percentage.toFixed(0)}%
-                                      {p.bundle.s180 > 0 && ` · ${p.bundle.s180}×180`}
-                                    </span>
-                                  </div>
-                                ))}
+                                {gameTotalsByGame[g.id].map((p) => {
+                                  // Non-zero score-tier counts only (a 20-team club's typical game
+                                  // never touches most of the 40+..180 ladder) — same "only show
+                                  // what actually happened" convention as the player-detail field
+                                  // breakdown's visibleFieldRows.
+                                  const hitTiers = p.bundle.tierBreakdown.filter((tier) => tier.count > 0);
+                                  return (
+                                    <div key={p.name} className="text-xs">
+                                      <div className="flex items-center justify-between">
+                                        <span className={`truncate ${p.won ? "text-secondary font-semibold" : "text-foreground"}`}>
+                                          {p.won && "🏆 "}{p.name}
+                                        </span>
+                                        <span className="text-muted-foreground font-mono shrink-0 ml-2">
+                                          Ø {p.bundle.average.toFixed(1)} · F9 {p.bundle.first9.toFixed(1)} · High {p.bundle.highscore}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between mt-0.5 text-muted-foreground">
+                                        <span className="font-mono">
+                                          CO {p.bundle.checkout.percentage.toFixed(0)}% ({p.bundle.checkout.hits}/{p.bundle.checkout.attempts})
+                                          {p.bundle.checkout.highestCheckout > 0 && ` · Finish ${p.bundle.checkout.highestCheckout}`}
+                                          {p.bundle.tonPlus > 0 && ` · 100+ ×${p.bundle.tonPlus}`}
+                                          {p.bundle.s180 > 0 && ` · 180 ×${p.bundle.s180}`}
+                                        </span>
+                                      </div>
+                                      {hitTiers.length > 0 && (
+                                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 font-mono text-[10px] text-muted-foreground/80">
+                                          {hitTiers.map((tier) => (
+                                            <span key={tier.label}>{tier.label} ×{tier.count}</span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
