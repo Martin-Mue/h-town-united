@@ -13,6 +13,13 @@ interface ClubRow {
   theme_preset: string;
 }
 
+/** "loading": fetch in flight or not started -- club may still be stale/null, never act on it.
+ *  "resolved": the fetch genuinely succeeded -- club is either the caller's real club, or
+ *  legitimately null (no membership row, no error). Only THIS status may drive a redirect.
+ *  "error": the fetch itself failed (network, RLS hiccup, ...) -- treat exactly like "loading",
+ *  never like "resolved with no club". */
+type MembershipStatus = "loading" | "resolved" | "error";
+
 interface ClubBrandingContextType {
   club: ClubRow | null;
   clubId: string | null;
@@ -20,18 +27,15 @@ interface ClubBrandingContextType {
   tagline: string | null;
   logoUrl: string;
   loading: boolean;
-  /** True only after a network/query error resolving an AUTHENTICATED user's own membership,
-   *  and every automatic retry has also failed. RequireClub (App.tsx) must treat this the same
-   *  as still-loading, NEVER as "confirmed no club" -- see the resolved flag below for why this
-   *  distinction exists at all. */
-  membershipError: boolean;
+  /** True once fetchClub has genuinely completed (success or legitimate empty result) for the
+   *  CURRENT user -- the only condition under which App.tsx's RequireClub may act on `club`. */
+  resolved: boolean;
   refetch: () => Promise<void>;
 }
 
 // Pre-fetch / fetch-error fallback only -- matches the seed row so a network hiccup never
 // leaves the app looking broken or blank for existing members.
 const FALLBACK_NAME = "H-Town United e.V.";
-const RETRY_DELAY_MS = 2000;
 
 const ClubBrandingContext = createContext<ClubBrandingContextType>({
   club: null,
@@ -40,7 +44,7 @@ const ClubBrandingContext = createContext<ClubBrandingContextType>({
   tagline: null,
   logoUrl: htuLogoFallback,
   loading: true,
-  membershipError: false,
+  resolved: false,
   refetch: async () => {},
 });
 
@@ -48,47 +52,42 @@ export const useClubBranding = () => useContext(ClubBrandingContext);
 
 export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
   const [club, setClub] = useState<ClubRow | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [membershipError, setMembershipError] = useState(false);
+  const [status, setStatus] = useState<MembershipStatus>("loading");
   const { resolvedTheme } = useTheme();
   const { user, loading: authLoading } = useAuth();
 
-  const fetchClub = async (isRetry = false) => {
-    if (!isRetry) setLoading(true);
+  const fetchClub = async () => {
+    setStatus("loading");
     if (user) {
       // Authenticated: resolve the caller's OWN club via their membership row, not just
       // "whichever club happens to exist" -- this is what makes branding correct once a
       // second club exists. Two plain queries (not a PostgREST embed) to match this codebase's
       // existing convention of joining client-side rather than relying on embedded selects.
+      //
+      // Deliberately simple and linear (no retry timer) -- App.tsx's RequireClub only ever
+      // redirects to /create-club when status is explicitly "resolved", so an error here just
+      // leaves status at "error" (treated identically to "loading" by every consumer) rather
+      // than needing its own recovery logic; refetch() (called on window focus, see below)
+      // naturally retries on the next opportunity.
       const { data: roleRow, error: roleError } = await supabase.from("user_roles").select("club_id").eq("user_id", user.id).maybeSingle();
-      const { data: clubRow, error: clubError } = roleError
-        ? { data: null, error: null }
-        : roleRow?.club_id
-          ? await supabase.from("clubs").select("*").eq("id", roleRow.club_id).maybeSingle()
-          : { data: null, error: null };
-
-      // A query ERROR (RLS hiccup, dropped connection, ...) must NEVER be treated the same as a
-      // genuinely-empty result -- RequireClub (App.tsx) reads `!club` as "this account has no
-      // club" and redirects to /create-club. Confusing "we don't know yet" with "confirmed
-      // clubless" would wrongly bounce an EXISTING member there on a transient failure. One
-      // automatic retry after a short delay; if that also fails, membershipError stays set (never
-      // resolved as clubless) until something succeeds -- RequireClub keeps showing a fallback
-      // instead of ever redirecting in this state.
-      if (roleError || clubError) {
-        if (!isRetry) {
-          setTimeout(() => fetchClub(true), RETRY_DELAY_MS);
-          return;
-        }
-        setMembershipError(true);
-        setLoading(false);
+      if (roleError) {
+        setStatus("error");
         return;
       }
-
-      setMembershipError(false);
-      // roleRow being null/no club_id (with NO error) is the one legitimate "genuinely clubless"
-      // case -- mid-onboarding, right after signup, before /create-club or an invite has run.
+      if (!roleRow?.club_id) {
+        // Genuinely no membership row (mid-onboarding, right after signup, before /create-club
+        // or an invite has run) -- the ONE legitimate path to a "resolved, no club" state.
+        setClub(null);
+        setStatus("resolved");
+        return;
+      }
+      const { data: clubRow, error: clubError } = await supabase.from("clubs").select("*").eq("id", roleRow.club_id).maybeSingle();
+      if (clubError) {
+        setStatus("error");
+        return;
+      }
       setClub(clubRow ?? null);
-      setLoading(false);
+      setStatus("resolved");
       return;
     }
     // Anonymous visitor: reads the public-safe view (the base `clubs` table's SELECT is
@@ -98,7 +97,7 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
     // neutral, non-club-specific identity instead.
     const { data } = await supabase.from("clubs_public").select("*").limit(1).maybeSingle();
     if (data) setClub(data);
-    setLoading(false);
+    setStatus("resolved");
   };
 
   useEffect(() => {
@@ -106,6 +105,18 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
     fetchClub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, authLoading]);
+
+  // Self-heals a transient "error" status (flaky connection, RLS hiccup) the next time the tab
+  // becomes active again, without needing a manual refresh -- otherwise a member who hit an error
+  // once would stay stuck on the loading fallback (safe, but not great) until something else
+  // happened to remount the provider.
+  useEffect(() => {
+    if (status !== "error") return;
+    const onFocus = () => fetchClub();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   // Re-apply CSS vars whenever the preset or the resolved light/dark mode changes.
   useEffect(() => {
@@ -135,9 +146,9 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
     name: club?.name ?? FALLBACK_NAME,
     tagline: club?.tagline ?? null,
     logoUrl,
-    loading,
-    membershipError,
-    refetch: () => fetchClub(),
+    loading: status === "loading",
+    resolved: status === "resolved",
+    refetch: fetchClub,
   };
 
   return <ClubBrandingContext.Provider value={value}>{children}</ClubBrandingContext.Provider>;
