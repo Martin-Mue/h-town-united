@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">H-Town United e.V.</string>
+    <string name="title_activity_main">H-Town United e.V.</string>
+    <string name="package_name">de.htownunited.tournamenthub</string>
+    <string name="custom_url_scheme">de.htownunited.tournamenthub</string>
+</resources>

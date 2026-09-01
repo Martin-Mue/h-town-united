@@ -4,6 +4,7 @@ import path from "path";
 import { execSync } from "child_process";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
+import { CLUB_IDENTITY } from "./club-identity";
 
 // Captured once, at build time (whatever machine/CI actually runs `npm run build`) — lets the
 // running app show which commit it was built from, so an installed PWA's version can be checked
@@ -70,17 +71,17 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,png,jpg,jpeg,svg,ico,woff2}"],
       },
       manifest: {
-        name: "H-Town United e.V. · Darts Club",
-        short_name: "H-Town United",
-        description: "Von Heiligenhausern für Heiligenhaus – Spiele, Turniere und Statistiken für den Dartsclub.",
-        theme_color: "#0b0f17",
-        background_color: "#0b0f17",
+        name: `${CLUB_IDENTITY.appName} · Darts Club`,
+        short_name: CLUB_IDENTITY.shortName,
+        description: CLUB_IDENTITY.description,
+        theme_color: CLUB_IDENTITY.themeColor,
+        background_color: CLUB_IDENTITY.backgroundColor,
         display: "standalone",
         start_url: "/",
         icons: [
-          { src: "/pwa-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/pwa-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "/pwa-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: CLUB_IDENTITY.icon192, sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: CLUB_IDENTITY.icon512, sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: CLUB_IDENTITY.iconMaskable512, sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
     }),
