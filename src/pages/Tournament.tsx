@@ -26,6 +26,7 @@ import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
+import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
 import htuEmblem from "@/assets/club-emblem.png";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -1820,80 +1821,84 @@ const TournamentPage = () => {
     return (
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
         <Button variant="ghost" onClick={() => { setEditingId(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm"><ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}</Button>
-        <div className="mb-6 rounded-xl border border-border bg-card p-4">
+        <div className="relative overflow-hidden mb-6 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-4 shadow-[0_0_30px_hsl(var(--primary)/0.12)]">
           <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> {t("tournament.bigEventMode")}</div>
           <h2 className="text-2xl font-display uppercase">{editingId ? t("tournament.editTournamentHeading") : t("tournament.createTournamentHeading")}</h2>
           <p className="text-sm text-muted-foreground">{t("tournament.upTo64Participants")}</p>
         </div>
         <div className="space-y-4">
-          <div>
-            <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.tournamentName")}</label>
-            <Input value={tournamentName} onChange={(e) => setTournamentName(e.target.value)} placeholder={t("tournament.tournamentNamePlaceholder")} className="bg-card border-border" />
-          </div>
-          {seriesList.length > 0 && (
+          <SectionCard className="space-y-4">
+            <Eyebrow icon={Trophy}>{t("tournament.tournamentName")}</Eyebrow>
+            <div className="-mt-2">
+              <Input value={tournamentName} onChange={(e) => setTournamentName(e.target.value)} placeholder={t("tournament.tournamentNamePlaceholder")} className="bg-muted border-border" />
+            </div>
+            {seriesList.length > 0 && (
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> {t("tournament.tournamentSeries")}</label>
+                <Select value={seriesId} onValueChange={setSeriesId}>
+                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="none">{t("tournament.noSeries")}</SelectItem>
+                    {seriesList.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> {t("tournament.tournamentSeries")}</label>
-              <Select value={seriesId} onValueChange={setSeriesId}>
-                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.structureMode")}</label>
+              <Select value={tournamentMode} onValueChange={setTournamentMode}>
+                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  <SelectItem value="none">{t("tournament.noSeries")}</SelectItem>
-                  {seriesList.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  <SelectItem value="ko">{t("tournament.koSystem")}</SelectItem>
+                  <SelectItem value="round-robin">{t("tournament.roundRobin")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          )}
-          <div>
-            <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.structureMode")}</label>
-            <Select value={tournamentMode} onValueChange={setTournamentMode}>
-              <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-card border-border">
-                <SelectItem value="ko">{t("tournament.koSystem")}</SelectItem>
-                <SelectItem value="round-robin">{t("tournament.roundRobin")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          </SectionCard>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("game.gameMode")}</label>
-              <Select value={gameMode} onValueChange={setGameMode}>
-                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="501">501</SelectItem>
-                  <SelectItem value="301">301</SelectItem>
-                  <SelectItem value="Cricket">Cricket</SelectItem>
-                  <SelectItem value="Extern">{t("tournament.playedExternally")}</SelectItem>
-                </SelectContent>
-              </Select>
+          <SectionCard className="space-y-4">
+            <Eyebrow icon={Target}>{t("game.gameMode")}</Eyebrow>
+            <div className="grid grid-cols-2 gap-3 -mt-2">
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">{t("game.gameMode")}</label>
+                <Select value={gameMode} onValueChange={setGameMode}>
+                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="501">501</SelectItem>
+                    <SelectItem value="301">301</SelectItem>
+                    <SelectItem value="Cricket">Cricket</SelectItem>
+                    <SelectItem value="Extern">{t("tournament.playedExternally")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.firstToLegsLabel")}</label>
+                <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
+                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.firstToLegsLabel")}</label>
-              <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
-                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
-          {tournamentMode !== "round-robin" && (
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.bracketSize")}</label>
-              <Select value={targetSize} onValueChange={setTargetSize}>
-                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="auto">{t("tournament.autoAdaptsToParticipants")}</SelectItem>
-                  {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>{t("tournament.fixed")}: {n}{t("tournament.playerBracketSuffix")}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {t("tournament.recommendedAuto")}
-              </p>
-            </div>
-          )}
+            {tournamentMode !== "round-robin" && (
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.bracketSize")}</label>
+                <Select value={targetSize} onValueChange={setTargetSize}>
+                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="auto">{t("tournament.autoAdaptsToParticipants")}</SelectItem>
+                    {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>{t("tournament.fixed")}: {n}{t("tournament.playerBracketSuffix")}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {t("tournament.recommendedAuto")}
+                </p>
+              </div>
+            )}
 
-          {tournamentMode !== "round-robin" && targetSize === "auto" && (() => {
+            {tournamentMode !== "round-robin" && targetSize === "auto" && (() => {
             // Only a real choice once the player count actually sits between two bracket
             // sizes — below/at a clean power of two (or once 64 is already the ceiling with
             // nothing bigger to compare against) chooseAutoMainSize has nothing to decide either
@@ -1920,59 +1925,59 @@ const TournamentPage = () => {
             );
           })()}
 
-          <div>
-            <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> {t("tournament.availableBoards")}</label>
-            <Select value={String(boards)} onValueChange={(v) => setBoards(Number(v))}>
-              <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-card border-border">
-                {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <SelectItem key={n} value={String(n)}>{n} {t("camera.board")}{n > 1 ? "s" : ""}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-muted-foreground mt-1">{t("tournament.determinesScheduleOrder")}</p>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-            <div className="min-w-0">
-              <Label htmlFor="live-play-enabled" className="text-sm flex items-center gap-1"><Play className="w-3.5 h-3.5" /> {t("tournament.livePlayFromBracket")}</Label>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {t("tournament.livePlayDesc")}
-              </p>
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> {t("tournament.availableBoards")}</label>
+              <Select value={String(boards)} onValueChange={(v) => setBoards(Number(v))}>
+                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <SelectItem key={n} value={String(n)}>{n} {t("camera.board")}{n > 1 ? "s" : ""}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground mt-1">{t("tournament.determinesScheduleOrder")}</p>
             </div>
-            <Switch id="live-play-enabled" checked={livePlayEnabled} onCheckedChange={setLivePlayEnabled} />
-          </div>
 
-          {tournamentMode !== "round-robin" && (
-            <Collapsible className="bg-muted/30 border border-border rounded-xl">
-              <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1"><Settings2 className="w-3.5 h-3.5" /> {t("tournament.draw")} · {drawMode === "random" ? t("tournament.random") : t("tournament.manual")}</span>
-                <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="px-3 pb-3 space-y-2">
-                <Select value={drawMode} onValueChange={(v) => setDrawMode(v as "random" | "manual")}>
-                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    <SelectItem value="random">{t("tournament.randomDraw")}</SelectItem>
-                    <SelectItem value="manual">{t("tournament.manualMatches")}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  {drawMode === "random"
-                    ? t("tournament.randomDrawDesc")
-                    : t("tournament.manualDrawDesc")}
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <div className="min-w-0">
+                <Label htmlFor="live-play-enabled" className="text-sm flex items-center gap-1"><Play className="w-3.5 h-3.5" /> {t("tournament.livePlayFromBracket")}</Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {t("tournament.livePlayDesc")}
                 </p>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+              </div>
+              <Switch id="live-play-enabled" checked={livePlayEnabled} onCheckedChange={setLivePlayEnabled} />
+            </div>
 
-          {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
-            <Collapsible className="bg-muted/30 border border-border rounded-xl">
-              <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> {t("tournament.modePerRound")}</span>
-                <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="px-3 pb-3">
-              <div className="space-y-2">
-                {roundConfigs.map((cfg, idx) => {
+            {tournamentMode !== "round-robin" && (
+              <Collapsible className="bg-muted/30 border border-border rounded-xl">
+                <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1"><Settings2 className="w-3.5 h-3.5" /> {t("tournament.draw")} · {drawMode === "random" ? t("tournament.random") : t("tournament.manual")}</span>
+                  <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="px-3 pb-3 space-y-2">
+                  <Select value={drawMode} onValueChange={(v) => setDrawMode(v as "random" | "manual")}>
+                    <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      <SelectItem value="random">{t("tournament.randomDraw")}</SelectItem>
+                      <SelectItem value="manual">{t("tournament.manualMatches")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    {drawMode === "random"
+                      ? t("tournament.randomDrawDesc")
+                      : t("tournament.manualDrawDesc")}
+                  </p>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
+              <Collapsible className="bg-muted/30 border border-border rounded-xl">
+                <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> {t("tournament.modePerRound")}</span>
+                  <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="px-3 pb-3">
+                <div className="space-y-2">
+                  {roundConfigs.map((cfg, idx) => {
                   // A trailing slot past the last real round is round 0 (preliminary round) — see
                   // the round-configs generation effect's comment for why it's appended there
                   // instead of taking index 0.
@@ -2005,6 +2010,10 @@ const TournamentPage = () => {
               </CollapsibleContent>
             </Collapsible>
           )}
+          </SectionCard>
+
+          <SectionCard className="space-y-4">
+            <Eyebrow icon={Users}>{t("tournament.participants")}</Eyebrow>
 
           {/* Add from club members */}
           {dbPlayers.length > 0 && (
@@ -2113,6 +2122,7 @@ const TournamentPage = () => {
               )}
             </div>
           )}
+          </SectionCard>
 
           {tournamentMode !== "round-robin" && players.length >= 2 && (() => {
             const size = effectiveSize;
@@ -2154,8 +2164,7 @@ const TournamentPage = () => {
                       : { label: t("tournament.byes"), value: byes },
                   ].map((s) => (
                     <div key={s.label} className="bg-card border border-border rounded-lg py-2">
-                      <p className="font-display text-xl">{s.value}</p>
-                      <p className="text-[10px] uppercase text-muted-foreground">{s.label}</p>
+                      <StatTile value={s.value} label={s.label} tone="primary" />
                     </div>
                   ))}
                 </div>
