@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -62,6 +62,13 @@ export type Database = {
             referencedRelation: "clubs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "club_invites_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       club_join_requests: {
@@ -100,6 +107,13 @@ export type Database = {
             referencedRelation: "clubs"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "club_join_requests_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       clubs: {
@@ -134,132 +148,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      games: {
-        Row: {
-          best_of_legs: number
-          club_id: string | null
-          created_at: string
-          detail_stats: Json
-          id: string
-          match_id: string | null
-          mode: string
-          played_at: string
-          player1_average: number
-          player1_double_rate: number
-          player1_highscore: number
-          player1_id: string | null
-          player1_legs_won: number
-          player1_name: string
-          player1_total_throws: number
-          player2_average: number
-          player2_double_rate: number
-          player2_highscore: number
-          player2_id: string | null
-          player2_legs_won: number
-          player2_name: string
-          player2_total_throws: number
-          start_score: number
-          tournament_id: string | null
-          user_id: string
-          winner_id: string | null
-          winner_name: string
-        }
-        Insert: {
-          best_of_legs?: number
-          club_id?: string | null
-          created_at?: string
-          detail_stats?: Json
-          id?: string
-          match_id?: string | null
-          mode?: string
-          played_at?: string
-          player1_average?: number
-          player1_double_rate?: number
-          player1_highscore?: number
-          player1_id?: string | null
-          player1_legs_won?: number
-          player1_name: string
-          player1_total_throws?: number
-          player2_average?: number
-          player2_double_rate?: number
-          player2_highscore?: number
-          player2_id?: string | null
-          player2_legs_won?: number
-          player2_name: string
-          player2_total_throws?: number
-          start_score?: number
-          tournament_id?: string | null
-          user_id: string
-          winner_id?: string | null
-          winner_name: string
-        }
-        Update: {
-          best_of_legs?: number
-          club_id?: string | null
-          created_at?: string
-          detail_stats?: Json
-          id?: string
-          match_id?: string | null
-          mode?: string
-          played_at?: string
-          player1_average?: number
-          player1_double_rate?: number
-          player1_highscore?: number
-          player1_id?: string | null
-          player1_legs_won?: number
-          player1_name?: string
-          player1_total_throws?: number
-          player2_average?: number
-          player2_double_rate?: number
-          player2_highscore?: number
-          player2_id?: string | null
-          player2_legs_won?: number
-          player2_name?: string
-          player2_total_throws?: number
-          start_score?: number
-          tournament_id?: string | null
-          user_id?: string
-          winner_id?: string | null
-          winner_name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "games_player1_id_fkey"
-            columns: ["player1_id"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "games_player2_id_fkey"
-            columns: ["player2_id"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "games_tournament_id_fkey"
-            columns: ["tournament_id"]
-            isOneToOne: false
-            referencedRelation: "tournaments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "games_tournament_id_fkey"
-            columns: ["tournament_id"]
-            isOneToOne: false
-            referencedRelation: "tournaments_public"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "games_winner_id_fkey"
-            columns: ["winner_id"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       game_legs: {
         Row: {
@@ -306,6 +194,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "game_legs_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_legs_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "game_legs_game_id_fkey"
             columns: ["game_id"]
             isOneToOne: false
@@ -315,6 +217,149 @@ export type Database = {
           {
             foreignKeyName: "game_legs_player_id_fkey"
             columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      games: {
+        Row: {
+          best_of_legs: number
+          club_id: string | null
+          created_at: string
+          detail_stats: Json
+          id: string
+          match_id: string | null
+          mode: string
+          played_at: string
+          player1_average: number
+          player1_double_rate: number
+          player1_highscore: number
+          player1_id: string | null
+          player1_legs_won: number
+          player1_name: string
+          player1_total_throws: number
+          player2_average: number
+          player2_double_rate: number
+          player2_highscore: number
+          player2_id: string | null
+          player2_legs_won: number
+          player2_name: string
+          player2_total_throws: number
+          start_score: number
+          stats_applied: boolean
+          tournament_id: string | null
+          user_id: string
+          winner_id: string | null
+          winner_name: string
+        }
+        Insert: {
+          best_of_legs?: number
+          club_id?: string | null
+          created_at?: string
+          detail_stats?: Json
+          id?: string
+          match_id?: string | null
+          mode?: string
+          played_at?: string
+          player1_average?: number
+          player1_double_rate?: number
+          player1_highscore?: number
+          player1_id?: string | null
+          player1_legs_won?: number
+          player1_name: string
+          player1_total_throws?: number
+          player2_average?: number
+          player2_double_rate?: number
+          player2_highscore?: number
+          player2_id?: string | null
+          player2_legs_won?: number
+          player2_name: string
+          player2_total_throws?: number
+          start_score?: number
+          stats_applied?: boolean
+          tournament_id?: string | null
+          user_id: string
+          winner_id?: string | null
+          winner_name: string
+        }
+        Update: {
+          best_of_legs?: number
+          club_id?: string | null
+          created_at?: string
+          detail_stats?: Json
+          id?: string
+          match_id?: string | null
+          mode?: string
+          played_at?: string
+          player1_average?: number
+          player1_double_rate?: number
+          player1_highscore?: number
+          player1_id?: string | null
+          player1_legs_won?: number
+          player1_name?: string
+          player1_total_throws?: number
+          player2_average?: number
+          player2_double_rate?: number
+          player2_highscore?: number
+          player2_id?: string | null
+          player2_legs_won?: number
+          player2_name?: string
+          player2_total_throws?: number
+          start_score?: number
+          stats_applied?: boolean
+          tournament_id?: string | null
+          user_id?: string
+          winner_id?: string | null
+          winner_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "games_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_player1_id_fkey"
+            columns: ["player1_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_player2_id_fkey"
+            columns: ["player2_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_winner_id_fkey"
+            columns: ["winner_id"]
             isOneToOne: false
             referencedRelation: "players"
             referencedColumns: ["id"]
@@ -366,6 +411,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "highlight_clips_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "highlight_clips_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "highlight_clips_player_id_fkey"
             columns: ["player_id"]
             isOneToOne: false
@@ -414,7 +473,22 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "impressum_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "impressum_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       manual_180_entries: {
         Row: {
@@ -442,6 +516,20 @@ export type Database = {
           year?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "manual_180_entries_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_180_entries_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "manual_180_entries_player_id_fkey"
             columns: ["player_id"]
@@ -530,7 +618,22 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "players_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "players_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       push_subscriptions: {
         Row: {
@@ -560,7 +663,22 @@ export type Database = {
           p256dh?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tournament_series: {
         Row: {
@@ -596,7 +714,22 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tournament_series_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_series_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tournaments: {
         Row: {
@@ -676,6 +809,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "tournaments_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournaments_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tournaments_series_id_fkey"
             columns: ["series_id"]
             isOneToOne: false
@@ -745,7 +892,22 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -832,28 +994,51 @@ export type Database = {
       }
     }
     Functions: {
-      current_club_id: { Args: Record<PropertyKey, never>; Returns: string }
-      create_club: { Args: { _name: string; _tagline?: string | null }; Returns: string }
-      get_invite_preview: {
-        Args: { _token: string }
+      accept_club_invite: { Args: { _token: string }; Returns: string }
+      admin_delete_user: { Args: { _user_id: string }; Returns: undefined }
+      admin_list_active_tournaments: {
+        Args: never
         Returns: {
-          club_name: string
-          tagline: string | null
-          logo_path: string | null
-          expired: boolean
-          already_accepted: boolean
+          attendance: Json
+          best_of_legs: number
+          boards: number
+          bracket: Json
+          champion: string | null
+          club_id: string | null
+          created_at: string
+          game_mode: string
+          id: string
+          live_play_enabled: boolean
+          manual_release: boolean
+          max_rounds_x01: number | null
+          mode: string
+          name: string
+          players: Json
+          prestart_views: Json
+          public_slug: string | null
+          public_view: boolean
+          round_configs: Json
+          series_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tournaments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      admin_list_join_requests: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          id: string
+          user_id: string
         }[]
       }
-      accept_club_invite: { Args: { _token: string }; Returns: string }
-      request_to_join_club: { Args: { _club_id: string }; Returns: string }
-      respond_to_join_request: { Args: { _request_id: string; _approve: boolean }; Returns: undefined }
-      admin_list_join_requests: {
-        Args: Record<PropertyKey, never>
-        Returns: { id: string; user_id: string; email: string; created_at: string }[]
-      }
-      update_match_live_snapshot: { Args: { p_tournament_id: string; p_match_id: string; p_snapshot: Json }; Returns: undefined }
-      apply_game_player_stats: { Args: { p_game_id: string }; Returns: undefined }
-      admin_delete_user: { Args: { _user_id: string }; Returns: undefined }
       admin_list_users: {
         Args: never
         Returns: {
@@ -861,6 +1046,34 @@ export type Database = {
           email: string
           roles: Database["public"]["Enums"]["app_role"][]
           user_id: string
+        }[]
+      }
+      admin_set_role: {
+        Args: {
+          _grant: boolean
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: undefined
+      }
+      admin_tournament_forecast_mode_stats: {
+        Args: never
+        Returns: {
+          avg_darts_per_leg: number
+          avg_legs_per_match: number
+          best_of_legs: number
+          leg_count: number
+          match_count: number
+          mode: string
+        }[]
+      }
+      admin_tournament_forecast_player_stats: {
+        Args: never
+        Returns: {
+          avg_darts_per_leg: number
+          leg_count: number
+          mode: string
+          player_name: string
         }[]
       }
       admin_user_activity: {
@@ -875,30 +1088,9 @@ export type Database = {
           user_id: string
         }[]
       }
-      admin_set_role: {
-        Args: {
-          _grant: boolean
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
+      apply_game_player_stats: {
+        Args: { p_game_id: string }
         Returns: undefined
-      }
-      public_tournament_highlights: {
-        Args: { _tournament_id: string }
-        Returns: {
-          player_id: string | null
-          player_name: string
-          starting_score: number
-          throws: Json
-          won: boolean
-          game_id: string
-          player1_id: string | null
-          player1_name: string
-          player1_average: number
-          player2_id: string | null
-          player2_name: string
-          player2_average: number
-        }[]
       }
       club_head_to_head: {
         Args: { _player_a: string; _player_b: string }
@@ -923,6 +1115,29 @@ export type Database = {
           win_rate: number
         }[]
       }
+      create_club: {
+        Args: { _name: string; _tagline?: string }
+        Returns: string
+      }
+      current_club_id: { Args: never; Returns: string }
+      dart_stats_leg_summary: {
+        Args: { p_starting_score: number; p_throws: Json }
+        Returns: {
+          checkout_attempts: number
+          checkout_hits: number
+          highest_visit: number
+        }[]
+      }
+      get_invite_preview: {
+        Args: { _token: string }
+        Returns: {
+          already_accepted: boolean
+          club_name: string
+          expired: boolean
+          logo_path: string
+          tagline: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -930,52 +1145,32 @@ export type Database = {
         }
         Returns: boolean
       }
-      admin_list_active_tournaments: {
-        Args: never
+      public_tournament_highlights: {
+        Args: { _tournament_id: string }
         Returns: {
-          attendance: Json
-          best_of_legs: number
-          boards: number
-          bracket: Json
-          champion: string | null
-          created_at: string
-          game_mode: string
-          id: string
-          live_play_enabled: boolean
-          manual_release: boolean
-          max_rounds_x01: number | null
-          mode: string
-          name: string
-          players: Json
-          prestart_views: Json
-          public_slug: string | null
-          public_view: boolean
-          round_configs: Json
-          series_id: string | null
-          status: string
-          updated_at: string
-          user_id: string
-        }[]
-      }
-      admin_tournament_forecast_mode_stats: {
-        Args: never
-        Returns: {
-          mode: string
-          best_of_legs: number
-          avg_legs_per_match: number | null
-          match_count: number
-          avg_darts_per_leg: number | null
-          leg_count: number
-        }[]
-      }
-      admin_tournament_forecast_player_stats: {
-        Args: never
-        Returns: {
+          game_id: string
+          leg_number: number
+          player_id: string
           player_name: string
-          mode: string
-          avg_darts_per_leg: number
-          leg_count: number
+          player1_average: number
+          player1_id: string
+          player1_name: string
+          player2_average: number
+          player2_id: string
+          player2_name: string
+          starting_score: number
+          throws: Json
+          won: boolean
         }[]
+      }
+      request_to_join_club: { Args: { _club_id: string }; Returns: string }
+      respond_to_join_request: {
+        Args: { _approve: boolean; _request_id: string }
+        Returns: undefined
+      }
+      update_match_live_snapshot: {
+        Args: { p_match_id: string; p_snapshot: Json; p_tournament_id: string }
+        Returns: undefined
       }
     }
     Enums: {

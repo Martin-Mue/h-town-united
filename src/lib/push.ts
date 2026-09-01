@@ -35,7 +35,7 @@ export async function subscribeToPush(userId: string, clubId: string | null): Pr
   if (!sub) {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).slice().buffer as ArrayBuffer,
     });
   }
   const json = sub.toJSON();
