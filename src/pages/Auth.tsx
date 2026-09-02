@@ -23,7 +23,37 @@ const AuthPage = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Sichtbar sobald eine Registrierung eine Bestätigungsmail ausgelöst hat oder ein Login an
+  // einer unbestätigten Adresse gescheitert ist – erlaubt erneutes Zusenden der Mail.
+  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
   const { toast } = useToast();
+
+  const resendConfirmation = async () => {
+    if (!pendingConfirm || resending) return;
+    setResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: pendingConfirm,
+        options: { emailRedirectTo: `${window.location.origin}${from || ""}` },
+      });
+      if (error) throw error;
+      toast({ title: "E-Mail erneut versendet", description: `Wir haben den Bestätigungslink noch einmal an ${pendingConfirm} geschickt.` });
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : "";
+      toast({
+        title: "Fehler",
+        description: /rate limit|too many|seconds/i.test(raw)
+          ? "Bitte kurz warten, bevor du eine neue Mail anforderst."
+          : raw || "E-Mail konnte nicht erneut versendet werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setResending(false);
+    }
+  };
+
 
   useEffect(() => {
     if (!authLoading && user) {
