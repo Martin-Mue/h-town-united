@@ -125,7 +125,9 @@ const AuthPage = () => {
       }
     } catch (err: unknown) {
       const raw: string = err instanceof Error ? err.message : "";
-      const msg = raw.includes("Invalid login credentials")
+      const msg = /email not confirmed|not confirmed/i.test(raw)
+        ? "Deine E-Mail-Adresse ist noch nicht bestätigt. Prüfe dein Postfach (auch den Spam-Ordner)."
+        : raw.includes("Invalid login credentials")
         ? "E-Mail oder Passwort falsch. Tipp: Passwort mit dem Auge prüfen."
         : raw.includes("User already registered")
         ? "Für diese E-Mail existiert bereits ein Konto. Einfach einloggen."
