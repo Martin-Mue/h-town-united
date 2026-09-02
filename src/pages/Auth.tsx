@@ -72,7 +72,12 @@ const AuthPage = () => {
       const normalizedEmail = email.trim().toLowerCase();
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-        if (error) throw error;
+        if (error) {
+          // Unbestätigte Adresse ist kein "falsches Passwort" — Hinweis + Resend anbieten.
+          if (/email not confirmed|not confirmed/i.test(error.message)) setPendingConfirm(normalizedEmail);
+          throw error;
+        }
+        setPendingConfirm(null);
         navigate(from || "/", { replace: true });
       } else if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({
@@ -85,20 +90,21 @@ const AuthPage = () => {
           options: { emailRedirectTo: `${window.location.origin}${from || ""}` },
         });
         if (error) throw error;
-        // signUp() only returns a live session immediately when email confirmation is off for
-        // this project (currently the case, verified against auth.users — every account's
-        // email_confirmed_at matches created_at to the millisecond, i.e. auto-confirmed). If that
-        // account setting is ever flipped on, session comes back null instead — navigating to a
-        // protected route as if logged in would just bounce straight back to /auth, contradicting
-        // the "welcome" toast. Branch on what actually came back rather than assuming.
+        // Mit aktivierter E-Mail-Bestätigung liefert signUp() keine Session zurück — der Account
+        // wird erst durch den Klick im Bestätigungslink nutzbar. Nur wenn wider Erwarten doch
+        // eine Session kommt (Auto-Confirm), geht es direkt weiter in die App.
         if (!data.session) {
+          setPendingConfirm(normalizedEmail);
           toast({
             title: "Fast geschafft!",
-            description: "Bitte bestätige deine E-Mail-Adresse über den Link, den wir dir geschickt haben.",
+            description: `Wir haben einen Bestätigungslink an ${normalizedEmail} geschickt. Bitte bestätige deine E-Mail-Adresse, danach kannst du dich einloggen.`,
           });
           setMode("login");
+          setPassword("");
+          setConfirmPassword("");
           return;
         }
+
         toast({
           title: "Willkommen im Verein! 🎯",
           description: "Lege jetzt dein Spielerprofil an.",
