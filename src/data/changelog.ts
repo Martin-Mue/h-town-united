@@ -294,4 +294,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Neon-Arena, Waldmeister, Mitternacht ve Monochrom Silber mevcut renk şemalarına katılıyor — artık her biri sadece farklı bir renk tonu değil, gerçekten kendine özgü bir görünüme sahip. Kulüp tasarımı ayarları artık Admin bölümünde.",
     },
   },
+  {
+    id: "2026-09-02-visual-refresh-auth-admin",
+    date: "2026-09-02",
+    title: {
+      de: "Optisches Update: Anmeldung, Beitritt & Admin",
+      en: "Visual refresh: login, join & admin",
+      fr: "Rafraîchissement visuel : connexion, adhésion et admin",
+      pl: "Odświeżenie wyglądu: logowanie, dołączanie i admin",
+      nl: "Visuele opfrisbeurt: inloggen, deelnemen en admin",
+      tr: "Görsel yenileme: giriş, katılım ve yönetim",
+    },
+    description: {
+      de: "Login-, Registrierungs- und Einladungs-/Beitrittsseiten haben jetzt den gleichen Look wie die Startseite; die Mitgliederliste im Admin-Bereich ist jetzt eine Kartenansicht statt einer Tabelle; Turnierserien nutzen das gleiche Rangliste-Design wie die Statistiken.",
+      en: "Login, signup, and invite/join pages now match the homepage's look; the Admin member list is a card view instead of a table; tournament series use the same ranking design as Statistics.",
+      fr: "Les pages de connexion, d'inscription et d'invitation/adhésion ont désormais le même look que la page d'accueil ; la liste des membres dans l'espace Admin est une vue en cartes au lieu d'un tableau ; les séries de tournois utilisent le même design de classement que les statistiques.",
+      pl: "Strony logowania, rejestracji i zaproszeń/dołączania mają teraz taki sam wygląd jak strona główna; lista członków w panelu administratora to teraz widok kart zamiast tabeli; serie turniejowe korzystają z tego samego wyglądu rankingu co statystyki.",
+      nl: "Inlog-, registratie- en uitnodigings-/deelnamepagina's zien er nu hetzelfde uit als de startpagina; de ledenlijst in het Admin-gedeelte is nu een kaartweergave in plaats van een tabel; toernooiseries gebruiken nu dezelfde ranglijst-vormgeving als de statistieken.",
+      tr: "Giriş, kayıt ve davet/katılım sayfaları artık ana sayfayla aynı görünüme sahip; Admin bölümündeki üye listesi artık tablo yerine kart görünümünde; turnuva serileri artık istatistiklerle aynı sıralama tasarımını kullanıyor.",
+    },
+  },
 ];
