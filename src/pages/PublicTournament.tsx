@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Trophy, Users, Loader2, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check, QrCode, Hourglass, Lock } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
+import MatchPredictionsPanel from "@/components/tournament/MatchPredictionsPanel";
+import { useMatchPredictions } from "@/hooks/useMatchPredictions";
 import { Badge } from "@/components/ui/badge";
 import {
   roundLabelFor,
@@ -1055,6 +1057,14 @@ const PublicTournamentPage = () => {
     };
   }, [slug]);
 
+  // Called unconditionally, ahead of the loading/not-found early returns below — hooks can't be
+  // called after an early return, so this can't sit next to isKo/matches (both AFTER those
+  // returns, since they safely dereference `t` without a null check). Safe to call with `t` still
+  // null: every effect/callback inside already no-ops on a falsy tournamentId. KO only — round-
+  // robin matches live in a different shape (RoundRobinMatch, no stable Match.id to key a
+  // prediction on), see the match_predictions migration's own note.
+  const predictions = useMatchPredictions(t && t.mode !== "round-robin" ? t.id : undefined, !!t && t.mode !== "round-robin");
+
   if (loading) {
     return (
       <div role="status" aria-label={tr("common.loading")} className="min-h-screen bg-background flex items-center justify-center">
@@ -1339,6 +1349,14 @@ const PublicTournamentPage = () => {
       ) : (
       <div className={`grid gap-4 p-4 ${view === "tree" ? "" : "lg:grid-cols-[1fr_320px]"}`}>
         <div className="min-w-0">
+          {isKo && (
+            <MatchPredictionsPanel
+              matches={matches}
+              tallies={predictions.tallies}
+              myVotes={predictions.myVotes}
+              onVote={predictions.castVote}
+            />
+          )}
           {/* "Jetzt am Board" used to duplicate here too — removed, the dedicated Board-Übersicht
               view (see view === "boards" above) is the one place for that now, so switching to
               tree/list/round-robin isn't showing the same live-match cards twice. */}

@@ -7,6 +7,7 @@ import CoachingPlan from "@/components/training/CoachingPlan";
 import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
 import { CHECKOUT_ROUTES } from "@/utils/checkoutTable";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { Sparkline } from "@/components/stats/StatPrimitives";
 
 /** Training drill definition */
 interface TrainingDrill {
@@ -243,6 +244,38 @@ function saveRecord(drillId: string, entry: RecordEntry, variant?: string) {
   window.localStorage.setItem(recordKey(drillId, variant), JSON.stringify(entry));
 }
 
+// ─── attempt history (trend) ──────────────────────────────────────
+// Same device-local storage as the record above (see its own comment for why) — this just adds
+// what the record alone can't show: whether you're actually trending better lately, not only
+// "is this the best you've ever done." Every fair/comparable completed run counts, not just the
+// ones that broke the record — same computeRecordCandidate gate as saveRecord uses.
+export interface HistoryEntry {
+  value: number;
+  achievedAt: string;
+}
+
+const HISTORY_LIMIT = 15;
+const historyKey = (drillId: string, variant?: string) => `training-history-${drillId}${variant ? `:${variant}` : ""}`;
+
+function loadHistory(drillId: string, variant?: string): HistoryEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(historyKey(drillId, variant));
+    return raw ? (JSON.parse(raw) as HistoryEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Appends one attempt, oldest-first, capped to the most recent HISTORY_LIMIT — an unbounded log
+ *  would grow forever for a drill someone practices daily. Returns the updated list so the
+ *  caller can set state from the same value it just persisted. */
+function pushHistoryEntry(drillId: string, entry: HistoryEntry, variant?: string): HistoryEntry[] {
+  const next = [...loadHistory(drillId, variant), entry].slice(-HISTORY_LIMIT);
+  if (typeof window !== "undefined") window.localStorage.setItem(historyKey(drillId, variant), JSON.stringify(next));
+  return next;
+}
+
 /** Given a FINISHED drill state, returns the comparable result for this run, or null if this
  *  particular run doesn't produce one (e.g. a round-cappable drill cut short before actually
  *  reaching the end — see `completedFully` — isn't a fair "how fast can you finish" data point). */
@@ -372,6 +405,7 @@ const TrainingPage = () => {
   const [drillConfig, setDrillConfig] = useState<DrillConfig>({});
   const [currentRecord, setCurrentRecord] = useState<RecordEntry | null>(null);
   const [brokeRecord, setBrokeRecord] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [rtcFlash, setRtcFlash] = useState(false);
 
   // Shanghai Round the Clock: brief visible feedback the instant progress becomes unrecoverable,
@@ -389,6 +423,7 @@ const TrainingPage = () => {
   useEffect(() => {
     const variant = selectedDrill ? recordVariant(selectedDrill.id, { maxRounds: drillConfig.maxRounds, rtcStart: drillConfig.rtcStart, targetBase: drillConfig.targetBase, targetMul: drillConfig.targetMul }) : undefined;
     setCurrentRecord(selectedDrill ? loadRecord(selectedDrill.id, variant) : null);
+    setHistory(selectedDrill ? loadHistory(selectedDrill.id, variant) : []);
   }, [selectedDrill, drillConfig.maxRounds, drillConfig.rtcStart, drillConfig.targetBase, drillConfig.targetMul]);
 
   // Compare + persist the instant a run finishes.
@@ -400,10 +435,12 @@ const TrainingPage = () => {
       return;
     }
     const variant = recordVariant(selectedDrill.id, { maxRounds: drillState.maxRounds, rtcStart: drillState.targetList?.[0], targetBase: drillState.targetBase, targetMul: drillState.targetMul });
+    const achievedAt = new Date().toISOString();
+    setHistory(pushHistoryEntry(selectedDrill.id, { value: candidate.value, achievedAt }, variant));
     const existing = loadRecord(selectedDrill.id, variant);
     const isNew = !existing || (candidate.higherIsBetter ? candidate.value > existing.value : candidate.value < existing.value);
     if (isNew) {
-      const entry: RecordEntry = { ...candidate, achievedAt: new Date().toISOString() };
+      const entry: RecordEntry = { ...candidate, achievedAt };
       saveRecord(selectedDrill.id, entry, variant);
       setCurrentRecord(entry);
       setBrokeRecord(true);
@@ -1360,9 +1397,21 @@ const TrainingPage = () => {
           </div>
 
           {currentRecord && (
-            <p className="text-xs text-muted-foreground mb-5 flex items-center justify-center gap-1.5">
-              <Trophy className="w-3.5 h-3.5 text-accent" /> {t("training.yourRecordLabel")} <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
-            </p>
+            <div className="mb-5">
+              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+                <Trophy className="w-3.5 h-3.5 text-accent" /> {t("training.yourRecordLabel")} <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
+              </p>
+              {/* Trend, not just the single best — the record alone can't show whether recent
+                  attempts are actually improving. Inverted for "fewer is better" drills (darts-to-
+                  finish etc.) so the line trending up always reads as "getting better", regardless
+                  of which direction the underlying number itself improves in. */}
+              {history.length > 1 && (
+                <div className="mt-3 px-2">
+                  <Sparkline values={history.map((h) => (currentRecord.higherIsBetter ? h.value : -h.value))} height={32} />
+                  <p className="text-[10px] text-muted-foreground mt-1 text-center">{t("training.recentAttemptsLabel")} ({history.length})</p>
+                </div>
+              )}
+            </div>
           )}
 
           {isBullControl && (

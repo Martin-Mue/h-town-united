@@ -1,8 +1,11 @@
 import { useState } from "react";
+import { Mic, MicOff, Check, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { isAchievableVisitTotal } from "@/utils/dartStats";
+import { useVoiceScoring } from "@/hooks/useVoiceScoring";
 
 /** Available base score values on a dartboard */
 const BOARD_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
@@ -55,12 +58,14 @@ interface DartScoreInputProps {
  * switch mid-game (e.g. per-dart while it's close, typed totals once a leg is a formality).
  */
 const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputModeChange, dartsThisRound = 0 }: DartScoreInputProps) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [localMode, setLocalMode] = useState<DartInputMode>("single");
   const [totalText, setTotalText] = useState("");
   const mode = inputMode ?? localMode;
   const setMode = onInputModeChange ?? setLocalMode;
   const midVisit = dartsThisRound > 0;
+  const voice = useVoiceScoring(LOCALE_BY_LANGUAGE[language]);
+  const voiceCandidateValid = voice.candidate !== null && isAchievableVisitTotal(voice.candidate);
   // What actually renders — forced to "single" mid-visit regardless of the stored mode (see
   // dartsThisRound doc above). Deliberately doesn't write this back through setMode: the only
   // way to reach a partial visit is by throwing via the single-dart pad in the first place, so
@@ -104,6 +109,50 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
         <p className="text-[10px] text-muted-foreground text-center -mt-1.5 mb-2">
           {t("game.modeLockedNote")}
         </p>
+      )}
+
+      {/* Hands-free voice scoring — an alternate way to reach the SAME onQuickRound the "Schnell"
+          grid and "Eintippen" field already use, so it only ever shows up where a visit-total
+          submission is actually wired up. Deliberately requires an explicit tap to confirm before
+          anything is submitted (see useVoiceScoring's own doc comment) — a misheard "80" instead
+          of "180" must never silently corrupt a real leg the way a mistapped button already can't. */}
+      {onQuickRound && voice.supported && !midVisit && (
+        <div className="mb-2.5">
+          {voice.candidate !== null ? (
+            <div className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm border ${voiceCandidateValid ? "bg-primary/10 border-primary/30" : "bg-destructive/10 border-destructive/30"}`}>
+              <span className="font-display text-base">
+                {voiceCandidateValid ? voice.candidate : t("game.invalidScore")}
+              </span>
+              <div className="flex gap-1.5">
+                {voiceCandidateValid && (
+                  <Button size="sm" onClick={() => { onQuickRound(voice.candidate!); voice.clear(); }} disabled={isDisabled} className="h-7 px-2 gap-1">
+                    <Check className="w-3.5 h-3.5" /> {t("game.voiceConfirm")}
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" onClick={voice.clear} className="h-7 px-2 gap-1">
+                  <X className="w-3.5 h-3.5" /> {t("game.voiceDiscard")}
+                </Button>
+              </div>
+            </div>
+          ) : voice.error ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground bg-muted/30 border border-border">
+              <span>{t("game.voiceNotUnderstood")}</span>
+              <Button size="sm" variant="outline" onClick={voice.start} className="h-7 px-2 gap-1">
+                <Mic className="w-3.5 h-3.5" /> {t("game.voiceRetry")}
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={voice.start}
+              disabled={isDisabled || voice.listening}
+              className={`w-full gap-1.5 ${voice.listening ? "animate-pulse-glow border-accent text-accent" : "text-muted-foreground"}`}
+            >
+              {voice.listening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+              {voice.listening ? t("game.voiceListening") : t("game.voiceScoreHint")}
+            </Button>
+          )}
+        </div>
       )}
 
       {effectiveMode === "single" && (

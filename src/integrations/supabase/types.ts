@@ -1253,6 +1253,10 @@ export type Database = {
         Args: { p_game_id: string }
         Returns: undefined
       }
+      cast_match_prediction: {
+        Args: { _match_id: string; _predicted_winner: string; _tournament_id: string; _voter_id: string }
+        Returns: undefined
+      }
       club_head_to_head: {
         Args: { _player_a: string; _player_b: string }
         Returns: {
@@ -1298,6 +1302,10 @@ export type Database = {
           logo_path: string
           tagline: string
         }[]
+      }
+      get_match_predictions: {
+        Args: { _tournament_id: string }
+        Returns: { match_id: string; predicted_winner: string; votes: number }[]
       }
       has_role: {
         Args: {

@@ -745,7 +745,13 @@ const GamePage = () => {
     return !!matchClubPlayer(dbPlayers, g.players[0].name) || !!matchClubPlayer(dbPlayers, g.players[1].name);
   }, [dbPlayers]);
 
-  const startGame = () => {
+  /** `starterOverride`: used by startRematch() only — it needs the JUST-swapped starter to take
+   *  effect in this exact call, and setStarterIndex() alone wouldn't be visible yet to the
+   *  starterIndex read below (same stale-closure issue as any setState immediately followed by
+   *  reading the old value in the same synchronous call). Kept as a separate function (not
+   *  startGame's own signature) so every existing `onClick={startGame}` reference stays a plain
+   *  zero-arg handler instead of needing a wrapper at each call site. */
+  const startGameWithStarter = (starterOverride?: number) => {
     const startScore = getStartScore();
     const n = numPlayers;
     const players: PlayerSlot[] = Array.from({ length: n }, (_, i) => ({
@@ -760,10 +766,11 @@ const GamePage = () => {
     }));
     const teams = teamMode ? [{ name: teamNames[0].trim() || "Team 1" }, { name: teamNames[1].trim() || "Team 2" }] : undefined;
     const scoreSlots = teams?.length ?? n;
+    const effectiveStarterIndex = starterOverride ?? starterIndex;
     // Team mode only ever offers a choice of 2 (which team starts, via each team's first
     // member); clamp defensively either way in case the player count shrank after picking a
     // starter further back in the list.
-    const starter = teamMode ? (starterIndex % 2 === 0 ? 0 : 1) : Math.min(starterIndex, n - 1);
+    const starter = teamMode ? (effectiveStarterIndex % 2 === 0 ? 0 : 1) : Math.min(effectiveStarterIndex, n - 1);
     const newGame: GameState = {
       mode, startScore, bestOfLegs, players,
       legsWon: Array(scoreSlots).fill(0),
@@ -801,6 +808,8 @@ const GamePage = () => {
       enterMatch();
     }
   };
+
+  const startGame = () => startGameWithStarter();
 
   // Board-mode auto-start countdown — a board-linked match starts itself instead of waiting for
   // a tap; "Bearbeiten" (setAutoStartCanceled) opts out for the rare case something needs
@@ -1661,6 +1670,30 @@ const GamePage = () => {
     setPhase("setup"); setGame(null); setGameSaved(false); setShowDetailedStats(false);
     setSelectedLegTab("all");
     setDartsThisRound(0); setUndoStack([]);
+  };
+
+  /** One-tap "Revanche" from the finished-game overlay — re-runs startGame() with whatever setup
+   *  state is already sitting in memory (players/mode/legs/etc.), instead of sending the user back
+   *  through the setup screen to reconfigure the exact same thing. Only the finished-game cleanup
+   *  resetGame() also does (bot timer/refs, the stale snapshot, gameSaved so the NEW game's own
+   *  finish doesn't get silently skipped by that stale flag) — deliberately skips resetGame's
+   *  `setPhase("setup"); setGame(null)`, since startGame() below already sets its own phase.
+   *
+   *  Whoever didn't start last time starts this one — common darts etiquette, and without it the
+   *  same player would open every single rematch in a row. Advances to the next player/team in
+   *  turn order (a strict swap for the usual 2-player case, a fair rotation for 3+); passed
+   *  straight into startGameWithStarter() rather than only through setStarterIndex(), since that
+   *  alone wouldn't be visible yet to startGameWithStarter()'s own read of starterIndex in this
+   *  same call. */
+  const startRematch = () => {
+    if (botTimerRef.current) { clearTimeout(botTimerRef.current); botTimerRef.current = null; }
+    clearActiveGameSnapshot();
+    setGameSaved(false);
+    setShowDetailedStats(false);
+    setSelectedLegTab("all");
+    const nextStarter = teamMode ? starterIndex + 1 : (starterIndex + 1) % numPlayers;
+    setStarterIndex(nextStarter);
+    startGameWithStarter(nextStarter);
   };
 
   // ─── BOT AUTO-PLAY ─────────────────────────────────
@@ -2876,10 +2909,17 @@ const GamePage = () => {
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={shareResult} disabled={sharingResult} className="gap-1.5 shrink-0">
                 <Share2 className="w-4 h-4" /> {sharingResult ? "…" : t("game.share")}
               </Button>
+              {/* Rematch only for a plain, freely-configured game — a tournament/league match
+                  comes from a fixed bracket/fixture, not a setup a rematch could just re-run. */}
+              {!tournamentLinkName && !leagueLinkRef.current && (
+                <Button variant="outline" onClick={startRematch} className="gap-1.5 shrink-0">
+                  <RotateCcw className="w-4 h-4" /> {t("game.rematch")}
+                </Button>
+              )}
               {tournamentLinkName ? (
                 <Button
                   onClick={() => {
