@@ -334,4 +334,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Göz alıcı kırmızı vurgulu klinik camgöbeği-gri — mevcut 8 renk şemasından daha soğuk ve dikkat çekici.",
     },
   },
+  {
+    id: "2026-09-02-league-mode-and-tools",
+    date: "2026-09-02",
+    title: {
+      de: "Liga-Modus, Spielerkarte & faire Paarungen",
+      en: "League mode, player card & fair pairings",
+      fr: "Mode ligue, carte joueur et appariements équitables",
+      pl: "Tryb ligi, karta zawodnika i sprawiedliwe pary",
+      nl: "Competitiemodus, spelerskaart & eerlijke koppels",
+      tr: "Lig modu, oyuncu kartı ve adil eşleşmeler",
+    },
+    description: {
+      de: "Neuer Liga-Modus mit automatischem Spielplan (Einfach- oder Doppelrunde, live gespielt oder manuell eingetragen); teilbare Spielerkarte als Bild; „Faire Paarungen” auf der Mitgliederseite schlägt Elo-ausgeglichene Duelle vor; Turniere können jetzt optional nach Elo gesetzt statt rein zufällig ausgelost werden.",
+      en: "New League mode with an automatic fixture list (single or double round-robin, live-played or manually entered); shareable player card as an image; \"Fair pairings\" on the members page suggests Elo-balanced matchups; tournaments can now optionally be seeded by Elo instead of purely random.",
+      fr: "Nouveau mode Ligue avec calendrier automatique (aller simple ou aller-retour, joué en direct ou saisi manuellement) ; carte joueur partageable sous forme d'image ; « Appariements équitables » sur la page des membres suggère des duels équilibrés par Elo ; les tournois peuvent désormais être classés par Elo au lieu d'un tirage purement aléatoire.",
+      pl: "Nowy tryb ligi z automatycznym terminarzem (runda pojedyncza lub podwójna, rozgrywana na żywo lub wpisywana ręcznie); udostępniana karta zawodnika jako obraz; „Sprawiedliwe pary” na stronie członków proponuje pojedynki zrównoważone wg Elo; turnieje można teraz opcjonalnie rozstawiać według Elo zamiast czysto losowo.",
+      nl: "Nieuwe competitiemodus met automatisch wedstrijdschema (enkele of dubbele competitie, live gespeeld of handmatig ingevoerd); deelbare spelerskaart als afbeelding; \"Eerlijke koppels\" op de ledenpagina stelt op Elo gebalanceerde duels voor; toernooien kunnen nu optioneel op Elo geplaatst worden in plaats van puur willekeurig.",
+      tr: "Otomatik fikstürlü yeni Lig modu (tek veya çift devreli lig, canlı oynanan ya da elle girilen); resim olarak paylaşılabilir oyuncu kartı; üye sayfasındaki \"Adil eşleşmeler\" Elo'ya göre dengeli maçlar öneriyor; turnuvalar artık isteğe bağlı olarak tamamen rastgele yerine Elo'ya göre kademelendirilebiliyor.",
+    },
+  },
 ];
