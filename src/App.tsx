@@ -14,22 +14,50 @@ import { Loader2 } from "lucide-react";
 // Route-level code splitting — each page becomes its own chunk, loaded on first visit
 // instead of all being bundled into the initial page load. `Auth` stays eager since it's
 // the very first thing a logged-out visitor sees and shouldn't wait on a second round-trip.
-const Index = lazy(() => import("./pages/Index"));
-const Players = lazy(() => import("./pages/Players"));
-const Game = lazy(() => import("./pages/Game"));
-const Tournament = lazy(() => import("./pages/Tournament"));
-const Training = lazy(() => import("./pages/Training"));
-const Statistics = lazy(() => import("./pages/Statistics"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const Admin = lazy(() => import("./pages/Admin"));
-const TournamentSeries = lazy(() => import("./pages/TournamentSeries"));
-const League = lazy(() => import("./pages/League"));
-const PublicTournament = lazy(() => import("./pages/PublicTournament"));
-const Settings = lazy(() => import("./pages/Settings"));
-const CreateClub = lazy(() => import("./pages/CreateClub"));
-const InvitePage = lazy(() => import("./pages/InvitePage"));
-const JoinClubPage = lazy(() => import("./pages/JoinClubPage"));
+//
+// After a deploy the old index.html (served from the SW precache or the browser cache) still
+// points at chunk filenames with the previous content hash — those 404 and React throws
+// "Failed to fetch dynamically imported module", leaving a blank screen. `lazyWithReload`
+// retries once and, if the chunk is genuinely gone, force-reloads the page exactly once
+// (sessionStorage guard prevents a reload loop when the network is simply down).
+const RELOAD_KEY = "chunk-reload-attempted";
+const lazyWithReload = <T extends { default: React.ComponentType<any> }>(factory: () => Promise<T>) =>
+  lazy(() =>
+    factory().catch(async (err) => {
+      try {
+        return await factory();
+      } catch {
+        if (typeof sessionStorage !== "undefined" && !sessionStorage.getItem(RELOAD_KEY)) {
+          sessionStorage.setItem(RELOAD_KEY, "1");
+          window.location.reload();
+          return new Promise<T>(() => {});
+        }
+        throw err;
+      }
+    })
+  );
+if (typeof window !== "undefined") {
+  window.addEventListener("load", () => {
+    try { sessionStorage.removeItem(RELOAD_KEY); } catch { /* ignore */ }
+  });
+}
+
+const Index = lazyWithReload(() => import("./pages/Index"));
+const Players = lazyWithReload(() => import("./pages/Players"));
+const Game = lazyWithReload(() => import("./pages/Game"));
+const Tournament = lazyWithReload(() => import("./pages/Tournament"));
+const Training = lazyWithReload(() => import("./pages/Training"));
+const Statistics = lazyWithReload(() => import("./pages/Statistics"));
+const NotFound = lazyWithReload(() => import("./pages/NotFound"));
+const ResetPassword = lazyWithReload(() => import("./pages/ResetPassword"));
+const Admin = lazyWithReload(() => import("./pages/Admin"));
+const TournamentSeries = lazyWithReload(() => import("./pages/TournamentSeries"));
+const League = lazyWithReload(() => import("./pages/League"));
+const PublicTournament = lazyWithReload(() => import("./pages/PublicTournament"));
+const Settings = lazyWithReload(() => import("./pages/Settings"));
+const CreateClub = lazyWithReload(() => import("./pages/CreateClub"));
+const InvitePage = lazyWithReload(() => import("./pages/InvitePage"));
+const JoinClubPage = lazyWithReload(() => import("./pages/JoinClubPage"));
 
 const RouteFallback = () => {
   const { t } = useLanguage();
