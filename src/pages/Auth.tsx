@@ -23,7 +23,37 @@ const AuthPage = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Sichtbar sobald eine Registrierung eine Bestätigungsmail ausgelöst hat oder ein Login an
+  // einer unbestätigten Adresse gescheitert ist – erlaubt erneutes Zusenden der Mail.
+  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
   const { toast } = useToast();
+
+  const resendConfirmation = async () => {
+    if (!pendingConfirm || resending) return;
+    setResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: pendingConfirm,
+        options: { emailRedirectTo: `${window.location.origin}${from || ""}` },
+      });
+      if (error) throw error;
+      toast({ title: "E-Mail erneut versendet", description: `Wir haben den Bestätigungslink noch einmal an ${pendingConfirm} geschickt.` });
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : "";
+      toast({
+        title: "Fehler",
+        description: /rate limit|too many|seconds/i.test(raw)
+          ? "Bitte kurz warten, bevor du eine neue Mail anforderst."
+          : raw || "E-Mail konnte nicht erneut versendet werden.",
+        variant: "destructive",
+      });
+    } finally {
+      setResending(false);
+    }
+  };
+
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -42,7 +72,12 @@ const AuthPage = () => {
       const normalizedEmail = email.trim().toLowerCase();
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
-        if (error) throw error;
+        if (error) {
+          // Unbestätigte Adresse ist kein "falsches Passwort" — Hinweis + Resend anbieten.
+          if (/email not confirmed|not confirmed/i.test(error.message)) setPendingConfirm(normalizedEmail);
+          throw error;
+        }
+        setPendingConfirm(null);
         navigate(from || "/", { replace: true });
       } else if (mode === "signup") {
         const { data, error } = await supabase.auth.signUp({
@@ -55,20 +90,21 @@ const AuthPage = () => {
           options: { emailRedirectTo: `${window.location.origin}${from || ""}` },
         });
         if (error) throw error;
-        // signUp() only returns a live session immediately when email confirmation is off for
-        // this project (currently the case, verified against auth.users — every account's
-        // email_confirmed_at matches created_at to the millisecond, i.e. auto-confirmed). If that
-        // account setting is ever flipped on, session comes back null instead — navigating to a
-        // protected route as if logged in would just bounce straight back to /auth, contradicting
-        // the "welcome" toast. Branch on what actually came back rather than assuming.
+        // Mit aktivierter E-Mail-Bestätigung liefert signUp() keine Session zurück — der Account
+        // wird erst durch den Klick im Bestätigungslink nutzbar. Nur wenn wider Erwarten doch
+        // eine Session kommt (Auto-Confirm), geht es direkt weiter in die App.
         if (!data.session) {
+          setPendingConfirm(normalizedEmail);
           toast({
             title: "Fast geschafft!",
-            description: "Bitte bestätige deine E-Mail-Adresse über den Link, den wir dir geschickt haben.",
+            description: `Wir haben einen Bestätigungslink an ${normalizedEmail} geschickt. Bitte bestätige deine E-Mail-Adresse, danach kannst du dich einloggen.`,
           });
           setMode("login");
+          setPassword("");
+          setConfirmPassword("");
           return;
         }
+
         toast({
           title: "Willkommen im Verein! 🎯",
           description: "Lege jetzt dein Spielerprofil an.",
@@ -89,7 +125,9 @@ const AuthPage = () => {
       }
     } catch (err: unknown) {
       const raw: string = err instanceof Error ? err.message : "";
-      const msg = raw.includes("Invalid login credentials")
+      const msg = /email not confirmed|not confirmed/i.test(raw)
+        ? "Deine E-Mail-Adresse ist noch nicht bestätigt. Prüfe dein Postfach (auch den Spam-Ordner)."
+        : raw.includes("Invalid login credentials")
         ? "E-Mail oder Passwort falsch. Tipp: Passwort mit dem Auge prüfen."
         : raw.includes("User already registered")
         ? "Für diese E-Mail existiert bereits ein Konto. Einfach einloggen."
@@ -203,6 +241,25 @@ const AuthPage = () => {
               {mode === "login" ? "Einloggen" : mode === "signup" ? "Registrieren" : "Reset-Link senden"}
             </Button>
           </form>
+          {pendingConfirm && mode !== "reset" && (
+            <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+              <p className="text-muted-foreground">
+                Bestätigungslink an <span className="text-foreground">{pendingConfirm}</span> gesendet. Nicht angekommen?
+                Schau auch im Spam-Ordner nach.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 w-full"
+                onClick={resendConfirmation}
+                disabled={resending}
+              >
+                {resending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                E-Mail erneut senden
+              </Button>
+            </div>
+          )}
           <div className="mt-4 space-y-2 text-sm text-center text-muted-foreground">
             {mode === "login" && (
               <>
