@@ -134,116 +134,105 @@ const AdminPage = () => {
         Hier kannst du Rollen vergeben und Accounts entfernen. Du selbst kannst dir die Admin-Rolle nicht entziehen.
       </p>
 
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50">
-            <tr className="text-left text-xs uppercase text-muted-foreground">
-              <th className="px-4 py-2">E-Mail</th>
-              <th className="px-4 py-2">Rollen</th>
-              <th className="px-4 py-2">Beitritt</th>
-              <th className="px-4 py-2 text-right">Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pagedUsers.visible.map((u) => {
-              const isSelf = u.user_id === user?.id;
-              const isAdminUser = u.roles?.includes("admin");
-              return (
-                <tr key={u.user_id} className="border-t border-border">
-                  <td className="px-4 py-3 font-mono text-xs">
-                    {u.email}
-                    {isSelf && <span className="ml-2 text-[10px] text-primary uppercase">(Du)</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    {u.roles?.length ? (
-                      u.roles.map((r) => (
-                        <Badge
-                          key={r}
-                          variant="outline"
-                          className={`text-[10px] uppercase px-1.5 py-0.5 mr-1 border-transparent ${
-                            r === "admin"
-                              ? "bg-primary/15 text-primary"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {r}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className="text-xs text-muted-foreground">–</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {new Date(u.created_at).toLocaleDateString("de-DE")}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="inline-flex gap-1">
-                      {isAdminUser ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={isSelf || busyId === u.user_id}
-                          onClick={() => setRole(u, "admin", false)}
-                          title={isSelf ? "Du kannst dir die Admin-Rolle nicht selbst entziehen" : "Admin entziehen"}
-                        >
-                          <ShieldOff className="w-3.5 h-3.5" />
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {pagedUsers.visible.map((u) => {
+          const isSelf = u.user_id === user?.id;
+          const isAdminUser = u.roles?.includes("admin");
+          const initial = u.email.trim().charAt(0).toUpperCase() || "?";
+          return (
+            <div key={u.user_id} className="rounded-xl border border-border bg-card p-4 flex items-start gap-3 hover:border-primary/40 transition-colors">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-display text-sm ${isAdminUser ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+                {initial}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-mono truncate">
+                  {u.email}
+                  {isSelf && <span className="ml-1.5 text-[10px] text-primary uppercase">(Du)</span>}
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {u.roles?.length ? (
+                    u.roles.map((r) => (
+                      <Badge
+                        key={r}
+                        variant="outline"
+                        className={`text-[10px] uppercase px-1.5 py-0.5 border-transparent ${
+                          r === "admin" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {r}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground">–</span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground">· seit {new Date(u.created_at).toLocaleDateString("de-DE")}</span>
+                </div>
+
+                <div className="mt-3 flex gap-1.5">
+                  {isAdminUser ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5"
+                      disabled={isSelf || busyId === u.user_id}
+                      onClick={() => setRole(u, "admin", false)}
+                      title={isSelf ? "Du kannst dir die Admin-Rolle nicht selbst entziehen" : "Admin entziehen"}
+                    >
+                      <ShieldOff className="w-3.5 h-3.5" /> Admin entziehen
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5"
+                      disabled={busyId === u.user_id}
+                      onClick={() => setRole(u, "admin", true)}
+                      title="Zum Admin machen"
+                    >
+                      <Shield className="w-3.5 h-3.5" /> Zum Admin machen
+                    </Button>
+                  )}
+                  <AlertDialog open={confirmDeleteId === u.user_id} onOpenChange={(open) => setConfirmDeleteId(open ? u.user_id : null)}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        disabled={isSelf || busyId === u.user_id}
+                        title={isSelf ? "Du kannst dich nicht selbst löschen" : "Mitglied entfernen"}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Mitglied entfernen?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {u.email} wird unwiderruflich aus dem Verein entfernt. Spiele und Statistiken bleiben erhalten.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={busyId === u.user_id}>Abbrechen</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            await deleteUser(u);
+                            setConfirmDeleteId(null);
+                          }}
                           disabled={busyId === u.user_id}
-                          onClick={() => setRole(u, "admin", true)}
-                          title="Zum Admin machen"
                         >
-                          <Shield className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                      <AlertDialog open={confirmDeleteId === u.user_id} onOpenChange={(open) => setConfirmDeleteId(open ? u.user_id : null)}>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                            disabled={isSelf || busyId === u.user_id}
-                            title={isSelf ? "Du kannst dich nicht selbst löschen" : "Mitglied entfernen"}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Mitglied entfernen?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {u.email} wird unwiderruflich aus dem Verein entfernt. Spiele und Statistiken bleiben erhalten.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel disabled={busyId === u.user_id}>Abbrechen</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={async (e) => {
-                                e.preventDefault();
-                                await deleteUser(u);
-                                setConfirmDeleteId(null);
-                              }}
-                              disabled={busyId === u.user_id}
-                            >
-                              {busyId === u.user_id ? "Entfernt…" : "Entfernen"}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        </div>
-        <ListPaginationFooter list={pagedUsers} />
+                          {busyId === u.user_id ? "Entfernt…" : "Entfernen"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
+      <ListPaginationFooter list={pagedUsers} />
         </TabsContent>
 
         <TabsContent value="invites">
