@@ -35,6 +35,7 @@ import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
 import { loadActiveGameSnapshot, saveActiveGameSnapshot, clearActiveGameSnapshot } from "@/lib/activeGameSnapshot";
 import { useTournamentLink } from "@/hooks/useTournamentLink";
 import { useLeagueLink } from "@/hooks/useLeagueLink";
+import { computePostGameStats } from "@/utils/postGameStats";
 import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
 import {
@@ -45,8 +46,6 @@ import {
   isAchievableVisitTotal,
   segmentCount,
   SEGMENT_NUMBERS,
-  computeLegStatBundle,
-  combineStatBundles,
   type StatBundle,
 } from "@/utils/dartStats";
 
@@ -1869,24 +1868,7 @@ const GamePage = () => {
     // thrown before the match ends) a harmless no-op — it only actually announces once.
   }, [game, speechEnabled]);
 
-  const postGameStats = useMemo(() => {
-    if (!game || !game.isFinished) return null;
-    const allLegs = [...game.completedLegs, game.currentLeg];
-    const isCricket = game.mode === "cricket";
-    return game.players.map((p, i) => {
-      const startingScore = effectiveStartScore(game.startScore, game.players, i, game.teams);
-      const perLeg = allLegs.map((leg) => computeLegStatBundle(leg.throws[i] ?? [], startingScore, isCricket));
-      const overall = combineStatBundles(perLeg, allLegs.flatMap((leg) => leg.throws[i] ?? []));
-      return {
-        name: p.name,
-        legs: game.legsWon[teamIndexFor(game.teams, i)],
-        perLeg,
-        overall,
-      };
-    });
-    // No code path calls setGame again once isFinished is true (every scoring handler guards on
-    // `!game.isFinished`), so depending on `game` recomputes exactly once, same as today.
-  }, [game]);
+  const postGameStats = useMemo(() => computePostGameStats(game), [game]);
 
   /** Which leg's numbers the post-game screen currently shows — "all" (match-wide) or a 0-based
    *  leg index. Reset on every new game via resetGame so a stale leg selection doesn't survive
