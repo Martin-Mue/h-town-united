@@ -169,6 +169,40 @@ const seededShuffle = <T,>(list: T[], seed: number) => {
   return copy;
 };
 
+/** Standard single-elimination seed placement for a bracket of size n (must be a power of 2) —
+ *  e.g. bracketSeedOrder(8) = [1,8,4,5,2,7,3,6], so seed 1 and seed 2 land in opposite halves and
+ *  can only meet in the final, seeds 1-4 are spread one to a quarter, etc. Textbook recursive
+ *  definition: seed n+1-s always sits opposite seed s at every split. */
+const bracketSeedOrder = (n: number): number[] => {
+  if (n <= 1) return [1];
+  const prev = bracketSeedOrder(n / 2);
+  const out: number[] = [];
+  prev.forEach((s) => { out.push(s); out.push(n + 1 - s); });
+  return out;
+};
+
+/** Elo-based "fair" seeding — orders players so the bracket itself keeps strong players apart
+ *  (standard seeding), rather than just sorting by Elo (which would seat #1 and #2 as neighbors
+ *  in round 1). Reuses buildSeeding/distributeByes completely unchanged: both already place
+ *  whatever order they're given sequentially into slots and hand the front of the list any BYEs
+ *  first, so feeding them a properly seed-ordered list is the only change needed for correct
+ *  seeded placement, including BYEs going to the top seeds as intended. When the field exceeds
+ *  `mainSize` (a preliminary round is needed), the weakest players — who buildSeeding always
+ *  slices off the tail into the preliminary round regardless of mode — are appended in plain Elo
+ *  order; only the direct-entry seeds get the interleaved placement, a reasonable approximation
+ *  rather than a fully co-derived seeding for that rarer non-power-of-2 case. */
+const fairSeededOrder = (playerNames: string[], mainSize: number, eloByName: Map<string, number>): string[] => {
+  const byElo = [...playerNames].sort((a, b) => (eloByName.get(b) ?? 1000) - (eloByName.get(a) ?? 1000));
+  const excess = Math.max(0, playerNames.length - mainSize);
+  const topCount = mainSize - excess;
+  const topSeeds = byElo.slice(0, topCount);
+  const rest = byElo.slice(topCount);
+  const seeded = bracketSeedOrder(mainSize)
+    .filter((seedNum) => seedNum <= topCount)
+    .map((seedNum) => topSeeds[seedNum - 1]);
+  return [...seeded, ...rest];
+};
+
 /**
  * Distributes BYEs evenly across the first round: every player with a bye is placed
  * into their own match, spread over the bracket (never two byes next to each other
@@ -687,7 +721,7 @@ const TournamentPage = () => {
   const [seriesId, setSeriesId] = useState<string>("none");
   const [seriesList, setSeriesList] = useState<SeriesRecord[]>([]);
   const [roundConfigs, setRoundConfigs] = useState<RoundConfig[]>([]);
-  const [drawMode, setDrawMode] = useState<"random" | "manual">("random");
+  const [drawMode, setDrawMode] = useState<"random" | "manual" | "fair">("random");
   const [drawSeed, setDrawSeed] = useState(() => Math.floor(Math.random() * 1e9));
   const [boards, setBoards] = useState(2);
   const [livePlayEnabled, setLivePlayEnabled] = useState(true);
@@ -986,11 +1020,16 @@ const TournamentPage = () => {
 
   const shufflePlayers = () => setPlayers((prev) => shuffle(prev));
 
+  const eloByName = useMemo(() => new Map(dbPlayers.map((p) => [p.name, p.elo_rating ?? 1000])), [dbPlayers]);
+
   /** The single source of truth for seeding – used by preview AND bracket generation. */
   const drawSeeding = useMemo(() => {
-    const base = drawMode === "manual" ? [...players] : seededShuffle(players, drawSeed);
+    const base =
+      drawMode === "manual" ? [...players] :
+      drawMode === "fair" ? fairSeededOrder(players, effectiveSize, eloByName) :
+      seededShuffle(players, drawSeed);
     return buildSeeding(base, effectiveSize);
-  }, [players, drawMode, drawSeed, effectiveSize]);
+  }, [players, drawMode, drawSeed, effectiveSize, eloByName]);
 
   const redraw = () => setDrawSeed(Math.floor(Math.random() * 1e9));
 
@@ -1949,20 +1988,23 @@ const TournamentPage = () => {
             {tournamentMode !== "round-robin" && (
               <Collapsible className="bg-muted/30 border border-border rounded-xl">
                 <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1"><Settings2 className="w-3.5 h-3.5" /> {t("tournament.draw")} · {drawMode === "random" ? t("tournament.random") : t("tournament.manual")}</span>
+                  <span className="flex items-center gap-1"><Settings2 className="w-3.5 h-3.5" /> {t("tournament.draw")} · {drawMode === "random" ? t("tournament.random") : drawMode === "fair" ? t("tournament.fair") : t("tournament.manual")}</span>
                   <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
                 </CollapsibleTrigger>
                 <CollapsibleContent className="px-3 pb-3 space-y-2">
-                  <Select value={drawMode} onValueChange={(v) => setDrawMode(v as "random" | "manual")}>
+                  <Select value={drawMode} onValueChange={(v) => setDrawMode(v as "random" | "manual" | "fair")}>
                     <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                     <SelectContent className="bg-card border-border">
                       <SelectItem value="random">{t("tournament.randomDraw")}</SelectItem>
+                      <SelectItem value="fair">{t("tournament.fairDraw")}</SelectItem>
                       <SelectItem value="manual">{t("tournament.manualMatches")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
                     {drawMode === "random"
                       ? t("tournament.randomDrawDesc")
+                      : drawMode === "fair"
+                      ? t("tournament.fairDrawDesc")
                       : t("tournament.manualDrawDesc")}
                   </p>
                 </CollapsibleContent>
@@ -2181,6 +2223,8 @@ const TournamentPage = () => {
                   <p>
                     {drawMode === "random"
                       ? t("tournament.fullyRandomDraw")
+                      : drawMode === "fair"
+                      ? t("tournament.fairDrawDesc")
                       : t("tournament.pairingsAsBelow")}
                   </p>
                 </div>
