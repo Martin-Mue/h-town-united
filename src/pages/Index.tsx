@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, Crosshair, Loader2 } from "lucide-react";
+import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, Crosshair, Loader2, PartyPopper } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchClubPlayers } from "@/lib/repositories/players";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow, type ActivityTranslator } from "@/utils/clubActivity";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
@@ -40,6 +41,12 @@ interface RecentGame {
   participantNames?: string[];
 }
 
+interface AnniversaryEntry {
+  id: string;
+  name: string;
+  years: number;
+}
+
 const DashboardPage = () => {
   const { language, t } = useLanguage();
   const { club, name: clubName, tagline, logoUrl } = useClubBranding();
@@ -50,6 +57,7 @@ const DashboardPage = () => {
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [anniversaries, setAnniversaries] = useState<AnniversaryEntry[]>([]);
   const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set());
   const pagedRecentGames = usePagedList(recentGames);
   const pagedActivity = usePagedList(activity);
@@ -124,6 +132,24 @@ const DashboardPage = () => {
       }
     };
     loadActivity();
+
+    // Membership anniversaries: joined_year is a manually-entered YEAR only (no day/month), so
+    // this can only ever say "N years with the club this year", never pinpoint the exact day —
+    // every full year counts (not just round 5/10-year milestones), matching how the feature was
+    // requested. Deliberately its own section rather than folded into computeClubActivity above:
+    // it isn't derived from games/legs and has no natural played-at recency window to sit inside.
+    const loadAnniversaries = async () => {
+      const roster = await fetchClubPlayers();
+      if (cancelled) return;
+      const currentYear = new Date().getFullYear();
+      setAnniversaries(
+        roster
+          .filter((p): p is typeof p & { joined_year: number } => !!p.joined_year && currentYear - p.joined_year > 0)
+          .map((p) => ({ id: p.id, name: p.name, years: currentYear - p.joined_year }))
+          .sort((a, b) => b.years - a.years || a.name.localeCompare(b.name))
+      );
+    };
+    loadAnniversaries();
     return () => { cancelled = true; };
     // `language` (not `t`) is the real dependency — `t` is a fresh closure every render (see
     // LanguageContext), so listing it would refetch on every render instead of only when the
@@ -222,6 +248,30 @@ const DashboardPage = () => {
             })}
           </div>
           <div className="mb-6"><ListPaginationFooter list={pagedActivity} /></div>
+        </>
+      )}
+
+      {/* Membership anniversaries — only shown once there's at least one to celebrate. */}
+      {anniversaries.length > 0 && (
+        <>
+          <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
+            <PartyPopper className="w-3.5 h-3.5 text-accent" /> {t("home.anniversaryHeading")}
+          </h2>
+          <div className="space-y-2 mb-6">
+            {anniversaries.map((a) => (
+              <div key={a.id} className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
+                  <PartyPopper className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm truncate">
+                    <span className="font-semibold">{a.name}</span> ·{" "}
+                    {a.years === 1 ? t("home.anniversaryOneYear") : `${a.years} ${t("home.anniversaryYearsSuffix")}`}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </>
       )}
 

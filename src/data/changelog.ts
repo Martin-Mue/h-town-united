@@ -354,4 +354,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Otomatik fikstürlü yeni Lig modu (tek veya çift devreli lig, canlı oynanan ya da elle girilen); resim olarak paylaşılabilir oyuncu kartı; üye sayfasındaki \"Adil eşleşmeler\" Elo'ya göre dengeli maçlar öneriyor; turnuvalar artık isteğe bağlı olarak tamamen rastgele yerine Elo'ya göre kademelendirilebiliyor.",
     },
   },
+  {
+    id: "2026-09-02-win-probability-and-anniversaries",
+    date: "2026-09-02",
+    title: {
+      de: "Siegchance beim Walk-on & Mitglieds-Jubiläen",
+      en: "Walk-on win probability & membership anniversaries",
+      fr: "Probabilité de victoire à l'entrée & anniversaires d'adhésion",
+      pl: "Szansa na zwycięstwo przy wejściu i rocznice członkostwa",
+      nl: "Winkans bij walk-on & lidmaatschapsjubilea",
+      tr: "Walk-on'da kazanma olasılığı ve üyelik yıl dönümleri",
+    },
+    description: {
+      de: "Der Walk-on-Bildschirm zeigt jetzt eine Elo-basierte Siegchance für beide Spieler an — auch beim allerersten Aufeinandertreffen. Neu auf der Startseite: eine Übersicht, welche Mitglieder dieses Jahr ihr Vereinsjubiläum feiern.",
+      en: "The walk-on screen now shows an Elo-based win probability for both players — even for a first-ever meeting. New on the home page: an overview of which members are celebrating a club anniversary this year.",
+      fr: "L'écran d'entrée affiche désormais une probabilité de victoire basée sur l'Elo pour les deux joueurs — même lors d'une toute première rencontre. Nouveau sur la page d'accueil : un aperçu des membres qui fêtent un anniversaire de club cette année.",
+      pl: "Ekran wejścia pokazuje teraz szansę na zwycięstwo opartą na Elo dla obu zawodników — nawet przy pierwszym spotkaniu. Nowość na stronie głównej: przegląd członków obchodzących w tym roku rocznicę w klubie.",
+      nl: "Het walk-on-scherm toont nu een op Elo gebaseerde winkans voor beide spelers — zelfs bij een allereerste ontmoeting. Nieuw op de startpagina: een overzicht van welke leden dit jaar hun clubjubileum vieren.",
+      tr: "Walk-on ekranı artık her iki oyuncu için de Elo tabanlı bir kazanma olasılığı gösteriyor — ilk kez karşılaşsalar bile. Ana sayfada yeni: bu yıl kulüp yıl dönümünü kutlayan üyelere genel bakış.",
+    },
+  },
 ];

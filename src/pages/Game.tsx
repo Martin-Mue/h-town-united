@@ -426,7 +426,7 @@ const GamePage = () => {
   // each side's average SPECIFICALLY across these head-to-head games — deliberately separate
   // from their lifetime average (already shown from dbPlayers), since how someone plays against
   // this one specific opponent is its own, genuinely different number.
-  const [walkonH2H, setWalkonH2H] = useState<{ aWins: number; bWins: number; total: number; aAvg: number; bAvg: number; storyline: string | null } | null>(null);
+  const [walkonH2H, setWalkonH2H] = useState<{ aWins: number; bWins: number; total: number; aAvg: number; bAvg: number; storyline: string | null; aWinProb: number | null } | null>(null);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   // Whether a human actually wants the camera on — distinct from cameraEnabled itself, which
@@ -663,6 +663,9 @@ const GamePage = () => {
     const a = matchClubPlayer(dbPlayers, players[0].name);
     const b = matchClubPlayer(dbPlayers, players[1].name);
     if (!a || !b || a.id === b.id) return;
+    // Standard Elo expected-score formula — independent of head-to-head history, so it's still
+    // meaningful (arguably most useful) for two players who've never played each other before.
+    const aWinProb = 100 / (1 + Math.pow(10, ((b.elo_rating ?? 1000) - (a.elo_rating ?? 1000)) / 400));
     const { data, error } = await supabase.from("games")
       .select("winner_id, player1_id, player1_average, player2_average, played_at")
       .or(`and(player1_id.eq.${a.id},player2_id.eq.${b.id}),and(player1_id.eq.${b.id},player2_id.eq.${a.id})`);
@@ -686,6 +689,7 @@ const GamePage = () => {
         data.map((g) => ({ aWon: g.winner_id === a.id, playedAt: g.played_at })),
         players[0].name, players[1].name, t,
       ),
+      aWinProb,
     });
   };
 
@@ -2448,6 +2452,21 @@ const GamePage = () => {
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
               {walkonH2H.total > 0 ? `${t("game.headToHeadSoFar")} · ${walkonH2H.total} ${t("stats.games")}` : t("game.firstMeeting")}
             </p>
+            {/* Elo-derived, so meaningful even for a first-ever meeting (total === 0) unlike
+                everything else in this card, which needs real head-to-head history. */}
+            {walkonH2H.aWinProb !== null && (
+              <div className="mt-3 max-w-[240px] mx-auto">
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-primary font-semibold">{Math.round(walkonH2H.aWinProb)}%</span>
+                  <span className="text-secondary font-semibold">{Math.round(100 - walkonH2H.aWinProb)}%</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden flex bg-muted">
+                  <div className="h-full bg-primary" style={{ width: `${walkonH2H.aWinProb}%` }} />
+                  <div className="h-full bg-secondary flex-1" />
+                </div>
+                <p className="text-[9px] uppercase tracking-widest text-muted-foreground mt-1">{t("game.winProbability")}</p>
+              </div>
+            )}
             {/* Average specifically FROM these head-to-head games — a genuinely different number
                 from the lifetime average shown per player above, not a duplicate of it. */}
             {walkonH2H.total > 0 && (

@@ -15,13 +15,14 @@ export interface ClubPlayer {
   high_score: number;
   elo_rating: number;
   double_rate: number;
+  joined_year: number | null;
 }
 
 /** Full club roster, alphabetical — used for player pickers (Game/Training setup) and
  *  name→id resolution (Tournament push notifications, bracket entry). */
 export async function fetchClubPlayers(): Promise<ClubPlayer[]> {
   const { data, error } = await supabase.from("players")
-    .select("id, name, emoji, user_id, games_played, games_won, average, high_score, elo_rating, double_rate").order("name");
+    .select("id, name, emoji, user_id, games_played, games_won, average, high_score, elo_rating, double_rate, joined_year").order("name");
   if (error) throw error;
   return data ?? [];
 }
