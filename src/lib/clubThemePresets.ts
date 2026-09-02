@@ -106,6 +106,18 @@ export const CLUB_THEME_PRESETS: ClubThemePreset[] = [
       accent: role(18, 90, 48, 18, 95, 58),
     },
   },
+  {
+    // Clinical scan register — icy cyan + near-neutral bone-grey, with a hazard-red accent doing
+    // the job a radiologist's annotation marker would (highlighting a finding on a scan) rather
+    // than the warm sports-club accent every other preset above leans on.
+    id: "roentgen",
+    label: "Röntgen",
+    roles: {
+      primary: role(195, 70, 40, 195, 75, 52),
+      secondary: role(210, 12, 35, 210, 14, 42),
+      accent: role(358, 85, 45, 358, 85, 55),
+    },
+  },
 ];
 
 export const DEFAULT_CLUB_THEME_PRESET_ID = "default";

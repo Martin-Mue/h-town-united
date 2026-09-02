@@ -314,4 +314,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Giriş, kayıt ve davet/katılım sayfaları artık ana sayfayla aynı görünüme sahip; Admin bölümündeki üye listesi artık tablo yerine kart görünümünde; turnuva serileri artık istatistiklerle aynı sıralama tasarımını kullanıyor.",
     },
   },
+  {
+    id: "2026-09-02-roentgen-preset",
+    date: "2026-09-02",
+    title: {
+      de: "Neues Vereinsdesign: Röntgen",
+      en: "New club design: Röntgen (X-ray)",
+      fr: "Nouveau thème de club : Röntgen (radiographie)",
+      pl: "Nowy motyw klubu: Röntgen (rentgen)",
+      nl: "Nieuw clubdesign: Röntgen (röntgenfoto)",
+      tr: "Yeni kulüp tasarımı: Röntgen (X-ışını)",
+    },
+    description: {
+      de: "Klinisches Cyan-Grau mit einem knalligen Rot als Akzent — kühler und auffälliger als die bisherigen 8 Farbschemata.",
+      en: "Clinical cyan-grey with a bold red accent — cooler and more striking than the existing 8 color schemes.",
+      fr: "Cyan-gris clinique avec un accent rouge vif — plus froid et percutant que les 8 palettes existantes.",
+      pl: "Kliniczny cyjan-szary z wyrazistym czerwonym akcentem — chłodniejszy i bardziej wyrazisty niż pozostałych 8 schematów kolorów.",
+      nl: "Klinisch cyaan-grijs met een felrode accentkleur — kouder en opvallender dan de bestaande 8 kleurenschema's.",
+      tr: "Göz alıcı kırmızı vurgulu klinik camgöbeği-gri — mevcut 8 renk şemasından daha soğuk ve dikkat çekici.",
+    },
+  },
 ];
