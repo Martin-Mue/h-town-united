@@ -16,7 +16,7 @@ const AuthPage = () => {
   // logged out. Falls back to the homepage for a direct/bookmarked visit to /auth.
   const from = (location.state as { from?: string } | null)?.from;
   const { user, loading: authLoading } = useAuth();
-  const { club, name: clubName, logoUrl } = useClubBranding();
+  const { club, name: clubName, tagline, logoUrl } = useClubBranding();
   const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -111,22 +111,30 @@ const AuthPage = () => {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          {club?.logo_path ? (
-            <img
-              src={logoUrl}
-              alt={clubName}
-              className="w-16 h-16 rounded-xl object-cover border border-primary/30 mx-auto mb-4 glow-cyan"
-            />
-          ) : (
-            <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
-              <span className="font-display text-primary font-bold text-3xl">{clubName.charAt(0).toUpperCase()}</span>
-            </div>
-          )}
-          <h1 className="text-3xl font-display uppercase">{clubName}</h1>
+        <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
+          <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
+          <div className="relative">
+            {club?.logo_path ? (
+              <img
+                src={logoUrl}
+                alt={clubName}
+                className="w-16 h-16 rounded-xl object-cover border border-primary/30 mx-auto mb-4 glow-cyan"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
+                <span className="font-display text-primary font-bold text-3xl">{clubName.charAt(0).toUpperCase()}</span>
+              </div>
+            )}
+            <h1 className="text-3xl font-display uppercase">{clubName}</h1>
+            {tagline && (
+              <p className="font-graffiti text-lg mt-1 -rotate-1 select-none text-primary drop-shadow-[0_0_10px_hsl(var(--primary)/0.4)]">
+                {tagline}
+              </p>
+            )}
+          </div>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-6">
+        <div className="bg-card border border-border rounded-2xl p-6">
           <h2 className="font-display uppercase text-lg mb-4">
             {mode === "login" ? "Anmelden" : mode === "signup" ? "Registrieren" : "Passwort zurücksetzen"}
           </h2>
