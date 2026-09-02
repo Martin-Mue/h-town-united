@@ -18,6 +18,7 @@ import { type Match, isRealPlayer, totalRoundsOf } from "@/utils/tournament";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
+import { SectionCard, Eyebrow, RankBadge, RankAvatar } from "@/components/stats/StatPrimitives";
 
 interface Scoring {
   champion: number;
@@ -139,8 +140,8 @@ const TournamentSeriesPage = () => {
           {activeSeries.description && <p className="text-sm text-muted-foreground">{activeSeries.description}</p>}
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-4 mb-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("series.overallStandings")}</h3>
+        <SectionCard className="mb-4">
+          <Eyebrow icon={Trophy}>{t("series.overallStandings")}</Eyebrow>
           {standings.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("series.noTournamentsFinishedYet")}</p>
           ) : (
@@ -149,27 +150,26 @@ const TournamentSeriesPage = () => {
                 // True rank in the full standings, not the index within this page/slice.
                 const i = standings.indexOf(s);
                 return (
-                  <div key={s.name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/40">
-                    <div className="flex items-center gap-3">
-                      <span className={`font-display w-8 ${i === 0 ? "text-accent" : ""}`}>
-                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
-                      </span>
-                      <span className="font-semibold text-sm">{s.name}</span>
-                      <span className="text-xs text-muted-foreground">
+                  <div key={s.name} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${i < 3 ? "bg-muted/50" : "bg-muted/30"}`}>
+                    <RankBadge rank={i + 1} />
+                    <RankAvatar emoji="🎯" rank={i + 1} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{s.name}</p>
+                      <p className="text-[10px] text-muted-foreground">
                         {s.champions > 0 && `${s.champions}× 🏆 · `}{s.tournaments} {t("series.tournamentsSuffix")}
-                      </span>
+                      </p>
                     </div>
-                    <span className="font-display text-primary text-lg">{s.points} {t("tournament.pointsAbbrev")}</span>
+                    <span className="font-display text-primary text-lg shrink-0">{s.points} {t("tournament.pointsAbbrev")}</span>
                   </div>
                 );
               })}
               <ListPaginationFooter list={pagedStandings} />
             </div>
           )}
-        </div>
+        </SectionCard>
 
-        <div className="bg-card border border-border rounded-xl p-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("series.tournamentsSuffix")} ({seriesTourneys.length})</h3>
+        <SectionCard>
+          <Eyebrow icon={Layers}>{t("series.tournamentsSuffix")} ({seriesTourneys.length})</Eyebrow>
           {seriesTourneys.length === 0 ? (
             <div className="text-center py-4">
               <p className="text-sm text-muted-foreground mb-3">{t("series.noTournamentsAssigned")}</p>
@@ -180,15 +180,18 @@ const TournamentSeriesPage = () => {
           ) : (
             <div className="space-y-2">
               {pagedSeriesTourneys.visible.map((t) => (
-                <Link key={t.id} to={`/tournament/${t.id}`} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted transition-colors">
-                  <span className="text-sm font-medium">{t.name}</span>
-                  {t.champion && <span className="text-xs text-accent">🏆 {t.champion}</span>}
+                <Link key={t.id} to={`/tournament/${t.id}`} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted transition-colors">
+                  <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                    <Trophy className="w-4 h-4" />
+                  </div>
+                  <span className="text-sm font-medium flex-1 min-w-0 truncate">{t.name}</span>
+                  {t.champion && <span className="text-xs text-accent shrink-0">🏆 {t.champion}</span>}
                 </Link>
               ))}
               <ListPaginationFooter list={pagedSeriesTourneys} />
             </div>
           )}
-        </div>
+        </SectionCard>
       </div>
     );
   }
@@ -210,7 +213,7 @@ const TournamentSeriesPage = () => {
       </div>
 
       {creating && (
-        <div className="bg-card border border-primary/30 rounded-xl p-4 mb-4 space-y-3">
+        <SectionCard glow="primary" className="mb-4 space-y-3">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{t("common.name")}</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Winter Series 2026" />
@@ -233,7 +236,7 @@ const TournamentSeriesPage = () => {
           <Button onClick={saveSeries} className="w-full" disabled={!name.trim() || savingSeries}>
             {savingSeries ? t("tournament.saving") : editingId ? t("tournament.saveChanges") : t("series.createSeries")}
           </Button>
-        </div>
+        </SectionCard>
       )}
 
       {loading ? (
@@ -248,9 +251,12 @@ const TournamentSeriesPage = () => {
           {pagedSeries.visible.map((s) => {
             const count = tournaments.filter((tourn) => tourn.series_id === s.id).length;
             return (
-              <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
-                <Link to={`/tournaments/series/${s.id}`} className="flex-1">
-                  <p className="font-semibold text-sm">{s.name}</p>
+              <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
+                <div className="w-9 h-9 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <Link to={`/tournaments/series/${s.id}`} className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{s.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{count} {t("series.tournamentsSuffix")} · {new Date(s.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language])}</p>
                 </Link>
                 {s.user_id === session?.user?.id && (
