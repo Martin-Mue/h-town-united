@@ -233,6 +233,25 @@ const AuthPage = () => {
               {mode === "login" ? "Einloggen" : mode === "signup" ? "Registrieren" : "Reset-Link senden"}
             </Button>
           </form>
+          {pendingConfirm && mode !== "reset" && (
+            <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+              <p className="text-muted-foreground">
+                Bestätigungslink an <span className="text-foreground">{pendingConfirm}</span> gesendet. Nicht angekommen?
+                Schau auch im Spam-Ordner nach.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 w-full"
+                onClick={resendConfirmation}
+                disabled={resending}
+              >
+                {resending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                E-Mail erneut senden
+              </Button>
+            </div>
+          )}
           <div className="mt-4 space-y-2 text-sm text-center text-muted-foreground">
             {mode === "login" && (
               <>
