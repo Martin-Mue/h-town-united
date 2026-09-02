@@ -54,18 +54,21 @@ const CreateClub = () => {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
-            <Trophy className="w-8 h-8 text-primary" />
+        <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
+          <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
+          <div className="relative">
+            <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
+              <Trophy className="w-8 h-8 text-primary" />
+            </div>
+            <h1 className="text-2xl font-display uppercase">Verein anlegen</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Dieser Account gehört noch zu keinem Verein. Lege jetzt deinen eigenen an, oder nutze
+              einen Einladungslink von einem bestehenden Verein.
+            </p>
           </div>
-          <h1 className="text-2xl font-display uppercase">Verein anlegen</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Dieser Account gehört noch zu keinem Verein. Lege jetzt deinen eigenen an, oder nutze
-            einen Einladungslink von einem bestehenden Verein.
-          </p>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-6">
+        <div className="bg-card border border-border rounded-2xl p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label>Vereinsname</Label>

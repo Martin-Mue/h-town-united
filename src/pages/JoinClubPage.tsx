@@ -62,17 +62,22 @@ const JoinClubPage = () => {
         {loading || authLoading ? (
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
         ) : club === "not_found" ? (
-          <div className="bg-card border border-border rounded-xl p-6">
+          <div className="bg-card border border-border rounded-2xl p-6">
             <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
             <h1 className="text-lg font-display uppercase mb-1">Verein nicht gefunden</h1>
             <p className="text-sm text-muted-foreground">Dieser Link ist ungültig.</p>
           </div>
         ) : club ? (
           <>
-            <img src={logoUrl} alt={club.name} className="w-16 h-16 rounded-xl object-cover border border-primary/30 mx-auto mb-4 glow-cyan" />
-            <h1 className="text-2xl font-display uppercase">{club.name}</h1>
-            {club.tagline && <p className="text-sm text-muted-foreground mt-1">{club.tagline}</p>}
-            <div className="bg-card border border-border rounded-xl p-6 mt-6">
+            <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden">
+              <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
+              <div className="relative">
+                <img src={logoUrl} alt={club.name} className="w-16 h-16 rounded-xl object-cover border border-primary/30 mx-auto mb-4 glow-cyan" />
+                <h1 className="text-2xl font-display uppercase">{club.name}</h1>
+                {club.tagline && <p className="text-sm text-muted-foreground mt-1">{club.tagline}</p>}
+              </div>
+            </div>
+            <div className="bg-card border border-border rounded-2xl p-6">
               {requested ? (
                 <p className="text-sm">
                   Deine Anfrage wurde gesendet. Ein Admin des Vereins muss sie noch bestätigen — das kann etwas dauern.
