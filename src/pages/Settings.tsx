@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LANGUAGES, type Language } from "@/i18n/translations";
 import { CLUB_THEME_PRESETS, resolveClubTheme, DEFAULT_CLUB_THEME_PRESET_ID } from "@/lib/clubThemePresets";
+import { SectionCard } from "@/components/stats/StatPrimitives";
 import GuidesTab from "@/components/settings/GuidesTab";
 
 const LANGUAGE_LABEL_KEY: Record<Language, string> = {
@@ -114,7 +115,7 @@ const SettingsPage = () => {
       {activeTab === "settings" && (
       <>
       <div className="space-y-3 mb-6">
-        <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">
+        <SectionCard className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Languages className="w-5 h-5 text-muted-foreground shrink-0" />
             <div className="min-w-0">
@@ -130,9 +131,9 @@ const SettingsPage = () => {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </SectionCard>
 
-        <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">
+        <SectionCard className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Moon className="w-5 h-5 text-muted-foreground shrink-0" />
             <div className="min-w-0">
@@ -145,10 +146,10 @@ const SettingsPage = () => {
             onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
             aria-label={t("settings.darkMode")}
           />
-        </div>
+        </SectionCard>
 
         {push.supported && (
-          <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">
+          <SectionCard className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <Bell className="w-5 h-5 text-muted-foreground shrink-0" />
               <div className="min-w-0">
@@ -157,13 +158,13 @@ const SettingsPage = () => {
               </div>
             </div>
             <Switch checked={push.enabled} onCheckedChange={push.toggle} disabled={push.busy} aria-label={t("settings.notifications")} />
-          </div>
+          </SectionCard>
         )}
 
         {/* Personal color override — local to this device only (localStorage, see
             ClubBrandingContext), never written anywhere shared. Everyone gets this, not just
             admins: only the 3 accent hues are personal, name/logo/tagline stay admin-only below. */}
-        <div className="bg-card border border-border rounded-xl p-4">
+        <SectionCard>
           <div className="flex items-center gap-3 mb-3">
             <Palette className="w-5 h-5 text-muted-foreground shrink-0" />
             <div className="min-w-0">
@@ -213,10 +214,10 @@ const SettingsPage = () => {
               );
             })}
           </div>
-        </div>
+        </SectionCard>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-4">
+      <SectionCard>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
             <FileText className="w-4 h-4" /> {t("settings.impressum")}
@@ -270,7 +271,7 @@ const SettingsPage = () => {
             <p><strong className="text-foreground">{t("settings.impressumRegister")}</strong><br />{impressum.register_info || t("settings.impressumRegisterPlaceholder")}</p>
           </div>
         )}
-      </div>
+      </SectionCard>
       </>
       )}
     </div>
