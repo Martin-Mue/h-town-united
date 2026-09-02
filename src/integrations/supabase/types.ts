@@ -496,13 +496,13 @@ export type Database = {
           created_at: string
           game_id: string | null
           id: string
-          leg: string
           league_id: string
+          leg: string
+          played_at: string | null
           player1_id: string
           player1_legs_won: number | null
           player2_id: string
           player2_legs_won: number | null
-          played_at: string | null
           round_number: number
           status: string
           winner_id: string | null
@@ -512,13 +512,13 @@ export type Database = {
           created_at?: string
           game_id?: string | null
           id?: string
-          leg?: string
           league_id: string
+          leg?: string
+          played_at?: string | null
           player1_id: string
           player1_legs_won?: number | null
           player2_id: string
           player2_legs_won?: number | null
-          played_at?: string | null
           round_number: number
           status?: string
           winner_id?: string | null
@@ -528,13 +528,13 @@ export type Database = {
           created_at?: string
           game_id?: string | null
           id?: string
-          leg?: string
           league_id?: string
+          leg?: string
+          played_at?: string | null
           player1_id?: string
           player1_legs_won?: number | null
           player2_id?: string
           player2_legs_won?: number | null
-          played_at?: string | null
           round_number?: number
           status?: string
           winner_id?: string | null
@@ -593,13 +593,13 @@ export type Database = {
       }
       leagues: {
         Row: {
+          best_of_legs: number
           club_id: string
           created_at: string
           created_by: string
           format: string
           game_mode: string
           id: string
-          best_of_legs: number
           name: string
           participant_ids: string[]
           result_mode: string
@@ -607,13 +607,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          best_of_legs?: number
           club_id?: string
           created_at?: string
           created_by?: string
           format?: string
           game_mode?: string
           id?: string
-          best_of_legs?: number
           name: string
           participant_ids?: string[]
           result_mode?: string
@@ -621,13 +621,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          best_of_legs?: number
           club_id?: string
           created_at?: string
           created_by?: string
           format?: string
           game_mode?: string
           id?: string
-          best_of_legs?: number
           name?: string
           participant_ids?: string[]
           result_mode?: string
