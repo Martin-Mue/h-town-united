@@ -24,6 +24,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Admin = lazy(() => import("./pages/Admin"));
 const TournamentSeries = lazy(() => import("./pages/TournamentSeries"));
+const League = lazy(() => import("./pages/League"));
 const PublicTournament = lazy(() => import("./pages/PublicTournament"));
 const Settings = lazy(() => import("./pages/Settings"));
 const CreateClub = lazy(() => import("./pages/CreateClub"));
@@ -96,6 +97,8 @@ const App = () => (
                           <Route path="/tournament/:id" element={<Tournament />} />
                           <Route path="/tournaments/series" element={<TournamentSeries />} />
                           <Route path="/tournaments/series/:id" element={<TournamentSeries />} />
+                          <Route path="/leagues" element={<League />} />
+                          <Route path="/leagues/:id" element={<League />} />
                           <Route path="/training" element={<Training />} />
                           <Route path="/statistics" element={<Statistics />} />
                           <Route path="/admin" element={<Admin />} />

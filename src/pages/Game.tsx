@@ -462,6 +462,16 @@ const GamePage = () => {
   const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(() =>
     initialSnapshot?.tournamentLink ? (initialSnapshot.tournamentLink.tournamentName || "Turnier") : null
   );
+  /** Set once on mount when this game was launched from a league fixture ("Spiel starten" on
+   *  /leagues/:id) — used to write the result back into league_fixtures on finish. Deliberately
+   *  NOT restored from the crash-recovery snapshot and NOT queued for offline retry the way the
+   *  tournament link above is: a league fixture is lower-stakes casual scheduling, not a live
+   *  broadcasted event, so a reload/offline mid-game losing just the fixture linkage (the game
+   *  itself still always saves safely either way) is an acceptable trade for not doubling this
+   *  file's already-large tournament-link surface. A missed write-back is fixable by hand on the
+   *  league page afterward.
+   */
+  const leagueLinkRef = useRef<{ leagueId: string; fixtureId: string; player1Id: string; player2Id: string } | null>(null);
   /** Whether the CheckoutSuggestion card shows during play. Defaults off for a tournament match
    *  (competitive play shouldn't hint the route) and on otherwise, but stays freely toggleable
    *  either way — this is a default, not a lock, unlike the fields the bracket actually fixes.
@@ -634,6 +644,38 @@ const GamePage = () => {
     if (Number.isFinite(qBestOf) && qBestOf > 0) setBestOfLegs(qBestOf);
     // Only ever read once, right after mount — re-running on every searchParams identity
     // change would clobber the scorekeeper's own edits to the setup form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Prefill from "Spiel starten" on a league fixture — same query-string launch pattern as the
+   *  tournament effect above (p1/p2/mode/bestOf), kept as its own separate effect rather than
+   *  folded into that one so the tournament path is untouched by this addition. */
+  useEffect(() => {
+    const lid = searchParams.get("lid");
+    const fid = searchParams.get("fid");
+    const p1id = searchParams.get("p1id");
+    const p2id = searchParams.get("p2id");
+    if (!lid || !fid || !p1id || !p2id) return;
+    leagueLinkRef.current = { leagueId: lid, fixtureId: fid, player1Id: p1id, player2Id: p2id };
+
+    const p1 = searchParams.get("p1");
+    const p2 = searchParams.get("p2");
+    if (p1 || p2) {
+      setPlayerNames((prev) => {
+        const next = [...prev];
+        if (p1) next[0] = p1;
+        if (p2) next[1] = p2;
+        return next;
+      });
+    }
+    setTeamMode(false);
+    setNumPlayers(2);
+
+    const qMode = searchParams.get("mode");
+    if (qMode === "501" || qMode === "301" || qMode === "cricket") setMode(qMode);
+
+    const qBestOf = parseInt(searchParams.get("bestOf") || "", 10);
+    if (Number.isFinite(qBestOf) && qBestOf > 0) setBestOfLegs(qBestOf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1902,6 +1944,25 @@ const GamePage = () => {
           });
         }
       }
+      const leagueLink = leagueLinkRef.current;
+      if (leagueLink) {
+        const p1Legs = game.legsWon[0];
+        const p2Legs = game.legsWon[1];
+        try {
+          await supabase.from("league_fixtures").update({
+            status: "finished",
+            winner_id: p1Legs > p2Legs ? leagueLink.player1Id : leagueLink.player2Id,
+            player1_legs_won: p1Legs,
+            player2_legs_won: p2Legs,
+            game_id: pendingGameIdRef.current,
+            played_at: new Date().toISOString(),
+          }).eq("id", leagueLink.fixtureId).eq("status", "pending");
+        } catch (syncErr) {
+          // Best-effort, see leagueLinkRef's doc comment — the game itself is already safely
+          // saved above regardless; only this write-back can be fixed up by hand afterward.
+          console.error("league fixture write-back failed", syncErr);
+        }
+      }
     } catch (err) {
       // No connection (or a mid-request drop) — the result is far too valuable to lose, so
       // it's queued in IndexedDB and replayed automatically once the app is back online
@@ -2987,6 +3048,10 @@ const GamePage = () => {
                   className="flex-1 font-display uppercase"
                 >
                   {t("game.backToTournament")}
+                </Button>
+              ) : leagueLinkRef.current ? (
+                <Button onClick={() => navigate(`/leagues/${leagueLinkRef.current!.leagueId}`)} className="flex-1 font-display uppercase">
+                  {t("game.backToLeague")}
                 </Button>
               ) : (
                 <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">{t("home.newGame")}</Button>

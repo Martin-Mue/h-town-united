@@ -273,6 +273,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.triplesLabel": { de: "Triples", en: "Triples", fr: "Triples", pl: "Triple", nl: "Triples", tr: "Tripleler" },
   "game.share": { de: "Teilen", en: "Share", fr: "Partager", pl: "Udostępnij", nl: "Delen", tr: "Paylaş" },
   "game.backToTournament": { de: "Zurück zum Turnier", en: "Back to tournament", fr: "Retour au tournoi", pl: "Powrót do turnieju", nl: "Terug naar toernooi", tr: "Turnuvaya dön" },
+  "game.backToLeague": { de: "Zurück zur Liga", en: "Back to league", fr: "Retour à la ligue", pl: "Powrót do ligi", nl: "Terug naar competitie", tr: "Lige dön" },
   "game.gameSaved": { de: "✓ Spiel gespeichert", en: "✓ Game saved", fr: "✓ Partie enregistrée", pl: "✓ Gra zapisana", nl: "✓ Potje opgeslagen", tr: "✓ Oyun kaydedildi" },
   "game.savedOffline": { de: "⏳ Offline gespeichert — wird synchronisiert, sobald wieder Netz da ist", en: "⏳ Saved offline — will sync once back online", fr: "⏳ Enregistré hors ligne — se synchronisera dès le retour du réseau", pl: "⏳ Zapisano offline — zsynchronizuje się po powrocie sieci", nl: "⏳ Offline opgeslagen — synchroniseert zodra er weer netwerk is", tr: "⏳ Çevrimdışı kaydedildi — bağlantı geri gelince senkronize edilecek" },
 
@@ -624,6 +625,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "tournament.deleteTournamentWarning": { de: "wird unwiderruflich gelöscht, inklusive Turnierbaum und Ergebnissen.", en: "will be permanently deleted, including the bracket and results.", fr: "sera définitivement supprimé, tableau et résultats inclus.", pl: "zostanie trwale usunięty, wraz z drabinką i wynikami.", nl: "wordt permanent verwijderd, inclusief schema en resultaten.", tr: "kalıcı olarak silinecek, turnuva tablosu ve sonuçlar dahil." },
   "tournament.tournaments": { de: "Turniere", en: "Tournaments", fr: "Tournois", pl: "Turnieje", nl: "Toernooien", tr: "Turnuvalar" },
   "tournament.series": { de: "Serien", en: "Series", fr: "Séries", pl: "Serie", nl: "Reeksen", tr: "Seriler" },
+  "tournament.leagueMode": { de: "Liga", en: "League", fr: "Ligue", pl: "Liga", nl: "Competitie", tr: "Lig" },
   "tournament.newTournament": { de: "Neues Turnier", en: "New tournament", fr: "Nouveau tournoi", pl: "Nowy turniej", nl: "Nieuw toernooi", tr: "Yeni turnuva" },
   "tournament.noTournamentsYet": { de: "Noch keine Turniere. Erstelle dein erstes!", en: "No tournaments yet. Create your first one!", fr: "Pas encore de tournois. Crée le premier !", pl: "Jeszcze żadnych turniejów. Stwórz swój pierwszy!", nl: "Nog geen toernooien. Maak je eerste aan!", tr: "Henüz turnuva yok. İlkini oluştur!" },
   "tournament.tabActive": { de: "Aktiv", en: "Active", fr: "Actifs", pl: "Aktywne", nl: "Actief", tr: "Aktif" },

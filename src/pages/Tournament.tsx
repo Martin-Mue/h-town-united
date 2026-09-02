@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, UserPlus, Monitor, QrCode, RefreshCcw, Target, Smartphone } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, UserPlus, Monitor, QrCode, RefreshCcw, Target, Smartphone, Swords } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
@@ -1756,6 +1756,9 @@ const TournamentPage = () => {
           <div className="flex items-center gap-2">
             <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
               <Layers className="w-3.5 h-3.5" /> {t("tournament.series")}
+            </Link>
+            <Link to="/leagues" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
+              <Swords className="w-3.5 h-3.5" /> {t("tournament.leagueMode")}
             </Link>
             <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
               <Plus className="w-4 h-4" /> {t("tournament.newTournament")}

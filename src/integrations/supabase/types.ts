@@ -490,6 +490,167 @@ export type Database = {
           },
         ]
       }
+      league_fixtures: {
+        Row: {
+          club_id: string
+          created_at: string
+          game_id: string | null
+          id: string
+          leg: string
+          league_id: string
+          player1_id: string
+          player1_legs_won: number | null
+          player2_id: string
+          player2_legs_won: number | null
+          played_at: string | null
+          round_number: number
+          status: string
+          winner_id: string | null
+        }
+        Insert: {
+          club_id?: string
+          created_at?: string
+          game_id?: string | null
+          id?: string
+          leg?: string
+          league_id: string
+          player1_id: string
+          player1_legs_won?: number | null
+          player2_id: string
+          player2_legs_won?: number | null
+          played_at?: string | null
+          round_number: number
+          status?: string
+          winner_id?: string | null
+        }
+        Update: {
+          club_id?: string
+          created_at?: string
+          game_id?: string | null
+          id?: string
+          leg?: string
+          league_id?: string
+          player1_id?: string
+          player1_legs_won?: number | null
+          player2_id?: string
+          player2_legs_won?: number | null
+          played_at?: string | null
+          round_number?: number
+          status?: string
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_fixtures_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_fixtures_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_fixtures_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_fixtures_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_fixtures_player1_id_fkey"
+            columns: ["player1_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_fixtures_player2_id_fkey"
+            columns: ["player2_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_fixtures_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leagues: {
+        Row: {
+          club_id: string
+          created_at: string
+          created_by: string
+          format: string
+          game_mode: string
+          id: string
+          best_of_legs: number
+          name: string
+          participant_ids: string[]
+          result_mode: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          club_id?: string
+          created_at?: string
+          created_by?: string
+          format?: string
+          game_mode?: string
+          id?: string
+          best_of_legs?: number
+          name: string
+          participant_ids?: string[]
+          result_mode?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          club_id?: string
+          created_at?: string
+          created_by?: string
+          format?: string
+          game_mode?: string
+          id?: string
+          best_of_legs?: number
+          name?: string
+          participant_ids?: string[]
+          result_mode?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leagues_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leagues_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       manual_180_entries: {
         Row: {
           club_id: string | null
