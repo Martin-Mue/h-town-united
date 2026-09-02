@@ -33,6 +33,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
 import { loadActiveGameSnapshot, saveActiveGameSnapshot, clearActiveGameSnapshot } from "@/lib/activeGameSnapshot";
+import { useTournamentLink } from "@/hooks/useTournamentLink";
+import { useLeagueLink } from "@/hooks/useLeagueLink";
 import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
 import {
@@ -355,6 +357,33 @@ const GamePage = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Clearing used to happen here, in its own effect keyed only on isFinished — which fires (and
+  // React runs effects in declaration order, so this ran) BEFORE saveGame's own isFinished effect
+  // even starts its several-awaited-calls-deep save. If a PWA update's location.reload() landed in
+  // that window, the crash-recovery copy was already gone and the pending save was torn down
+  // mid-flight with no trace anywhere — a finished match lost outright. Moved into saveGame()
+  // itself now, cleared only once the game is durably somewhere (Supabase, or the offline queue on
+  // failure) — see the end of that function.
+  /** Whether the CheckoutSuggestion card shows during play. Defaults off for a tournament match
+   *  (competitive play shouldn't hint the route) and on otherwise, but stays freely toggleable
+   *  either way — this is a default, not a lock, unlike the fields the bracket actually fixes.
+   *  Not persisted to localStorage on purpose: a per-preference key would leak a tournament
+   *  override into the next casual game's default (or vice versa) instead of each context
+   *  re-deriving its own sensible default every time. Seeded from initialSnapshot here so a
+   *  crash-recovery resume of a tournament match (which skips "setup" entirely) still gets the
+   *  right default; the fresh-launch path sets it again in the tid/mid prefill effect below. */
+  const [checkoutSuggestionEnabled, setCheckoutSuggestionEnabled] = useState(() => !initialSnapshot?.tournamentLink);
+  const { tournamentLinkRef, tournamentLinkName, setTournamentLinkName } = useTournamentLink({
+    searchParams,
+    initialTournamentLink: initialSnapshot?.tournamentLink ?? null,
+    setPlayerNames,
+    setTeamMode,
+    setNumPlayers,
+    setMode,
+    setBestOfLegs,
+    setCheckoutSuggestionEnabled,
+  });
+  const { leagueLinkRef } = useLeagueLink({ searchParams, setPlayerNames, setTeamMode, setNumPlayers, setMode, setBestOfLegs });
   // Mirror the in-progress game to localStorage on every change — see loadActiveGameSnapshot's
   // doc comment. Cleared once the leg is decided (below) or on an explicit new-game reset
   // (resetGame), since a finished game's durability is the existing save/offline-queue path's
@@ -365,39 +394,10 @@ const GamePage = () => {
     }
     // dartsThisRound/turnStartRemaining included deliberately — without them a snapshot taken
     // mid-visit (after game changed but before either was re-derived) could be saved with stale
-    // values; tournamentLinkRef is a ref so its current value doesn't need to be a dependency.
-  }, [game, phase, dartsThisRound, turnStartRemaining]);
-  // Clearing used to happen here, in its own effect keyed only on isFinished — which fires (and
-  // React runs effects in declaration order, so this ran) BEFORE saveGame's own isFinished effect
-  // even starts its several-awaited-calls-deep save. If a PWA update's location.reload() landed in
-  // that window, the crash-recovery copy was already gone and the pending save was torn down
-  // mid-flight with no trace anywhere — a finished match lost outright. Moved into saveGame()
-  // itself now, cleared only once the game is durably somewhere (Supabase, or the offline queue on
-  // failure) — see the end of that function.
-  /** Set once on mount when this game was launched from a tournament bracket match ("Spiel starten") — used to tag the saved game and write the result back into the bracket on finish. Restored from the crash-recovery snapshot too, so a mid-game reload doesn't sever the link (see loadActiveGameSnapshot's doc comment). */
-  const tournamentLinkRef = useRef<{ tournamentId: string; matchId: string; tournamentName?: string; board?: number } | null>(initialSnapshot?.tournamentLink ?? null);
-  const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(() =>
-    initialSnapshot?.tournamentLink ? (initialSnapshot.tournamentLink.tournamentName || "Turnier") : null
-  );
-  /** Set once on mount when this game was launched from a league fixture ("Spiel starten" on
-   *  /leagues/:id) — used to write the result back into league_fixtures on finish. Deliberately
-   *  NOT restored from the crash-recovery snapshot and NOT queued for offline retry the way the
-   *  tournament link above is: a league fixture is lower-stakes casual scheduling, not a live
-   *  broadcasted event, so a reload/offline mid-game losing just the fixture linkage (the game
-   *  itself still always saves safely either way) is an acceptable trade for not doubling this
-   *  file's already-large tournament-link surface. A missed write-back is fixable by hand on the
-   *  league page afterward.
-   */
-  const leagueLinkRef = useRef<{ leagueId: string; fixtureId: string; player1Id: string; player2Id: string } | null>(null);
-  /** Whether the CheckoutSuggestion card shows during play. Defaults off for a tournament match
-   *  (competitive play shouldn't hint the route) and on otherwise, but stays freely toggleable
-   *  either way — this is a default, not a lock, unlike the fields the bracket actually fixes.
-   *  Not persisted to localStorage on purpose: a per-preference key would leak a tournament
-   *  override into the next casual game's default (or vice versa) instead of each context
-   *  re-deriving its own sensible default every time. Seeded from initialSnapshot here so a
-   *  crash-recovery resume of a tournament match (which skips "setup" entirely) still gets the
-   *  right default; the fresh-launch path sets it again in the tid/mid prefill effect below. */
-  const [checkoutSuggestionEnabled, setCheckoutSuggestionEnabled] = useState(() => !initialSnapshot?.tournamentLink);
+    // values. tournamentLinkRef's own identity never changes (a ref, now returned from
+    // useTournamentLink instead of a bare useRef() call, but still just a ref) — listed only to
+    // satisfy the lint rule, which can no longer see that stability across the hook boundary.
+  }, [game, phase, dartsThisRound, turnStartRemaining, tournamentLinkRef]);
   // Board-mode auto-start: a board-linked match counts down to starting itself instead of
   // waiting for a tap on "Spiel starten" — "Bearbeiten" (below) cancels it for the rare case
   // something (handicap, warmup, ...) needs adjusting first. Not persisted in the crash-recovery
@@ -516,86 +516,6 @@ const GamePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, dbPlayers]);
 
-  // Prefill from "Spiel starten" on a tournament bracket match — reads the launch query
-  // string once on mount. Everything it sets stays a normal, editable setup value; only
-  // the tournament/match id link (kept in a ref, never rendered as form state) is fixed.
-  useEffect(() => {
-    const tid = searchParams.get("tid");
-    const mid = searchParams.get("mid");
-    if (!tid || !mid) return;
-    const tname = searchParams.get("tname") || undefined;
-    // Routes "Zurück zum Turnier" straight back to a board's next-match view instead of the flat
-    // bracket, closing the loop board-mode exists for — set either from an explicit board-mode
-    // "Los geht's" tap (Tournament.tsx's startFromBoard appends ?board=N), OR, when this match was
-    // reached some other way (a QR-code scan, a manual bracket tap), falling back to whichever
-    // board THIS device last bound to for THIS tournament — the whole point of board-mode is that
-    // one device only ever plays one board, so any match for that tournament on this device almost
-    // certainly belongs there too, not just the ones launched through the board-mode button itself.
-    const boardParam = parseInt(searchParams.get("board") || "", 10);
-    let board = Number.isFinite(boardParam) && boardParam > 0 ? boardParam : undefined;
-    if (board === undefined && typeof window !== "undefined") {
-      const savedBoard = parseInt(window.localStorage.getItem(`dart-tournament-board-${tid}`) || "", 10);
-      if (Number.isFinite(savedBoard) && savedBoard > 0) board = savedBoard;
-    }
-    tournamentLinkRef.current = { tournamentId: tid, matchId: mid, tournamentName: tname, board };
-    setTournamentLinkName(tname || "Turnier");
-    setCheckoutSuggestionEnabled(false);
-
-    const p1 = searchParams.get("p1");
-    const p2 = searchParams.get("p2");
-    if (p1 || p2) {
-      setPlayerNames((prev) => {
-        const next = [...prev];
-        if (p1) next[0] = p1;
-        if (p2) next[1] = p2;
-        return next;
-      });
-    }
-    setTeamMode(false);
-    setNumPlayers(2);
-
-    const qMode = searchParams.get("mode");
-    if (qMode === "501" || qMode === "301" || qMode === "cricket") setMode(qMode);
-
-    const qBestOf = parseInt(searchParams.get("bestOf") || "", 10);
-    if (Number.isFinite(qBestOf) && qBestOf > 0) setBestOfLegs(qBestOf);
-    // Only ever read once, right after mount — re-running on every searchParams identity
-    // change would clobber the scorekeeper's own edits to the setup form.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /** Prefill from "Spiel starten" on a league fixture — same query-string launch pattern as the
-   *  tournament effect above (p1/p2/mode/bestOf), kept as its own separate effect rather than
-   *  folded into that one so the tournament path is untouched by this addition. */
-  useEffect(() => {
-    const lid = searchParams.get("lid");
-    const fid = searchParams.get("fid");
-    const p1id = searchParams.get("p1id");
-    const p2id = searchParams.get("p2id");
-    if (!lid || !fid || !p1id || !p2id) return;
-    leagueLinkRef.current = { leagueId: lid, fixtureId: fid, player1Id: p1id, player2Id: p2id };
-
-    const p1 = searchParams.get("p1");
-    const p2 = searchParams.get("p2");
-    if (p1 || p2) {
-      setPlayerNames((prev) => {
-        const next = [...prev];
-        if (p1) next[0] = p1;
-        if (p2) next[1] = p2;
-        return next;
-      });
-    }
-    setTeamMode(false);
-    setNumPlayers(2);
-
-    const qMode = searchParams.get("mode");
-    if (qMode === "501" || qMode === "301" || qMode === "cricket") setMode(qMode);
-
-    const qBestOf = parseInt(searchParams.get("bestOf") || "", 10);
-    if (Number.isFinite(qBestOf) && qBestOf > 0) setBestOfLegs(qBestOf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Board-mode start gate: resolves whether THIS match may actually auto-start, mirroring
   // Tournament.tsx's canStartLiveGame (live_play_enabled + per-round "Extern") plus the same
   // isLiveSnapshotFresh collision check the manual "Spiel starten" button already guards with —
@@ -631,7 +551,9 @@ const GamePage = () => {
       setBoardStartGate("clear");
     })();
     return () => { cancelled = true; };
-  }, [tournamentLinkName]);
+    // tournamentLinkRef's identity never changes (see the snapshot-mirroring effect above for why
+    // it's listed at all despite that).
+  }, [tournamentLinkName, tournamentLinkRef]);
 
   // Pushes a lightweight "score right now" snapshot to the tournament's public live view while
   // a tournament-linked match is being played — debounced so it fires a couple seconds after
@@ -1921,7 +1843,9 @@ const GamePage = () => {
     clearActiveGameSnapshot();
     setGameSaved(true);
     savingRef.current = false;
-  }, [game, gameSaved, session, clubId, toast, t]);
+    // tournamentLinkRef/leagueLinkRef identities never change (see the snapshot-mirroring
+    // effect's comment above for why they're listed at all despite that).
+  }, [game, gameSaved, session, clubId, toast, t, tournamentLinkRef, leagueLinkRef]);
 
   useEffect(() => {
     if (game?.isFinished && !gameSaved && session?.user?.id) saveGame();
