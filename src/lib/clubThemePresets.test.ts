@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveClubTheme } from "./clubThemePresets";
+import { resolveClubTheme, CLUB_THEME_PRESETS } from "./clubThemePresets";
 
 describe("resolveClubTheme", () => {
   it("reproduces today's index.css light-mode values for the default preset", () => {
@@ -31,5 +31,29 @@ describe("resolveClubTheme", () => {
     const ids = ["default", "ozeanblau", "violett", "bordeaux"];
     const primaries = ids.map((id) => resolveClubTheme(id, "dark")["--primary"]);
     expect(new Set(primaries).size).toBe(ids.length);
+  });
+
+  it("gives every registered preset a distinct primary hue, including the newer ones", () => {
+    const primaries = CLUB_THEME_PRESETS.map((p) => resolveClubTheme(p.id, "dark")["--primary"]);
+    expect(new Set(primaries).size).toBe(CLUB_THEME_PRESETS.length);
+  });
+
+  it("keeps every preset's dark-mode primary/accent lightness readable against near-black text", () => {
+    // --primary-foreground/--accent-foreground are near-black in dark mode (index.css) --
+    // a preset with a too-dark primary/accent there would be genuinely hard to read, not just a
+    // stylistic choice, so this is a real floor and not an arbitrary number.
+    for (const preset of CLUB_THEME_PRESETS) {
+      expect(preset.roles.primary.dark.l).toBeGreaterThanOrEqual(45);
+      expect(preset.roles.accent.dark.l).toBeGreaterThanOrEqual(45);
+    }
+  });
+
+  it("resolves every registered preset for both modes without throwing or falling back", () => {
+    for (const preset of CLUB_THEME_PRESETS) {
+      const dark = resolveClubTheme(preset.id, "dark");
+      const light = resolveClubTheme(preset.id, "light");
+      expect(dark["--primary"]).toBeTruthy();
+      expect(light["--primary"]).toBeTruthy();
+    }
   });
 });

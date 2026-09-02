@@ -1,58 +1,109 @@
+interface RoleTone {
+  light: { h: number; s: number; l: number };
+  dark: { h: number; s: number; l: number };
+}
+
 export interface ClubThemePreset {
   id: string;
   label: string;
-  hues: {
-    primary: { light: number; dark: number };
-    secondary: { light: number; dark: number };
-    accent: { light: number; dark: number };
+  roles: {
+    primary: RoleTone;
+    secondary: RoleTone;
+    accent: RoleTone;
   };
 }
 
-// Saturation/lightness are locked per role across every preset -- only hue rotates. These are
-// today's exact shipping values from index.css, which is what keeps the existing white/near-black
-// --*-foreground contrast correct for every preset with zero extra work (the provider never
-// touches --*-foreground).
-const ROLE_TONE = {
-  primary: { sLight: 85, lLight: 38, sDark: 85, lDark: 48 },
-  secondary: { sLight: 65, lLight: 34, sDark: 65, lDark: 42 },
-  accent: { sLight: 95, lLight: 45, sDark: 100, lDark: 58 },
-} as const;
+// Unlike the first 4 presets (which share one saturation/lightness "shape" and only rotate hue --
+// see the git history of this file), saturation and lightness are now per-preset too, so a preset
+// can have its own personality (muted/earthy, neon, near-monochrome, ...) instead of just being a
+// different-colored copy of the same look. Every (light, dark) pair still respects the two fixed
+// contrast constraints from index.css that resolveClubTheme's output feeds: dark-mode text on
+// primary/accent is near-black (--primary-foreground/--accent-foreground), so their dark lightness
+// must stay bright (~45%+); secondary's text is white in both modes, so it stays moderate-to-dark
+// in both. Ignoring those bands would produce a technically-valid but hard-to-read preset.
+const role = (hLight: number, sLight: number, lLight: number, hDark: number, sDark: number, lDark: number): RoleTone => ({
+  light: { h: hLight, s: sLight, l: lLight },
+  dark: { h: hDark, s: sDark, l: lDark },
+});
 
 export const CLUB_THEME_PRESETS: ClubThemePreset[] = [
   {
     id: "default",
     label: "Cyan & Gold",
-    hues: {
-      primary: { light: 185, dark: 185 },
-      secondary: { light: 155, dark: 155 },
-      accent: { light: 42, dark: 45 },
+    roles: {
+      primary: role(185, 85, 38, 185, 85, 48),
+      secondary: role(155, 65, 34, 155, 65, 42),
+      accent: role(42, 95, 45, 45, 100, 58),
     },
   },
   {
     id: "ozeanblau",
     label: "Ozeanblau & Bernstein",
-    hues: {
-      primary: { light: 208, dark: 208 },
-      secondary: { light: 178, dark: 178 },
-      accent: { light: 65, dark: 65 },
+    roles: {
+      primary: role(208, 85, 38, 208, 85, 48),
+      secondary: role(178, 65, 34, 178, 65, 42),
+      accent: role(65, 95, 45, 65, 100, 58),
     },
   },
   {
     id: "violett",
     label: "Violett & Lindgrün",
-    hues: {
-      primary: { light: 270, dark: 270 },
-      secondary: { light: 240, dark: 240 },
-      accent: { light: 127, dark: 127 },
+    roles: {
+      primary: role(270, 85, 38, 270, 85, 48),
+      secondary: role(240, 65, 34, 240, 65, 42),
+      accent: role(127, 95, 45, 127, 100, 58),
     },
   },
   {
     id: "bordeaux",
     label: "Bordeaux & Himmelblau",
-    hues: {
-      primary: { light: 335, dark: 335 },
-      secondary: { light: 305, dark: 305 },
-      accent: { light: 192, dark: 192 },
+    roles: {
+      primary: role(335, 85, 38, 335, 85, 48),
+      secondary: role(305, 65, 34, 305, 65, 42),
+      accent: role(192, 95, 45, 192, 100, 58),
+    },
+  },
+  {
+    // High-saturation, high-energy — an esports/arena feel rather than a club-crest feel.
+    id: "neon-arena",
+    label: "Neon-Arena",
+    roles: {
+      primary: role(320, 90, 42, 320, 90, 55),
+      secondary: role(195, 85, 38, 195, 85, 46),
+      accent: role(75, 90, 42, 75, 95, 55),
+    },
+  },
+  {
+    // Lower saturation across all three roles instead of just a different hue — a genuinely
+    // quieter, earthier register next to the vibrant presets above.
+    id: "waldmeister",
+    label: "Waldmeister",
+    roles: {
+      primary: role(142, 45, 32, 142, 48, 46),
+      secondary: role(32, 40, 32, 32, 42, 40),
+      accent: role(95, 55, 38, 95, 60, 50),
+    },
+  },
+  {
+    // Deep jewel tones — moderate saturation held at a lower lightness than the others for a
+    // moodier, more premium feel rather than the bright-arena default.
+    id: "mitternacht",
+    label: "Mitternacht",
+    roles: {
+      primary: role(235, 70, 40, 235, 75, 52),
+      secondary: role(265, 55, 34, 265, 55, 40),
+      accent: role(340, 75, 42, 340, 80, 55),
+    },
+  },
+  {
+    // Near-neutral graphite base (very low saturation on primary/secondary) with one saturated
+    // accent doing all the color work — structurally different from every hue-trio preset above.
+    id: "monochrom-silber",
+    label: "Monochrom Silber",
+    roles: {
+      primary: role(210, 15, 38, 210, 15, 50),
+      secondary: role(210, 10, 30, 210, 12, 38),
+      accent: role(18, 90, 48, 18, 95, 58),
     },
   },
 ];
@@ -67,30 +118,22 @@ export function resolveClubTheme(presetId: string, mode: "light" | "dark"): Reco
     CLUB_THEME_PRESETS.find((p) => p.id === presetId) ??
     CLUB_THEME_PRESETS.find((p) => p.id === DEFAULT_CLUB_THEME_PRESET_ID)!;
   const isDark = mode === "dark";
-  const { primary: p, secondary: s, accent: a } = ROLE_TONE;
 
-  const primary = tone(
-    isDark ? preset.hues.primary.dark : preset.hues.primary.light,
-    isDark ? p.sDark : p.sLight,
-    isDark ? p.lDark : p.lLight,
-  );
-  const secondary = tone(
-    isDark ? preset.hues.secondary.dark : preset.hues.secondary.light,
-    isDark ? s.sDark : s.sLight,
-    isDark ? s.lDark : s.lLight,
-  );
-  const accent = tone(
-    isDark ? preset.hues.accent.dark : preset.hues.accent.light,
-    isDark ? a.sDark : a.sLight,
-    isDark ? a.lDark : a.lLight,
-  );
+  const pRole = isDark ? preset.roles.primary.dark : preset.roles.primary.light;
+  const sRole = isDark ? preset.roles.secondary.dark : preset.roles.secondary.light;
+  const aRole = isDark ? preset.roles.accent.dark : preset.roles.accent.light;
+
+  const primary = tone(pRole.h, pRole.s, pRole.l);
+  const secondary = tone(sRole.h, sRole.s, sRole.l);
+  const accent = tone(aRole.h, aRole.s, aRole.l);
 
   // --gradient-hero always uses dark-mode-brightness hues for its wash, in both light and dark
   // mode -- mirrors the fact that today's light-mode --gradient-hero in index.css already
   // hardcodes the dark-mode literal verbatim.
-  const heroPrimary = tone(preset.hues.primary.dark, p.sDark, p.lDark);
-  const heroSecondary = tone(preset.hues.secondary.dark, s.sDark, s.lDark);
-  const heroAccent = tone(preset.hues.accent.dark, a.sDark, a.lDark);
+  const heroD = preset.roles;
+  const heroPrimary = tone(heroD.primary.dark.h, heroD.primary.dark.s, heroD.primary.dark.l);
+  const heroSecondary = tone(heroD.secondary.dark.h, heroD.secondary.dark.s, heroD.secondary.dark.l);
+  const heroAccent = tone(heroD.accent.dark.h, heroD.accent.dark.s, heroD.accent.dark.l);
 
   return {
     "--primary": primary,

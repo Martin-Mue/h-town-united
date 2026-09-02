@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminStats from "@/components/admin/AdminStats";
 import AdminTournamentForecast from "@/components/admin/AdminTournamentForecast";
 import AdminInvites from "@/components/admin/AdminInvites";
+import AdminClubBranding from "@/components/admin/AdminClubBranding";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 
@@ -123,6 +124,7 @@ const AdminPage = () => {
         <TabsList className="mb-4">
           <TabsTrigger value="members">Mitglieder</TabsTrigger>
           <TabsTrigger value="invites">Einladungen</TabsTrigger>
+          <TabsTrigger value="branding">Design</TabsTrigger>
           <TabsTrigger value="stats">Statistiken</TabsTrigger>
           <TabsTrigger value="forecast">Turnier-Prognose</TabsTrigger>
         </TabsList>
@@ -246,6 +248,10 @@ const AdminPage = () => {
 
         <TabsContent value="invites">
           <AdminInvites />
+        </TabsContent>
+
+        <TabsContent value="branding">
+          <AdminClubBranding />
         </TabsContent>
 
         <TabsContent value="stats">
