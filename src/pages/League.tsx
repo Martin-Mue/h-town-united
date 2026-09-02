@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { Trophy, Plus, ArrowLeft, Play, Pencil, Check, Loader2, Users, Swords } from "lucide-react";
+import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Loader2, Users, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
@@ -68,6 +72,7 @@ const LeaguePage = () => {
   const [bestOfLegs, setBestOfLegs] = useState(3);
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
   const [savingLeague, setSavingLeague] = useState(false);
+  const [editingLeagueId, setEditingLeagueId] = useState<string | null>(null);
 
   const [manualEntryFixture, setManualEntryFixture] = useState<FixtureRow | null>(null);
   const [manualP1Legs, setManualP1Legs] = useState("");
@@ -128,7 +133,7 @@ const LeaguePage = () => {
 
   const resetForm = () => {
     setName(""); setFormat("single"); setResultMode("live"); setGameMode("501"); setBestOfLegs(3);
-    setSelectedParticipants(new Set()); setCreating(false);
+    setSelectedParticipants(new Set()); setCreating(false); setEditingLeagueId(null);
   };
 
   const toggleParticipant = (pid: string) => setSelectedParticipants((prev) => {
@@ -136,6 +141,39 @@ const LeaguePage = () => {
     if (next.has(pid)) next.delete(pid); else next.add(pid);
     return next;
   });
+
+  const startEditLeague = (l: LeagueRow) => {
+    setName(l.name);
+    setFormat(l.format);
+    setResultMode(l.result_mode);
+    setGameMode(l.game_mode);
+    setBestOfLegs(l.best_of_legs);
+    setSelectedParticipants(new Set(l.participant_ids));
+    setEditingLeagueId(l.id);
+    setCreating(true);
+  };
+
+  // Renaming/changing result mode or game settings is always safe post-creation; format and
+  // participants are NOT editable here since the fixture list is already generated from them —
+  // changing either would desync the schedule from what's actually being played. The edit form
+  // hides those two fields and explains why rather than silently ignoring a change to them.
+  const saveLeagueEdit = async () => {
+    if (!editingLeagueId || !name.trim() || savingLeague) return;
+    setSavingLeague(true);
+    try {
+      const { error } = await supabase.from("leagues").update({
+        name: name.trim(), result_mode: resultMode, game_mode: gameMode, best_of_legs: bestOfLegs,
+      }).eq("id", editingLeagueId);
+      if (error) throw error;
+      toast({ title: "Liga aktualisiert" });
+      resetForm();
+      await fetchAll();
+    } catch (err: unknown) {
+      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Änderungen konnten nicht gespeichert werden.", variant: "destructive" });
+    } finally {
+      setSavingLeague(false);
+    }
+  };
 
   const createLeague = async () => {
     if (!name.trim() || selectedParticipants.size < 2 || !session?.user?.id || savingLeague) return;
@@ -171,6 +209,17 @@ const LeaguePage = () => {
       toast({ title: "Fehler", description: err instanceof Error ? err.message : "Liga konnte nicht erstellt werden.", variant: "destructive" });
     } finally {
       setSavingLeague(false);
+    }
+  };
+
+  const deleteLeague = async (leagueId: string) => {
+    try {
+      const { error } = await supabase.from("leagues").delete().eq("id", leagueId);
+      if (error) throw error;
+      toast({ title: "Liga gelöscht" });
+      await fetchAll();
+    } catch (err: unknown) {
+      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Liga konnte nicht gelöscht werden.", variant: "destructive" });
     }
   };
 
@@ -381,16 +430,18 @@ const LeaguePage = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Format</label>
-              <Select value={format} onValueChange={(v) => setFormat(v as "single" | "double")}>
-                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="single">Einfachrunde</SelectItem>
-                  <SelectItem value="double">Hin- und Rückrunde</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {!editingLeagueId && (
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">Format</label>
+                <Select value={format} onValueChange={(v) => setFormat(v as "single" | "double")}>
+                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    <SelectItem value="single">Einfachrunde</SelectItem>
+                    <SelectItem value="double">Hin- und Rückrunde</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <label className="text-sm text-muted-foreground mb-1 block">Ergebnisse</label>
               <Select value={resultMode} onValueChange={(v) => setResultMode(v as "live" | "manual")}>
@@ -426,21 +477,31 @@ const LeaguePage = () => {
             </div>
           </div>
 
-          <div>
-            <label className="text-sm text-muted-foreground mb-1.5 block">Teilnehmer ({selectedParticipants.size})</label>
-            <div className="space-y-1 max-h-[40vh] overflow-y-auto -mx-1 px-1">
-              {dbPlayers.map((p) => (
-                <label key={p.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 cursor-pointer">
-                  <Checkbox checked={selectedParticipants.has(p.id)} onCheckedChange={() => toggleParticipant(p.id)} />
-                  <span className="text-lg shrink-0">{p.emoji}</span>
-                  <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
-                </label>
-              ))}
+          {editingLeagueId ? (
+            <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-lg p-2.5">
+              Format und Teilnehmer sind nach dem Erstellen nicht mehr änderbar, da der Spielplan bereits danach erzeugt wurde. Für eine andere Zusammensetzung: Liga löschen und neu anlegen.
+            </p>
+          ) : (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1.5 block">Teilnehmer ({selectedParticipants.size})</label>
+              <div className="space-y-1 max-h-[40vh] overflow-y-auto -mx-1 px-1">
+                {dbPlayers.map((p) => (
+                  <label key={p.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 cursor-pointer">
+                    <Checkbox checked={selectedParticipants.has(p.id)} onCheckedChange={() => toggleParticipant(p.id)} />
+                    <span className="text-lg shrink-0">{p.emoji}</span>
+                    <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          <Button onClick={createLeague} className="w-full" disabled={!name.trim() || selectedParticipants.size < 2 || savingLeague}>
-            {savingLeague ? "Speichert…" : "Liga erstellen"}
+          <Button
+            onClick={editingLeagueId ? saveLeagueEdit : createLeague}
+            className="w-full"
+            disabled={!name.trim() || (!editingLeagueId && selectedParticipants.size < 2) || savingLeague}
+          >
+            {savingLeague ? "Speichert…" : editingLeagueId ? "Änderungen speichern" : "Liga erstellen"}
           </Button>
         </SectionCard>
       )}
@@ -455,17 +516,45 @@ const LeaguePage = () => {
       ) : (
         <div className="space-y-3">
           {pagedLeagues.visible.map((l) => (
-            <Link key={l.id} to={`/leagues/${l.id}`} className="block bg-card border border-border rounded-xl p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
-              <div className="w-9 h-9 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
-                <Swords className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{l.name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {l.participant_ids.length} Teilnehmer · {l.format === "double" ? "Hin- und Rückrunde" : "Einfachrunde"} · {l.status === "finished" ? "Beendet" : "Aktiv"}
-                </p>
-              </div>
-            </Link>
+            <div key={l.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
+              <Link to={`/leagues/${l.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
+                  <Swords className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{l.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {l.participant_ids.length} Teilnehmer · {l.format === "double" ? "Hin- und Rückrunde" : "Einfachrunde"} · {l.status === "finished" ? "Beendet" : "Aktiv"}
+                  </p>
+                </div>
+              </Link>
+              {l.created_by === session?.user?.id && (
+                <div className="flex items-center shrink-0">
+                  <Button variant="ghost" size="icon" title="Liga bearbeiten" aria-label="Liga bearbeiten" onClick={() => startEditLeague(l)}>
+                    <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" title="Liga löschen" aria-label="Liga löschen">
+                        <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Liga löschen?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          „{l.name}" wird unwiderruflich gelöscht, inklusive des gesamten Spielplans. Bereits gespielte Partien selbst bleiben in der Statistik erhalten.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteLeague(l.id)}>Löschen</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+            </div>
           ))}
           <ListPaginationFooter list={pagedLeagues} />
         </div>
