@@ -11,6 +11,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +56,7 @@ const DEFAULT_SCORING: Scoring = { champion: 100, runnerUp: 70, semi: 50, quarte
 const TournamentSeriesPage = () => {
   const { id } = useParams();
   const { session } = useAuth();
+  const isAdmin = useIsAdmin(session?.user?.id);
   const { clubId } = useClubBranding();
   const { toast } = useToast();
   const { t, language } = useLanguage();
@@ -259,30 +261,36 @@ const TournamentSeriesPage = () => {
                   <p className="font-semibold text-sm truncate">{s.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{count} {t("series.tournamentsSuffix")} · {new Date(s.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language])}</p>
                 </Link>
-                {s.user_id === session?.user?.id && (
+                {(s.user_id === session?.user?.id || isAdmin) && (
                   <div className="flex items-center">
-                  <Button variant="ghost" size="icon" title={t("series.editSeries")} aria-label={t("series.editSeries")} onClick={() => startEdit(s)}>
-                    <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" title={t("series.deleteSeries")} aria-label={t("series.deleteSeries")}>
-                        <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{t("series.deleteSeriesConfirm")}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          „{s.name}" {t("series.deleteSeriesWarning")}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => deleteSeries(s.id)}>{t("stats.delete")}</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  {s.user_id === session?.user?.id && (
+                    <Button variant="ghost" size="icon" title={t("series.editSeries")} aria-label={t("series.editSeries")} onClick={() => startEdit(s)}>
+                      <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                    </Button>
+                  )}
+                  {/* Deleting a season is admin-only, regardless of who created it — it's shared
+                      club history at that point, not the creator's personal scratch data. */}
+                  {isAdmin && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" title={t("series.deleteSeries")} aria-label={t("series.deleteSeries")}>
+                          <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{t("series.deleteSeriesConfirm")}</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            „{s.name}" {t("series.deleteSeriesWarning")}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => deleteSeries(s.id)}>{t("stats.delete")}</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                   </div>
                 )}
               </div>

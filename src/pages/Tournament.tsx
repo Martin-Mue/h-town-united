@@ -20,6 +20,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
@@ -772,6 +773,7 @@ const TournamentPage = () => {
   const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
 
   const { session } = useAuth();
+  const isAdmin = useIsAdmin(session?.user?.id);
   const { clubId } = useClubBranding();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -783,6 +785,10 @@ const TournamentPage = () => {
    *  tournaments at once), `isOwner` for whichever one is currently open. */
   const isOwnerOf = (t: TournamentRecord) => !!session?.user?.id && t.user_id === session.user.id;
   const isOwner = activeTournament ? isOwnerOf(activeTournament) : false;
+  /** Mirrors the DB policy exactly (20260902210000 migration): the owner can delete their own
+   *  tournament for as long as it's still active/in-setup, but once it's archived (finished) —
+   *  shared club history at that point, not scratch data — only an admin can remove it. */
+  const canDelete = (t: TournamentRecord) => isAdmin || (isOwnerOf(t) && t.status !== "finished");
   /** RESULT/bracket edits (tap winner, +1 leg, reset a match, edit round-1 players, reshuffle
    *  scorekeepers) are a different story: the same trigger above explicitly exempts
    *  bracket/champion/status from the owner lock, specifically so a live game finishing on
@@ -1828,7 +1834,7 @@ const TournamentPage = () => {
                     {t("common.edit")}
                   </Button>
                 )}
-                {isOwnerOf(tourn) && (
+                {canDelete(tourn) && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()} title={t("tournament.deleteTournament")} aria-label={t("tournament.deleteTournament")}>
