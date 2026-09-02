@@ -2041,7 +2041,7 @@ const TournamentPage = () => {
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.quickEntry")}</label>
             <div className="flex gap-2">
-              <Input autoFocus value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder={t("tournament.namePlaceholder")} className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
+              <Input value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder={t("tournament.namePlaceholder")} className="bg-card border-border" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
               <Input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} placeholder={t("tournament.nicknamePlaceholder")} className="bg-card border-border w-44" onKeyDown={(e) => e.key === "Enter" && addPlayer()} />
               <Button onClick={addPlayer} size="icon" variant="outline" title={t("tournament.addPlayer")} aria-label={t("tournament.addPlayer")}><Plus className="w-4 h-4" /></Button>
             </div>

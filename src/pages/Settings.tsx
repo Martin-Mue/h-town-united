@@ -187,7 +187,11 @@ const SettingsPage = () => {
               </span>
               <span className="truncate">{t("settings.myColorClubDefault")}</span>
             </button>
-            {CLUB_THEME_PRESETS.map((preset) => {
+            {/* The preset matching the club's own current theme is skipped here — selecting it
+                explicitly would look and behave identically to "Vereinsfarbe" above, since that
+                option already resolves to exactly this preset. Showing both was a literal
+                duplicate, not just a stylistic one. */}
+            {CLUB_THEME_PRESETS.filter((preset) => preset.id !== (club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID)).map((preset) => {
               const vars = resolveClubTheme(preset.id, resolvedTheme === "light" ? "light" : "dark");
               const selected = personalThemePreset === preset.id;
               return (
