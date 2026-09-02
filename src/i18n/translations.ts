@@ -499,6 +499,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.choosePlayer": { de: "Spieler wählen...", en: "Choose player...", fr: "Choisir un joueur...", pl: "Wybierz gracza...", nl: "Speler kiezen...", tr: "Oyuncu seç..." },
   "stats.yourPersonalStats": { de: "Deine persönliche Statistik", en: "Your personal statistics", fr: "Tes statistiques personnelles", pl: "Twoje statystyki osobiste", nl: "Jouw persoonlijke statistieken", tr: "Kişisel istatistiklerin" },
   "stats.recap": { de: "Rückblick", en: "Recap", fr: "Récap", pl: "Podsumowanie", nl: "Terugblik", tr: "Özet" },
+  "stats.shareCard": { de: "Spielerkarte teilen", en: "Share player card", fr: "Partager la carte joueur", pl: "Udostępnij kartę zawodnika", nl: "Spelerskaart delen", tr: "Oyuncu kartını paylaş" },
   "stats.average": { de: "Ø Average", en: "Ø Average", fr: "Ø Moyenne", pl: "Ø Średnia", nl: "Ø Gemiddelde", tr: "Ø Ortalama" },
   "stats.streak": { de: "Serie", en: "Streak", fr: "Série", pl: "Seria", nl: "Reeks", tr: "Seri" },
   "stats.bestStreak": { de: "Beste Serie", en: "Best streak", fr: "Meilleure série", pl: "Najlepsza seria", nl: "Beste reeks", tr: "En iyi seri" },

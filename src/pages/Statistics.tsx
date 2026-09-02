@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download, FileText, ArrowLeft, Check } from "lucide-react";
+import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,6 +26,7 @@ import {
   type DartThrow, type CheckoutStats, type CricketStats, type ScoreTierCount, type SegmentCounts, type StatBundle,
 } from "@/utils/dartStats";
 import { RankingBarChart, type RankingBarDatum } from "@/components/stats/RankingBarChart";
+import { downloadPlayerCard } from "@/utils/playerCard";
 import { highlightKindLabel } from "@/utils/x01Rules";
 import { generateSeasonReportPdf } from "@/utils/seasonReport";
 import { computeAimBias } from "@/utils/aimBias";
@@ -111,6 +112,7 @@ const StatisticsPage = () => {
   // single-select for the list, since a ranked list can only be sorted one way at a time; the
   // bar view can show several stats side by side, so it needs its own multi-select).
   const [selectedBarStats, setSelectedBarStats] = useState<Set<typeof sortBy>>(new Set());
+  const [sharingCard, setSharingCard] = useState(false);
   const rankingStatKeys: (typeof sortBy)[] = [
     "points", "elo", "average", "games_won", "win_rate", "high_score",
     "checkout", "one_eighties", "highest_checkout", "mpr", "best_game_avg", "fewest_darts",
@@ -602,6 +604,31 @@ const StatisticsPage = () => {
       case "best_game_avg": return (playerBestGameAvgById[p.id] ?? 0).toFixed(1);
       case "fewest_darts": return playerShortestLegById[p.id] ?? "–";
       default: return Math.round(p.elo_rating ?? 1000); // elo
+    }
+  };
+
+  const handleShareCard = async () => {
+    if (!playerDetailStats || sharingCard) return;
+    setSharingCard(true);
+    try {
+      await downloadPlayerCard({
+        clubName,
+        playerName: playerDetailStats.player.name,
+        emoji: playerDetailStats.player.emoji,
+        eloRating: playerDetailStats.player.elo_rating ?? 1000,
+        average: playerDetailStats.average,
+        highScore: playerDetailStats.highScore,
+        // Derived from winRate/totalGames (both already filter-scoped) rather than
+        // player.games_won, which is the lifetime total — keeps the card consistent with every
+        // other number on this view when a season/date filter is active.
+        gamesWon: Math.round((playerDetailStats.winRate / 100) * playerDetailStats.totalGames),
+        gamesPlayed: playerDetailStats.totalGames,
+        oneEightyTotal: player180Total,
+        bestCheckout: advancedByPlayer[playerDetailStats.player.id]?.checkout.highestCheckout ?? 0,
+        unlockedAchievementIcons: playerAchievements.filter((a) => a.unlocked).map((a) => a.icon),
+      });
+    } finally {
+      setSharingCard(false);
     }
   };
 
@@ -1600,6 +1627,9 @@ const StatisticsPage = () => {
                       <Sparkles className="w-3.5 h-3.5" /> {t("stats.recap")}
                     </Button>
                   )}
+                  <Button size="icon" variant="outline" className="shrink-0" onClick={handleShareCard} disabled={sharingCard} title={t("stats.shareCard")} aria-label={t("stats.shareCard")}>
+                    {sharingCard ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+                  </Button>
                 </div>
 
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("stats.average")}</p>
