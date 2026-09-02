@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download, FileText, ArrowLeft } from "lucide-react";
+import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download, FileText, ArrowLeft, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -107,6 +107,14 @@ const StatisticsPage = () => {
   const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo" | "one_eighties" | "highest_checkout" | "mpr" | "best_game_avg" | "fewest_darts">("average");
   const [rankingFocusKey, setRankingFocusKey] = useState<typeof sortBy | null>(null);
   const [rankingViewMode, setRankingViewMode] = useState<"list" | "bar">("list");
+  // Which stats appear in the bar view — independent from sortBy/rankingFocusKey (those stay
+  // single-select for the list, since a ranked list can only be sorted one way at a time; the
+  // bar view can show several stats side by side, so it needs its own multi-select).
+  const [selectedBarStats, setSelectedBarStats] = useState<Set<typeof sortBy>>(new Set());
+  const rankingStatKeys: (typeof sortBy)[] = [
+    "points", "elo", "average", "games_won", "win_rate", "high_score",
+    "checkout", "one_eighties", "highest_checkout", "mpr", "best_game_avg", "fewest_darts",
+  ];
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
@@ -576,9 +584,12 @@ const StatisticsPage = () => {
     }
   };
 
-  const sortValueFor = (p: PlayerStats): string | number => {
+  // `key` defaults to the active sortBy (every pre-existing call site keeps working unchanged)
+  // but can be overridden — the bar view uses this to read several stats' values at once,
+  // independent of whatever sortBy currently drives the list.
+  const sortValueFor = (p: PlayerStats, key: typeof sortBy = sortBy): string | number => {
     const winRate = p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
-    switch (sortBy) {
+    switch (key) {
       case "average": return p.games_played > 0 ? Number(p.average).toFixed(1) : "–";
       case "games_won": return p.games_won;
       case "high_score": return p.high_score;
@@ -1244,25 +1255,48 @@ const StatisticsPage = () => {
               <ArrowLeft className="w-4 h-4" /> {t("stats.backToOverview")}
             </Button>
             <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
-              <Trophy className="w-4 h-4" /> {sortByLabel(rankingFocusKey)}
+              <Trophy className="w-4 h-4" /> {rankingViewMode === "list" ? sortByLabel(rankingFocusKey) : t("stats.leaderboard")}
             </h3>
 
-            {/* Stat picker — the bar chart and list below both react live to this, same sortBy
-                state the condensed leaderboard's <Select> further down also drives. */}
-            <div className="relative -mx-4 px-4 sm:mx-0 sm:px-0 mb-3">
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
-                {([
-                  "points", "elo", "average", "games_won", "win_rate", "high_score",
-                  "checkout", "one_eighties", "highest_checkout", "mpr", "best_game_avg", "fewest_darts",
-                ] as const).map((key) => (
-                  <button key={key} onClick={() => { setSortBy(key); setRankingFocusKey(key); }}
-                    className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${rankingFocusKey === key ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-foreground"}`}>
-                    {sortByLabel(key)}
-                  </button>
-                ))}
+            {rankingViewMode === "list" ? (
+              /* Single-select — drives sortBy, so the list below and its title always agree on
+                 exactly one active stat. */
+              <div className="relative -mx-4 px-4 sm:mx-0 sm:px-0 mb-3">
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  {rankingStatKeys.map((key) => (
+                    <button key={key} onClick={() => { setSortBy(key); setRankingFocusKey(key); }}
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${rankingFocusKey === key ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+                      {sortByLabel(key)}
+                    </button>
+                  ))}
+                </div>
+                <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" />
               </div>
-              <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" />
-            </div>
+            ) : (
+              /* Multi-select — the bar view can show several stats side by side, one stacked bar
+                 each, so this toggles membership in selectedBarStats instead of replacing it. */
+              <div className="relative -mx-4 px-4 sm:mx-0 sm:px-0 mb-3">
+                <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  {rankingStatKeys.map((key) => {
+                    const checked = selectedBarStats.has(key);
+                    return (
+                      <button key={key} onClick={() => setSelectedBarStats((prev) => {
+                          const next = new Set(prev);
+                          if (checked) next.delete(key); else next.add(key);
+                          return next;
+                        })}
+                        className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${checked ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+                        <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 ${checked ? "border-primary-foreground/70 bg-primary-foreground/20" : "border-muted-foreground/50"}`}>
+                          {checked && <Check className="w-2.5 h-2.5" />}
+                        </span>
+                        {sortByLabel(key)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent sm:hidden" />
+              </div>
+            )}
 
             <p className="text-[10px] text-muted-foreground mb-3">
               {filtersActive ? t("stats.valuesForFilteredPeriod") : t("stats.lifetimeValues")}
@@ -1272,7 +1306,7 @@ const StatisticsPage = () => {
                nothing to do with skill) — every other stat on this leaderboard (average,
                checkout %, ...) is fine either way. Point at the mode filter in the bar above
                rather than duplicating a second mode picker down here. */}
-            {rankingFocusKey === "fewest_darts" && (
+            {(rankingViewMode === "list" ? rankingFocusKey === "fewest_darts" : selectedBarStats.has("fewest_darts")) && (
               <p className="text-[10px] text-accent mb-3 flex items-center gap-1">
                 <Filter className="w-3 h-3 shrink-0" />
                 {filterMode !== "all" ? `${t("stats.fewestDartsModeScoped")} ${filterMode}` : t("stats.fewestDartsPickModeHint")}
@@ -1296,15 +1330,26 @@ const StatisticsPage = () => {
             {leaderboard.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">{t("stats.noPlayersYet")}</p>
             ) : rankingViewMode === "bar" ? (
-              <RankingBarChart
-                data={leaderboard.map((p): RankingBarDatum => ({
-                  id: p.id,
-                  name: p.name,
-                  emoji: p.emoji,
-                  value: Number.parseFloat(String(sortValueFor(p))),
-                  displayValue: String(sortValueFor(p)),
-                }))}
-              />
+              selectedBarStats.size === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">{t("stats.pickAtLeastOneStat")}</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {rankingStatKeys.filter((key) => selectedBarStats.has(key)).map((key) => (
+                    <div key={key}>
+                      <p className="text-xs font-semibold text-center mb-3">{sortByLabel(key)}</p>
+                      <RankingBarChart
+                        data={leaderboard.map((p): RankingBarDatum => ({
+                          id: p.id,
+                          name: p.name,
+                          emoji: p.emoji,
+                          value: Number.parseFloat(String(sortValueFor(p, key))),
+                          displayValue: String(sortValueFor(p, key)),
+                        }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )
             ) : (
               <div className="space-y-1">
                 {leaderboard.map((p, i) => (
@@ -1356,7 +1401,7 @@ const StatisticsPage = () => {
               { labelKey: "stats.bestMpr", value: bestMpr.val ? bestMpr.val.toFixed(2) : "-", sub: bestMpr.name, icon: Target, tone: "accent" as const, sortKey: "mpr" as const },
               { labelKey: "stats.fewestDartsToCheckout", value: bestShortestLeg.val || "-", sub: bestShortestLeg.name, icon: Hash, tone: "destructive" as const, sortKey: "fewest_darts" as const },
             ].map(s => (
-              <button key={s.labelKey} onClick={() => { setSortBy(s.sortKey); setRankingFocusKey(s.sortKey); }}
+              <button key={s.labelKey} onClick={() => { setSortBy(s.sortKey); setRankingFocusKey(s.sortKey); setSelectedBarStats(new Set([s.sortKey])); }}
                 className="shrink-0 w-[132px] sm:w-auto bg-card rounded-xl p-3.5 border border-border text-left hover:border-primary/40 hover:-translate-y-0.5 transition-all">
                 <s.icon className={`w-4 h-4 mb-2 ${TONE_ICON[s.tone]}`} />
                 <p className="text-xl font-display mb-1">{s.value}</p>

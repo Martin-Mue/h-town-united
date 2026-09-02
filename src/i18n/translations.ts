@@ -962,6 +962,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.backToOverview": { de: "Zurück zur Übersicht", en: "Back to overview", fr: "Retour à l'aperçu", pl: "Powrót do przeglądu", nl: "Terug naar overzicht", tr: "Genel bakışa dön" },
   "stats.viewAsList": { de: "Liste", en: "List", fr: "Liste", pl: "Lista", nl: "Lijst", tr: "Liste" },
   "stats.viewAsBar": { de: "Balken", en: "Bar chart", fr: "Diagramme", pl: "Wykres", nl: "Balk", tr: "Grafik" },
+  "stats.pickAtLeastOneStat": { de: "Wähle mindestens eine Statistik aus.", en: "Pick at least one stat.", fr: "Sélectionnez au moins une statistique.", pl: "Wybierz co najmniej jedną statystykę.", nl: "Kies minstens één statistiek.", tr: "En az bir istatistik seç." },
 
   // Players.tsx
   "players.errorTitle": { de: "Fehler", en: "Error", fr: "Erreur", pl: "Błąd", nl: "Fout", tr: "Hata" },

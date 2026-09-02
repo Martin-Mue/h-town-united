@@ -21,7 +21,10 @@ export interface RankingBarDatum {
  *  which would stop being reliably distinguishable. A legend below the bar carries the exact
  *  values — the bar itself is proportion-only, segments are too thin to label in place. */
 export const RankingBarChart = ({ data }: { data: RankingBarDatum[] }) => {
-  const contributors = data.filter((d) => Number.isFinite(d.value) && d.value > 0);
+  // Sorted here rather than trusted from the caller — the bar view can show several stats at
+  // once, each needing its own descending order, while the caller's array is only ever sorted by
+  // whichever single stat currently drives the list (see Statistics.tsx's sortBy/leaderboard).
+  const contributors = data.filter((d) => Number.isFinite(d.value) && d.value > 0).sort((a, b) => b.value - a.value);
   if (contributors.length === 0) return null;
 
   const top = contributors.slice(0, 7);
