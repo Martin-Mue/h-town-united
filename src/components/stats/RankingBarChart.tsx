@@ -1,63 +1,63 @@
-const BAR_COLORS = [
+const SEGMENT_COLORS = [
   "var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)",
-  "var(--chart-5)", "var(--chart-6)", "var(--chart-7)", "var(--chart-8)",
+  "var(--chart-5)", "var(--chart-6)", "var(--chart-7)",
 ];
+const OTHER_COLOR = "hsl(var(--muted-foreground) / 0.35)";
 
 export interface RankingBarDatum {
   id: string;
   name: string;
   emoji: string;
-  /** Raw magnitude for bar length — NaN/non-finite (no data for this stat yet) renders an empty bar. */
+  /** Raw magnitude this player contributes — must be >= 0. Non-finite/zero is excluded from the stack. */
   value: number;
   /** Already-formatted value for display (matches whatever the list view next to this shows). */
   displayValue: string;
 }
 
-/** Horizontal bar-chart view for a ranking drill-down — one bar per player, colored from a fixed
- *  8-slot categorical palette (index.css --chart-1..8, CVD-validated, light/dark aware) with a
- *  legend below. Capped to the top 8: past that, per-player hues stop being reliably
- *  distinguishable, and the full ranked list rendered alongside this already covers everyone —
- *  this chart is a glanceable summary, not the complete reference. */
-export const RankingBarChart = ({ data, moreLabel }: { data: RankingBarDatum[]; moreLabel: (count: number) => string }) => {
-  const top = data.slice(0, 8);
-  if (top.length === 0) return null;
+/** A single vertical bar for the currently-selected stat, sliced into one colored segment per
+ *  player proportional to their share of the club total — not one bar per player. Named colors
+ *  go to the top 7 contributors (index.css --chart-1..7, CVD-validated, light/dark aware);
+ *  anyone past that folds into one neutral-grey "Andere" segment rather than a generated 8th hue,
+ *  which would stop being reliably distinguishable. A legend below the bar carries the exact
+ *  values — the bar itself is proportion-only, segments are too thin to label in place. */
+export const RankingBarChart = ({ data }: { data: RankingBarDatum[] }) => {
+  const contributors = data.filter((d) => Number.isFinite(d.value) && d.value > 0);
+  if (contributors.length === 0) return null;
 
-  const finiteValues = top.map((d) => d.value).filter((v) => Number.isFinite(v));
-  const max = finiteValues.length > 0 ? Math.max(...finiteValues) : 0;
-  const hiddenCount = data.length - top.length;
+  const top = contributors.slice(0, 7);
+  const rest = contributors.slice(7);
+  const restTotal = rest.reduce((sum, d) => sum + d.value, 0);
+  const total = top.reduce((sum, d) => sum + d.value, 0) + restTotal;
+
+  const segments = [
+    ...top.map((d, i) => ({ id: d.id, label: `${d.emoji} ${d.name}`, value: d.value, displayValue: d.displayValue, color: SEGMENT_COLORS[i] })),
+    ...(rest.length > 0 ? [{ id: "__other", label: `Andere (${rest.length})`, value: restTotal, displayValue: String(restTotal), color: OTHER_COLOR }] : []),
+  ];
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2.5">
-        {top.map((d, i) => {
-          const hasValue = Number.isFinite(d.value) && max > 0;
-          const pct = hasValue ? Math.max(3, (d.value / max) * 100) : 0;
-          return (
-            <div key={d.id} className="flex items-center gap-2.5">
-              <span className="w-4 text-right text-[10px] text-muted-foreground shrink-0 font-mono">{i + 1}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline justify-between gap-2 mb-1">
-                  <span className="text-xs font-medium truncate">{d.emoji} {d.name}</span>
-                  <span className="text-xs font-display shrink-0" style={{ color: BAR_COLORS[i] }}>{d.displayValue}</span>
-                </div>
-                <div className="h-2.5 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: BAR_COLORS[i] }} />
-                </div>
-              </div>
-            </div>
-          );
-        })}
+    <div className="flex flex-col items-center">
+      <p className="text-[11px] text-muted-foreground mb-3">Σ {Number.isInteger(total) ? total : total.toFixed(1)}</p>
+      <div className="w-24 h-64 rounded-xl overflow-hidden flex flex-col bg-muted shrink-0">
+        {segments.map((s) => (
+          <div
+            key={s.id}
+            className="w-full border-t border-background/40 first:border-t-0 transition-all duration-500"
+            style={{ height: `${(s.value / total) * 100}%`, background: s.color }}
+            title={`${s.label}: ${s.displayValue}`}
+          />
+        ))}
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-3 border-t border-border/60">
-        {top.map((d, i) => (
-          <div key={d.id} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: BAR_COLORS[i] }} />
-            <span className="truncate max-w-[140px]">{d.emoji} {d.name}</span>
+      <div className="w-full mt-4 space-y-1.5 pt-3 border-t border-border/60">
+        {segments.map((s) => (
+          <div key={s.id} className="flex items-center gap-2 text-[11px]">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">{s.label}</span>
+            <span className="shrink-0 font-mono text-muted-foreground">{s.displayValue}</span>
+            <span className="shrink-0 font-mono text-muted-foreground w-10 text-right">{((s.value / total) * 100).toFixed(0)}%</span>
           </div>
         ))}
       </div>
-      {hiddenCount > 0 && <p className="text-[10px] text-muted-foreground">{moreLabel(hiddenCount)}</p>}
     </div>
   );
 };

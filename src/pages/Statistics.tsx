@@ -106,6 +106,7 @@ const StatisticsPage = () => {
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo" | "one_eighties" | "highest_checkout" | "mpr" | "best_game_avg" | "fewest_darts">("average");
   const [rankingFocusKey, setRankingFocusKey] = useState<typeof sortBy | null>(null);
+  const [rankingViewMode, setRankingViewMode] = useState<"list" | "bar">("list");
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
@@ -1277,22 +1278,33 @@ const StatisticsPage = () => {
                 {filterMode !== "all" ? `${t("stats.fewestDartsModeScoped")} ${filterMode}` : t("stats.fewestDartsPickModeHint")}
               </p>
             )}
+
             {leaderboard.length > 0 && (
-              <div className="mb-5 pb-5 border-b border-border/60">
-                <RankingBarChart
-                  data={leaderboard.map((p): RankingBarDatum => ({
-                    id: p.id,
-                    name: p.name,
-                    emoji: p.emoji,
-                    value: Number.parseFloat(String(sortValueFor(p))),
-                    displayValue: String(sortValueFor(p)),
-                  }))}
-                  moreLabel={(count) => `+ ${count} ${t("stats.moreInListBelow")}`}
-                />
+              <div className="flex justify-center gap-1.5 mb-4">
+                {([
+                  { mode: "list" as const, label: t("stats.viewAsList") },
+                  { mode: "bar" as const, label: t("stats.viewAsBar") },
+                ]).map((opt) => (
+                  <button key={opt.mode} onClick={() => setRankingViewMode(opt.mode)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${rankingViewMode === opt.mode ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+                    {opt.label}
+                  </button>
+                ))}
               </div>
             )}
+
             {leaderboard.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">{t("stats.noPlayersYet")}</p>
+            ) : rankingViewMode === "bar" ? (
+              <RankingBarChart
+                data={leaderboard.map((p): RankingBarDatum => ({
+                  id: p.id,
+                  name: p.name,
+                  emoji: p.emoji,
+                  value: Number.parseFloat(String(sortValueFor(p))),
+                  displayValue: String(sortValueFor(p)),
+                }))}
+              />
             ) : (
               <div className="space-y-1">
                 {leaderboard.map((p, i) => (
