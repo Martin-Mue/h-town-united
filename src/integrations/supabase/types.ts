@@ -122,7 +122,10 @@ export type Database = {
           id: string
           logo_path: string | null
           name: string
+          plan_status: string
           plan_tier: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           tagline: string | null
           theme_preset: string
           updated_at: string
@@ -132,7 +135,10 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name: string
+          plan_status?: string
           plan_tier?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           tagline?: string | null
           theme_preset?: string
           updated_at?: string
@@ -142,7 +148,10 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name?: string
+          plan_status?: string
           plan_tier?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           tagline?: string | null
           theme_preset?: string
           updated_at?: string
