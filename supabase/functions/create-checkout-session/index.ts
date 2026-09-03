@@ -34,13 +34,20 @@ serve(async (req) => {
     if (claimsError || !claimsData?.claims) return jsonResponse({ error: "Authentication required" }, 401);
     const callerId = claimsData.claims.sub as string;
 
-    const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
-    const STRIPE_PRICE_ID = Deno.env.get("STRIPE_PRICE_ID");
-    if (!STRIPE_SECRET_KEY || !STRIPE_PRICE_ID) throw new Error("Stripe is not configured (STRIPE_SECRET_KEY / STRIPE_PRICE_ID)");
+    // STRIPE_SECRET_KEY is the canonical name, but on this project the key was stored as
+    // STRIPE_TEST_API_KEY (secret values can't be read/copied through the secrets API), so we
+    // fall back to that name. Either one works.
+    const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? Deno.env.get("STRIPE_TEST_API_KEY");
+    const STRIPE_PRICE_ID_MONTHLY = Deno.env.get("STRIPE_PRICE_ID_MONTHLY");
+    const STRIPE_PRICE_ID_YEARLY = Deno.env.get("STRIPE_PRICE_ID_YEARLY");
+    if (!STRIPE_SECRET_KEY) throw new Error("Stripe is not configured (STRIPE_SECRET_KEY / STRIPE_TEST_API_KEY)");
+    if (!STRIPE_PRICE_ID_MONTHLY || !STRIPE_PRICE_ID_YEARLY) throw new Error("Stripe is not configured (STRIPE_PRICE_ID_MONTHLY / STRIPE_PRICE_ID_YEARLY)");
     const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-11-20.acacia" });
 
-    const { successUrl, cancelUrl } = await req.json().catch(() => ({}));
+    const { successUrl, cancelUrl, period } = await req.json().catch(() => ({}));
     if (!successUrl || !cancelUrl) return jsonResponse({ error: "successUrl and cancelUrl are required" }, 400);
+    const billingPeriod = period === "yearly" ? "yearly" : "monthly";
+    const STRIPE_PRICE_ID = billingPeriod === "yearly" ? STRIPE_PRICE_ID_YEARLY : STRIPE_PRICE_ID_MONTHLY;
 
     // Only an admin may start an upgrade for their club — mirrors the UI gate (Admin.tsx), but
     // checked again here since this endpoint itself decides which club's Stripe customer to use.

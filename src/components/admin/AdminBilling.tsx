@@ -15,13 +15,14 @@ const AdminBilling = () => {
   const { toast } = useToast();
   const { club, refetch } = useClubBranding();
   const [startingCheckout, setStartingCheckout] = useState(false);
+  const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
 
   const startUpgrade = async () => {
     setStartingCheckout(true);
     try {
       const returnUrl = `${window.location.origin}/admin`;
       const { data, error } = await supabase.functions.invoke("create-checkout-session", {
-        body: { successUrl: `${returnUrl}?upgraded=1`, cancelUrl: returnUrl },
+        body: { successUrl: `${returnUrl}?upgraded=1`, cancelUrl: returnUrl, period },
       });
       if (error || !data?.url) throw error ?? new Error("Keine Checkout-URL erhalten.");
       window.location.href = data.url;
@@ -76,11 +77,31 @@ const AdminBilling = () => {
         <li>Kamera-Scoring ist gesperrt</li>
         <li>Turniere sind auf 8 Teilnehmer begrenzt</li>
       </ul>
-      <Button onClick={startUpgrade} disabled={startingCheckout} className="gap-1.5">
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setPeriod("monthly")}
+          className={`flex-1 rounded-lg border px-3 py-2 text-left transition-colors ${
+            period === "monthly" ? "border-primary bg-primary/10" : "border-border hover:bg-muted"
+          }`}
+        >
+          <p className="font-semibold text-sm">Monatlich</p>
+          <p className="text-[10px] text-muted-foreground">flexible monatliche Abbuchung</p>
+        </button>
+        <button
+          onClick={() => setPeriod("yearly")}
+          className={`flex-1 rounded-lg border px-3 py-2 text-left transition-colors ${
+            period === "yearly" ? "border-primary bg-primary/10" : "border-border hover:bg-muted"
+          }`}
+        >
+          <p className="font-semibold text-sm">Jährlich</p>
+          <p className="text-[10px] text-muted-foreground">1 Jahr im Voraus — günstiger</p>
+        </button>
+      </div>
+      <Button onClick={startUpgrade} disabled={startingCheckout} className="gap-1.5 w-full">
         {startingCheckout ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-        Jetzt upgraden
+        {period === "yearly" ? "Jährlich upgraden" : "Monatlich upgraden"}
       </Button>
-      <p className="text-[10px] text-muted-foreground mt-2">
+      <p className="text-[10px] text-muted-foreground mt-2 text-center">
         Weiterleitung zu Stripe Checkout — Kreditkarte, PayPal und Klarna wählbar.
       </p>
     </div>
