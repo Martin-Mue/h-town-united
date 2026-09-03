@@ -21,6 +21,7 @@ import AdminStats from "@/components/admin/AdminStats";
 import AdminTournamentForecast from "@/components/admin/AdminTournamentForecast";
 import AdminInvites from "@/components/admin/AdminInvites";
 import AdminClubBranding from "@/components/admin/AdminClubBranding";
+import AdminBilling from "@/components/admin/AdminBilling";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 
@@ -126,6 +127,7 @@ const AdminPage = () => {
           <TabsTrigger value="members">Mitglieder</TabsTrigger>
           <TabsTrigger value="invites">Einladungen</TabsTrigger>
           <TabsTrigger value="branding">Design</TabsTrigger>
+          <TabsTrigger value="billing">Abrechnung</TabsTrigger>
           <TabsTrigger value="stats">Statistiken</TabsTrigger>
           <TabsTrigger value="forecast">Turnier-Prognose</TabsTrigger>
         </TabsList>
@@ -268,6 +270,10 @@ const AdminPage = () => {
 
         <TabsContent value="branding">
           <AdminClubBranding />
+        </TabsContent>
+
+        <TabsContent value="billing">
+          <AdminBilling />
         </TabsContent>
 
         <TabsContent value="stats">

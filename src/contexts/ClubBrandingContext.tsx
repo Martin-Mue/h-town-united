@@ -24,6 +24,9 @@ interface ClubRow {
    *  comment) — clubHasFeature() treats a missing value as the safe (gated) default, since
    *  nothing on that anonymous path should ever need to check it anyway. */
   plan_tier?: string;
+  /** Stripe's own subscription lifecycle state ('none'|'trialing'|'active'|'past_due'|'canceled'),
+   *  read by AdminBilling.tsx — same optionality/reasoning as plan_tier above. */
+  plan_status?: string;
 }
 
 /** "loading": fetch in flight or not started -- club may still be stale/null, never act on it.
