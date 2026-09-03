@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2 } from "lucide-react";
+import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,6 +35,7 @@ import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
 import { loadActiveGameSnapshot, saveActiveGameSnapshot, clearActiveGameSnapshot } from "@/lib/activeGameSnapshot";
 import { useTournamentLink } from "@/hooks/useTournamentLink";
 import { useLeagueLink } from "@/hooks/useLeagueLink";
+import { useOnlineMatch } from "@/hooks/useOnlineMatch";
 import { computePostGameStats } from "@/utils/postGameStats";
 import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
@@ -370,6 +371,10 @@ const GamePage = () => {
     setCheckoutSuggestionEnabled,
   });
   const { leagueLinkRef } = useLeagueLink({ searchParams, setPlayerNames, setTeamMode, setNumPlayers, setMode, setBestOfLegs });
+  // Online-match play (?online=<online_matches.id>) — a THIRD entry path alongside the two above.
+  // The actual sync effects live further down (after pendingGameIdRef exists), see there.
+  const onlineMatchId = searchParams.get("online");
+  const onlineMatch = useOnlineMatch(onlineMatchId ?? undefined, session?.user?.id);
   // Mirror the in-progress game to localStorage on every change — see loadActiveGameSnapshot's
   // doc comment. Cleared once the leg is decided (below) or on an explicit new-game reset
   // (resetGame), since a finished game's durability is the existing save/offline-queue path's
@@ -455,6 +460,58 @@ const GamePage = () => {
   // Generated up front (before the game row exists) so highlight clips captured
   // mid-game can already reference the game they'll end up saved under.
   const pendingGameIdRef = useRef<string>(crypto.randomUUID());
+
+  // --- Online-match sync (see the onlineMatch = useOnlineMatch(...) call further up) ---
+  // True once this device has applied the online match's state at least once — gates the
+  // outgoing-sync effect below so it can never fire on a stale/half-initialized `game` before the
+  // real online state has landed.
+  const onlineInitializedRef = useRef(false);
+  // Set right before applying an INCOMING remote update to local state, and checked (then reset)
+  // by the outgoing-sync effect immediately after — without this, applying the opponent's throw
+  // would itself change `game`, which would re-trigger the outgoing effect and try to "sync back"
+  // a state that already came FROM the server, an unnecessary echo. Not a correctness issue
+  // either way (submit_online_throw's own turn-check would just reject an echo that isn't
+  // actually this device's turn), but avoids the wasted round-trip.
+  const applyingRemoteOnlineUpdateRef = useRef(false);
+
+  // Applies the online match's current state to local game/dartsThisRound/turnStartRemaining —
+  // fires on first load (transitions phase straight to "playing", skipping setup/warmup/walkon
+  // entirely for online mode) AND on every subsequent update (the opponent's next throw arriving
+  // via useOnlineMatch's broadcast/postgres_changes subscriptions).
+  useEffect(() => {
+    if (!onlineMatchId) return;
+    const state = onlineMatch.row?.game_state;
+    if (onlineMatch.row?.status !== "active" || !state) return;
+    if (!onlineInitializedRef.current) {
+      onlineInitializedRef.current = true;
+      // Shared, deterministic id (not a fresh crypto.randomUUID() like a local startGame() would
+      // generate) — both devices independently reach game.isFinished and call saveGame(); this is
+      // what makes gameSync.ts's existing pendingGameId-existence check actually catch that as one
+      // duplicate save attempt instead of two genuinely different games.
+      pendingGameIdRef.current = onlineMatchId;
+      setPhase("playing");
+    }
+    applyingRemoteOnlineUpdateRef.current = true;
+    const { dartsThisRound: incomingDarts, turnStartRemaining: incomingTurnStart, ...gameOnly } = state;
+    setGame(gameOnly);
+    setDartsThisRound(incomingDarts);
+    setTurnStartRemaining(incomingTurnStart);
+  }, [onlineMatchId, onlineMatch.row]);
+
+  // Propagates a throw THIS device just applied locally out to the opponent's device — mirrors
+  // the existing crash-recovery snapshot effect (a bit further down) in shape (watch game/
+  // dartsThisRound/turnStartRemaining, act on every change) but targets the shared online-match
+  // row instead of localStorage.
+  useEffect(() => {
+    if (!onlineMatchId || !onlineInitializedRef.current || !game || phase !== "playing") return;
+    if (applyingRemoteOnlineUpdateRef.current) { applyingRemoteOnlineUpdateRef.current = false; return; }
+    void onlineMatch.sendThrow(game, dartsThisRound, turnStartRemaining).catch((err) => {
+      console.error("online throw sync failed", err);
+      toast({ title: t("game.onlineSyncFailedTitle"), description: t("game.onlineSyncFailedDesc"), variant: "destructive" });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game, dartsThisRound, turnStartRemaining, phase, onlineMatchId]);
+
   const [botThinking, setBotThinking] = useState(false);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const botPlanRef = useRef<{ key: string; darts: DartThrow[]; applied: number } | null>(null);
@@ -1915,6 +1972,30 @@ const GamePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postGameStats, selectedLegTab]);
 
+  // ─── ONLINE MATCH: waiting for the row to load/become active ──────────
+  // Reached only in the brief window before the sync effect above transitions phase straight to
+  // "playing" (or if the match somehow isn't active — declined/canceled/already finished — in
+  // which case this stays showing rather than falling through to the normal local setup form,
+  // which would silently let two people configure and play an unrelated LOCAL game instead).
+  if (onlineMatchId && phase === "setup") {
+    const notActive = onlineMatch.row && onlineMatch.row.status !== "active";
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center p-6">
+        {notActive ? (
+          <>
+            <p className="text-sm text-muted-foreground">{t("game.onlineMatchNotActive")}</p>
+            <Button onClick={() => navigate("/")} className="mt-2">{t("common.backToHome")}</Button>
+          </>
+        ) : (
+          <>
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">{t("game.onlineMatchLoading")}</p>
+          </>
+        )}
+      </div>
+    );
+  }
+
   // ─── SETUP PHASE ───────────────────────────────
   if (phase === "setup") {
     const activePlayerCount = numPlayers;
@@ -3024,7 +3105,7 @@ const GamePage = () => {
             </button>
 
             {showManualInput && (
-              <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
+              <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice || (!!onlineMatchId && !onlineMatch.isMyTurn)}
                 onThrow={throwDart}
                 onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
                 inputMode={dartInputMode} onInputModeChange={setDartInputMode}
@@ -3054,7 +3135,7 @@ const GamePage = () => {
 
           {/* Compact bottom bar — always reachable, no matter how tall the camera/manual-input content gets. */}
           <div className="shrink-0 border-t border-border bg-background/95 backdrop-blur px-4 py-2.5 flex gap-2">
-            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak} className="flex-1 gap-1">
+            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
               <Undo2 className="w-4 h-4" /> {t("game.undo")}
             </Button>
             <Button
@@ -3133,7 +3214,7 @@ const GamePage = () => {
               dartsThisRound={dartsThisRound} />
 
             <div className="flex gap-2 mt-3">
-              <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak} className="flex-1 gap-1">
+              <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
                 <Undo2 className="w-4 h-4" /> {t("game.undo")}
               </Button>
               <Button
