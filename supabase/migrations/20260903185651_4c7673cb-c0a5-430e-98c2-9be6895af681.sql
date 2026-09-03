@@ -1,0 +1,1 @@
+revoke execute on function public.restrict_club_billing_edits() from anon, authenticated;
