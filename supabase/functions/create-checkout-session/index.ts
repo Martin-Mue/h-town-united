@@ -35,12 +35,21 @@ serve(async (req) => {
     const callerId = claimsData.claims.sub as string;
 
     const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
-    const STRIPE_PRICE_ID = Deno.env.get("STRIPE_PRICE_ID");
-    if (!STRIPE_SECRET_KEY || !STRIPE_PRICE_ID) throw new Error("Stripe is not configured (STRIPE_SECRET_KEY / STRIPE_PRICE_ID)");
+    // Two prices (monthly/yearly) — the client picks which by sending "month" or "year", never a
+    // raw Stripe price id: resolving through this fixed lookup, not trusting a client-supplied
+    // price id directly, is what stops a tampered request from checking out at an arbitrary price.
+    const PRICE_IDS: Record<"month" | "year", string | undefined> = {
+      month: Deno.env.get("STRIPE_PRICE_ID_MONTHLY"),
+      year: Deno.env.get("STRIPE_PRICE_ID_YEARLY"),
+    };
+    if (!STRIPE_SECRET_KEY) throw new Error("Stripe is not configured (STRIPE_SECRET_KEY)");
     const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-11-20.acacia" });
 
-    const { successUrl, cancelUrl } = await req.json().catch(() => ({}));
+    const { successUrl, cancelUrl, interval } = await req.json().catch(() => ({}));
     if (!successUrl || !cancelUrl) return jsonResponse({ error: "successUrl and cancelUrl are required" }, 400);
+    if (interval !== "month" && interval !== "year") return jsonResponse({ error: "interval must be 'month' or 'year'" }, 400);
+    const priceId = PRICE_IDS[interval as "month" | "year"];
+    if (!priceId) throw new Error(`Stripe is not configured (STRIPE_PRICE_ID_${interval === "month" ? "MONTHLY" : "YEARLY"})`);
 
     // Only an admin may start an upgrade for their club — mirrors the UI gate (Admin.tsx), but
     // checked again here since this endpoint itself decides which club's Stripe customer to use.
@@ -76,7 +85,7 @@ serve(async (req) => {
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
-      line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       payment_method_types: ["card", "paypal", "klarna"],
       client_reference_id: clubId,
       metadata: { club_id: clubId },

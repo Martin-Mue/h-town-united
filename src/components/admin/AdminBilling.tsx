@@ -1,27 +1,51 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CreditCard, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
+/** Kept in sync with the two live Stripe prices by hand (STRIPE_PRICE_ID_MONTHLY/_YEARLY on the
+ *  create-checkout-session edge function) — there's no third place this reads from, so if either
+ *  price ever changes in the Stripe Dashboard, update the number here too. */
+const PRICE_DISPLAY = {
+  month: "7,99 € / Monat",
+  year: "80,00 € / Jahr",
+} as const;
+
 /** Admin-only billing status + upgrade entry point. German-only, matching the rest of Admin.tsx;
  *  Admin.tsx's own page-level admin gate is the only access check, nothing re-checked here (same
  *  convention as AdminClubBranding/AdminInvites). The actual plan_tier/plan_status flip never
  *  happens client-side — this only ever starts a Stripe Checkout session (create-checkout-session
- *  edge function) and reflects whatever the webhook has already written; refetch() after
- *  returning from Checkout is what picks that up, not a value set here. */
+ *  edge function) and reflects whatever the webhook has already written; refetch() below (once
+ *  back from Checkout, via the ?upgraded=1 return URL) is what picks that up, not a value set
+ *  here. */
 const AdminBilling = () => {
   const { toast } = useToast();
   const { club, refetch } = useClubBranding();
-  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [startingCheckout, setStartingCheckout] = useState<"month" | "year" | null>(null);
 
-  const startUpgrade = async () => {
-    setStartingCheckout(true);
+  // Webhook writes plan_tier/plan_status asynchronously (Stripe calls it, not this tab) — by the
+  // time Checkout redirects back here it's USUALLY already landed, but not guaranteed instantly,
+  // so this refetches rather than trusting the redirect alone. Strips the query param either way
+  // so a manual page reload afterward doesn't refetch again for no reason.
+  useEffect(() => {
+    if (searchParams.get("upgraded") !== "1") return;
+    refetch();
+    const next = new URLSearchParams(searchParams);
+    next.delete("upgraded");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const startUpgrade = async (interval: "month" | "year") => {
+    setStartingCheckout(interval);
     try {
       const returnUrl = `${window.location.origin}/admin`;
       const { data, error } = await supabase.functions.invoke("create-checkout-session", {
-        body: { successUrl: `${returnUrl}?upgraded=1`, cancelUrl: returnUrl },
+        body: { interval, successUrl: `${returnUrl}?upgraded=1`, cancelUrl: returnUrl },
       });
       if (error || !data?.url) throw error ?? new Error("Keine Checkout-URL erhalten.");
       window.location.href = data.url;
@@ -31,7 +55,7 @@ const AdminBilling = () => {
         description: err instanceof Error ? err.message : "Unbekannter Fehler.",
         variant: "destructive",
       });
-      setStartingCheckout(false);
+      setStartingCheckout(null);
     }
   };
 
@@ -76,10 +100,16 @@ const AdminBilling = () => {
         <li>Kamera-Scoring ist gesperrt</li>
         <li>Turniere sind auf 8 Teilnehmer begrenzt</li>
       </ul>
-      <Button onClick={startUpgrade} disabled={startingCheckout} className="gap-1.5">
-        {startingCheckout ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-        Jetzt upgraden
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => startUpgrade("month")} disabled={startingCheckout !== null} className="gap-1.5">
+          {startingCheckout === "month" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+          Monatlich — {PRICE_DISPLAY.month}
+        </Button>
+        <Button onClick={() => startUpgrade("year")} disabled={startingCheckout !== null} variant="outline" className="gap-1.5">
+          {startingCheckout === "year" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+          Jährlich — {PRICE_DISPLAY.year}
+        </Button>
+      </div>
       <p className="text-[10px] text-muted-foreground mt-2">
         Weiterleitung zu Stripe Checkout — Kreditkarte, PayPal und Klarna wählbar.
       </p>
