@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
  *  create-checkout-session edge function) — there's no third place this reads from, so if either
  *  price ever changes in the Stripe Dashboard, update the number here too. */
 const PRICE_DISPLAY = {
-  month: "7,99 € / Monat",
-  year: "80,00 € / Jahr",
+  monthly: "7,99 € / Monat",
+  yearly: "80,00 € / Jahr",
 } as const;
 
 /** Admin-only billing status + upgrade entry point. German-only, matching the rest of Admin.tsx;
@@ -25,7 +25,8 @@ const AdminBilling = () => {
   const { toast } = useToast();
   const { club, refetch } = useClubBranding();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [startingCheckout, setStartingCheckout] = useState<"month" | "year" | null>(null);
+  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
 
   // Webhook writes plan_tier/plan_status asynchronously (Stripe calls it, not this tab) — by the
   // time Checkout redirects back here it's USUALLY already landed, but not guaranteed instantly,
@@ -40,12 +41,12 @@ const AdminBilling = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const startUpgrade = async (interval: "month" | "year") => {
-    setStartingCheckout(interval);
+  const startUpgrade = async () => {
+    setStartingCheckout(true);
     try {
       const returnUrl = `${window.location.origin}/admin`;
       const { data, error } = await supabase.functions.invoke("create-checkout-session", {
-        body: { interval, successUrl: `${returnUrl}?upgraded=1`, cancelUrl: returnUrl },
+        body: { successUrl: `${returnUrl}?upgraded=1`, cancelUrl: returnUrl, period },
       });
       if (error || !data?.url) throw error ?? new Error("Keine Checkout-URL erhalten.");
       window.location.href = data.url;
@@ -55,7 +56,7 @@ const AdminBilling = () => {
         description: err instanceof Error ? err.message : "Unbekannter Fehler.",
         variant: "destructive",
       });
-      setStartingCheckout(null);
+      setStartingCheckout(false);
     }
   };
 
@@ -100,17 +101,31 @@ const AdminBilling = () => {
         <li>Kamera-Scoring ist gesperrt</li>
         <li>Turniere sind auf 8 Teilnehmer begrenzt</li>
       </ul>
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => startUpgrade("month")} disabled={startingCheckout !== null} className="gap-1.5">
-          {startingCheckout === "month" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-          Monatlich — {PRICE_DISPLAY.month}
-        </Button>
-        <Button onClick={() => startUpgrade("year")} disabled={startingCheckout !== null} variant="outline" className="gap-1.5">
-          {startingCheckout === "year" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
-          Jährlich — {PRICE_DISPLAY.year}
-        </Button>
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setPeriod("monthly")}
+          className={`flex-1 rounded-lg border px-3 py-2 text-left transition-colors ${
+            period === "monthly" ? "border-primary bg-primary/10" : "border-border hover:bg-muted"
+          }`}
+        >
+          <p className="font-semibold text-sm">Monatlich</p>
+          <p className="text-[10px] text-muted-foreground">{PRICE_DISPLAY.monthly}</p>
+        </button>
+        <button
+          onClick={() => setPeriod("yearly")}
+          className={`flex-1 rounded-lg border px-3 py-2 text-left transition-colors ${
+            period === "yearly" ? "border-primary bg-primary/10" : "border-border hover:bg-muted"
+          }`}
+        >
+          <p className="font-semibold text-sm">Jährlich</p>
+          <p className="text-[10px] text-muted-foreground">{PRICE_DISPLAY.yearly} — günstiger</p>
+        </button>
       </div>
-      <p className="text-[10px] text-muted-foreground mt-2">
+      <Button onClick={startUpgrade} disabled={startingCheckout} className="gap-1.5 w-full">
+        {startingCheckout ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+        {period === "yearly" ? "Jährlich upgraden" : "Monatlich upgraden"}
+      </Button>
+      <p className="text-[10px] text-muted-foreground mt-2 text-center">
         Weiterleitung zu Stripe Checkout — Kreditkarte, PayPal und Klarna wählbar.
       </p>
     </div>
