@@ -10,7 +10,19 @@ import htuLogoFallback from "@/assets/htu-logo.jpg";
 // a DB column for exactly that reason (see the user's own framing: "solange eine Änderung von
 // jemand anderem meinen Login bzw. meine Ansicht nicht ändert"). Only the 3 accent colors are
 // personal; name/logo/tagline stay admin-only and club-wide, untouched by this.
-const PERSONAL_THEME_KEY = "dart-personal-theme-preset";
+//
+// Scoped by user id (not a single bare key) -- the original bare-key version leaked between
+// DIFFERENT ACCOUNTS sharing the SAME BROWSER (localStorage is per-origin, not per logged-in
+// Supabase user): logging out of one account and into another on the same device/tab still saw
+// the first account's override, since nothing about switching accounts touches localStorage. The
+// "never change what anyone else sees" guarantee was only ever about *other people's own
+// devices* -- this closes the same-device/different-account gap, found live 2026-09-03
+// (mueller-kim set a color, then martin logged in on the same browser and saw it too).
+const PERSONAL_THEME_KEY_BASE = "dart-personal-theme-preset";
+// The old, unscoped key -- same string, kept as its own name so every reference to "the legacy
+// key" below reads as intentional rather than a typo of the scoped version.
+const LEGACY_PERSONAL_THEME_KEY = PERSONAL_THEME_KEY_BASE;
+const personalThemeKey = (userId: string) => `${PERSONAL_THEME_KEY_BASE}:${userId}`;
 
 interface ClubRow {
   id: string;
@@ -47,8 +59,8 @@ interface ClubBrandingContextType {
    *  CURRENT user -- the only condition under which App.tsx's RequireClub may act on `club`. */
   resolved: boolean;
   refetch: () => Promise<void>;
-  /** This browser's personal color override (see PERSONAL_THEME_KEY above), or null when using
-   *  the club's own default. Never the club's theme_preset itself -- that stays admin-only. */
+  /** This browser+account's personal color override (see personalThemeKey above), or null when
+   *  using the club's own default. Never the club's theme_preset itself -- that stays admin-only. */
   personalThemePreset: string | null;
   /** Pass null to clear the override and go back to the club default. */
   setPersonalThemePreset: (presetId: string | null) => void;
@@ -79,15 +91,39 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
   const { resolvedTheme } = useTheme();
   const { user, loading: authLoading } = useAuth();
 
-  const [personalThemePreset, setPersonalThemePresetState] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(PERSONAL_THEME_KEY);
-  });
+  const [personalThemePreset, setPersonalThemePresetState] = useState<string | null>(null);
+
+  // Re-reads whenever the logged-in user changes (covers both a hard reload AND switching
+  // accounts within the same session, neither of which the old useState-initializer version
+  // reacted to) -- can't resolve this in a lazy useState initializer the way the old version did,
+  // since `user` itself may still be mid-resolution on first render.
+  useEffect(() => {
+    if (typeof window === "undefined" || !user) {
+      setPersonalThemePresetState(null);
+      return;
+    }
+    const key = personalThemeKey(user.id);
+    let value = window.localStorage.getItem(key);
+    if (value === null) {
+      // One-time migration from the old unscoped key, if this device has one and this user
+      // hasn't set their own scoped value yet -- preserves whatever was already chosen instead of
+      // silently resetting it back to the club default the moment this fix lands.
+      const legacy = window.localStorage.getItem(LEGACY_PERSONAL_THEME_KEY);
+      if (legacy !== null) {
+        window.localStorage.setItem(key, legacy);
+        window.localStorage.removeItem(LEGACY_PERSONAL_THEME_KEY);
+        value = legacy;
+      }
+    }
+    setPersonalThemePresetState(value);
+  }, [user]);
+
   const setPersonalThemePreset = (presetId: string | null) => {
     setPersonalThemePresetState(presetId);
-    if (typeof window === "undefined") return;
-    if (presetId) window.localStorage.setItem(PERSONAL_THEME_KEY, presetId);
-    else window.localStorage.removeItem(PERSONAL_THEME_KEY);
+    if (typeof window === "undefined" || !user) return;
+    const key = personalThemeKey(user.id);
+    if (presetId) window.localStorage.setItem(key, presetId);
+    else window.localStorage.removeItem(key);
   };
 
   // Guards against out-of-order responses: e.g. onAuthStateChange's INITIAL_SESSION callback and
