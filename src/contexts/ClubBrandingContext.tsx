@@ -161,7 +161,18 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
         setStatus("resolved");
         return;
       }
-      const { data: clubRow, error: clubError } = await supabase.from("clubs").select("*").eq("id", roleRow.club_id).maybeSingle();
+      // Explicit column list, not select("*") -- stripe_customer_id/stripe_subscription_id were
+      // deliberately revoked from `authenticated` at the column-privilege level (2026-09-03, see
+      // ClubRow's own doc comment) after a security-advisor finding that any club member could
+      // read them via the old blanket SELECT grant. PostgREST resolves "*" from its schema cache
+      // (built with a privileged role), not per-caller-role, so it still tries to select those two
+      // columns by name and the query then fails outright with a permission error -- an explicit
+      // list here is what actually avoids that, not just what hides the columns.
+      const { data: clubRow, error: clubError } = await supabase
+        .from("clubs")
+        .select("id, name, tagline, logo_path, theme_preset, plan_tier, plan_status, created_at, updated_at")
+        .eq("id", roleRow.club_id)
+        .maybeSingle();
       if (requestId !== requestIdRef.current) return;
       if (clubError) {
         setStatus("error");
