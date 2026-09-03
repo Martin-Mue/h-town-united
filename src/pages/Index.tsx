@@ -11,6 +11,7 @@ import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Badge } from "@/components/ui/badge";
 import htuEmblem from "@/assets/club-emblem-color.png";
+import PendingOnlineChallenges from "@/components/home/PendingOnlineChallenges";
 
 const EVENT_ICON: Record<ActivityEvent["type"], typeof Target> = {
   "180": Target,
@@ -208,6 +209,8 @@ const DashboardPage = () => {
           </p>
         </div>
       </div>
+
+      <PendingOnlineChallenges />
 
       {/* Quick action cards */}
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("home.quickAccess")}</h2>

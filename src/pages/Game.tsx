@@ -78,6 +78,7 @@ import { clubHasFeature } from "@/lib/planFeatures";
 import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
+import { createLegState, createCricketState } from "@/utils/gameStateFactory";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
@@ -100,23 +101,8 @@ const STATS_DURATION_MS = 4500;
 const AUTOSTART_DELAY_MS = 5000;
 const MAX_PLAYERS = 8;
 
-function createLegState(legNumber: number, startScore: number, startingPlayerIndex: number, players: PlayerSlot[], teams?: TeamSlot[]): LegState {
-  const scoreSlots = teams?.length ?? players.length;
-  return {
-    legNumber,
-    startingPlayerIndex,
-    remaining: Array.from({ length: scoreSlots }, (_, i) => effectiveStartScore(startScore, players, i, teams)),
-    throws: Array.from({ length: players.length }, () => []),
-    startedScoring: teams
-      ? Array.from({ length: scoreSlots }, (_, teamIdx) => !players.some((p, i) => teamIndexFor(teams, i) === teamIdx && p.doubleIn))
-      : players.map((p) => !p.doubleIn),
-  };
-}
-function createCricketState(numbers: readonly number[] = CRICKET_NUMBERS): CricketPlayerState {
-  const marks: Record<number, number> = {};
-  numbers.forEach((n) => (marks[n] = 0));
-  return { marks, points: 0 };
-}
+// createLegState/createCricketState moved to utils/gameStateFactory.ts (imported above) so the
+// online-match accept flow can build a real starting leg without duplicating this logic.
 
 /**
  * Applies a decided leg win (`winnerIndex`, a score-slot index — teamIdx-space, matching

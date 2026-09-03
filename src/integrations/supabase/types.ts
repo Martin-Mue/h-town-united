@@ -771,6 +771,69 @@ export type Database = {
           },
         ]
       }
+      online_matches: {
+        Row: {
+          best_of_legs: number
+          club_id: string
+          created_at: string
+          created_by: string
+          game_state: Json | null
+          id: string
+          mode: string
+          player1_user_id: string
+          player2_user_id: string
+          source_id: string | null
+          source_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          best_of_legs?: number
+          club_id: string
+          created_at?: string
+          created_by: string
+          game_state?: Json | null
+          id?: string
+          mode: string
+          player1_user_id: string
+          player2_user_id: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          best_of_legs?: number
+          club_id?: string
+          created_at?: string
+          created_by?: string
+          game_state?: Json | null
+          id?: string
+          mode?: string
+          player1_user_id?: string
+          player2_user_id?: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_matches_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_matches_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           ai_portrait_url: string | null
@@ -1227,6 +1290,10 @@ export type Database = {
     }
     Functions: {
       accept_club_invite: { Args: { _token: string }; Returns: string }
+      accept_online_match: {
+        Args: { _initial_game_state: Json; _match_id: string }
+        Returns: undefined
+      }
       admin_delete_user: { Args: { _user_id: string }; Returns: undefined }
       admin_list_active_tournaments: {
         Args: never
@@ -1415,6 +1482,15 @@ export type Database = {
       request_to_join_club: { Args: { _club_id: string }; Returns: string }
       respond_to_join_request: {
         Args: { _approve: boolean; _request_id: string }
+        Returns: undefined
+      }
+      submit_online_throw: {
+        Args: {
+          _match_id: string
+          _new_darts_this_round: number
+          _new_game_state: Json
+          _new_turn_start_remaining: number
+        }
         Returns: undefined
       }
       update_match_live_snapshot: {
