@@ -15,7 +15,9 @@ const jsonResponse = (payload: Record<string, unknown>, status = 200) =>
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
+  // Fall back to STRIPE_TEST_API_KEY (the name the key was originally stored under) — see
+  // create-checkout-session for the same rationale.
+  const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? Deno.env.get("STRIPE_TEST_API_KEY");
   const STRIPE_WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET");
   if (!STRIPE_SECRET_KEY || !STRIPE_WEBHOOK_SECRET) {
     console.error("stripe-webhook: missing STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET");
