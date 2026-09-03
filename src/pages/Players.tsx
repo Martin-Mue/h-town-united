@@ -25,8 +25,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { compressImage } from "@/utils/imageCompression";
 import { SectionCard, StatTile } from "@/components/stats/StatPrimitives";
-import MatchmakingDialog from "@/components/players/MatchmakingDialog";
-import ChallengeDialog from "@/components/players/ChallengeDialog";
 
 // recharts (~390KB) is only needed once a player's detail view is open, not for browsing
 // the roster list — split into its own chunk instead of loading it for every /players visit.
@@ -800,8 +798,6 @@ const PlayersPage = () => {
       <div className="flex items-center justify-between mb-6 relative gap-2 flex-wrap">
         <h3 className="text-sm font-display uppercase tracking-widest text-muted-foreground">{t("stats.members")}</h3>
         <div className="flex items-center gap-2">
-        <MatchmakingDialog players={players} />
-        <ChallengeDialog players={players} />
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open) {

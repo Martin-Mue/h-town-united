@@ -49,7 +49,7 @@ const PendingOnlineChallenges = () => {
         .eq("player2_user_id", user.id)
         .eq("status", "pending");
       // Matches already accepted — the challenger's own device has no other way to learn "the
-      // other side said yes, come play" than polling for this, since ChallengeDialog.tsx never
+      // other side said yes, come play" than polling for this, since OnlineChallengeSetup.tsx never
       // navigates them into Game.tsx itself (only the accepter's own accept() action does that).
       const { data: active } = await supabase
         .from("online_matches")

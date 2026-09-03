@@ -28,6 +28,7 @@ import { clubHasFeature } from "@/lib/planFeatures";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
+import MatchmakingDialog from "@/components/players/MatchmakingDialog";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
 import htuEmblem from "@/assets/club-emblem.png";
@@ -1032,6 +1033,14 @@ const TournamentPage = () => {
   const shufflePlayers = () => setPlayers((prev) => shuffle(prev));
 
   const eloByName = useMemo(() => new Map(dbPlayers.map((p) => [p.name, p.elo_rating ?? 1000])), [dbPlayers]);
+  // For the "Faire Paarungen" helper below — a quick 1v1-balance reference while adding
+  // participants, separate from (and not a replacement for) the actual bracket seeding above.
+  // Real emoji/Elo for anyone matching a roster row (case-insensitive, same convention as
+  // matchClubPlayer elsewhere), a generic fallback for pure guest names.
+  const matchmakingPool = useMemo(() => players.map((name) => {
+    const dbMatch = dbPlayers.find((p) => p.name.trim().toLowerCase() === name.trim().toLowerCase());
+    return { id: name, name, emoji: dbMatch?.emoji ?? "🎯", elo_rating: dbMatch?.elo_rating ?? 1000 };
+  }), [players, dbPlayers]);
 
   /** The single source of truth for seeding – used by preview AND bracket generation. */
   const drawSeeding = useMemo(() => {
@@ -2141,6 +2150,7 @@ const TournamentPage = () => {
               {players.length > 0 && (
                 <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPlayers([])}>{t("tournament.clearList")}</Button>
               )}
+              {players.length > 1 && <MatchmakingDialog players={matchmakingPool} />}
             </div>
           </div>
 

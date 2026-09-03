@@ -21,6 +21,7 @@ import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import LiveCamera, { type DetectedDart, type LiveCameraHandle } from "@/components/game/LiveCamera";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
+import OnlineChallengeSetup from "@/components/game/OnlineChallengeSetup";
 import ConfettiBurst from "@/components/ConfettiBurst";
 import AnimatedScore from "@/components/AnimatedScore";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, TeamSlot, BotLevel } from "@/types/game";
@@ -250,6 +251,10 @@ const GamePage = () => {
   const [numPlayers, setNumPlayers] = useState(2);
   const [customCricket, setCustomCricket] = useState(false);
   const [teamMode, setTeamMode] = useState(false);
+  // Toggle shown on the plain (not tournament/league-linked) setup screen — "online" swaps the
+  // whole form for OnlineChallengeSetup (challenge a real club member, synced two-device play)
+  // instead of the usual local player-name entry. Not persisted; always starts on "local".
+  const [setupMode, setSetupMode] = useState<"local" | "online">("local");
   // Who throws first in the match — a raw player index normally, but effectively a team choice
   // in team mode (0/1 pick each team's first member, matching the [TeamA-1, TeamB-1, TeamA-2,
   // TeamB-2, ...] interleaving createLegState/teamIndexFor already assume). Defaults to 0 (today's
@@ -2058,9 +2063,28 @@ const GamePage = () => {
       );
     }
 
+    // "Online spielen" replaces this whole local-setup form with a challenge-a-member screen —
+    // only offered for a genuinely casual game; a tournament/league match's opponent and mode are
+    // already fixed by the bracket/fixture, so there's nothing left to challenge someone into.
+    if (setupMode === "online" && !tournamentLinkName && !leagueLinkRef.current) {
+      return <OnlineChallengeSetup onBack={() => setSetupMode("local")} />;
+    }
+
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
         <h2 className="text-2xl font-display uppercase mb-1 text-center">{t("home.newGame")}</h2>
+        {!tournamentLinkName && !leagueLinkRef.current && (
+          <div className="flex rounded-lg border border-border bg-muted/30 p-1 mb-4 max-w-xs mx-auto">
+            <button type="button" onClick={() => setSetupMode("local")}
+              className={`flex-1 rounded-md py-1.5 text-xs font-medium uppercase tracking-wide transition-colors ${setupMode === "local" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+              {t("game.setupLocal")}
+            </button>
+            <button type="button" onClick={() => setSetupMode("online")}
+              className={`flex-1 rounded-md py-1.5 text-xs font-medium uppercase tracking-wide transition-colors ${setupMode === "online" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
+              {t("game.setupOnline")}
+            </button>
+          </div>
+        )}
         {tournamentLinkName && (
           <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 mb-5 text-center">
             <p className="text-xs text-primary font-medium">
