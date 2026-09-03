@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useHasRole } from "@/hooks/useHasRole";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
@@ -790,15 +791,12 @@ const TournamentPage = () => {
    *  shared club history at that point, not scratch data — only an admin can remove it. */
   const canDelete = (t: TournamentRecord) => isAdmin || (isOwnerOf(t) && t.status !== "finished");
   /** RESULT/bracket edits (tap winner, +1 leg, reset a match, edit round-1 players, reshuffle
-   *  scorekeepers) are a different story: the same trigger above explicitly exempts
-   *  bracket/champion/status from the owner lock, specifically so a live game finishing on
-   *  someone else's device can still write its result back. This one extra account is trusted
-   *  the same way for the MANUAL entry path too, at the user's explicit request — logged into
-   *  their own second (non-admin) account on whatever devices are scorekeeping. Not a role
-   *  system; just this one id, matching how the app already hardcodes specific accounts
-   *  elsewhere (e.g. Players.tsx's STATIC_PORTRAITS). */
-  const TRUSTED_RESULT_EDITOR_ID = "37a33cda-b542-4b30-b9b3-49d597a3bb97"; // mueller-kim@outlook.com
-  const canEditResults = isOwner || session?.user?.id === TRUSTED_RESULT_EDITOR_ID;
+   *  scorekeepers) are a different story: the trigger above exempts bracket/champion/status from
+   *  the owner lock for roster participants, admins, and now anyone holding the club-wide
+   *  'editor' role — an admin-managed replacement for what used to be one hardcoded trusted
+   *  account (see Admin.tsx's member cards for where an admin grants this now). */
+  const isEditor = useHasRole(session?.user?.id, "editor");
+  const canEditResults = isOwner || isAdmin || isEditor;
 
   const togglePublicView = async () => {
     if (!activeTournament) return;

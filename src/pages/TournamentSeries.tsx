@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useHasRole } from "@/hooks/useHasRole";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +58,7 @@ const TournamentSeriesPage = () => {
   const { id } = useParams();
   const { session } = useAuth();
   const isAdmin = useIsAdmin(session?.user?.id);
+  const isEditor = useHasRole(session?.user?.id, "editor");
   const { clubId } = useClubBranding();
   const { toast } = useToast();
   const { t, language } = useLanguage();
@@ -261,9 +263,9 @@ const TournamentSeriesPage = () => {
                   <p className="font-semibold text-sm truncate">{s.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{count} {t("series.tournamentsSuffix")} · {new Date(s.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language])}</p>
                 </Link>
-                {(s.user_id === session?.user?.id || isAdmin) && (
+                {(s.user_id === session?.user?.id || isAdmin || isEditor) && (
                   <div className="flex items-center">
-                  {s.user_id === session?.user?.id && (
+                  {(s.user_id === session?.user?.id || isAdmin || isEditor) && (
                     <Button variant="ghost" size="icon" title={t("series.editSeries")} aria-label={t("series.editSeries")} onClick={() => startEdit(s)}>
                       <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
                     </Button>

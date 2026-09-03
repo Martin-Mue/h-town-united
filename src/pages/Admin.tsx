@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Shield, ShieldOff, Trash2, UserCog } from "lucide-react";
+import { Loader2, Shield, ShieldOff, Trash2, UserCog, Pencil, PencilOff } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +28,7 @@ interface AdminUser {
   user_id: string;
   email: string;
   created_at: string;
-  roles: ("admin" | "member")[];
+  roles: ("admin" | "member" | "editor")[];
 }
 
 /** Admin-only page: manage member roles and accounts. */
@@ -67,7 +67,7 @@ const AdminPage = () => {
     load();
   }, [load]);
 
-  const setRole = async (u: AdminUser, role: "admin", grant: boolean) => {
+  const setRole = async (u: AdminUser, role: "admin" | "editor", grant: boolean) => {
     setBusyId(u.user_id);
     const { error } = await supabase.rpc("admin_set_role", {
       _user_id: u.user_id,
@@ -77,7 +77,8 @@ const AdminPage = () => {
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: grant ? "Admin-Rolle vergeben" : "Admin-Rolle entzogen" });
+      const roleLabel = role === "admin" ? "Admin-Rolle" : "Turnier-Bearbeitung";
+      toast({ title: grant ? `${roleLabel} vergeben` : `${roleLabel} entzogen` });
       load();
     }
     setBusyId(null);
@@ -138,6 +139,7 @@ const AdminPage = () => {
         {pagedUsers.visible.map((u) => {
           const isSelf = u.user_id === user?.id;
           const isAdminUser = u.roles?.includes("admin");
+          const isEditorUser = u.roles?.includes("editor");
           const initial = u.email.trim().charAt(0).toUpperCase() || "?";
           return (
             <div key={u.user_id} className="rounded-xl border border-border bg-card p-4 flex items-start gap-3 hover:border-primary/40 transition-colors">
@@ -156,7 +158,7 @@ const AdminPage = () => {
                         key={r}
                         variant="outline"
                         className={`text-[10px] uppercase px-1.5 py-0.5 border-transparent ${
-                          r === "admin" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                          r === "admin" ? "bg-primary/15 text-primary" : r === "editor" ? "bg-secondary/15 text-secondary" : "bg-muted text-muted-foreground"
                         }`}
                       >
                         {r}
@@ -168,7 +170,7 @@ const AdminPage = () => {
                   <span className="text-[10px] text-muted-foreground">· seit {new Date(u.created_at).toLocaleDateString("de-DE")}</span>
                 </div>
 
-                <div className="mt-3 flex gap-1.5">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {isAdminUser ? (
                     <Button
                       size="sm"
@@ -190,6 +192,31 @@ const AdminPage = () => {
                       title="Zum Admin machen"
                     >
                       <Shield className="w-3.5 h-3.5" /> Zum Admin machen
+                    </Button>
+                  )}
+                  {/* Vereinsweite Turnier-/Saison-Bearbeitungsrechte ohne volle Admin-Rolle —
+                      ersetzt den früher hartkodierten TRUSTED_RESULT_EDITOR_ID-Sonderfall. */}
+                  {isEditorUser ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5"
+                      disabled={busyId === u.user_id}
+                      onClick={() => setRole(u, "editor", false)}
+                      title="Turnier-Bearbeitung entziehen"
+                    >
+                      <PencilOff className="w-3.5 h-3.5" /> Bearbeitung entziehen
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5"
+                      disabled={busyId === u.user_id}
+                      onClick={() => setRole(u, "editor", true)}
+                      title="Turnier-/Saison-Bearbeitung erlauben"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Bearbeitung erlauben
                     </Button>
                   )}
                   <AlertDialog open={confirmDeleteId === u.user_id} onOpenChange={(open) => setConfirmDeleteId(open ? u.user_id : null)}>
