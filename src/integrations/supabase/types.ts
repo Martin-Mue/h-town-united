@@ -700,6 +700,68 @@ export type Database = {
           },
         ]
       }
+      match_predictions: {
+        Row: {
+          club_id: string | null
+          created_at: string
+          id: string
+          match_id: string
+          predicted_winner: string
+          tournament_id: string
+          updated_at: string
+          voter_id: string
+        }
+        Insert: {
+          club_id?: string | null
+          created_at?: string
+          id?: string
+          match_id: string
+          predicted_winner: string
+          tournament_id: string
+          updated_at?: string
+          voter_id: string
+        }
+        Update: {
+          club_id?: string | null
+          created_at?: string
+          id?: string
+          match_id?: string
+          predicted_winner?: string
+          tournament_id?: string
+          updated_at?: string
+          voter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_predictions_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_predictions_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_predictions_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_predictions_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           ai_portrait_url: string | null
@@ -1254,7 +1316,12 @@ export type Database = {
         Returns: undefined
       }
       cast_match_prediction: {
-        Args: { _match_id: string; _predicted_winner: string; _tournament_id: string; _voter_id: string }
+        Args: {
+          _match_id: string
+          _predicted_winner: string
+          _tournament_id: string
+          _voter_id: string
+        }
         Returns: undefined
       }
       club_head_to_head: {
@@ -1305,7 +1372,11 @@ export type Database = {
       }
       get_match_predictions: {
         Args: { _tournament_id: string }
-        Returns: { match_id: string; predicted_winner: string; votes: number }[]
+        Returns: {
+          match_id: string
+          predicted_winner: string
+          votes: number
+        }[]
       }
       has_role: {
         Args: {
@@ -1343,7 +1414,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "member"
+      app_role: "admin" | "member" | "editor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1471,7 +1542,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "member"],
+      app_role: ["admin", "member", "editor"],
     },
   },
 } as const
