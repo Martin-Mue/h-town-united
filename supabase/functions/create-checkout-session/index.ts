@@ -12,10 +12,11 @@ const jsonResponse = (payload: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 /** Starts a Stripe-hosted Checkout session for a club's paid upgrade — never touches card data
- *  directly (Checkout is Stripe's own hosted page), so this app carries no PCI scope. Card,
- *  PayPal, and Klarna are all offered as selectable payment methods on that same hosted page
- *  (configured on the Price/Payment Link in the Stripe Dashboard, or via payment_method_types
- *  below) — one integration, familiar checkout options for the club admin. The actual
+ *  directly (Checkout is Stripe's own hosted page), so this app carries no PCI scope. Which
+ *  payment methods appear (card/PayPal/Klarna/...) is NOT set here — this account has "Managed
+ *  Payments" enabled, which selects them automatically and actively REJECTS an explicit
+ *  `payment_method_types` param (`StripeInvalidRequestError: Unsupported parameter`); configure
+ *  the actual method list in the Stripe Dashboard's Payment Methods settings instead. The actual
  *  plan_tier/plan_status flip happens later, in stripe-webhook, once Stripe confirms payment —
  *  never here, since a client hitting this endpoint hasn't paid anything yet. */
 serve(async (req) => {
@@ -86,7 +87,6 @@ serve(async (req) => {
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
-      payment_method_types: ["card", "paypal", "klarna"],
       client_reference_id: clubId,
       metadata: { club_id: clubId },
       // subscription.updated/.deleted webhook events reference the Subscription object, not the
