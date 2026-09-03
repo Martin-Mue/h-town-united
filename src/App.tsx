@@ -21,6 +21,7 @@ import { Loader2 } from "lucide-react";
 // retries once and, if the chunk is genuinely gone, force-reloads the page exactly once
 // (sessionStorage guard prevents a reload loop when the network is simply down).
 const RELOAD_KEY = "chunk-reload-attempted";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mirrors React.lazy's own upstream signature
 const lazyWithReload = <T extends { default: React.ComponentType<any> }>(factory: () => Promise<T>) =>
   lazy(() =>
     factory().catch(async (err) => {

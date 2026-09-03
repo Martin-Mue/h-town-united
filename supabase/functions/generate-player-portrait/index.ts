@@ -82,7 +82,7 @@ serve(async (req) => {
     if (playerName.length === 0) playerName = "Player";
 
     // Validate sourceImageBase64
-    let sourceImageBase64 = body.sourceImageBase64 || null;
+    const sourceImageBase64 = body.sourceImageBase64 || null;
     if (sourceImageBase64) {
       if (typeof sourceImageBase64 !== "string") {
         return new Response(
@@ -119,7 +119,14 @@ Style: cinematic sports photography, high contrast, dramatic lighting.
 Aspect ratio: 1:1 square portrait.
 Ultra high resolution.`;
 
-    const messages: any[] = [
+    type PortraitMessage = {
+      role: "user";
+      content: string | Array<
+        | { type: "text"; text: string }
+        | { type: "image_url"; image_url: { url: string } }
+      >;
+    };
+    const messages: PortraitMessage[] = [
       {
         role: "user",
         content: sourceImageBase64
