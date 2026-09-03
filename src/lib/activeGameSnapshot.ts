@@ -5,6 +5,16 @@ export interface TournamentLink {
   matchId: string;
   tournamentName?: string;
   board?: number;
+  // The bracket's own authoritative player1/player2 name strings, and whether player1 is
+  // GameState.players[0] — always true for local/board-mode play (playerNames[0] is set straight
+  // from match.player1 at launch, byte-identical), but an online-played match can have it either
+  // way (whoever tapped "Online" first becomes slot 0, not necessarily the bracket's player1).
+  // Optional so an old crash-recovery snapshot from before this field existed still deserializes;
+  // Game.tsx's write-back falls back to game.winnerName/legsWon when absent, which was already
+  // exactly correct for local play (see this field's own construction sites).
+  player1Name?: string;
+  player2Name?: string;
+  player1IsGameSlot0?: boolean;
 }
 
 export interface ActiveGameSnapshot {

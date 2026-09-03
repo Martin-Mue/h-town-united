@@ -84,7 +84,7 @@ import { createLegState, createCricketState } from "@/utils/gameStateFactory";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
-import { isLiveSnapshotFresh, totalRoundsOf, type Match } from "@/utils/tournament";
+import { isLiveSnapshotFresh, totalRoundsOf, type Match, type RoundRobinMatch } from "@/utils/tournament";
 import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
 import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 
@@ -547,6 +547,42 @@ const GamePage = () => {
     })();
     return () => { cancelled = true; };
   }, [onlineMatch.row, leagueLinkRef]);
+
+  // Same idea as the league effect just above, for a tournament-bracket-match-sourced online
+  // match (see Tournament.tsx's startMatchOnline) — source_id is "tournamentId:matchId". Sets
+  // BOTH tournamentLinkRef (read directly by the pushLiveSnapshot/write-back effects) AND
+  // tournamentLinkName (state — unlike leagueLinkRef, several render sites below, e.g. the
+  // post-game Rematch/"Back to Tournament" buttons, key off this STATE rather than the ref).
+  // Tournament brackets store players as free NAME strings, not ids (see the plan's own
+  // documented finding) — player1Name/player2Name/player1IsGameSlot0 let the write-back attribute
+  // the result to the right bracket slot without trusting GameState.winnerName/legsWon order
+  // directly, the same class of fix as the league case.
+  useEffect(() => {
+    const row = onlineMatch.row;
+    if (!row || row.source_type !== "tournament" || !row.source_id || tournamentLinkRef.current) return;
+    const [tournamentId, matchId] = row.source_id.split(":");
+    if (!tournamentId || !matchId) return;
+    let cancelled = false;
+    (async () => {
+      const { data: tournament } = await supabase.from("tournaments")
+        .select("name, bracket").eq("id", tournamentId).maybeSingle();
+      if (cancelled || !tournament) return;
+      const bracket = (tournament.bracket as unknown as (Match | RoundRobinMatch)[]) || [];
+      const match = bracket.find((m) => m.id === matchId);
+      if (!match?.player1 || !match?.player2) return;
+      const roster = await fetchClubPlayers();
+      if (cancelled) return;
+      const p1 = matchClubPlayer(roster, match.player1);
+      if (!p1?.user_id) return;
+      tournamentLinkRef.current = {
+        tournamentId, matchId, tournamentName: tournament.name,
+        player1Name: match.player1, player2Name: match.player2,
+        player1IsGameSlot0: p1.user_id === row.player1_user_id,
+      };
+      setTournamentLinkName(tournament.name || "Turnier");
+    })();
+    return () => { cancelled = true; };
+  }, [onlineMatch.row, tournamentLinkRef, setTournamentLinkName]);
 
   const [botThinking, setBotThinking] = useState(false);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1866,6 +1902,20 @@ const GamePage = () => {
     if (!game || !game.isFinished || savingRef.current || gameSaved) return;
     savingRef.current = true;
     const link = tournamentLinkRef.current ?? undefined;
+    // Positional, not name-based — GameState.players[0] doesn't reliably line up with the
+    // bracket's own player1 for an online match (whoever tapped "Online" first becomes slot 0, see
+    // the online-tournament resolution effect above), so game.winnerName/legsWon[0]/[1] alone
+    // aren't trustworthy there the way they always were for local/board-mode play. Falls back to
+    // exactly the old name/legsWon-based values whenever link.player1Name/player2Name aren't
+    // present (any local game, or an old crash-recovery snapshot from before this field existed) —
+    // a no-op for local play.
+    const winnerSlot0 = (game.winnerIndex ?? (game.legsWon[0] >= game.legsWon[1] ? 0 : 1)) === 0;
+    const linkPlayer1IsGameSlot0 = link?.player1IsGameSlot0 ?? true;
+    const tournamentWinnerName = (link?.player1Name && link?.player2Name)
+      ? (winnerSlot0 === linkPlayer1IsGameSlot0 ? link.player1Name : link.player2Name)
+      : game.winnerName!;
+    const tournamentScore1 = linkPlayer1IsGameSlot0 ? game.legsWon[0] : game.legsWon[1];
+    const tournamentScore2 = linkPlayer1IsGameSlot0 ? game.legsWon[1] : game.legsWon[0];
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
       await saveGameRecord(game, session?.user?.id, clubId, pendingGameIdRef.current, link);
@@ -1875,9 +1925,9 @@ const GamePage = () => {
       if (link) {
         try {
           await recordMatchResult(link.tournamentId, link.matchId, {
-            winnerName: game.winnerName!,
-            score1: game.legsWon[0],
-            score2: game.legsWon[1],
+            winnerName: tournamentWinnerName,
+            score1: tournamentScore1,
+            score2: tournamentScore2,
           });
         } catch (syncErr) {
           // The game itself is safely saved either way — only the bracket write-back failed
@@ -1889,9 +1939,9 @@ const GamePage = () => {
             id: `${pendingGameIdRef.current}-match`,
             tournamentId: link.tournamentId,
             matchId: link.matchId,
-            winnerName: game.winnerName!,
-            score1: game.legsWon[0],
-            score2: game.legsWon[1],
+            winnerName: tournamentWinnerName,
+            score1: tournamentScore1,
+            score2: tournamentScore2,
           });
           toast({
             title: t("game.tournamentPending"),
@@ -1934,9 +1984,9 @@ const GamePage = () => {
           id: `${pendingGameIdRef.current}-match`,
           tournamentId: link.tournamentId,
           matchId: link.matchId,
-          winnerName: game.winnerName!,
-          score1: game.legsWon[0],
-          score2: game.legsWon[1],
+          winnerName: tournamentWinnerName,
+          score1: tournamentScore1,
+          score2: tournamentScore2,
         });
       }
       setQueuedOffline(true);

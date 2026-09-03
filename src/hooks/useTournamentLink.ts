@@ -60,12 +60,15 @@ export function useTournamentLink({
       const savedBoard = parseInt(window.localStorage.getItem(`dart-tournament-board-${tid}`) || "", 10);
       if (Number.isFinite(savedBoard) && savedBoard > 0) board = savedBoard;
     }
-    tournamentLinkRef.current = { tournamentId: tid, matchId: mid, tournamentName: tname, board };
+    const p1 = searchParams.get("p1");
+    const p2 = searchParams.get("p2");
+    // p1/p2 are always provided for a real tournament launch (liveGamePath passes match.player1/
+    // player2 verbatim) — playerNames[0] below is set from p1 the same way, so player1IsGameSlot0
+    // is unconditionally true here; see TournamentLink's own doc comment for why this matters.
+    tournamentLinkRef.current = { tournamentId: tid, matchId: mid, tournamentName: tname, board, player1Name: p1 ?? undefined, player2Name: p2 ?? undefined, player1IsGameSlot0: true };
     setTournamentLinkName(tname || "Turnier");
     setCheckoutSuggestionEnabled(false);
 
-    const p1 = searchParams.get("p1");
-    const p2 = searchParams.get("p2");
     if (p1 || p2) {
       setPlayerNames((prev) => {
         const next = [...prev];

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, UserPlus, Monitor, QrCode, RefreshCcw, Target, Smartphone, Swords } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, UserPlus, Monitor, QrCode, RefreshCcw, Target, Smartphone, Swords, Wifi } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
@@ -27,7 +27,7 @@ import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { clubHasFeature } from "@/lib/planFeatures";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
-import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
+import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
 import MatchmakingDialog from "@/components/players/MatchmakingDialog";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
@@ -299,6 +299,10 @@ interface BracketViewportProps {
   onStartLiveGame: (match: Match) => void;
   /** Absolute URL for the QR code — null when the match isn't in a live-startable state. */
   getLiveGameUrl: (match: Match) => string | null;
+  /** Two-device online sync instead of QR-to-one-shared-board — see startMatchOnline's doc comment. */
+  canStartOnlineGame: (match: Match) => boolean;
+  onStartOnlineGame: (match: Match) => void;
+  startingOnlineId: string | null;
   /** True SETTINGS edits (round mode/format) stay creator-only — DB-enforced, see
    *  20260815170000 migration. Used only for canEditPrelim below, NOT for manual result entry
    *  (that's canEditResults, a separate/broader prop — the DB already allows non-owners to write
@@ -311,7 +315,7 @@ interface BracketViewportProps {
   onEditRoundMode: (round: number) => void;
 }
 
-const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, isOwner, canEditResults, onEditRoundMode }: BracketViewportProps) => {
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, canStartOnlineGame, onStartOnlineGame, startingOnlineId, isOwner, canEditResults, onEditRoundMode }: BracketViewportProps) => {
   // v2 — no continuous auto-measurement (see PublicTournament.tsx's LiveBracket for the same
   // change + full rationale): fixed, always-legible scale by default, native scroll for
   // overflow, manual zoom, and "fit to screen" as a one-time on-demand measurement instead of
@@ -451,6 +455,13 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               }
             />
           )}
+        </div>
+      )}
+      {canStartOnlineGame(match) && (
+        <div className="flex border-t border-border/60">
+          <Button variant="outline" size="sm" className="flex-1 rounded-none h-9 text-xs gap-1.5" disabled={startingOnlineId === match.id} onClick={() => onStartOnlineGame(match)}>
+            {startingOnlineId === match.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wifi className="w-3.5 h-3.5" />} {t("players.playOnline")}
+          </Button>
         </div>
       )}
       {canEditResults && (match.winner || match.score1 || match.score2 || onEditMatch) && (
@@ -1596,6 +1607,57 @@ const TournamentPage = () => {
     if (path) navigate(path);
   };
 
+  // Two-device sync for a bracket/round-robin match, same online_matches mechanism as League.tsx's
+  // startFixtureOnline (source_type='tournament' here, source_id="tournamentId:matchId" per the
+  // plan's documented convention) — shared by both bracket shapes since KO and round-robin only
+  // differ in how they derive mode/bestOf, not in how the challenge itself gets created. Unlike
+  // canStartLiveGame, deliberately does NOT gate on the board schedule ("now playing" slot) — online
+  // play happens on the two players' own devices, not a shared physical board, so it isn't
+  // competing for board time at all.
+  const [startingOnlineId, setStartingOnlineId] = useState<string | null>(null);
+
+  const canStartMatchOnline = (player1: string | undefined, player2: string | undefined, decided: boolean): boolean => {
+    const myUserId = session?.user?.id;
+    if (!myUserId || decided || !player1 || !player2 || !isRealPlayer(player1) || !isRealPlayer(player2)) return false;
+    const p1 = matchClubPlayer(dbPlayers, player1);
+    const p2 = matchClubPlayer(dbPlayers, player2);
+    if (!p1?.user_id || !p2?.user_id) return false;
+    return myUserId === p1.user_id || myUserId === p2.user_id;
+  };
+
+  const startMatchOnline = async (matchId: string, player1: string, player2: string, mode: string, bestOf: number) => {
+    const myUserId = session?.user?.id;
+    if (!myUserId || !activeTournament || !clubId) return;
+    const p1 = matchClubPlayer(dbPlayers, player1);
+    const p2 = matchClubPlayer(dbPlayers, player2);
+    if (!p1?.user_id || !p2?.user_id) return;
+    const opponentUserId = myUserId === p1.user_id ? p2.user_id : p1.user_id;
+    const sourceId = `${activeTournament.id}:${matchId}`;
+    setStartingOnlineId(matchId);
+    try {
+      const { data: existing } = await supabase
+        .from("online_matches")
+        .select("id")
+        .eq("source_type", "tournament").eq("source_id", sourceId).in("status", ["pending", "active"])
+        .maybeSingle();
+      if (existing) {
+        navigate(`/game?online=${existing.id}`);
+        return;
+      }
+      const { data: created, error } = await supabase.from("online_matches").insert({
+        club_id: clubId, source_type: "tournament", source_id: sourceId,
+        created_by: myUserId, player1_user_id: myUserId, player2_user_id: opponentUserId,
+        mode: mode.toLowerCase() as "501" | "301" | "cricket", best_of_legs: bestOf,
+      }).select("id").single();
+      if (error) throw error;
+      navigate(`/game?online=${created.id}`);
+    } catch (err: unknown) {
+      toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("tournament.onlineMatchFailed"), variant: "destructive" });
+    } finally {
+      setStartingOnlineId(null);
+    }
+  };
+
   // ─── Round Robin: Set Winner ───────────────────
   // Same fresh-fetch-then-merge approach as persistBracket above — round-robin ties (both
   // manual taps and live-game auto-finishes) are just as race-prone across multiple boards.
@@ -2694,6 +2756,9 @@ const TournamentPage = () => {
             canStartLiveGame={canStartLiveGame}
             onStartLiveGame={startLiveGame}
             getLiveGameUrl={(m) => { const p = koLiveGamePath(m); return p ? `${window.location.origin}${p}` : null; }}
+            canStartOnlineGame={(m) => canStartMatchOnline(m.player1, m.player2, !!m.winner) && resolveRoundMode(m.round) !== "Extern"}
+            onStartOnlineGame={(m) => startMatchOnline(m.id, m.player1!, m.player2!, resolveRoundMode(m.round), resolveRoundBestOf(m.round))}
+            startingOnlineId={startingOnlineId}
             isOwner={isOwner}
             canEditResults={canEditResults}
             onEditRoundMode={openRoundModeEditor}
@@ -3061,6 +3126,11 @@ const TournamentPage = () => {
                         />
                       )}
                     </>
+                  )}
+                  {canStartMatchOnline(m.player1, m.player2, m.played) && activeTournament.game_mode !== "Extern" && (
+                    <Button size="sm" variant="outline" className="text-xs h-9 px-2 gap-1" disabled={startingOnlineId === m.id} onClick={() => startMatchOnline(m.id, m.player1, m.player2, activeTournament.game_mode || "501", activeTournament.best_of_legs || 1)}>
+                      {startingOnlineId === m.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} {t("players.playOnline")}
+                    </Button>
                   )}
                   {canEditResults && (
                     <>
