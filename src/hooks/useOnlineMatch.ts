@@ -21,6 +21,8 @@ export interface OnlineMatchRow {
   player1_user_id: string;
   player2_user_id: string;
   game_state: OnlineGameState | null;
+  source_type: "casual" | "league" | "tournament";
+  source_id: string | null;
 }
 
 /** Drives Game.tsx's online-play branch — loads an `online_matches` row, keeps it live via a

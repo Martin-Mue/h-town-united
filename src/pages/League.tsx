@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Loader2, Users, Swords } from "lucide-react";
+import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Loader2, Users, Swords, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -234,6 +234,44 @@ const LeaguePage = () => {
     navigate(`/game?${params.toString()}`);
   };
 
+  const [startingOnlineId, setStartingOnlineId] = useState<string | null>(null);
+
+  // Two-device sync for a fixture, reusing the same online_matches mechanism as a casual
+  // challenge (source_type='league', source_id=fixture.id) -- see Game.tsx's matching effect
+  // that resolves this back into a league_fixtures write-back once the match finishes. Only
+  // offered to the two fixture participants themselves (mirrors the RLS insert policy, which
+  // would reject anyone else's attempt anyway), and only when both have a real linked account.
+  const startFixtureOnline = async (f: FixtureRow) => {
+    const myUserId = session?.user?.id;
+    const p1 = playerById.get(f.player1_id);
+    const p2 = playerById.get(f.player2_id);
+    if (!myUserId || !p1?.user_id || !p2?.user_id || !clubId) return;
+    const opponentUserId = myUserId === p1.user_id ? p2.user_id : p1.user_id;
+    setStartingOnlineId(f.id);
+    try {
+      const { data: existing } = await supabase
+        .from("online_matches")
+        .select("id")
+        .eq("source_type", "league").eq("source_id", f.id).in("status", ["pending", "active"])
+        .maybeSingle();
+      if (existing) {
+        navigate(`/game?online=${existing.id}`);
+        return;
+      }
+      const { data: created, error } = await supabase.from("online_matches").insert({
+        club_id: clubId, source_type: "league", source_id: f.id,
+        created_by: myUserId, player1_user_id: myUserId, player2_user_id: opponentUserId,
+        mode: activeLeague!.game_mode as "501" | "301" | "cricket", best_of_legs: activeLeague!.best_of_legs,
+      }).select("id").single();
+      if (error) throw error;
+      navigate(`/game?online=${created.id}`);
+    } catch (err: unknown) {
+      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Online-Match konnte nicht gestartet werden.", variant: "destructive" });
+    } finally {
+      setStartingOnlineId(null);
+    }
+  };
+
   const openManualEntry = (f: FixtureRow) => {
     setManualEntryFixture(f);
     setManualP1Legs(""); setManualP2Legs("");
@@ -348,9 +386,16 @@ const LeaguePage = () => {
                           </div>
                           {f.status === "pending" && (
                             activeLeague.result_mode === "live" ? (
-                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={() => startFixtureGame(f)}>
-                                <Play className="w-3 h-3" /> Spielen
-                              </Button>
+                              <>
+                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={() => startFixtureGame(f)}>
+                                  <Play className="w-3 h-3" /> Spielen
+                                </Button>
+                                {session?.user?.id && [p1?.user_id, p2?.user_id].includes(session.user.id) && p1?.user_id && p2?.user_id && (
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" disabled={startingOnlineId === f.id} onClick={() => startFixtureOnline(f)}>
+                                    {startingOnlineId === f.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} Online
+                                  </Button>
+                                )}
+                              </>
                             ) : (
                               <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={() => openManualEntry(f)}>
                                 <Pencil className="w-3 h-3" /> Eintragen

@@ -6,6 +6,13 @@ export interface LeagueLink {
   fixtureId: string;
   player1Id: string;
   player2Id: string;
+  // True when player1Id (the fixture's OWN stored player1_id) is GameState.players[0] — always
+  // true for a local game (this hook always sets playerNames in fixture order below), but an
+  // online-played fixture can have it the other way around: whoever taps "Online" first becomes
+  // GameState slot 0, which is not necessarily the fixture's own designated player1. The
+  // league_fixtures write-back (Game.tsx's saveGame) needs this to attribute legsWon/winner_id to
+  // the right fixture column instead of assuming slot 0 always means "player1".
+  player1IsGameSlot0: boolean;
 }
 
 interface UseLeagueLinkParams {
@@ -38,7 +45,7 @@ export function useLeagueLink({ searchParams, setPlayerNames, setTeamMode, setNu
     const p1id = searchParams.get("p1id");
     const p2id = searchParams.get("p2id");
     if (!lid || !fid || !p1id || !p2id) return;
-    leagueLinkRef.current = { leagueId: lid, fixtureId: fid, player1Id: p1id, player2Id: p2id };
+    leagueLinkRef.current = { leagueId: lid, fixtureId: fid, player1Id: p1id, player2Id: p2id, player1IsGameSlot0: true };
 
     const p1 = searchParams.get("p1");
     const p2 = searchParams.get("p2");

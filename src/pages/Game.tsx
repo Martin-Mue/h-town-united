@@ -517,6 +517,37 @@ const GamePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game, dartsThisRound, turnStartRemaining, phase, onlineMatchId]);
 
+  // A league-fixture-sourced online match (see League.tsx's startFixtureOnline) reaches Game.tsx
+  // via ?online=<id> alone, never the lid/fid/p1id/p2id params useLeagueLink reads — the accepting
+  // device in particular has no way to know those, since PendingOnlineChallenges.tsx navigates it
+  // in generically with no fixture knowledge at all. Resolving the fixture here and populating the
+  // SAME leagueLinkRef lets the existing league_fixtures write-back (further below) fire unchanged
+  // on either device. player1Id/player2Id stay the fixture's OWN stored ids (unlike local play,
+  // NOT guaranteed to line up with GameState.players[0]/[1] — whoever taps "Online" first becomes
+  // GameState slot 0, which may be either fixture participant) — player1IsGameSlot0 records which
+  // way round it landed so the write-back can attribute legsWon/winner_id correctly either way.
+  useEffect(() => {
+    const row = onlineMatch.row;
+    if (!row || row.source_type !== "league" || !row.source_id || leagueLinkRef.current) return;
+    let cancelled = false;
+    (async () => {
+      const { data: fixture } = await supabase.from("league_fixtures")
+        .select("league_id, player1_id, player2_id").eq("id", row.source_id!).maybeSingle();
+      if (cancelled || !fixture) return;
+      const { data: fixtureP1Row } = await supabase.from("players")
+        .select("user_id").eq("id", fixture.player1_id).maybeSingle();
+      if (cancelled || !fixtureP1Row) return;
+      leagueLinkRef.current = {
+        leagueId: fixture.league_id,
+        fixtureId: row.source_id!,
+        player1Id: fixture.player1_id,
+        player2Id: fixture.player2_id,
+        player1IsGameSlot0: fixtureP1Row.user_id === row.player1_user_id,
+      };
+    })();
+    return () => { cancelled = true; };
+  }, [onlineMatch.row, leagueLinkRef]);
+
   const [botThinking, setBotThinking] = useState(false);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const botPlanRef = useRef<{ key: string; darts: DartThrow[]; applied: number } | null>(null);
@@ -1870,14 +1901,17 @@ const GamePage = () => {
       }
       const leagueLink = leagueLinkRef.current;
       if (leagueLink) {
-        const p1Legs = game.legsWon[0];
-        const p2Legs = game.legsWon[1];
+        // GameState.players[0]/[1] only line up 1:1 with the fixture's own player1/player2 when
+        // player1IsGameSlot0 — true unconditionally for local play, but an online-played fixture
+        // can have it flipped (see the resolution effect that sets this ref for that case).
+        const fixtureP1Legs = leagueLink.player1IsGameSlot0 ? game.legsWon[0] : game.legsWon[1];
+        const fixtureP2Legs = leagueLink.player1IsGameSlot0 ? game.legsWon[1] : game.legsWon[0];
         try {
           await supabase.from("league_fixtures").update({
             status: "finished",
-            winner_id: p1Legs > p2Legs ? leagueLink.player1Id : leagueLink.player2Id,
-            player1_legs_won: p1Legs,
-            player2_legs_won: p2Legs,
+            winner_id: fixtureP1Legs > fixtureP2Legs ? leagueLink.player1Id : leagueLink.player2Id,
+            player1_legs_won: fixtureP1Legs,
+            player2_legs_won: fixtureP2Legs,
             game_id: pendingGameIdRef.current,
             played_at: new Date().toISOString(),
           }).eq("id", leagueLink.fixtureId).eq("status", "pending");
