@@ -8,6 +8,9 @@ import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
 import { CHECKOUT_ROUTES } from "@/utils/checkoutTable";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Sparkline } from "@/components/stats/StatPrimitives";
+import { useToast } from "@/hooks/use-toast";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { clubHasFeature } from "@/lib/planFeatures";
 
 /** Training drill definition */
 interface TrainingDrill {
@@ -398,6 +401,8 @@ interface DrillConfig {
 
 const TrainingPage = () => {
   const { t } = useLanguage();
+  const { toast } = useToast();
+  const { club } = useClubBranding();
   const [selectedDrill, setSelectedDrill] = useState<TrainingDrill | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [drillState, setDrillState] = useState<DrillState | null>(null);
@@ -1357,7 +1362,13 @@ const TrainingPage = () => {
             <div className="mt-3">
               <Button
                 variant={cameraEnabled ? "default" : "outline"}
-                onClick={() => setCameraEnabled((v) => !v)}
+                onClick={() => {
+                  if (!cameraEnabled && !clubHasFeature(club?.plan_tier, "camera")) {
+                    toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
+                    return;
+                  }
+                  setCameraEnabled((v) => !v);
+                }}
                 className="w-full gap-2"
               >
                 <Camera className="w-4 h-4" /> {cameraEnabled ? t("training.cameraOff") : t("training.cameraScoring")}

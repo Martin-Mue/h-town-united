@@ -18,6 +18,12 @@ interface ClubRow {
   tagline: string | null;
   logo_path: string | null;
   theme_preset: string;
+  /** Drives clubHasFeature() (src/lib/planFeatures.ts) — 'trial' | 'free_locked' | 'paid'.
+   *  Optional, not just typed-as-string: the anonymous/cold fetch path below reads from
+   *  `clubs_public`, which deliberately excludes this column (see that view's own migration
+   *  comment) — clubHasFeature() treats a missing value as the safe (gated) default, since
+   *  nothing on that anonymous path should ever need to check it anyway. */
+  plan_tier?: string;
 }
 
 /** "loading": fetch in flight or not started -- club may still be stale/null, never act on it.

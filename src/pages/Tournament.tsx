@@ -24,6 +24,7 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useHasRole } from "@/hooks/useHasRole";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { clubHasFeature } from "@/lib/planFeatures";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
@@ -775,7 +776,11 @@ const TournamentPage = () => {
 
   const { session } = useAuth();
   const isAdmin = useIsAdmin(session?.user?.id);
-  const { clubId } = useClubBranding();
+  const { clubId, club } = useClubBranding();
+  // Trial-tier clubs are capped well below the real 64-player ceiling — 8 matches the size this
+  // was already offered as a fixed bracket option, so a gated club still gets a genuinely usable
+  // tournament size, just not a big multi-board event. free_locked/paid clubs are unaffected.
+  const maxParticipants = clubHasFeature(club?.plan_tier, "largeTournaments") ? 64 : 8;
   const { toast } = useToast();
   const navigate = useNavigate();
   const { id: routeTournamentId } = useParams();
@@ -972,14 +977,16 @@ const TournamentPage = () => {
     // this component) rather than only inside the updater — needed here specifically to know
     // what actually landed for the toast below, not just to compute the new list.
     const newOnes = cleaned.filter((name) => !players.includes(name));
-    const added = Math.min(newOnes.length, Math.max(0, 64 - players.length));
-    setPlayers((prev) => [...prev, ...cleaned.filter((name) => !prev.includes(name))].slice(0, 64));
-    // Used to silently drop duplicates and anything past the 64-player cap — the input field
+    const added = Math.min(newOnes.length, Math.max(0, maxParticipants - players.length));
+    setPlayers((prev) => [...prev, ...cleaned.filter((name) => !prev.includes(name))].slice(0, maxParticipants));
+    // Used to silently drop duplicates and anything past the player cap — the input field
     // still cleared as if every name had been accepted, with no indication anything didn't stick.
     if (added < cleaned.length) {
       toast({
         title: t("tournament.notAllPlayersAdded"),
-        description: `${added} / ${cleaned.length} ${t("tournament.playersAddedDupOrLimitSuffix")}`,
+        description: added === 0 && newOnes.length > 0 && maxParticipants < 64
+          ? t("plan.largeTournamentsGatedHint")
+          : `${added} / ${cleaned.length} ${t("tournament.playersAddedDupOrLimitSuffix")}`,
         variant: added === 0 ? "destructive" : undefined,
       });
     }
@@ -1935,9 +1942,12 @@ const TournamentPage = () => {
                   <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     <SelectItem value="auto">{t("tournament.autoAdaptsToParticipants")}</SelectItem>
-                    {BRACKET_SIZES.map(n => <SelectItem key={n} value={String(n)}>{t("tournament.fixed")}: {n}{t("tournament.playerBracketSuffix")}</SelectItem>)}
+                    {(clubHasFeature(club?.plan_tier, "largeTournaments") ? BRACKET_SIZES : BRACKET_SIZES.filter((n) => n <= 8)).map(n => <SelectItem key={n} value={String(n)}>{t("tournament.fixed")}: {n}{t("tournament.playerBracketSuffix")}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {!clubHasFeature(club?.plan_tier, "largeTournaments") && (
+                  <p className="text-[11px] text-accent mt-1">{t("plan.largeTournamentsGatedHint")}</p>
+                )}
                 <p className="text-[11px] text-muted-foreground mt-1">
                   {t("tournament.recommendedAuto")}
                 </p>
@@ -2123,7 +2133,7 @@ const TournamentPage = () => {
               <Button size="sm" variant="outline" onClick={addBulkPlayers}>{t("tournament.adoptList")}</Button>
               {tournamentMode !== "round-robin" && <Button size="sm" variant="outline" onClick={fillGuestPlayers}>{t("tournament.fillWithGuests")}</Button>}
               <div className="flex items-center gap-1">
-                <Input type="number" min={1} max={64} value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value))} className="h-8 w-16 bg-card border-border" />
+                <Input type="number" min={1} max={maxParticipants} value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value))} className="h-8 w-16 bg-card border-border" />
                 <Button size="sm" variant="outline" onClick={() => addPlayers(Array.from({ length: Math.max(1, guestCount) }, (_, i) => `${t("tournament.guestNamePrefix")} ${String(players.length + i + 1).padStart(2, "0")}`))}>
                   {t("tournament.addGuests")}
                 </Button>

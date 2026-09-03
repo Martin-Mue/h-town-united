@@ -74,6 +74,7 @@ import {
 import { speakSequence, buildRoundAnnouncement, getCallerVoice, setCallerVoice, type CallerVoice } from "@/utils/speech";
 import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { clubHasFeature } from "@/lib/planFeatures";
 import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
@@ -339,7 +340,7 @@ const GamePage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useLanguage();
-  const { name: clubName, clubId } = useClubBranding();
+  const { name: clubName, clubId, club } = useClubBranding();
   const [searchParams] = useSearchParams();
   // Declared up here (rather than alongside their other in-game-HUD state further down) because
   // the crash-recovery save effect just below needs them in its dependency array, which is
@@ -3151,7 +3152,13 @@ const GamePage = () => {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => { cameraWantedRef.current = true; setCameraEnabled(true); }}
+                onClick={() => {
+                  if (!clubHasFeature(club?.plan_tier, "camera")) {
+                    toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
+                    return;
+                  }
+                  cameraWantedRef.current = true; setCameraEnabled(true);
+                }}
                 disabled={!!currentPlayer?.isBot}
                 className="gap-1"
                 title={t("game.liveCameraScoring")}
