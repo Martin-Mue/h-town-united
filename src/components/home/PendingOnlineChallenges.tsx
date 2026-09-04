@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Wifi, Check, X } from "lucide-react";
+import { Wifi, Check, X, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { createLegState, createCricketState } from "@/utils/gameStateFactory";
+import { notifyChallengeDeclined } from "@/lib/onlineMatchNotify";
 import type { GameState, PlayerSlot } from "@/types/game";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -37,6 +38,11 @@ const PendingOnlineChallenges = () => {
   const [challenges, setChallenges] = useState<PendingChallenge[]>([]);
   const [activeMatches, setActiveMatches] = useState<ActiveMatch[]>([]);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  // Tapping decline doesn't decline immediately — it reveals an inline optional-comment field
+  // first (the user explicitly wanted the challenger to be able to see why), confirmed via the
+  // same X icon a second time. null means no challenge is mid-decline right now.
+  const [decliningId, setDecliningId] = useState<string | null>(null);
+  const [declineComment, setDeclineComment] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -91,11 +97,25 @@ const PendingOnlineChallenges = () => {
     return () => { cancelled = true; window.clearInterval(interval); };
   }, [user]);
 
-  const decline = async (id: string) => {
-    setRespondingId(id);
-    await supabase.from("online_matches").update({ status: "declined" }).eq("id", id);
-    setChallenges((prev) => prev.filter((c) => c.id !== id));
+  const decline = async (challenge: PendingChallenge, reason: string) => {
+    if (!user) return;
+    setRespondingId(challenge.id);
+    const trimmedReason = reason.trim();
+    const { error } = await supabase.from("online_matches")
+      .update({ status: "declined", decline_reason: trimmedReason || null })
+      .eq("id", challenge.id);
+    // If a given environment hasn't had the decline_reason migration applied yet, PostgREST
+    // rejects the whole update — declining must still work even without the comment persisted
+    // (the push below still carries it either way, computed client-side regardless of this write).
+    if (error) {
+      await supabase.from("online_matches").update({ status: "declined" }).eq("id", challenge.id);
+    }
+    const { data: myPlayer } = await supabase.from("players").select("name").eq("user_id", user.id).maybeSingle();
+    notifyChallengeDeclined(challenge.player1_user_id, myPlayer?.name ?? "Jemand", trimmedReason || undefined);
+    setChallenges((prev) => prev.filter((c) => c.id !== challenge.id));
     setRespondingId(null);
+    setDecliningId(null);
+    setDeclineComment("");
   };
 
   const accept = async (challenge: PendingChallenge) => {
@@ -158,35 +178,69 @@ const PendingOnlineChallenges = () => {
           </Link>
         ))}
         {challenges.map((c) => (
-          <div key={c.id} className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0 text-base">
-              {c.challengerEmoji}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm truncate">
-                <span className="font-semibold">{c.challengerName}</span> · {t("home.challengedYou")} ({c.mode === "cricket" ? "Cricket" : c.mode})
-              </p>
-            </div>
-            <div className="flex gap-1.5 shrink-0">
-              <button
-                onClick={() => decline(c.id)}
-                disabled={respondingId === c.id}
-                aria-label={t("home.declineChallenge")}
-                title={t("home.declineChallenge")}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-destructive/15 hover:text-destructive transition-colors disabled:opacity-40"
-              >
-                <X className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => accept(c)}
-                disabled={respondingId === c.id}
-                aria-label={t("home.acceptChallenge")}
-                title={t("home.acceptChallenge")}
-                className="w-8 h-8 rounded-full flex items-center justify-center bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40"
-              >
-                <Check className="w-4 h-4" />
-              </button>
-            </div>
+          <div key={c.id} className="bg-card border border-border rounded-xl px-4 py-2.5">
+            {decliningId === c.id ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={declineComment}
+                  onChange={(e) => setDeclineComment(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") decline(c, declineComment); }}
+                  placeholder={t("home.declineCommentPlaceholder")}
+                  maxLength={200}
+                  className="flex-1 min-w-0 rounded-lg bg-muted border border-border px-3 py-1.5 text-sm text-foreground"
+                />
+                <button
+                  onClick={() => { setDecliningId(null); setDeclineComment(""); }}
+                  disabled={respondingId === c.id}
+                  aria-label={t("common.cancel")}
+                  title={t("common.cancel")}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-40"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => decline(c, declineComment)}
+                  disabled={respondingId === c.id}
+                  aria-label={t("home.declineChallenge")}
+                  title={t("home.declineChallenge")}
+                  className="w-8 h-8 rounded-full flex items-center justify-center bg-destructive/15 text-destructive hover:bg-destructive/25 transition-colors shrink-0 disabled:opacity-40"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0 text-base">
+                  {c.challengerEmoji}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm truncate">
+                    <span className="font-semibold">{c.challengerName}</span> · {t("home.challengedYou")} ({c.mode === "cricket" ? "Cricket" : c.mode})
+                  </p>
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <button
+                    onClick={() => setDecliningId(c.id)}
+                    disabled={respondingId === c.id}
+                    aria-label={t("home.declineChallenge")}
+                    title={t("home.declineChallenge")}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-destructive/15 hover:text-destructive transition-colors disabled:opacity-40"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => accept(c)}
+                    disabled={respondingId === c.id}
+                    aria-label={t("home.acceptChallenge")}
+                    title={t("home.acceptChallenge")}
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-40"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

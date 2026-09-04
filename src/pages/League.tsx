@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
+import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
 import { generateRoundRobinFixtures } from "@/utils/roundRobin";
 import { SectionCard, Eyebrow, RankBadge, RankAvatar } from "@/components/stats/StatPrimitives";
 import { usePagedList } from "@/hooks/usePagedList";
@@ -264,6 +265,8 @@ const LeaguePage = () => {
         mode: activeLeague!.game_mode as "501" | "301" | "cricket", best_of_legs: activeLeague!.best_of_legs,
       }).select("id").single();
       if (error) throw error;
+      const myName = myUserId === p1.user_id ? p1.name : p2.name;
+      notifyChallengeCreated(opponentUserId, myName, activeLeague!.game_mode as "501" | "301" | "cricket");
       navigate(`/game?online=${created.id}`);
     } catch (err: unknown) {
       toast({ title: "Fehler", description: err instanceof Error ? err.message : "Online-Match konnte nicht gestartet werden.", variant: "destructive" });

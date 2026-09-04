@@ -28,6 +28,7 @@ import { clubHasFeature } from "@/lib/planFeatures";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
+import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
 import MatchmakingDialog from "@/components/players/MatchmakingDialog";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
@@ -1650,6 +1651,8 @@ const TournamentPage = () => {
         mode: mode.toLowerCase() as "501" | "301" | "cricket", best_of_legs: bestOf,
       }).select("id").single();
       if (error) throw error;
+      const myName = myUserId === p1.user_id ? p1.name : p2.name;
+      notifyChallengeCreated(opponentUserId, myName, mode.toLowerCase() as "501" | "301" | "cricket");
       navigate(`/game?online=${created.id}`);
     } catch (err: unknown) {
       toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("tournament.onlineMatchFailed"), variant: "destructive" });

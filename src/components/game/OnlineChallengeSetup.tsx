@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
+import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
 
 const MODES = ["501", "301", "cricket"] as const;
 const BEST_OF_OPTIONS = [1, 3, 5];
@@ -52,6 +53,8 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
       toast({ title: t("players.challengeFailed"), description: error.message, variant: "destructive" });
       return;
     }
+    const myName = players.find((p) => p.user_id === user.id)?.name ?? "Jemand";
+    notifyChallengeCreated(opponent.user_id, myName, mode);
     toast({ title: t("players.challengeSent"), description: t("players.challengeSentDesc") });
     navigate("/");
   };

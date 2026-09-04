@@ -110,6 +110,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "home.challengedYou": { de: "hat dich herausgefordert", en: "challenged you", fr: "t'a défié", pl: "wyzwał(a) cię", nl: "heeft je uitgedaagd", tr: "seni meydan okudu" },
   "home.acceptChallenge": { de: "Annehmen", en: "Accept", fr: "Accepter", pl: "Akceptuj", nl: "Accepteren", tr: "Kabul et" },
   "home.declineChallenge": { de: "Ablehnen", en: "Decline", fr: "Refuser", pl: "Odrzuć", nl: "Afwijzen", tr: "Reddet" },
+  "home.declineCommentPlaceholder": { de: "Kommentar (optional)", en: "Comment (optional)", fr: "Commentaire (facultatif)", pl: "Komentarz (opcjonalnie)", nl: "Opmerking (optioneel)", tr: "Yorum (isteğe bağlı)" },
   "home.anniversaryHeading": { de: "Mitglieds-Jubiläen", en: "Membership anniversaries", fr: "Anniversaires d'adhésion", pl: "Rocznice członkostwa", nl: "Lidmaatschapsjubilea", tr: "Üyelik yıl dönümleri" },
   "home.anniversaryOneYear": { de: "seit 1 Jahr dabei", en: "member for 1 year", fr: "membre depuis 1 an", pl: "członkiem od 1 roku", nl: "lid sinds 1 jaar", tr: "1 yıldır üye" },
   "home.anniversaryYearsSuffix": { de: "Jahre dabei", en: "years with the club", fr: "ans au club", pl: "lat w klubie", nl: "jaar lid", tr: "yıldır üye" },
