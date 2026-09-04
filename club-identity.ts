@@ -14,10 +14,10 @@
 // published under it -- safe to change freely before the first real Play Console submission, not
 // after.
 export const CLUB_IDENTITY = {
-  appId: "de.htownunited.tournamenthub",
-  appName: "H-Town United e.V.",
-  shortName: "H-Town United",
-  description: "Von Heiligenhausern für Heiligenhaus – Spiele, Turniere und Statistiken für den Dartsclub.",
+  appId: "com.dartspot.club",
+  appName: "DartSpot",
+  shortName: "DartSpot",
+  description: "Turniere, Ligen und Statistiken für deinen Dartverein.",
   themeColor: "#0b0f17",
   backgroundColor: "#0b0f17",
   icon192: "/pwa-192.png",
