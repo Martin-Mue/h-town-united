@@ -242,6 +242,7 @@ export type Database = {
           match_id: string | null
           mode: string
           played_at: string
+          played_online: boolean
           player1_average: number
           player1_double_rate: number
           player1_highscore: number
@@ -256,7 +257,6 @@ export type Database = {
           player2_legs_won: number
           player2_name: string
           player2_total_throws: number
-          played_online: boolean
           start_score: number
           stats_applied: boolean
           tournament_id: string | null
@@ -273,6 +273,7 @@ export type Database = {
           match_id?: string | null
           mode?: string
           played_at?: string
+          played_online?: boolean
           player1_average?: number
           player1_double_rate?: number
           player1_highscore?: number
@@ -287,7 +288,6 @@ export type Database = {
           player2_legs_won?: number
           player2_name: string
           player2_total_throws?: number
-          played_online?: boolean
           start_score?: number
           stats_applied?: boolean
           tournament_id?: string | null
@@ -304,6 +304,7 @@ export type Database = {
           match_id?: string | null
           mode?: string
           played_at?: string
+          played_online?: boolean
           player1_average?: number
           player1_double_rate?: number
           player1_highscore?: number
@@ -318,7 +319,6 @@ export type Database = {
           player2_legs_won?: number
           player2_name?: string
           player2_total_throws?: number
-          played_online?: boolean
           start_score?: number
           stats_applied?: boolean
           tournament_id?: string | null
