@@ -780,6 +780,7 @@ export type Database = {
           club_id: string
           created_at: string
           created_by: string
+          decline_reason: string | null
           game_state: Json | null
           id: string
           mode: string
@@ -795,6 +796,7 @@ export type Database = {
           club_id: string
           created_at?: string
           created_by: string
+          decline_reason?: string | null
           game_state?: Json | null
           id?: string
           mode: string
@@ -810,6 +812,7 @@ export type Database = {
           club_id?: string
           created_at?: string
           created_by?: string
+          decline_reason?: string | null
           game_state?: Json | null
           id?: string
           mode?: string
