@@ -1,10 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 
 // Public VAPID key — safe to ship in client code (only the matching private key, held as a
-// Supabase edge function secret, can actually sign/send pushes). Regenerated 2026-08-19 (the
-// original private key was never saved anywhere and was unrecoverable) — must match whatever
-// VAPID_PUBLIC_KEY is set to in the send-push edge function's secrets, see supabase/functions/send-push.
-const VAPID_PUBLIC_KEY = "BHCBpSkqfWzlx1MKr5ZS1jtHhdgnyGQYOAdIEXZhFQpGt2dNh05fewEk5cI7x7X1BcACbQSVUlDwvpO6bTMymhQ";
+// Supabase edge function secret, can actually sign/send pushes). Regenerated 2026-09-04 (the
+// previous key pair's private half was unrecoverable) — must match VAPID_PUBLIC_KEY in the
+// send-push edge function's secrets, see supabase/functions/send-push.
+const VAPID_PUBLIC_KEY = "BHeUAzMydhdKntNo7g6a1bkdLeIx6dlZc-n1oG9ntdbJ_Rcn6a7d8oDwMPK64RQjwcdOyS1iDQ3W3AktlxmlYOU";
 
 function urlBase64ToUint8Array(base64: string): Uint8Array {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
