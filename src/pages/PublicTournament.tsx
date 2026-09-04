@@ -1057,6 +1057,27 @@ const PublicTournamentPage = () => {
     };
   }, [slug]);
 
+  // Separate effect (not folded into the slug-keyed one above) since it needs t.id, which isn't
+  // known until that first load() resolves. Subscribes to pushLiveSnapshot's broadcast channel
+  // (see tournamentMatchSync.ts) as a fast path layered on top of the postgres_changes/poll above
+  // — that one still fires regardless and remains the durable source of truth for a viewer who
+  // missed the broadcast; this only makes a mid-match score tick feel instant instead of
+  // up-to-8s-stale, by patching just the one affected match's `live` field directly.
+  useEffect(() => {
+    if (!t?.id) return;
+    const id = t.id;
+    const channel = supabase
+      .channel(`tournament-live-${id}`)
+      .on("broadcast", { event: "live" }, ({ payload }) => {
+        const { matchId, snapshot } = payload as { matchId: string; snapshot: LiveSnapshot };
+        setT((prev) => (prev && prev.id === id
+          ? { ...prev, bracket: prev.bracket.map((m) => (m.id === matchId ? { ...m, live: snapshot } : m)) }
+          : prev));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [t?.id]);
+
   // Called unconditionally, ahead of the loading/not-found early returns below — hooks can't be
   // called after an early return, so this can't sit next to isKo/matches (both AFTER those
   // returns, since they safely dereference `t` without a null check). Safe to call with `t` still

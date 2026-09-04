@@ -932,10 +932,31 @@ const TournamentPage = () => {
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tournaments", filter: `id=eq.${id}` }, refresh)
       .subscribe();
 
+    // Separate channel/name from the one above on purpose — this is pushLiveSnapshot's fast,
+    // best-effort broadcast path (see tournamentMatchSync.ts), not a durable postgres_changes
+    // event, so it's kept apart rather than folded into the same subscription. Patches just the
+    // one match's `live` field directly instead of waiting for the next full `refresh()` (which
+    // still happens regardless via the postgres_changes/poll above — this only makes the common
+    // case, a score ticking up mid-match, feel instant instead of up-to-8s-stale).
+    const liveChannel = supabase
+      .channel(`tournament-live-${id}`)
+      .on("broadcast", { event: "live" }, ({ payload }) => {
+        const { matchId, snapshot } = payload as { matchId: string; snapshot: Match["live"] };
+        setActiveTournament((prev) => {
+          if (!prev || prev.id !== id) return prev;
+          const bracket = (prev.bracket as (Match | RoundRobinMatch)[]).map((m) =>
+            m.id === matchId ? { ...m, live: snapshot } : m
+          );
+          return { ...prev, bracket: bracket as Match[] | RoundRobinMatch[] };
+        });
+      })
+      .subscribe();
+
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       supabase.removeChannel(channel);
+      supabase.removeChannel(liveChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, activeTournament?.id]);

@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { Json } from "@/integrations/supabase/types";
 import {
   type Match,
@@ -43,6 +44,24 @@ async function notifyMatchesReady(matches: Match[]): Promise<void> {
   }
 }
 
+// One subscribed broadcast channel per tournament, reused across calls instead of creating (and
+// re-subscribing) a fresh one on every single snapshot push — this fires every ~1.2s per active
+// linked game, so churning channels that often would be wasteful. Same channel name both
+// PublicTournament.tsx and Tournament.tsx's own bracket view listen on. Never explicitly torn
+// down: a page session realistically touches at most a couple of tournaments, so the small,
+// bounded leak isn't worth the extra bookkeeping (mirrors this file's existing "spectator sugar,
+// not worth defending too hard" stance).
+const liveChannels = new Map<string, RealtimeChannel>();
+function getLiveChannel(tournamentId: string): RealtimeChannel {
+  let channel = liveChannels.get(tournamentId);
+  if (!channel) {
+    channel = supabase.channel(`tournament-live-${tournamentId}`);
+    channel.subscribe();
+    liveChannels.set(tournamentId, channel);
+  }
+  return channel;
+}
+
 /**
  * Best-effort "what's the score right now" push for the public live view — spectator sugar,
  * never authoritative. Every failure is swallowed: this must never interrupt or slow down an
@@ -54,8 +73,15 @@ async function notifyMatchesReady(matches: Match[]): Promise<void> {
  * server-side UPDATE (see the update_match_live_snapshot migration) instead of a client-side
  * SELECT-then-UPDATE — the old read-modify-write had a real window for a concurrent write
  * (another board finishing, an owner's manual edit) to land in between and get silently reverted.
+ *
+ * Also broadcasts the same {matchId, snapshot} payload — a pure latency shortcut, same shape as
+ * useOnlineMatch's sendThrow: the DB write above stays the durable, reconnect-safe source of
+ * truth (a viewer who missed the broadcast still gets it on the next postgres_changes UPDATE or
+ * 8s poll), broadcast just lets an already-open viewer see it sooner than that write-then-poll
+ * round trip would otherwise allow.
  */
 export async function pushLiveSnapshot(tournamentId: string, matchId: string, snapshot: LiveSnapshot): Promise<void> {
+  void getLiveChannel(tournamentId).send({ type: "broadcast", event: "live", payload: { matchId, snapshot } });
   try {
     await supabase.rpc("update_match_live_snapshot", {
       p_tournament_id: tournamentId,
