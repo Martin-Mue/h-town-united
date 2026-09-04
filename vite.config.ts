@@ -48,7 +48,7 @@ const buildTime = new Date().toISOString();
 function i18nGeneratedLocales() {
   const regenerate = () => {
     try {
-      execSync("node --experimental-strip-types scripts/generate-locales.mjs", { stdio: "inherit" });
+      execSync("node scripts/generate-locales.mjs", { stdio: "inherit" });
     } catch (err) {
       console.error("[i18n] locale generation failed:", err instanceof Error ? err.message : err);
     }
