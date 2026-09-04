@@ -43,7 +43,15 @@ serve(async (req) => {
     const STRIPE_PRICE_ID_YEARLY = Deno.env.get("STRIPE_PRICE_ID_YEARLY");
     if (!STRIPE_SECRET_KEY) throw new Error("Stripe is not configured (STRIPE_SECRET_KEY / STRIPE_TEST_API_KEY)");
     if (!STRIPE_PRICE_ID_MONTHLY || !STRIPE_PRICE_ID_YEARLY) throw new Error("Stripe is not configured (STRIPE_PRICE_ID_MONTHLY / STRIPE_PRICE_ID_YEARLY)");
-    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-11-20.acacia" });
+    // Managed Payments (this account's payment-method setup) requires 2025-03-31.basil or newer —
+    // 2024-11-20.acacia rejects the request outright with "Managed Payments is not supported on
+    // API version...". Bump this only forward in lockstep with stripe-webhook's own pinned
+    // version below; a mismatch between the two isn't harmful (each call is independently
+    // versioned against Stripe), but keeping them identical avoids two things to remember. The
+    // `as Stripe.LatestApiVersion` cast is defensive: the pinned stripe@17.5.0 SDK's own type
+    // definitions may predate this version string, which would otherwise fail Deno's type check
+    // at deploy time even though the string itself is exactly what Stripe's API expects.
+    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2025-03-31.basil" as Stripe.LatestApiVersion });
 
     // "period" (not "interval") — matches what AdminBilling.tsx actually sends; a client sending
     // anything other than "yearly" defaults to monthly rather than erroring, same as the UI's own

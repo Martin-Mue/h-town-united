@@ -23,7 +23,9 @@ serve(async (req) => {
     console.error("stripe-webhook: missing STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET");
     return jsonResponse({ error: "Not configured" }, 500);
   }
-  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-11-20.acacia" });
+  // Kept in lockstep with create-checkout-session's own pinned version — see its comment for why
+  // this account needs 2025-03-31.basil or newer (Managed Payments).
+  const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2025-03-31.basil" as Stripe.LatestApiVersion });
 
   const signature = req.headers.get("stripe-signature");
   const rawBody = await req.text();
