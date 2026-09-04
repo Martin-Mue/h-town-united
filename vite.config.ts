@@ -37,6 +37,34 @@ const commitSha = (() => {
 })();
 const buildTime = new Date().toISOString();
 
+// Regenerates src/i18n/generated/<lang>.json from the single-source src/i18n/translations.ts (see
+// scripts/generate-locales.mjs's own doc comment) -- runs once at both dev-server start and build
+// start, and again whenever translations.ts changes during dev, so the generated per-language
+// files this app's runtime actually loads (LanguageContext.tsx) can never silently drift out of
+// sync with the source anyone actually edits. Spawned as its own `node` process (not imported
+// in-process) specifically so it doesn't depend on whatever flags/loader Vite's own process
+// happens to be running under -- self-contained regardless of how `npm run dev`/`build` end up
+// invoking things internally.
+function i18nGeneratedLocales() {
+  const regenerate = () => {
+    try {
+      execSync("node --experimental-strip-types scripts/generate-locales.mjs", { stdio: "inherit" });
+    } catch (err) {
+      console.error("[i18n] locale generation failed:", err instanceof Error ? err.message : err);
+    }
+  };
+  return {
+    name: "i18n-generated-locales",
+    buildStart() { regenerate(); },
+    configureServer(server) {
+      regenerate();
+      const translationsFile = path.resolve(__dirname, "src/i18n/translations.ts");
+      server.watcher.add(translationsFile);
+      server.watcher.on("change", (file) => { if (path.resolve(file) === translationsFile) regenerate(); });
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -57,6 +85,7 @@ export default defineConfig(({ mode }) => ({
     __BUILD_TIME__: JSON.stringify(buildTime),
   },
   plugins: [
+    i18nGeneratedLocales(),
     react(),
     mode === "development" && componentTagger(),
     VitePWA({

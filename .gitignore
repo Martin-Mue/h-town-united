@@ -13,6 +13,10 @@ dist-ssr
 *.local
 supabase/.temp
 
+# Regenerated from src/i18n/translations.ts on every dev/build start — see
+# scripts/generate-locales.mjs and the i18nGeneratedLocales Vite plugin.
+src/i18n/generated
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
