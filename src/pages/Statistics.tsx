@@ -49,7 +49,7 @@ interface GameRecord {
   player1_average: number; player2_average: number; player1_highscore: number; player2_highscore: number;
   player1_legs_won: number; player2_legs_won: number; player1_double_rate: number; player2_double_rate: number;
   player1_total_throws: number; player2_total_throws: number; winner_name: string; winner_id: string | null; played_at: string;
-  player1_id: string | null; player2_id: string | null; start_score: number; best_of_legs: number;
+  player1_id: string | null; player2_id: string | null; start_score: number; best_of_legs: number; played_online: boolean;
   detail_stats?: {
     players?: DetailStat[];
     /** Legacy shape from before detail_stats covered every player, not just the top 2. */
@@ -144,7 +144,7 @@ const StatisticsPage = () => {
   const fetchData = useCallback(async () => {
     const [gamesRes, playersRes, legsRes, clipsRes, manual180Res] = await Promise.all([
       supabase.from("games")
-        .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats")
+        .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats, played_online")
         .order("played_at", { ascending: false }).limit(500),
       supabase.from("players").select("id, name, games_played, games_won, average, high_score, double_rate, elo_rating, emoji, user_id").order("average", { ascending: false }),
       // No user_id/created_at — only the dart-by-dart fields the stats views actually read.
@@ -452,7 +452,8 @@ const StatisticsPage = () => {
       return candidates.reduce((b, c) => (c.id && c.val > b.val ? { name: c.name, val: c.val } : b), best);
     }, { name: "-", val: 0 });
     const mostWins = players.reduce((best, p) => p.games_won > best.val ? { name: p.name, val: p.games_won, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
-    return { totalGames, totalPlayers, avgOfAverages, bestAvg, bestHighscore, mostGames, totalDarts, highestGameAvg, mostWins };
+    const onlineGames = filteredGames.reduce((s, g) => s + (g.played_online ? 1 : 0), 0);
+    return { totalGames, totalPlayers, avgOfAverages, bestAvg, bestHighscore, mostGames, totalDarts, highestGameAvg, mostWins, onlineGames, localGames: totalGames - onlineGames };
   }, [filteredGames, players]);
 
   // Per-player best single-game average — same source rows as clubStats.highestGameAvg above,
@@ -1399,7 +1400,17 @@ const StatisticsPage = () => {
           {/* Club at a glance */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
-              { labelKey: "stats.gamesPlayed", value: clubStats.totalGames, icon: Target, tone: "primary" as const },
+              {
+                labelKey: "stats.gamesPlayed", icon: Target, tone: "primary" as const,
+                value: clubStats.totalGames > 0 ? (
+                  <>
+                    {clubStats.totalGames}
+                    <span className="block text-[9px] font-normal text-muted-foreground/80 mt-0.5 normal-case tracking-normal">
+                      {clubStats.onlineGames} {t("game.setupOnline")} · {clubStats.localGames} {t("game.setupLocal")}
+                    </span>
+                  </>
+                ) : clubStats.totalGames,
+              },
               { labelKey: "stats.members", value: clubStats.totalPlayers, icon: Users, tone: "secondary" as const },
               { labelKey: "stats.clubAverage", value: clubStats.avgOfAverages.toFixed(1), icon: TrendingUp, tone: "accent" as const },
               { labelKey: "stats.dartsThrown", value: clubStats.totalDarts.toLocaleString(), icon: Hash, tone: "primary" as const },

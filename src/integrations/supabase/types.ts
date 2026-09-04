@@ -256,6 +256,7 @@ export type Database = {
           player2_legs_won: number
           player2_name: string
           player2_total_throws: number
+          played_online: boolean
           start_score: number
           stats_applied: boolean
           tournament_id: string | null
@@ -286,6 +287,7 @@ export type Database = {
           player2_legs_won?: number
           player2_name: string
           player2_total_throws?: number
+          played_online?: boolean
           start_score?: number
           stats_applied?: boolean
           tournament_id?: string | null
@@ -316,6 +318,7 @@ export type Database = {
           player2_legs_won?: number
           player2_name?: string
           player2_total_throws?: number
+          played_online?: boolean
           start_score?: number
           stats_applied?: boolean
           tournament_id?: string | null

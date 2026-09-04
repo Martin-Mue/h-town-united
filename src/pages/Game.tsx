@@ -1918,7 +1918,7 @@ const GamePage = () => {
     const tournamentScore2 = linkPlayer1IsGameSlot0 ? game.legsWon[1] : game.legsWon[0];
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
-      await saveGameRecord(game, session?.user?.id, clubId, pendingGameIdRef.current, link);
+      await saveGameRecord(game, session?.user?.id, clubId, pendingGameIdRef.current, link, !!onlineMatchId);
       if (game.players.length > 2) {
         toast({ title: t("game.gameSavedTitle"), description: t("game.gameSavedAllPlayersDesc") });
       }
@@ -1978,7 +1978,7 @@ const GamePage = () => {
       // eventual insert idempotent even if this fires more than once. The tournament bracket
       // write-back gets its own queue entry for the same reason — it needs a live read of the
       // bracket, so it can't just be retried as part of the game-save replay.
-      await enqueueGameSave({ id: pendingGameIdRef.current, game, userId: session?.user?.id, clubId, tournamentLink: link });
+      await enqueueGameSave({ id: pendingGameIdRef.current, game, userId: session?.user?.id, clubId, tournamentLink: link, playedOnline: !!onlineMatchId });
       if (link) {
         await enqueueMatchResult({
           id: `${pendingGameIdRef.current}-match`,
@@ -2014,7 +2014,7 @@ const GamePage = () => {
     savingRef.current = false;
     // tournamentLinkRef/leagueLinkRef identities never change (see the snapshot-mirroring
     // effect's comment above for why they're listed at all despite that).
-  }, [game, gameSaved, session, clubId, toast, t, tournamentLinkRef, leagueLinkRef]);
+  }, [game, gameSaved, session, clubId, toast, t, tournamentLinkRef, leagueLinkRef, onlineMatchId]);
 
   useEffect(() => {
     if (game?.isFinished && !gameSaved && session?.user?.id) saveGame();

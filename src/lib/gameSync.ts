@@ -23,7 +23,8 @@ export async function saveGameRecord(
   userId: string | undefined,
   clubId: string | null,
   pendingGameId: string,
-  tournamentLink?: { tournamentId: string; matchId: string }
+  tournamentLink?: { tournamentId: string; matchId: string },
+  playedOnline?: boolean
 ): Promise<void> {
   const allLegs = [...game.completedLegs, game.currentLeg];
   const n = game.players.length;
@@ -131,6 +132,7 @@ export async function saveGameRecord(
     winner_name: game.winnerName!, winner_id: winnerMatch?.id || null,
     detail_stats: { players: game.players.map((_, i) => detailFor(i)) } as unknown as Json,
     tournament_id: tournamentLink?.tournamentId ?? null,
+    played_online: !!playedOnline,
     ...(tournamentLink ? { match_id: tournamentLink.matchId } : {}),
   };
   // Idempotency check: `pendingGameId` is the same client-generated id across retries
@@ -152,6 +154,14 @@ export async function saveGameRecord(
 
   if (!insertedGameId) {
     let { data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(gameInsertPayload).select("id").single();
+    // If a given environment hasn't had the `played_online` migration applied yet, PostgREST
+    // rejects the whole insert with a schema-cache error — retry without that field rather than
+    // losing the entire game. Same reasoning/shape as the match_id fallback right below (both
+    // guard against a brief window where this code is live before its own migration has run).
+    if (insertGameErr?.code === "42703" && String(insertGameErr.message || "").includes("played_online")) {
+      const { played_online, ...fallback } = gameInsertPayload;
+      ({ data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(fallback).select("id").single());
+    }
     // If a given environment hasn't had the `match_id` migration applied yet, PostgREST rejects
     // the whole insert with a schema-cache error — retry once without that field rather than
     // losing the entire game (and silently skipping the tournament bracket write-back below).

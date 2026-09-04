@@ -24,6 +24,8 @@ export interface QueuedGameSave {
   clubId: string | null;
   /** Set when the game was started from a tournament bracket match, so the replay can still tag the saved row. */
   tournamentLink?: { tournamentId: string; matchId: string };
+  /** Set when the game was a synced two-device online match, so the replay still tags the saved row correctly. */
+  playedOnline?: boolean;
   createdAt: number;
   attempts: number;
   lastError?: string;
@@ -149,9 +151,9 @@ export const subscribeQueueCount = gameQueue.subscribeCount;
 export const getQueueCount = gameQueue.count;
 
 export async function flushGameSaveQueue(
-  replay: (game: GameState, userId: string | undefined, clubId: string | null, pendingGameId: string, tournamentLink?: { tournamentId: string; matchId: string }) => Promise<void>
+  replay: (game: GameState, userId: string | undefined, clubId: string | null, pendingGameId: string, tournamentLink?: { tournamentId: string; matchId: string }, playedOnline?: boolean) => Promise<void>
 ): Promise<{ synced: number; failed: number }> {
-  return gameQueue.flush((item) => replay(item.game, item.userId, item.clubId ?? null, item.id, item.tournamentLink));
+  return gameQueue.flush((item) => replay(item.game, item.userId, item.clubId ?? null, item.id, item.tournamentLink, item.playedOnline));
 }
 
 const matchResultQueue = createQueue<QueuedMatchResult>(MATCH_RESULT_STORE);
