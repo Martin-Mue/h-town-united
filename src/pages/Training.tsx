@@ -1,16 +1,22 @@
 import { useState, useCallback, useEffect } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered, Route } from "lucide-react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered, Route, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import CoachingPlan from "@/components/training/CoachingPlan";
 import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
 import { CHECKOUT_ROUTES } from "@/utils/checkoutTable";
+import { isAchievableVisitTotal } from "@/utils/dartStats";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Sparkline } from "@/components/stats/StatPrimitives";
 import { useToast } from "@/hooks/use-toast";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { clubHasFeature } from "@/lib/planFeatures";
+
+/** Drills with an X01-style countdown checkout target — the only ones a visit-TOTAL (quick-round
+ *  presets, typed total, or voice) can apply to, since the other drills need to know WHICH segment
+ *  was hit, not just a sum. */
+const CHECKOUT_DRILL_IDS = ["121-challenge", "pressure-training", "random-finish"];
 
 /** Training drill definition */
 interface TrainingDrill {
@@ -412,6 +418,7 @@ const TrainingPage = () => {
   const [brokeRecord, setBrokeRecord] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [rtcFlash, setRtcFlash] = useState(false);
+  const [undoStack, setUndoStack] = useState<DrillState[]>([]);
 
   // Shanghai Round the Clock: brief visible feedback the instant progress becomes unrecoverable,
   // instead of only a silent state reset the player might not notice until the next dart.
@@ -470,6 +477,7 @@ const TrainingPage = () => {
   const startDrill = (drill: TrainingDrill, config: DrillConfig = drillConfig) => {
     setBrokeRecord(false);
     setRtcFlash(false);
+    setUndoStack([]);
     const state: DrillState = {
       drillId: drill.id,
       dartsThrown: 0,
@@ -988,17 +996,107 @@ const TrainingPage = () => {
     });
   }, [selectedDrill, t]);
 
+  /** Snapshot drillState onto the undo stack right before a mutation — mirrors Game.tsx's
+   *  saveUndo(), called from each entry point (manual pad, camera round, quick-round) rather than
+   *  from inside processDart itself, since processDart only ever reads `prev` via the setDrillState
+   *  updater and never closes over the `drillState` variable directly (needed so a camera round's
+   *  several processDart calls in one tick don't each see a stale pre-round value) — reading
+   *  `drillState` here instead, once per user action, is exactly where a fresh value is available. */
+  const pushUndo = useCallback(() => {
+    if (!drillState || drillState.finished) return;
+    setUndoStack((prev) => [...prev, JSON.parse(JSON.stringify(drillState))]);
+  }, [drillState]);
+
   const handleDrillThrow = useCallback((base: number, mul: number) => {
+    pushUndo();
     processDart(base, mul);
-  }, [processDart]);
+  }, [pushUndo, processDart]);
 
   const handleCameraRound = useCallback((darts: DetectedDart[]) => {
+    pushUndo();
     darts.forEach((d) => processDart(d.baseValue, d.multiplier));
-  }, [processDart]);
+  }, [pushUndo, processDart]);
+
+  /** Submit a whole 3-dart visit as one total (quick-preset grid, typed total, or voice — all of
+   *  DartScoreInput's onQuickRound). Only offered for the 3 checkout-style drills (see
+   *  CHECKOUT_DRILL_IDS). Deliberately NOT implemented as "split into 3 fake darts and feed them
+   *  through processDart one at a time" the way Game.tsx's splitQuickRound does — that trick exists
+   *  there because game_legs.throws persists individual darts for later per-dart stats, so Game.tsx
+   *  needs a plausible-looking breakdown. Training never persists per-dart detail, and an arbitrary
+   *  3-way split of the total can cross zero (or land on 1) at a fake intermediate dart that has
+   *  nothing to do with whether the REAL total busts against the current remaining — e.g. splitting
+   *  60 into 20+20+20 against a remaining of 40 would falsely check out after two synthetic darts.
+   *  Resolving bust/checkout once, for the total against remaining, matches every other
+   *  quick-round-shaped drill in real darts and can't produce that artifact. */
+  const handleQuickRound = (total: number) => {
+    if (!selectedDrill || !CHECKOUT_DRILL_IDS.includes(selectedDrill.id) || !isAchievableVisitTotal(total)) return;
+    if (!drillState || drillState.finished) return;
+    pushUndo();
+    setDrillState((prev) => {
+      if (!prev || prev.finished) return prev;
+      const updated = { ...prev, dartsThrown: prev.dartsThrown + 3, dartsThisRound: 0 };
+      const newRemaining = prev.remaining - total;
+      switch (selectedDrill.id) {
+        case "121-challenge": {
+          if (newRemaining < 0 || newRemaining === 1) {
+            updated.remaining = prev.remaining;
+          } else if (newRemaining === 0) {
+            updated.remaining = 0;
+            updated.finished = true;
+            updated.hits = prev.hits + 1;
+          } else {
+            updated.remaining = newRemaining;
+            updated.currentTarget = newRemaining;
+          }
+          break;
+        }
+        case "pressure-training": {
+          if (newRemaining === 0) {
+            updated.hits = prev.hits + 1;
+            const nextIdx = prev.targetIndex + 1;
+            if (nextIdx >= prev.targetList.length) {
+              updated.finished = true;
+            } else {
+              updated.targetIndex = nextIdx;
+              updated.currentTarget = prev.targetList[nextIdx];
+              updated.remaining = prev.targetList[nextIdx];
+            }
+          } else {
+            updated.remaining = prev.targetList[prev.targetIndex];
+          }
+          break;
+        }
+        case "random-finish": {
+          if (newRemaining === 0) {
+            updated.hits = prev.hits + 1;
+            const next = randomCheckout();
+            updated.remaining = next;
+            updated.currentTarget = next;
+            if (updated.hits >= 10) updated.finished = true;
+          } else {
+            const next = randomCheckout();
+            updated.remaining = next;
+            updated.currentTarget = next;
+          }
+          break;
+        }
+      }
+      return updated;
+    });
+  };
+
+  /** Undo the last dart (or last quick-round visit) — restores the pre-mutation snapshot wholesale. */
+  const undoLastDart = () => {
+    if (undoStack.length === 0) return;
+    const last = undoStack[undoStack.length - 1];
+    setDrillState(last);
+    setUndoStack((prev) => prev.slice(0, -1));
+  };
 
   const exitDrill = () => {
     setDrillState(null);
     setSelectedDrill(null);
+    setUndoStack([]);
     // Otherwise a later drill quick-started from CoachingPlan (which skips the pre-start config
     // screen entirely) silently inherits whatever config an unrelated earlier drill left behind —
     // e.g. a round cap the player never set for the drill they're actually about to play.
@@ -1011,7 +1109,7 @@ const TrainingPage = () => {
 
   // ─── ACTIVE DRILL VIEW ────────────────────────────
   if (selectedDrill && drillState) {
-    const isCheckoutDrill = ["121-challenge", "pressure-training", "random-finish"].includes(selectedDrill.id);
+    const isCheckoutDrill = CHECKOUT_DRILL_IDS.includes(selectedDrill.id);
 
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
@@ -1352,14 +1450,21 @@ const TrainingPage = () => {
               />
             )}
 
-            {/* Score input */}
+            {/* Score input — quick-round/typed-total/voice only for the 3 checkout-style drills,
+                since those are the only ones where a visit TOTAL (rather than a specific segment)
+                is enough to know what happened. */}
             <DartScoreInput
               isDisabled={drillState.finished}
               onThrow={handleDrillThrow}
+              onQuickRound={isCheckoutDrill ? handleQuickRound : undefined}
+              dartsThisRound={drillState.dartsThisRound}
             />
 
-            {/* Camera toggle */}
-            <div className="mt-3">
+            {/* Undo + Camera toggle */}
+            <div className="flex gap-2 mt-3">
+              <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
+                <Undo2 className="w-4 h-4" /> {t("training.undo")}
+              </Button>
               <Button
                 variant={cameraEnabled ? "default" : "outline"}
                 onClick={() => {
@@ -1369,7 +1474,7 @@ const TrainingPage = () => {
                   }
                   setCameraEnabled((v) => !v);
                 }}
-                className="w-full gap-2"
+                className="flex-1 gap-2"
               >
                 <Camera className="w-4 h-4" /> {cameraEnabled ? t("training.cameraOff") : t("training.cameraScoring")}
               </Button>
