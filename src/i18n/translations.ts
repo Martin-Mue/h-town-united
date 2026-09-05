@@ -147,6 +147,13 @@ export const translations: Record<string, Record<Language, string>> = {
   "activity.newAverageRecord": { de: "Neue Bestmarke: Ø", en: "New personal best: avg", fr: "Nouveau record : moy.", pl: "Nowy rekord: śr.", nl: "Nieuw record: gem.", tr: "Yeni rekor: ort." },
   "activity.newBestFinish": { de: "Neues bestes Finish:", en: "New best finish:", fr: "Meilleur finish :", pl: "Nowe najlepsze zakończenie:", nl: "Nieuwe beste finish:", tr: "Yeni en iyi bitiriş:" },
   "activity.winStreak": { de: "Siege in Folge!", en: "wins in a row!", fr: "victoires d'affilée !", pl: "zwycięstw z rzędu!", nl: "overwinningen op rij!", tr: "maç üst üste galibiyet!" },
+  // {opponent} is replaced at the call site (Index.tsx) -- a single full-sentence template per
+  // language rather than the prefix/suffix-concatenation style the other activity.* keys above
+  // use, since word order around the name genuinely differs per language here (Turkish especially:
+  // the name comes BEFORE the verb phrase), and every key needs a real, non-empty value in every
+  // language (see translations.test.ts's completeness check) -- a prefix/suffix split would leave
+  // some languages with a legitimately empty piece.
+  "activity.matchResultTemplate": { de: "hat gegen {opponent} gewonnen", en: "won against {opponent}", fr: "a gagné contre {opponent}", pl: "wygrał(a) z {opponent}", nl: "heeft gewonnen van {opponent}", tr: "{opponent} karşısında kazandı" },
 
   // Statistics.tsx — shared chrome (scope toggle, filter bar, tab nav) + Overview tab.
   // The Players/H2H/Games/Highlights tabs are NOT covered yet — see the memory note on i18n

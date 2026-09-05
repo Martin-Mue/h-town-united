@@ -28,7 +28,7 @@ export interface ActivityLegRow {
 
 export interface ActivityEvent {
   id: string;
-  type: "180" | "pb_average" | "pb_checkout" | "win_streak";
+  type: "180" | "pb_average" | "pb_checkout" | "win_streak" | "match_result";
   playerName: string;
   playedAt: string;
   detail: string;
@@ -48,6 +48,9 @@ export interface ActivityTranslator {
   newAverageRecord: (avg: string) => string;
   newBestFinish: (checkout: number) => string;
   winStreak: (streak: number) => string;
+  /** opponentName is the player who LOST -- the event's own playerName is always the winner, so
+   *  the rendered line reads "<playerName> · <matchResult(opponentName)>". */
+  matchResult: (opponentName: string) => string;
 }
 
 const DEFAULT_TRANSLATOR: ActivityTranslator = {
@@ -55,6 +58,7 @@ const DEFAULT_TRANSLATOR: ActivityTranslator = {
   newAverageRecord: (avg) => `Neue Bestmarke: Ø ${avg}`,
   newBestFinish: (checkout) => `Neues bestes Finish: ${checkout}`,
   winStreak: (streak) => `${streak} Siege in Folge!`,
+  matchResult: (opponentName) => `hat gegen ${opponentName} gewonnen`,
 };
 
 /**
@@ -88,6 +92,21 @@ export function computeClubActivity(
 
   for (const g of sortedGames) {
     const isRecent = new Date(g.played_at).getTime() >= cutoff;
+
+    // Plain "X beat Y" result -- the actual "the club is alive today" signal the feed was missing
+    // before this: 180s/PBs/streaks are all rare-highlight events, so on an ordinary evening with
+    // solid-but-unremarkable games the whole feed used to stay empty. Restricted to games between
+    // two players who BOTH have a linked club profile (real member vs. real member) -- a bot or
+    // guest opponent has no player_id, and player1_id/player2_id only ever cover the actual top-2
+    // finishers (see the ranking note elsewhere in this file), so a free-for-all whose winner is
+    // neither of those two is deliberately skipped here rather than misattributing the win.
+    if (isRecent && g.player1_id && g.player2_id && (g.winner_id === g.player1_id || g.winner_id === g.player2_id)) {
+      const winnerIsP1 = g.winner_id === g.player1_id;
+      const winnerName = winnerIsP1 ? g.player1_name : g.player2_name;
+      const loserName = winnerIsP1 ? g.player2_name : g.player1_name;
+      events.push({ id: `result-${g.id}`, type: "match_result", playerName: winnerName, playedAt: g.played_at, detail: translator.matchResult(loserName) });
+    }
+
     const sides: { id: string | null; name: string; avg: number }[] = [
       { id: g.player1_id, name: g.player1_name, avg: Number(g.player1_average) },
       { id: g.player2_id, name: g.player2_name, avg: Number(g.player2_average) },

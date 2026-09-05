@@ -127,6 +127,32 @@ describe("computeClubActivity", () => {
     expect(events.some((e) => e.type === "pb_checkout")).toBe(false);
   });
 
+  it("reports a plain match result between two linked club members", () => {
+    const events = computeClubActivity([game({ id: "g1", played_at: daysAgo(1), winner_id: "p1" })], []);
+    const result = events.find((e) => e.type === "match_result");
+    expect(result).toBeDefined();
+    expect(result!.playerName).toBe("Martin");
+    expect(result!.detail).toContain("Kevin");
+  });
+
+  it("does not report a match result when one side has no linked club profile (bot/guest)", () => {
+    const events = computeClubActivity(
+      [game({ id: "g1", played_at: daysAgo(1), winner_id: "p1", player2_id: null, player2_name: "Bot (Schwer)" })],
+      [],
+    );
+    expect(events.some((e) => e.type === "match_result")).toBe(false);
+  });
+
+  it("does not report a match result outside the recent window", () => {
+    const events = computeClubActivity([game({ id: "g1", played_at: daysAgo(30), winner_id: "p1" })], [], 14);
+    expect(events.some((e) => e.type === "match_result")).toBe(false);
+  });
+
+  it("does not report a match result when the winner is neither tracked side (free-for-all)", () => {
+    const events = computeClubActivity([game({ id: "g1", played_at: daysAgo(1), winner_id: "p3" })], []);
+    expect(events.some((e) => e.type === "match_result")).toBe(false);
+  });
+
   it("gives two 180s in different legs of the same game distinct ids", () => {
     // A best-of-3+ match where the same player hits a 180 in leg 1 AND leg 3 used to produce two
     // events sharing one id (game_id + player_id, no leg discriminator) — a React key collision

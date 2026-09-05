@@ -46,21 +46,32 @@ const buildTime = new Date().toISOString();
 // happens to be running under -- self-contained regardless of how `npm run dev`/`build` end up
 // invoking things internally.
 function i18nGeneratedLocales() {
-  const regenerate = () => {
+  // throwOnError distinguishes "npm run build" from the dev server: a production build that
+  // ships without valid src/i18n/generated/<lang>.json files is far worse than one that fails
+  // outright here -- every t(key) call in the shipped app silently falls back to showing the raw
+  // key ("nav.home" instead of "Home") with nothing in the browser console to explain why, which
+  // is exactly the failure this plugin exists to prevent. Previously this step only logged and
+  // let the build continue regardless of whether generation actually succeeded -- fine for local
+  // dev (a mid-edit syntax error in translations.ts shouldn't kill the whole dev server), but it
+  // meant a build-environment-specific failure here (a missing/mismatched esbuild binary, `node`
+  // not on PATH, ...) could ship completely broken translations with a fully green build log.
+  const regenerate = (throwOnError: boolean) => {
     try {
       execSync("node scripts/generate-locales.mjs", { stdio: "inherit" });
     } catch (err) {
-      console.error("[i18n] locale generation failed:", err instanceof Error ? err.message : err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[i18n] locale generation failed:", message);
+      if (throwOnError) throw new Error(`[i18n] locale generation failed during build: ${message}`);
     }
   };
   return {
     name: "i18n-generated-locales",
-    buildStart() { regenerate(); },
+    buildStart() { regenerate(true); },
     configureServer(server) {
-      regenerate();
+      regenerate(false);
       const translationsFile = path.resolve(__dirname, "src/i18n/translations.ts");
       server.watcher.add(translationsFile);
-      server.watcher.on("change", (file) => { if (path.resolve(file) === translationsFile) regenerate(); });
+      server.watcher.on("change", (file) => { if (path.resolve(file) === translationsFile) regenerate(false); });
     },
   };
 }

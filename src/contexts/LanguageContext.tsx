@@ -51,11 +51,24 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     let cancelled = false;
     const cached = localeCache.get(language);
     if (cached) { setStrings(cached); return; }
-    LOCALE_LOADERS[language]().then((mod) => {
-      if (cancelled) return;
-      localeCache.set(language, mod.default);
-      setStrings(mod.default);
-    });
+    LOCALE_LOADERS[language]()
+      .then((mod) => {
+        if (cancelled) return;
+        localeCache.set(language, mod.default);
+        setStrings(mod.default);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // Falls back to an empty string map (t() then shows raw keys, same degraded-but-visible
+        // behavior as any one key genuinely missing from the map) instead of leaving `strings`
+        // null forever — without this, a chunk that can't be fetched at all (a bad deploy, a
+        // build that shipped without generating src/i18n/generated/*.json, ...) would leave the
+        // ENTIRE app stuck on the loading spinner above, forever, for every single visitor.
+        // Logged loudly since a translation map that's silently empty is exactly the "everything
+        // shows as nav.home instead of Home" failure mode this is here to make diagnosable.
+        console.error(`[i18n] failed to load locale chunk for "${language}":`, err);
+        setStrings({});
+      });
     return () => { cancelled = true; };
   }, [language]);
 

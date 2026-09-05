@@ -27,6 +27,19 @@ const { code } = await esbuild.transform(source, { loader: "ts", format: "esm" }
 const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
 const { translations, LANGUAGES } = await import(dataUrl);
 
+// Defensive: fail loudly rather than silently writing empty/near-empty locale files if the
+// dynamic import above somehow came back with nothing usable (a genuinely blank translations.ts,
+// an esbuild transform that produced a module with no exports, ...). Without this check, an
+// empty `translations` object would still write out valid-but-empty JSON for every language --
+// which then makes every t(key) call in the app fall back to showing the raw key, with nothing
+// in this script's own output flagging that anything went wrong.
+if (!Array.isArray(LANGUAGES) || LANGUAGES.length === 0) {
+  throw new Error("[i18n] translations.ts's LANGUAGES export came back empty -- refusing to write locale files.");
+}
+if (!translations || Object.keys(translations).length === 0) {
+  throw new Error("[i18n] translations.ts's translations export came back empty -- refusing to write locale files.");
+}
+
 await mkdir(outDir, { recursive: true });
 
 for (const lang of LANGUAGES) {

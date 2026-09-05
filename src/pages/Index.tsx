@@ -18,6 +18,7 @@ const EVENT_ICON: Record<ActivityEvent["type"], typeof Target> = {
   pb_average: TrendingUp,
   pb_checkout: Crosshair,
   win_streak: Flame,
+  match_result: Trophy,
 };
 
 const QUICK_ACTIONS = [
@@ -121,6 +122,7 @@ const DashboardPage = () => {
       newAverageRecord: (avg) => `${t("activity.newAverageRecord")} ${avg}`,
       newBestFinish: (checkout) => `${t("activity.newBestFinish")} ${checkout}`,
       winStreak: (streak) => `${streak} ${t("activity.winStreak")}`,
+      matchResult: (opponent) => t("activity.matchResultTemplate").replace("{opponent}", opponent),
     };
     const loadActivity = async () => {
       const [{ data: games }, { data: legs }] = await Promise.all([
