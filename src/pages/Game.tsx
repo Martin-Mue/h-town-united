@@ -2879,6 +2879,35 @@ const GamePage = () => {
                 {game.bestOfLegs > 1 && <span className="text-primary font-bold">{card.legsWon} Legs</span>}
                 {card.p180 > 0 && <span className="text-accent font-bold">🎯{card.p180}</span>}
               </div>
+              {/* Active-player extras folded into the card itself (single-out note, dart counter,
+                  ghost pace) instead of a second section repeating the same turn info below the
+                  whole grid — that duplicate section was the main reason the playing screen still
+                  needed to scroll on short phones, and the active card already carries enough
+                  visual weight (border glow, pulse dot, highlighted name) that restating "X is
+                  throwing" next to it added no information, only height. */}
+              {isActive && (
+                <>
+                  {!isCricket && !(currentPlayer?.doubleOut ?? true) && (
+                    <p className="text-[10px] text-muted-foreground mt-1">({t("game.singleOut")})</p>
+                  )}
+                  <div className="flex justify-center gap-1 mt-1.5">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className={`w-2 h-2 rounded-full transition-all ${i < dartsThisRound ? "bg-primary" : "bg-muted"}`} />
+                    ))}
+                  </div>
+                  {game && !currentPlayer?.isBot && ghostSequences[currentIdx] && (() => {
+                    const teamIdx = teamIndexFor(game.teams, currentIdx);
+                    const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);
+                    if (!cmp) return null;
+                    const targetLabel = t("game.yourRecordPace");
+                    return (
+                      <p className={`text-[10px] mt-1 font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
+                        👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} ${t("game.pointsAhead")} ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} ${t("game.pointsBehind")} ${targetLabel}` : `${t("game.exactlyOnPace")} ${targetLabel}`}
+                      </p>
+                    );
+                  })()}
+                </>
+              )}
             </div>
           );
         })}
@@ -2890,40 +2919,6 @@ const GamePage = () => {
           {t("game.leg")} {game.currentLeg.legNumber} · {game.players[game.currentLeg.startingPlayerIndex].name} {t("game.startsFirst")}
         </div>
       )}
-
-      {/* Current player indicator with dart counter + round score */}
-      <div className="text-center mt-2 landscape:mt-1">
-        <span className="text-sm text-primary font-medium">
-          {currentPlayerName}{currentPlayer?.isBot ? " (Bot)" : ""} {currentPlayer?.isBot && botThinking ? `${t("game.isThrowing")}…` : t("game.isThrowing")}
-        </span>
-        {mode !== "cricket" && !(currentPlayer?.doubleOut ?? true) && (
-          <span className="text-[10px] text-muted-foreground ml-2">({t("game.singleOut")})</span>
-        )}
-        <div className="flex justify-center gap-1 mt-1 landscape:mt-0.5">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className={`w-3 h-3 landscape:w-2 landscape:h-2 rounded-full transition-all ${i < dartsThisRound ? "bg-primary" : "bg-muted"}`} />
-          ))}
-        </div>
-        <div className="flex items-center justify-center gap-2 mt-1 landscape:mt-0.5">
-          <span className="text-[10px] text-muted-foreground">{t("game.dartCounterLabel")} {dartsThisRound + 1} / 3</span>
-          {dartsThisRound > 0 && (
-            <span className="text-xs font-display text-primary">+{currentRoundTotal}</span>
-          )}
-        </div>
-        {/* Ghost-mode live pace comparison — see ghostMode.ts. Only for the actively-throwing
-            player; showing every player's ghost status at once would be scoreboard clutter. */}
-        {game && !currentPlayer?.isBot && ghostSequences[currentIdx] && (() => {
-          const teamIdx = teamIndexFor(game.teams, currentIdx);
-          const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);
-          if (!cmp) return null;
-          const targetLabel = t("game.yourRecordPace");
-          return (
-            <p className={`text-[10px] mt-1 font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
-              👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} ${t("game.pointsAhead")} ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} ${t("game.pointsBehind")} ${targetLabel}` : `${t("game.exactlyOnPace")} ${targetLabel}`}
-            </p>
-          );
-        })()}
-      </div>
     </div>
   );
 
