@@ -559,6 +559,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.needTwoPlayersH2H": { de: "Mindestens 2 Spieler nötig für H2H-Vergleich.", en: "At least 2 players needed for a H2H comparison.", fr: "Au moins 2 joueurs nécessaires pour une comparaison H2H.", pl: "Potrzeba co najmniej 2 graczy do porównania H2H.", nl: "Minimaal 2 spelers nodig voor een H2H-vergelijking.", tr: "H2H karşılaştırması için en az 2 oyuncu gerekir." },
   "stats.gameHistory": { de: "Spielverlauf", en: "Game history", fr: "Historique des parties", pl: "Historia gier", nl: "Potjesgeschiedenis", tr: "Oyun geçmişi" },
   "stats.matchTotal": { de: "Gesamt", en: "Match total", fr: "Total du match", pl: "Suma meczu", nl: "Wedstrijdtotaal", tr: "Maç toplamı" },
+  "stats.legByLeg": { de: "Leg für Leg", en: "Leg by leg", fr: "Leg par leg", pl: "Leg po legu", nl: "Leg voor leg", tr: "Leg leg" },
   "stats.noLegDetailsAvailable": { de: "Keine Leg-Details verfügbar — dieses Spiel wurde vor der Detail-Aufzeichnung gespielt.", en: "No leg details available — this game was played before detailed recording started.", fr: "Aucun détail de leg disponible — cette partie a été jouée avant l'enregistrement détaillé.", pl: "Brak szczegółów legów — ta gra została rozegrana przed wprowadzeniem szczegółowego zapisu.", nl: "Geen leg-details beschikbaar — dit potje is gespeeld vóór de gedetailleerde registratie.", tr: "Leg detayları mevcut değil — bu oyun detaylı kayıt başlamadan önce oynandı." },
   "stats.highlightClips": { de: "Highlight-Clips", en: "Highlight clips", fr: "Clips highlight", pl: "Klipy z najlepszymi momentami", nl: "Highlightclips", tr: "Öne çıkan klipler" },
   "stats.olderThan30Days": { de: "älter als 30 Tage", en: "older than 30 days", fr: "plus de 30 jours", pl: "starsze niż 30 dni", nl: "ouder dan 30 dagen", tr: "30 günden eski" },
@@ -934,6 +935,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "training.avg3Dart": { de: "Ø 3-Dart", en: "Ø 3-dart", fr: "Ø 3-fléchettes", pl: "Ø 3-lotkowa", nl: "Ø 3-dart", tr: "Ø 3-dart" },
   "training.cameraOff": { de: "Kamera aus", en: "Camera off", fr: "Caméra désactivée", pl: "Kamera wył.", nl: "Camera uit", tr: "Kamera kapalı" },
   "training.cameraScoring": { de: "Kamera-Scoring", en: "Camera scoring", fr: "Score par caméra", pl: "Wynik z kamery", nl: "Camera-scoring", tr: "Kamera skoru" },
+  "training.undo": { de: "Rückgängig", en: "Undo", fr: "Annuler", pl: "Cofnij", nl: "Ongedaan maken", tr: "Geri al" },
 
   "training.roundTheClockWin": { de: "Rund um die Uhr! 🎉", en: "Round the clock! 🎉", fr: "Autour de l'horloge ! 🎉", pl: "Dookoła zegara! 🎉", nl: "Rond de klok! 🎉", tr: "Tam tur! 🎉" },
   "training.shanghaiWin": { de: "Shanghai! 🎉", en: "Shanghai! 🎉", fr: "Shanghai ! 🎉", pl: "Shanghai! 🎉", nl: "Shanghai! 🎉", tr: "Shanghai! 🎉" },
