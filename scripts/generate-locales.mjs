@@ -9,30 +9,43 @@
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import esbuild from "esbuild";
+import ts from "typescript";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const outDir = path.join(root, "src", "i18n", "generated");
 const sourcePath = path.join(root, "src", "i18n", "translations.ts");
 
-// Compiled via esbuild rather than relying on Node's own native TypeScript stripping
-// (`--experimental-strip-types`) -- that flag is a genuinely recent Node addition, and this
-// script also runs inside whatever Node version Lovable's own cloud build happens to use, not
-// just this machine's (deliberately kept current for Capacitor tooling, per club-identity.ts's
-// own history -- no guarantee a build environment matches). esbuild is guaranteed present
-// regardless, since it's Vite's own bundler dependency, and needs no special flags to run.
+// Compiled via the `typescript` package's own transpileModule -- a pure-JS compiler with no
+// native binary of its own. This used to go through esbuild.transform() instead (Vite's own
+// bundler dependency, so "guaranteed present"), but esbuild ships a platform-specific NATIVE
+// binary that has to exactly match its JS wrapper's version -- and this repo's mixed install
+// history is a real risk for that: bun.lock, bun.lockb AND package-lock.json are all still
+// present at the repo root (leftover from installing with different package managers at
+// different times), and package.json's own `allowScripts` block lists TWO different esbuild
+// versions as trusted (0.21.5 and 0.25.0) -- clear evidence more than one copy has been
+// installed at once. Whenever Lovable's cloud build happens to end up with a JS wrapper next to
+// the WRONG native binary, esbuild.transform() throws a version-mismatch error with nothing
+// wrong in translations.ts itself -- which, before this script's own defensive checks further
+// down existed, used to silently ship every locale file empty, and after them, would instead
+// fail the whole build outright (see vite.config.ts's throwOnError). Either way, real users saw
+// raw translation keys ("nav.home") in the shipped app for a cause that had nothing to do with
+// the translations themselves. `typescript` is a plain-JS, already-required devDependency (this
+// project also uses it for type-checking) with no native binary at all, so it can't fail this
+// way regardless of which package manager actually populated node_modules this time.
 const source = await readFile(sourcePath, "utf-8");
-const { code } = await esbuild.transform(source, { loader: "ts", format: "esm" });
+const { outputText: code } = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
+});
 const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
 const { translations, LANGUAGES } = await import(dataUrl);
 
 // Defensive: fail loudly rather than silently writing empty/near-empty locale files if the
 // dynamic import above somehow came back with nothing usable (a genuinely blank translations.ts,
-// an esbuild transform that produced a module with no exports, ...). Without this check, an
-// empty `translations` object would still write out valid-but-empty JSON for every language --
-// which then makes every t(key) call in the app fall back to showing the raw key, with nothing
-// in this script's own output flagging that anything went wrong.
+// a transpile that produced a module with no exports, ...). Without this check, an empty
+// `translations` object would still write out valid-but-empty JSON for every language -- which
+// then makes every t(key) call in the app fall back to showing the raw key, with nothing in this
+// script's own output flagging that anything went wrong.
 if (!Array.isArray(LANGUAGES) || LANGUAGES.length === 0) {
   throw new Error("[i18n] translations.ts's LANGUAGES export came back empty -- refusing to write locale files.");
 }
