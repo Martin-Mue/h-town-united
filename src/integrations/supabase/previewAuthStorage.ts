@@ -35,6 +35,10 @@ export function brokeredPreviewStorage() {
     new Promise((resolve) => {
       const requestId = newId();
       let done = false;
+      // Declared (not const) before finish/onMessage below so they can close over the binding —
+      // it's only assigned once, at the bottom, but that assignment must come after finish exists
+      // (the timeout callback calls finish), so combining declaration+assignment isn't possible.
+      // eslint-disable-next-line prefer-const
       let timer: ReturnType<typeof setTimeout>;
       const finish = (r: { ok: boolean; value?: string | null } | null) => {
         if (done) return;
