@@ -76,6 +76,13 @@ interface GameLegRecord {
   throws: DartThrow[]; won: boolean;
 }
 
+/** Just enough of a league_fixtures row (see League.tsx) to compute "Punkte (Saison)" —
+ *  a league's own 2-points-per-win table, not a generic points system for every game. */
+interface LeagueFixtureRecord {
+  id: string; status: "pending" | "finished"; winner_id: string | null;
+  player1_id: string; player2_id: string; played_at: string | null;
+}
+
 export interface HighlightClipRecord {
   id: string; game_id: string | null; player_id: string | null; player_name: string;
   kind: string; points: number; darts: DartThrow[]; storage_path: string; mime: string; created_at: string;
@@ -97,6 +104,7 @@ const StatisticsPage = () => {
   const [gameLegs, setGameLegs] = useState<GameLegRecord[]>([]);
   const [highlightClips, setHighlightClips] = useState<HighlightClipRecord[]>([]);
   const [manual180Entries, setManual180Entries] = useState<{ id: string; player_id: string; year: number; count: number }[]>([]);
+  const [leagueFixtures, setLeagueFixtures] = useState<LeagueFixtureRecord[]>([]);
   // storage_path -> short-lived signed URL. The dart-clips bucket is private (see migration
   // 20260816090000_security_advisor_fixes), so plain getPublicUrl() no longer resolves to
   // anything playable — every clip needs a signed URL fetched under the viewer's own auth.
@@ -143,7 +151,7 @@ const StatisticsPage = () => {
   const { name: clubName } = useClubBranding();
 
   const fetchData = useCallback(async () => {
-    const [gamesRes, playersRes, legsRes, clipsRes, manual180Res] = await Promise.all([
+    const [gamesRes, playersRes, legsRes, clipsRes, manual180Res, leagueFixturesRes] = await Promise.all([
       supabase.from("games")
         .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats, played_online")
         .order("played_at", { ascending: false }).limit(500),
@@ -154,12 +162,15 @@ const StatisticsPage = () => {
         .order("created_at", { ascending: false }).limit(4000),
       supabase.from("highlight_clips").select("*").order("created_at", { ascending: false }).limit(200),
       supabase.from("manual_180_entries").select("id, player_id, year, count"),
+      // Only finished fixtures carry a winner — "Punkte (Saison)" below only ever needs those.
+      supabase.from("league_fixtures").select("id, status, winner_id, player1_id, player2_id, played_at").eq("status", "finished"),
     ]);
     if (gamesRes.data) setGames(gamesRes.data as GameRecord[]);
     if (playersRes.data) setPlayers(playersRes.data);
     if (legsRes.data) setGameLegs(legsRes.data as unknown as GameLegRecord[]);
     if (clipsRes.data) setHighlightClips(clipsRes.data as unknown as HighlightClipRecord[]);
     if (manual180Res.data) setManual180Entries(manual180Res.data);
+    if (leagueFixturesRes.data) setLeagueFixtures(leagueFixturesRes.data as unknown as LeagueFixtureRecord[]);
     setLoading(false);
   }, []);
 
@@ -532,6 +543,34 @@ const StatisticsPage = () => {
     }, { name: "-", val: 0, emoji: "" });
   }, [players, player180TotalById]);
 
+  // "Punkte (Saison)" is a lightweight league table (2 points per win) — NOT a generic points
+  // system for every game a player has played. It must only ever count league fixtures (the
+  // ones with their own Spielplan in League.tsx), never casual or tournament games, so this is
+  // built straight from league_fixtures rather than from games_won like every other stat here.
+  // Scoped to the same time/year window as the rest of the page (via each fixture's own
+  // played_at) but deliberately NOT to filterMode/filterBestOf: a fixture has no mode of its
+  // own — it inherits its league's one fixed game_mode — so those per-game filters don't map
+  // onto it, and zeroing league points out just because e.g. "Cricket" is selected would be
+  // more confusing than ignoring that filter for this one column.
+  const leaguePointsByPlayer = useMemo(() => {
+    const now = Date.now();
+    const dayMs = 86_400_000;
+    let cutoff = 0;
+    if (filterTime === "today") cutoff = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+    else if (filterTime === "week") cutoff = now - 7 * dayMs;
+    else if (filterTime === "month") cutoff = now - 30 * dayMs;
+    else if (filterTime === "year") cutoff = now - 365 * dayMs;
+    const result: Record<string, number> = {};
+    leagueFixtures.forEach((f) => {
+      if (!f.winner_id || !f.played_at) return;
+      if (cutoff > 0 && new Date(f.played_at).getTime() < cutoff) return;
+      if (filterYear !== "all" && new Date(f.played_at).getFullYear() !== Number(filterYear)) return;
+      if (filterPlayerId !== "all" && f.player1_id !== filterPlayerId && f.player2_id !== filterPlayerId) return;
+      result[f.winner_id] = (result[f.winner_id] ?? 0) + 2;
+    });
+    return result;
+  }, [leagueFixtures, filterTime, filterYear, filterPlayerId]);
+
   const leaderboard = useMemo(() => {
     // Any active filter (season, time range, mode, ...) switches the leaderboard from
     // lifetime totals to stats recomputed for just the filtered games.
@@ -548,7 +587,7 @@ const StatisticsPage = () => {
       if (sortBy === "checkout") {
         return (advancedByPlayer[b.id]?.checkout.percentage ?? 0) - (advancedByPlayer[a.id]?.checkout.percentage ?? 0);
       }
-      if (sortBy === "points") return b.games_won * 2 - a.games_won * 2;
+      if (sortBy === "points") return (leaguePointsByPlayer[b.id] ?? 0) - (leaguePointsByPlayer[a.id] ?? 0);
       if (sortBy === "one_eighties") return (player180TotalById[b.id] ?? 0) - (player180TotalById[a.id] ?? 0);
       if (sortBy === "highest_checkout") {
         return (advancedByPlayer[b.id]?.checkout.highestCheckout ?? 0) - (advancedByPlayer[a.id]?.checkout.highestCheckout ?? 0);
@@ -564,7 +603,7 @@ const StatisticsPage = () => {
       }
       return (b.elo_rating ?? 1000) - (a.elo_rating ?? 1000); // sortBy === "elo", the last remaining case
     });
-  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive, player180TotalById, cricketByPlayer, playerBestGameAvgById, playerShortestLegById]);
+  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive, player180TotalById, cricketByPlayer, playerBestGameAvgById, playerShortestLegById, leaguePointsByPlayer]);
 
   const pagedLeaderboard = usePagedList(leaderboard);
 
@@ -599,7 +638,7 @@ const StatisticsPage = () => {
       case "high_score": return p.high_score;
       case "win_rate": return `${winRate}%`;
       case "checkout": return `${(advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0)}%`;
-      case "points": return `${p.games_won * 2} Pkt`;
+      case "points": return `${leaguePointsByPlayer[p.id] ?? 0} Pkt`;
       case "one_eighties": return player180TotalById[p.id] ?? 0;
       case "highest_checkout": return advancedByPlayer[p.id]?.checkout.highestCheckout ?? 0;
       case "mpr": return (cricketByPlayer[p.id]?.cricket.mpr ?? 0).toFixed(2);
@@ -637,7 +676,7 @@ const StatisticsPage = () => {
   const exportLeaderboardCsv = () => {
     const header = [t("stats.rank"), "Name", t("stats.games"), t("game.winsLabel"), t("game.points"), "Elo", "Average", "Highscore", "Checkout %"];
     const rows = leaderboard.map((p, i) => [
-      i + 1, p.name, p.games_played, p.games_won, p.games_won * 2, p.elo_rating ?? 1000,
+      i + 1, p.name, p.games_played, p.games_won, leaguePointsByPlayer[p.id] ?? 0, p.elo_rating ?? 1000,
       Number(p.average).toFixed(1), p.high_score, (advancedByPlayer[p.id]?.checkout.percentage ?? 0).toFixed(0),
     ]);
     const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
@@ -671,7 +710,7 @@ const StatisticsPage = () => {
       ].filter((h) => h.name !== "-"),
       leaderboard: leaderboard.map((p, i) => ({
         rank: i + 1, name: p.name, gamesPlayed: p.games_played, gamesWon: p.games_won,
-        points: p.games_won * 2, elo: Math.round(p.elo_rating ?? 1000),
+        points: leaguePointsByPlayer[p.id] ?? 0, elo: Math.round(p.elo_rating ?? 1000),
         average: Number(p.average), highScore: p.high_score,
         doubleRate: advancedByPlayer[p.id]?.checkout.percentage ?? 0,
       })),

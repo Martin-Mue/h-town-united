@@ -2640,6 +2640,23 @@ const TournamentPage = () => {
                     </Button>
                   }
                 />
+                {/* A dedicated deep link straight to the board overview, pinned (no rotation) —
+                    the "which match is on which board, what's next" screen the roadmap actually
+                    asks for as its own one-scan setup, distinct from "Auto" (rotates through
+                    bracket/participants/etc. too) and the plain live link (opens wherever this
+                    device last was, or the bracket by default). ?view=boards already works via
+                    PublicTournament.tsx's own deep-link handling — this just surfaces it here. */}
+                <QrCodeDialog
+                  url={`${window.location.origin}/live/${activeTournament.public_slug}?view=boards`}
+                  title={t("pt.boardOverview")}
+                  description={t("tournament.boardScreenModeDesc")}
+                  downloadName={`live-boards-${activeTournament.public_slug}`}
+                  trigger={
+                    <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" title={t("tournament.boardScreenTooltip")}>
+                      <Monitor className="w-3 h-3" /> {t("camera.board")}
+                    </Button>
+                  }
+                />
               </div>
             </div>
             {!hasStarted(activeTournament) && (
