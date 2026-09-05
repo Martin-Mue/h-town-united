@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,11 +19,12 @@ import {
 import DartScoreInput, { type DartInputMode } from "@/components/game/DartScoreInput";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
-import LiveCamera, { type DetectedDart, type LiveCameraHandle } from "@/components/game/LiveCamera";
+import type { DetectedDart, LiveCameraHandle } from "@/components/game/LiveCamera";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
 import OnlineChallengeSetup from "@/components/game/OnlineChallengeSetup";
 import ConfettiBurst from "@/components/ConfettiBurst";
 import AnimatedScore from "@/components/AnimatedScore";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, TeamSlot, BotLevel } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,6 +51,13 @@ import {
   SEGMENT_NUMBERS,
   type StatBundle,
 } from "@/utils/dartStats";
+
+// LiveCamera pulls in onnxruntime-web plus the dart-detection/vision utilities — the heaviest
+// dependency in this page by far. It's split into its own chunk (fetched only once React actually
+// tries to render it) instead of the default value import, so a bot-only match never downloads it
+// at all, and a human match downloads it as a separate, cacheable chunk instead of inflating
+// Game's own bundle. The type-only import above stays erased at build time either way.
+const LiveCamera = lazy(() => import("@/components/game/LiveCamera"));
 
 /** Bot personas with their target 3-dart average range. `nameKey` (not a literal string) since
  *  this is a module-level constant with no access to the language context — resolved via t() at
@@ -3183,17 +3191,30 @@ const GamePage = () => {
             {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />}
 
             {!currentPlayer?.isBot && (
-              <LiveCamera
-                ref={liveCameraRef}
-                enabled={cameraEnabled}
-                paused={!!pendingCheckoutChoice || !!pendingTiebreak}
-                onClose={() => { cameraWantedRef.current = false; setCameraEnabled(false); setPendingCameraDarts([]); }}
-                onRoundCommit={submitDetectedRound}
-                onPendingChange={setPendingCameraDarts}
-                dartsRemaining={Math.max(1, 3 - dartsThisRound)}
-                playerName={currentPlayerName}
-                onRequestManualEntry={() => setShowManualInput(true)}
-              />
+              // A camera-permission quirk or ONNX model load failure on an unfamiliar
+              // Android/browser combo now degrades to this one card instead of taking the whole
+              // in-progress match down — manual entry below stays fully usable either way.
+              <ErrorBoundary label="Kamera">
+                <Suspense
+                  fallback={
+                    <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                    </div>
+                  }
+                >
+                  <LiveCamera
+                    ref={liveCameraRef}
+                    enabled={cameraEnabled}
+                    paused={!!pendingCheckoutChoice || !!pendingTiebreak}
+                    onClose={() => { cameraWantedRef.current = false; setCameraEnabled(false); setPendingCameraDarts([]); }}
+                    onRoundCommit={submitDetectedRound}
+                    onPendingChange={setPendingCameraDarts}
+                    dartsRemaining={Math.max(1, 3 - dartsThisRound)}
+                    playerName={currentPlayerName}
+                    onRequestManualEntry={() => setShowManualInput(true)}
+                  />
+                </Suspense>
+              </ErrorBoundary>
             )}
 
             {cricketBoard}

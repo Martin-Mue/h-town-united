@@ -9,6 +9,7 @@ import { useOfflineGameQueue } from "@/hooks/useOfflineGameQueue";
 import { useOfflineMatchResultQueue } from "@/hooks/useOfflineMatchResultQueue";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import WhatsNewBanner from "@/components/WhatsNewBanner";
+import OnboardingTour from "@/components/OnboardingTour";
 import htuEmblem from "@/assets/club-emblem.png";
 
 const NAV_ITEMS = [
@@ -49,6 +50,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
 
   return (
     <div className="h-[100dvh] bg-background flex flex-col relative overflow-hidden">
+      <OnboardingTour />
       {/* Subtle full-page watermark so plainer list/empty-state pages don't feel bare */}
       <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden flex items-center justify-center">
         <img src={watermarkSrc} alt="" aria-hidden="true" className="w-[140vw] max-w-none opacity-[0.03] select-none" />

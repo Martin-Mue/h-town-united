@@ -9,6 +9,7 @@ import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import { ClubBrandingProvider, useClubBranding } from "@/contexts/ClubBrandingContext";
 import Layout from "./components/Layout";
 import Auth from "./pages/Auth";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Loader2 } from "lucide-react";
 
 // Route-level code splitting — each page becomes its own chunk, loaded on first visit
@@ -103,6 +104,10 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          {/* Belt-and-suspenders around the whole route tree: a render error anywhere below this
+              (a page bug, a bad Supabase response a component didn't expect, ...) now shows a
+              small recoverable message instead of unmounting the entire app to a blank screen. */}
+          <ErrorBoundary>
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
@@ -142,6 +147,7 @@ const App = () => (
               />
             </Routes>
           </Suspense>
+          </ErrorBoundary>
         </BrowserRouter>
       </TooltipProvider>
     </ClubBrandingProvider>
