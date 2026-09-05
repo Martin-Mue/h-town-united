@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2 } from "lucide-react";
+import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, ChevronRight, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -43,6 +43,7 @@ import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Sparkles } from "lucide-react";
 import { Eyebrow, SectionCard, StatTile, TrendBadge, Sparkline, RingStat, RankAvatar, RankBadge, TONE_TEXT as TONE_ICON } from "@/components/stats/StatPrimitives";
+import MatchDetailDialog from "@/components/stats/MatchDetailDialog";
 
 interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
@@ -131,7 +132,7 @@ const StatisticsPage = () => {
     if (typeof window !== "undefined") window.localStorage.setItem("stats-view-scope", scope);
     setViewScope(scope);
   };
-  const [expandedGameId, setExpandedGameId] = useState<string | null>(null);
+  const [detailGame, setDetailGame] = useState<GameRecord | null>(null);
   const [filterTime, setFilterTime] = useState<"all" | "today" | "week" | "month" | "year">("all");
   const [filterMode, setFilterMode] = useState<string>("all");
   const [filterPlayerId, setFilterPlayerId] = useState<string>("all");
@@ -987,46 +988,10 @@ const StatisticsPage = () => {
   const recentGames = viewScope === "personal" ? personalGames : filteredGames;
   const pagedRecentGames = usePagedList(recentGames);
 
-  // Leg-by-leg breakdown per game, from the dart-by-dart game_legs data.
-  const legsByGame = useMemo(() => {
-    const byGame: Record<string, GameLegRecord[]> = {};
-    gameLegs.forEach((leg) => {
-      (byGame[leg.game_id] ||= []).push(leg);
-    });
-    const gameById = new Map(games.map((g) => [g.id, g]));
-    const result: Record<string, { legNumber: number; mode: string; players: { name: string; average: number; first9: number; mpr: number; hitRate: number; points: number; dartsThrown: number; won: boolean }[] }[]> = {};
-    Object.entries(byGame).forEach(([gameId, legs]) => {
-      const mode = gameById.get(gameId)?.mode || "501";
-      const isCricket = mode === "cricket";
-      const byLegNumber: Record<number, GameLegRecord[]> = {};
-      legs.forEach((l) => { (byLegNumber[l.leg_number] ||= []).push(l); });
-      result[gameId] = Object.entries(byLegNumber)
-        .sort(([a], [b]) => Number(a) - Number(b))
-        .map(([legNumber, rows]) => ({
-          legNumber: Number(legNumber),
-          mode,
-          players: [...rows].sort((a, b) => a.player_index - b.player_index).map((r) => {
-            const cricket = isCricket ? computeCricketStats(r.throws) : null;
-            return {
-              name: r.player_name,
-              average: average(r.throws),
-              first9: !isCricket ? first9Average(r.throws) : 0,
-              mpr: cricket?.mpr ?? 0,
-              hitRate: cricket?.hitRate ?? 0,
-              points: r.throws.reduce((s, t) => s + t.points, 0),
-              dartsThrown: r.throws.length,
-              won: r.won,
-            };
-          }),
-        }));
-    });
-    return result;
-  }, [gameLegs, games]);
-
-  // Full match-total stat bundle per player (checkout%, 180s, highscore — not just the per-leg
-  // average/first9 legsByGame above already shows), from the same game_legs data via the exact
-  // leg-boundary-safe aggregation Game.tsx's own post-match screen uses. Cricket games are skipped
-  // — checkout/tier stats don't apply there, legsByGame's MPR/hitRate already covers that mode.
+  // Full match-total stat bundle per player (checkout%, 180s, highscore, tier breakdown) for the
+  // match-detail dialog's "Gesamt" card, from the same game_legs data via the exact leg-boundary-
+  // safe aggregation Game.tsx's own post-match screen uses. Cricket games are skipped — checkout/
+  // tier stats don't apply there; MatchDetailDialog falls back to per-leg MPR/hit-rate instead.
   const gameTotalsByGame = useMemo(() => {
     const byGame: Record<string, GameLegRecord[]> = {};
     gameLegs.forEach((leg) => {
@@ -2030,119 +1995,49 @@ const StatisticsPage = () => {
             </div>
           ) : (
             <div className="space-y-2">
-              {pagedRecentGames.visible.map(g => {
-                const legs = legsByGame[g.id];
-                const isExpanded = expandedGameId === g.id;
-                return (
-                  <div key={g.id} className="rounded-lg bg-muted/30 overflow-hidden">
-                    <button
-                      onClick={() => setExpandedGameId(isExpanded ? null : g.id)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <Badge variant="outline" className="text-xs bg-muted text-foreground px-2 py-0.5 font-mono shrink-0 border-transparent">{g.mode}</Badge>
-                        <div className="min-w-0">
-                          <span className="text-sm flex items-center gap-1 min-w-0">
-                            <span className="truncate flex-1 min-w-0">{g.player1_name}</span>
-                            <span className="text-muted-foreground shrink-0">vs</span>
-                            <span className="truncate flex-1 min-w-0">{g.player2_name}</span>
-                          </span>
-                          <div className="text-[10px] text-muted-foreground">
-                            Ø {Number(g.player1_average).toFixed(1)} - {Number(g.player2_average).toFixed(1)} · {g.player1_legs_won}:{g.player2_legs_won} {t("game.legsSuffix")}
-                          </div>
-                        </div>
+              {pagedRecentGames.visible.map(g => (
+                <button
+                  key={g.id}
+                  onClick={() => setDetailGame(g)}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 text-left hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <Badge variant="outline" className="text-xs bg-muted text-foreground px-2 py-0.5 font-mono shrink-0 border-transparent">{g.mode}</Badge>
+                    <div className="min-w-0">
+                      <span className="text-sm flex items-center gap-1 min-w-0">
+                        <span className="truncate flex-1 min-w-0">{g.player1_name}</span>
+                        <span className="text-muted-foreground shrink-0">vs</span>
+                        <span className="truncate flex-1 min-w-0">{g.player2_name}</span>
+                      </span>
+                      <div className="text-[10px] text-muted-foreground">
+                        Ø {Number(g.player1_average).toFixed(1)} - {Number(g.player2_average).toFixed(1)} · {g.player1_legs_won}:{g.player2_legs_won} {t("game.legsSuffix")}
                       </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" })}
-                          </span>
-                          <span className="text-xs text-secondary font-medium">{g.winner_name} ✓</span>
-                        </div>
-                        {legs && legs.length > 0 && (
-                          isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                        )}
-                      </div>
-                    </button>
-
-                    {isExpanded && (
-                      legs && legs.length > 0 ? (
-                        <div className="px-3 pb-3 space-y-1.5 border-t border-border/60 pt-2">
-                          {gameTotalsByGame[g.id] && (
-                            <div className="rounded-md bg-primary/10 border border-primary/20 px-2.5 py-2">
-                              <p className="text-[10px] uppercase tracking-wider text-primary mb-1">{t("stats.matchTotal")}</p>
-                              <div className="space-y-1">
-                                {gameTotalsByGame[g.id].map((p) => {
-                                  // Non-zero score-tier counts only (a 20-team club's typical game
-                                  // never touches most of the 40+..180 ladder) — same "only show
-                                  // what actually happened" convention as the player-detail field
-                                  // breakdown's visibleFieldRows.
-                                  const hitTiers = p.bundle.tierBreakdown.filter((tier) => tier.count > 0);
-                                  return (
-                                    <div key={p.name} className="text-xs">
-                                      <div className="flex items-center justify-between">
-                                        <span className={`truncate ${p.won ? "text-secondary font-semibold" : "text-foreground"}`}>
-                                          {p.won && "🏆 "}{p.name}
-                                        </span>
-                                        <span className="text-muted-foreground font-mono shrink-0 ml-2">
-                                          Ø {p.bundle.average.toFixed(1)} · F9 {p.bundle.first9.toFixed(1)} · High {p.bundle.highscore}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center justify-between mt-0.5 text-muted-foreground">
-                                        <span className="font-mono">
-                                          CO {p.bundle.checkout.percentage.toFixed(0)}% ({p.bundle.checkout.hits}/{p.bundle.checkout.attempts})
-                                          {p.bundle.checkout.highestCheckout > 0 && ` · Finish ${p.bundle.checkout.highestCheckout}`}
-                                          {p.bundle.tonPlus > 0 && ` · 100+ ×${p.bundle.tonPlus}`}
-                                          {p.bundle.s180 > 0 && ` · 180 ×${p.bundle.s180}`}
-                                        </span>
-                                      </div>
-                                      {hitTiers.length > 0 && (
-                                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 font-mono text-[10px] text-muted-foreground/80">
-                                          {hitTiers.map((tier) => (
-                                            <span key={tier.label}>{tier.label} ×{tier.count}</span>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                          {legs.map((leg) => (
-                            <div key={leg.legNumber} className="rounded-md bg-background/60 px-2.5 py-2">
-                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{t("game.leg")} {leg.legNumber}</p>
-                              <div className="space-y-1">
-                                {leg.players.map((p) => (
-                                  <div key={p.name} className="flex items-center justify-between text-xs">
-                                    <span className={`truncate ${p.won ? "text-secondary font-semibold" : "text-foreground"}`}>
-                                      {p.won && "🏆 "}{p.name}
-                                    </span>
-                                    <span className="text-muted-foreground font-mono shrink-0 ml-2">
-                                      {leg.mode === "cricket"
-                                        ? `MPR ${p.mpr.toFixed(2)} · ${p.hitRate.toFixed(0)}% ${t("stats.hitRate")}`
-                                        : `Ø ${p.average.toFixed(1)}${p.first9 > 0 ? ` · F9 ${p.first9.toFixed(1)}` : ""}`}
-                                      {" · "}{p.dartsThrown} {t("game.dartsSuffix")}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="px-3 pb-3 pt-1 text-[11px] text-muted-foreground border-t border-border/60">
-                          {t("stats.noLegDetailsAvailable")}
-                        </p>
-                      )
-                    )}
+                    </div>
                   </div>
-                );
-              })}
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" })}
+                      </span>
+                      <span className="text-xs text-secondary font-medium">{g.winner_name} ✓</span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                </button>
+              ))}
             </div>
           )}
           <ListPaginationFooter list={pagedRecentGames} />
         </SectionCard>
+      )}
+
+      {detailGame && (
+        <MatchDetailDialog
+          game={detailGame}
+          legs={gameLegs.filter((l) => l.game_id === detailGame.id)}
+          matchTotals={gameTotalsByGame[detailGame.id]}
+          onClose={() => setDetailGame(null)}
+        />
       )}
 
       {/* HIGHLIGHTS TAB */}

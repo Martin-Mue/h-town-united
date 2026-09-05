@@ -19,6 +19,9 @@ interface ThrowHistoryEditorProps {
    *  into a different visit the way removing one would). */
   onEditThrow: (throwIndex: number, base: number, multiplier: 1 | 2 | 3) => void;
   onDeleteThrow: (throwIndex: number) => void;
+  /** Hides the edit-mode toggle entirely, for viewing a past match's history where corrections no
+   *  longer apply — pass editModeOn={false} and no-op callbacks alongside this from the caller. */
+  readOnly?: boolean;
 }
 
 /**
@@ -29,7 +32,7 @@ interface ThrowHistoryEditorProps {
  * closing after every single edit meant reopening it per dart, which was the actual complaint
  * this component exists to fix.
  */
-const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, openChipIdx, onOpenChipChange, onEditThrow, onDeleteThrow }: ThrowHistoryEditorProps) => {
+const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, openChipIdx, onOpenChipChange, onEditThrow, onDeleteThrow, readOnly }: ThrowHistoryEditorProps) => {
   const { t } = useLanguage();
   if (throws.length === 0) return null;
 
@@ -37,9 +40,11 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
     <div className="mt-3 bg-card rounded-xl border border-border p-3">
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs text-muted-foreground uppercase font-display">{t("game.throwsHeading")} · {playerName}</p>
-        <button onClick={onToggleEditMode} className="text-xs text-primary flex items-center gap-1">
-          <Edit2 className="w-3 h-3" /> {editModeOn ? t("game.done") : t("game.edit")}
-        </button>
+        {!readOnly && (
+          <button onClick={onToggleEditMode} className="text-xs text-primary flex items-center gap-1">
+            <Edit2 className="w-3 h-3" /> {editModeOn ? t("game.done") : t("game.edit")}
+          </button>
+        )}
       </div>
       <div className="space-y-1">
         {Array.from({ length: Math.ceil(throws.length / 3) }, (_, roundIdx) => {
