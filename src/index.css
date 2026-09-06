@@ -212,4 +212,31 @@
   .gradient-card {
     background: var(--gradient-card);
   }
+
+  /* "Oché Live" broadcast look — PublicTournament.tsx's Board-Übersicht (the dedicated
+   * TV/tablet-at-the-venue screen) only. Deliberately fixed-dark with the *dark* theme's exact
+   * hue values, regardless of the viewer's own light/dark preference: that screen is read by a
+   * whole room from across the venue, not tuned to one person's setting, and a bright white
+   * panel would wash out under hall lighting the way the app's usual light-mode card doesn't
+   * have to worry about. Angled corners echo a real broadcast scoreboard bug (PDC-style) instead
+   * of this app's normal soft rounded card — the loud, one-off exception to the shared elevation
+   * tokens above, not a replacement for them. */
+  .broadcast-panel {
+    background: hsl(222 30% 7%);
+    color: hsl(210 15% 92%);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 1.25rem 100%, 0 calc(100% - 1.25rem));
+  }
+  .broadcast-tag {
+    background: hsl(185 85% 48%);
+    color: hsl(222 30% 5%);
+    transform: skewX(-10deg);
+  }
+  .broadcast-tag > * {
+    display: inline-block;
+    transform: skewX(10deg);
+  }
+  .broadcast-scorebar {
+    background: hsl(222 25% 12%);
+    clip-path: polygon(0.75rem 0, 100% 0, 100% 100%, 0 100%);
+  }
 }

@@ -6,6 +6,13 @@ import type { Json } from "@/integrations/supabase/types";
 
 export type OnlineMatchStatus = "pending" | "active" | "finished" | "declined" | "canceled";
 
+/** Realtime connection health for the match channel — surfaced so the UI can tell a player their
+ *  view might be stale instead of leaving them to unknowingly keep playing on an out-of-date
+ *  board. "reconnecting" covers both an actual drop (TIMED_OUT/CHANNEL_ERROR) and the same-tab
+ *  gap while the tab was backgrounded (visibilitychange re-sync below) — either way, the caller
+ *  should treat state as provisional until this flips back to "connected". */
+export type OnlineConnectionStatus = "connected" | "reconnecting" | "disconnected";
+
 /** The stored game_state JSONB carries dartsThisRound/turnStartRemaining merged in alongside the
  *  plain GameState fields (see the submit_online_throw/accept_online_match RPCs) — they're normal
  *  sibling useState in local/bot play (src/types/game.ts doesn't include them), but a reconnect
@@ -34,16 +41,19 @@ export interface OnlineMatchRow {
 export function useOnlineMatch(matchId: string | undefined, userId: string | undefined) {
   const [row, setRow] = useState<OnlineMatchRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<OnlineConnectionStatus>("connected");
   const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
     if (!matchId) {
       setRow(null);
       setLoading(false);
+      setConnectionStatus("connected");
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setConnectionStatus("connected");
 
     const load = async () => {
       const { data } = await supabase.from("online_matches").select("*").eq("id", matchId).maybeSingle();
@@ -65,11 +75,38 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
         const nextState = (payload.payload as { game_state: OnlineGameState })?.game_state;
         if (nextState) setRow((prev) => (prev ? { ...prev, game_state: nextState } : prev));
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (cancelled) return;
+        if (status === "SUBSCRIBED") {
+          setConnectionStatus("connected");
+          // A (re)subscribe can follow a real drop, during which a postgres_changes UPDATE could
+          // have been missed entirely (no channel to deliver it on) — re-fetch the row directly
+          // rather than trusting whatever local state happened to survive the gap. Cheap and
+          // idempotent when nothing was actually missed.
+          load();
+        } else if (status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
+          setConnectionStatus("reconnecting");
+        } else if (status === "CLOSED") {
+          setConnectionStatus("disconnected");
+        }
+      });
     channelRef.current = channel;
+
+    // The realtime socket can be silently suspended while the tab is backgrounded (common on
+    // mobile) with no CHANNEL_ERROR/CLOSED ever firing to say so — from the channel's own point of
+    // view nothing looked wrong, it just stopped receiving. Coming back to the foreground is
+    // exactly the moment a player could unknowingly resume tapping on a stale board, so treat it
+    // as "reconnecting" until a fresh fetch confirms the row is current.
+    const onVisibilityChange = () => {
+      if (cancelled || document.visibilityState !== "visible") return;
+      setConnectionStatus("reconnecting");
+      load().then(() => { if (!cancelled) setConnectionStatus("connected"); });
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
@@ -99,5 +136,5 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
     if (error) throw error;
   }, [matchId]);
 
-  return { row, loading, isMyTurn, sendThrow };
+  return { row, loading, isMyTurn, sendThrow, connectionStatus };
 }

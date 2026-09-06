@@ -298,6 +298,11 @@ export const translations: Record<string, Record<Language, string>> = {
   // negative framing the roadmap's Mentaltrainer audit flagged; the "ahead" line already ends on
   // "!", so "behind" gets its own closing note instead of staying the only flat, silent case.
   "game.stillTimeToCatchUp": { de: "noch ist alles offen", en: "still everything to play for", fr: "tout reste encore possible", pl: "wszystko jeszcze możliwe", nl: "nog alles mogelijk", tr: "her şey hâlâ mümkün" },
+  // Online-match connection health badge (see useOnlineMatch's connectionStatus / Game.tsx's
+  // scoreboardBlock) — "reconnecting" covers both a real drop and the same-tab gap after the tab
+  // was backgrounded; "disconnected" is the realtime channel reporting CLOSED.
+  "game.onlineReconnecting": { de: "Verbindung wird aktualisiert…", en: "Reconnecting…", fr: "Reconnexion…", pl: "Ponowne łączenie…", nl: "Opnieuw verbinden…", tr: "Yeniden bağlanılıyor…" },
+  "game.onlineDisconnected": { de: "Verbindung unterbrochen", en: "Connection lost", fr: "Connexion perdue", pl: "Utracono połączenie", nl: "Verbinding verbroken", tr: "Bağlantı kesildi" },
   "game.wins": { de: "Gewinnt!", en: "Wins!", fr: "Gagne !", pl: "Wygrywa!", nl: "Wint!", tr: "Kazandı!" },
   "game.legsSuffix": { de: "Legs", en: "Legs", fr: "Legs", pl: "Legi", nl: "Legs", tr: "Legler" },
   "game.lessStats": { de: "Weniger anzeigen", en: "Show less", fr: "Voir moins", pl: "Pokaż mniej", nl: "Minder tonen", tr: "Daha az göster" },

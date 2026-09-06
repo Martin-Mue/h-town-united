@@ -188,18 +188,24 @@ const DashboardPage = () => {
           overlaps only the tree's lower trunk area, like it grew out of it. Picked over a
           concentric layering (badge centered over the tree) specifically because that hid too
           much of the tree behind the badge to read as a tree at all. */}
-      <div className="gradient-hero rounded-2xl p-5 sm:p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
+      {/* Shrunk on mobile only (sm:+ unchanged) — the full-size hero pushed Quick Actions and
+          the activity feed below the fold on a phone, the actual majority device here (Design-
+          Sprint Rangliste #9). Every dimension below scales down by the same ~0.66 factor
+          (watermark box/image, badge size, badge's top offset) so the "badge grows out of the
+          tree's lower trunk" composition from the v6 layout comment above holds at the smaller
+          size instead of just cropping it. */}
+      <div className="gradient-hero rounded-2xl p-4 sm:p-6 pt-5 sm:pt-8 mb-3 sm:mb-4 border border-border relative overflow-hidden text-center">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.1),transparent_65%)]" />
         <div className="relative flex flex-col items-center">
-          <div className="relative mb-2 h-[196px] sm:h-[220px] w-full">
+          <div className="relative mb-1 sm:mb-2 h-[130px] sm:h-[220px] w-full">
             <img
               src={watermarkSrc}
               alt={t("players.clubEmblemAlt")}
-              className="absolute top-0 left-1/2 -translate-x-1/2 w-[180px] h-[180px] sm:w-[200px] sm:h-[200px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
+              className="absolute top-0 left-1/2 -translate-x-1/2 w-[120px] h-[120px] sm:w-[200px] sm:h-[200px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
             />
-            <div className="absolute left-1/2 -translate-x-1/2 top-[104px] sm:top-[115px] group">
+            <div className="absolute left-1/2 -translate-x-1/2 top-[68px] sm:top-[115px] group">
               <div className="absolute inset-0 rounded-full bg-primary/25 blur-xl scale-125" />
-              <div className="relative w-[92px] h-[92px] sm:w-[102px] sm:h-[102px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-700 group-hover:-rotate-[6deg]">
+              <div className="relative w-[60px] h-[60px] sm:w-[102px] sm:h-[102px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-700 group-hover:-rotate-[6deg]">
                 <img
                   src={logoUrl}
                   alt={clubName}
@@ -212,11 +218,11 @@ const DashboardPage = () => {
               town name (Heiligenhaus), deliberately not translated since an English rendering
               would just lose the point of it. Rendered only when a club has set one. */}
           {tagline && (
-            <p className="font-graffiti text-xl sm:text-2xl leading-tight -rotate-1 select-none text-primary drop-shadow-[0_0_14px_hsl(var(--primary)/0.45)]">
+            <p className="font-graffiti text-lg sm:text-2xl leading-tight -rotate-1 select-none text-primary drop-shadow-[0_0_14px_hsl(var(--primary)/0.45)]">
               {tagline}
             </p>
           )}
-          <p className="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-muted-foreground font-display mt-2">
+          <p className="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-muted-foreground font-display mt-1 sm:mt-2">
             {t("home.tagline")}
           </p>
         </div>

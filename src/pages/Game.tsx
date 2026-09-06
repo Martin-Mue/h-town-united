@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, Loader2 } from "lucide-react";
+import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react";
+import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, Loader2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +19,13 @@ import {
 import DartScoreInput, { type DartInputMode } from "@/components/game/DartScoreInput";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
-import LiveCamera, { type DetectedDart, type LiveCameraHandle } from "@/components/game/LiveCamera";
+// Loaded lazily — LiveCamera pulls in onnxruntime-web + vision utilities (~112KB) that a keyboard-
+// only match (or any bot game, which never renders this at all — see the !currentPlayer?.isBot
+// guard below) has no use for. Type-only imports are erased at compile time, so they don't defeat
+// the code-split the way a value import of the same module would.
+const LiveCamera = lazy(() => import("@/components/game/LiveCamera"));
+import type { DetectedDart, LiveCameraHandle } from "@/components/game/LiveCamera";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
 import OnlineChallengeSetup from "@/components/game/OnlineChallengeSetup";
 import ConfettiBurst from "@/components/ConfettiBurst";
@@ -2781,6 +2787,19 @@ const GamePage = () => {
     // a known combination that some Android Chrome/WebView versions composite inconsistently
     // (sticky silently stops tracking scroll), and this is the standard low-risk mitigation.
     <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 landscape:pt-1.5 landscape:pb-1 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 will-change-transform">
+      {/* Online-match connection health — a dropped/backgrounded realtime channel used to fail
+          silently (see useOnlineMatch's connectionStatus doc comment): a player could keep tapping
+          on a board that was quietly no longer live. Shown right at the top of the always-visible
+          sticky scoreboard, not buried in a toast that could be missed. */}
+      {onlineMatchId && onlineMatch.connectionStatus !== "connected" && (
+        <div className="flex items-center justify-center gap-1.5 mb-2 py-1 rounded-md bg-accent/10 text-accent text-[11px] font-medium">
+          {onlineMatch.connectionStatus === "reconnecting" ? (
+            <><Loader2 className="w-3 h-3 animate-spin" /> {t("game.onlineReconnecting")}</>
+          ) : (
+            <><WifiOff className="w-3 h-3" /> {t("game.onlineDisconnected")}</>
+          )}
+        </div>
+      )}
       <div className={`grid ${numCols} gap-3 landscape:gap-1.5`}>
         {(game.teams
           ? game.teams.map((t, ti) => {
@@ -3192,17 +3211,25 @@ const GamePage = () => {
             {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />}
 
             {!currentPlayer?.isBot && (
-              <LiveCamera
-                ref={liveCameraRef}
-                enabled={cameraEnabled}
-                paused={!!pendingCheckoutChoice || !!pendingTiebreak}
-                onClose={() => { cameraWantedRef.current = false; setCameraEnabled(false); setPendingCameraDarts([]); }}
-                onRoundCommit={submitDetectedRound}
-                onPendingChange={setPendingCameraDarts}
-                dartsRemaining={Math.max(1, 3 - dartsThisRound)}
-                playerName={currentPlayerName}
-                onRequestManualEntry={() => setShowManualInput(true)}
-              />
+              // A camera/ONNX failure on an unfamiliar Android/browser combo only takes down this
+              // card, not the whole match — manual entry (further below) stays fully available
+              // either way. Suspense's fallback only ever shows for the brief one-time chunk
+              // fetch, not per-render, since the dynamic import resolves and caches after that.
+              <ErrorBoundary label="Kamera">
+                <Suspense fallback={<div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
+                  <LiveCamera
+                    ref={liveCameraRef}
+                    enabled={cameraEnabled}
+                    paused={!!pendingCheckoutChoice || !!pendingTiebreak}
+                    onClose={() => { cameraWantedRef.current = false; setCameraEnabled(false); setPendingCameraDarts([]); }}
+                    onRoundCommit={submitDetectedRound}
+                    onPendingChange={setPendingCameraDarts}
+                    dartsRemaining={Math.max(1, 3 - dartsThisRound)}
+                    playerName={currentPlayerName}
+                    onRequestManualEntry={() => setShowManualInput(true)}
+                  />
+                </Suspense>
+              </ErrorBoundary>
             )}
 
             {cricketBoard}

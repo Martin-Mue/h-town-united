@@ -17,10 +17,39 @@ export function isPushSupported(): boolean {
   return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 }
 
+/** A PushSubscription persists in the browser across a server-side VAPID key rotation — the
+ *  browser has no way to know the private half changed, so `pushManager.getSubscription()` keeps
+ *  returning the old one as if nothing happened. A push signed with the NEW key then silently
+ *  fails to reach it (the push service rejects a mismatched key), and — worse — the Settings
+ *  toggle still reads "enabled" because a subscription object still exists. Detected by comparing
+ *  the subscription's own applicationServerKey (the key it was actually created with) against
+ *  today's VAPID_PUBLIC_KEY; a mismatch means it predates the 2026-09-04 rotation (or any future
+ *  one) and needs to be dropped instead of trusted. */
+function isSubscriptionCurrent(sub: PushSubscription): boolean {
+  const current = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+  const used = sub.options?.applicationServerKey ? new Uint8Array(sub.options.applicationServerKey) : null;
+  if (!used || used.length !== current.length) return false;
+  return used.every((byte, i) => byte === current[i]);
+}
+
+/** The one place both read paths below go through — returns the existing subscription only if
+ *  it still matches today's VAPID key, otherwise tears down a stale one (client AND server side,
+ *  so a dead row doesn't linger in push_subscriptions either) and returns null so the caller
+ *  re-subscribes fresh instead of silently keeping something nothing can deliver to. */
+async function getValidSubscription(reg: ServiceWorkerRegistration): Promise<PushSubscription | null> {
+  const sub = await reg.pushManager.getSubscription();
+  if (!sub) return null;
+  if (isSubscriptionCurrent(sub)) return sub;
+  const endpoint = sub.endpoint;
+  try { await sub.unsubscribe(); } catch { /* best-effort — a stale endpoint may already 404 */ }
+  await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+  return null;
+}
+
 export async function getCurrentPushSubscription(): Promise<PushSubscription | null> {
   if (!isPushSupported()) return null;
   const reg = await navigator.serviceWorker.ready;
-  return reg.pushManager.getSubscription();
+  return getValidSubscription(reg);
 }
 
 /** Requests notification permission, subscribes via the service worker, and stores the
@@ -31,7 +60,7 @@ export async function subscribeToPush(userId: string, clubId: string | null): Pr
   if (permission !== "granted") return false;
 
   const reg = await navigator.serviceWorker.ready;
-  let sub = await reg.pushManager.getSubscription();
+  let sub = await getValidSubscription(reg);
   if (!sub) {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,

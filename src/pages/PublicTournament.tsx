@@ -25,6 +25,7 @@ import {
   type RotationSlot,
 } from "@/utils/tournament";
 import AnimatedScore from "@/components/AnimatedScore";
+import { playWalkonSound } from "@/utils/sounds";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
 import { generateQrDataUrl } from "@/lib/qrcode";
@@ -668,46 +669,48 @@ const BoardOverview = ({
   const { t } = useLanguage();
 
   return (
-    <div className="p-4 sm:p-6 bg-background min-h-[60vh]">
+    <div className="p-4 sm:p-6 min-h-[60vh]" style={{ background: "hsl(222 30% 5%)", color: "hsl(210 15% 92%)" }}>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-[clamp(0.7rem,1.2vw,0.9rem)] uppercase tracking-[0.3em] text-primary flex items-center gap-2">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> {t("pt.boardOverview")} · {t("tournament.live")}
+        <p className="text-[clamp(0.7rem,1.2vw,0.9rem)] uppercase tracking-[0.3em] flex items-center gap-2" style={{ color: "hsl(185 85% 48%)" }}>
+          <span className="inline-block h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "hsl(185 85% 48%)" }} /> {t("pt.boardOverview")} · {t("tournament.live")}
         </p>
       </div>
 
       {now.length === 0 ? (
-        <div className="text-muted-foreground text-center py-12">
+        <div className="text-center py-12" style={{ color: "hsl(210 15% 55%)" }}>
           <Monitor className="w-[clamp(2.5rem,5vw,4rem)] h-[clamp(2.5rem,5vw,4rem)] mx-auto mb-3 opacity-30" />
           <p className="text-[clamp(1rem,2vw,1.5rem)]">{t("pt.noOngoingMatches")}</p>
         </div>
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 320px), 1fr))` }}>
           {now.map((c) => (
-            <div key={c.id} className="rounded-2xl border-2 border-primary/50 bg-gradient-to-br from-primary/10 via-card to-accent/5 p-4 sm:p-6 glow-cyan">
+            <div key={c.id} className="broadcast-panel border-2 border-primary/60 p-4 sm:p-6 pl-6 sm:pl-8 glow-cyan">
               <div className="flex items-center justify-between mb-3">
-                <span className="font-display text-[clamp(1.1rem,2vw,1.6rem)] text-primary">{t("camera.board")} {c.board}</span>
-                {c.round !== undefined && <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-muted-foreground">{roundLabelFor(c.round, totalRounds, t)}</span>}
+                <span className="broadcast-tag inline-flex px-3 py-1 rounded-[2px]">
+                  <span className="font-display font-semibold text-[clamp(0.8rem,1.4vw,1rem)] uppercase tracking-wide">{t("camera.board")} {c.board}</span>
+                </span>
+                {c.round !== undefined && <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest" style={{ color: "hsl(210 15% 55%)" }}>{roundLabelFor(c.round, totalRounds, t)}</span>}
               </div>
-              <p className="font-display uppercase leading-tight text-[clamp(1.3rem,3.2vw,2.4rem)]">
+              <p className="font-display uppercase leading-tight tracking-wide text-[clamp(1.4rem,3.6vw,2.6rem)]">
                 {c.player1}
-                <span className="block text-muted-foreground text-[clamp(0.8rem,1.6vw,1.1rem)] normal-case my-0.5">{t("common.vs")}</span>
+                <span className="block text-[clamp(0.8rem,1.6vw,1.1rem)] normal-case my-0.5" style={{ color: "hsl(210 15% 55%)" }}>{t("common.vs")}</span>
                 {c.player2}
               </p>
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
-                <span className="font-display text-[clamp(1.4rem,2.6vw,2rem)] text-secondary">
-                  <AnimatedScore value={c.score1} /> : <AnimatedScore value={c.score2} />
+              <div className="broadcast-scorebar flex items-center justify-between mt-3 px-3 sm:px-4 py-2">
+                <span className="font-display font-bold tabular-nums text-[clamp(1.9rem,3.8vw,3.1rem)]" style={{ color: "hsl(185 85% 48%)" }}>
+                  <AnimatedScore value={c.score1} /> <span style={{ color: "hsl(210 15% 45%)" }}>:</span> <AnimatedScore value={c.score2} />
                 </span>
                 {c.scorekeeper !== undefined && (
-                  <span className="text-[clamp(0.7rem,1.1vw,0.9rem)] text-muted-foreground flex items-center gap-1">
+                  <span className="text-[clamp(0.7rem,1.1vw,0.9rem)] flex items-center gap-1" style={{ color: "hsl(210 15% 55%)" }}>
                     <PenLine className="w-3.5 h-3.5" /> {c.scorekeeper || "–"}
                   </span>
                 )}
               </div>
               {isLiveSnapshotFresh(c.live) && (
-                <div className="mt-2 rounded-lg bg-accent/10 border border-accent/30 px-2.5 py-1.5">
+                <div className="mt-2 rounded-lg px-2.5 py-1.5" style={{ background: "hsl(45 100% 58% / 0.12)", border: "1px solid hsl(45 100% 58% / 0.4)" }}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-accent flex items-center gap-1.5">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
+                    <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest flex items-center gap-1.5" style={{ color: "hsl(45 100% 58%)" }}>
+                      <span className="inline-block h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "hsl(45 100% 58%)" }} /> {t("tournament.live")}
                     </span>
                     <span className="font-display text-[clamp(1rem,1.8vw,1.4rem)]">
                       <AnimatedScore value={c.live!.remaining1 ?? 0} /> : <AnimatedScore value={c.live!.remaining2 ?? 0} />
@@ -723,13 +726,13 @@ const BoardOverview = ({
 
       {onDeck.length > 0 && (
         <div className="mt-6">
-          <p className="text-[clamp(0.7rem,1.1vw,0.85rem)] uppercase tracking-widest text-muted-foreground mb-2">{t("pt.upNext")}</p>
+          <p className="text-[clamp(0.7rem,1.1vw,0.85rem)] uppercase tracking-widest mb-2" style={{ color: "hsl(210 15% 55%)" }}>{t("pt.upNext")}</p>
           <div className="flex flex-wrap gap-2">
             {onDeck.map((c) => (
-              <div key={c.id} className="rounded-xl border border-border bg-card/60 px-3 py-2 flex items-center gap-2">
-                <Badge variant="outline" className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] bg-primary/10 text-primary px-1.5 py-0.5 shrink-0 border-transparent">{t("camera.board")} {c.board}</Badge>
+              <div key={c.id} className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "hsl(222 25% 11%)", border: "1px solid hsl(222 18% 18%)" }}>
+                <Badge variant="outline" className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] px-1.5 py-0.5 shrink-0 border-transparent" style={{ background: "hsl(185 85% 48% / 0.15)", color: "hsl(185 85% 48%)" }}>{t("camera.board")} {c.board}</Badge>
                 <span className="text-[clamp(0.85rem,1.4vw,1.05rem)] uppercase tracking-wide">
-                  {c.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {c.player2}
+                  {c.player1} <span className="normal-case" style={{ color: "hsl(210 15% 55%)" }}>{t("common.vs")}</span> {c.player2}
                 </span>
               </div>
             ))}
@@ -737,7 +740,7 @@ const BoardOverview = ({
         </div>
       )}
       {queuedCount > 0 && (
-        <p className="mt-3 text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest text-muted-foreground">
+        <p className="mt-3 text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest" style={{ color: "hsl(210 15% 55%)" }}>
           +{queuedCount} {t("pt.moreMatchesQueued")}
         </p>
       )}
@@ -784,6 +787,14 @@ const PublicTournamentPage = () => {
   const [flash, setFlash] = useState<Match | null>(null);
   const seenResults = useRef<Set<string> | null>(null);
   const flashTimer = useRef<number | null>(null);
+  // "You're up next" audio/haptic cue — the push notification (Tournament.tsx's
+  // notifyMatchReady) reaches a player's own phone, but THIS screen is the one thing actually
+  // visible/audible in a loud venue, and a silent visual-only board update is easy to miss
+  // entirely (Rangliste Runde 2 #10). Tracks which match ids currently occupy a board across
+  // renders (mirrors the seenResults/flash pattern above), firing only for an id that's newly
+  // present — never on first load (a room full of already-running boards shouldn't all chime at
+  // once) and never twice for the same match.
+  const boardAnnounceSeen = useRef<Set<string> | null>(null);
   // One shared fullscreen wrapper around the toolbar + whichever view is active, instead of
   // each view (tree/list/participants/highlights) reimplementing its own Fullscreen API glue —
   // BoardOverview used to be the only one with this, now every rotation slot gets it uniformly
@@ -1021,6 +1032,22 @@ const PublicTournamentPage = () => {
       if (flashTimer.current) window.clearTimeout(flashTimer.current);
       flashTimer.current = window.setTimeout(() => setFlash(null), 12000);
     }
+  }, [t]);
+
+  // Recomputes the same "now on a board" set the render below builds from `t.bracket` (KO via
+  // currentBoardSchedule, round-robin via roundRobinBoardCards) rather than reusing the render
+  // body's own boardCardsNow — that's derived after this component's loading early-return further
+  // down, so it isn't available to a hook, which must run unconditionally on every render.
+  useEffect(() => {
+    if (!t) return;
+    const bCount = Math.max(1, t.boards || 2);
+    const nowIds = t.mode === "round-robin"
+      ? new Set(roundRobinBoardCards(t.bracket as unknown as RoundRobinMatch[], bCount).now.map((c) => c.id))
+      : new Set(currentBoardSchedule(t.bracket as Match[], bCount).now.map((e) => e.match.id));
+    if (boardAnnounceSeen.current === null) { boardAnnounceSeen.current = nowIds; return; }
+    const isNewOnBoard = [...nowIds].some((id) => !boardAnnounceSeen.current!.has(id));
+    boardAnnounceSeen.current = nowIds;
+    if (isNewOnBoard) playWalkonSound();
   }, [t]);
 
   useEffect(() => {
