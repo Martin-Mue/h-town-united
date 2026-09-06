@@ -8,6 +8,7 @@ import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { Button } from "@/components/ui/button";
 import { useOfflineGameQueue } from "@/hooks/useOfflineGameQueue";
 import { useOfflineMatchResultQueue } from "@/hooks/useOfflineMatchResultQueue";
+import { useOfflineBracketActionQueue } from "@/hooks/useOfflineBracketActionQueue";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import WhatsNewBanner from "@/components/WhatsNewBanner";
 import OnboardingTour from "@/components/OnboardingTour";
@@ -39,8 +40,9 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const [signingOut, setSigningOut] = useState(false);
   const gameQueue = useOfflineGameQueue();
   const matchResultQueue = useOfflineMatchResultQueue();
-  const pendingCount = gameQueue.pendingCount + matchResultQueue.pendingCount;
-  const syncing = gameQueue.syncing || matchResultQueue.syncing;
+  const bracketActionQueue = useOfflineBracketActionQueue();
+  const pendingCount = gameQueue.pendingCount + matchResultQueue.pendingCount + bracketActionQueue.pendingCount;
+  const syncing = gameQueue.syncing || matchResultQueue.syncing || bracketActionQueue.syncing;
   const { t } = useLanguage();
 
   const handleSignOut = async () => {

@@ -512,6 +512,21 @@ export interface RoundRobinMatch {
   live?: LiveSnapshot;
 }
 
+/** Serializable description of one manual bracket-scoring tap — setKoWinner/setKoScore/
+ *  resetKoMatch for single-elimination, setRrWinner/resetRrMatch for round-robin. This is the
+ *  shape shared between the immediate "online" apply path (tournamentMatchSync.ts's
+ *  applyBracketAction) and the offline retry queue (offlineQueue.ts's pending_bracket_actions
+ *  store): a tap that couldn't reach Supabase is queued as one of these and, once connectivity
+ *  is back, replayed through the exact same applyBracketAction — so it's always resolved against
+ *  whatever the bracket looks like BY THEN, never against a stale closure over the bracket as it
+ *  looked at tap time. */
+export type BracketActionPayload =
+  | { type: "setKoWinner"; matchId: string; winner: string; score1?: number; score2?: number }
+  | { type: "setKoScore"; matchId: string; slot: 1 | 2 }
+  | { type: "resetKoMatch"; matchId: string }
+  | { type: "setRrWinner"; matchId: string; winner: string }
+  | { type: "resetRrMatch"; matchId: string };
+
 export interface RoundRobinStanding {
   name: string;
   played: number;

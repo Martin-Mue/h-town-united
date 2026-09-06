@@ -5,6 +5,7 @@ import {
   type Match,
   type RoundRobinMatch,
   type LiveSnapshot,
+  type BracketActionPayload,
   recomputeBracket,
   assignScorekeepers,
   bracketChampion,
@@ -12,6 +13,7 @@ import {
   newlyPlayableMatches,
   resolveMatchUserIds,
   buildMatchReadyPush,
+  isPlayable,
 } from "@/utils/tournament";
 
 export interface MatchResultInput {
@@ -181,4 +183,143 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
     // blindly with stale data.
   }
   throw new Error("recordMatchResult: too many concurrent write conflicts, giving up");
+}
+
+/** Pure transform for the three single-elimination manual actions. Returns null for a no-op:
+ *  either the action doesn't apply to a KO bracket (round-robin actions), the target match is
+ *  gone, or — for setKoWinner only — the match was ALREADY decided (mirrors recordMatchResult's
+ *  own "someone else's write already decided this match, don't clobber it" guard, which matters
+ *  here specifically because a queued offline tap can replay well after another board already
+ *  declared the same match's winner). setKoScore/resetKoMatch always apply directly, same as
+ *  before this change — only the winner-declaring action needed the idempotency guard. */
+function applyActionToKoBracket(
+  bracket: Match[],
+  action: BracketActionPayload,
+  ctx: { roundConfigs?: { bestOf: number }[]; defaultBestOf: number }
+): Match[] | null {
+  switch (action.type) {
+    case "setKoWinner": {
+      const m = bracket.find((x) => x.id === action.matchId);
+      if (!m || m.winner) return null;
+      return bracket.map((x) => (x.id === action.matchId
+        ? { ...x, winner: action.winner, score1: action.score1 ?? x.score1, score2: action.score2 ?? x.score2 }
+        : { ...x }));
+    }
+    case "setKoScore": {
+      const m = bracket.find((x) => x.id === action.matchId);
+      if (!m || !isPlayable(m)) return null;
+      const cfg = (ctx.roundConfigs || [])[m.round - 1];
+      const bestOf = cfg?.bestOf || ctx.defaultBestOf || 1;
+      const legsToWin = Math.ceil(bestOf / 2);
+      return bracket.map((x) => {
+        if (x.id !== action.matchId) return { ...x };
+        const score1 = action.slot === 1 ? (x.score1 || 0) + 1 : (x.score1 || 0);
+        const score2 = action.slot === 2 ? (x.score2 || 0) + 1 : (x.score2 || 0);
+        const winner = score1 >= legsToWin && score1 > score2 ? x.player1 : score2 >= legsToWin && score2 > score1 ? x.player2 : undefined;
+        return { ...x, score1, score2, winner: winner ?? x.winner };
+      });
+    }
+    case "resetKoMatch":
+      return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: undefined, score1: undefined, score2: undefined } : { ...x }));
+    default:
+      return null;
+  }
+}
+
+/** Round-robin equivalent of applyActionToKoBracket — same "don't clobber an already-played
+ *  match" guard for setRrWinner, mirroring recordMatchResult's round-robin branch above. */
+function applyActionToRrBracket(bracket: RoundRobinMatch[], action: BracketActionPayload): RoundRobinMatch[] | null {
+  switch (action.type) {
+    case "setRrWinner": {
+      const m = bracket.find((x) => x.id === action.matchId);
+      if (!m || m.played) return null;
+      return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: action.winner, played: true } : x));
+    }
+    case "resetRrMatch":
+      return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: undefined, played: false } : x));
+    default:
+      return null;
+  }
+}
+
+export interface ApplyBracketActionResult {
+  bracket: Match[] | RoundRobinMatch[];
+  champion: string | null;
+  status: string;
+  /** Matches that just became playable as a result of this write — caller decides what to do
+   *  with them (Tournament.tsx's notifyMatchReady is a push notification; a queued replay from
+   *  the offline hook fires the same notifications, just later). Empty for a no-op or for any
+   *  round-robin action, same as before this change (round-robin never had "next match" pushes). */
+  newlyPlayable: Match[];
+}
+
+/**
+ * Applies one manual bracket-scoring tap (setKoWinner/setKoScore/resetKoMatch for single-
+ * elimination, setRrWinner/resetRrMatch for round-robin) with the exact same optimistic-
+ * concurrency pattern as recordMatchResult above: always re-fetch the tournament row fresh,
+ * apply the action against THAT bracket — never a caller-held copy — and condition the write on
+ * `updated_at` still matching what this attempt read, retrying from a fresh read on conflict.
+ *
+ * This single function is now the ONLY path that writes a manual bracket tap, used both when
+ * the tap can reach Supabase right away (Tournament.tsx calls it directly) and when it can't: a
+ * tap that fails while offline (or on any other error) is queued via offlineQueue.ts's
+ * enqueueBracketAction and replayed through this exact same function later — so a queued tap is
+ * always resolved against the CURRENT bracket, never against how it looked when the tap happened
+ * (which is exactly what a plain "retry the original write" queue would have gotten wrong, the
+ * same reason recordMatchResult couldn't just be retried blindly either).
+ */
+export async function applyBracketAction(tournamentId: string, action: BracketActionPayload): Promise<ApplyBracketActionResult> {
+  for (let attempt = 0; attempt < MAX_CONCURRENT_WRITE_ATTEMPTS; attempt++) {
+    const { data: tournament, error } = await supabase
+      .from("tournaments")
+      .select("id, mode, bracket, players, boards, round_configs, best_of_legs, champion, status, updated_at")
+      .eq("id", tournamentId)
+      .single();
+    if (error) throw error;
+    if (!tournament) throw new Error("Tournament not found");
+
+    if (tournament.mode === "round-robin") {
+      const freshBracket = (tournament.bracket as unknown as RoundRobinMatch[]) || [];
+      const patched = applyActionToRrBracket(freshBracket, action);
+      if (!patched) return { bracket: freshBracket, champion: tournament.champion, status: tournament.status, newlyPlayable: [] };
+      const allPlayed = patched.length > 0 && patched.every((m) => m.played);
+      const champion = allPlayed ? calcStandings(patched)[0]?.name || null : null;
+      const { data: updated, error: updErr } = await supabase.from("tournaments").update({
+        bracket: patched as unknown as Json,
+        champion,
+        status: champion ? "finished" : "active",
+      }).eq("id", tournamentId).eq("updated_at", tournament.updated_at).select("id");
+      if (updErr) throw updErr;
+      if (updated && updated.length > 0) return { bracket: patched, champion, status: champion ? "finished" : "active", newlyPlayable: [] };
+      continue; // lost the race — re-fetch and try again
+    }
+
+    const freshBracket = (tournament.bracket as unknown as Match[]) || [];
+    const activePlayers = (tournament.players as unknown as string[]) || [];
+    const rawPatched = applyActionToKoBracket(freshBracket, action, {
+      roundConfigs: tournament.round_configs as unknown as { bestOf: number }[] | undefined,
+      defaultBestOf: tournament.best_of_legs || 1,
+    });
+    if (!rawPatched) return { bracket: freshBracket, champion: tournament.champion, status: tournament.status, newlyPlayable: [] };
+    const recomputed = recomputeBracket(rawPatched, activePlayers);
+    const withKeepers = assignScorekeepers(recomputed, activePlayers, { boards: tournament.boards || 2, keepExisting: true });
+    const champion = bracketChampion(withKeepers);
+    const { data: updated, error: updErr } = await supabase.from("tournaments").update({
+      bracket: withKeepers as unknown as Json,
+      champion,
+      status: champion ? "finished" : "active",
+    }).eq("id", tournamentId).eq("updated_at", tournament.updated_at).select("id");
+    if (updErr) throw updErr;
+    if (updated && updated.length > 0) {
+      return {
+        bracket: withKeepers,
+        champion,
+        status: champion ? "finished" : "active",
+        newlyPlayable: newlyPlayableMatches(freshBracket, withKeepers),
+      };
+    }
+    // lost the race — loop back and recompute from the now-current bracket instead of retrying
+    // blindly with stale data.
+  }
+  throw new Error("applyBracketAction: too many concurrent write conflicts, giving up");
 }

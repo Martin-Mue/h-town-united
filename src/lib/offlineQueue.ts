@@ -1,16 +1,19 @@
 import type { GameState } from "@/types/game";
+import type { BracketActionPayload } from "@/utils/tournament";
 
 /**
  * Offline write queues for anything that must reach Supabase after a match, but can't be
- * dropped just because the club's wifi hiccups: finished game results, and (separately)
- * tournament bracket write-backs for a "Spiel starten" live game. Two independent IndexedDB
- * object stores, same durable enqueue → flush-on-reconnect shape.
+ * dropped just because the club's wifi hiccups: finished game results, tournament bracket
+ * write-backs for a "Spiel starten" live game, and (separately again) manual bracket-scoring
+ * taps made directly in the Tournament.tsx admin UI (declare winner, +1 leg, reset a match).
+ * Three independent IndexedDB object stores, same durable enqueue → flush-on-reconnect shape.
  */
 
 const DB_NAME = "darts-offline-queue";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const GAME_STORE = "pending_game_saves";
 const MATCH_RESULT_STORE = "pending_match_results";
+const BRACKET_ACTION_STORE = "pending_bracket_actions";
 
 export interface QueuedGameSave {
   /** Same id used as the `games.id` primary key, so replays are idempotent. */
@@ -43,6 +46,17 @@ export interface QueuedMatchResult {
   lastError?: string;
 }
 
+/** One queued manual bracket-scoring tap — see BracketActionPayload's own doc comment for why
+ *  this carries the action's *intent* (matchId/winner/slot) rather than a precomputed bracket. */
+export interface QueuedBracketAction {
+  id: string;
+  tournamentId: string;
+  action: BracketActionPayload;
+  createdAt: number;
+  attempts: number;
+  lastError?: string;
+}
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -50,6 +64,7 @@ function openDb(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains(GAME_STORE)) db.createObjectStore(GAME_STORE, { keyPath: "id" });
       if (!db.objectStoreNames.contains(MATCH_RESULT_STORE)) db.createObjectStore(MATCH_RESULT_STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(BRACKET_ACTION_STORE)) db.createObjectStore(BRACKET_ACTION_STORE, { keyPath: "id" });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -166,4 +181,16 @@ export async function flushMatchResultQueue(
   replay: (tournamentId: string, matchId: string, result: { winnerName: string; score1?: number; score2?: number }) => Promise<void>
 ): Promise<{ synced: number; failed: number }> {
   return matchResultQueue.flush((item) => replay(item.tournamentId, item.matchId, { winnerName: item.winnerName, score1: item.score1, score2: item.score2 }));
+}
+
+const bracketActionQueue = createQueue<QueuedBracketAction>(BRACKET_ACTION_STORE);
+
+export const enqueueBracketAction = bracketActionQueue.enqueue;
+export const listQueuedBracketActions = bracketActionQueue.list;
+export const subscribeBracketActionQueueCount = bracketActionQueue.subscribeCount;
+
+export async function flushBracketActionQueue(
+  replay: (tournamentId: string, action: BracketActionPayload) => Promise<unknown>
+): Promise<{ synced: number; failed: number }> {
+  return bracketActionQueue.flush((item) => replay(item.tournamentId, item.action).then(() => undefined));
 }

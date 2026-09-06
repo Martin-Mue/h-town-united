@@ -29,6 +29,8 @@ import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
 import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
+import { applyBracketAction } from "@/lib/tournamentMatchSync";
+import { enqueueBracketAction } from "@/lib/offlineQueue";
 import MatchmakingDialog from "@/components/players/MatchmakingDialog";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
 import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
@@ -59,7 +61,13 @@ import {
   boardHasFutureMatch,
   DEFAULT_PRESTART_VIEWS,
   type RotationSlot,
+  type BracketActionPayload,
 } from "@/utils/tournament";
+
+/** Shared with tournamentMatchSync.ts's recordMatchResult/applyBracketAction — a defensive bound
+ *  on how many times persistBracket re-fetches and retries against a concurrent write before
+ *  giving up, not a real hot path (see those functions' own doc comments for the full reasoning). */
+const BRACKET_WRITE_MAX_ATTEMPTS = 5;
 
 interface RoundConfig {
   mode: string;      // "501" | "301" | "Cricket" | "Extern"
@@ -1256,83 +1264,160 @@ const TournamentPage = () => {
 
   // ─── KO: persist a recomputed bracket ──────────
   // Takes a patch FUNCTION (not a precomputed array) and re-fetches the bracket fresh from
-  // Supabase right before applying it. Several boards/devices can edit the same tournament
-  // at once (manual taps on one screen while another board's live game auto-finishes) — a
-  // patch built against a locally-cached `activeTournament.bracket` would silently overwrite
-  // whichever other match got updated in between.
+  // Supabase right before applying it. Several boards/devices can edit the same tournament at
+  // once (manual taps on one screen while another board's live game auto-finishes) — a patch
+  // built against a locally-cached `activeTournament.bracket` would silently overwrite whichever
+  // other match got updated in between. The write itself is now CONDITIONED on `updated_at`
+  // still matching what this attempt read (same optimistic-concurrency pattern as
+  // tournamentMatchSync.ts's recordMatchResult/applyBracketAction — that trigger-maintained
+  // column changes on every write, including ones from other clients): if a concurrent write
+  // already landed, this attempt's WHERE clause matches zero rows instead of clobbering it, and
+  // this re-fetches + recomputes from the now-current bracket instead of retrying blindly with
+  // stale data. Used by the less frequent, setup-time bracket edits (reassign a scorekeeper, edit
+  // round-1 players, withdraw/add a participant) — the actual live-scoring taps (declare winner,
+  // +1 leg, reset a match) go through runBracketAction/applyBracketAction below instead, which
+  // additionally queues offline for automatic retry.
   const persistBracket = async (patch: (fresh: Match[]) => Match[], opts: { reshuffleKeepers?: boolean } = {}) => {
     if (!activeTournament) return;
-    const { data: freshRow } = await supabase.from("tournaments").select("bracket, players").eq("id", activeTournament.id).single();
-    const freshBracket = (freshRow?.bracket as unknown as Match[] | undefined) ?? (activeTournament.bracket as Match[]);
-    const freshPlayers = (freshRow?.players as unknown as string[] | undefined) ?? activeTournament.players;
-    const raw = patch(freshBracket);
-    const recomputed = recomputeBracket(raw, freshPlayers);
-    const withKeepers = assignScorekeepers(recomputed, freshPlayers, {
-      boards: activeTournament.boards || 2,
-      keepExisting: !opts.reshuffleKeepers,
-    });
-    const champion = bracketChampion(withKeepers);
+    for (let attempt = 0; attempt < BRACKET_WRITE_MAX_ATTEMPTS; attempt++) {
+      const { data: freshRow } = await supabase.from("tournaments").select("bracket, players, updated_at").eq("id", activeTournament.id).single();
+      const freshBracket = (freshRow?.bracket as unknown as Match[] | undefined) ?? (activeTournament.bracket as Match[]);
+      const freshPlayers = (freshRow?.players as unknown as string[] | undefined) ?? activeTournament.players;
+      const raw = patch(freshBracket);
+      const recomputed = recomputeBracket(raw, freshPlayers);
+      const withKeepers = assignScorekeepers(recomputed, freshPlayers, {
+        boards: activeTournament.boards || 2,
+        keepExisting: !opts.reshuffleKeepers,
+      });
+      const champion = bracketChampion(withKeepers);
 
-    // "Your match is up next" — only for matches that just BECAME playable, so this fires once per
-    // match. Diffs against freshBracket (not the stale local activeTournament.bracket) — another
-    // board can have already advanced+notified this same match while this client hadn't re-polled
-    // yet, and diffing against the stale copy would make it look "newly playable" again here too.
-    newlyPlayableMatches(freshBracket, withKeepers).forEach(notifyMatchReady);
+      const baseQuery = supabase.from("tournaments").update({
+        bracket: withKeepers as unknown as Json,
+        champion,
+        status: champion ? "finished" : "active",
+      }).eq("id", activeTournament.id);
+      // No updated_at to condition on (row vanished, or the select above itself failed) — fall
+      // back to an unconditioned write rather than getting stuck; every other case below is CAS.
+      const { data: updated, error } = freshRow?.updated_at
+        ? await baseQuery.eq("updated_at", freshRow.updated_at).select("id")
+        : await baseQuery.select("id");
+      // Every bracket mutation through this function used to apply the optimistic local update
+      // unconditionally, so a write that failed on flaky venue WiFi would show as "saved" right
+      // up until the next reload/poll silently reverted it, with no error ever shown. Skip the
+      // optimistic update on a real failure instead, so what's on screen stays honest about what
+      // actually made it to the DB.
+      if (error) {
+        toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+        return;
+      }
+      if (!updated || updated.length === 0) continue; // lost the race — re-fetch and retry
 
-    const { error } = await supabase.from("tournaments").update({
-      bracket: withKeepers as unknown as Json,
-      champion,
-      status: champion ? "finished" : "active",
-    }).eq("id", activeTournament.id);
-    // Every bracket mutation (set winner, +1 leg, reset a match, reassign a scorekeeper, edit
-    // round-1 players) goes through this one function — it used to apply the optimistic local
-    // update unconditionally, so a write that failed on flaky venue WiFi would show as "saved"
-    // right up until the next reload/poll silently reverted it, with no error ever shown. Skip
-    // the optimistic update on failure instead, so what's on screen stays honest about what
-    // actually made it to the DB.
-    if (error) {
-      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+      // "Your match is up next" — only for matches that just BECAME playable, so this fires once
+      // per match. Diffs against freshBracket (the read THIS attempt actually won with, not the
+      // stale local activeTournament.bracket).
+      newlyPlayableMatches(freshBracket, withKeepers).forEach(notifyMatchReady);
+      setActiveTournament({ ...activeTournament, bracket: withKeepers, players: freshPlayers, champion, status: champion ? "finished" : "active" });
+      if (champion && seenCeremonyFor !== activeTournament.id) {
+        setCeremonyChampion(champion);
+        setSeenCeremonyFor(activeTournament.id);
+      }
       return;
     }
-    setActiveTournament({ ...activeTournament, bracket: withKeepers, players: freshPlayers, champion, status: champion ? "finished" : "active" });
-    if (champion && seenCeremonyFor !== activeTournament.id) {
-      setCeremonyChampion(champion);
-      setSeenCeremonyFor(activeTournament.id);
+    toast({ title: t("common.error"), description: t("tournament.bracketWriteConflict") });
+  };
+
+  /** Best-effort LOCAL reflection of a manual scoring tap that couldn't reach Supabase at all
+   *  (queued instead — see runBracketAction below) — recomputed from whatever bracket this
+   *  client already has, the same way these five actions always computed their optimistic update
+   *  before this change. Never the source of truth: once the queued action actually replays (or
+   *  the next poll/realtime update lands), the server's own recompute silently overwrites this —
+   *  it only exists so a tap doesn't look like it did nothing while offline. */
+  const applyOptimisticLocalPatch = (action: BracketActionPayload) => {
+    if (!activeTournament) return;
+    if (activeTournament.mode === "round-robin") {
+      const bracket = (activeTournament.bracket as RoundRobinMatch[]).map((m) => {
+        if (action.type === "setRrWinner" && m.id === action.matchId) return { ...m, winner: action.winner, played: true };
+        if (action.type === "resetRrMatch" && m.id === action.matchId) return { ...m, winner: undefined, played: false };
+        return m;
+      });
+      const allPlayed = bracket.every((m) => m.played);
+      const champion = allPlayed ? calcStandings(bracket)[0]?.name || null : null;
+      setActiveTournament({ ...activeTournament, bracket, champion, status: champion ? "finished" : activeTournament.status });
+      return;
+    }
+    const raw = (activeTournament.bracket as Match[]).map((m) => {
+      if (action.type === "setKoWinner" && m.id === action.matchId) {
+        return { ...m, winner: action.winner, score1: action.score1 ?? m.score1, score2: action.score2 ?? m.score2 };
+      }
+      if (action.type === "setKoScore" && m.id === action.matchId) {
+        const cfg = (activeTournament.round_configs || [])[m.round - 1];
+        const bestOf = cfg?.bestOf || activeTournament.best_of_legs || 1;
+        const legsToWin = Math.ceil(bestOf / 2);
+        const score1 = action.slot === 1 ? (m.score1 || 0) + 1 : (m.score1 || 0);
+        const score2 = action.slot === 2 ? (m.score2 || 0) + 1 : (m.score2 || 0);
+        const winner = score1 >= legsToWin && score1 > score2 ? m.player1 : score2 >= legsToWin && score2 > score1 ? m.player2 : undefined;
+        return { ...m, score1, score2, winner: winner ?? m.winner };
+      }
+      if (action.type === "resetKoMatch" && m.id === action.matchId) {
+        return { ...m, winner: undefined, score1: undefined, score2: undefined };
+      }
+      return m;
+    });
+    const recomputed = recomputeBracket(raw, activeTournament.players);
+    const withKeepers = assignScorekeepers(recomputed, activeTournament.players, { boards: activeTournament.boards || 2, keepExisting: true });
+    const champion = bracketChampion(withKeepers);
+    setActiveTournament({ ...activeTournament, bracket: withKeepers, champion, status: champion ? "finished" : activeTournament.status });
+  };
+
+  /** Shared apply path for every manual bracket-scoring tap — declare winner, +1 leg, reset a
+   *  match, for both KO and round-robin. Routes through applyBracketAction, which re-fetches the
+   *  tournament fresh and writes conditioned on `updated_at` (same CAS-with-retry pattern as
+   *  recordMatchResult), so a tap here can never silently clobber a concurrent write from another
+   *  board or from a live game finishing. A tap that can't reach Supabase at all — genuinely
+   *  offline, or any other failure — is queued via enqueueBracketAction and replayed
+   *  automatically once back online (see useOfflineBracketActionQueue, mounted in Layout.tsx)
+   *  instead of just failing with no way back, which is what every one of these five actions did
+   *  before this change. */
+  const runBracketAction = async (action: BracketActionPayload) => {
+    if (!activeTournament) return;
+    const tournamentId = activeTournament.id;
+    try {
+      if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
+      const result = await applyBracketAction(tournamentId, action);
+      setActiveTournament((prev) => (prev && prev.id === tournamentId
+        ? { ...prev, bracket: result.bracket, champion: result.champion, status: result.status }
+        : prev));
+      result.newlyPlayable.forEach(notifyMatchReady);
+      if (result.champion && seenCeremonyFor !== tournamentId) {
+        setCeremonyChampion(result.champion);
+        setSeenCeremonyFor(tournamentId);
+      }
+    } catch (err) {
+      await enqueueBracketAction({ id: crypto.randomUUID(), tournamentId, action });
+      applyOptimisticLocalPatch(action);
+      const genuinelyOffline = err instanceof Error && err.message === "offline";
+      toast({
+        title: genuinelyOffline ? t("tournament.actionQueuedOfflineTitle") : t("tournament.actionQueuedRetryTitle"),
+        description: genuinelyOffline ? t("tournament.actionQueuedOfflineDesc") : t("tournament.actionQueuedRetryDesc"),
+      });
     }
   };
 
   const setKoWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
-    if (!activeTournament) return;
     // score1/score2 are optional overrides — when omitted (the only way the UI actually calls
-    // this today: tapping a player's name declares them the winner directly), keep whatever legs
-    // were already tallied via the "+1" button (setKoScore) instead of wiping them to blank.
-    await persistBracket((fresh) => fresh.map(m =>
-      m.id === matchId ? { ...m, winner, score1: score1 ?? m.score1, score2: score2 ?? m.score2 } : { ...m }
-    ));
+    // this today: tapping a player's name declares them the winner directly), applyBracketAction
+    // keeps whatever legs were already tallied via the "+1" button (setKoScore) instead of
+    // wiping them to blank.
+    await runBracketAction({ type: "setKoWinner", matchId, winner, score1, score2 });
   };
 
   const setKoScore = async (matchId: string, slot: 1 | 2) => {
-    if (!activeTournament) return;
-    const match = (activeTournament.bracket as Match[]).find(m => m.id === matchId);
-    if (!match || !isPlayable(match)) return;
-    const cfg = (activeTournament.round_configs || [])[match.round - 1];
-    const bestOf = cfg?.bestOf || activeTournament.best_of_legs || 1;
-    const legsToWin = Math.ceil(bestOf / 2);
-    await persistBracket((fresh) => fresh.map(m => {
-      if (m.id !== matchId) return { ...m };
-      const score1 = slot === 1 ? (m.score1 || 0) + 1 : (m.score1 || 0);
-      const score2 = slot === 2 ? (m.score2 || 0) + 1 : (m.score2 || 0);
-      const winner = score1 >= legsToWin && score1 > score2 ? m.player1 : score2 >= legsToWin && score2 > score1 ? m.player2 : undefined;
-      return { ...m, score1, score2, winner: winner ?? m.winner };
-    }));
+    await runBracketAction({ type: "setKoScore", matchId, slot });
   };
 
   /** Resets a match AND every result that depended on it (cascade via recompute). */
   const resetKoMatch = async (matchId: string) => {
-    if (!activeTournament) return;
-    await persistBracket((fresh) => fresh.map(m =>
-      m.id === matchId ? { ...m, winner: undefined, score1: undefined, score2: undefined } : { ...m }
-    ));
+    await runBracketAction({ type: "resetKoMatch", matchId });
   };
 
   /** Replace the two participants of a first-round match (late changes, no-shows …). */
@@ -1683,39 +1768,11 @@ const TournamentPage = () => {
   };
 
   // ─── Round Robin: Set Winner ───────────────────
-  // Same fresh-fetch-then-merge approach as persistBracket above — round-robin ties (both
-  // manual taps and live-game auto-finishes) are just as race-prone across multiple boards.
+  // Routes through runBracketAction/applyBracketAction — same CAS-with-retry write and offline
+  // queueing as the KO actions above; round-robin ties (both manual taps and live-game
+  // auto-finishes) are just as race-prone across multiple boards.
   const setRrWinner = async (matchId: string, winner: string) => {
-    if (!activeTournament) return;
-    const { data: freshRow } = await supabase.from("tournaments").select("bracket").eq("id", activeTournament.id).single();
-    const freshBracket = (freshRow?.bracket as unknown as RoundRobinMatch[] | undefined) ?? (activeTournament.bracket as RoundRobinMatch[]);
-    const bracket = freshBracket.map(m => m.id === matchId ? { ...m, winner, played: true } : m);
-
-    const allPlayed = bracket.every(m => m.played);
-    let champion: string | null = null;
-    if (allPlayed) {
-      const standings = calcStandings(bracket);
-      champion = standings[0]?.name || null;
-    }
-
-    const { error } = await supabase.from("tournaments").update({
-      bracket: bracket as unknown as Json,
-      champion,
-      status: champion ? "finished" : "active",
-    }).eq("id", activeTournament.id);
-    // Same reasoning as persistBracket (the KO equivalent of this function) — don't apply the
-    // optimistic update on a failed write, or the screen keeps showing a result that was never
-    // actually saved.
-    if (error) {
-      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
-      return;
-    }
-
-    setActiveTournament({ ...activeTournament, bracket, champion });
-    if (champion && seenCeremonyFor !== activeTournament.id) {
-      setCeremonyChampion(champion);
-      setSeenCeremonyFor(activeTournament.id);
-    }
+    await runBracketAction({ type: "setRrWinner", matchId, winner });
   };
 
   /** Round-robin's equivalent of resetKoMatch — a mis-tapped setRrWinner had no way back at all
@@ -1724,23 +1781,7 @@ const TournamentPage = () => {
    *  the table's last one un-finishes the tournament, but if a DIFFERENT match still completes it
    *  the tournament should stay finished with whichever standings that leaves. */
   const resetRrMatch = async (matchId: string) => {
-    if (!activeTournament) return;
-    const { data: freshRow } = await supabase.from("tournaments").select("bracket").eq("id", activeTournament.id).single();
-    const freshBracket = (freshRow?.bracket as unknown as RoundRobinMatch[] | undefined) ?? (activeTournament.bracket as RoundRobinMatch[]);
-    const bracket = freshBracket.map(m => m.id === matchId ? { ...m, winner: undefined, played: false } : m);
-    const allPlayed = bracket.every(m => m.played);
-    const champion = allPlayed ? (calcStandings(bracket)[0]?.name || null) : null;
-
-    const { error } = await supabase.from("tournaments").update({
-      bracket: bracket as unknown as Json,
-      champion,
-      status: champion ? "finished" : "active",
-    }).eq("id", activeTournament.id);
-    if (error) {
-      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
-      return;
-    }
-    setActiveTournament({ ...activeTournament, bracket, champion });
+    await runBracketAction({ type: "resetRrMatch", matchId });
   };
 
   const openTournament = (t: TournamentRecord) => {
