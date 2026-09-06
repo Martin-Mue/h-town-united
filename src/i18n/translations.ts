@@ -23,6 +23,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "nav.tournament": { de: "Turnier", en: "Tournament", fr: "Tournoi", pl: "Turniej", nl: "Toernooi", tr: "Turnuva" },
   "nav.club": { de: "Verein", en: "Club", fr: "Club", pl: "Klub", nl: "Club", tr: "Kulüp" },
   "nav.admin": { de: "Admin", en: "Admin", fr: "Admin", pl: "Admin", nl: "Admin", tr: "Yönetici" },
+  "nav.more": { de: "Mehr", en: "More", fr: "Plus", pl: "Więcej", nl: "Meer", tr: "Daha fazla" },
 
   // Layout.tsx — header controls
   "header.lightTheme": { de: "Helles Design", en: "Light theme", fr: "Thème clair", pl: "Jasny motyw", nl: "Licht thema", tr: "Açık tema" },
@@ -154,6 +155,7 @@ export const translations: Record<string, Record<Language, string>> = {
   // language (see translations.test.ts's completeness check) -- a prefix/suffix split would leave
   // some languages with a legitimately empty piece.
   "activity.matchResultTemplate": { de: "hat gegen {opponent} gewonnen", en: "won against {opponent}", fr: "a gagné contre {opponent}", pl: "wygrał(a) z {opponent}", nl: "heeft gewonnen van {opponent}", tr: "{opponent} karşısında kazandı" },
+  "activity.matchResultMultiplayerTemplate": { de: "hat eine Mehrspieler-Runde gewonnen ({count} Spieler)", en: "won a multiplayer round ({count} players)", fr: "a gagné une partie multijoueur ({count} joueurs)", pl: "wygrał(a) rundę wieloosobową ({count} graczy)", nl: "heeft een meerspelerronde gewonnen ({count} spelers)", tr: "çok oyunculu bir turu kazandı ({count} oyuncu)" },
 
   // Statistics.tsx — shared chrome (scope toggle, filter bar, tab nav) + Overview tab.
   // The Players/H2H/Games/Highlights tabs are NOT covered yet — see the memory note on i18n
@@ -234,6 +236,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.max": { de: "Max.", en: "Max.", fr: "Max.", pl: "Maks.", nl: "Max.", tr: "Maks." },
   "game.rounds": { de: "Runden", en: "rounds", fr: "tours", pl: "rund", nl: "rondes", tr: "tur" },
   "game.roundLimitDesc": { de: "Nach dem Limit gewinnt das Leg wer weniger Restpunkte hat.", en: "Once the limit is reached, whoever has fewer points remaining wins the leg.", fr: "Une fois la limite atteinte, celui qui a le moins de points restants gagne le leg.", pl: "Po osiągnięciu limitu leg wygrywa ten, kto ma mniej punktów do wyrzucenia.", nl: "Na de limiet wint degene met minder resterende punten de leg.", tr: "Limite ulaşıldığında, kalan puanı daha az olan leg'i kazanır." },
+  "game.advancedSettings": { de: "Erweiterte Einstellungen", en: "Advanced settings", fr: "Paramètres avancés", pl: "Ustawienia zaawansowane", nl: "Geavanceerde instellingen", tr: "Gelişmiş ayarlar" },
   "game.enterName": { de: "Name eingeben...", en: "Enter name...", fr: "Entrer un nom...", pl: "Wpisz imię...", nl: "Naam invoeren...", tr: "İsim girin..." },
   "game.chooseClubMember": { de: "Vereinsmitglied wählen", en: "Choose club member", fr: "Choisir un membre du club", pl: "Wybierz członka klubu", nl: "Verenigingslid kiezen", tr: "Kulüp üyesi seç" },
   "game.bot": { de: "Bot", en: "Bot", fr: "Bot", pl: "Bot", nl: "Bot", tr: "Bot" },

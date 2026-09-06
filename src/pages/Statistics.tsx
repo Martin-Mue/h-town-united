@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, ChevronRight, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2 } from "lucide-react";
+import { DartGameIcon } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -58,8 +59,6 @@ interface GameRecord {
     /** Legacy shape from before detail_stats covered every player, not just the top 2. */
     player1?: DetailStat | null;
     player2?: DetailStat | null;
-    /** Team mode flag — see clutchStats.ts. Absent on games saved before this existed. */
-    isTeamGame?: boolean;
   } | null;
 }
 
@@ -922,7 +921,7 @@ const StatisticsPage = () => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
     const modeById = new Map(games.map((g) => [g.id, g.mode]));
     const relevantLegs = gameLegs.filter((l) => filteredIds.has(l.game_id) && modeById.get(l.game_id) !== "cricket" && Array.isArray(l.throws));
-    const relevantGames = filteredGames.map((g) => ({ id: g.id, best_of_legs: g.best_of_legs, isTeamGame: !!g.detail_stats?.isTeamGame }));
+    const relevantGames = filteredGames.map((g) => ({ id: g.id, best_of_legs: g.best_of_legs }));
     return computeClutchStats(relevantGames, relevantLegs, selectedPlayerId);
   }, [selectedPlayerId, filteredGames, gameLegs, games]);
 
@@ -2159,7 +2158,11 @@ const StatisticsPage = () => {
         <SectionCard>
           <Eyebrow icon={Target}>{t("stats.gameHistory")}</Eyebrow>
           {recentGames.length === 0 ? (
-            <div className="text-center py-4">
+            // Design Rangliste #15: every other tab's empty state on this page already leads with
+            // an icon (Target/Users above) — this one was pure text, the exact "Noch keine Spiele"
+            // case the roadmap calls out. DartGameIcon matches Index.tsx's identical empty state.
+            <div className="text-center py-6">
+              <DartGameIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm text-muted-foreground mb-3">{t("home.noGamesYet")}</p>
               <Button asChild size="sm"><Link to="/game">{t("game.startGame")}</Link></Button>
             </div>

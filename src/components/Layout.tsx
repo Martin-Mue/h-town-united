@@ -1,11 +1,12 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LogOut, UserCog, CloudOff, RefreshCw, Settings } from "lucide-react";
+import { LogOut, UserCog, CloudOff, RefreshCw, Settings, MoreHorizontal } from "lucide-react";
 import { HomeIcon, DartGameIcon, StatsIcon, TrainingIcon, DartTrophyIcon, ClubIcon } from "@/components/icons/DartIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { Button } from "@/components/ui/button";
+import { Drawer, DrawerTrigger, DrawerContent, DrawerTitle, DrawerClose } from "@/components/ui/drawer";
 import { useOfflineGameQueue } from "@/hooks/useOfflineGameQueue";
 import { useOfflineMatchResultQueue } from "@/hooks/useOfflineMatchResultQueue";
 import { useOfflineBracketActionQueue } from "@/hooks/useOfflineBracketActionQueue";
@@ -44,8 +45,22 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const pendingCount = gameQueue.pendingCount + matchResultQueue.pendingCount + bracketActionQueue.pendingCount;
   const syncing = gameQueue.syncing || matchResultQueue.syncing || bracketActionQueue.syncing;
   const { t } = useLanguage();
-  const mobileNavItems = [...NAV_ITEMS, ...(isAdmin ? [{ to: "/admin", icon: UserCog, labelKey: "nav.admin" }] : [])];
-  const mobileActiveIndex = mobileNavItems.findIndex((item) => location.pathname === item.to);
+  // Bottom-nav is width-constrained on mobile — 6-7 equal-weight items crowded together with no
+  // priority ordering (Design-Sprint Rangliste #11). These 4 are the highest-frequency actions
+  // (dashboard, starting a game, checking a live tournament, checking your own stats); Training,
+  // Verein and (for admins) Admin move into a "Mehr" drawer instead of competing for a 5th/6th/
+  // 7th equal-weight slot. Desktop's top nav further below is untouched — no such constraint there.
+  const CORE_MOBILE_PATHS = new Set(["/", "/game", "/tournament", "/statistics"]);
+  const coreMobileItems = NAV_ITEMS.filter((item) => CORE_MOBILE_PATHS.has(item.to));
+  const moreMobileItems = [
+    ...NAV_ITEMS.filter((item) => !CORE_MOBILE_PATHS.has(item.to)),
+    ...(isAdmin ? [{ to: "/admin", icon: UserCog, labelKey: "nav.admin" }] : []),
+  ];
+  const mobileSlotCount = coreMobileItems.length + 1; // +1 for the "Mehr" slot itself
+  const moreActive = moreMobileItems.some((item) => location.pathname === item.to);
+  const mobileActiveIndex = moreActive
+    ? coreMobileItems.length
+    : coreMobileItems.findIndex((item) => location.pathname === item.to);
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -164,28 +179,28 @@ const Layout = ({ children }: { children: ReactNode }) => {
 
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-md border-t border-border grid py-2 z-50"
-        style={{ gridTemplateColumns: `repeat(${mobileNavItems.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${mobileSlotCount}, minmax(0, 1fr))` }}
       >
         {/* Animated pill under the active tab — a `position:fixed` nav is already its own
             positioning context, so this absolute pill needs no extra `relative` wrapper. Slides
             (--ease-spring, a little overshoot) rather than just fading, so switching tabs reads
-            as one continuous motion instead of two independent icon color changes. */}
+            as one continuous motion instead of two independent icon color changes. Also lands
+            under the "Mehr" slot itself (last column) when the active route is one of the items
+            tucked inside the drawer, so the nav never goes fully unhighlighted. */}
         {mobileActiveIndex >= 0 && (
           <div
             aria-hidden="true"
             className="absolute top-1 bottom-1 rounded-lg bg-primary/10 pointer-events-none"
             style={{
-              left: `calc(${mobileActiveIndex} * (100% / ${mobileNavItems.length}))`,
-              width: `calc(100% / ${mobileNavItems.length})`,
+              left: `calc(${mobileActiveIndex} * (100% / ${mobileSlotCount}))`,
+              width: `calc(100% / ${mobileSlotCount})`,
               transitionProperty: "left",
               transitionDuration: "380ms",
               transitionTimingFunction: "var(--ease-spring)",
             }}
           />
         )}
-        {/* Admin never had an entry here — it only ever existed in the "hidden md:flex" desktop
-            nav above, so any admin on mobile had no way to reach it at all. */}
-        {mobileNavItems.map((item) => {
+        {coreMobileItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
             <Link
@@ -201,6 +216,49 @@ const Layout = ({ children }: { children: ReactNode }) => {
             </Link>
           );
         })}
+        {/* "Mehr" — Training, Verein and (for admins) Admin, previously equal-weight bottom-nav
+            slots, now one tap deeper via a bottom drawer instead of crowding 6-7 items into the
+            same row. DrawerClose wrapping each Link closes the drawer on navigation for free. */}
+        <Drawer>
+          <DrawerTrigger asChild>
+            <button
+              type="button"
+              className={`relative flex flex-col items-center gap-0.5 px-2 py-1 text-xs transition-colors active:scale-90 min-w-0 ${
+                moreActive ? "text-primary" : "text-muted-foreground"
+              }`}
+              style={{ transitionTimingFunction: "var(--ease-press)" }}
+            >
+              <MoreHorizontal className={`w-5 h-5 ${moreActive ? "drop-shadow-[0_0_6px_hsl(var(--primary))]" : ""}`} />
+              <span className="truncate max-w-full">{t("nav.more")}</span>
+            </button>
+          </DrawerTrigger>
+          <DrawerContent>
+            <DrawerTitle className="px-4 pt-1 text-sm uppercase tracking-widest text-muted-foreground font-display">
+              {t("nav.more")}
+            </DrawerTitle>
+            <div className="p-4 pt-3 pb-6 grid grid-cols-3 gap-3">
+              {moreMobileItems.map((item) => {
+                const isActive = location.pathname === item.to;
+                return (
+                  <DrawerClose asChild key={item.to}>
+                    <Link
+                      to={item.to}
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-xs transition-colors active:scale-95 ${
+                        isActive
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                      style={{ transitionTimingFunction: "var(--ease-press)" }}
+                    >
+                      <item.icon className="w-6 h-6" />
+                      <span className="truncate max-w-full">{t(item.labelKey)}</span>
+                    </Link>
+                  </DrawerClose>
+                );
+              })}
+            </div>
+          </DrawerContent>
+        </Drawer>
       </nav>
     </div>
   );

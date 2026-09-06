@@ -133,6 +133,7 @@ const DashboardPage = () => {
       newBestFinish: (checkout) => `${t("activity.newBestFinish")} ${checkout}`,
       winStreak: (streak) => `${streak} ${t("activity.winStreak")}`,
       matchResult: (opponent) => t("activity.matchResultTemplate").replace("{opponent}", opponent),
+      matchResultMultiplayer: (count) => t("activity.matchResultMultiplayerTemplate").replace("{count}", String(count)),
     };
     const loadActivity = async () => {
       const [{ data: games }, { data: legs }] = await Promise.all([
@@ -303,6 +304,11 @@ const DashboardPage = () => {
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
       ) : recentGames.length === 0 ? (
         <Link to="/game" className="block bg-card border border-border hover:border-primary/40 active:scale-[0.98] active:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-all" style={{ transitionTimingFunction: "var(--ease-press)" }}>
+          {/* Design Rangliste #15: this was plain text before — reuses DartGameIcon (the same
+              hand-drawn dart-in-flight icon as the "Neues Spiel" quick action right above) rather
+              than a generic lucide glyph, so the very first impression on an empty dashboard
+              already speaks this app's own icon language instead of falling back to stock text. */}
+          <DartGameIcon className="w-10 h-10 mx-auto mb-2 opacity-40" />
           {t("home.noGamesYet")} <span className="text-primary font-medium">{t("home.startFirstGame")}</span>
         </Link>
       ) : (

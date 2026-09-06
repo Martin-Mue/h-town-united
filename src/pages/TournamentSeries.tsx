@@ -16,7 +16,7 @@ import { useHasRole } from "@/hooks/useHasRole";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { type Match, isRealPlayer, totalRoundsOf } from "@/utils/tournament";
+import { type Match, type RoundRobinMatch, isRealPlayer, totalRoundsOf, calcStandings } from "@/utils/tournament";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
@@ -357,6 +357,26 @@ function computeStandings(tourneys: TournamentLite[], scoring: Scoring): Standin
             if (isRealPlayer(loser)) add(loser, scoring.quarter - scoring.participation);
           });
         }
+      }
+    } else if (t.mode === "round-robin" && Array.isArray(t.bracket)) {
+      // Round-robin used to only ever pay out the flat participation point beyond a champion bonus
+      // — unlike a KO bracket, where reaching the final/semifinal/quarterfinal each carries its own
+      // bonus tier no matter how big the bracket is (Season Rangliste #14). Mirror those same tier
+      // SIZES (1 champion, 1 runner-up, up to 2 semi-tier, up to 4 quarter-tier) against
+      // calcStandings()'s final ranking — including its head-to-head tiebreak — instead, so a
+      // strong round-robin finish (e.g. 2nd of 6) is rewarded the same way a strong bracket run
+      // would be, not just the same flat point as someone knocked out in their first match.
+      const rrMatches = t.bracket as unknown as RoundRobinMatch[];
+      if (rrMatches.some((m) => m.played)) {
+        const ranked = calcStandings(rrMatches).filter((s) => isRealPlayer(s.name));
+        ranked.forEach((s, i) => {
+          if (i === 0) add(s.name, scoring.champion - scoring.participation, true);
+          else if (i === 1) add(s.name, scoring.runnerUp - scoring.participation);
+          else if (i < 4) add(s.name, scoring.semi - scoring.participation);
+          else if (i < 8) add(s.name, scoring.quarter - scoring.participation);
+        });
+      } else if (t.champion) {
+        add(t.champion, scoring.champion - scoring.participation, true);
       }
     } else if (t.champion) {
       add(t.champion, scoring.champion - scoring.participation, true);

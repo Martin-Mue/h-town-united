@@ -98,6 +98,13 @@ import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 const WALKON_PREF_KEY = "dart-walkon-enabled";
 const INPUT_MODE_PREF_KEY = "dart-input-mode";
 const SOUND_PREF_KEY = "dart-sound-enabled";
+/** Progressive disclosure (Design Rangliste #16): a brand-new member and a club veteran saw the
+ *  exact same fully-expanded setup form — round-limit, custom-Cricket, and per-player
+ *  double-in/double-out/handicap are real options but not ones a first-time player needs to think
+ *  about before their first throw. Collapsed by default; the very first time anyone actually opens
+ *  it, that "I use this" signal is remembered per-device so it stays open for them from then on —
+ *  nobody has to re-expand it every single game once they've shown they care about it. */
+const ADVANCED_SETUP_SEEN_KEY = "dart-advanced-setup-seen";
 /** How long the walk-on intro stays up before auto-advancing (ms) — also the window
  *  during which a tap skips straight to the match. */
 const WALKON_DURATION_MS = 3200;
@@ -299,6 +306,19 @@ const GamePage = () => {
     const raw = window.localStorage.getItem(WALKON_PREF_KEY);
     return raw ? raw !== "false" : true;
   });
+  const [showAdvancedSetup, setShowAdvancedSetup] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(ADVANCED_SETUP_SEEN_KEY) === "1";
+  });
+  const revealAdvancedSetup = () => {
+    setShowAdvancedSetup((prev) => {
+      const next = !prev;
+      // Only the transition to OPEN counts as "this person uses advanced settings" — collapsing it
+      // back again afterwards (e.g. to declutter before naming players) doesn't un-graduate them.
+      if (next && typeof window !== "undefined") window.localStorage.setItem(ADVANCED_SETUP_SEEN_KEY, "1");
+      return next;
+    });
+  };
   // Which of the 3 dart-entry modes (per-dart pad / quick-total grid / typed total) the scoring
   // pad shows — persisted (not just component-local state) and switchable mid-game, deliberately
   // shared across every DartScoreInput on this screen so choosing it once covers the whole match.
@@ -2245,51 +2265,69 @@ const GamePage = () => {
           <SectionCard className="space-y-4">
           <Eyebrow icon={Trophy}>{t("game.setupFormatSection")}</Eyebrow>
 
-          {mode === "cricket" && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
-              <div className="min-w-0">
-                <Label htmlFor="custom-cricket" className="text-sm">{t("game.customCricket")}</Label>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.customCricketDesc")}</p>
-              </div>
-              <Switch id="custom-cricket" checked={customCricket} onCheckedChange={setCustomCricket} />
+          {mode !== "cricket" && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("game.firstToLegs")}</label>
+              <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))} disabled={isTournamentMatch}>
+                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {[1, 3, 5, 7, 9, 11].map((n) => (
+                    <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
           {mode !== "cricket" && (
+            <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
+              <div className="min-w-0">
+                <Label className="text-sm font-medium">{t("game.checkoutSuggestions")}</Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.checkoutSuggestionsDesc")}</p>
+              </div>
+              <Switch checked={checkoutSuggestionEnabled} onCheckedChange={setCheckoutSuggestionEnabled} />
+            </div>
+          )}
+
+          {/* Progressive disclosure (Design Rangliste #16): custom-Cricket numbers and the
+              per-leg round limit are real but genuinely optional settings a first-time player
+              doesn't need in front of them — collapsed until explicitly opened once. */}
+          <button
+            type="button"
+            onClick={revealAdvancedSetup}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showAdvancedSetup ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            {t("game.advancedSettings")}
+          </button>
+
+          {showAdvancedSetup && (
             <>
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">{t("game.firstToLegs")}</label>
-                <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))} disabled={isTournamentMatch}>
-                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    {[1, 3, 5, 7, 9, 11].map((n) => (
-                      <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">{t("game.roundLimitPerLeg")}</label>
-                <Select value={String(maxRoundsX01)} onValueChange={(v) => setMaxRoundsX01(parseInt(v))}>
-                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    <SelectItem value="0">{t("game.noLimit")}</SelectItem>
-                    {[8, 10, 12, 15, 20, 25].map((n) => (
-                      <SelectItem key={n} value={String(n)}>{t("game.max")} {n} {t("game.rounds")}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[10px] text-muted-foreground mt-1">{t("game.roundLimitDesc")}</p>
-              </div>
-
-              <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
-                <div className="min-w-0">
-                  <Label className="text-sm font-medium">{t("game.checkoutSuggestions")}</Label>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.checkoutSuggestionsDesc")}</p>
+              {mode === "cricket" && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
+                  <div className="min-w-0">
+                    <Label htmlFor="custom-cricket" className="text-sm">{t("game.customCricket")}</Label>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.customCricketDesc")}</p>
+                  </div>
+                  <Switch id="custom-cricket" checked={customCricket} onCheckedChange={setCustomCricket} />
                 </div>
-                <Switch checked={checkoutSuggestionEnabled} onCheckedChange={setCheckoutSuggestionEnabled} />
-              </div>
+              )}
+
+              {mode !== "cricket" && (
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1 block">{t("game.roundLimitPerLeg")}</label>
+                  <Select value={String(maxRoundsX01)} onValueChange={(v) => setMaxRoundsX01(parseInt(v))}>
+                    <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      <SelectItem value="0">{t("game.noLimit")}</SelectItem>
+                      {[8, 10, 12, 15, 20, 25].map((n) => (
+                        <SelectItem key={n} value={String(n)}>{t("game.max")} {n} {t("game.rounds")}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">{t("game.roundLimitDesc")}</p>
+                </div>
+              )}
             </>
           )}
           </SectionCard>
@@ -2382,7 +2420,12 @@ const GamePage = () => {
                   </>
                 )}
 
-                {mode !== "cricket" && (
+                {/* Progressive disclosure (Design Rangliste #16): double-in/out and handicap are
+                    real gameplay rules, not cosmetic — but their defaults (straight-in,
+                    double-out, no handicap) already match how most casual club games are played,
+                    so a first-time player isn't forced to make three rule decisions before their
+                    first throw. Same showAdvancedSetup toggle as the Format section above. */}
+                {mode !== "cricket" && showAdvancedSetup && (
                   <>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">{playerDoubleIn[i] ? t("game.doubleIn") : t("game.straightIn")}</span>

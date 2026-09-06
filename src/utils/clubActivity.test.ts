@@ -153,6 +153,38 @@ describe("computeClubActivity", () => {
     expect(events.some((e) => e.type === "match_result")).toBe(false);
   });
 
+  it("reports a free-for-all win even when the runner-up has no linked club profile", () => {
+    // player2_id null (an unmatched/bot runner-up) used to suppress the whole match_result event
+    // even though the actual WINNER (player1) is fully linked — the free-for-all win just
+    // vanished from the feed. Distinguished from a true 1v1 purely via legs data (3 distinct
+    // participants), since player1_id/player2_id alone can't tell the two apart.
+    const legs: ActivityLegRow[] = [
+      { game_id: "g1", leg_number: 1, player_id: "p1", player_name: "Martin", throws: [], starting_score: 501, won: true },
+      { game_id: "g1", leg_number: 1, player_id: null, player_name: "Bot (Schwer)", throws: [], starting_score: 501, won: false },
+      { game_id: "g1", leg_number: 1, player_id: "p3", player_name: "Sandra", throws: [], starting_score: 501, won: false },
+    ];
+    const events = computeClubActivity(
+      [game({ id: "g1", played_at: daysAgo(1), winner_id: "p1", player2_id: null, player2_name: "Bot (Schwer)" })],
+      legs,
+    );
+    const result = events.find((e) => e.type === "match_result");
+    expect(result).toBeDefined();
+    expect(result!.playerName).toBe("Martin");
+    expect(result!.detail).toContain("3");
+  });
+
+  it("still requires the runner-up to be linked for a genuine 1v1 (only 2 real participants)", () => {
+    const legs: ActivityLegRow[] = [
+      { game_id: "g1", leg_number: 1, player_id: "p1", player_name: "Martin", throws: [], starting_score: 501, won: true },
+      { game_id: "g1", leg_number: 1, player_id: null, player_name: "Bot (Schwer)", throws: [], starting_score: 501, won: false },
+    ];
+    const events = computeClubActivity(
+      [game({ id: "g1", played_at: daysAgo(1), winner_id: "p1", player2_id: null, player2_name: "Bot (Schwer)" })],
+      legs,
+    );
+    expect(events.some((e) => e.type === "match_result")).toBe(false);
+  });
+
   it("gives two 180s in different legs of the same game distinct ids", () => {
     // A best-of-3+ match where the same player hits a 180 in leg 1 AND leg 3 used to produce two
     // events sharing one id (game_id + player_id, no leg discriminator) — a React key collision

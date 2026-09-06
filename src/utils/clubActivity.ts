@@ -51,6 +51,10 @@ export interface ActivityTranslator {
   /** opponentName is the player who LOST -- the event's own playerName is always the winner, so
    *  the rendered line reads "<playerName> · <matchResult(opponentName)>". */
   matchResult: (opponentName: string) => string;
+  /** Same "<playerName> · <...>" slot as matchResult, for a free-for-all (3+ real participants)
+   *  win — there's no single named loser to point at the way a 1v1 has one, so this names the
+   *  field size instead of a specific opponent. */
+  matchResultMultiplayer: (participantCount: number) => string;
 }
 
 const DEFAULT_TRANSLATOR: ActivityTranslator = {
@@ -59,6 +63,7 @@ const DEFAULT_TRANSLATOR: ActivityTranslator = {
   newBestFinish: (checkout) => `Neues bestes Finish: ${checkout}`,
   winStreak: (streak) => `${streak} Siege in Folge!`,
   matchResult: (opponentName) => `hat gegen ${opponentName} gewonnen`,
+  matchResultMultiplayer: (participantCount) => `hat eine Mehrspieler-Runde gewonnen (${participantCount} Spieler)`,
 };
 
 /**
@@ -85,6 +90,17 @@ export function computeClubActivity(
     legsByGame.get(l.game_id)!.push(l);
   });
 
+  // How many REAL participants a game actually had — player1_id/player2_id only ever cover the
+  // top-2 finishers (see gameSync.ts's `ranking`), so they can't tell a 1v1 apart from a
+  // free-for-all on their own. Derived from the legs themselves (present for every player
+  // regardless of final placement), keyed by player_id where linked and by name otherwise so an
+  // unmatched guest/bot still counts as one participant instead of collapsing into nothing.
+  const participantsByGame = new Map<string, Set<string>>();
+  legs.forEach((l) => {
+    if (!participantsByGame.has(l.game_id)) participantsByGame.set(l.game_id, new Set());
+    participantsByGame.get(l.game_id)!.add(l.player_id ?? `name:${l.player_name}`);
+  });
+
   const bestAvg = new Map<string, number>();
   const bestCheckout = new Map<string, number>();
   const gamesPlayed = new Map<string, number>();
@@ -95,16 +111,27 @@ export function computeClubActivity(
 
     // Plain "X beat Y" result -- the actual "the club is alive today" signal the feed was missing
     // before this: 180s/PBs/streaks are all rare-highlight events, so on an ordinary evening with
-    // solid-but-unremarkable games the whole feed used to stay empty. Restricted to games between
-    // two players who BOTH have a linked club profile (real member vs. real member) -- a bot or
-    // guest opponent has no player_id, and player1_id/player2_id only ever cover the actual top-2
-    // finishers (see the ranking note elsewhere in this file), so a free-for-all whose winner is
-    // neither of those two is deliberately skipped here rather than misattributing the win.
-    if (isRecent && g.player1_id && g.player2_id && (g.winner_id === g.player1_id || g.winner_id === g.player2_id)) {
-      const winnerIsP1 = g.winner_id === g.player1_id;
-      const winnerName = winnerIsP1 ? g.player1_name : g.player2_name;
-      const loserName = winnerIsP1 ? g.player2_name : g.player1_name;
-      events.push({ id: `result-${g.id}`, type: "match_result", playerName: winnerName, playedAt: g.played_at, detail: translator.matchResult(loserName) });
+    // solid-but-unremarkable games the whole feed used to stay empty.
+    if (isRecent) {
+      const participantCount = participantsByGame.get(g.id)?.size ?? 0;
+      if (participantCount >= 3) {
+        // Free-for-all: player2_id only ever covers the RUNNER-UP (see the ranking note above),
+        // so requiring them to also be a linked member — the 1v1 gate just below — meant a
+        // free-for-all win vanished from the feed the moment 2nd place was a bot or an unmatched
+        // guest name, even though the winner themselves is a fully real, linked member. Only the
+        // winner needs to be identifiable here; there's no single "loser" to name in a 3+-way
+        // game anyway, so matchResultMultiplayer doesn't try to (Community Rangliste #12).
+        if (g.player1_id && g.winner_id === g.player1_id) {
+          events.push({ id: `result-${g.id}`, type: "match_result", playerName: g.player1_name, playedAt: g.played_at, detail: translator.matchResultMultiplayer(participantCount) });
+        }
+      } else if (g.player1_id && g.player2_id && (g.winner_id === g.player1_id || g.winner_id === g.player2_id)) {
+        // Restricted to games between two players who BOTH have a linked club profile (real
+        // member vs. real member) -- a bot or guest opponent has no player_id.
+        const winnerIsP1 = g.winner_id === g.player1_id;
+        const winnerName = winnerIsP1 ? g.player1_name : g.player2_name;
+        const loserName = winnerIsP1 ? g.player2_name : g.player1_name;
+        events.push({ id: `result-${g.id}`, type: "match_result", playerName: winnerName, playedAt: g.played_at, detail: translator.matchResult(loserName) });
+      }
     }
 
     const sides: { id: string | null; name: string; avg: number }[] = [

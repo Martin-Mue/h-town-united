@@ -1,6 +1,18 @@
 import { useEffect, useMemo } from "react";
 import { Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { playVictorySound } from "@/utils/sounds";
+
+// Same key Game.tsx's in-match sound toggle persists to (SOUND_PREF_KEY there) — read directly
+// rather than imported, since Game.tsx doesn't export it and this ceremony has no sound toggle
+// of its own to manage; muting sound during a match is expected to also mute the champion
+// fanfare, not leave it as a separate, un-mutable exception.
+const SOUND_PREF_KEY = "dart-sound-enabled";
+const isSoundEnabled = () => {
+  if (typeof window === "undefined") return true;
+  const raw = window.localStorage.getItem(SOUND_PREF_KEY);
+  return raw ? raw !== "false" : true;
+};
 
 interface TrophyCeremonyProps {
   champion: string;
@@ -40,6 +52,15 @@ const TrophyCeremony = ({ champion, tournamentName, onClose }: TrophyCeremonyPro
     const t = window.setTimeout(() => onClose?.(), 9000);
     return () => window.clearTimeout(t);
   }, [onClose]);
+
+  // Fanfare + vibration on mount, once — ConfettiBurst's in-match moments (180s, checkouts,
+  // match wins) already have this via Game.tsx's playXSound() calls, but this ceremony stayed
+  // purely visual (Design Rangliste #13). playVictorySound() already bundles both the audio and
+  // navigator.vibrate() call, same as every other success sound in utils/sounds.ts.
+  useEffect(() => {
+    if (isSoundEnabled()) playVictorySound();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const close = () => onClose?.();
 
