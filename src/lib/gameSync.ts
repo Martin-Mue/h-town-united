@@ -3,7 +3,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
-import { computeEloDeltas, type EloParticipant } from "@/utils/elo";
+import { computeEloDeltas, computeTeamEloDeltas, type EloParticipant, type EloTeam } from "@/utils/elo";
 import {
   average as calculateAverage,
   highestVisit as getHighest3DartRound,
@@ -56,8 +56,7 @@ export async function saveGameRecord(
 
   // Elo snapshot: every human participant's pre-game rating, captured once up front so a
   // multiplayer game's deltas are all computed against the SAME starting ratings regardless
-  // of which player's DB row happens to get updated first below. Team games are excluded —
-  // see computeEloDeltas.
+  // of which player's DB row happens to get updated first below.
   //
   // Ranked by legsWon (the real signal across multi-leg matches) first, then a same-leg
   // tiebreak for whoever's still tied — which in practice is almost everyone whenever
@@ -69,27 +68,48 @@ export async function saveGameRecord(
   // Elo only ever measures human-vs-human standing, same as the old isWinner-only model did.
   const eloTiebreak = (i: number) =>
     game.mode === "cricket" ? -(game.cricket?.[i]?.points ?? 0) : (game.currentLeg.remaining[i] ?? Infinity);
-  const eloCandidates: { i: number; id: string; rating: number }[] = [];
-  if (!game.teams) {
+  let eloDeltas: Record<string, number> = {};
+  if (game.teams) {
+    // Team games: reduce each team to one virtual participant (see computeTeamEloDeltas) whose
+    // rank comes straight from winnerIndex, which for team mode already IS the winning team's
+    // index (see the leg-win/games_won handling elsewhere in this file). A team with no matched
+    // human members (all bots / unrecognized guest names) is dropped rather than passed through
+    // as an empty-rated opponent — same "no real signal, no movement" outcome as an individual
+    // game against an unmatched name.
+    const teamsForElo: EloTeam[] = [0, 1].map((teamIdx) => {
+      const memberIds: string[] = [];
+      const memberRatings: number[] = [];
+      for (let i = 0; i < n; i++) {
+        if (teamIndexFor(game.teams, i) !== teamIdx || game.players[i].isBot) continue;
+        const match = findDbPlayer(game.players[i].name);
+        if (!match) continue;
+        memberIds.push(match.id);
+        memberRatings.push(Number(match.elo_rating) || 1000);
+      }
+      return { memberIds, memberRatings, rank: game.winnerIndex === teamIdx ? 1 : 2 };
+    }).filter((team) => team.memberIds.length > 0);
+    eloDeltas = computeTeamEloDeltas(teamsForElo);
+  } else {
+    const eloCandidates: { i: number; id: string; rating: number }[] = [];
     for (let i = 0; i < n; i++) {
       if (game.players[i].isBot) continue;
       const match = findDbPlayer(game.players[i].name);
       if (!match) continue;
       eloCandidates.push({ i, id: match.id, rating: Number(match.elo_rating) || 1000 });
     }
+    eloCandidates.sort((a, b) => game.legsWon[b.i] - game.legsWon[a.i] || eloTiebreak(a.i) - eloTiebreak(b.i));
+    const eloParticipants: EloParticipant[] = [];
+    let eloRank = 1;
+    eloCandidates.forEach((c, k) => {
+      if (k > 0) {
+        const prev = eloCandidates[k - 1];
+        const tied = game.legsWon[prev.i] === game.legsWon[c.i] && eloTiebreak(prev.i) === eloTiebreak(c.i);
+        if (!tied) eloRank = k + 1;
+      }
+      eloParticipants.push({ id: c.id, rating: c.rating, rank: eloRank });
+    });
+    eloDeltas = computeEloDeltas(eloParticipants);
   }
-  eloCandidates.sort((a, b) => game.legsWon[b.i] - game.legsWon[a.i] || eloTiebreak(a.i) - eloTiebreak(b.i));
-  const eloParticipants: EloParticipant[] = [];
-  let eloRank = 1;
-  eloCandidates.forEach((c, k) => {
-    if (k > 0) {
-      const prev = eloCandidates[k - 1];
-      const tied = game.legsWon[prev.i] === game.legsWon[c.i] && eloTiebreak(prev.i) === eloTiebreak(c.i);
-      if (!tied) eloRank = k + 1;
-    }
-    eloParticipants.push({ id: c.id, rating: c.rating, rank: eloRank });
-  });
-  const eloDeltas = computeEloDeltas(eloParticipants);
   const p1Match = findDbPlayer(game.players[top1].name);
   const p2Match = top2 !== undefined ? findDbPlayer(game.players[top2].name) : undefined;
   const winnerIdx = game.winnerIndex ?? top1;
@@ -130,7 +150,9 @@ export async function saveGameRecord(
     player1_double_rate: doubleRates[top1], player2_double_rate: top2 !== undefined ? doubleRates[top2] : 0,
     player1_total_throws: throwsByPlayer[top1].length, player2_total_throws: top2 !== undefined ? throwsByPlayer[top2].length : 0,
     winner_name: game.winnerName!, winner_id: winnerMatch?.id || null,
-    detail_stats: { players: game.players.map((_, i) => detailFor(i)) } as unknown as Json,
+    // isTeamGame rides along in detail_stats (no schema migration needed) so Statistics.tsx can
+    // tell computeClutchStats which games are team games — see clutchStats.ts.
+    detail_stats: { players: game.players.map((_, i) => detailFor(i)), isTeamGame: !!game.teams } as unknown as Json,
     tournament_id: tournamentLink?.tournamentId ?? null,
     played_online: !!playedOnline,
     ...(tournamentLink ? { match_id: tournamentLink.matchId } : {}),

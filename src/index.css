@@ -59,6 +59,21 @@
 
     --radius: 0.75rem;
 
+    /* Elevation scale + motion timing (Design-Sprint Runde 2 Rang 3) — a fixed vocabulary for
+     * "how far off the page does this sit" and "how does it move", so new UI reaches for one of
+     * these instead of hand-tuning a one-off shadow/duration per component. Shadow color is the
+     * app's own dark foreground tone (222 30% 5%, same hue as --foreground in .dark) rather than
+     * flat black, for a slightly warmer "ink" shadow consistent with the brand palette; not
+     * redeclared under .dark since a black-tinted shadow still reads as recession against the
+     * lighter --card surfaces there. --ease-spring is for things ARRIVING (a nav pill sliding to
+     * its new tab, a dialog appearing) — a little overshoot reads as alive. --ease-press is for
+     * the brief press-down/release of a tap — no overshoot, just quick and decisive. */
+    --shadow-sm: 0 1px 2px hsl(222 30% 5% / 0.08), 0 1px 1px hsl(222 30% 5% / 0.04);
+    --shadow-md: 0 4px 10px hsl(222 30% 5% / 0.12), 0 2px 4px hsl(222 30% 5% / 0.08);
+    --shadow-lg: 0 10px 24px hsl(222 30% 5% / 0.18), 0 4px 8px hsl(222 30% 5% / 0.1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-press: cubic-bezier(0.4, 0, 0.2, 1);
+
     --sidebar-background: 210 20% 97%;
     --sidebar-foreground: 222 30% 10%;
     --sidebar-primary: 185 85% 38%;
@@ -167,6 +182,21 @@
 }
 
 @layer utilities {
+  .shadow-elevation-sm {
+    box-shadow: var(--shadow-sm);
+  }
+  .shadow-elevation-md {
+    box-shadow: var(--shadow-md);
+  }
+  .shadow-elevation-lg {
+    box-shadow: var(--shadow-lg);
+  }
+  .ease-spring {
+    transition-timing-function: var(--ease-spring);
+  }
+  .ease-press {
+    transition-timing-function: var(--ease-press);
+  }
   .glow-cyan {
     box-shadow: var(--shadow-glow-cyan);
   }

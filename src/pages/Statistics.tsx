@@ -58,6 +58,8 @@ interface GameRecord {
     /** Legacy shape from before detail_stats covered every player, not just the top 2. */
     player1?: DetailStat | null;
     player2?: DetailStat | null;
+    /** Team mode flag — see clutchStats.ts. Absent on games saved before this existed. */
+    isTeamGame?: boolean;
   } | null;
 }
 
@@ -920,7 +922,7 @@ const StatisticsPage = () => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
     const modeById = new Map(games.map((g) => [g.id, g.mode]));
     const relevantLegs = gameLegs.filter((l) => filteredIds.has(l.game_id) && modeById.get(l.game_id) !== "cricket" && Array.isArray(l.throws));
-    const relevantGames = filteredGames.map((g) => ({ id: g.id, best_of_legs: g.best_of_legs }));
+    const relevantGames = filteredGames.map((g) => ({ id: g.id, best_of_legs: g.best_of_legs, isTeamGame: !!g.detail_stats?.isTeamGame }));
     return computeClutchStats(relevantGames, relevantLegs, selectedPlayerId);
   }, [selectedPlayerId, filteredGames, gameLegs, games]);
 

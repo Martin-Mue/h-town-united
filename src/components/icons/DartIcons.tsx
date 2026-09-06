@@ -114,3 +114,16 @@ export const ClubIcon = (props: SVGProps<SVGSVGElement>) => (
     <circle cx="5" cy="19" r="1.15" fill="currentColor" stroke="none" />
   </svg>
 );
+
+/** Dashboard quick action: "Season" (round-robin/league standings over a whole season, distinct
+ *  from a single tournament's DartTrophyIcon above) — replaces lucide's generic Medal. A ribboned
+ *  medal disc with a star, the one icon in this set that isn't built from the shaft/tip/flight
+ *  vocabulary (a season standing isn't a single throw or match) but still plain stroke line art
+ *  in the same convention so it drops into every existing call site unchanged. */
+export const SeasonIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE_PROPS} {...props}>
+    <path d="M9 13 L6.5 20.5 L12 18 L17.5 20.5 L15 13" />
+    <circle cx="12" cy="8" r="5.25" />
+    <path d="M12 5.2 L13.1 7.4 L15.5 7.75 L13.75 9.45 L14.15 11.85 L12 10.7 L9.85 11.85 L10.25 9.45 L8.5 7.75 L10.9 7.4 Z" fill="currentColor" stroke="none" />
+  </svg>
+);

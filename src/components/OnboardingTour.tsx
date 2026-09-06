@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Sparkles, Target, Dumbbell, Trophy } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
+import { Sparkles } from "lucide-react";
+import { DartGameIcon, TrainingIcon, DartTrophyIcon } from "@/components/icons/DartIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -8,16 +10,19 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 const SEEN_KEY_PREFIX = "dart-onboarding-seen-";
 
 interface Step {
-  icon: typeof Target;
+  // Sparkles (step 1, "welcome") stays lucide — it's generic dialog chrome, not a stand-in for
+  // one of DartIcons' six dart-domain concepts, same distinction the roadmap's icon-language
+  // item draws. Steps 2-4 (play/train/compete) now use the same hand-drawn icons as the nav.
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   titleKey: string;
   bodyKey: string;
 }
 
 const STEPS: Step[] = [
   { icon: Sparkles, titleKey: "onboarding.step1Title", bodyKey: "onboarding.step1Body" },
-  { icon: Target, titleKey: "onboarding.step2Title", bodyKey: "onboarding.step2Body" },
-  { icon: Dumbbell, titleKey: "onboarding.step3Title", bodyKey: "onboarding.step3Body" },
-  { icon: Trophy, titleKey: "onboarding.step4Title", bodyKey: "onboarding.step4Body" },
+  { icon: DartGameIcon, titleKey: "onboarding.step2Title", bodyKey: "onboarding.step2Body" },
+  { icon: TrainingIcon, titleKey: "onboarding.step3Title", bodyKey: "onboarding.step3Body" },
+  { icon: DartTrophyIcon, titleKey: "onboarding.step4Title", bodyKey: "onboarding.step4Body" },
 ];
 
 /**

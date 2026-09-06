@@ -293,6 +293,11 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.pointsBehind": { de: "Punkte hinter", en: "points behind", fr: "points de retard sur", pl: "punktów za", nl: "punten achter op", tr: "puan geride" },
   "game.exactlyOnPace": { de: "genau im Tempo von", en: "exactly on pace with", fr: "exactement au rythme de", pl: "dokładnie w tempie", nl: "precies op het tempo van", tr: "tam temposunda" },
   "game.yourRecordPace": { de: "deinem Rekordtempo", en: "your record pace", fr: "ton rythme record", pl: "Twoim rekordowym tempie", nl: "jouw recordtempo", tr: "rekor temponun" },
+  // Closer shown only on the "behind pace" ghost-mode line (see Game.tsx) — a bare, unadorned
+  // deficit shown live, dart after dart, with no balancing thought is exactly the kind of flat
+  // negative framing the roadmap's Mentaltrainer audit flagged; the "ahead" line already ends on
+  // "!", so "behind" gets its own closing note instead of staying the only flat, silent case.
+  "game.stillTimeToCatchUp": { de: "noch ist alles offen", en: "still everything to play for", fr: "tout reste encore possible", pl: "wszystko jeszcze możliwe", nl: "nog alles mogelijk", tr: "her şey hâlâ mümkün" },
   "game.wins": { de: "Gewinnt!", en: "Wins!", fr: "Gagne !", pl: "Wygrywa!", nl: "Wint!", tr: "Kazandı!" },
   "game.legsSuffix": { de: "Legs", en: "Legs", fr: "Legs", pl: "Legi", nl: "Legs", tr: "Legler" },
   "game.lessStats": { de: "Weniger anzeigen", en: "Show less", fr: "Voir moins", pl: "Pokaż mniej", nl: "Minder tonen", tr: "Daha az göster" },
@@ -1229,6 +1234,10 @@ export const translations: Record<string, Record<Language, string>> = {
   "rivalry.duelsOneWinDiff": { de: "Duelle, nur ein Sieg Unterschied.", en: "duels, only one win apart.", fr: "duels, à une seule victoire d'écart.", pl: "pojedynków, różnica tylko jednego zwycięstwa.", nl: "duels, slechts één overwinning verschil.", tr: "düello, sadece bir galibiyet farkla." },
   "rivalry.wonLastDuel": { de: "gewann das letzte Duell", en: "won the last duel", fr: "a gagné le dernier duel", pl: "wygrał ostatni pojedynek", nl: "won het laatste duel", tr: "son düelloyu kazandı" },
   "rivalry.wantsRevenge": { de: "will zurückschlagen.", en: "wants revenge.", fr: "veut se venger.", pl: "chce się zrewanżować.", nl: "wil terugslaan.", tr: "intikam istiyor." },
+  // Encouraging closer for the streak branches (2+ / 3+ in a row) — see buildRivalryStoryline's
+  // doc comment: a losing streak stated with no balancing thought is a nocebo right before the
+  // match, so every streak callout now ends on this instead of the bare dominance statement.
+  "rivalry.turnaroundChance": { de: "Heute die Chance auf die Wende!", en: "Today's the chance to turn it around!", fr: "Aujourd'hui, l'occasion d'inverser la tendance !", pl: "Dziś szansa na przełamanie!", nl: "Vandaag de kans om het tij te keren!", tr: "Bugün durumu tersine çevirme şansı!" },
 
   // clutchStats.ts + ClutchCard.tsx
   "clutch.title": { de: "Clutch-Faktor", en: "Clutch factor", fr: "Facteur clutch", pl: "Współczynnik clutch", nl: "Clutch-factor", tr: "Clutch faktörü" },

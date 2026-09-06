@@ -1,8 +1,9 @@
 /**
  * Elo skill rating — answers "who's actually best right now" by weighting each result
  * against the opponent's own rating, rather than a flat win quota that rewards mostly
- * beating weaker players. Team games are excluded entirely (see gameSync.ts): with one
- * shared team score it's ambiguous how much of a win belongs to which member.
+ * beating weaker players. Team games are handled by computeTeamEloDeltas below, which
+ * moves every member of a team by the SAME amount rather than trying to apportion a win
+ * between teammates — see that function's doc comment for why.
  */
 const K_FACTOR = 32;
 
@@ -43,5 +44,42 @@ export function computeEloDeltas(participants: EloParticipant[]): Record<string,
       deltas[b.id] -= change;
     }
   }
+  return deltas;
+}
+
+/** One team's Elo inputs for computeTeamEloDeltas: its matched human members' ids/ratings
+ *  (bots and unmatched names already filtered out by the caller) and its placement rank,
+ *  same rank semantics as EloParticipant. */
+export interface EloTeam {
+  memberIds: string[];
+  /** Index-aligned with memberIds. */
+  memberRatings: number[];
+  rank: number;
+}
+
+/**
+ * Team-game Elo. Each team is reduced to one virtual participant — its rating is the
+ * average of its matched members' individual ratings — and those virtual participants are
+ * run through the exact same pairwise placement model as computeEloDeltas above. The
+ * resulting per-team delta is then applied UNIFORMLY to every member of that team.
+ *
+ * Deliberately not apportioned by individual contribution: as the module doc explains,
+ * there's no principled way to say how much of a shared team result belongs to which
+ * member. Averaging in and moving everyone by the same delta sidesteps that question
+ * entirely while still letting real team results move individual ratings, rather than
+ * excluding team games from Elo altogether.
+ */
+export function computeTeamEloDeltas(teams: EloTeam[]): Record<string, number> {
+  const virtual: EloParticipant[] = teams.map((team, idx) => ({
+    id: String(idx),
+    rating: team.memberRatings.reduce((sum, r) => sum + r, 0) / (team.memberRatings.length || 1),
+    rank: team.rank,
+  }));
+  const teamDeltas = computeEloDeltas(virtual);
+  const deltas: Record<string, number> = {};
+  teams.forEach((team, idx) => {
+    const delta = teamDeltas[String(idx)] ?? 0;
+    team.memberIds.forEach((id) => { deltas[id] = delta; });
+  });
   return deltas;
 }

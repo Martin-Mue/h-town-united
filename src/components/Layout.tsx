@@ -44,6 +44,8 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const pendingCount = gameQueue.pendingCount + matchResultQueue.pendingCount + bracketActionQueue.pendingCount;
   const syncing = gameQueue.syncing || matchResultQueue.syncing || bracketActionQueue.syncing;
   const { t } = useLanguage();
+  const mobileNavItems = [...NAV_ITEMS, ...(isAdmin ? [{ to: "/admin", icon: UserCog, labelKey: "nav.admin" }] : [])];
+  const mobileActiveIndex = mobileNavItems.findIndex((item) => location.pathname === item.to);
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -160,21 +162,42 @@ const Layout = ({ children }: { children: ReactNode }) => {
         <main className="flex-1 pb-20 md:pb-6">{children}</main>
       </div>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-md border-t border-border flex justify-around py-2 z-50 overflow-x-auto">
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-md border-t border-border grid py-2 z-50"
+        style={{ gridTemplateColumns: `repeat(${mobileNavItems.length}, minmax(0, 1fr))` }}
+      >
+        {/* Animated pill under the active tab — a `position:fixed` nav is already its own
+            positioning context, so this absolute pill needs no extra `relative` wrapper. Slides
+            (--ease-spring, a little overshoot) rather than just fading, so switching tabs reads
+            as one continuous motion instead of two independent icon color changes. */}
+        {mobileActiveIndex >= 0 && (
+          <div
+            aria-hidden="true"
+            className="absolute top-1 bottom-1 rounded-lg bg-primary/10 pointer-events-none"
+            style={{
+              left: `calc(${mobileActiveIndex} * (100% / ${mobileNavItems.length}))`,
+              width: `calc(100% / ${mobileNavItems.length})`,
+              transitionProperty: "left",
+              transitionDuration: "380ms",
+              transitionTimingFunction: "var(--ease-spring)",
+            }}
+          />
+        )}
         {/* Admin never had an entry here — it only ever existed in the "hidden md:flex" desktop
             nav above, so any admin on mobile had no way to reach it at all. */}
-        {[...NAV_ITEMS, ...(isAdmin ? [{ to: "/admin", icon: UserCog, labelKey: "nav.admin" }] : [])].map((item) => {
+        {mobileNavItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
             <Link
               key={item.to}
               to={item.to}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs transition-colors shrink-0 ${
+              className={`relative flex flex-col items-center gap-0.5 px-2 py-1 text-xs transition-colors active:scale-90 min-w-0 ${
                 isActive ? "text-primary" : "text-muted-foreground"
               }`}
+              style={{ transitionTimingFunction: "var(--ease-press)" }}
             >
               <item.icon className={`w-5 h-5 ${isActive ? "drop-shadow-[0_0_6px_hsl(var(--primary))]" : ""}`} />
-              {t(item.labelKey)}
+              <span className="truncate max-w-full">{t(item.labelKey)}</span>
             </Link>
           );
         })}

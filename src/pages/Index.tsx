@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router-dom";
-import { Target, Users, Trophy, Medal, Dumbbell, BarChart3, Flame, TrendingUp, Crosshair, Loader2, PartyPopper } from "lucide-react";
+import { Flame, TrendingUp, Crosshair, Loader2, PartyPopper } from "lucide-react";
+import { DartGameIcon, DartTrophyIcon, SeasonIcon, StatsIcon, TrainingIcon, ClubIcon } from "@/components/icons/DartIcons";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchClubPlayers } from "@/lib/repositories/players";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow, type ActivityTranslator } from "@/utils/clubActivity";
@@ -13,21 +15,29 @@ import { Badge } from "@/components/ui/badge";
 import htuEmblem from "@/assets/club-emblem-color.png";
 import PendingOnlineChallenges from "@/components/home/PendingOnlineChallenges";
 
-const EVENT_ICON: Record<ActivityEvent["type"], typeof Target> = {
-  "180": Target,
+// Icon type shared by lucide's components and DartSpot's own hand-drawn set (DartIcons.tsx) —
+// both accept plain SVGProps and get called the same way (<Icon className="..." />), so this
+// dashboard mixes both freely: DartIcons where a direct dart-domain equivalent exists (Game,
+// Tournament, Season, Statistics, Training, Club), lucide kept where the concept is a generic,
+// non-dart-specific glyph (a trend arrow, a flame, a crosshair) rather than a stand-in for one of
+// this set's six nav concepts — see the roadmap's Design-Sprint item for that scoping.
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
+
+const EVENT_ICON: Record<ActivityEvent["type"], IconComponent> = {
+  "180": DartGameIcon,
   pb_average: TrendingUp,
   pb_checkout: Crosshair,
   win_streak: Flame,
-  match_result: Trophy,
+  match_result: DartTrophyIcon,
 };
 
-const QUICK_ACTIONS = [
-  { to: "/game", labelKey: "home.newGame", descKey: "home.newGameDesc", icon: Target },
-  { to: "/tournament", labelKey: "home.tournament", descKey: "home.tournamentDesc", icon: Trophy },
-  { to: "/tournaments/series", labelKey: "home.season", descKey: "home.seasonDesc", icon: Medal },
-  { to: "/statistics", labelKey: "home.statistics", descKey: "home.statisticsDesc", icon: BarChart3 },
-  { to: "/training", labelKey: "home.training", descKey: "home.trainingDesc", icon: Dumbbell },
-  { to: "/players", labelKey: "home.club", descKey: "home.clubDesc", icon: Users },
+const QUICK_ACTIONS: { to: string; labelKey: string; descKey: string; icon: IconComponent }[] = [
+  { to: "/game", labelKey: "home.newGame", descKey: "home.newGameDesc", icon: DartGameIcon },
+  { to: "/tournament", labelKey: "home.tournament", descKey: "home.tournamentDesc", icon: DartTrophyIcon },
+  { to: "/tournaments/series", labelKey: "home.season", descKey: "home.seasonDesc", icon: SeasonIcon },
+  { to: "/statistics", labelKey: "home.statistics", descKey: "home.statisticsDesc", icon: StatsIcon },
+  { to: "/training", labelKey: "home.training", descKey: "home.trainingDesc", icon: TrainingIcon },
+  { to: "/players", labelKey: "home.club", descKey: "home.clubDesc", icon: ClubIcon },
 ];
 
 interface RecentGame {
@@ -219,8 +229,9 @@ const DashboardPage = () => {
       <div className="grid grid-cols-2 gap-3 mb-6">
         {QUICK_ACTIONS.map((action) => (
           <Link key={action.to} to={action.to}
-            className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 transition-all group">
-            <action.icon className="w-6 h-6 text-primary mb-2 group-hover:scale-110 transition-transform" />
+            className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-elevation-sm active:scale-95 active:border-primary/40 active:bg-primary/5 transition-all group"
+            style={{ transitionTimingFunction: "var(--ease-press)" }}>
+            <action.icon className="w-6 h-6 text-primary mb-2 group-hover:scale-110 group-active:scale-110 transition-transform" />
             <p className="font-semibold text-sm">{t(action.labelKey)}</p>
             <p className="text-xs text-muted-foreground">{t(action.descKey)}</p>
           </Link>
@@ -285,7 +296,7 @@ const DashboardPage = () => {
       {loadingGames ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
       ) : recentGames.length === 0 ? (
-        <Link to="/game" className="block bg-card border border-border hover:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-colors">
+        <Link to="/game" className="block bg-card border border-border hover:border-primary/40 active:scale-[0.98] active:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-all" style={{ transitionTimingFunction: "var(--ease-press)" }}>
           {t("home.noGamesYet")} <span className="text-primary font-medium">{t("home.startFirstGame")}</span>
         </Link>
       ) : (

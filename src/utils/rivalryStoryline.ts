@@ -11,6 +11,14 @@ export interface RivalryMeeting {
  * genuinely even rivalry, then a generic "revenge" framing off the most recent meeting (always
  * available once there's been at least one). Returns null only when there's no history at all —
  * the walk-on screen already has its own "Erstes Aufeinandertreffen" copy for that case.
+ *
+ * The streak branches (2+ / 3+) append an explicit "today's the chance to turn it around"
+ * clause rather than ending on the bare dominance statement — shown to BOTH players right before
+ * they start playing, a losing streak stated flatly ("X has beaten you N times in a row") is a
+ * nocebo for whoever's on the losing side of it: purely negative pre-match framing with no
+ * balancing thought. The underlying fact (who, how many) is unchanged and still the headline;
+ * only the closing note is added, so this stays true to the real head-to-head history rather than
+ * softening it into something false.
  */
 export function buildRivalryStoryline(meetings: RivalryMeeting[], aName: string, bName: string, t: (key: string) => string): string | null {
   if (meetings.length === 0) return null;
@@ -27,10 +35,10 @@ export function buildRivalryStoryline(meetings: RivalryMeeting[], aName: string,
   const streakLoser = lastWonByA ? bName : aName;
 
   if (streak >= 3) {
-    return `🔥 ${streakWinner} ${t("rivalry.streakManyMid")} ${streak} ${t("rivalry.streakManySuffix")} ${streakLoser} ${t("rivalry.streakInARow")}`;
+    return `🔥 ${streakWinner} ${t("rivalry.streakManyMid")} ${streak} ${t("rivalry.streakManySuffix")} ${streakLoser} ${t("rivalry.streakInARow")} ${t("rivalry.turnaroundChance")}`;
   }
   if (streak === 2) {
-    return `${streakWinner} ${t("rivalry.streakTwoMid")} ${streakLoser} ${t("rivalry.streakTwoSuffix")}`;
+    return `${streakWinner} ${t("rivalry.streakTwoMid")} ${streakLoser} ${t("rivalry.streakTwoSuffix")} ${t("rivalry.turnaroundChance")}`;
   }
 
   const aWins = sorted.filter((m) => m.aWon).length;

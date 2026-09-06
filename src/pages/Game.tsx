@@ -2903,7 +2903,10 @@ const GamePage = () => {
                     const targetLabel = t("game.yourRecordPace");
                     return (
                       <p className={`text-[10px] mt-1 font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
-                        👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} ${t("game.pointsAhead")} ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} ${t("game.pointsBehind")} ${targetLabel}` : `${t("game.exactlyOnPace")} ${targetLabel}`}
+                        {/* "Behind" used to be the only flat, silent case here (no "!" the way "ahead"
+                            gets one) — a bare live deficit with no balancing thought, dart after dart,
+                            all leg long. Gets its own closing note now instead of staying silent. */}
+                        👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} ${t("game.pointsAhead")} ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} ${t("game.pointsBehind")} ${targetLabel} — ${t("game.stillTimeToCatchUp")}` : `${t("game.exactlyOnPace")} ${targetLabel}`}
                       </p>
                     );
                   })()}

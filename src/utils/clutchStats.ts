@@ -3,6 +3,9 @@ import { computeCheckoutStats, combineCheckoutStats, type DartThrow, type Checko
 export interface ClutchGameRow {
   id: string;
   best_of_legs: number;
+  /** Team mode (see teamUtils.ts) — teams are always exactly 2, interleaved, so a player's
+   *  "side" for the running leg-count below is player_index % 2 instead of player_index itself. */
+  isTeamGame?: boolean;
 }
 
 export interface ClutchLegRow {
@@ -33,13 +36,15 @@ const NEGLIGIBLE_DIFF_PP = 5;
  * out, the other who must respond or lose it — so every attempt inside that leg counts as
  * clutch for whichever of the two threw it, not only the eventual leg winner.
  *
- * Scoped to true 1v1 games only (exactly two distinct player_index values across the game's
- * legs) — team/multiplayer games don't have a stable per-"side" leg count reconstructable from
- * game_legs alone (player_index there is the individual player's slot, not their team), the same
- * scoping choice the walk-on H2H lookup already makes.
+ * Scoped to true 1v1 games and exactly-2-team games (which reduce to 2 "sides" the same way) —
+ * genuine 3+-way free-for-all games don't have a stable per-side leg count reconstructable from
+ * game_legs alone (player_index there is the individual player's slot, and with no team grouping
+ * there's no principled way to pair players into 2 sides), the same scoping choice the walk-on
+ * H2H lookup already makes.
  */
 export function computeClutchStats(games: ClutchGameRow[], legs: ClutchLegRow[], playerId: string): ClutchResult {
   const bestOfById = new Map(games.map((g) => [g.id, g.best_of_legs]));
+  const teamGameIds = new Set(games.filter((g) => g.isTeamGame).map((g) => g.id));
   const legsByGame = new Map<string, ClutchLegRow[]>();
   legs.forEach((l) => {
     if (!legsByGame.has(l.game_id)) legsByGame.set(l.game_id, []);
@@ -52,12 +57,17 @@ export function computeClutchStats(games: ClutchGameRow[], legs: ClutchLegRow[],
   legsByGame.forEach((rows, gameId) => {
     const bestOfLegs = bestOfById.get(gameId);
     if (!bestOfLegs) return;
-    const distinctIdx = new Set(rows.map((r) => r.player_index));
-    if (distinctIdx.size !== 2) return; // team/multiplayer game — no stable 2-side leg count
+    // Team games are always exactly 2 teams, interleaved [TeamA-1, TeamB-1, TeamA-2, ...] — see
+    // teamUtils.ts — so a player's "side" is player_index % 2 there; for non-team games "side" is
+    // just the player_index itself (identity), same as before this function knew about teams.
+    const isTeam = teamGameIds.has(gameId);
+    const sideOf = (playerIndex: number) => (isTeam ? playerIndex % 2 : playerIndex);
+    const distinctSides = new Set(rows.map((r) => sideOf(r.player_index)));
+    if (distinctSides.size !== 2) return; // free-for-all game — no stable 2-side leg count
 
     const legsToWin = Math.ceil(bestOfLegs / 2);
     const running: Record<number, number> = {};
-    distinctIdx.forEach((idx) => { running[idx] = 0; });
+    distinctSides.forEach((side) => { running[side] = 0; });
 
     // Grouped by leg_number first: each leg has one game_legs row PER PLAYER, and both rows for
     // the same leg must see the same "decisive" snapshot (the state before that leg started).
@@ -78,9 +88,14 @@ export function computeClutchStats(games: ClutchGameRow[], legs: ClutchLegRow[],
           (decisive ? clutchList : normalList).push(stats);
         }
       }
+      // Dedupe by side, not by row: in a team game both members of the winning team's rows for
+      // this leg carry the same won=true, and counting each row separately would credit that
+      // side's running leg-count twice per leg.
+      const wonSidesThisLeg = new Set<number>();
       for (const leg of legRows) {
-        if (leg.won) running[leg.player_index] += 1;
+        if (leg.won) wonSidesThisLeg.add(sideOf(leg.player_index));
       }
+      wonSidesThisLeg.forEach((side) => { running[side] += 1; });
     }
   });
 
