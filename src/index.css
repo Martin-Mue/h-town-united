@@ -4,6 +4,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ───────────────────────── Color semantics (read this before adding a color) ─────────────────
+ * The three brand hues already ARE the semantic tokens below — they were just never written
+ * down anywhere, so new UI has historically picked whichever of the three looked nice rather
+ * than the one with the right meaning. There is no fourth "just because" accent color: every
+ * cyan/green/gold anywhere in the app should map to one of these three roles, not to
+ * "whichever one wasn't used on this card yet".
+ *
+ *   --primary   (cyan, 185°) = PRIMARY ACTION.   The thing to click/tap right now: main CTAs,
+ *               the active nav tab, links, focus rings, "this is interactive" in general.
+ *   --secondary (green, 155°) = WIN / SUCCESS.   A match won, a checkout hit, "connected"/
+ *               "online" status, anything that says an outcome was good.
+ *   --accent    (gold, 42-45°) = ACHIEVEMENT / HIGHLIGHT. Records, badges, the trophy, streak
+ *               milestones, "this is special" — NOT a second primary-action color and NOT a
+ *               generic warning color (that's --destructive, which is a separate red).
+ *
+ * --dart-cyan/--dart-green/--dart-gold below are the exact same three hues, kept as their own
+ * tokens only for call sites that need a raw color value outside the primary/secondary/accent
+ * component-variant system (e.g. an inline SVG's stroke, a chart series color, a glow filter) —
+ * they're aliases of the same three roles above, not a fourth palette to reach for.
+ * ────────────────────────────────────────────────────────────────────────────────────────── */
 @layer base {
   /* Light theme (default CSS variable values) — same token set as .dark below, tuned for a
      white/light backdrop instead of the venue-dark original. Brand hues (185 cyan, 155

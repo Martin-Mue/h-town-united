@@ -1,6 +1,7 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Target, Trophy, Dumbbell, Users, LogOut, BarChart3, UserCog, CloudOff, RefreshCw, Settings } from "lucide-react";
+import { LogOut, UserCog, CloudOff, RefreshCw, Settings } from "lucide-react";
+import { HomeIcon, DartGameIcon, StatsIcon, TrainingIcon, DartTrophyIcon, ClubIcon } from "@/components/icons/DartIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
@@ -12,13 +13,17 @@ import WhatsNewBanner from "@/components/WhatsNewBanner";
 import OnboardingTour from "@/components/OnboardingTour";
 import htuEmblem from "@/assets/club-emblem.png";
 
+// Icons are DartSpot's own hand-drawn set (src/components/icons/DartIcons.tsx), not lucide —
+// see that file's doc comment for why: these six are the icons every member sees on every
+// screen (desktop nav above AND the mobile bottom nav further down both read from this same
+// array), so they're the highest-value place to look like DartSpot instead of "any shadcn app".
 const NAV_ITEMS = [
-  { to: "/", icon: Home, labelKey: "nav.home" },
-  { to: "/game", icon: Target, labelKey: "nav.game" },
-  { to: "/statistics", icon: BarChart3, labelKey: "nav.stats" },
-  { to: "/training", icon: Dumbbell, labelKey: "nav.training" },
-  { to: "/tournament", icon: Trophy, labelKey: "nav.tournament" },
-  { to: "/players", icon: Users, labelKey: "nav.club" },
+  { to: "/", icon: HomeIcon, labelKey: "nav.home" },
+  { to: "/game", icon: DartGameIcon, labelKey: "nav.game" },
+  { to: "/statistics", icon: StatsIcon, labelKey: "nav.stats" },
+  { to: "/training", icon: TrainingIcon, labelKey: "nav.training" },
+  { to: "/tournament", icon: DartTrophyIcon, labelKey: "nav.tournament" },
+  { to: "/players", icon: ClubIcon, labelKey: "nav.club" },
 ];
 
 const Layout = ({ children }: { children: ReactNode }) => {
