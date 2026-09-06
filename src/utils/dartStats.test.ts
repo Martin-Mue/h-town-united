@@ -3,6 +3,8 @@ import {
   isAchievableVisitTotal, scoreTierBreakdown, segmentBreakdown, segmentCount,
   combineScoreTiers, combineSegmentCounts, first9Average,
   computeLegStatBundle, combineStatBundles, type DartThrow,
+  checkoutRangeBreakdown, combineCheckoutRangeBreakdowns,
+  checkoutDoubleBreakdown, combineCheckoutDoubleBreakdowns,
 } from "./dartStats";
 
 describe("isAchievableVisitTotal", () => {
@@ -192,5 +194,69 @@ describe("combineStatBundles first9 (cross-leg boundary safety)", () => {
     // first9 treats both legs' rates as equally-weighted data points (37.5 = (60+15)/2).
     expect(overall.average).toBe(42);
     expect(overall.first9).toBe(37.5);
+  });
+});
+
+describe("checkoutRangeBreakdown / checkoutDoubleBreakdown (granular checkout%)", () => {
+  const miss = () => d(0, 0);
+
+  it("buckets an attempt by the remaining score it started on, and only credits a hit to that same bucket", () => {
+    // Starts at 100 (81-120 bucket): visit 1 misses entirely (attempt, no hit), visit 2 checks
+    // out with a 2-dart finish T20 + D20 = 100 (attempt, hit).
+    const legA = throwsOf(visit(miss(), miss(), miss()), [d(20, 3), d(20, 2)]);
+    const range = checkoutRangeBreakdown(legA, 100);
+    expect(range.find((b) => b.label === "81-120")!.stats).toEqual({ attempts: 2, hits: 1, percentage: 50 });
+    expect(range.filter((b) => b.label !== "81-120").every((b) => b.stats.attempts === 0)).toBe(true);
+  });
+
+  it("does not count a remaining score above 170 as an attempt at all", () => {
+    const stillOpening = throwsOf(visit(d(20, 3), d(20, 3), d(20, 3))); // 501 -> 321, not an attempt
+    const range = checkoutRangeBreakdown(stillOpening, 501);
+    expect(range.every((b) => b.stats.attempts === 0)).toBe(true);
+  });
+
+  it("attributes a direct-double remainder (even, <=40) to its specific double", () => {
+    // Starts at 40 (D20): visit 1 misses (attempt, no hit), visit 2 hits D20.
+    const legB = throwsOf(visit(miss(), miss(), miss()), [d(20, 2)]);
+    expect(checkoutDoubleBreakdown(legB, 40)).toEqual([{ label: "D20", stats: { attempts: 2, hits: 1, percentage: 50 } }]);
+    // Same shape, still in the 2-40 range bucket.
+    expect(checkoutRangeBreakdown(legB, 40).find((b) => b.label === "2-40")!.stats).toEqual({ attempts: 2, hits: 1, percentage: 50 });
+  });
+
+  it("attributes remaining=50 to Bull, not to a numbered double", () => {
+    const legBull = throwsOf([d(25, 2)]); // starts at 50, hits double-bull immediately
+    expect(checkoutDoubleBreakdown(legBull, 50)).toEqual([{ label: "Bull", stats: { attempts: 1, hits: 1, percentage: 100 } }]);
+  });
+
+  it("does NOT attribute an odd or >40-and-not-50 remainder to any double, even though it's a real attempt", () => {
+    // 101 is achievable (isCheckoutPossible) but needs a combination first -- which double the
+    // player eventually throws at isn't known from the data at the start of the visit.
+    const legOdd = throwsOf(visit(miss(), miss(), miss()));
+    expect(checkoutDoubleBreakdown(legOdd, 101)).toEqual([]);
+    expect(checkoutRangeBreakdown(legOdd, 101).find((b) => b.label === "81-120")!.stats).toEqual({ attempts: 1, hits: 0, percentage: 0 });
+  });
+
+  it("combineCheckoutRangeBreakdowns sums matching buckets across legs and preserves every label", () => {
+    const legA = checkoutRangeBreakdown(throwsOf(visit(miss(), miss(), miss()), [d(20, 3), d(20, 2)]), 100); // 81-120: 2/1
+    const legD = checkoutRangeBreakdown(throwsOf(visit(miss(), miss(), miss())), 101); // 81-120: 1/0
+    const combined = combineCheckoutRangeBreakdowns([legA, legD]);
+    expect(combined.map((b) => b.label)).toEqual(["2-40", "41-80", "81-120", "121-170"]);
+    expect(combined.find((b) => b.label === "81-120")!.stats).toEqual({ attempts: 3, hits: 1, percentage: 33.3 });
+    expect(combined.find((b) => b.label === "41-80")!.stats).toEqual({ attempts: 0, hits: 0, percentage: 0 });
+  });
+
+  it("combineCheckoutDoubleBreakdowns merges the same double across legs and sorts by attempts descending", () => {
+    const legB = checkoutDoubleBreakdown(throwsOf(visit(miss(), miss(), miss()), [d(20, 2)]), 40); // D20: 2/1
+    const legC = checkoutDoubleBreakdown(throwsOf([d(16, 2)]), 32); // D16: 1/1
+    const legC2 = checkoutDoubleBreakdown(throwsOf([d(16, 2)]), 32); // another D16: 1/1
+    const combined = combineCheckoutDoubleBreakdowns([legB, legC, legC2]);
+    expect(combined).toEqual([
+      { label: "D20", stats: { attempts: 2, hits: 1, percentage: 50 } },
+      { label: "D16", stats: { attempts: 2, hits: 2, percentage: 100 } },
+    ]);
+  });
+
+  it("combineCheckoutRangeBreakdowns on zero legs returns the full zeroed bucket set, not an empty array", () => {
+    expect(combineCheckoutRangeBreakdowns([]).length).toBe(4);
   });
 });

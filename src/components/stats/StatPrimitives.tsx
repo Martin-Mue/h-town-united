@@ -119,6 +119,23 @@ export const RingStat = ({ percent, tone = "secondary", size = 40 }: { percent: 
   );
 };
 
+/** One labeled row in a "breakdown across a handful of named buckets" list — a short label, a
+ *  filled horizontal track, and a right-aligned value. Used for checkout% broken down by
+ *  remaining-score range or by double (a full chart would be overkill for ~4-8 short rows), but
+ *  generic enough for any similar small distribution. */
+export const BarRow = ({ label, percent, sublabel, tone = "primary" }: { label: string; percent: number; sublabel?: string; tone?: "primary" | "secondary" | "accent" }) => (
+  <div className="flex items-center gap-2 text-xs">
+    <span className="w-14 shrink-0 font-mono text-muted-foreground">{label}</span>
+    <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+      <div
+        className={`h-full rounded-full ${tone === "primary" ? "bg-primary" : tone === "accent" ? "bg-accent" : "bg-secondary"}`}
+        style={{ width: `${Math.max(0, Math.min(100, percent))}%` }}
+      />
+    </div>
+    <span className="w-16 shrink-0 text-right font-mono text-muted-foreground">{sublabel ?? `${percent.toFixed(0)}%`}</span>
+  </div>
+);
+
 /** Circular initial/emoji avatar with an optional rank-colored ring (gold/silver/bronze for
  *  top 3, plain border otherwise) — replaces the bare emoji + "🥇/🥈/🥉" text combo in every
  *  ranked list (leaderboard, ranking-focus drill-down). */

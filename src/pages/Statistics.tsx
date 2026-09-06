@@ -20,10 +20,12 @@ import { Loader2 } from "lucide-react";
 import DartboardHeatmap from "@/components/stats/DartboardHeatmap";
 import {
   first9Average, average, highestVisit, count180s, computeCheckoutStats, combineCheckoutStats,
+  checkoutRangeBreakdown, combineCheckoutRangeBreakdowns, checkoutDoubleBreakdown, combineCheckoutDoubleBreakdowns,
   computeCricketStats, combineCricketStats, experienceScore,
   scoreTierBreakdown, segmentBreakdown, segmentCount, combineScoreTiers, combineSegmentCounts, SEGMENT_NUMBERS,
   computeLegStatBundle, combineStatBundles,
   type DartThrow, type CheckoutStats, type CricketStats, type ScoreTierCount, type SegmentCounts, type StatBundle,
+  type CheckoutRangeBreakdown, type CheckoutDoubleBreakdown,
 } from "@/utils/dartStats";
 import { RankingBarChart, type RankingBarDatum } from "@/components/stats/RankingBarChart";
 import { downloadPlayerCard } from "@/utils/playerCard";
@@ -42,7 +44,7 @@ import SeasonRecap from "@/components/stats/SeasonRecap";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Sparkles } from "lucide-react";
-import { Eyebrow, SectionCard, StatTile, TrendBadge, Sparkline, RingStat, RankAvatar, RankBadge, TONE_TEXT as TONE_ICON } from "@/components/stats/StatPrimitives";
+import { Eyebrow, SectionCard, StatTile, TrendBadge, Sparkline, RingStat, RankAvatar, RankBadge, BarRow, TONE_TEXT as TONE_ICON } from "@/components/stats/StatPrimitives";
 import MatchDetailDialog from "@/components/stats/MatchDetailDialog";
 
 interface GameRecord {
@@ -271,24 +273,39 @@ const StatisticsPage = () => {
 
   // Checkout %, highest checkout, first-9 average — computed from the dart-by-dart
   // game_legs data (not available on X01 games only; Cricket has no "checkout").
+  // Also collects the granular checkout breakdown (by remaining-score range, and by the ~21
+  // "direct double" remainders where which double was being aimed at is actually knowable — see
+  // dartStats.ts's checkoutRangeBreakdown/checkoutDoubleBreakdown doc comments) alongside the
+  // existing single global checkout% -- a global number can't tell a player whether it's their
+  // low finishes or their 3-dart combination finishes dragging the average down.
   const advancedByPlayer = useMemo(() => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
     const modeById = new Map(games.map((g) => [g.id, g.mode]));
-    const byPlayer: Record<string, { name: string; checkouts: CheckoutStats[]; first9s: number[] }> = {};
+    const byPlayer: Record<string, {
+      name: string; checkouts: CheckoutStats[]; first9s: number[];
+      rangeBreakdowns: CheckoutRangeBreakdown[][]; doubleBreakdowns: CheckoutDoubleBreakdown[][];
+    }> = {};
     gameLegs.forEach((leg) => {
       if (!filteredIds.has(leg.game_id)) return;
       if (modeById.get(leg.game_id) === "cricket") return;
       if (!leg.player_id || !Array.isArray(leg.throws) || leg.throws.length === 0) return;
-      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, checkouts: [], first9s: [] });
+      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, checkouts: [], first9s: [], rangeBreakdowns: [], doubleBreakdowns: [] });
       bucket.checkouts.push(computeCheckoutStats(leg.throws, leg.starting_score));
       bucket.first9s.push(first9Average(leg.throws));
+      bucket.rangeBreakdowns.push(checkoutRangeBreakdown(leg.throws, leg.starting_score));
+      bucket.doubleBreakdowns.push(checkoutDoubleBreakdown(leg.throws, leg.starting_score));
     });
-    const result: Record<string, { name: string; checkout: CheckoutStats; first9: number }> = {};
+    const result: Record<string, {
+      name: string; checkout: CheckoutStats; first9: number;
+      rangeBreakdown: CheckoutRangeBreakdown[]; doubleBreakdown: CheckoutDoubleBreakdown[];
+    }> = {};
     Object.entries(byPlayer).forEach(([id, v]) => {
       result[id] = {
         name: v.name,
         checkout: combineCheckoutStats(v.checkouts),
         first9: v.first9s.length ? v.first9s.reduce((a, b) => a + b, 0) / v.first9s.length : 0,
+        rangeBreakdown: combineCheckoutRangeBreakdowns(v.rangeBreakdowns),
+        doubleBreakdown: combineCheckoutDoubleBreakdowns(v.doubleBreakdowns),
       };
     });
     return result;
@@ -820,6 +837,46 @@ const StatisticsPage = () => {
   }, [selectedPlayerId, filteredGames, players, language]);
 
   const pagedRecentForm = usePagedList(playerDetailStats?.recentForm ?? []);
+
+  // First-9 average over time, oldest first — same shape/convention as averageTrend above, so it
+  // can reuse the same Sparkline/AreaChart components. Unlike averageTrend (which reads a
+  // per-game column already stored on the `games` row), first9 isn't stored anywhere at the game
+  // level -- it only exists per LEG (see dartStats.ts's StatBundle doc comment on why a leg's
+  // first 9 darts can't be recovered from a flattened multi-leg throw sequence), so this groups
+  // this player's own game_legs by game_id first and averages each game's own legs, mirroring
+  // exactly what combineStatBundles does for a single match's post-game screen. Addresses the
+  // roadmap's "First-9-Average als Trendlinie statt Einzelwert" ask -- advancedByPlayer's first9
+  // above is a single lifetime/filtered number, this is the history behind it.
+  const playerFirst9Trend = useMemo(() => {
+    if (!selectedPlayerId) return [];
+    const modeById = new Map(games.map((g) => [g.id, g.mode]));
+    const playerGames = filteredGames.filter((g) => g.player1_id === selectedPlayerId || g.player2_id === selectedPlayerId);
+    const gameIds = new Set(playerGames.map((g) => g.id));
+    const first9sByGame: Record<string, number[]> = {};
+    gameLegs.forEach((leg) => {
+      if (leg.player_id !== selectedPlayerId || !gameIds.has(leg.game_id)) return;
+      if (modeById.get(leg.game_id) === "cricket") return;
+      if (!Array.isArray(leg.throws) || leg.throws.length === 0) return;
+      (first9sByGame[leg.game_id] ||= []).push(first9Average(leg.throws));
+    });
+    let runningAvg = 0;
+    let n = 0;
+    const trend: { game: number; date: string; first9: string; runningFirst9: string }[] = [];
+    [...playerGames].reverse().forEach((g) => {
+      const vals = first9sByGame[g.id];
+      if (!vals || vals.length === 0) return; // no X01 legs with throws recorded for this game
+      const gameFirst9 = vals.reduce((a, b) => a + b, 0) / vals.length;
+      n++;
+      runningAvg = (runningAvg * (n - 1) + gameFirst9) / n;
+      trend.push({
+        game: n,
+        date: new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" }),
+        first9: gameFirst9.toFixed(1),
+        runningFirst9: runningAvg.toFixed(1),
+      });
+    });
+    return trend;
+  }, [selectedPlayerId, filteredGames, gameLegs, games, language]);
 
   // Throw heatmap — board-relative tip coordinates (boardU/boardV) are camera-framing-
   // independent, so points from different games/devices/sessions are directly comparable.
@@ -1742,6 +1799,52 @@ const StatisticsPage = () => {
                     <StatTile label={t("stats.highestFinish")} value={advancedByPlayer[playerDetailStats.player.id].checkout.highestCheckout} tone="accent" />
                     <StatTile label={t("stats.checkoutAttempts")} value={advancedByPlayer[playerDetailStats.player.id].checkout.attempts} tone="muted" />
                   </div>
+                  {playerFirst9Trend.length > 1 && (
+                    <div className="mt-3 pt-3 border-t border-border/60">
+                      <p className="text-[10px] text-muted-foreground mb-1">{t("stats.first9TrendLabel")}</p>
+                      <Sparkline values={playerFirst9Trend.map((d) => Number(d.first9))} tone="primary" height={32} />
+                    </div>
+                  )}
+                </SectionCard>
+              )}
+
+              {/* Granular checkout breakdown — a global checkout% can't tell a player WHERE their
+                  finishes are actually breaking down; this splits the same attempts/hits by the
+                  remaining-score range they started on, and (for the subset where it's actually
+                  knowable, see dartStats.ts) by the specific double. */}
+              {advancedByPlayer[playerDetailStats.player.id] && advancedByPlayer[playerDetailStats.player.id].checkout.attempts > 0 && (
+                <SectionCard className="mb-4">
+                  <Eyebrow icon={Crosshair}>{t("stats.checkoutBreakdown")}</Eyebrow>
+                  <p className="text-[10px] text-muted-foreground mb-3">{t("stats.checkoutByRangeLabel")}</p>
+                  <div className="space-y-1.5">
+                    {advancedByPlayer[playerDetailStats.player.id].rangeBreakdown
+                      .filter((b) => b.stats.attempts > 0)
+                      .map((b) => (
+                        <BarRow
+                          key={b.label}
+                          label={b.label}
+                          percent={b.stats.percentage}
+                          sublabel={`${b.stats.hits}/${b.stats.attempts}`}
+                          tone="secondary"
+                        />
+                      ))}
+                  </div>
+                  {advancedByPlayer[playerDetailStats.player.id].doubleBreakdown.length > 0 && (
+                    <>
+                      <p className="text-[10px] text-muted-foreground mt-4 mb-3">{t("stats.checkoutByDoubleLabel")}</p>
+                      <div className="space-y-1.5">
+                        {advancedByPlayer[playerDetailStats.player.id].doubleBreakdown.map((b) => (
+                          <BarRow
+                            key={b.label}
+                            label={b.label}
+                            percent={b.stats.percentage}
+                            sublabel={`${b.stats.hits}/${b.stats.attempts}`}
+                            tone="primary"
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </SectionCard>
               )}
 
@@ -1851,6 +1954,32 @@ const StatisticsPage = () => {
                       <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
                       <Area type="monotone" dataKey="average" stroke="hsl(var(--primary))" fill="url(#avgGrad)" strokeWidth={2} name={t("stats.gameAverageSeries")} />
                       <Line type="monotone" dataKey="runningAvg" stroke="hsl(var(--secondary))" strokeWidth={2} strokeDasharray="5 3" dot={false} name={t("stats.runningAverageSeries")} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </SectionCard>
+              )}
+
+              {/* First-9 trend — same idea as the average trend above, but for the opening-nine
+                  reference value (see playerFirst9Trend's own doc comment for why it's tracked
+                  separately from averageTrend rather than derived from it). Addresses the
+                  roadmap's "First-9-Average als Trendlinie statt Einzelwert" ask directly. */}
+              {playerFirst9Trend.length > 0 && (
+                <SectionCard className="mb-4">
+                  <Eyebrow icon={TrendingUp}>{t("stats.first9Trend")}</Eyebrow>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <AreaChart data={playerFirst9Trend}>
+                      <defs>
+                        <linearGradient id="first9Grad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 9, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} domain={["auto", "auto"]} />
+                      <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} />
+                      <Area type="monotone" dataKey="first9" stroke="hsl(var(--accent))" fill="url(#first9Grad)" strokeWidth={2} name={t("stats.first9Series")} />
+                      <Line type="monotone" dataKey="runningFirst9" stroke="hsl(var(--secondary))" strokeWidth={2} strokeDasharray="5 3" dot={false} name={t("stats.runningFirst9Series")} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </SectionCard>

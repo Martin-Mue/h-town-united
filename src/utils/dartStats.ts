@@ -218,6 +218,100 @@ export function combineCheckoutStats(all: CheckoutStats[]): CheckoutStats {
   };
 }
 
+// ─── Granular checkout breakdown ────────────────────────────────────────
+/** A single attempts/hits/percentage bucket -- the same shape CheckoutStats already uses, minus
+ *  highestCheckout (that's a whole-checkout concept, not a per-bucket one). */
+export interface CheckoutBucketStats {
+  attempts: number;
+  hits: number;
+  /** hits / attempts, 0-100. */
+  percentage: number;
+}
+
+const toBucketStats = (attempts: number, hits: number): CheckoutBucketStats => ({
+  attempts, hits, percentage: attempts > 0 ? Math.round((hits / attempts) * 1000) / 10 : 0,
+});
+
+const combineBucketStats = (all: CheckoutBucketStats[]): CheckoutBucketStats =>
+  toBucketStats(all.reduce((s, c) => s + c.attempts, 0), all.reduce((s, c) => s + c.hits, 0));
+
+/** Remaining-score bands a global checkout% gets split into -- coarse enough to read at a
+ *  glance, fine enough to actually point at something ("your low finishes are fine, it's the
+ *  three-dart combination finishes above 120 that are costing you legs"). Bounded at 170 like
+ *  isCheckoutPossible itself -- nothing above that is ever a real attempt. */
+const CHECKOUT_RANGE_BOUNDS: readonly [label: string, min: number, max: number][] = [
+  ["2-40", 2, 40], ["41-80", 41, 80], ["81-120", 81, 120], ["121-170", 121, 170],
+];
+
+export interface CheckoutRangeBreakdown {
+  label: string;
+  stats: CheckoutBucketStats;
+}
+
+/** Same leg-replay logic as computeCheckoutStats, bucketed by the remaining score each attempt
+ *  actually started on instead of collapsed into one global number. */
+export function checkoutRangeBreakdown(throws: DartThrow[], startingScore: number): CheckoutRangeBreakdown[] {
+  let remaining = startingScore;
+  const buckets = CHECKOUT_RANGE_BOUNDS.map(() => ({ attempts: 0, hits: 0 }));
+  for (const v of visits(throws)) {
+    const idx = isCheckoutPossible(remaining)
+      ? CHECKOUT_RANGE_BOUNDS.findIndex(([, min, max]) => remaining >= min && remaining <= max)
+      : -1;
+    if (idx >= 0) buckets[idx].attempts++;
+    remaining -= v.reduce((s, t) => s + t.points, 0);
+    if (remaining === 0 && idx >= 0) buckets[idx].hits++;
+  }
+  return CHECKOUT_RANGE_BOUNDS.map(([label], i) => ({ label, stats: toBucketStats(buckets[i].attempts, buckets[i].hits) }));
+}
+
+export function combineCheckoutRangeBreakdowns(perLeg: CheckoutRangeBreakdown[][]): CheckoutRangeBreakdown[] {
+  if (perLeg.length === 0) return checkoutRangeBreakdown([], 0);
+  return perLeg[0].map((bucket, i) => ({ label: bucket.label, stats: combineBucketStats(perLeg.map((legBuckets) => legBuckets[i].stats)) }));
+}
+
+/** The ~21 remaining scores where the very next dart IS a double with nothing to combine first
+ *  (2-40 even, plus bull at 50) -- the only case where "which double was this attempt actually
+ *  aimed at" is a fact rather than a guess. Everything else (odd remainders, or >40 and not 50)
+ *  needs at least one more dart before a specific double is even reachable, so which double the
+ *  player eventually throws at isn't knowable from the data at the moment the visit started --
+ *  those attempts still count in the range breakdown above, just not attributed to one double
+ *  here, rather than silently guessing. */
+function directDoubleLabel(remaining: number): string | null {
+  if (remaining === 50) return "Bull";
+  if (remaining > 0 && remaining <= 40 && remaining % 2 === 0) return `D${remaining / 2}`;
+  return null;
+}
+
+export interface CheckoutDoubleBreakdown {
+  label: string;
+  stats: CheckoutBucketStats;
+}
+
+export function checkoutDoubleBreakdown(throws: DartThrow[], startingScore: number): CheckoutDoubleBreakdown[] {
+  let remaining = startingScore;
+  const byLabel: Record<string, { attempts: number; hits: number }> = {};
+  for (const v of visits(throws)) {
+    const label = directDoubleLabel(remaining);
+    const bucket = label ? (byLabel[label] ||= { attempts: 0, hits: 0 }) : null;
+    if (bucket) bucket.attempts++;
+    remaining -= v.reduce((s, t) => s + t.points, 0);
+    if (bucket && remaining === 0) bucket.hits++;
+  }
+  return Object.entries(byLabel)
+    .map(([label, b]) => ({ label, stats: toBucketStats(b.attempts, b.hits) }))
+    .sort((a, b) => b.stats.attempts - a.stats.attempts);
+}
+
+export function combineCheckoutDoubleBreakdowns(perLeg: CheckoutDoubleBreakdown[][]): CheckoutDoubleBreakdown[] {
+  const byLabel: Record<string, CheckoutBucketStats[]> = {};
+  for (const legBreakdown of perLeg) {
+    for (const { label, stats } of legBreakdown) (byLabel[label] ||= []).push(stats);
+  }
+  return Object.entries(byLabel)
+    .map(([label, statsList]) => ({ label, stats: combineBucketStats(statsList) }))
+    .sort((a, b) => b.stats.attempts - a.stats.attempts);
+}
+
 // ─── Cricket ──────────────────────────────────────────────────────────
 const CRICKET_MARK_NUMBERS = [20, 19, 18, 17, 16, 15, 25];
 
