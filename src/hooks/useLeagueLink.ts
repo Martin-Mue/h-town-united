@@ -29,12 +29,19 @@ interface UseLeagueLinkParams {
  * useTournamentLink (p1/p2/mode/bestOf), kept as its own separate hook rather than folded into
  * that one so the tournament path stays untouched by this addition.
  *
- * Deliberately NOT restored from the crash-recovery snapshot and NOT queued for offline retry the
- * way the tournament link is: a league fixture is lower-stakes casual scheduling, not a live
- * broadcasted event, so a reload/offline mid-game losing just the fixture linkage (the game
- * itself still always saves safely either way) is an acceptable trade for not doubling this
- * file's already-large tournament-link surface. A missed write-back is fixable by hand on the
- * league page afterward.
+ * Deliberately NOT restored from the crash-recovery snapshot: a league fixture is lower-stakes
+ * casual scheduling, not a live broadcasted event, so a reload losing just the fixture linkage
+ * (the game itself still always saves safely either way, and the ref only ever drives the
+ * write-back below, not gameplay) is an acceptable trade for not doubling this file's already-
+ * large tournament-link surface with a second snapshot-restore path.
+ *
+ * The write-back itself IS now queued for offline retry, same as the tournament link (Round 3
+ * backend audit KORREKTUR — see offlineQueue.ts's doc comment) -- losing a completed fixture
+ * result outright, rather than just its convenience linkage on a reload, is exactly the kind of
+ * silent data loss the tournament path was already built to avoid, and queuing it turned out to
+ * be a small, additive change (Game.tsx's saveGame block, offlineQueue.ts, a shared
+ * leagueFixtureSync.ts helper) rather than the larger restructuring this comment originally
+ * weighed against.
  */
 export function useLeagueLink({ searchParams, setPlayerNames, setTeamMode, setNumPlayers, setMode, setBestOfLegs }: UseLeagueLinkParams) {
   const leagueLinkRef = useRef<LeagueLink | null>(null);

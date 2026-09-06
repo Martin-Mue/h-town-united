@@ -11,6 +11,13 @@ export interface ActivityGameRow {
   player2_average: number;
   winner_id: string | null;
   played_at: string;
+  /** Team-game marker + the winning team's plain name, both optional so existing call sites/tests
+   *  that don't select these columns keep working unchanged (games saved before this field existed
+   *  have no detail_stats.isTeamGame at all, which correctly falls through to the 1v1/free-for-all
+   *  paths below exactly as before). See the isTeamGame branch's comment for why these two fields
+   *  are what's needed and not, say, winner_id. */
+  winner_name?: string;
+  detail_stats?: unknown;
 }
 
 export interface ActivityLegRow {
@@ -113,24 +120,45 @@ export function computeClubActivity(
     // before this: 180s/PBs/streaks are all rare-highlight events, so on an ordinary evening with
     // solid-but-unremarkable games the whole feed used to stay empty.
     if (isRecent) {
-      const participantCount = participantsByGame.get(g.id)?.size ?? 0;
-      if (participantCount >= 3) {
-        // Free-for-all: player2_id only ever covers the RUNNER-UP (see the ranking note above),
-        // so requiring them to also be a linked member — the 1v1 gate just below — meant a
-        // free-for-all win vanished from the feed the moment 2nd place was a bot or an unmatched
-        // guest name, even though the winner themselves is a fully real, linked member. Only the
-        // winner needs to be identifiable here; there's no single "loser" to name in a 3+-way
-        // game anyway, so matchResultMultiplayer doesn't try to (Community Rangliste #12).
-        if (g.player1_id && g.winner_id === g.player1_id) {
-          events.push({ id: `result-${g.id}`, type: "match_result", playerName: g.player1_name, playedAt: g.played_at, detail: translator.matchResultMultiplayer(participantCount) });
+      const isTeamGame = !!(g.detail_stats as { isTeamGame?: boolean } | null | undefined)?.isTeamGame;
+      if (isTeamGame) {
+        // Team games (2v2 etc., Round 3 Community-Audit KORREKTUR to Rang 12): gameSync.ts's
+        // saveGameRecord inserts one game_legs ROW PER INDIVIDUAL PLAYER even for team games, so
+        // participantsByGame sees 4 distinct participants for a 2v2 and the free-for-all branch
+        // below would misfire on it -- and even if it didn't, that branch's `g.player1_id ===
+        // g.winner_id` check only ever resolves to ONE representative member of TEAM 0
+        // (gameSync.ts's top1/winnerIdx handling), so a Team-1 win silently produced no event at
+        // all, and a Team-0 win got mislabeled as a generic "N-Spieler-Mehrspieler-Runde" instead
+        // of a team result. player1_name/player2_name are already reliably the two TEAM names
+        // (gameSync.ts sets them from game.teams[0/1].name), and winner_name is independently set
+        // from game.teams[winnerIndex].name in Game.tsx at the team level -- comparing these three
+        // plain strings sidesteps the buggy per-individual id resolution entirely.
+        if (g.winner_name && (g.winner_name === g.player1_name || g.winner_name === g.player2_name)) {
+          const winnerIsTeam1 = g.winner_name === g.player1_name;
+          const winnerTeamName = winnerIsTeam1 ? g.player1_name : g.player2_name;
+          const loserTeamName = winnerIsTeam1 ? g.player2_name : g.player1_name;
+          events.push({ id: `result-${g.id}`, type: "match_result", playerName: winnerTeamName, playedAt: g.played_at, detail: translator.matchResult(loserTeamName) });
         }
-      } else if (g.player1_id && g.player2_id && (g.winner_id === g.player1_id || g.winner_id === g.player2_id)) {
-        // Restricted to games between two players who BOTH have a linked club profile (real
-        // member vs. real member) -- a bot or guest opponent has no player_id.
-        const winnerIsP1 = g.winner_id === g.player1_id;
-        const winnerName = winnerIsP1 ? g.player1_name : g.player2_name;
-        const loserName = winnerIsP1 ? g.player2_name : g.player1_name;
-        events.push({ id: `result-${g.id}`, type: "match_result", playerName: winnerName, playedAt: g.played_at, detail: translator.matchResult(loserName) });
+      } else {
+        const participantCount = participantsByGame.get(g.id)?.size ?? 0;
+        if (participantCount >= 3) {
+          // Free-for-all: player2_id only ever covers the RUNNER-UP (see the ranking note above),
+          // so requiring them to also be a linked member — the 1v1 gate just below — meant a
+          // free-for-all win vanished from the feed the moment 2nd place was a bot or an unmatched
+          // guest name, even though the winner themselves is a fully real, linked member. Only the
+          // winner needs to be identifiable here; there's no single "loser" to name in a 3+-way
+          // game anyway, so matchResultMultiplayer doesn't try to (Community Rangliste #12).
+          if (g.player1_id && g.winner_id === g.player1_id) {
+            events.push({ id: `result-${g.id}`, type: "match_result", playerName: g.player1_name, playedAt: g.played_at, detail: translator.matchResultMultiplayer(participantCount) });
+          }
+        } else if (g.player1_id && g.player2_id && (g.winner_id === g.player1_id || g.winner_id === g.player2_id)) {
+          // Restricted to games between two players who BOTH have a linked club profile (real
+          // member vs. real member) -- a bot or guest opponent has no player_id.
+          const winnerIsP1 = g.winner_id === g.player1_id;
+          const winnerName = winnerIsP1 ? g.player1_name : g.player2_name;
+          const loserName = winnerIsP1 ? g.player2_name : g.player1_name;
+          events.push({ id: `result-${g.id}`, type: "match_result", playerName: winnerName, playedAt: g.played_at, detail: translator.matchResult(loserName) });
+        }
       }
     }
 

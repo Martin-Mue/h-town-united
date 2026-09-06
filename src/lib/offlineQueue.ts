@@ -4,16 +4,28 @@ import type { BracketActionPayload } from "@/utils/tournament";
 /**
  * Offline write queues for anything that must reach Supabase after a match, but can't be
  * dropped just because the club's wifi hiccups: finished game results, tournament bracket
- * write-backs for a "Spiel starten" live game, and (separately again) manual bracket-scoring
- * taps made directly in the Tournament.tsx admin UI (declare winner, +1 leg, reset a match).
- * Three independent IndexedDB object stores, same durable enqueue → flush-on-reconnect shape.
+ * write-backs for a "Spiel starten" live game, (separately again) manual bracket-scoring
+ * taps made directly in the Tournament.tsx admin UI (declare winner, +1 leg, reset a match),
+ * and league_fixtures write-backs. Four independent IndexedDB object stores, same durable
+ * enqueue → flush-on-reconnect shape.
+ *
+ * The league fixture queue (added in Round 3) revisits a deliberate trade-off documented in
+ * useLeagueLink.ts's own doc comment: the league write-back was originally left unqueued as
+ * "lower-stakes casual scheduling ... fixable by hand afterward", to avoid growing Game.tsx's
+ * already-large tournament-link surface further. The Round 3 backend audit found this meant a
+ * league result can be silently lost (no toast, no retry, `console.error` only) on the exact
+ * same kind of connection drop the tournament path already handles safely — same bug class as
+ * the tournament link, just at a second site. Addressed here the same additive, isolated way
+ * the original comment's concern was about avoiding (a few lines wired into the existing
+ * leagueLink block, not a restructuring), via the shared createQueue() factory below.
  */
 
 const DB_NAME = "darts-offline-queue";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const GAME_STORE = "pending_game_saves";
 const MATCH_RESULT_STORE = "pending_match_results";
 const BRACKET_ACTION_STORE = "pending_bracket_actions";
+const LEAGUE_FIXTURE_RESULT_STORE = "pending_league_fixture_results";
 
 export interface QueuedGameSave {
   /** Same id used as the `games.id` primary key, so replays are idempotent. */
@@ -57,6 +69,27 @@ export interface QueuedBracketAction {
   lastError?: string;
 }
 
+/** One queued league_fixtures write-back — either a Game.tsx "Spiel starten" league match that
+ *  finished, or a League.tsx manual result entry, whichever failed to reach Supabase directly.
+ *  Carries the update's *values*, not a precomputed row, same reasoning as QueuedBracketAction. */
+export interface QueuedLeagueFixtureResult {
+  id: string;
+  fixtureId: string;
+  winnerId: string | null;
+  player1LegsWon: number;
+  player2LegsWon: number;
+  /** Set only for the Game.tsx live-play path, so the replay can also stamp the fixture with the
+   *  game it came from — absent for League.tsx's manual entry, which has no game row at all. */
+  gameId?: string;
+  /** Game.tsx's write only ever applies to a still-`pending` fixture (guards against double-
+   *  applying if the user somehow triggers two saves); League.tsx's manual entry has no such
+   *  guard today (an admin correcting an already-finished fixture is a legitimate case there). */
+  guardPending: boolean;
+  createdAt: number;
+  attempts: number;
+  lastError?: string;
+}
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -65,6 +98,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(GAME_STORE)) db.createObjectStore(GAME_STORE, { keyPath: "id" });
       if (!db.objectStoreNames.contains(MATCH_RESULT_STORE)) db.createObjectStore(MATCH_RESULT_STORE, { keyPath: "id" });
       if (!db.objectStoreNames.contains(BRACKET_ACTION_STORE)) db.createObjectStore(BRACKET_ACTION_STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(LEAGUE_FIXTURE_RESULT_STORE)) db.createObjectStore(LEAGUE_FIXTURE_RESULT_STORE, { keyPath: "id" });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -193,4 +227,18 @@ export async function flushBracketActionQueue(
   replay: (tournamentId: string, action: BracketActionPayload) => Promise<unknown>
 ): Promise<{ synced: number; failed: number }> {
   return bracketActionQueue.flush((item) => replay(item.tournamentId, item.action).then(() => undefined));
+}
+
+const leagueFixtureResultQueue = createQueue<QueuedLeagueFixtureResult>(LEAGUE_FIXTURE_RESULT_STORE);
+
+export const enqueueLeagueFixtureResult = leagueFixtureResultQueue.enqueue;
+export const listQueuedLeagueFixtureResults = leagueFixtureResultQueue.list;
+export const subscribeLeagueFixtureResultQueueCount = leagueFixtureResultQueue.subscribeCount;
+
+export async function flushLeagueFixtureResultQueue(
+  replay: (fixtureId: string, result: { winnerId: string | null; player1LegsWon: number; player2LegsWon: number; gameId?: string; guardPending: boolean }) => Promise<void>
+): Promise<{ synced: number; failed: number }> {
+  return leagueFixtureResultQueue.flush((item) =>
+    replay(item.fixtureId, { winnerId: item.winnerId, player1LegsWon: item.player1LegsWon, player2LegsWon: item.player2LegsWon, gameId: item.gameId, guardPending: item.guardPending })
+  );
 }

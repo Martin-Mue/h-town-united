@@ -10,6 +10,7 @@ import { Drawer, DrawerTrigger, DrawerContent, DrawerTitle, DrawerClose } from "
 import { useOfflineGameQueue } from "@/hooks/useOfflineGameQueue";
 import { useOfflineMatchResultQueue } from "@/hooks/useOfflineMatchResultQueue";
 import { useOfflineBracketActionQueue } from "@/hooks/useOfflineBracketActionQueue";
+import { useOfflineLeagueFixtureQueue } from "@/hooks/useOfflineLeagueFixtureQueue";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import WhatsNewBanner from "@/components/WhatsNewBanner";
 import OnboardingTour from "@/components/OnboardingTour";
@@ -42,8 +43,9 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const gameQueue = useOfflineGameQueue();
   const matchResultQueue = useOfflineMatchResultQueue();
   const bracketActionQueue = useOfflineBracketActionQueue();
-  const pendingCount = gameQueue.pendingCount + matchResultQueue.pendingCount + bracketActionQueue.pendingCount;
-  const syncing = gameQueue.syncing || matchResultQueue.syncing || bracketActionQueue.syncing;
+  const leagueFixtureQueue = useOfflineLeagueFixtureQueue();
+  const pendingCount = gameQueue.pendingCount + matchResultQueue.pendingCount + bracketActionQueue.pendingCount + leagueFixtureQueue.pendingCount;
+  const syncing = gameQueue.syncing || matchResultQueue.syncing || bracketActionQueue.syncing || leagueFixtureQueue.syncing;
   const { t } = useLanguage();
   // Bottom-nav is width-constrained on mobile — 6-7 equal-weight items crowded together with no
   // priority ordering (Design-Sprint Rangliste #11). These 4 are the highest-frequency actions

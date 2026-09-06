@@ -137,7 +137,10 @@ const DashboardPage = () => {
     };
     const loadActivity = async () => {
       const [{ data: games }, { data: legs }] = await Promise.all([
-        supabase.from("games").select("id, mode, player1_id, player2_id, player1_name, player2_name, player1_average, player2_average, winner_id, played_at"),
+        // winner_name + detail_stats added for computeClubActivity's team-game branch (Round 3
+        // Community-Audit KORREKTUR) -- without them it can't tell a 2v2 apart from a
+        // free-for-all and silently drops/mislabels team wins in the feed.
+        supabase.from("games").select("id, mode, player1_id, player2_id, player1_name, player2_name, player1_average, player2_average, winner_id, winner_name, detail_stats, played_at"),
         supabase.from("game_legs").select("game_id, leg_number, player_id, player_name, throws, starting_score, won"),
       ]);
       if (cancelled) return;

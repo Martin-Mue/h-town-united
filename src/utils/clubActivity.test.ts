@@ -185,6 +185,77 @@ describe("computeClubActivity", () => {
     expect(events.some((e) => e.type === "match_result")).toBe(false);
   });
 
+  it("attributes a team win (2v2) to the winning team, even when Team 2 (not Team 1) wins", () => {
+    // Regression test for the Round 3 Community-Audit KORREKTUR: gameSync.ts inserts one
+    // game_legs row per INDIVIDUAL player even for team games, so a 2v2 has 4 distinct
+    // participants -- without the isTeamGame branch this would misfire into the free-for-all
+    // path, and even there the old `winner_id === player1_id` check only ever resolved to a
+    // Team-0 representative, so a Team-1 (here: Team 2) win produced NO event at all.
+    const legs: ActivityLegRow[] = [
+      { game_id: "g1", leg_number: 1, player_id: "p1", player_name: "Martin", throws: [], starting_score: 501, won: false },
+      { game_id: "g1", leg_number: 1, player_id: "p2", player_name: "Kevin", throws: [], starting_score: 501, won: false },
+      { game_id: "g1", leg_number: 1, player_id: "p3", player_name: "Sandra", throws: [], starting_score: 501, won: true },
+      { game_id: "g1", leg_number: 1, player_id: "p4", player_name: "Uwe", throws: [], starting_score: 501, won: true },
+    ];
+    const events = computeClubActivity(
+      [game({
+        id: "g1", played_at: daysAgo(1),
+        player1_name: "Team 1", player2_name: "Team 2",
+        winner_id: "p3", // buggy old signal: an individual id, never equal to player1_id/player2_id
+        winner_name: "Team 2",
+        detail_stats: { isTeamGame: true },
+      })],
+      legs,
+    );
+    const result = events.find((e) => e.type === "match_result");
+    expect(result).toBeDefined();
+    expect(result!.playerName).toBe("Team 2");
+    expect(result!.detail).toContain("Team 1");
+    // Must NOT also fire the old free-for-all path (4 distinct participants would trigger it).
+    expect(events.filter((e) => e.type === "match_result")).toHaveLength(1);
+  });
+
+  it("also attributes a team win to Team 1 when Team 1 wins (not just Team 2)", () => {
+    const legs: ActivityLegRow[] = [
+      { game_id: "g1", leg_number: 1, player_id: "p1", player_name: "Martin", throws: [], starting_score: 501, won: true },
+      { game_id: "g1", leg_number: 1, player_id: "p2", player_name: "Kevin", throws: [], starting_score: 501, won: true },
+      { game_id: "g1", leg_number: 1, player_id: "p3", player_name: "Sandra", throws: [], starting_score: 501, won: false },
+      { game_id: "g1", leg_number: 1, player_id: "p4", player_name: "Uwe", throws: [], starting_score: 501, won: false },
+    ];
+    const events = computeClubActivity(
+      [game({
+        id: "g1", played_at: daysAgo(1),
+        player1_name: "Team 1", player2_name: "Team 2",
+        winner_id: "p1",
+        winner_name: "Team 1",
+        detail_stats: { isTeamGame: true },
+      })],
+      legs,
+    );
+    const result = events.find((e) => e.type === "match_result");
+    expect(result).toBeDefined();
+    expect(result!.playerName).toBe("Team 1");
+    expect(result!.detail).toContain("Team 2");
+  });
+
+  it("still uses the free-for-all path for a non-team 3+ player game (isTeamGame absent/false)", () => {
+    // Guards against the new branch accidentally swallowing the pre-existing free-for-all case
+    // that Rang 12 already fixed -- no detail_stats at all (legacy row) must behave identically
+    // to detail_stats.isTeamGame === false.
+    const legs: ActivityLegRow[] = [
+      { game_id: "g1", leg_number: 1, player_id: "p1", player_name: "Martin", throws: [], starting_score: 501, won: true },
+      { game_id: "g1", leg_number: 1, player_id: null, player_name: "Bot (Schwer)", throws: [], starting_score: 501, won: false },
+      { game_id: "g1", leg_number: 1, player_id: "p3", player_name: "Sandra", throws: [], starting_score: 501, won: false },
+    ];
+    const events = computeClubActivity(
+      [game({ id: "g1", played_at: daysAgo(1), winner_id: "p1", player2_id: null, player2_name: "Bot (Schwer)" })],
+      legs,
+    );
+    const result = events.find((e) => e.type === "match_result");
+    expect(result).toBeDefined();
+    expect(result!.detail).toContain("3");
+  });
+
   it("gives two 180s in different legs of the same game distinct ids", () => {
     // A best-of-3+ match where the same player hits a 180 in leg 1 AND leg 3 used to produce two
     // events sharing one id (game_id + player_id, no leg discriminator) — a React key collision

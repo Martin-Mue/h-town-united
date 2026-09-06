@@ -40,6 +40,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { recordMatchResult, pushLiveSnapshot } from "@/lib/tournamentMatchSync";
+import { applyLeagueFixtureResult } from "@/lib/leagueFixtureSync";
 import { loadActiveGameSnapshot, saveActiveGameSnapshot, clearActiveGameSnapshot } from "@/lib/activeGameSnapshot";
 import { useTournamentLink } from "@/hooks/useTournamentLink";
 import { useLeagueLink } from "@/hooks/useLeagueLink";
@@ -89,7 +90,7 @@ import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
 import { createLegState, createCricketState } from "@/utils/gameStateFactory";
 import { saveGameRecord } from "@/lib/gameSync";
-import { enqueueGameSave, enqueueMatchResult } from "@/lib/offlineQueue";
+import { enqueueGameSave, enqueueMatchResult, enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
 import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
 import { isLiveSnapshotFresh, totalRoundsOf, type Match, type RoundRobinMatch } from "@/utils/tournament";
 import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
@@ -1983,19 +1984,24 @@ const GamePage = () => {
         // can have it flipped (see the resolution effect that sets this ref for that case).
         const fixtureP1Legs = leagueLink.player1IsGameSlot0 ? game.legsWon[0] : game.legsWon[1];
         const fixtureP2Legs = leagueLink.player1IsGameSlot0 ? game.legsWon[1] : game.legsWon[0];
+        const leagueResult = {
+          winnerId: fixtureP1Legs > fixtureP2Legs ? leagueLink.player1Id : leagueLink.player2Id,
+          player1LegsWon: fixtureP1Legs,
+          player2LegsWon: fixtureP2Legs,
+          gameId: pendingGameIdRef.current,
+          guardPending: true,
+        };
         try {
-          await supabase.from("league_fixtures").update({
-            status: "finished",
-            winner_id: fixtureP1Legs > fixtureP2Legs ? leagueLink.player1Id : leagueLink.player2Id,
-            player1_legs_won: fixtureP1Legs,
-            player2_legs_won: fixtureP2Legs,
-            game_id: pendingGameIdRef.current,
-            played_at: new Date().toISOString(),
-          }).eq("id", leagueLink.fixtureId).eq("status", "pending");
+          await applyLeagueFixtureResult(leagueLink.fixtureId, leagueResult);
         } catch (syncErr) {
-          // Best-effort, see leagueLinkRef's doc comment — the game itself is already safely
-          // saved above regardless; only this write-back can be fixed up by hand afterward.
-          console.error("league fixture write-back failed", syncErr);
+          // Round 3 backend audit KORREKTUR: this used to be silently best-effort (console.error
+          // only, no retry, no user-facing indication) — the exact same failure mode the
+          // tournament bracket write-back just above already queues and retries. Same fix here:
+          // queue it, and tell the user, instead of letting it vanish until someone notices the
+          // league table looks wrong.
+          console.error("league fixture write-back failed, queuing for retry", syncErr);
+          await enqueueLeagueFixtureResult({ id: `${pendingGameIdRef.current}-league`, fixtureId: leagueLink.fixtureId, ...leagueResult });
+          toast({ title: t("game.leaguePending"), description: t("game.leaguePendingDesc") });
         }
       }
     } catch (err) {
@@ -2014,6 +2020,25 @@ const GamePage = () => {
           winnerName: tournamentWinnerName,
           score1: tournamentScore1,
           score2: tournamentScore2,
+        });
+      }
+      // Same reasoning as the tournament bracket entry above, now also covering the case where
+      // the whole save failed BEFORE the leagueLink block inside the try was even reached (see
+      // Round 3 backend audit KORREKTUR) — previously a league fixture write-back was only ever
+      // attempted at all when saveGameRecord itself succeeded, so a genuinely-offline device lost
+      // it outright rather than queuing it like every other write-back here does.
+      const leagueLinkForQueue = leagueLinkRef.current;
+      if (leagueLinkForQueue) {
+        const fixtureP1Legs = leagueLinkForQueue.player1IsGameSlot0 ? game.legsWon[0] : game.legsWon[1];
+        const fixtureP2Legs = leagueLinkForQueue.player1IsGameSlot0 ? game.legsWon[1] : game.legsWon[0];
+        await enqueueLeagueFixtureResult({
+          id: `${pendingGameIdRef.current}-league`,
+          fixtureId: leagueLinkForQueue.fixtureId,
+          winnerId: fixtureP1Legs > fixtureP2Legs ? leagueLinkForQueue.player1Id : leagueLinkForQueue.player2Id,
+          player1LegsWon: fixtureP1Legs,
+          player2LegsWon: fixtureP2Legs,
+          gameId: pendingGameIdRef.current,
+          guardPending: true,
         });
       }
       setQueuedOffline(true);

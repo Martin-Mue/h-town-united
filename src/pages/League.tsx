@@ -16,6 +16,8 @@ import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useToast } from "@/hooks/use-toast";
 import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
 import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
+import { applyLeagueFixtureResult } from "@/lib/leagueFixtureSync";
+import { enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
 import { generateRoundRobinFixtures } from "@/utils/roundRobin";
 import { SectionCard, Eyebrow, RankBadge, RankAvatar } from "@/components/stats/StatPrimitives";
 import { usePagedList } from "@/hooks/usePagedList";
@@ -286,19 +288,26 @@ const LeaguePage = () => {
     const l2 = parseInt(manualP2Legs, 10);
     if (!Number.isFinite(l1) || !Number.isFinite(l2) || l1 < 0 || l2 < 0 || l1 === l2) return;
     setSavingResult(true);
+    const result = {
+      winnerId: l1 > l2 ? manualEntryFixture.player1_id : manualEntryFixture.player2_id,
+      player1LegsWon: l1,
+      player2LegsWon: l2,
+      guardPending: false, // manual entry may legitimately correct an already-finished fixture
+    };
     try {
-      const { error } = await supabase.from("league_fixtures").update({
-        status: "finished",
-        winner_id: l1 > l2 ? manualEntryFixture.player1_id : manualEntryFixture.player2_id,
-        player1_legs_won: l1,
-        player2_legs_won: l2,
-        played_at: new Date().toISOString(),
-      }).eq("id", manualEntryFixture.id);
-      if (error) throw error;
+      await applyLeagueFixtureResult(manualEntryFixture.id, result);
       setManualEntryFixture(null);
       await fetchFixtures();
     } catch (err: unknown) {
-      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Ergebnis konnte nicht gespeichert werden.", variant: "destructive" });
+      // Round 3 backend audit KORREKTUR: previously a failed write here just surfaced the error
+      // toast below and left the fixture untouched with no other recourse but clicking Save again
+      // — fine while the admin is still looking at the dialog, but if the connection drops right
+      // as they submit and they navigate away trusting the toast, the result was gone for good.
+      // Queuing it (same as Game.tsx's write-back) means it still lands automatically even then;
+      // the dialog stays open and the error toast still fires so an admin who's still there and
+      // wants to retry immediately can just click Save again.
+      await enqueueLeagueFixtureResult({ id: crypto.randomUUID(), fixtureId: manualEntryFixture.id, ...result });
+      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Ergebnis konnte nicht gespeichert werden — wird automatisch nachgeholt.", variant: "destructive" });
     } finally {
       setSavingResult(false);
     }
