@@ -27,7 +27,13 @@ interface LanguageContextType {
   t: (key: string) => string;
 }
 
-const LanguageContext = createContext<LanguageContextType>({
+// Exported (not just the useLanguage hook) so a class component that can't use hooks -- an error
+// boundary must be a class component, see ErrorBoundary.tsx -- can still read it via React's
+// static contextType, without every call site needing to start passing translated strings down
+// as props. The default value here (language "de", t as identity) is also what such a consumer
+// gets if ErrorBoundary is ever rendered outside a LanguageProvider, which is a safe fallback,
+// not a real expected case.
+export const LanguageContext = createContext<LanguageContextType>({
   language: "de",
   setLanguage: () => {},
   t: (key: string) => key,
@@ -76,6 +82,15 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     setLanguageState(lang);
     if (typeof window !== "undefined") window.localStorage.setItem(LANGUAGE_PREF_KEY, lang);
   };
+
+  // Round 4 Rang 2: index.html hardcodes <html lang="en">, and nothing ever updated it after
+  // that -- so a screen reader's pronunciation rules, the browser's own "translate this page?"
+  // prompt, and spellcheck all stayed English-language-anchored regardless of which of the 6
+  // languages was actually selected (default "de"). Keeps it correct across a later in-session
+  // language switch too, not just on first load.
+  useEffect(() => {
+    if (typeof document !== "undefined") document.documentElement.lang = language;
+  }, [language]);
 
   const t = (key: string) => strings?.[key] ?? key;
 

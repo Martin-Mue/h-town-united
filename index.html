@@ -1,22 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>H-Town United e.V. · Darts Club</title>
-    <meta name="description" content="Vereinsapp der H-Town United e.V. Darts: Spiele, Statistiken, Turniere und Live-Kamera-Scoring." />
-    <meta name="author" content="H-Town United e.V." />
-    <link rel="icon" type="image/jpeg" href="/htu-logo.jpg" />
+    <!-- title/description/author/OG/favicon below are placeholders, overwritten at build time by
+         the html-identity Vite plugin (see vite.config.ts) from the same club-identity.ts
+         CLUB_IDENTITY object the PWA manifest and native app already use as their single source
+         of truth for this shared, multi-club deployment's own neutral platform identity -- see
+         that file's own doc comment. Round 4 Rang 3: previously hardcoded to one specific club's
+         real name/logo ("H-Town United e.V."), which is what any visitor saw before React
+         hydrates ClubBrandingContext's per-user dynamic title/favicon (crawlers, link-preview
+         bots, and the very first paint), regardless of which club they actually belonged to. -->
+    <title>DartSpot</title>
+    <meta name="description" content="DartSpot" />
+    <meta name="author" content="DartSpot" />
+    <link rel="icon" type="image/png" href="/pwa-192.png" />
     <link rel="apple-touch-icon" href="/pwa-192.png" />
     <meta name="theme-color" content="#0b0f17" />
 
-    <meta property="og:title" content="H-Town United e.V. · Darts Club" />
-    <meta property="og:description" content="Vereinsapp der H-Town United e.V. Darts mit Live-Kamera-Scoring." />
+    <meta property="og:title" content="DartSpot" />
+    <meta property="og:description" content="DartSpot" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/htu-logo.jpg" />
+    <meta property="og:image" content="/pwa-512.png" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="/htu-logo.jpg" />
+    <meta name="twitter:image" content="/pwa-512.png" />
   </head>
 
   <body>

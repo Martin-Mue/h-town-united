@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import ClubCrest from "@/components/ClubCrest";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Send, TriangleAlert } from "lucide-react";
 import htuLogoFallback from "@/assets/htu-logo.jpg";
@@ -23,6 +25,7 @@ const JoinClubPage = () => {
   const { clubId } = useParams<{ clubId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { user, loading: authLoading } = useAuth();
   const [club, setClub] = useState<ClubPreview | null | "not_found">(null);
   const [loading, setLoading] = useState(true);
@@ -45,8 +48,8 @@ const JoinClubPage = () => {
       if (error) throw error;
       setRequested(true);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Anfrage konnte nicht gesendet werden.";
-      toast({ title: "Fehler", description: msg, variant: "destructive" });
+      const msg = err instanceof Error ? err.message : t("joinClub.requestFailedGeneric");
+      toast({ title: t("common.error"), description: msg, variant: "destructive" });
     } finally {
       setRequesting(false);
     }
@@ -64,15 +67,15 @@ const JoinClubPage = () => {
         ) : club === "not_found" ? (
           <div className="bg-card border border-border rounded-2xl p-6">
             <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
-            <h1 className="text-lg font-display uppercase mb-1">Verein nicht gefunden</h1>
-            <p className="text-sm text-muted-foreground">Dieser Link ist ungültig.</p>
+            <h1 className="text-lg font-display uppercase mb-1">{t("joinClub.notFoundTitle")}</h1>
+            <p className="text-sm text-muted-foreground">{t("common.invalidLinkGeneric")}</p>
           </div>
         ) : club ? (
           <>
             <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden">
               <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
               <div className="relative">
-                <img src={logoUrl} alt={club.name} className="w-16 h-16 rounded-xl object-cover border border-primary/30 mx-auto mb-4 glow-cyan" />
+                <ClubCrest logoUrl={logoUrl} alt={club.name} initial={club.name.charAt(0).toUpperCase()} />
                 <h1 className="text-2xl font-display uppercase">{club.name}</h1>
                 {club.tagline && <p className="text-sm text-muted-foreground mt-1">{club.tagline}</p>}
               </div>
@@ -80,22 +83,22 @@ const JoinClubPage = () => {
             <div className="bg-card border border-border rounded-2xl p-6">
               {requested ? (
                 <p className="text-sm">
-                  Deine Anfrage wurde gesendet. Ein Admin des Vereins muss sie noch bestätigen — das kann etwas dauern.
+                  {t("joinClub.requestSentMsg")}
                 </p>
               ) : (
                 <>
-                  <p className="text-sm mb-4">Beantrage hier die Mitgliedschaft in diesem Verein.</p>
+                  <p className="text-sm mb-4">{t("joinClub.prompt")}</p>
                   {user ? (
                     <Button className="w-full gap-2" onClick={handleRequest} disabled={requesting}>
                       {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                      Beitritt beantragen
+                      {t("joinClub.requestBtn")}
                     </Button>
                   ) : (
                     <div className="space-y-2">
                       <Button className="w-full" onClick={() => navigate("/auth", { state: { from: `/join/${clubId}` } })}>
-                        Anmelden
+                        {t("auth.loginTitle")}
                       </Button>
-                      <p className="text-xs text-muted-foreground">Noch kein Konto? Auf der Anmeldeseite registrieren.</p>
+                      <p className="text-xs text-muted-foreground">{t("common.noAccountRegisterHint")}</p>
                     </div>
                   )}
                 </>

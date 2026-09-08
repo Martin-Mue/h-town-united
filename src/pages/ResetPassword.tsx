@@ -5,12 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import ClubCrest from "@/components/ClubCrest";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const ResetPassword = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { club, name: clubName, tagline, logoUrl } = useClubBranding();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -51,24 +54,24 @@ const ResetPassword = () => {
     e.preventDefault();
     setError(null);
     if (password.length < 6) {
-      setError("Passwort muss mindestens 6 Zeichen haben.");
+      setError(t("common.passwordMinLength"));
       return;
     }
     if (password !== confirm) {
-      setError("Passwörter stimmen nicht überein.");
+      setError(t("common.passwordsDontMatch"));
       return;
     }
     setLoading(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      toast({ title: "Passwort aktualisiert", description: "Du kannst dich jetzt einloggen." });
+      toast({ title: t("resetPassword.updatedTitle"), description: t("resetPassword.updatedDesc") });
       await supabase.auth.signOut();
       navigate("/auth", { replace: true });
     } catch (err: unknown) {
       toast({
-        title: "Fehler",
-        description: err instanceof Error ? err.message : "Passwort konnte nicht zurückgesetzt werden.",
+        title: t("common.error"),
+        description: err instanceof Error ? err.message : t("resetPassword.updateFailedGeneric"),
         variant: "destructive",
       });
     } finally {
@@ -82,17 +85,11 @@ const ResetPassword = () => {
         <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
           <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
           <div className="relative">
-            {club?.logo_path ? (
-              <img
-                src={logoUrl}
-                alt={clubName}
-                className="w-16 h-16 rounded-xl object-cover border border-primary/30 mx-auto mb-4 glow-cyan"
-              />
-            ) : (
-              <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
-                <span className="font-display text-primary font-bold text-3xl">{clubName.charAt(0).toUpperCase()}</span>
-              </div>
-            )}
+            <ClubCrest
+              logoUrl={club?.logo_path ? logoUrl : null}
+              alt={clubName}
+              initial={clubName.charAt(0).toUpperCase()}
+            />
             <h1 className="text-3xl font-display uppercase">{clubName}</h1>
             {tagline && (
               <p className="font-graffiti text-lg mt-1 -rotate-1 select-none text-primary drop-shadow-[0_0_10px_hsl(var(--primary)/0.4)]">
@@ -102,22 +99,22 @@ const ResetPassword = () => {
           </div>
         </div>
         <div className="bg-card border border-border rounded-2xl p-6">
-          <h2 className="font-display uppercase text-lg mb-4">Neues Passwort</h2>
+          <h2 className="font-display uppercase text-lg mb-4">{t("resetPassword.title")}</h2>
           {!ready ? (
-            <div role="status" aria-label="Lädt …" className="flex items-center justify-center py-8">
+            <div role="status" aria-label={t("common.loading")} className="flex items-center justify-center py-8">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : linkExpired ? (
             <div className="space-y-4 text-center">
               <p className="text-sm text-muted-foreground">
-                Dieser Link ist abgelaufen oder wurde bereits verwendet. Fordere über "Passwort vergessen" auf der Login-Seite einen neuen Link an.
+                {t("resetPassword.linkExpiredMsg")}
               </p>
-              <Button className="w-full" onClick={() => navigate("/auth")}>Zur Anmeldung</Button>
+              <Button className="w-full" onClick={() => navigate("/auth")}>{t("common.goToLoginBtn")}</Button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label>Neues Passwort</Label>
+                <Label>{t("resetPassword.title")}</Label>
                 <div className="relative">
                   <Input
                     type={show ? "text" : "password"}
@@ -134,14 +131,14 @@ const ResetPassword = () => {
                     onClick={() => setShow((s) => !s)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
                     tabIndex={-1}
-                    aria-label={show ? "Passwort verbergen" : "Passwort anzeigen"}
+                    aria-label={show ? t("auth.hidePassword") : t("auth.showPassword")}
                   >
                     {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
               <div>
-                <Label>Passwort wiederholen</Label>
+                <Label>{t("resetPassword.repeatPasswordLabel")}</Label>
                 <Input
                   type={show ? "text" : "password"}
                   value={confirm}
@@ -156,14 +153,14 @@ const ResetPassword = () => {
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Passwort speichern
+                {t("resetPassword.saveBtn")}
               </Button>
               <button
                 type="button"
                 onClick={() => navigate("/auth")}
                 className="w-full text-sm text-muted-foreground hover:text-foreground"
               >
-                Abbrechen
+                {t("common.cancel")}
               </button>
             </form>
           )}

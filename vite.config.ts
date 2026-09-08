@@ -76,6 +76,35 @@ function i18nGeneratedLocales() {
   };
 }
 
+// Round 4 Rang 3: index.html's <title>/description/author/OG/favicon were hardcoded to one
+// specific club's real name and logo ("H-Town United e.V.") even though this is a shared,
+// multi-club deployment -- see ClubBrandingContext.tsx's own doc comment, which already made
+// document.title/favicon dynamic per logged-in user's club at runtime but explicitly flagged
+// "the harder PWA-manifest problem (vite.config.ts, index.html meta/OG tags)... stays out of
+// scope". This closes that gap the same way CLUB_IDENTITY already closes it for the PWA manifest
+// below and for capacitor.config.ts: one neutral, build-time identity, so anyone who hits the app
+// before React hydrates (crawlers, link-preview bots, the very first paint) sees the platform's
+// own generic branding rather than one specific club's. index.html carries literal "DartSpot"
+// placeholders (see its own comment) purely so it stays valid, readable HTML on its own --
+// this plugin is what actually makes CLUB_IDENTITY the one place a rebrand needs to touch.
+function htmlIdentityPlugin() {
+  const title = CLUB_IDENTITY.appName;
+  return {
+    name: "html-identity",
+    transformIndexHtml(html: string) {
+      return html
+        .replace(/<title>.*?<\/title>/, `<title>${title}</title>`)
+        .replace(/<meta name="description" content=".*?" \/>/, `<meta name="description" content="${CLUB_IDENTITY.description}" />`)
+        .replace(/<meta name="author" content=".*?" \/>/, `<meta name="author" content="${CLUB_IDENTITY.appName}" />`)
+        .replace(/<link rel="icon"[^>]*\/>/, `<link rel="icon" type="image/png" href="${CLUB_IDENTITY.icon192}" />`)
+        .replace(/<meta property="og:title" content=".*?" \/>/, `<meta property="og:title" content="${title}" />`)
+        .replace(/<meta property="og:description" content=".*?" \/>/, `<meta property="og:description" content="${CLUB_IDENTITY.description}" />`)
+        .replace(/<meta property="og:image" content=".*?" \/>/, `<meta property="og:image" content="${CLUB_IDENTITY.icon512}" />`)
+        .replace(/<meta name="twitter:image" content=".*?" \/>/, `<meta name="twitter:image" content="${CLUB_IDENTITY.icon512}" />`);
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -97,6 +126,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     i18nGeneratedLocales(),
+    htmlIdentityPlugin(),
     react(),
     mode === "development" && componentTagger(),
     VitePWA({

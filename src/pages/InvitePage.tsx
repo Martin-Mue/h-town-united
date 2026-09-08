@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import ClubCrest from "@/components/ClubCrest";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, PartyPopper, TriangleAlert } from "lucide-react";
 import htuLogoFallback from "@/assets/htu-logo.jpg";
@@ -25,6 +26,7 @@ const InvitePage = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { user, loading: authLoading } = useAuth();
   const [preview, setPreview] = useState<InvitePreview | null | "not_found">(null);
   const [loading, setLoading] = useState(true);
@@ -48,11 +50,11 @@ const InvitePage = () => {
     try {
       const { error } = await supabase.rpc("accept_club_invite", { _token: token });
       if (error) throw error;
-      toast({ title: "Willkommen im Verein! 🎯", description: "Lege jetzt dein Spielerprofil an." });
+      toast({ title: t("common.welcomeToClubTitle"), description: t("common.createProfileNowDesc") });
       navigate("/players?createProfile=1", { replace: true });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Einladung konnte nicht angenommen werden.";
-      toast({ title: "Fehler", description: msg, variant: "destructive" });
+      const msg = err instanceof Error ? err.message : t("invite.acceptFailedGeneric");
+      toast({ title: t("common.error"), description: msg, variant: "destructive" });
     } finally {
       setAccepting(false);
     }
@@ -70,23 +72,23 @@ const InvitePage = () => {
         ) : preview === "not_found" ? (
           <div className="bg-card border border-border rounded-2xl p-6">
             <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
-            <h1 className="text-lg font-display uppercase mb-1">Einladung nicht gefunden</h1>
-            <p className="text-sm text-muted-foreground">Dieser Link ist ungültig.</p>
+            <h1 className="text-lg font-display uppercase mb-1">{t("invite.notFoundTitle")}</h1>
+            <p className="text-sm text-muted-foreground">{t("common.invalidLinkGeneric")}</p>
           </div>
         ) : preview?.expired ? (
           <div className="bg-card border border-border rounded-2xl p-6">
             <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
-            <h1 className="text-lg font-display uppercase mb-1">Einladung abgelaufen</h1>
-            <p className="text-sm text-muted-foreground">Bitte frag den Verein nach einem neuen Link.</p>
+            <h1 className="text-lg font-display uppercase mb-1">{t("invite.expiredTitle")}</h1>
+            <p className="text-sm text-muted-foreground">{t("invite.expiredDesc")}</p>
           </div>
         ) : preview?.already_accepted ? (
           <div className="bg-card border border-border rounded-2xl p-6">
             <PartyPopper className="w-8 h-8 text-accent mx-auto mb-3" />
-            <h1 className="text-lg font-display uppercase mb-1">Einladung bereits verwendet</h1>
+            <h1 className="text-lg font-display uppercase mb-1">{t("invite.alreadyAcceptedTitle")}</h1>
             <p className="text-sm text-muted-foreground mb-4">
-              Diese Einladung wurde schon angenommen. Falls das nicht du warst, melde dich einfach an.
+              {t("invite.alreadyAcceptedDesc")}
             </p>
-            <Button onClick={() => navigate("/auth")}>Zur Anmeldung</Button>
+            <Button onClick={() => navigate("/auth")}>{t("common.goToLoginBtn")}</Button>
           </div>
         ) : preview ? (
           <>
@@ -99,18 +101,18 @@ const InvitePage = () => {
               </div>
             </div>
             <div className="bg-card border border-border rounded-2xl p-6">
-              <p className="text-sm mb-4">Du wurdest eingeladen, diesem Verein beizutreten.</p>
+              <p className="text-sm mb-4">{t("invite.prompt")}</p>
               {user ? (
                 <Button className="w-full" onClick={handleAccept} disabled={accepting}>
                   {accepting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Einladung annehmen
+                  {t("invite.acceptBtn")}
                 </Button>
               ) : (
                 <div className="space-y-2">
                   <Button className="w-full" onClick={() => navigate("/auth", { state: { from: `/invite/${token}` } })}>
-                    Anmelden
+                    {t("auth.loginTitle")}
                   </Button>
-                  <p className="text-xs text-muted-foreground">Noch kein Konto? Auf der Anmeldeseite registrieren.</p>
+                  <p className="text-xs text-muted-foreground">{t("common.noAccountRegisterHint")}</p>
                 </div>
               )}
             </div>

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import ClubCrest from "@/components/ClubCrest";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -13,6 +14,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 const AuthPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   // Set by ProtectedRoute when it redirected here — e.g. a "Spiel starten" QR link scanned while
   // logged out. Falls back to the homepage for a direct/bookmarked visit to /auth.
   const from = (location.state as { from?: string } | null)?.from;
@@ -40,14 +42,14 @@ const AuthPage = () => {
         options: { emailRedirectTo: `${window.location.origin}${from || ""}` },
       });
       if (error) throw error;
-      toast({ title: "E-Mail erneut versendet", description: `Wir haben den Bestätigungslink noch einmal an ${pendingConfirm} geschickt.` });
+      toast({ title: t("auth.resendSuccessTitle"), description: `${t("auth.resendSuccessDescPrefix")} ${pendingConfirm} ${t("auth.resendSuccessDescSuffix")}` });
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : "";
       toast({
-        title: "Fehler",
+        title: t("common.error"),
         description: /rate limit|too many|seconds/i.test(raw)
-          ? "Bitte kurz warten, bevor du eine neue Mail anforderst."
-          : raw || "E-Mail konnte nicht erneut versendet werden.",
+          ? t("auth.rateLimitResend")
+          : raw || t("auth.resendFailedGeneric"),
         variant: "destructive",
       });
     } finally {
@@ -65,7 +67,7 @@ const AuthPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === "signup" && password !== confirmPassword) {
-      toast({ title: "Fehler", description: "Die Passwörter stimmen nicht überein.", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("common.passwordsDontMatch"), variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -97,8 +99,8 @@ const AuthPage = () => {
         if (!data.session) {
           setPendingConfirm(normalizedEmail);
           toast({
-            title: "Fast geschafft!",
-            description: `Wir haben einen Bestätigungslink an ${normalizedEmail} geschickt. Bitte bestätige deine E-Mail-Adresse, danach kannst du dich einloggen.`,
+            title: t("auth.almostDoneTitle"),
+            description: `${t("auth.almostDoneDescPrefix")} ${normalizedEmail} ${t("auth.almostDoneDescSuffix")}`,
           });
           setMode("login");
           setPassword("");
@@ -107,8 +109,8 @@ const AuthPage = () => {
         }
 
         toast({
-          title: "Willkommen im Verein! 🎯",
-          description: "Lege jetzt dein Spielerprofil an.",
+          title: t("common.welcomeToClubTitle"),
+          description: t("common.createProfileNowDesc"),
         });
         navigate(from || "/players?createProfile=1", { replace: true });
         return;
@@ -118,8 +120,8 @@ const AuthPage = () => {
         });
         if (error) throw error;
         toast({
-          title: "E-Mail versendet",
-          description: "Prüfe dein Postfach für den Reset-Link.",
+          title: t("auth.resetEmailSentTitle"),
+          description: t("auth.resetEmailSentDesc"),
         });
         setMode("login");
         return;
@@ -127,18 +129,18 @@ const AuthPage = () => {
     } catch (err: unknown) {
       const raw: string = err instanceof Error ? err.message : "";
       const msg = /email not confirmed|not confirmed/i.test(raw)
-        ? "Deine E-Mail-Adresse ist noch nicht bestätigt. Prüfe dein Postfach (auch den Spam-Ordner)."
+        ? t("auth.errNotConfirmed")
         : raw.includes("Invalid login credentials")
-        ? "E-Mail oder Passwort falsch. Tipp: Passwort mit dem Auge prüfen."
+        ? t("auth.errInvalidCredentials")
         : raw.includes("User already registered")
-        ? "Für diese E-Mail existiert bereits ein Konto. Einfach einloggen."
+        ? t("auth.errAlreadyRegistered")
         : raw.includes("Password should be at least")
-        ? "Das Passwort muss mindestens 6 Zeichen lang sein."
+        ? t("common.passwordMinLength")
         : /rate limit|too many/i.test(raw)
-        ? "Zu viele Versuche. Bitte kurz warten und erneut probieren."
-        : raw || "Authentifizierung fehlgeschlagen.";
+        ? t("auth.errRateLimit")
+        : raw || t("auth.errGeneric");
       toast({
-        title: "Fehler",
+        title: t("common.error"),
         description: msg,
         variant: "destructive",
       });
@@ -169,11 +171,11 @@ const AuthPage = () => {
 
         <div className="bg-card border border-border rounded-2xl p-6">
           <h2 className="font-display uppercase text-lg mb-4">
-            {mode === "login" ? "Anmelden" : mode === "signup" ? "Registrieren" : "Passwort zurücksetzen"}
+            {mode === "login" ? t("auth.loginTitle") : mode === "signup" ? t("auth.signupTitle") : t("auth.resetTitle")}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label>E-Mail</Label>
+              <Label>{t("auth.emailLabel")}</Label>
               <Input
                 type="email"
                 value={email}
@@ -186,7 +188,7 @@ const AuthPage = () => {
             </div>
             {mode !== "reset" && (
               <div>
-                <Label>Passwort</Label>
+                <Label>{t("auth.passwordLabel")}</Label>
                 <div className="relative">
                   <Input
                     type={showPassword ? "text" : "password"}
@@ -203,19 +205,19 @@ const AuthPage = () => {
                     onClick={() => setShowPassword((s) => !s)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
                     tabIndex={-1}
-                    aria-label={showPassword ? "Passwort verbergen" : "Passwort anzeigen"}
+                    aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 {mode === "signup" && (
-                  <p className="text-xs text-muted-foreground mt-1">Mindestens 6 Zeichen.</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("auth.minLengthHint")}</p>
                 )}
               </div>
             )}
             {mode === "signup" && (
               <div>
-                <Label>Passwort bestätigen</Label>
+                <Label>{t("auth.confirmPasswordLabel")}</Label>
                 <Input
                   type={showPassword ? "text" : "password"}
                   value={confirmPassword}
@@ -227,20 +229,19 @@ const AuthPage = () => {
                   minLength={6}
                 />
                 {confirmPassword.length > 0 && confirmPassword !== password && (
-                  <p className="text-xs text-destructive mt-1">Stimmt noch nicht mit dem Passwort überein.</p>
+                  <p className="text-xs text-destructive mt-1">{t("auth.confirmMismatch")}</p>
                 )}
               </div>
             )}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {mode === "login" ? "Einloggen" : mode === "signup" ? "Registrieren" : "Reset-Link senden"}
+              {mode === "login" ? t("auth.loginBtn") : mode === "signup" ? t("auth.signupTitle") : t("auth.resetLinkBtn")}
             </Button>
           </form>
           {pendingConfirm && mode !== "reset" && (
             <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
               <p className="text-muted-foreground">
-                Bestätigungslink an <span className="text-foreground">{pendingConfirm}</span> gesendet. Nicht angekommen?
-                Schau auch im Spam-Ordner nach.
+                {t("auth.confirmSentPrefix")} <span className="text-foreground">{pendingConfirm}</span> {t("auth.confirmSentSuffix")}
               </p>
               <Button
                 type="button"
@@ -251,7 +252,7 @@ const AuthPage = () => {
                 disabled={resending}
               >
                 {resending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                E-Mail erneut senden
+                {t("auth.resendBtn")}
               </Button>
             </div>
           )}
@@ -259,30 +260,30 @@ const AuthPage = () => {
             {mode === "login" && (
               <>
                 <p>
-                  Noch kein Konto?{" "}
+                  {t("auth.noAccountYet")}{" "}
                   <button onClick={() => setMode("signup")} className="text-primary hover:underline">
-                    Registrieren
+                    {t("auth.signupTitle")}
                   </button>
                 </p>
                 <p>
                   <button onClick={() => setMode("reset")} className="text-primary hover:underline">
-                    Passwort vergessen?
+                    {t("auth.forgotPassword")}
                   </button>
                 </p>
               </>
             )}
             {mode === "signup" && (
               <p>
-                Bereits registriert?{" "}
+                {t("auth.alreadyRegistered")}{" "}
                 <button onClick={() => setMode("login")} className="text-primary hover:underline">
-                  Anmelden
+                  {t("auth.loginTitle")}
                 </button>
               </p>
             )}
             {mode === "reset" && (
               <p>
                 <button onClick={() => setMode("login")} className="text-primary hover:underline">
-                  Zurück zur Anmeldung
+                  {t("auth.backToLogin")}
                 </button>
               </p>
             )}

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Loader2, Trophy } from "lucide-react";
 
 /** Reached by any authenticated account with no club membership yet -- see RequireClub in
@@ -16,6 +17,7 @@ import { Loader2, Trophy } from "lucide-react";
 const CreateClub = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { signOut } = useAuth();
   const { club, refetch } = useClubBranding();
   const [name, setName] = useState("");
@@ -41,11 +43,11 @@ const CreateClub = () => {
       });
       if (error) throw error;
       await refetch();
-      toast({ title: "Verein angelegt! 🎯", description: "Lege jetzt dein Spielerprofil an." });
+      toast({ title: t("createClub.createdTitle"), description: t("common.createProfileNowDesc") });
       navigate("/players?createProfile=1", { replace: true });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Verein konnte nicht angelegt werden.";
-      toast({ title: "Fehler", description: msg, variant: "destructive" });
+      const msg = err instanceof Error ? err.message : t("createClub.createFailedGeneric");
+      toast({ title: t("common.error"), description: msg, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -60,10 +62,9 @@ const CreateClub = () => {
             <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
               <Trophy className="w-8 h-8 text-primary" />
             </div>
-            <h1 className="text-2xl font-display uppercase">Verein anlegen</h1>
+            <h1 className="text-2xl font-display uppercase">{t("createClub.title")}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Dieser Account gehört noch zu keinem Verein. Lege jetzt deinen eigenen an, oder nutze
-              einen Einladungslink von einem bestehenden Verein.
+              {t("createClub.description")}
             </p>
           </div>
         </div>
@@ -71,32 +72,32 @@ const CreateClub = () => {
         <div className="bg-card border border-border rounded-2xl p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label>Vereinsname</Label>
+              <Label>{t("createClub.nameLabel")}</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="z. B. Dartfreunde Musterstadt e.V."
+                placeholder={t("createClub.namePlaceholder")}
                 className="bg-muted border-border"
                 required
               />
             </div>
             <div>
-              <Label>Leitspruch (optional)</Label>
+              <Label>{t("createClub.taglineLabel")}</Label>
               <Input
                 value={tagline}
                 onChange={(e) => setTagline(e.target.value)}
-                placeholder="Ein kurzer Slogan für euren Verein"
+                placeholder={t("createClub.taglinePlaceholder")}
                 className="bg-muted border-border"
               />
             </div>
             <Button type="submit" className="w-full" disabled={saving || !name.trim()}>
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Verein anlegen
+              {t("createClub.title")}
             </Button>
           </form>
           <div className="mt-4 text-center">
             <button onClick={() => signOut()} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-              Abmelden
+              {t("header.signOut")}
             </button>
           </div>
         </div>

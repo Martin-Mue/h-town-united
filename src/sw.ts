@@ -3,6 +3,10 @@ import { precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { NetworkFirst, NetworkOnly } from "workbox-strategies";
 import { clientsClaim } from "workbox-core";
+// Relative import, not the "@/" alias -- vite-plugin-pwa's injectManifest strategy bundles this
+// file through its own separate Rollup step, which isn't guaranteed to carry vite.config.ts's
+// resolve.alias into that context.
+import { CLUB_IDENTITY } from "../club-identity";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
@@ -40,7 +44,11 @@ self.addEventListener("push", (event) => {
   } catch {
     payload = { body: event.data?.text() };
   }
-  const title = payload.title ?? "H-Town United Darts";
+  // Round 4 Rang 3: in practice the send-push edge function always requires a title (rejects a
+  // request without one with a 400), so this only ever fires if the push payload itself failed
+  // to parse as JSON at all -- rare, but still worth a neutral, deployment-wide fallback instead
+  // of one specific club's real name, same reasoning as index.html's title/OG tags above.
+  const title = payload.title ?? `${CLUB_IDENTITY.appName} Darts`;
   event.waitUntil(
     self.registration.showNotification(title, {
       body: payload.body,
