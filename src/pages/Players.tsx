@@ -807,6 +807,27 @@ const PlayersPage = () => {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1" onClick={openCreateProfile}><Plus className="w-4 h-4" /> {t("players.memberButton")}</Button>
           </DialogTrigger>
+
+          {/* "Daumenzone" — one of Round 3's three unscheduled design directions. The header
+              button above is the only way to add a member, but it sits at the very top of the
+              screen — outside a thumb's natural reach on a one-handed phone grip, on what is
+              otherwise a long, frequently-scrolled list page. This duplicates the SAME trigger
+              (same openCreateProfile handler, same shared `dialogOpen` Dialog above — no second
+              dialog instance, no new state) as a fixed, always-reachable bottom-right FAB, mobile
+              only (the desktop header button is already a short, precise mouse click away).
+              Positioned above Layout.tsx's bottom nav (fixed, h~64px, z-50) with clearance to
+              spare, at a lower z-index so it never competes with the nav for taps. Deliberately a
+              single new, self-contained element — NOT a restructure of this page's scroll/layout
+              containers, per the lesson documented in Game.tsx's reverted full-pinning attempt. */}
+          <Button
+            size="icon"
+            onClick={openCreateProfile}
+            aria-label={t("players.addMemberFab")}
+            title={t("players.addMemberFab")}
+            className="md:hidden fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full shadow-lg glow-cyan"
+          >
+            <Plus className="w-6 h-6" />
+          </Button>
           <DialogContent className="bg-card border-border max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-display uppercase">{isEditMode ? t("players.editPlayerProfileTitle") : t("players.newMemberTitle")}</DialogTitle>

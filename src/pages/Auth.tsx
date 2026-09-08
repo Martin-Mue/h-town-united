@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import ClubCrest from "@/components/ClubCrest";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -152,17 +153,11 @@ const AuthPage = () => {
         <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
           <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
           <div className="relative">
-            {club?.logo_path ? (
-              <img
-                src={logoUrl}
-                alt={clubName}
-                className="w-16 h-16 rounded-xl object-cover border border-primary/30 mx-auto mb-4 glow-cyan"
-              />
-            ) : (
-              <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
-                <span className="font-display text-primary font-bold text-3xl">{clubName.charAt(0).toUpperCase()}</span>
-              </div>
-            )}
+            <ClubCrest
+              logoUrl={club?.logo_path ? logoUrl : null}
+              alt={clubName}
+              initial={clubName.charAt(0).toUpperCase()}
+            />
             <h1 className="text-3xl font-display uppercase">{clubName}</h1>
             {tagline && (
               <p className="font-graffiti text-lg mt-1 -rotate-1 select-none text-primary drop-shadow-[0_0_10px_hsl(var(--primary)/0.4)]">

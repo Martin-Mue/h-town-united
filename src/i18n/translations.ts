@@ -624,6 +624,8 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.gameHistory": { de: "Spielverlauf", en: "Game history", fr: "Historique des parties", pl: "Historia gier", nl: "Potjesgeschiedenis", tr: "Oyun geçmişi" },
   "stats.matchTotal": { de: "Gesamt", en: "Match total", fr: "Total du match", pl: "Suma meczu", nl: "Wedstrijdtotaal", tr: "Maç toplamı" },
   "stats.legByLeg": { de: "Leg für Leg", en: "Leg by leg", fr: "Leg par leg", pl: "Leg po legu", nl: "Leg voor leg", tr: "Leg leg" },
+  // Round 3, unscheduled design idea "Match Data Terminal" — MatchDetailDialog.tsx's toggle button.
+  "stats.terminalViewToggle": { de: "Terminal-Ansicht", en: "Terminal view", fr: "Vue terminal", pl: "Widok terminala", nl: "Terminalweergave", tr: "Terminal görünümü" },
   "stats.noLegDetailsAvailable": { de: "Keine Leg-Details verfügbar — dieses Spiel wurde vor der Detail-Aufzeichnung gespielt.", en: "No leg details available — this game was played before detailed recording started.", fr: "Aucun détail de leg disponible — cette partie a été jouée avant l'enregistrement détaillé.", pl: "Brak szczegółów legów — ta gra została rozegrana przed wprowadzeniem szczegółowego zapisu.", nl: "Geen leg-details beschikbaar — dit potje is gespeeld vóór de gedetailleerde registratie.", tr: "Leg detayları mevcut değil — bu oyun detaylı kayıt başlamadan önce oynandı." },
   "stats.highlightClips": { de: "Highlight-Clips", en: "Highlight clips", fr: "Clips highlight", pl: "Klipy z najlepszymi momentami", nl: "Highlightclips", tr: "Öne çıkan klipler" },
   "stats.olderThan30Days": { de: "älter als 30 Tage", en: "older than 30 days", fr: "plus de 30 jours", pl: "starsze niż 30 dni", nl: "ouder dan 30 dagen", tr: "30 günden eski" },
@@ -1135,6 +1137,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "players.later": { de: "Später", en: "Later", fr: "Plus tard", pl: "Później", nl: "Later", tr: "Daha sonra" },
   "players.clubManagement": { de: "Vereinsverwaltung", en: "Club management", fr: "Gestion du club", pl: "Zarządzanie klubem", nl: "Clubbeheer", tr: "Kulüp yönetimi" },
   "players.memberButton": { de: "Mitglied", en: "Member", fr: "Membre", pl: "Członek", nl: "Lid", tr: "Üye" },
+  "players.addMemberFab": { de: "Mitglied hinzufügen", en: "Add member", fr: "Ajouter un membre", pl: "Dodaj członka", nl: "Lid toevoegen", tr: "Üye ekle" },
   "players.fairPairings": { de: "Faire Paarungen", en: "Fair pairings", fr: "Appariements équitables", pl: "Sprawiedliwe pary", nl: "Eerlijke koppels", tr: "Adil eşleşmeler" },
   "players.playOnline": { de: "Online spielen", en: "Play online", fr: "Jouer en ligne", pl: "Graj online", nl: "Online spelen", tr: "Çevrimiçi oyna" },
   "players.chooseOpponent": { de: "Gegner wählen", en: "Choose opponent", fr: "Choisir un adversaire", pl: "Wybierz przeciwnika", nl: "Kies tegenstander", tr: "Rakip seç" },

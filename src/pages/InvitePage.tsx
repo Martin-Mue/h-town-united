@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import ClubCrest from "@/components/ClubCrest";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, PartyPopper, TriangleAlert } from "lucide-react";
@@ -92,7 +93,7 @@ const InvitePage = () => {
             <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden">
               <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
               <div className="relative">
-                <img src={logoUrl} alt={preview.club_name} className="w-16 h-16 rounded-xl object-cover border border-primary/30 mx-auto mb-4 glow-cyan" />
+                <ClubCrest logoUrl={logoUrl} alt={preview.club_name} initial={preview.club_name.charAt(0).toUpperCase()} />
                 <h1 className="text-2xl font-display uppercase">{preview.club_name}</h1>
                 {preview.tagline && <p className="text-sm text-muted-foreground mt-1">{preview.tagline}</p>}
               </div>
