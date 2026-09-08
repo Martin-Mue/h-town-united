@@ -14,11 +14,19 @@ const DrawerPortal = DrawerPrimitive.Portal;
 
 const DrawerClose = DrawerPrimitive.Close;
 
+// Design-Sprint Runde 4 Rang 5: this is the bottom-nav "Mehr" drawer (Layout.tsx) -- one of the
+// most frequently opened surfaces on mobile, yet it had the plain flat overlay/panel every other
+// modal here had before Dialog/AlertDialog's Rang 6 treatment. Same backdrop-blur + elevation +
+// glow-tinted border now, for one consistent "surface arriving" feeling across every overlay.
 const DrawerOverlay = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
 >(({ className, ...props }, ref) => (
-  <DrawerPrimitive.Overlay ref={ref} className={cn("fixed inset-0 z-50 bg-black/80", className)} {...props} />
+  <DrawerPrimitive.Overlay
+    ref={ref}
+    className={cn("fixed inset-0 z-50 bg-black/80 backdrop-blur-sm", className)}
+    {...props}
+  />
 ));
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
 
@@ -31,7 +39,7 @@ const DrawerContent = React.forwardRef<
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
+        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border border-primary/15 bg-background shadow-elevation-lg",
         className,
       )}
       {...props}
