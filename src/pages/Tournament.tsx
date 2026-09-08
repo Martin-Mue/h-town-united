@@ -90,7 +90,9 @@ interface TournamentRecord {
   status: string;
   champion: string | null;
   players: string[];
-  bracket: Match[] | RoundRobinMatch[];
+  // KO and RR brackets share the column (mode-dependent shape); parseBracket validates entries
+  // against BOTH shapes, so the stored value here is the union — callers narrow by mode.
+  bracket: (Match | RoundRobinMatch)[];
   created_at: string;
   game_mode?: string;
   best_of_legs?: number;
