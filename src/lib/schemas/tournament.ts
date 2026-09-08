@@ -148,7 +148,8 @@ export function parseRoundConfigs(raw: unknown, context?: string): RoundConfig[]
     logInvalid(context, "round_configs", result.error.flatten());
     return [];
   }
-  return result.data;
+  // Safe: the schema just enforced mode:string + bestOf:number at runtime (see RoundConfig note).
+  return result.data as RoundConfig[];
 }
 
 /** `tournaments.attendance` — organizer check-in state, keyed by participant name. */
