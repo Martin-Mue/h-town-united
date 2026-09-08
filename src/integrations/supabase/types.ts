@@ -160,7 +160,7 @@ export type Database = {
       }
       game_legs: {
         Row: {
-          club_id: string | null
+          club_id: string
           created_at: string
           game_id: string
           id: string
@@ -174,7 +174,7 @@ export type Database = {
           won: boolean
         }
         Insert: {
-          club_id?: string | null
+          club_id: string
           created_at?: string
           game_id: string
           id?: string
@@ -188,7 +188,7 @@ export type Database = {
           won?: boolean
         }
         Update: {
-          club_id?: string | null
+          club_id?: string
           created_at?: string
           game_id?: string
           id?: string
@@ -235,7 +235,7 @@ export type Database = {
       games: {
         Row: {
           best_of_legs: number
-          club_id: string | null
+          club_id: string
           created_at: string
           detail_stats: Json
           id: string
@@ -266,7 +266,7 @@ export type Database = {
         }
         Insert: {
           best_of_legs?: number
-          club_id?: string | null
+          club_id: string
           created_at?: string
           detail_stats?: Json
           id?: string
@@ -297,7 +297,7 @@ export type Database = {
         }
         Update: {
           best_of_legs?: number
-          club_id?: string | null
+          club_id?: string
           created_at?: string
           detail_stats?: Json
           id?: string
@@ -380,7 +380,7 @@ export type Database = {
       }
       highlight_clips: {
         Row: {
-          club_id: string | null
+          club_id: string
           created_at: string
           darts: Json
           game_id: string | null
@@ -394,7 +394,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          club_id?: string | null
+          club_id: string
           created_at?: string
           darts?: Json
           game_id?: string | null
@@ -408,7 +408,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          club_id?: string | null
+          club_id?: string
           created_at?: string
           darts?: Json
           game_id?: string | null
@@ -516,7 +516,6 @@ export type Database = {
           player2_id: string
           player2_legs_won: number | null
           round_number: number
-          scheduled_date: string | null
           status: string
           winner_id: string | null
         }
@@ -533,7 +532,6 @@ export type Database = {
           player2_id: string
           player2_legs_won?: number | null
           round_number: number
-          scheduled_date?: string | null
           status?: string
           winner_id?: string | null
         }
@@ -550,7 +548,6 @@ export type Database = {
           player2_id?: string
           player2_legs_won?: number | null
           round_number?: number
-          scheduled_date?: string | null
           status?: string
           winner_id?: string | null
         }
@@ -850,7 +847,7 @@ export type Database = {
           average: number
           bio: string | null
           birthday: string | null
-          club_id: string | null
+          club_id: string
           created_at: string
           dart_weight_g: number | null
           double_rate: number
@@ -876,7 +873,7 @@ export type Database = {
           average?: number
           bio?: string | null
           birthday?: string | null
-          club_id?: string | null
+          club_id: string
           created_at?: string
           dart_weight_g?: number | null
           double_rate?: number
@@ -902,7 +899,7 @@ export type Database = {
           average?: number
           bio?: string | null
           birthday?: string | null
-          club_id?: string | null
+          club_id?: string
           created_at?: string
           dart_weight_g?: number | null
           double_rate?: number
@@ -1042,7 +1039,7 @@ export type Database = {
           boards: number
           bracket: Json
           champion: string | null
-          club_id: string | null
+          club_id: string
           created_at: string
           game_mode: string
           id: string
@@ -1067,7 +1064,7 @@ export type Database = {
           boards?: number
           bracket?: Json
           champion?: string | null
-          club_id?: string | null
+          club_id: string
           created_at?: string
           game_mode?: string
           id?: string
@@ -1092,7 +1089,7 @@ export type Database = {
           boards?: number
           bracket?: Json
           champion?: string | null
-          club_id?: string | null
+          club_id?: string
           created_at?: string
           game_mode?: string
           id?: string
@@ -1312,7 +1309,7 @@ export type Database = {
           boards: number
           bracket: Json
           champion: string | null
-          club_id: string | null
+          club_id: string
           created_at: string
           game_mode: string
           id: string
