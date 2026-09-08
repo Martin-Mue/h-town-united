@@ -104,7 +104,7 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
           {statCards.map((s, i) => (
             <div
               key={s.label}
-              className="bg-card border border-border rounded-xl p-4 text-center animate-scale-in"
+              className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 text-center animate-scale-in"
               style={{ animationDelay: `${i * 60}ms`, animationFillMode: "backwards" }}
             >
               <s.icon className={`w-5 h-5 mx-auto mb-2 ${s.color}`} />
@@ -120,7 +120,7 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
             <h3 className="font-display text-sm uppercase text-muted-foreground mb-2 mt-6">{t("recap.yourHighlights")}</h3>
             <div className="space-y-3">
               {recap.clips.map((clip, i) => (
-                <div key={clip.id} className="bg-card border border-border rounded-xl overflow-hidden animate-scale-in" style={{ animationDelay: `${(statCards.length + i) * 60}ms`, animationFillMode: "backwards" }}>
+                <div key={clip.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl overflow-hidden animate-scale-in" style={{ animationDelay: `${(statCards.length + i) * 60}ms`, animationFillMode: "backwards" }}>
                   {clipUrls[clip.storage_path] ? (
                     <video src={clipUrls[clip.storage_path]} controls playsInline className="w-full aspect-video bg-black" preload="metadata" />
                   ) : (

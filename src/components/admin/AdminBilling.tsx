@@ -84,7 +84,7 @@ const AdminBilling = () => {
 
   if (club.plan_tier === "free_locked") {
     return (
-      <div className="bg-card border border-border rounded-xl p-6 flex items-center gap-3">
+      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-6 flex items-center gap-3">
         <CheckCircle2 className="w-6 h-6 text-secondary shrink-0" />
         <div>
           <p className="font-semibold text-sm">Kostenlos &amp; uneingeschränkt</p>
@@ -97,7 +97,7 @@ const AdminBilling = () => {
   if (club.plan_tier === "paid") {
     const pastDue = club.plan_status === "past_due";
     return (
-      <div className="bg-card border border-border rounded-xl p-6 flex items-center gap-3">
+      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-6 flex items-center gap-3">
         {pastDue ? <AlertTriangle className="w-6 h-6 text-accent shrink-0" /> : <CheckCircle2 className="w-6 h-6 text-secondary shrink-0" />}
         <div>
           <p className="font-semibold text-sm">{pastDue ? "Zahlung ausstehend" : "Paid-Plan aktiv"}</p>
@@ -112,7 +112,7 @@ const AdminBilling = () => {
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl p-6">
+    <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-6">
       <div className="flex items-center gap-2 mb-3">
         <CreditCard className="w-5 h-5 text-primary" />
         <p className="font-semibold text-sm">Trial-Plan</p>

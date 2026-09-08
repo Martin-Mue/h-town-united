@@ -84,7 +84,7 @@ const AdminStats = () => {
 
   return (
     <div className="space-y-4">
-      <div className="bg-card border border-border rounded-xl p-4">
+      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3 flex items-center gap-2">
           <ImageIcon className="w-4 h-4" /> Trainingsdaten
         </h3>
@@ -120,7 +120,7 @@ const AdminStats = () => {
         )}
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-4">
+      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3 flex items-center gap-2">
           <Gamepad2 className="w-4 h-4" /> Spiele
         </h3>
@@ -138,7 +138,7 @@ const AdminStats = () => {
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl overflow-hidden">
         <h3 className="font-display text-sm uppercase text-muted-foreground p-4 pb-0 flex items-center gap-2">
           <Users className="w-4 h-4" /> Mitglieder-Aktivität
         </h3>

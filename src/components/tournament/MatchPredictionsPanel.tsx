@@ -32,7 +32,7 @@ const MatchPredictionsPanel = ({ matches, tallies, myVotes, onVote }: MatchPredi
   };
 
   return (
-    <div className="bg-card border border-border rounded-xl p-4 mb-4">
+    <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 mb-4">
       <h3 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("pt.predictionsHeading")}</h3>
       <div className="space-y-3">
         {open.map((m) => {

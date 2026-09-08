@@ -663,7 +663,7 @@ const PlayersPage = () => {
 
         {/* Bio */}
         {selectedPlayer.bio && (
-          <div className="bg-card border border-border rounded-xl p-4 mb-4">
+          <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 mb-4">
             <p className="text-xs uppercase text-muted-foreground font-display mb-2">{t("players.bioHeading")}</p>
             <p className="text-sm whitespace-pre-line text-foreground/90">{selectedPlayer.bio}</p>
           </div>

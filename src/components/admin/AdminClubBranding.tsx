@@ -102,7 +102,7 @@ const AdminClubBranding = () => {
   };
 
   return (
-    <div className="bg-card border border-border rounded-xl p-4">
+    <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
           <Palette className="w-4 h-4" /> Vereinsdesign

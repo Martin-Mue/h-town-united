@@ -238,7 +238,12 @@ const DashboardPage = () => {
       <div className="grid grid-cols-2 gap-3 mb-6">
         {QUICK_ACTIONS.map((action) => (
           <Link key={action.to} to={action.to}
-            className="bg-card border border-border rounded-xl p-4 hover:border-primary/40 hover:shadow-elevation-sm active:scale-95 active:border-primary/40 active:bg-primary/5 transition-all group"
+            // Design-Sprint Runde 5 Rang 1: the home dashboard -- the single highest-traffic
+            // screen in the app -- was missed entirely by Runde 3's card-surface sweep and was
+            // still on the flat pre-Sprint `bg-card` fill. Same gradient-card + elevation as every
+            // other card shell now, with a stronger hover elevation on top since this is the
+            // primary tap target on the page.
+            className="gradient-card border border-border rounded-xl p-4 shadow-elevation-sm hover:border-primary/40 hover:shadow-elevation-md active:scale-95 active:border-primary/40 active:bg-primary/5 transition-all group"
             style={{ transitionTimingFunction: "var(--ease-press)" }}>
             <action.icon className="w-6 h-6 text-primary mb-2 group-hover:scale-110 group-active:scale-110 transition-transform" />
             <p className="font-semibold text-sm">{t(action.labelKey)}</p>
@@ -260,7 +265,7 @@ const DashboardPage = () => {
             {pagedActivity.visible.map((e) => {
               const Icon = EVENT_ICON[e.type];
               return (
-                <div key={e.id} className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center gap-3">
+                <div key={e.id} className="gradient-card border border-border rounded-xl px-4 py-2.5 shadow-elevation-sm flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
                     <Icon className="w-4 h-4" />
                   </div>
@@ -284,7 +289,7 @@ const DashboardPage = () => {
           </h2>
           <div className="space-y-2 mb-6">
             {anniversaries.map((a) => (
-              <div key={a.id} className="bg-card border border-border rounded-xl px-4 py-2.5 flex items-center gap-3">
+              <div key={a.id} className="gradient-card border border-border rounded-xl px-4 py-2.5 shadow-elevation-sm flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
                   <PartyPopper className="w-4 h-4" />
                 </div>
@@ -305,7 +310,7 @@ const DashboardPage = () => {
       {loadingGames ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
       ) : recentGames.length === 0 ? (
-        <Link to="/game" className="block bg-card border border-border hover:border-primary/40 active:scale-[0.98] active:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-all" style={{ transitionTimingFunction: "var(--ease-press)" }}>
+        <Link to="/game" className="block gradient-card border border-border shadow-elevation-sm hover:border-primary/40 active:scale-[0.98] active:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-all" style={{ transitionTimingFunction: "var(--ease-press)" }}>
           {/* Design Rangliste #15: this was plain text before — reuses DartGameIcon (the same
               hand-drawn dart-in-flight icon as the "Neues Spiel" quick action right above) rather
               than a generic lucide glyph, so the very first impression on an empty dashboard
@@ -319,7 +324,7 @@ const DashboardPage = () => {
             const extra = game.participantNames && game.participantNames.length > 2 ? game.participantNames : null;
             const isExpanded = extra ? expandedGames.has(game.id) : false;
             return (
-              <div key={game.id} className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+              <div key={game.id} className="gradient-card border border-border rounded-xl px-4 py-3 shadow-elevation-sm flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <Badge variant="outline" className="text-xs bg-muted px-2 py-0.5 font-mono border-transparent shrink-0">{game.mode}</Badge>
                   {isExpanded && extra ? (

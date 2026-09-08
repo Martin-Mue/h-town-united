@@ -1439,7 +1439,7 @@ const PublicTournamentPage = () => {
          *  list/tree instead, so "who's up next" was scrolled well out of view on first glance. */
         <aside className="flex flex-col gap-4 lg:sticky lg:top-4 self-start order-first lg:order-none">
           {isKo && (
-            <div className="bg-card border border-border rounded-xl p-4">
+            <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <ListOrdered className="w-4 h-4 text-primary" />
@@ -1480,7 +1480,7 @@ const PublicTournamentPage = () => {
             </div>
           )}
 
-          <div className="bg-card border border-border rounded-xl p-4">
+          <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <Zap className="w-5 h-5 text-accent" />
               <h3 className="font-display uppercase text-base">{tr("pt.liveTicker")}</h3>

@@ -57,7 +57,7 @@ const AdminTournamentForecast = () => {
 
   return (
     <div className="space-y-4">
-      <div className="bg-card border border-border rounded-xl p-4">
+      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
             <Timer className="w-4 h-4" /> Zeit-Tempo
@@ -85,7 +85,7 @@ const AdminTournamentForecast = () => {
       </div>
 
       {tournaments.length === 0 && (
-        <div className="bg-card border border-border rounded-xl p-8 text-center text-sm text-muted-foreground">
+        <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-8 text-center text-sm text-muted-foreground">
           Aktuell läuft kein Turnier.
         </div>
       )}
@@ -100,7 +100,7 @@ const AdminTournamentForecast = () => {
         />
       ))}
 
-      <div className="bg-card border border-border rounded-xl p-4 flex gap-2 text-[11px] text-muted-foreground">
+      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 flex gap-2 text-[11px] text-muted-foreground">
         <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
         <p>
           Es wird nirgends eine echte Uhrzeit für Leg- oder Match-Beginn/-Ende erfasst — die Schätzung beruht auf

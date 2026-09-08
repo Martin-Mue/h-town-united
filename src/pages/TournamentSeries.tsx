@@ -270,7 +270,7 @@ const TournamentSeriesPage = () => {
           {pagedSeries.visible.map((s) => {
             const count = tournaments.filter((tourn) => tourn.series_id === s.id).length;
             return (
-              <div key={s.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
+              <div key={s.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
                 <div className="w-9 h-9 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
                   <Layers className="w-4 h-4" />
                 </div>

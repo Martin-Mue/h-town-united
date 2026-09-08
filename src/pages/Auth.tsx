@@ -169,7 +169,7 @@ const AuthPage = () => {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-6">
+        <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
           <h2 className="font-display uppercase text-lg mb-4">
             {mode === "login" ? t("auth.loginTitle") : mode === "signup" ? t("auth.signupTitle") : t("auth.resetTitle")}
           </h2>

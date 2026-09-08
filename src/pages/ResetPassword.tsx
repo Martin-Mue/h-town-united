@@ -98,7 +98,7 @@ const ResetPassword = () => {
             )}
           </div>
         </div>
-        <div className="bg-card border border-border rounded-2xl p-6">
+        <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
           <h2 className="font-display uppercase text-lg mb-4">{t("resetPassword.title")}</h2>
           {!ready ? (
             <div role="status" aria-label={t("common.loading")} className="flex items-center justify-center py-8">

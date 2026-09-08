@@ -1710,7 +1710,7 @@ const TrainingPage = () => {
           <button
             key={drill.id}
             onClick={() => setSelectedDrill(drill)}
-            className="bg-card border border-border rounded-xl p-4 text-left hover:border-primary/40 transition-all group"
+            className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 text-left hover:border-primary/40 transition-all group"
           >
             <div className="flex items-start gap-3">
               <drill.icon className="w-8 h-8 text-primary shrink-0 group-hover:scale-110 transition-transform" />

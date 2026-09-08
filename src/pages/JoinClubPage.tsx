@@ -65,7 +65,7 @@ const JoinClubPage = () => {
         {loading || authLoading ? (
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
         ) : club === "not_found" ? (
-          <div className="bg-card border border-border rounded-2xl p-6">
+          <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
             <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
             <h1 className="text-lg font-display uppercase mb-1">{t("joinClub.notFoundTitle")}</h1>
             <p className="text-sm text-muted-foreground">{t("common.invalidLinkGeneric")}</p>
@@ -80,7 +80,7 @@ const JoinClubPage = () => {
                 {club.tagline && <p className="text-sm text-muted-foreground mt-1">{club.tagline}</p>}
               </div>
             </div>
-            <div className="bg-card border border-border rounded-2xl p-6">
+            <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
               {requested ? (
                 <p className="text-sm">
                   {t("joinClub.requestSentMsg")}

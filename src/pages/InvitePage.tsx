@@ -70,19 +70,19 @@ const InvitePage = () => {
         {loading || authLoading ? (
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
         ) : preview === "not_found" ? (
-          <div className="bg-card border border-border rounded-2xl p-6">
+          <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
             <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
             <h1 className="text-lg font-display uppercase mb-1">{t("invite.notFoundTitle")}</h1>
             <p className="text-sm text-muted-foreground">{t("common.invalidLinkGeneric")}</p>
           </div>
         ) : preview?.expired ? (
-          <div className="bg-card border border-border rounded-2xl p-6">
+          <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
             <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
             <h1 className="text-lg font-display uppercase mb-1">{t("invite.expiredTitle")}</h1>
             <p className="text-sm text-muted-foreground">{t("invite.expiredDesc")}</p>
           </div>
         ) : preview?.already_accepted ? (
-          <div className="bg-card border border-border rounded-2xl p-6">
+          <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
             <PartyPopper className="w-8 h-8 text-accent mx-auto mb-3" />
             <h1 className="text-lg font-display uppercase mb-1">{t("invite.alreadyAcceptedTitle")}</h1>
             <p className="text-sm text-muted-foreground mb-4">
@@ -100,7 +100,7 @@ const InvitePage = () => {
                 {preview.tagline && <p className="text-sm text-muted-foreground mt-1">{preview.tagline}</p>}
               </div>
             </div>
-            <div className="bg-card border border-border rounded-2xl p-6">
+            <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
               <p className="text-sm mb-4">{t("invite.prompt")}</p>
               {user ? (
                 <Button className="w-full" onClick={handleAccept} disabled={accepting}>

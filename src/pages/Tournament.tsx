@@ -1914,7 +1914,7 @@ const TournamentPage = () => {
         ) : (
           <div className="space-y-3">
             {pagedTournaments.visible.map(tourn => (
-              <div key={tourn.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
+              <div key={tourn.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 flex items-center justify-between">
                 <button onClick={() => openTournament(tourn)} className="flex-1 text-left">
                   <div className="flex items-center gap-3">
                     {/* The dot alone used to be the only status signal — a tiny unlabeled color
@@ -2263,7 +2263,7 @@ const TournamentPage = () => {
               {drawMode === "manual" ? (
                 <div className="space-y-1">
                   {players.map((p, i) => (
-                    <div key={p} className="flex items-center gap-2 bg-card border border-border rounded-lg px-2 py-1.5 text-sm">
+                    <div key={p} className="flex items-center gap-2 gradient-card border border-border shadow-elevation-sm rounded-lg px-2 py-1.5 text-sm">
                       <span className="w-6 text-center font-mono text-xs text-muted-foreground">{i + 1}</span>
                       <span className="flex-1 truncate">{p}</span>
                       <Button size="icon" variant="ghost" className="h-8 w-8" disabled={i === 0} onClick={() => movePlayer(i, -1)} title={t("tournament.moveUp")} aria-label={`${p} ${t("tournament.moveUpFor")}`}><ArrowUp className="w-3.5 h-3.5" /></Button>
@@ -2279,7 +2279,7 @@ const TournamentPage = () => {
                 <div className="flex flex-wrap gap-2">
                   {players.map(p => (
                     <button key={p} onClick={() => removePlayer(p)}
-                      className="bg-card border border-border rounded-lg px-3 py-1 text-sm hover:border-destructive hover:text-destructive transition-colors group">
+                      className="gradient-card border border-border shadow-elevation-sm rounded-lg px-3 py-1 text-sm hover:border-destructive hover:text-destructive transition-colors group">
                       {p} <span className="text-muted-foreground group-hover:text-destructive ml-1">×</span>
                     </button>
                   ))}
@@ -2328,7 +2328,7 @@ const TournamentPage = () => {
                       ? { label: t("tournament.preliminaryMatches"), value: seeding.prelimPairs.length }
                       : { label: t("tournament.byes"), value: byes },
                   ].map((s) => (
-                    <div key={s.label} className="bg-card border border-border rounded-lg py-2">
+                    <div key={s.label} className="gradient-card border border-border shadow-elevation-sm rounded-lg py-2">
                       <StatTile value={s.value} label={s.label} tone="primary" />
                     </div>
                   ))}
@@ -2361,7 +2361,7 @@ const TournamentPage = () => {
                             {roundLabelFor(r, rounds, t)}
                           </p>
                           {list.map((m, i) => (
-                            <div key={m.id} className="bg-card border border-border rounded px-1.5 py-1 text-[10px] leading-tight">
+                            <div key={m.id} className="gradient-card border border-border shadow-elevation-sm rounded px-1.5 py-1 text-[10px] leading-tight">
                               <div className="flex items-center gap-1">
                                 <span className="font-mono text-[8px] text-muted-foreground w-4">{r === 1 ? i + 1 : ""}</span>
                                 <span className={`flex-1 truncate uppercase tracking-wide ${!isRealPlayer(m.player1) ? "text-muted-foreground/40" : ""}`}>{m.player1 || "—"}</span>
@@ -2850,7 +2850,7 @@ const TournamentPage = () => {
                 return <p className="text-sm text-muted-foreground">{t("tournament.allPlayableMatchesDone")}</p>;
               }
               return slots.map((slot, i) => (
-                <div key={slot} className="bg-card border border-border rounded-xl overflow-hidden">
+                <div key={slot} className="gradient-card border border-border shadow-elevation-sm rounded-xl overflow-hidden">
                   <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between">
                     <h3 className="font-display uppercase text-sm">
                       {roundLabel(open.find(e => e.slot === slot)!.round, totalRounds)}
@@ -2924,7 +2924,7 @@ const TournamentPage = () => {
             })()}
 
             {isOwner && (
-              <div className="bg-card border border-border rounded-xl p-4">
+              <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <h3 className="font-display uppercase text-sm flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
                   <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
@@ -3016,7 +3016,12 @@ const TournamentPage = () => {
 
         {editMatch && (
           <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditMatch(null)}>
-            <div className="bg-card border border-border rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+            {/* Design-Sprint Runde 5 Rang 2: this is a hand-rolled modal (same fixed-overlay
+                pattern Dialog.tsx uses), so it gets that same elevation-lg + glow-tinted border
+                treatment instead of the plain shadow-elevation-sm every routine inline card here
+                gets -- a floating panel over a blurred backdrop should read as raised further than
+                a card sitting in the normal page flow. */}
+            <div className="gradient-card border border-primary/15 shadow-elevation-lg rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
               <h3 className="font-display uppercase text-sm">{t("tournament.editMatchHeading")}</h3>
               <p className="text-[11px] text-muted-foreground">{t("tournament.emptyMeansBye")}</p>
               <Input value={editP1} onChange={(e) => setEditP1(e.target.value)} placeholder={t("tournament.player1ByePlaceholder")} className="bg-background border-border" />
@@ -3031,7 +3036,8 @@ const TournamentPage = () => {
 
         {editingRound !== null && (
           <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditingRound(null)}>
-            <div className="bg-card border border-border rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+            {/* Same modal-elevation upgrade as the editMatch dialog above -- see its comment. */}
+            <div className="gradient-card border border-primary/15 shadow-elevation-lg rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
               <h3 className="font-display uppercase text-sm">
                 {editingRound === 0
                   ? `${t("tournament.preliminaryRoundLabel")} ${t("tournament.editHeadingSuffix")}`
@@ -3077,7 +3083,7 @@ const TournamentPage = () => {
           if (done.length === 0) return null;
           return (
             <div className="container mb-6">
-              <div className="bg-card border border-border rounded-xl p-4">
+              <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Zap className="w-4 h-4 text-accent" />
                   <h3 className="font-display uppercase text-sm">{t("tournament.liveTickerHeading")}</h3>
@@ -3306,7 +3312,7 @@ const TournamentPage = () => {
        *  scorekeeper toolkit, Round 3 Rang 1): check-in, late sign-up, withdrawal. Round-robin has
        *  no tree/schedule sub-tabs to hide this behind, so it's just always shown here. */}
       {isOwner && (
-        <div className="bg-card border border-border rounded-xl p-4 mt-4">
+        <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 mt-4">
           <div className="flex items-center justify-between gap-2 mb-2">
             <h3 className="font-display uppercase text-sm flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
             <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">

@@ -633,7 +633,7 @@ const LeaguePage = () => {
       ) : (
         <div className="space-y-3">
           {pagedLeagues.visible.map((l) => (
-            <div key={l.id} className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
+            <div key={l.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
               <Link to={`/leagues/${l.id}`} className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="w-9 h-9 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
                   <Swords className="w-4 h-4" />
