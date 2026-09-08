@@ -774,6 +774,61 @@ export type Database = {
           },
         ]
       }
+      match_reflections: {
+        Row: {
+          club_id: string
+          created_at: string
+          focus_rating: number | null
+          game_id: string
+          id: string
+          improve_next: string | null
+          user_id: string
+          went_well: string | null
+        }
+        Insert: {
+          club_id?: string
+          created_at?: string
+          focus_rating?: number | null
+          game_id: string
+          id?: string
+          improve_next?: string | null
+          user_id?: string
+          went_well?: string | null
+        }
+        Update: {
+          club_id?: string
+          created_at?: string
+          focus_rating?: number | null
+          game_id?: string
+          id?: string
+          improve_next?: string | null
+          user_id?: string
+          went_well?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_reflections_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_reflections_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_reflections_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       online_matches: {
         Row: {
           best_of_legs: number
