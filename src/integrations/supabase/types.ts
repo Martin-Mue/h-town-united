@@ -516,6 +516,7 @@ export type Database = {
           player2_id: string
           player2_legs_won: number | null
           round_number: number
+          scheduled_date: string | null
           status: string
           winner_id: string | null
         }
@@ -532,6 +533,7 @@ export type Database = {
           player2_id: string
           player2_legs_won?: number | null
           round_number: number
+          scheduled_date?: string | null
           status?: string
           winner_id?: string | null
         }
@@ -548,6 +550,7 @@ export type Database = {
           player2_id?: string
           player2_legs_won?: number | null
           round_number?: number
+          scheduled_date?: string | null
           status?: string
           winner_id?: string | null
         }
