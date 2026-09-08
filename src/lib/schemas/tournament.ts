@@ -87,7 +87,11 @@ const roundConfigSchema = z
   })
   .passthrough();
 
-export type RoundConfig = z.infer<typeof roundConfigSchema>;
+/** Explicit type instead of z.infer: zod's objectOutputType marks passthrough-object properties
+ *  optional in the OUTPUT type even when the schema requires them at parse time, which then
+ *  breaks every downstream consumer expecting `{ mode: string; bestOf: number }`. The schema
+ *  still enforces both fields at runtime; this type is the compile-time mirror. */
+export type RoundConfig = { mode: string; bestOf: number };
 
 const ROTATION_SLOTS = ["boards", "bracket", "participants", "highlights", "waiting", "format", "qr"] as const;
 const rotationSlotSchema = z.enum(ROTATION_SLOTS);
@@ -144,7 +148,8 @@ export function parseRoundConfigs(raw: unknown, context?: string): RoundConfig[]
     logInvalid(context, "round_configs", result.error.flatten());
     return [];
   }
-  return result.data;
+  // Safe: the schema just enforced mode:string + bestOf:number at runtime (see RoundConfig note).
+  return result.data as RoundConfig[];
 }
 
 /** `tournaments.attendance` — organizer check-in state, keyed by participant name. */
