@@ -150,7 +150,7 @@ const AdminPage = () => {
           const isEditorUser = u.roles?.includes("editor");
           const initial = u.email.trim().charAt(0).toUpperCase() || "?";
           return (
-            <div key={u.user_id} className="rounded-xl border border-border bg-card p-4 flex items-start gap-3 hover:border-primary/40 transition-colors">
+            <div key={u.user_id} className="rounded-xl border border-border gradient-card shadow-elevation-sm p-4 flex items-start gap-3 hover:border-primary/40 transition-colors">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-display text-sm ${isAdminUser ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
                 {initial}
               </div>

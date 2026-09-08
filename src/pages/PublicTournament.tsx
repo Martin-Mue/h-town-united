@@ -58,7 +58,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
 
   return (
     <div className="space-y-4">
-      <div className="bg-card rounded-xl border border-border p-4">
+      <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
         <div className="grid grid-cols-[auto_1fr_repeat(4,40px)] gap-x-2 gap-y-1 text-xs">
           <span className="text-muted-foreground">#</span>
@@ -83,7 +83,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
       </div>
 
       {unplayed.length > 0 && (
-        <div className="bg-card rounded-xl border border-border p-4">
+        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
           <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.upcomingMatches")} ({unplayed.length})</h3>
           <div className="space-y-1.5">
             {unplayed.map((m) => (
@@ -96,7 +96,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
       )}
 
       {played.length > 0 && (
-        <div className="bg-card rounded-xl border border-border p-4">
+        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
           <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.playedMatches")} ({played.length})</h3>
           <div className="space-y-1">
             {played.map((m) => (
@@ -579,12 +579,12 @@ const FormatStatusPage = ({
   return (
     <div className="max-w-xl mx-auto py-8 px-4 space-y-5">
       <div className={`grid gap-3 ${checkedIn !== null ? "grid-cols-2" : "grid-cols-1"}`}>
-        <div className="rounded-xl border border-border bg-card p-5 text-center">
+        <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-5 text-center">
           <p className="font-display text-4xl text-primary">{tournament.players.length}</p>
           <p className="text-xs uppercase tracking-widest text-muted-foreground mt-1.5">{t("tournament.participants")}</p>
         </div>
         {checkedIn !== null && (
-          <div className="rounded-xl border border-border bg-card p-5 text-center">
+          <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-5 text-center">
             <p className="font-display text-4xl text-secondary">{checkedIn} / {tournament.players.length}</p>
             <p className="text-xs uppercase tracking-widest text-muted-foreground mt-1.5">{t("pt.checkedInLabel")}</p>
           </div>
@@ -592,7 +592,7 @@ const FormatStatusPage = ({
       </div>
 
       {isKo ? (
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-5">
           <h3 className="font-display uppercase text-base text-muted-foreground mb-3">{t("pt.formatLabel")}</h3>
           <ul className="space-y-2.5 text-base">
             {rounds.map((r) => {
@@ -607,7 +607,7 @@ const FormatStatusPage = ({
           </ul>
         </div>
       ) : (
-        <div className="rounded-xl border border-border bg-card p-5 flex items-center justify-between text-base">
+        <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-5 flex items-center justify-between text-base">
           <span className="text-muted-foreground">{t("pt.formatLabel")}</span>
           <span className="font-mono text-primary">{tournament.game_mode} · FT{Math.ceil(tournament.best_of_legs / 2)}</span>
         </div>
@@ -1289,7 +1289,7 @@ const PublicTournamentPage = () => {
           </div>
         </div>
         {showRotationSettings && (
-          <div className="mb-2 rounded-xl border border-border bg-card p-3 max-w-xl">
+          <div className="mb-2 rounded-xl border border-border gradient-card shadow-elevation-sm p-3 max-w-xl">
             <p className="text-[11px] text-muted-foreground mb-2">{tr("pt.rotationSettingsDesc")}</p>
             <div className="flex flex-wrap gap-2">
               {([
@@ -1327,7 +1327,7 @@ const PublicTournamentPage = () => {
               rotation has the width to spare, and the highlight table only grows as the
               tournament goes on, so it should use that width rather than stay narrow and squeeze
               a growing row/column count into a fixed small box. */}
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-4">
             <h3 className="font-display uppercase text-sm mb-3 text-muted-foreground flex items-center gap-2"><Target className="w-4 h-4" /> {tr("pt.highlightsLabel")}</h3>
             {!tournamentHighlights || !tournamentAverages ? (
               <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
@@ -1338,7 +1338,7 @@ const PublicTournamentPage = () => {
         </div>
       ) : view === "participants" ? (
         <div className="px-4 pb-6">
-          <div className="rounded-xl border border-border bg-card p-3">
+          <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
               <h3 className="font-display uppercase text-sm text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
               <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">

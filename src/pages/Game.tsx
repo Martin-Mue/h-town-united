@@ -2694,7 +2694,7 @@ const GamePage = () => {
   ) : null;
 
   const cricketBoard = isCricket && game.cricket ? (
-    <div className="bg-card rounded-xl border border-border p-3 mb-3 overflow-x-auto">
+    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 mb-3 overflow-x-auto">
       <table className="w-full text-center text-xs border-collapse">
         <thead>
           <tr>

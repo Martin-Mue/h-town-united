@@ -718,7 +718,7 @@ const PlayersPage = () => {
             radar (a single invisible point) and two zero-width bars: just axis labels over blank
             space, reading as broken rather than "no data yet". */}
         {selectedPlayer.games_played === 0 ? (
-          <div className="bg-card rounded-xl border border-border p-4 mb-6 text-center text-sm text-muted-foreground">
+          <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 mb-6 text-center text-sm text-muted-foreground">
             {t("players.noStatsYetForCharts")}
           </div>
         ) : (
@@ -1030,7 +1030,7 @@ const PlayersPage = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {pagedPlayers.visible.map((player) => (
             <Collapsible key={player.id} open={!!expandedCards[player.id]} onOpenChange={() => toggleCard(player.id)}>
-              <div className="rounded-xl border border-border bg-card p-4 text-left transition-all group hover:border-primary/50 hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]">
+              <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-4 text-left transition-all group hover:border-primary/50 hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]">
                 <div className="flex items-start gap-3">
                   <div className="group-hover:scale-105 transition-transform">
                     <PlayerAvatar player={player} size="md" />

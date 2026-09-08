@@ -2,8 +2,17 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+// Design-Sprint Runde 3 Rang 2: swapped Tailwind's generic flat `shadow-sm` for this app's own
+// --shadow-sm elevation token (a slightly warmer "ink" shadow, see index.css) and the existing-
+// but-unused `gradient-card` utility (a two-stop surface gradient, already tuned per light/dark)
+// instead of a flat `bg-card` -- every card in the app picks this up automatically, without
+// touching the ~40 call sites that already just write `<Card>` or the hand-rolled equivalent.
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props} />
+  <div
+    ref={ref}
+    className={cn("rounded-lg border border-border gradient-card text-card-foreground shadow-elevation-sm", className)}
+    {...props}
+  />
 ));
 Card.displayName = "Card";
 

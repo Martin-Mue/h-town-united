@@ -1248,7 +1248,7 @@ const StatisticsPage = () => {
       </div>
 
       {viewScope === "personal" && !myPlayer && (
-        <div className="bg-card rounded-xl border border-border p-6 text-center mb-4">
+        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-6 text-center mb-4">
           <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm text-muted-foreground mb-3">
             {t("stats.noProfileLinked")}

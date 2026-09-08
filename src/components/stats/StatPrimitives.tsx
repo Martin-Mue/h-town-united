@@ -20,7 +20,13 @@ export const Eyebrow = ({ icon: Icon, children, tone = "muted" }: { icon?: Lucid
 
 /** Standard card shell. `glow` adds the accent gradient + border treatment reserved for the one
  *  or two highest-priority moments per view (a section's own hero number), never used for
- *  routine content — overusing it would just make it the new wall of noise. */
+ *  routine content — overusing it would just make it the new wall of noise.
+ *  Design-Sprint Runde 3 Rang 2: the routine (non-glow) case used to be completely flat
+ *  (`border-border bg-card`, no shadow at all) — every SectionCard in the app (this is the one
+ *  actually-used card shell; the shadcn `<Card>` primitive sits unused, see components/ui/card.tsx)
+ *  now sits at this app's own --shadow-sm elevation on the `gradient-card` two-stop surface
+ *  instead of a flat fill, so even routine content reads as a physical panel, not a div with a
+ *  border. The glow variants are untouched — they already have their own, stronger treatment. */
 export const SectionCard = ({ children, glow, className = "" }: { children: ReactNode; glow?: "primary" | "accent"; className?: string }) => (
   <div
     className={`rounded-xl border p-4 ${
@@ -28,7 +34,7 @@ export const SectionCard = ({ children, glow, className = "" }: { children: Reac
         ? "border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card shadow-[0_0_30px_hsl(var(--primary)/0.12)]"
         : glow === "accent"
         ? "border-accent/30 bg-gradient-to-br from-accent/10 via-card to-card shadow-[0_0_24px_hsl(var(--accent)/0.1)]"
-        : "border-border bg-card"
+        : "border-border gradient-card shadow-elevation-sm"
     } ${className}`}
   >
     {children}

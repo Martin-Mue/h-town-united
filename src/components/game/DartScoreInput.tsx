@@ -82,7 +82,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
   };
 
   return (
-    <div className="bg-card rounded-xl border border-border p-3">
+    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
       {/* Mode switch — always visible, not tucked behind a collapse toggle, since the whole point
           is being able to change tack at any moment mid-game without hunting for the control. */}
       {onQuickRound && (

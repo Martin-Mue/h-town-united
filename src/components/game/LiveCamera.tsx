@@ -1567,7 +1567,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const ringRect = cropScreenRect();
 
   return (
-    <div className="mb-3 space-y-2 rounded-xl border border-border bg-card p-3">
+    <div className="mb-3 space-y-2 rounded-xl border border-border gradient-card shadow-elevation-sm p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Camera className="h-4 w-4 text-primary" />

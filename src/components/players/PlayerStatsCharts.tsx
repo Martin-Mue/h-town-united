@@ -18,7 +18,7 @@ const PlayerStatsCharts = ({ skillRadarData, winLossData }: { skillRadarData: Sk
   const { t } = useLanguage();
   return (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-    <div className="bg-card rounded-xl border border-border p-4">
+    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
       <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("players.skillProfile")}</h3>
       <ResponsiveContainer width="100%" height={180}>
         <RadarChart data={skillRadarData}>
@@ -30,7 +30,7 @@ const PlayerStatsCharts = ({ skillRadarData, winLossData }: { skillRadarData: Sk
       </ResponsiveContainer>
     </div>
 
-    <div className="bg-card rounded-xl border border-border p-4">
+    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
       <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("game.winsLabel")} / {t("players.losses")}</h3>
       <ResponsiveContainer width="100%" height={120}>
         <BarChart data={winLossData} layout="vertical">

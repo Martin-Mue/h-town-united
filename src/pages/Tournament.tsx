@@ -2397,7 +2397,7 @@ const TournamentPage = () => {
   // duplicating the collapsible markup in each branch.
   const highlightsSection = (
     <div className="container mb-4">
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="gradient-card rounded-xl border border-border shadow-elevation-sm overflow-hidden">
         <button onClick={toggleHighlights} className="w-full flex items-center justify-between px-4 py-3 text-left">
           <span className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground">
             <Target className="w-4 h-4" /> {t("tournament.tournamentHighlights")}
@@ -2421,7 +2421,7 @@ const TournamentPage = () => {
   // highlightsSection above, shared by both the K.O. and round-robin returns.
   const forecastSection = isAdmin ? (
     <div className="container mb-4">
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="gradient-card rounded-xl border border-border shadow-elevation-sm overflow-hidden">
         <button onClick={() => setShowForecast((v) => !v)} className="w-full flex items-center justify-between px-4 py-3 text-left">
           <span className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground">
             <Timer className="w-4 h-4" /> {t("tournament.tournamentForecast")}
@@ -3141,7 +3141,7 @@ const TournamentPage = () => {
       {forecastSection}
 
       {/* Standings table */}
-      <div className="bg-card rounded-xl border border-border p-4 mb-4">
+      <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 mb-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
         <div className="grid grid-cols-[auto_1fr_repeat(4,40px)] gap-x-2 gap-y-1 text-xs">
           <span className="text-muted-foreground">#</span>
@@ -3172,7 +3172,7 @@ const TournamentPage = () => {
 
       {/* Upcoming matches */}
       {unplayed.length > 0 && (
-        <div className="bg-card rounded-xl border border-border p-4 mb-4">
+        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 mb-4">
           <div className="flex items-center justify-between gap-2 mb-3">
             <h3 className="font-display text-sm uppercase text-muted-foreground">{t("tournament.upcomingMatches")} ({unplayed.length})</h3>
             {canEditResults && (
@@ -3265,7 +3265,7 @@ const TournamentPage = () => {
 
       {/* Played matches */}
       {played.length > 0 && (
-        <div className="bg-card rounded-xl border border-border p-4">
+        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
           <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.playedMatches")} ({played.length})</h3>
           <div className="space-y-1">
             {pagedRrPlayed.visible.map(m => (
