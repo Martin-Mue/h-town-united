@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { execSync } from "child_process";
@@ -67,11 +67,11 @@ function i18nGeneratedLocales() {
   return {
     name: "i18n-generated-locales",
     buildStart() { regenerate(true); },
-    configureServer(server) {
+    configureServer(server: ViteDevServer) {
       regenerate(false);
       const translationsFile = path.resolve(__dirname, "src/i18n/translations.ts");
       server.watcher.add(translationsFile);
-      server.watcher.on("change", (file) => { if (path.resolve(file) === translationsFile) regenerate(false); });
+      server.watcher.on("change", (file: string) => { if (path.resolve(file) === translationsFile) regenerate(false); });
     },
   };
 }
