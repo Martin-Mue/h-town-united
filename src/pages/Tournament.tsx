@@ -90,9 +90,7 @@ interface TournamentRecord {
   status: string;
   champion: string | null;
   players: string[];
-  // KO and RR brackets share the column (mode-dependent shape); parseBracket validates entries
-  // against BOTH shapes, so the stored value here is the union — callers narrow by mode.
-  bracket: (Match | RoundRobinMatch)[];
+  bracket: Match[] | RoundRobinMatch[];
   created_at: string;
   game_mode?: string;
   best_of_legs?: number;
@@ -870,7 +868,7 @@ const TournamentPage = () => {
   const mapTournamentRow = (t: Database["public"]["Tables"]["tournaments"]["Row"]): TournamentRecord => ({
     ...t,
     players: parsePlayers(t.players, `tournament ${t.id}`),
-    bracket: parseBracket(t.bracket, `tournament ${t.id}`),
+    bracket: parseBracket(t.bracket, `tournament ${t.id}`) as Match[] | RoundRobinMatch[],
     game_mode: t.game_mode || "501",
     best_of_legs: t.best_of_legs || 3,
     series_id: t.series_id || null,
@@ -1208,7 +1206,7 @@ const TournamentPage = () => {
       const rec: TournamentRecord = {
         ...upd,
         players: parsePlayers(upd.players, `tournament ${upd.id}`),
-        bracket: parseBracket(upd.bracket, `tournament ${upd.id}`),
+        bracket: parseBracket(upd.bracket, `tournament ${upd.id}`) as Match[] | RoundRobinMatch[],
         round_configs: parseRoundConfigs(upd.round_configs, `tournament ${upd.id}`),
         boards: upd.boards ?? boards,
         live_play_enabled: upd.live_play_enabled ?? livePlayEnabled,
@@ -1257,7 +1255,7 @@ const TournamentPage = () => {
     const record: TournamentRecord = {
       ...data,
       players: parsePlayers(data.players, `tournament ${data.id}`),
-      bracket: parseBracket(data.bracket, `tournament ${data.id}`),
+      bracket: parseBracket(data.bracket, `tournament ${data.id}`) as Match[] | RoundRobinMatch[],
       game_mode: data.game_mode || gameMode,
       best_of_legs: data.best_of_legs || bestOfLegs,
       series_id: data.series_id,
