@@ -11,7 +11,11 @@
 -- user_id/club_id both default from the calling user's own auth context rather than being sent
 -- by the client, so the app-side insert (see MatchReflection.tsx) never has to compute them
 -- itself and can't accidentally attribute a reflection to someone else.
-create table public.match_reflections (
+--
+-- Round 5: guarded with if-not-exists / if-exists -- the Lovable editor independently generated
+-- its own copy of this same migration on 08.09. (20260908155517...), so this file and that one
+-- now need to both be safe to run in either order in any given environment.
+create table if not exists public.match_reflections (
   id uuid primary key default gen_random_uuid(),
   club_id uuid not null default public.current_club_id() references public.clubs(id),
   user_id uuid not null default auth.uid(),
@@ -27,10 +31,14 @@ create table public.match_reflections (
   unique (user_id, game_id)
 );
 
-create index idx_match_reflections_user_game on public.match_reflections(user_id, game_id);
+create index if not exists idx_match_reflections_user_game on public.match_reflections(user_id, game_id);
+
+grant select, insert, update, delete on public.match_reflections to authenticated;
+grant all on public.match_reflections to service_role;
 
 alter table public.match_reflections enable row level security;
 
+drop policy if exists "Users manage only their own match reflections" on public.match_reflections;
 create policy "Users manage only their own match reflections"
   on public.match_reflections for all to authenticated
   using (user_id = auth.uid() and club_id = public.current_club_id())

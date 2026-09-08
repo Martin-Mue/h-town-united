@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,7 @@ import AdminClubBranding from "@/components/admin/AdminClubBranding";
 import AdminBilling from "@/components/admin/AdminBilling";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
+import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 
 interface AdminUser {
   user_id: string;
@@ -36,6 +38,7 @@ interface AdminUser {
 /** Admin-only page: manage member roles and accounts. */
 const AdminPage = () => {
   const { user } = useAuth();
+  const { t, language } = useLanguage();
   const { toast } = useToast();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const pagedUsers = usePagedList(users);
@@ -58,12 +61,12 @@ const AdminPage = () => {
     }
     const { data, error } = await supabase.rpc("admin_list_users");
     if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
     } else {
       setUsers((data as AdminUser[]) ?? []);
     }
     setLoading(false);
-  }, [user, toast]);
+  }, [user, toast, t]);
 
   useEffect(() => {
     load();
@@ -77,10 +80,12 @@ const AdminPage = () => {
       _grant: grant,
     });
     if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
     } else {
-      const roleLabel = role === "admin" ? "Admin-Rolle" : "Turnier-Bearbeitung";
-      toast({ title: grant ? `${roleLabel} vergeben` : `${roleLabel} entzogen` });
+      const titleKey = role === "admin"
+        ? (grant ? "admin.adminRoleGrantedTitle" : "admin.adminRoleRevokedTitle")
+        : (grant ? "admin.editorRoleGrantedTitle" : "admin.editorRoleRevokedTitle");
+      toast({ title: t(titleKey) });
       load();
     }
     setBusyId(null);
@@ -90,9 +95,9 @@ const AdminPage = () => {
     setBusyId(u.user_id);
     const { error } = await supabase.rpc("admin_delete_user", { _user_id: u.user_id });
     if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Mitglied entfernt" });
+      toast({ title: t("admin.memberRemovedTitle") });
       load();
     }
     setBusyId(null);
@@ -100,7 +105,7 @@ const AdminPage = () => {
 
   if (loading) {
     return (
-      <div role="status" aria-label="Lädt …" className="container py-12 flex justify-center">
+      <div role="status" aria-label={t("common.loading")} className="container py-12 flex justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -110,8 +115,8 @@ const AdminPage = () => {
     return (
       <div className="container py-12 text-center">
         <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-        <h2 className="text-xl font-display uppercase">Kein Zugriff</h2>
-        <p className="text-sm text-muted-foreground mt-1">Nur Admins können Mitglieder verwalten.</p>
+        <h2 className="text-xl font-display uppercase">{t("admin.noAccessTitle")}</h2>
+        <p className="text-sm text-muted-foreground mt-1">{t("admin.noAccessDesc")}</p>
       </div>
     );
   }
@@ -120,22 +125,22 @@ const AdminPage = () => {
     <div className="container py-6 animate-slide-up">
       <div className="flex items-center gap-2 mb-6">
         <AdminIcon className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-display uppercase">Administration</h1>
+        <h1 className="text-2xl font-display uppercase">{t("admin.title")}</h1>
       </div>
 
       <Tabs defaultValue="members">
         <TabsList className="mb-4">
-          <TabsTrigger value="members">Mitglieder</TabsTrigger>
-          <TabsTrigger value="invites">Einladungen</TabsTrigger>
-          <TabsTrigger value="branding">Design</TabsTrigger>
-          <TabsTrigger value="billing">Abrechnung</TabsTrigger>
-          <TabsTrigger value="stats">Statistiken</TabsTrigger>
-          <TabsTrigger value="forecast">Turnier-Prognose</TabsTrigger>
+          <TabsTrigger value="members">{t("admin.tabMembers")}</TabsTrigger>
+          <TabsTrigger value="invites">{t("admin.tabInvites")}</TabsTrigger>
+          <TabsTrigger value="branding">{t("admin.tabBranding")}</TabsTrigger>
+          <TabsTrigger value="billing">{t("admin.tabBilling")}</TabsTrigger>
+          <TabsTrigger value="stats">{t("admin.tabStats")}</TabsTrigger>
+          <TabsTrigger value="forecast">{t("admin.tabForecast")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="members">
       <p className="text-sm text-muted-foreground mb-4">
-        Hier kannst du Rollen vergeben und Accounts entfernen. Du selbst kannst dir die Admin-Rolle nicht entziehen.
+        {t("admin.membersIntro")}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -152,7 +157,7 @@ const AdminPage = () => {
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-mono truncate">
                   {u.email}
-                  {isSelf && <span className="ml-1.5 text-[10px] text-primary uppercase">(Du)</span>}
+                  {isSelf && <span className="ml-1.5 text-[10px] text-primary uppercase">({t("admin.selfBadge")})</span>}
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {u.roles?.length ? (
@@ -170,7 +175,7 @@ const AdminPage = () => {
                   ) : (
                     <span className="text-[10px] text-muted-foreground">–</span>
                   )}
-                  <span className="text-[10px] text-muted-foreground">· seit {new Date(u.created_at).toLocaleDateString("de-DE")}</span>
+                  <span className="text-[10px] text-muted-foreground">· {t("admin.memberSinceLabel")} {new Date(u.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language])}</span>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-1.5">
@@ -181,9 +186,9 @@ const AdminPage = () => {
                       className="h-8 text-xs gap-1.5"
                       disabled={isSelf || busyId === u.user_id}
                       onClick={() => setRole(u, "admin", false)}
-                      title={isSelf ? "Du kannst dir die Admin-Rolle nicht selbst entziehen" : "Admin entziehen"}
+                      title={isSelf ? t("admin.cantRevokeOwnAdminTitle") : t("admin.revokeAdminBtn")}
                     >
-                      <ShieldOff className="w-3.5 h-3.5" /> Admin entziehen
+                      <ShieldOff className="w-3.5 h-3.5" /> {t("admin.revokeAdminBtn")}
                     </Button>
                   ) : (
                     <Button
@@ -192,9 +197,9 @@ const AdminPage = () => {
                       className="h-8 text-xs gap-1.5"
                       disabled={busyId === u.user_id}
                       onClick={() => setRole(u, "admin", true)}
-                      title="Zum Admin machen"
+                      title={t("admin.makeAdminBtn")}
                     >
-                      <Shield className="w-3.5 h-3.5" /> Zum Admin machen
+                      <Shield className="w-3.5 h-3.5" /> {t("admin.makeAdminBtn")}
                     </Button>
                   )}
                   {/* Vereinsweite Turnier-/Saison-Bearbeitungsrechte ohne volle Admin-Rolle —
@@ -206,9 +211,9 @@ const AdminPage = () => {
                       className="h-8 text-xs gap-1.5"
                       disabled={busyId === u.user_id}
                       onClick={() => setRole(u, "editor", false)}
-                      title="Turnier-Bearbeitung entziehen"
+                      title={t("admin.revokeEditorTitle")}
                     >
-                      <PencilOff className="w-3.5 h-3.5" /> Bearbeitung entziehen
+                      <PencilOff className="w-3.5 h-3.5" /> {t("admin.revokeEditorBtn")}
                     </Button>
                   ) : (
                     <Button
@@ -217,9 +222,9 @@ const AdminPage = () => {
                       className="h-8 text-xs gap-1.5"
                       disabled={busyId === u.user_id}
                       onClick={() => setRole(u, "editor", true)}
-                      title="Turnier-/Saison-Bearbeitung erlauben"
+                      title={t("admin.grantEditorTitle")}
                     >
-                      <Pencil className="w-3.5 h-3.5" /> Bearbeitung erlauben
+                      <Pencil className="w-3.5 h-3.5" /> {t("admin.grantEditorBtn")}
                     </Button>
                   )}
                   <AlertDialog open={confirmDeleteId === u.user_id} onOpenChange={(open) => setConfirmDeleteId(open ? u.user_id : null)}>
@@ -229,20 +234,20 @@ const AdminPage = () => {
                         variant="outline"
                         className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         disabled={isSelf || busyId === u.user_id}
-                        title={isSelf ? "Du kannst dich nicht selbst löschen" : "Mitglied entfernen"}
+                        title={isSelf ? t("admin.cantDeleteSelfTitle") : t("admin.removeMemberBtnTitle")}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Mitglied entfernen?</AlertDialogTitle>
+                        <AlertDialogTitle>{t("admin.removeMemberDialogTitle")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          {u.email} wird unwiderruflich aus dem Verein entfernt. Spiele und Statistiken bleiben erhalten.
+                          {u.email} {t("admin.removeMemberDescSuffix")}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel disabled={busyId === u.user_id}>Abbrechen</AlertDialogCancel>
+                        <AlertDialogCancel disabled={busyId === u.user_id}>{t("common.cancel")}</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={async (e) => {
                             e.preventDefault();
@@ -251,7 +256,7 @@ const AdminPage = () => {
                           }}
                           disabled={busyId === u.user_id}
                         >
-                          {busyId === u.user_id ? "Entfernt…" : "Entfernen"}
+                          {busyId === u.user_id ? t("admin.removingBtn") : t("admin.removeBtn")}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>

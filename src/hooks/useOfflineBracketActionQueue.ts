@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
 import { applyBracketAction } from "@/lib/tournamentMatchSync";
 import { flushBracketActionQueue, subscribeBracketActionQueueCount } from "@/lib/offlineQueue";
-import { useToast } from "@/hooks/use-toast";
+import { useOfflineQueueFlush } from "@/hooks/useOfflineQueueFlush";
 
 /**
  * Mirrors useOfflineMatchResultQueue, but for manual bracket-scoring taps made directly in the
@@ -11,35 +10,16 @@ import { useToast } from "@/hooks/use-toast";
  * replayed automatically once the connection is back, through the exact same applyBracketAction
  * used for the immediate online path — so a queued tap is always resolved against whatever the
  * bracket looks like by the time it replays, not against a stale snapshot from tap time.
+ * Round 5: now a thin wrapper around useOfflineQueueFlush -- see that file's doc comment for why.
  */
 export function useOfflineBracketActionQueue() {
-  const [pendingCount, setPendingCount] = useState(0);
-  const [syncing, setSyncing] = useState(false);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const unsubscribe = subscribeBracketActionQueueCount(setPendingCount);
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    const flush = async () => {
-      if (typeof navigator !== "undefined" && !navigator.onLine) return;
-      setSyncing(true);
-      try {
-        const { synced } = await flushBracketActionQueue(applyBracketAction);
-        if (synced > 0) {
-          toast({ title: `${synced} Turnier-Aktion${synced === 1 ? "" : "en"} nachgetragen`, description: "Offline gespeicherte Spielstand-Änderungen wurden in den Turnierbaum übernommen." });
-        }
-      } finally {
-        setSyncing(false);
-      }
-    };
-    flush();
-    window.addEventListener("online", flush);
-    return () => window.removeEventListener("online", flush);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return { pendingCount, syncing };
+  return useOfflineQueueFlush({
+    subscribeCount: subscribeBracketActionQueueCount,
+    flush: flushBracketActionQueue,
+    apply: applyBracketAction,
+    toastMessage: (synced) => ({
+      title: `${synced} Turnier-Aktion${synced === 1 ? "" : "en"} nachgetragen`,
+      description: "Offline gespeicherte Spielstand-Änderungen wurden in den Turnierbaum übernommen.",
+    }),
+  });
 }

@@ -23,6 +23,7 @@ import { generateRoundRobinFixtures } from "@/utils/roundRobin";
 import { SectionCard, Eyebrow, RankBadge, RankAvatar } from "@/components/stats/StatPrimitives";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
+import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 
 interface LeagueRow {
   id: string;
@@ -63,7 +64,7 @@ const LeaguePage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { session } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { clubId } = useClubBranding();
   const { toast } = useToast();
 
@@ -121,7 +122,7 @@ const LeaguePage = () => {
       .eq("round_number", round);
     setSavingRoundDate(null);
     if (error) {
-      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
       return;
     }
     await fetchFixtures();
@@ -193,11 +194,11 @@ const LeaguePage = () => {
         name: name.trim(), result_mode: resultMode, game_mode: gameMode, best_of_legs: bestOfLegs,
       }).eq("id", editingLeagueId);
       if (error) throw error;
-      toast({ title: "Liga aktualisiert" });
+      toast({ title: t("league.leagueUpdatedTitle") });
       resetForm();
       await fetchAll();
     } catch (err: unknown) {
-      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Änderungen konnten nicht gespeichert werden.", variant: "destructive" });
+      toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("league.saveEditFailedGeneric"), variant: "destructive" });
     } finally {
       setSavingLeague(false);
     }
@@ -229,12 +230,12 @@ const LeaguePage = () => {
       );
       if (fxError) throw fxError;
 
-      toast({ title: "Liga erstellt", description: `${generated.length} Partien im Spielplan.` });
+      toast({ title: t("league.leagueCreatedTitle"), description: `${generated.length} ${t("league.fixturesGeneratedSuffix")}` });
       resetForm();
       await fetchAll();
       navigate(`/leagues/${league.id}`);
     } catch (err: unknown) {
-      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Liga konnte nicht erstellt werden.", variant: "destructive" });
+      toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("league.createFailedGeneric"), variant: "destructive" });
     } finally {
       setSavingLeague(false);
     }
@@ -244,10 +245,10 @@ const LeaguePage = () => {
     try {
       const { error } = await supabase.from("leagues").delete().eq("id", leagueId);
       if (error) throw error;
-      toast({ title: "Liga gelöscht" });
+      toast({ title: t("league.leagueDeletedTitle") });
       await fetchAll();
     } catch (err: unknown) {
-      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Liga konnte nicht gelöscht werden.", variant: "destructive" });
+      toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("league.deleteFailedGeneric"), variant: "destructive" });
     }
   };
 
@@ -296,7 +297,7 @@ const LeaguePage = () => {
       notifyChallengeCreated(opponentUserId, myName, activeLeague!.game_mode as "501" | "301" | "cricket");
       navigate(`/game?online=${created.id}`);
     } catch (err: unknown) {
-      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Online-Match konnte nicht gestartet werden.", variant: "destructive" });
+      toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("league.startOnlineFailedGeneric"), variant: "destructive" });
     } finally {
       setStartingOnlineId(null);
     }
@@ -332,20 +333,20 @@ const LeaguePage = () => {
       // the dialog stays open and the error toast still fires so an admin who's still there and
       // wants to retry immediately can just click Save again.
       await enqueueLeagueFixtureResult({ id: crypto.randomUUID(), fixtureId: manualEntryFixture.id, ...result });
-      toast({ title: "Fehler", description: err instanceof Error ? err.message : "Ergebnis konnte nicht gespeichert werden — wird automatisch nachgeholt.", variant: "destructive" });
+      toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("league.saveResultFailedQueuedGeneric"), variant: "destructive" });
     } finally {
       setSavingResult(false);
     }
   };
 
-  const legLabel = (leg: FixtureRow["leg"]) => leg === "first" ? "Hinrunde" : leg === "return" ? "Rückrunde" : null;
+  const legLabel = (leg: FixtureRow["leg"]) => leg === "first" ? t("league.firstLegLabel") : leg === "return" ? t("league.returnLegLabel") : null;
 
   // ─── SINGLE LEAGUE DETAIL ────────────────────────
   if (id && activeLeague) {
     return (
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
         <Link to="/leagues" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground">
-          <ArrowLeft className="w-4 h-4" /> Alle Ligen
+          <ArrowLeft className="w-4 h-4" /> {t("league.allLeaguesLink")}
         </Link>
 
         <div className="mb-6">
@@ -354,13 +355,13 @@ const LeaguePage = () => {
             <h2 className="text-2xl font-display uppercase">{activeLeague.name}</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            {activeLeague.game_mode} · First to {Math.ceil(activeLeague.best_of_legs / 2)} · {activeLeague.format === "double" ? "Hin- und Rückrunde" : "Einfachrunde"} ·{" "}
-            {activeLeague.result_mode === "live" ? "Live-Spiele" : "Manuelle Eingabe"}
+            {activeLeague.game_mode} · {t("stats.firstTo")} {Math.ceil(activeLeague.best_of_legs / 2)} · {activeLeague.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")} ·{" "}
+            {activeLeague.result_mode === "live" ? t("league.liveGamesLabel") : t("league.manualEntryLabel")}
           </p>
         </div>
 
         <SectionCard className="mb-4">
-          <Eyebrow icon={Trophy}>Tabelle</Eyebrow>
+          <Eyebrow icon={Trophy}>{t("league.standingsTitle")}</Eyebrow>
           {standings.length === 0 ? (
             // Round 3 Rang 7: the one remaining "pure text" empty state in the app — every other
             // list-empty-state already leads with an icon (Trophy/Layers/Target/... elsewhere),
@@ -375,10 +376,10 @@ const LeaguePage = () => {
               <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-2 px-3 text-[10px] text-muted-foreground uppercase mb-1">
                 <span className="w-6" />
                 <span />
-                <span className="w-8 text-center">Sp</span>
-                <span className="w-8 text-center">S</span>
-                <span className="w-14 text-center">Legs</span>
-                <span className="w-10 text-right">Pkt</span>
+                <span className="w-8 text-center">{t("league.colPlayed")}</span>
+                <span className="w-8 text-center">{t("league.colWon")}</span>
+                <span className="w-14 text-center">{t("league.colLegs")}</span>
+                <span className="w-10 text-right">{t("league.colPoints")}</span>
               </div>
               {pagedStandings.visible.map((s) => {
                 const i = standings.indexOf(s);
@@ -403,9 +404,9 @@ const LeaguePage = () => {
         </SectionCard>
 
         <SectionCard>
-          <Eyebrow icon={Users}>Spielplan</Eyebrow>
+          <Eyebrow icon={Users}>{t("league.fixturesTitle")}</Eyebrow>
           {fixturesByRound.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Keine Partien.</p>
+            <p className="text-sm text-muted-foreground">{t("league.noFixturesYet")}</p>
           ) : (
             <div className="space-y-4">
               {fixturesByRound.map(([round, roundFixtures]) => {
@@ -415,7 +416,7 @@ const LeaguePage = () => {
                 <div key={round}>
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Runde {round}{legLabel(roundFixtures[0].leg) ? ` · ${legLabel(roundFixtures[0].leg)}` : ""}
+                      {t("league.roundLabel")} {round}{legLabel(roundFixtures[0].leg) ? ` · ${legLabel(roundFixtures[0].leg)}` : ""}
                     </p>
                     {/* Round 3 Rang 10: a Spieltag is scheduled as a whole round, not per fixture —
                         see setRoundScheduledDate's doc comment. Read-only date text for everyone
@@ -435,7 +436,7 @@ const LeaguePage = () => {
                     ) : scheduledDate ? (
                       <p className="flex items-center gap-1 text-[10px] text-muted-foreground shrink-0">
                         <CalendarDays className="w-3 h-3" />
-                        {new Date(scheduledDate).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
+                        {new Date(scheduledDate).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
                       </p>
                     ) : null}
                   </div>
@@ -458,17 +459,17 @@ const LeaguePage = () => {
                             activeLeague.result_mode === "live" ? (
                               <>
                                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={() => startFixtureGame(f)}>
-                                  <Play className="w-3 h-3" /> Spielen
+                                  <Play className="w-3 h-3" /> {t("league.playBtn")}
                                 </Button>
                                 {session?.user?.id && [p1?.user_id, p2?.user_id].includes(session.user.id) && p1?.user_id && p2?.user_id && (
                                   <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" disabled={startingOnlineId === f.id} onClick={() => startFixtureOnline(f)}>
-                                    {startingOnlineId === f.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} Online
+                                    {startingOnlineId === f.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} {t("game.setupOnline")}
                                   </Button>
                                 )}
                               </>
                             ) : (
                               <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={() => openManualEntry(f)}>
-                                <Pencil className="w-3 h-3" /> Eintragen
+                                <Pencil className="w-3 h-3" /> {t("league.enterResultBtn")}
                               </Button>
                             )
                           )}
@@ -486,33 +487,33 @@ const LeaguePage = () => {
         <Dialog open={!!manualEntryFixture} onOpenChange={(open) => !open && setManualEntryFixture(null)}>
           <DialogContent className="bg-card border-border">
             <DialogHeader>
-              <DialogTitle className="font-display uppercase">Ergebnis eintragen</DialogTitle>
+              <DialogTitle className="font-display uppercase">{t("league.enterResultDialogTitle")}</DialogTitle>
             </DialogHeader>
             {manualEntryFixture && (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 items-end">
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block truncate">
-                      {playerById.get(manualEntryFixture.player1_id)?.name ?? "Spieler 1"}
+                      {playerById.get(manualEntryFixture.player1_id)?.name ?? t("league.player1Label")}
                     </label>
                     <Input type="number" min={0} value={manualP1Legs} onChange={(e) => setManualP1Legs(e.target.value)} className="bg-muted border-border" />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block truncate">
-                      {playerById.get(manualEntryFixture.player2_id)?.name ?? "Spieler 2"}
+                      {playerById.get(manualEntryFixture.player2_id)?.name ?? t("league.player2Label")}
                     </label>
                     <Input type="number" min={0} value={manualP2Legs} onChange={(e) => setManualP2Legs(e.target.value)} className="bg-muted border-border" />
                   </div>
                 </div>
                 {manualP1Legs !== "" && manualP2Legs !== "" && manualP1Legs === manualP2Legs && (
-                  <p className="text-xs text-destructive">Unentschieden ist nicht möglich — es muss einen Sieger geben.</p>
+                  <p className="text-xs text-destructive">{t("league.noDrawAllowedMsg")}</p>
                 )}
                 <Button
                   className="w-full gap-1.5"
                   disabled={savingResult || manualP1Legs === "" || manualP2Legs === "" || manualP1Legs === manualP2Legs}
                   onClick={submitManualResult}
                 >
-                  {savingResult ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Speichern
+                  {savingResult ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} {t("game.save")}
                 </Button>
               </div>
             )}
@@ -528,12 +529,12 @@ const LeaguePage = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Swords className="w-6 h-6 text-accent" />
-          <h2 className="text-2xl font-display uppercase">Liga-Modus</h2>
+          <h2 className="text-2xl font-display uppercase">{t("league.pageTitle")}</h2>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/tournament" className="text-xs text-muted-foreground hover:text-foreground">← Turniere</Link>
+          <Link to="/tournament" className="text-xs text-muted-foreground hover:text-foreground">← {t("league.tournamentsLink")}</Link>
           <Button size="sm" onClick={() => (creating ? resetForm() : setCreating(true))} className="gap-1">
-            <Plus className="w-4 h-4" /> {creating ? "Abbrechen" : "Neue Liga"}
+            <Plus className="w-4 h-4" /> {creating ? t("common.cancel") : t("league.newLeagueBtn")}
           </Button>
         </div>
       </div>
@@ -541,30 +542,30 @@ const LeaguePage = () => {
       {creating && (
         <SectionCard glow="primary" className="mb-4 space-y-3">
           <div>
-            <label className="text-sm text-muted-foreground mb-1 block">Name</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Herbstliga 2026" className="bg-muted border-border" />
+            <label className="text-sm text-muted-foreground mb-1 block">{t("common.name")}</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("league.namePlaceholder")} className="bg-muted border-border" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {!editingLeagueId && (
               <div>
-                <label className="text-sm text-muted-foreground mb-1 block">Format</label>
+                <label className="text-sm text-muted-foreground mb-1 block">{t("league.formatLabel")}</label>
                 <Select value={format} onValueChange={(v) => setFormat(v as "single" | "double")}>
                   <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
-                    <SelectItem value="single">Einfachrunde</SelectItem>
-                    <SelectItem value="double">Hin- und Rückrunde</SelectItem>
+                    <SelectItem value="single">{t("league.singleRoundLabel")}</SelectItem>
+                    <SelectItem value="double">{t("league.doubleRoundLabel")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             )}
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Ergebnisse</label>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("league.resultModeLabel")}</label>
               <Select value={resultMode} onValueChange={(v) => setResultMode(v as "live" | "manual")}>
                 <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  <SelectItem value="live">Live gespielt</SelectItem>
-                  <SelectItem value="manual">Manuell eingetragen</SelectItem>
+                  <SelectItem value="live">{t("league.liveModeOption")}</SelectItem>
+                  <SelectItem value="manual">{t("league.manualModeOption")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -572,7 +573,7 @@ const LeaguePage = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">Spielmodus</label>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("league.gameModeLabel")}</label>
               <Select value={gameMode} onValueChange={setGameMode}>
                 <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
@@ -583,11 +584,11 @@ const LeaguePage = () => {
               </Select>
             </div>
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">First to Legs</label>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.firstToLegsLabel")}</label>
               <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
                 <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
-                  {BEST_OF_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>First to {Math.ceil(n / 2)}</SelectItem>)}
+                  {BEST_OF_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -595,11 +596,11 @@ const LeaguePage = () => {
 
           {editingLeagueId ? (
             <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-lg p-2.5">
-              Format und Teilnehmer sind nach dem Erstellen nicht mehr änderbar, da der Spielplan bereits danach erzeugt wurde. Für eine andere Zusammensetzung: Liga löschen und neu anlegen.
+              {t("league.editRestrictionNotice")}
             </p>
           ) : (
             <div>
-              <label className="text-sm text-muted-foreground mb-1.5 block">Teilnehmer ({selectedParticipants.size})</label>
+              <label className="text-sm text-muted-foreground mb-1.5 block">{t("league.participantsLabel")} ({selectedParticipants.size})</label>
               <div className="space-y-1 max-h-[40vh] overflow-y-auto -mx-1 px-1">
                 {dbPlayers.map((p) => (
                   <label key={p.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 cursor-pointer">
@@ -617,13 +618,13 @@ const LeaguePage = () => {
             className="w-full"
             disabled={!name.trim() || (!editingLeagueId && selectedParticipants.size < 2) || savingLeague}
           >
-            {savingLeague ? "Speichert…" : editingLeagueId ? "Änderungen speichern" : "Liga erstellen"}
+            {savingLeague ? t("league.savingBtn") : editingLeagueId ? t("league.saveChangesBtn") : t("league.createLeagueBtn")}
           </Button>
         </SectionCard>
       )}
 
       {loading || playersLoading ? (
-        <div role="status" aria-label="Lädt …" className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+        <div role="status" aria-label={t("common.loading")} className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
       ) : leagues.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Swords className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -640,31 +641,31 @@ const LeaguePage = () => {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm truncate">{l.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {l.participant_ids.length} Teilnehmer · {l.format === "double" ? "Hin- und Rückrunde" : "Einfachrunde"} · {l.status === "finished" ? "Beendet" : "Aktiv"}
+                    {l.participant_ids.length} {t("league.participantsSuffix")} · {l.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")} · {l.status === "finished" ? t("league.finishedStatusLabel") : t("league.activeStatusLabel")}
                   </p>
                 </div>
               </Link>
               {l.created_by === session?.user?.id && (
                 <div className="flex items-center shrink-0">
-                  <Button variant="ghost" size="icon" title="Liga bearbeiten" aria-label="Liga bearbeiten" onClick={() => startEditLeague(l)}>
+                  <Button variant="ghost" size="icon" title={t("league.editLeagueBtn")} aria-label={t("league.editLeagueBtn")} onClick={() => startEditLeague(l)}>
                     <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" title="Liga löschen" aria-label="Liga löschen">
+                      <Button variant="ghost" size="icon" title={t("league.deleteLeagueBtn")} aria-label={t("league.deleteLeagueBtn")}>
                         <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Liga löschen?</AlertDialogTitle>
+                        <AlertDialogTitle>{t("league.deleteLeagueDialogTitle")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          „{l.name}" wird unwiderruflich gelöscht, inklusive des gesamten Spielplans. Bereits gespielte Partien selbst bleiben in der Statistik erhalten.
+                          „{l.name}" {t("league.deleteLeagueDescSuffix")}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => deleteLeague(l.id)}>Löschen</AlertDialogAction>
+                        <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteLeague(l.id)}>{t("stats.delete")}</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
