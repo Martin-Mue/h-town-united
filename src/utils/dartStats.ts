@@ -276,7 +276,12 @@ export function combineCheckoutRangeBreakdowns(perLeg: CheckoutRangeBreakdown[][
  *  player eventually throws at isn't knowable from the data at the moment the visit started --
  *  those attempts still count in the range breakdown above, just not attributed to one double
  *  here, rather than silently guessing. */
-function directDoubleLabel(remaining: number): string | null {
+// Round 3 Rang 16: exported (was module-private) so Game.tsx/CheckoutSuggestion.tsx can look up
+// which specific double a live suggestion is for, and match it against this same player's own
+// checkoutDoubleBreakdown entry — the "checkout suggestion personalization" the roadmap wanted,
+// using breakdown data that already existed for Statistics.tsx's own doubles table (see that
+// page's own checkoutDoubleBreakdown usage) rather than inventing a second per-double stat.
+export function directDoubleLabel(remaining: number): string | null {
   if (remaining === 50) return "Bull";
   if (remaining > 0 && remaining <= 40 && remaining % 2 === 0) return `D${remaining / 2}`;
   return null;

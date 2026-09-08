@@ -53,10 +53,13 @@ import {
   count180s,
   computeCheckoutStats,
   combineCheckoutStats,
+  checkoutDoubleBreakdown,
+  combineCheckoutDoubleBreakdowns,
   isAchievableVisitTotal,
   segmentCount,
   SEGMENT_NUMBERS,
   type StatBundle,
+  type CheckoutDoubleBreakdown,
 } from "@/utils/dartStats";
 
 /** Bot personas with their target 3-dart average range. `nameKey` (not a literal string) since
@@ -89,9 +92,11 @@ import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
 import { createLegState, createCricketState } from "@/utils/gameStateFactory";
+import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricketNumbers } from "@/utils/legLogic";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult, enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
-import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
+import { matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
+import { usePlayers } from "@/hooks/usePlayers";
 import { isLiveSnapshotFresh, totalRoundsOf, type Match, type RoundRobinMatch } from "@/utils/tournament";
 import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
 import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
@@ -120,127 +125,9 @@ const MAX_PLAYERS = 8;
 
 // createLegState/createCricketState moved to utils/gameStateFactory.ts (imported above) so the
 // online-match accept flow can build a real starting leg without duplicating this logic.
-
-/**
- * Applies a decided leg win (`winnerIndex`, a score-slot index — teamIdx-space, matching
- * `legsWon`/`currentLeg.remaining`) on top of `base` — either finishes the match (bestOfLegs
- * reached) or archives the leg and starts the next one via createLegState. `updatedLeg` is the
- * caller's own already-prepared current leg (with the deciding dart/state applied, if any);
- * `base` and `prev` are usually the same object — `base` only needs to differ when a caller has
- * its own extra fields to preserve in the non-finished branch (e.g. handleX01Throw's round-cap
- * path, which pre-sets a default `currentPlayerIndex` before knowing whether the cap ended the
- * leg). Shared by every place an X01 leg can end: a checkout, the maxRoundsX01 cap resolving to a
- * unique winner, and a bull-off tiebreak resolving a cap-tied leg — previously reimplemented at
- * each site (Game.tsx's own duplication tracking flagged this as the likely next source of a
- * fixed-in-one-path-forgotten-in-the-other bug).
- */
-function applyLegWin(base: GameState, prev: GameState, updatedLeg: LegState, winnerIndex: number): GameState {
-  const n = prev.players.length;
-  const legsWon = [...prev.legsWon];
-  legsWon[winnerIndex] += 1;
-  const legsToWin = Math.ceil(prev.bestOfLegs / 2);
-  const finishedLeg: LegState = { ...updatedLeg, winnerIndex };
-  if (legsWon[winnerIndex] >= legsToWin) {
-    return {
-      ...base,
-      currentLeg: finishedLeg,
-      legsWon,
-      isFinished: true,
-      winnerName: prev.teams ? prev.teams[winnerIndex].name : prev.players[winnerIndex].name,
-      winnerIndex,
-    };
-  }
-  const nextStarter = (finishedLeg.startingPlayerIndex + 1) % n;
-  return {
-    ...base,
-    legsWon,
-    completedLegs: [...prev.completedLegs, finishedLeg],
-    currentLeg: createLegState(finishedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams),
-    currentPlayerIndex: nextStarter,
-  };
-}
-
-/**
- * Applies one Cricket dart's marks/points to `myState` (the throwing player/team's own
- * CricketPlayerState) in place — mutates `myState.marks`/`myState.points` directly, matching the
- * "already-cloned, safe to mutate" convention every call site already uses for its own working
- * copy. Shared by the three places a Cricket dart's marks get computed: a live manual/bot throw,
- * a camera-detected round, and replaying a whole leg from scratch after a mid-leg delete —
- * previously reimplemented identically at each site.
- */
-function applyCricketDart(myState: CricketPlayerState, others: CricketPlayerState[], cricketNumbers: readonly number[], targetNumber: number, baseValue: number, multiplier: number): void {
-  if (!cricketNumbers.includes(targetNumber) || targetNumber === 0) return;
-  const hitsToAdd = baseValue === 50 ? 2 : multiplier;
-  const currentMarks = myState.marks[targetNumber] || 0;
-  const newMarks = currentMarks + hitsToAdd;
-  myState.marks = { ...myState.marks, [targetNumber]: newMarks };
-  const stillOpenForSomeoneElse = others.some((o) => (o.marks[targetNumber] || 0) < 3);
-  if (newMarks > 3 && stillOpenForSomeoneElse) {
-    const scorableHits = newMarks - Math.max(currentMarks, 3);
-    myState.points += targetNumber * scorableHits;
-  }
-}
-
-/**
- * Rebuilds Cricket marks/points from scratch by replaying a leg's throws in true chronological
- * order. Needed because — unlike X01's `remaining`, a simple running total that reverses cleanly
- * with `+= removed.points` — Cricket scoring is order-dependent ACROSS players: whether a hit
- * still scores points depends on whether every opponent has already closed that number, which
- * depends on the true interleaved throw order, not just this one player's own sequence. deleting
- * a single throw and only patching that one player's marks/points (the way X01 patches
- * `remaining`) can't correctly account for numbers that were open when the deleted throw happened
- * but have since closed, or vice versa.
- *
- * `currentLeg.throws` doesn't store a shared timestamp/sequence number across players, but turns
- * strictly alternate in up-to-3-dart visits starting from `startingPlayerIndex` (see
- * `currentPlayerIndex`'s own `(idx + 1) % n` advance elsewhere in this file) — enough structure to
- * reconstruct the true interleaving purely from each player's own already-ordered array: take up
- * to 3 darts from whoever's turn it is, advance, repeat, skipping (not looping forever on) a
- * player who's already exhausted their recorded throws for this leg.
- */
-function replayCricketState(
-  throwsByPlayer: DartThrow[][],
-  startingPlayerIndex: number,
-  teams: TeamSlot[] | undefined,
-  cricketNumbers: readonly number[]
-): CricketPlayerState[] {
-  const n = throwsByPlayer.length;
-  const scoreSlots = teams?.length ?? n;
-  const cricket = Array.from({ length: scoreSlots }, () => createCricketState(cricketNumbers));
-  const cursors = new Array(n).fill(0);
-  let active = startingPlayerIndex;
-  let exhaustedStreak = 0;
-  while (exhaustedStreak < n) {
-    const arr = throwsByPlayer[active];
-    if (cursors[active] >= arr.length) {
-      exhaustedStreak++;
-      active = (active + 1) % n;
-      continue;
-    }
-    exhaustedStreak = 0;
-    const take = Math.min(3, arr.length - cursors[active]);
-    const teamIdx = teamIndexFor(teams, active);
-    const myState = cricket[teamIdx];
-    for (let i = 0; i < take; i++) {
-      const d = arr[cursors[active] + i];
-      const others = cricket.filter((_, j) => j !== teamIdx);
-      const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
-      applyCricketDart(myState, others, cricketNumbers, targetNumber, d.baseValue, d.multiplier);
-    }
-    cursors[active] += take;
-    active = (active + 1) % n;
-  }
-  return cricket;
-}
-/** 6 unique random numbers (1-20) plus Bull, freshly rolled — never memoized/cached across games. */
-function generateRandomCricketNumbers(): number[] {
-  const pool = Array.from({ length: 20 }, (_, i) => i + 1);
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  return [...pool.slice(0, 6), 25];
-}
+// applyLegWin/applyCricketDart/replayCricketState/generateRandomCricketNumbers moved to
+// utils/legLogic.ts (Round 3 Rang 12 — see that file's own doc comment) — they were already pure,
+// closing over nothing but their own parameters, so this is a behavior-neutral extraction.
 
 /** Undo snapshot for reverting last dart */
 interface UndoSnapshot {
@@ -443,7 +330,10 @@ const GamePage = () => {
   // buttons, or a touchscreen double-touch) each see the OTHER's update instead of both computing
   // from the same stale remaining value and one silently clobbering the other's subtraction.
   const remainingRef = useRef<number[]>([]);
-  const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
+  // Round 3 Rang 4: shared/cached club roster (usePlayers) instead of this component's own
+  // fetchClubPlayers() mount effect — see usePlayers.ts. Defaults to [] while loading, same as
+  // the old useState did.
+  const { data: dbPlayers = [] } = usePlayers();
   // Head-to-head record for the walk-on screen — null while unresolved (no fetch fired yet,
   // or one of the two isn't a real roster player), { total: 0, ... } once fetched but this is
   // their first-ever meeting. Fetched once per game start (see startGame), not derived from
@@ -598,9 +488,11 @@ const GamePage = () => {
       const bracket = (tournament.bracket as unknown as (Match | RoundRobinMatch)[]) || [];
       const match = bracket.find((m) => m.id === matchId);
       if (!match?.player1 || !match?.player2) return;
-      const roster = await fetchClubPlayers();
-      if (cancelled) return;
-      const p1 = matchClubPlayer(roster, match.player1);
+      // Round 3 Rang 4: reads the shared usePlayers() roster (dbPlayers) instead of issuing its
+      // own fetchClubPlayers() call — dbPlayers is in the dependency array below so this effect
+      // retries once the roster has actually loaded, instead of only ever seeing an empty roster
+      // if it happened to run before the shared query resolved.
+      const p1 = matchClubPlayer(dbPlayers, match.player1);
       if (!p1?.user_id) return;
       tournamentLinkRef.current = {
         tournamentId, matchId, tournamentName: tournament.name,
@@ -610,7 +502,7 @@ const GamePage = () => {
       setTournamentLinkName(tournament.name || "Turnier");
     })();
     return () => { cancelled = true; };
-  }, [onlineMatch.row, tournamentLinkRef, setTournamentLinkName]);
+  }, [onlineMatch.row, tournamentLinkRef, setTournamentLinkName, dbPlayers]);
 
   const [botThinking, setBotThinking] = useState(false);
   const botTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -621,6 +513,11 @@ const GamePage = () => {
   // rolls its own fresh entry) — only reset on a genuinely new game, same as botPlanRef.
   const botLegConfigRef = useRef<Record<string, LevelConfig>>({});
   const [checkoutRates, setCheckoutRates] = useState<Record<string, number>>({});
+  // Round 3 Rang 16: per-player, per-double hit rates (e.g. "your D16 rate") alongside the flat
+  // overall checkoutRates above — see CheckoutSuggestion.tsx's personalDoubleBreakdown prop doc
+  // comment for why this is the more genuinely "personalized" of the two. Fetched in the exact
+  // same effect/query as checkoutRates below (same game_legs rows, no extra round trip).
+  const [checkoutDoubleRates, setCheckoutDoubleRates] = useState<Record<string, CheckoutDoubleBreakdown[]>>({});
   // Mirrors checkoutRates for the "already fetched this player" guard below — read via the ref
   // (not the checkoutRates closure) specifically so that effect doesn't need checkoutRates in its
   // own dependency array, which would re-fire it every time ANY player's rate gets cached, not
@@ -635,10 +532,6 @@ const GamePage = () => {
     setScoreFlash((prev) => ({ slot, key: (prev?.key ?? 0) + 1 }));
     window.setTimeout(() => setScoreFlash((prev) => (prev?.slot === slot ? null : prev)), 900);
   };
-
-  useEffect(() => {
-    fetchClubPlayers().then(setDbPlayers).catch((err) => console.error("fetchClubPlayers failed", err));
-  }, []);
 
   // Defaults player slot 1 to whoever's actually logged in (once their own claimed club profile
   // — players.user_id — is known), so starting a casual game doesn't require re-picking yourself
@@ -740,6 +633,12 @@ const GamePage = () => {
           data.map((leg) => computeCheckoutStats(leg.throws as unknown as DartThrow[], leg.starting_score))
         );
         if (combined.attempts > 0) setCheckoutRates((prev) => ({ ...prev, [player.name]: combined.percentage }));
+        // Round 3 Rang 16: same rows, no extra query — just a finer-grained breakdown of the
+        // same throws already fetched above for the overall rate.
+        const doubleBreakdown = combineCheckoutDoubleBreakdowns(
+          data.map((leg) => checkoutDoubleBreakdown(leg.throws as unknown as DartThrow[], leg.starting_score))
+        );
+        if (doubleBreakdown.length > 0) setCheckoutDoubleRates((prev) => ({ ...prev, [player.name]: doubleBreakdown }));
       });
   }, [game, phase, dbPlayers]);
 
@@ -3034,6 +2933,23 @@ const GamePage = () => {
             <p className="text-accent font-display text-xl uppercase mb-4">{t("game.wins")}</p>
             {game.bestOfLegs > 1 && <p className="text-sm text-muted-foreground mb-4">{game.legsWon.join(" : ")} {t("game.legsSuffix")}</p>}
 
+            {/* Round 3 Rang 8: a small supportive line for whoever didn't win — this screen used
+                to be entirely one-sided (trophy + winner name only), with nothing acknowledging
+                the other player at all. Only shown for a genuine 1-on-1 (or 2-team) match, where
+                "the loser" is unambiguous — a 3+-player free-for-all has no single obvious
+                runner-up to address here without a fuller placement breakdown this screen
+                doesn't have. */}
+            {(() => {
+              const participants = game.teams ?? game.players;
+              if (participants.length !== 2 || game.winnerIndex === undefined) return null;
+              const loserName = participants[game.winnerIndex === 0 ? 1 : 0].name;
+              return (
+                <p className="text-sm text-muted-foreground mb-4">
+                  {t("game.consolationMessage").replace("{name}", loserName)}
+                </p>
+              );
+            })()}
+
             {/* Leg filter — every stat block below (cards, distribution, detailed table, field
                 breakdown) reads through statFor(p), which reacts to this tab. Only shown once
                 there's more than one leg to actually distinguish. */}
@@ -3276,7 +3192,7 @@ const GamePage = () => {
                 </div>
               </div>
             )}
-            {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />}
+            {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null} />}
 
             {!currentPlayer?.isBot && (
               // A camera/ONNX failure on an unfamiliar Android/browser combo only takes down this
@@ -3395,7 +3311,7 @@ const GamePage = () => {
             {scoreboardBlock}
             {doubleInBanner}
             {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && (
-              <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} />
+              <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null} />
             )}
             {cricketBoard}
           </div>

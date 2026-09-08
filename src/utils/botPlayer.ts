@@ -32,14 +32,28 @@ export interface LevelConfig {
   aimedTriple: number;
   /** probability of hitting an aimed double / bull finish */
   doubleHitChance: number;
+  /** Round 3 Rang 11: of the `miss` probability above (a scoring dart aimed at a triple that
+   *  doesn't land there), the fraction that instead strays to an adjacent number's single —
+   *  a real player's "miss" rarely means the dart goes nowhere; it usually means it landed one
+   *  segment off. The remainder of `miss` is a genuine errant dart (0 points), same as before this
+   *  field existed. 0/undefined reproduces the old flat-zero behavior exactly — see simulateDart's
+   *  aimed-triple branch. Only elite/legendary use this (see doc comment above LEVEL_CONFIG); a
+   *  beginner bot missing the board entirely needs no such nuance. `miss` itself was retuned
+   *  alongside this for elite/legendary so the measured 3-dart averages below are unchanged —
+   *  see this file's own botsim tuning notes if re-deriving. */
+  missNeighborChance?: number;
 }
 
 const LEVEL_CONFIG: Record<BotLevel, LevelConfig> = {
   easy: { miss: 0.30, randomSingle: 0.44, aimedSingle: 0.20, aimedTriple: 0.06, doubleHitChance: 0.13 },
   medium: { miss: 0.22, randomSingle: 0.42, aimedSingle: 0.28, aimedTriple: 0.08, doubleHitChance: 0.18 },
   hard: { miss: 0.16, randomSingle: 0.37, aimedSingle: 0.34, aimedTriple: 0.13, doubleHitChance: 0.24 },
-  elite: { miss: 0.105, randomSingle: 0.305, aimedSingle: 0.375, aimedTriple: 0.215, doubleHitChance: 0.315 },
-  legendary: { miss: 0.075, randomSingle: 0.23, aimedSingle: 0.355, aimedTriple: 0.34, doubleHitChance: 0.43 },
+  // Round 3 Rang 11: miss/aimedTriple retuned (from .105/.215 and .075/.34) alongside the new
+  // missNeighborChance so the measured averages below stay ~71/~89 — see the doc comment on
+  // missNeighborChance above. Verified via a 16000-visit standalone re-simulation of the changed
+  // simulateDart logic, same methodology as the original "MEASURED, not aspirational" comment.
+  elite: { miss: 0.121, randomSingle: 0.305, aimedSingle: 0.375, aimedTriple: 0.199, doubleHitChance: 0.315, missNeighborChance: 0.45 },
+  legendary: { miss: 0.094, randomSingle: 0.23, aimedSingle: 0.355, aimedTriple: 0.321, doubleHitChance: 0.43, missNeighborChance: 0.65 },
 };
 
 /** The target-average band each named bot level rolls within (see rollConfigForLevel) — the
@@ -58,7 +72,7 @@ export const BOT_LEVEL_RANGES: Record<BotLevel, [number, number]> = {
  *  80-100 range — without this, anything requested above ≈89 would just clamp to the same
  *  center config, and the top of that range would never actually feel any different. Not a
  *  selectable tier of its own, just an extra control point. */
-const LEGENDARY_CEILING: LevelConfig = { miss: 0.06, randomSingle: 0.19, aimedSingle: 0.33, aimedTriple: 0.42, doubleHitChance: 0.50 };
+const LEGENDARY_CEILING: LevelConfig = { miss: 0.08, randomSingle: 0.19, aimedSingle: 0.33, aimedTriple: 0.40, doubleHitChance: 0.50, missNeighborChance: 0.75 };
 
 /** The LEVEL_CONFIG anchors paired with their own measured average, ascending — the control
  *  points configForAverage interpolates between. Order matters (binary-search-able by avg). */
@@ -82,6 +96,10 @@ function lerpConfig(lo: LevelConfig, hi: LevelConfig, t: number): LevelConfig {
     aimedSingle: lerp(lo.aimedSingle, hi.aimedSingle, t),
     aimedTriple: lerp(lo.aimedTriple, hi.aimedTriple, t),
     doubleHitChance: lerp(lo.doubleHitChance, hi.doubleHitChance, t),
+    // Round 3 Rang 11: ?? 0 so easy/medium/hard (which don't set this field) interpolate as if
+    // they were 0 rather than producing NaN — an in-between average approaching elite gains this
+    // near-miss realism gradually, instead of it switching on abruptly at the elite anchor.
+    missNeighborChance: lerp(lo.missNeighborChance ?? 0, hi.missNeighborChance ?? 0, t),
   };
 }
 
@@ -166,7 +184,19 @@ function simulateDart(targetBase: number, targetMultiplier: 1 | 2 | 3, cfg: Leve
 
   // Scoring dart aimed at a triple
   const roll = rand();
-  if (roll < cfg.miss) return miss();
+  if (roll < cfg.miss) {
+    // Round 3 Rang 11: at elite/legendary, most of what used to be a flat zero-point "miss" is
+    // now a dart that strayed onto the single of a neighboring number instead — see
+    // missNeighborChance's doc comment on LevelConfig. Easy/medium/hard have no missNeighborChance
+    // set (lerpConfig treats that as 0), so they keep the original flat-zero miss unchanged: a
+    // genuinely wild throw is exactly what "missing the board" should look like at that skill
+    // level, unlike a near-miss single at the top of the ladder.
+    if (cfg.missNeighborChance && rand() < cfg.missNeighborChance) {
+      const neighbor = Math.min(20, Math.max(1, targetBase + (rand() < 0.5 ? -1 : 1)));
+      return { baseValue: neighbor, multiplier: 1, points: neighbor };
+    }
+    return miss();
+  }
   if (roll < cfg.miss + cfg.randomSingle) {
     const base = 1 + Math.floor(rand() * 20);
     return { baseValue: base, multiplier: 1, points: base };

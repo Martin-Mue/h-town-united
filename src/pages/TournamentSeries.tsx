@@ -227,7 +227,14 @@ const TournamentSeriesPage = () => {
             <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t("common.optional")} rows={2} />
           </div>
           <div>
-            <label className="text-sm text-muted-foreground mb-2 block">{t("series.pointDistribution")}</label>
+            <label className="text-sm text-muted-foreground mb-1 block">{t("series.pointDistribution")}</label>
+            {/* Round 3 Rang 15: explanation + live preview — these five numbers are each the FULL
+                point total for that placement (computeStandings below adds participation for
+                everyone first, then only the delta above it for champion/runnerUp/semi/quarter),
+                which reads easily as "bonus on top of participation" without this hint. The
+                preview re-reads straight from `scoring` state, so it updates as the organizer
+                types — no separate computation, just the same numbers shown as an outcome. */}
+            <p className="text-xs text-muted-foreground mb-2">{t("series.pointDistributionHint")}</p>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
               {(["champion", "runnerUp", "semi", "quarter", "participation"] as const).map((k) => (
                 <div key={k}>
@@ -235,6 +242,14 @@ const TournamentSeriesPage = () => {
                   <Input type="number" value={scoring[k]} onChange={(e) => setScoring({ ...scoring, [k]: parseInt(e.target.value) || 0 })} className="h-8 text-sm" />
                 </div>
               ))}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="text-foreground/70">{t("series.previewLabel")}:</span>
+              <span>🏆 {scoring.champion} {t("tournament.pointsAbbrev")}</span>
+              <span>🥈 {scoring.runnerUp} {t("tournament.pointsAbbrev")}</span>
+              <span>{t("series.semifinalAbbrev")} {scoring.semi} {t("tournament.pointsAbbrev")}</span>
+              <span>{t("series.quarterfinalAbbrev")} {scoring.quarter} {t("tournament.pointsAbbrev")}</span>
+              <span>{t("series.participationAbbrev")} {scoring.participation} {t("tournament.pointsAbbrev")}</span>
             </div>
           </div>
           <Button onClick={saveSeries} className="w-full" disabled={!name.trim() || savingSeries}>

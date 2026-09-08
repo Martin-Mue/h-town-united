@@ -4,7 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Shield, ShieldOff, Trash2, UserCog, Pencil, PencilOff } from "lucide-react";
+import { Loader2, Shield, ShieldOff, Trash2, Pencil, PencilOff } from "lucide-react";
+import { AdminIcon } from "@/components/icons/DartIcons";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -118,7 +119,7 @@ const AdminPage = () => {
   return (
     <div className="container py-6 animate-slide-up">
       <div className="flex items-center gap-2 mb-6">
-        <UserCog className="w-6 h-6 text-primary" />
+        <AdminIcon className="w-6 h-6 text-primary" />
         <h1 className="text-2xl font-display uppercase">Administration</h1>
       </div>
 

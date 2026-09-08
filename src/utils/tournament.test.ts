@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { recomputeBracket, calcStandings, assignScorekeepers, currentBoardSchedule, fillByeSlot, BYE, type Match, type RoundRobinMatch } from "./tournament";
+import {
+  recomputeBracket,
+  calcStandings,
+  assignScorekeepers,
+  assignRrBoards,
+  assignRrScorekeepers,
+  withdrawRrPlayer,
+  addRrParticipant,
+  currentBoardSchedule,
+  fillByeSlot,
+  BYE,
+  type Match,
+  type RoundRobinMatch,
+} from "./tournament";
 
 describe("recomputeBracket", () => {
   it("propagates round winners into the next round", () => {
@@ -166,5 +179,97 @@ describe("calcStandings", () => {
     expect(names.indexOf("A")).toBeLessThan(names.indexOf("B"));
     expect(names[0]).toBe("C");
     expect(names[names.length - 1]).toBe("D");
+  });
+});
+
+describe("assignRrBoards", () => {
+  it("cycles board numbers across unplayed matches and clears the board of played ones", () => {
+    const matches: RoundRobinMatch[] = [
+      { id: "m1", player1: "A", player2: "B", played: false },
+      { id: "m2", player1: "A", player2: "C", played: false },
+      { id: "m3", player1: "B", player2: "C", played: true, winner: "B", board: 4 },
+      { id: "m4", player1: "A", player2: "D", played: false },
+    ];
+    const result = assignRrBoards(matches, 2);
+    expect(result.find((m) => m.id === "m1")!.board).toBe(1);
+    expect(result.find((m) => m.id === "m2")!.board).toBe(2);
+    expect(result.find((m) => m.id === "m3")!.board).toBeUndefined();
+    expect(result.find((m) => m.id === "m4")!.board).toBe(1);
+  });
+
+  it("falls back to a single board instead of dividing by zero", () => {
+    const matches: RoundRobinMatch[] = [{ id: "m1", player1: "A", player2: "B", played: false }];
+    expect(assignRrBoards(matches, 0)[0].board).toBe(1);
+  });
+});
+
+describe("assignRrScorekeepers", () => {
+  it("never assigns a match's own two players as its scorekeeper", () => {
+    const matches: RoundRobinMatch[] = [
+      { id: "m1", player1: "A", player2: "B", played: false },
+      { id: "m2", player1: "C", player2: "D", played: false },
+    ];
+    const result = assignRrScorekeepers(matches, ["A", "B", "C", "D"]);
+    const m1 = result.find((m) => m.id === "m1")!;
+    const m2 = result.find((m) => m.id === "m2")!;
+    expect(["A", "B"]).not.toContain(m1.scorekeeper);
+    expect(["C", "D"]).not.toContain(m2.scorekeeper);
+  });
+
+  it("keeps a locked scorekeeper even when it isn't load-balanced", () => {
+    const matches: RoundRobinMatch[] = [
+      { id: "m1", player1: "A", player2: "B", played: false, scorekeeper: "C", scorekeeperLocked: true },
+      { id: "m2", player1: "C", player2: "D", played: false },
+    ];
+    const result = assignRrScorekeepers(matches, ["A", "B", "C", "D"]);
+    const m1 = result.find((m) => m.id === "m1")!;
+    expect(m1.scorekeeper).toBe("C");
+    expect(m1.scorekeeperLocked).toBe(true);
+  });
+
+  it("clears a lock and reassigns once the locked scorekeeper is no longer an active participant", () => {
+    const matches: RoundRobinMatch[] = [
+      { id: "m1", player1: "A", player2: "B", played: false, scorekeeper: "C", scorekeeperLocked: true },
+    ];
+    // C withdrew — no longer in the participants list
+    const result = assignRrScorekeepers(matches, ["A", "B", "D"]);
+    const m1 = result.find((m) => m.id === "m1")!;
+    expect(m1.scorekeeperLocked).toBeUndefined();
+    expect(m1.scorekeeper).toBe("D");
+  });
+
+  it("leaves already-played matches completely untouched", () => {
+    const matches: RoundRobinMatch[] = [
+      { id: "m1", player1: "A", player2: "B", played: true, winner: "A", scorekeeper: "C" },
+    ];
+    const result = assignRrScorekeepers(matches, ["A", "B", "C"]);
+    expect(result[0]).toBe(matches[0]);
+  });
+});
+
+describe("withdrawRrPlayer", () => {
+  it("drops only the withdrawn player's unplayed matches, keeping played ones for the standings history", () => {
+    const matches: RoundRobinMatch[] = [
+      { id: "m1", player1: "A", player2: "B", played: false },
+      { id: "m2", player1: "A", player2: "C", played: true, winner: "A" },
+      { id: "m3", player1: "B", player2: "C", played: false },
+    ];
+    const result = withdrawRrPlayer(matches, "A");
+    expect(result.map((m) => m.id).sort()).toEqual(["m2", "m3"]);
+  });
+});
+
+describe("addRrParticipant", () => {
+  it("adds one fresh unplayed match against every player already in the bracket", () => {
+    const matches: RoundRobinMatch[] = [
+      { id: "m1", player1: "A", player2: "B", played: true, winner: "A" },
+      { id: "m2", player1: "A", player2: "C", played: false },
+      { id: "m3", player1: "B", player2: "C", played: false },
+    ];
+    const result = addRrParticipant(matches, "D");
+    expect(result.length).toBe(6);
+    const fresh = result.slice(3);
+    expect(fresh.every((m) => m.player2 === "D" && !m.played)).toBe(true);
+    expect(new Set(fresh.map((m) => m.player1))).toEqual(new Set(["A", "B", "C"]));
   });
 });

@@ -308,6 +308,9 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.onlineDisconnected": { de: "Verbindung unterbrochen", en: "Connection lost", fr: "Connexion perdue", pl: "Utracono połączenie", nl: "Verbinding verbroken", tr: "Bağlantı kesildi" },
   "game.wins": { de: "Gewinnt!", en: "Wins!", fr: "Gagne !", pl: "Wygrywa!", nl: "Wint!", tr: "Kazandı!" },
   "game.legsSuffix": { de: "Legs", en: "Legs", fr: "Legs", pl: "Legi", nl: "Legs", tr: "Legler" },
+  // Round 3 Rang 8: winner overlay used to say nothing at all about whoever didn't win — this is
+  // the one line that acknowledges them. {name} is replaced with the losing player/team's name.
+  "game.consolationMessage": { de: "Gut gekämpft, {name}! Nächstes Mal klappt's.", en: "Well played, {name}! Next time's yours.", fr: "Bien joué, {name} ! La prochaine fois sera la tienne.", pl: "Dobra gra, {name}! Następnym razem się uda.", nl: "Goed gespeeld, {name}! Volgende keer is het jouwe.", tr: "İyi oynadın, {name}! Bir dahaki sefere senindir." },
   "game.lessStats": { de: "Weniger anzeigen", en: "Show less", fr: "Voir moins", pl: "Pokaż mniej", nl: "Minder tonen", tr: "Daha az göster" },
   "game.detailedStats": { de: "Detaillierte Statistiken", en: "Detailed statistics", fr: "Statistiques détaillées", pl: "Szczegółowe statystyki", nl: "Gedetailleerde statistieken", tr: "Detaylı istatistikler" },
   "game.scoreDistribution": { de: "Rundenverteilung", en: "Round distribution", fr: "Répartition des tours", pl: "Rozkład rund", nl: "Rondeverdeling", tr: "Tur dağılımı" },
@@ -403,7 +406,13 @@ export const translations: Record<string, Record<Language, string>> = {
   "reflection.saveFailed": { de: "Konnte gerade nicht gespeichert werden — bitte später erneut versuchen.", en: "Couldn't save this right now — please try again later.", fr: "Impossible d'enregistrer pour le moment — merci de réessayer plus tard.", pl: "Nie udało się teraz zapisać — spróbuj ponownie później.", nl: "Kon dit nu niet opslaan — probeer het later opnieuw.", tr: "Şu anda kaydedilemedi — lütfen daha sonra tekrar dene." },
 
   // CheckoutSuggestion.tsx
-  "game.checkoutRateTooltip": { de: "Deine bisherige Checkout-Quote in diesem Score-Bereich", en: "Your checkout rate so far in this score range", fr: "Ton taux de checkout jusqu'ici dans cette plage de score", pl: "Twój dotychczasowy wskaźnik checkoutu w tym zakresie wyniku", nl: "Jouw checkout-percentage tot nu toe in dit scorebereik", tr: "Bu skor aralığındaki şimdiye kadarki checkout oranın" },
+  // Round 3 Rang 16: this tooltip previously claimed "in diesem Score-Bereich" / "in this score
+  // range" — CheckoutSuggestion only ever computed one flat OVERALL rate (combineCheckoutStats
+  // across every attempt, any remaining), so the copy overclaimed a specificity nothing behind it
+  // delivered. Now genuinely true: this exact wording is the fallback shown only when there's no
+  // real per-double data yet (see checkoutRateTooltipDouble below for the actual specific case).
+  "game.checkoutRateTooltip": { de: "Deine bisherige Checkout-Quote insgesamt", en: "Your overall checkout rate so far", fr: "Ton taux de checkout global jusqu'ici", pl: "Twój dotychczasowy ogólny wskaźnik checkoutu", nl: "Jouw algemene checkout-percentage tot nu toe", tr: "Şimdiye kadarki genel checkout oranın" },
+  "game.checkoutRateTooltipDouble": { de: "Deine bisherige Trefferquote auf genau dieses Doppel", en: "Your hit rate specifically for exactly this double", fr: "Ton taux de réussite spécifiquement sur ce double précis", pl: "Twój dotychczasowy wskaźnik trafień dokładnie w to podwójne pole", nl: "Jouw trefpercentage specifiek voor precies dit dubbel", tr: "Tam olarak bu duble için isabet oranın" },
   "game.rateLabel": { de: "Quote:", en: "Rate:", fr: "Taux :", pl: "Wskaźnik:", nl: "Percentage:", tr: "Oran:" },
 
   // ThrowHistoryEditor.tsx
@@ -805,6 +814,7 @@ export const translations: Record<string, Record<Language, string>> = {
 
   // Tournament.tsx — bracket phase (KO live view + round-robin header).
   "tournament.tournamentHighlights": { de: "Turnier-Highlights", en: "Tournament highlights", fr: "Highlights du tournoi", pl: "Najlepsze momenty turnieju", nl: "Toernooi-highlights", tr: "Turnuva öne çıkanları" },
+  "tournament.tournamentForecast": { de: "Turnier-Prognose", en: "Tournament forecast", fr: "Prévision du tournoi", pl: "Prognoza turnieju", nl: "Toernooiprognose", tr: "Turnuva tahmini" },
   "tournament.liveOn": { de: "Live an", en: "Live on", fr: "Direct actif", pl: "Na żywo wł.", nl: "Live aan", tr: "Canlı açık" },
   "tournament.liveView": { de: "Live-Ansicht", en: "Live view", fr: "Vue en direct", pl: "Widok na żywo", nl: "Live-weergave", tr: "Canlı görünüm" },
   "tournament.overview": { de: "Übersicht", en: "Overview", fr: "Vue d'ensemble", pl: "Przegląd", nl: "Overzicht", tr: "Genel bakış" },
@@ -937,6 +947,14 @@ export const translations: Record<string, Record<Language, string>> = {
   "common.description": { de: "Beschreibung", en: "Description", fr: "Description", pl: "Opis", nl: "Beschrijving", tr: "Açıklama" },
   "common.optional": { de: "Optional", en: "Optional", fr: "Optionnel", pl: "Opcjonalnie", nl: "Optioneel", tr: "İsteğe bağlı" },
   "series.pointDistribution": { de: "Punkteverteilung", en: "Point distribution", fr: "Répartition des points", pl: "Rozdział punktów", nl: "Puntenverdeling", tr: "Puan dağılımı" },
+  // Round 3 Rang 15: the point-distribution form (TournamentSeries.tsx) gave organizers five bare
+  // number inputs with no explanation of how they combine — computeStandings there treats each
+  // number as the placement's FULL total (participation is added for everyone first, then only
+  // the DELTA above participation for champion/runnerUp/semi/quarter), not a bonus stacked on top
+  // of participation, which isn't obvious from the form alone and was genuinely easy to misread
+  // as "champion gets this PLUS participation".
+  "series.pointDistributionHint": { de: "Jede Zahl ist die volle Punktzahl für diesen Platz, nicht zusätzlich zur Teilnahme — der Sieger bekommt genau den Wert unter „1.“, nicht Teilnahme obendrauf.", en: "Each number is the full point total for that placement, not on top of participation — the champion gets exactly the value under \"1.\", not participation added on.", fr: "Chaque nombre est le total complet de points pour ce classement, pas en plus de la participation — le champion reçoit exactement la valeur sous « 1. », pas la participation en plus.", pl: "Każda liczba to całkowita liczba punktów za to miejsce, a nie dodatek do punktów za udział — zwycięzca dostaje dokładnie wartość pod „1.“, bez doliczania punktów za udział.", nl: "Elk getal is het volledige puntentotaal voor die plaatsing, niet bovenop deelname — de winnaar krijgt precies de waarde onder „1.“, niet deelname erbovenop.", tr: "Her sayı o sıralama için toplam puandır, katılım puanına ek değildir — şampiyon tam olarak \"1.\" altındaki değeri alır, katılım puanı eklenmez." },
+  "series.previewLabel": { de: "Vorschau", en: "Preview", fr: "Aperçu", pl: "Podgląd", nl: "Voorbeeld", tr: "Önizleme" },
   "series.semifinalAbbrev": { de: "SF", en: "SF", fr: "SF", pl: "PF", nl: "SF", tr: "YF" },
   "series.quarterfinalAbbrev": { de: "VF", en: "QF", fr: "QF", pl: "ĆF", nl: "KF", tr: "ÇF" },
   "series.participationAbbrev": { de: "Teiln.", en: "Part.", fr: "Part.", pl: "Udz.", nl: "Deeln.", tr: "Kat." },
@@ -946,6 +964,12 @@ export const translations: Record<string, Record<Language, string>> = {
   "series.deleteSeries": { de: "Serie löschen", en: "Delete series", fr: "Supprimer la série", pl: "Usuń serię", nl: "Reeks verwijderen", tr: "Seriyi sil" },
   "series.deleteSeriesConfirm": { de: "Serie löschen?", en: "Delete series?", fr: "Supprimer la série ?", pl: "Usunąć serię?", nl: "Reeks verwijderen?", tr: "Seri silinsin mi?" },
   "series.deleteSeriesWarning": { de: "wird gelöscht. Die enthaltenen Turniere bleiben erhalten, verlieren aber ihre Zuordnung zur Serie.", en: "will be deleted. The tournaments it contains stay intact but lose their assignment to the series.", fr: "sera supprimée. Les tournois qu'elle contient restent intacts mais perdent leur association à la série.", pl: "zostanie usunięta. Zawarte w niej turnieje pozostaną, ale stracą przypisanie do serii.", nl: "wordt verwijderd. De toernooien erin blijven behouden, maar verliezen hun koppeling aan de reeks.", tr: "silinecek. İçerdiği turnuvalar kalır ancak seriye atanmışlıkları kaybolur." },
+  // Round 3 Rang 7: League.tsx's first two i18n keys — the file otherwise still has no useLanguage()
+  // call at all (a standalone, not-yet-fully-integrated page, unlike every other page in the app),
+  // added here only for its two empty states (the "illustrated empty states" gap the audit found:
+  // the participants-table one had no icon at all yet, unlike every other empty state in the app).
+  "league.noParticipantsYet": { de: "Noch keine Teilnehmer.", en: "No participants yet.", fr: "Pas encore de participants.", pl: "Jeszcze żadnych uczestników.", nl: "Nog geen deelnemers.", tr: "Henüz katılımcı yok." },
+  "league.noLeaguesYet": { de: "Noch keine Ligen. Erstelle die erste!", en: "No leagues yet. Create the first one!", fr: "Pas encore de ligues. Crée la première !", pl: "Jeszcze żadnych lig. Utwórz pierwszą!", nl: "Nog geen competities. Maak de eerste aan!", tr: "Henüz lig yok. İlkini oluştur!" },
 
   // Training.tsx — drill definitions.
   "training.doublesOnlyDesc": { de: "Triff jedes Doppelfeld einmal. Trainiere deine Checkout-Sicherheit.", en: "Hit every double field once. Train your checkout reliability.", fr: "Touche chaque double une fois. Entraîne ta fiabilité au checkout.", pl: "Trafiaj każde pole double raz. Trenuj pewność checkoutów.", nl: "Raak elk dubbel veld één keer. Train je checkout-betrouwbaarheid.", tr: "Her çift alanı bir kez vur. Checkout güvenilirliğini geliştir." },
@@ -1114,6 +1138,9 @@ export const translations: Record<string, Record<Language, string>> = {
   "players.fairPairings": { de: "Faire Paarungen", en: "Fair pairings", fr: "Appariements équitables", pl: "Sprawiedliwe pary", nl: "Eerlijke koppels", tr: "Adil eşleşmeler" },
   "players.playOnline": { de: "Online spielen", en: "Play online", fr: "Jouer en ligne", pl: "Graj online", nl: "Online spelen", tr: "Çevrimiçi oyna" },
   "players.chooseOpponent": { de: "Gegner wählen", en: "Choose opponent", fr: "Choisir un adversaire", pl: "Wybierz przeciwnika", nl: "Kies tegenstander", tr: "Rakip seç" },
+  // Round 3 Rang 9: shown next to opponents within ELO_CLOSE_MATCH_THRESHOLD of your own rating
+  // in OnlineChallengeSetup's now-Elo-sorted opponent list.
+  "players.goodMatch": { de: "guter Gegner", en: "good match", fr: "bon adversaire", pl: "dobry przeciwnik", nl: "goede tegenstander", tr: "iyi eşleşme" },
   "players.noOnlineOpponents": { de: "Kein anderes Mitglied mit eigenem Account verfügbar.", en: "No other member with their own account available.", fr: "Aucun autre membre avec son propre compte disponible.", pl: "Brak innego członka z własnym kontem.", nl: "Geen ander lid met een eigen account beschikbaar.", tr: "Kendi hesabı olan başka üye yok." },
   "players.legsFormat": { de: "Format", en: "Format", fr: "Format", pl: "Format", nl: "Formaat", tr: "Format" },
   "players.sendChallenge": { de: "Herausfordern", en: "Send challenge", fr: "Défier", pl: "Wyzwij", nl: "Uitdagen", tr: "Meydan oku" },

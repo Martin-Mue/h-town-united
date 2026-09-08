@@ -127,3 +127,18 @@ export const SeasonIcon = (props: SVGProps<SVGSVGElement>) => (
     <path d="M12 5.2 L13.1 7.4 L15.5 7.75 L13.75 9.45 L14.15 11.85 L12 10.7 L9.85 11.85 L10.25 9.45 L8.5 7.75 L10.9 7.4 Z" fill="currentColor" stroke="none" />
   </svg>
 );
+
+/** Nav: "Admin" (Round 3 Rang 6) — replaces lucide's generic UserCog. Admin sits in the exact
+ *  same nav slot as the original six above (Layout.tsx's desktop nav, mobile top-level nav, and
+ *  the "Mehr" drawer all read it from the same list) but was left on a stock lucide icon when
+ *  this set was first drawn, since it's only ever shown to admins. A shield with a checkmark —
+ *  "verified control area", not a single throw or match, so deliberately not built from the
+ *  shaft/tip/flight vocabulary (same reasoning as SeasonIcon's medal above). Distinct on purpose
+ *  from the plain lucide Shield/ShieldOff still used inside Admin.tsx for the per-member
+ *  grant/revoke buttons — those are a specific role-toggle action, not this nav concept. */
+export const AdminIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE_PROPS} {...props}>
+    <path d="M12 3.3 L18.4 5.7 V11.3 C18.4 15.8 15.6 18.7 12 20.4 C8.4 18.7 5.6 15.8 5.6 11.3 V5.7 Z" />
+    <path d="M8.8 11.9 L10.9 14 L15.3 9.2" />
+  </svg>
+);

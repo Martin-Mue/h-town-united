@@ -1,7 +1,7 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { LogOut, UserCog, CloudOff, RefreshCw, Settings, MoreHorizontal } from "lucide-react";
-import { HomeIcon, DartGameIcon, StatsIcon, TrainingIcon, DartTrophyIcon, ClubIcon } from "@/components/icons/DartIcons";
+import { LogOut, CloudOff, RefreshCw, Settings, MoreHorizontal } from "lucide-react";
+import { HomeIcon, DartGameIcon, StatsIcon, TrainingIcon, DartTrophyIcon, ClubIcon, AdminIcon } from "@/components/icons/DartIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
@@ -20,6 +20,7 @@ import htuEmblem from "@/assets/club-emblem.png";
 // see that file's doc comment for why: these six are the icons every member sees on every
 // screen (desktop nav above AND the mobile bottom nav further down both read from this same
 // array), so they're the highest-value place to look like DartSpot instead of "any shadcn app".
+// Admin (added below, admin-only) uses the same hand-drawn set too (AdminIcon, Round 3 Rang 6).
 const NAV_ITEMS = [
   { to: "/", icon: HomeIcon, labelKey: "nav.home" },
   { to: "/game", icon: DartGameIcon, labelKey: "nav.game" },
@@ -56,7 +57,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const coreMobileItems = NAV_ITEMS.filter((item) => CORE_MOBILE_PATHS.has(item.to));
   const moreMobileItems = [
     ...NAV_ITEMS.filter((item) => !CORE_MOBILE_PATHS.has(item.to)),
-    ...(isAdmin ? [{ to: "/admin", icon: UserCog, labelKey: "nav.admin" }] : []),
+    ...(isAdmin ? [{ to: "/admin", icon: AdminIcon, labelKey: "nav.admin" }] : []),
   ];
   const mobileSlotCount = coreMobileItems.length + 1; // +1 for the "Mehr" slot itself
   const moreActive = moreMobileItems.some((item) => location.pathname === item.to);
@@ -150,7 +151,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
                       : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
                 >
-                  <UserCog className="w-4 h-4" />
+                  <AdminIcon className="w-4 h-4" />
                   {t("nav.admin")}
                 </Link>
               )}

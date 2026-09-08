@@ -8,6 +8,8 @@ import {
   type BracketActionPayload,
   recomputeBracket,
   assignScorekeepers,
+  assignRrBoards,
+  assignRrScorekeepers,
   bracketChampion,
   calcStandings,
   newlyPlayableMatches,
@@ -15,6 +17,7 @@ import {
   buildMatchReadyPush,
   isPlayable,
 } from "@/utils/tournament";
+import { parsePlayers, parseBracket, parseRoundConfigs } from "@/lib/schemas/tournament";
 
 export interface MatchResultInput {
   winnerName: string;
@@ -132,15 +135,22 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
     if (!tournament) throw new Error("Tournament not found");
 
     if (tournament.mode === "round-robin") {
-      const rrBracket = (tournament.bracket as unknown as RoundRobinMatch[]) || [];
+      const rrBracket = parseBracket(tournament.bracket, `tournament ${tournamentId} (recordMatchResult)`) as RoundRobinMatch[];
       // Someone else's write already decided this match (two devices finishing the same match
       // close together, or a manual correction landing first) — don't clobber a real result with
       // whatever this call happened to compute. Not an error to retry: the underlying game row is
       // saved regardless (see the caller), only this specific bracket write-back is a no-op.
       if (rrBracket.find((m) => m.id === matchId)?.played) return;
-      const bracket = rrBracket.map((m) =>
+      const raw = rrBracket.map((m) =>
         m.id === matchId ? { ...m, winner: result.winnerName, played: true, live: undefined } : m
       );
+      // Board/scorekeeper toolkit (Round 3, Rang 1): a finished match frees up its board and its
+      // scorekeeper slot, same as recomputeBracket+assignScorekeepers does for KO just below --
+      // without this, a live game finishing left the just-played match's board/scorekeeper stale
+      // and never handed that board number to whichever match cycles into it next.
+      const activePlayers = parsePlayers(tournament.players, `tournament ${tournamentId} (recordMatchResult)`);
+      const withBoards = assignRrBoards(raw, tournament.boards || 2);
+      const bracket = assignRrScorekeepers(withBoards, activePlayers, { keepExisting: true });
       const allPlayed = bracket.length > 0 && bracket.every((m) => m.played);
       const champion = allPlayed ? calcStandings(bracket)[0]?.name || null : null;
       const { data: updated, error: updErr } = await supabase.from("tournaments").update({
@@ -153,7 +163,7 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
       continue; // lost the race — someone else wrote first; re-fetch and try again
     }
 
-    const koBracket = (tournament.bracket as unknown as Match[]) || [];
+    const koBracket = parseBracket(tournament.bracket, `tournament ${tournamentId} (recordMatchResult)`) as Match[];
     // Same reasoning as the round-robin branch above — already decided by another write, skip
     // rather than overwrite (and never throw here: the caller queues a thrown error for retry,
     // which would just fail identically forever once a match is genuinely already decided).
@@ -161,7 +171,7 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
     const raw = koBracket.map((m) =>
       m.id === matchId ? { ...m, winner: result.winnerName, score1: result.score1, score2: result.score2, live: undefined } : m
     );
-    const activePlayers = (tournament.players as unknown as string[]) || [];
+    const activePlayers = parsePlayers(tournament.players, `tournament ${tournamentId} (recordMatchResult)`);
     const recomputed = recomputeBracket(raw, activePlayers);
     const withKeepers = assignScorekeepers(recomputed, activePlayers, {
       boards: tournament.boards || 2,
@@ -175,7 +185,7 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
     }).eq("id", tournamentId).eq("updated_at", tournament.updated_at).select("id");
     if (updErr) throw updErr;
     if (updated && updated.length > 0) {
-      void notifyMatchesReady(newlyPlayableMatches((tournament.bracket as unknown as Match[]) || [], withKeepers));
+      void notifyMatchesReady(newlyPlayableMatches(koBracket, withKeepers));
       return;
     }
     // lost the race — someone else wrote (or manually edited) the tournament between our SELECT
@@ -279,9 +289,17 @@ export async function applyBracketAction(tournamentId: string, action: BracketAc
     if (!tournament) throw new Error("Tournament not found");
 
     if (tournament.mode === "round-robin") {
-      const freshBracket = (tournament.bracket as unknown as RoundRobinMatch[]) || [];
-      const patched = applyActionToRrBracket(freshBracket, action);
-      if (!patched) return { bracket: freshBracket, champion: tournament.champion, status: tournament.status, newlyPlayable: [] };
+      const freshBracket = parseBracket(tournament.bracket, `tournament ${tournamentId} (applyBracketAction)`) as RoundRobinMatch[];
+      const rawPatched = applyActionToRrBracket(freshBracket, action);
+      if (!rawPatched) return { bracket: freshBracket, champion: tournament.champion, status: tournament.status, newlyPlayable: [] };
+      // Same reasoning as recordMatchResult's round-robin branch above: setRrWinner/resetRrMatch
+      // change which matches are done, so the board/scorekeeper rotation needs a fresh pass too —
+      // otherwise a manual tap (or its queued offline replay) left a played match's board still
+      // "assigned" and a reset match with no scorekeeper until the next unrelated write happened
+      // to trigger persistRrBracket from the organizer UI.
+      const rrPlayers = parsePlayers(tournament.players, `tournament ${tournamentId} (applyBracketAction)`);
+      const withBoards = assignRrBoards(rawPatched, tournament.boards || 2);
+      const patched = assignRrScorekeepers(withBoards, rrPlayers, { keepExisting: true });
       const allPlayed = patched.length > 0 && patched.every((m) => m.played);
       const champion = allPlayed ? calcStandings(patched)[0]?.name || null : null;
       const { data: updated, error: updErr } = await supabase.from("tournaments").update({
@@ -294,10 +312,10 @@ export async function applyBracketAction(tournamentId: string, action: BracketAc
       continue; // lost the race — re-fetch and try again
     }
 
-    const freshBracket = (tournament.bracket as unknown as Match[]) || [];
-    const activePlayers = (tournament.players as unknown as string[]) || [];
+    const freshBracket = parseBracket(tournament.bracket, `tournament ${tournamentId} (applyBracketAction)`) as Match[];
+    const activePlayers = parsePlayers(tournament.players, `tournament ${tournamentId} (applyBracketAction)`);
     const rawPatched = applyActionToKoBracket(freshBracket, action, {
-      roundConfigs: tournament.round_configs as unknown as { bestOf: number }[] | undefined,
+      roundConfigs: parseRoundConfigs(tournament.round_configs, `tournament ${tournamentId} (applyBracketAction)`),
       defaultBestOf: tournament.best_of_legs || 1,
     });
     if (!rawPatched) return { bracket: freshBracket, champion: tournament.champion, status: tournament.status, newlyPlayable: [] };

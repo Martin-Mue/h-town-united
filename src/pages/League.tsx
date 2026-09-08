@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Loader2, Users, Swords, Wifi } from "lucide-react";
+import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Loader2, Users, Swords, Wifi, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useToast } from "@/hooks/use-toast";
-import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
+import { usePlayers } from "@/hooks/usePlayers";
 import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
 import { applyLeagueFixtureResult } from "@/lib/leagueFixtureSync";
 import { enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
@@ -47,6 +48,9 @@ interface FixtureRow {
   winner_id: string | null;
   player1_legs_won: number | null;
   player2_legs_won: number | null;
+  /** Round 3 Rang 10: organizer-set matchday (Spieltag) date, shared across every fixture in the
+   *  same round_number — distinct from played_at (only set once a fixture is actually finished). */
+  scheduled_date: string | null;
 }
 
 const BEST_OF_OPTIONS = [1, 3, 5, 7];
@@ -59,11 +63,16 @@ const LeaguePage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { session } = useAuth();
+  const { t } = useLanguage();
   const { clubId } = useClubBranding();
   const { toast } = useToast();
 
   const [leagues, setLeagues] = useState<LeagueRow[]>([]);
-  const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
+  // Round 3 Rang 4: shared/cached club roster (see usePlayers.ts) instead of this page's own
+  // fetchClubPlayers() call inside fetchAll below — kept the `dbPlayers` name so every existing
+  // consumer of it further down in this file (playerById, the participant checklist, ...) is
+  // untouched.
+  const { data: dbPlayers = [], isLoading: playersLoading } = usePlayers();
   const [loading, setLoading] = useState(true);
   const [fixtures, setFixtures] = useState<FixtureRow[]>([]);
 
@@ -83,12 +92,8 @@ const LeaguePage = () => {
   const [savingResult, setSavingResult] = useState(false);
 
   const fetchAll = useCallback(async () => {
-    const [l, p] = await Promise.all([
-      supabase.from("leagues").select("*").order("created_at", { ascending: false }),
-      fetchClubPlayers(),
-    ]);
+    const l = await supabase.from("leagues").select("*").order("created_at", { ascending: false });
     if (l.data) setLeagues(l.data as unknown as LeagueRow[]);
-    setDbPlayers(p);
     setLoading(false);
   }, []);
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -101,6 +106,26 @@ const LeaguePage = () => {
     setFixtures((data as unknown as FixtureRow[]) ?? []);
   }, [id]);
   useEffect(() => { fetchFixtures(); }, [fetchFixtures]);
+
+  const [savingRoundDate, setSavingRoundDate] = useState<number | null>(null);
+  /** Round 3 Rang 10: writes one matchday date to every fixture sharing this round_number — a
+   *  Spieltag is scheduled as a whole, not fixture-by-fixture (see the migration's doc comment for
+   *  why this is a plain shared column rather than a separate per-round table). `date` is an empty
+   *  string to clear a previously-set date (the <input type="date"> onChange value on clear). */
+  const setRoundScheduledDate = async (round: number, date: string) => {
+    if (!id) return;
+    setSavingRoundDate(round);
+    const { error } = await supabase.from("league_fixtures")
+      .update({ scheduled_date: date || null })
+      .eq("league_id", id)
+      .eq("round_number", round);
+    setSavingRoundDate(null);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+      return;
+    }
+    await fetchFixtures();
+  };
 
   const playerById = useMemo(() => new Map(dbPlayers.map((p) => [p.id, p])), [dbPlayers]);
 
@@ -337,7 +362,14 @@ const LeaguePage = () => {
         <SectionCard className="mb-4">
           <Eyebrow icon={Trophy}>Tabelle</Eyebrow>
           {standings.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Noch keine Teilnehmer.</p>
+            // Round 3 Rang 7: the one remaining "pure text" empty state in the app — every other
+            // list-empty-state already leads with an icon (Trophy/Layers/Target/... elsewhere),
+            // this was the last gap the audit found. Swords matches this page's own header/list
+            // icon just below, so it stays visually consistent with the rest of League.tsx too.
+            <div className="text-center py-8 text-muted-foreground">
+              <Swords className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">{t("league.noParticipantsYet")}</p>
+            </div>
           ) : (
             <div className="space-y-1">
               <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-2 px-3 text-[10px] text-muted-foreground uppercase mb-1">
@@ -376,11 +408,37 @@ const LeaguePage = () => {
             <p className="text-sm text-muted-foreground">Keine Partien.</p>
           ) : (
             <div className="space-y-4">
-              {fixturesByRound.map(([round, roundFixtures]) => (
+              {fixturesByRound.map(([round, roundFixtures]) => {
+                const scheduledDate = roundFixtures[0].scheduled_date;
+                const isOrganizer = activeLeague.created_by === session?.user?.id;
+                return (
                 <div key={round}>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
-                    Runde {round}{legLabel(roundFixtures[0].leg) ? ` · ${legLabel(roundFixtures[0].leg)}` : ""}
-                  </p>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Runde {round}{legLabel(roundFixtures[0].leg) ? ` · ${legLabel(roundFixtures[0].leg)}` : ""}
+                    </p>
+                    {/* Round 3 Rang 10: a Spieltag is scheduled as a whole round, not per fixture —
+                        see setRoundScheduledDate's doc comment. Read-only date text for everyone
+                        else once a date is set; only the league's organizer gets the editable
+                        input (same creator-only gate as the league edit/delete buttons above). */}
+                    {isOrganizer ? (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <CalendarDays className="w-3 h-3 text-muted-foreground" />
+                        <Input
+                          type="date"
+                          value={scheduledDate ?? ""}
+                          disabled={savingRoundDate === round}
+                          onChange={(e) => setRoundScheduledDate(round, e.target.value)}
+                          className="h-6 w-[130px] text-[10px] px-1.5 bg-muted border-border"
+                        />
+                      </div>
+                    ) : scheduledDate ? (
+                      <p className="flex items-center gap-1 text-[10px] text-muted-foreground shrink-0">
+                        <CalendarDays className="w-3 h-3" />
+                        {new Date(scheduledDate).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
+                      </p>
+                    ) : null}
+                  </div>
                   <div className="space-y-1.5">
                     {roundFixtures.map((f) => {
                       const p1 = playerById.get(f.player1_id);
@@ -419,7 +477,8 @@ const LeaguePage = () => {
                     })}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </SectionCard>
@@ -563,12 +622,12 @@ const LeaguePage = () => {
         </SectionCard>
       )}
 
-      {loading ? (
+      {loading || playersLoading ? (
         <div role="status" aria-label="Lädt …" className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
       ) : leagues.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Swords className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="text-sm">Noch keine Ligen. Erstelle die erste!</p>
+          <p className="text-sm">{t("league.noLeaguesYet")}</p>
         </div>
       ) : (
         <div className="space-y-3">

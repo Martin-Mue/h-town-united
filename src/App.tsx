@@ -3,10 +3,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import { ClubBrandingProvider, useClubBranding } from "@/contexts/ClubBrandingContext";
+import { queryClient } from "@/lib/queryClient";
 import Layout from "./components/Layout";
 import Auth from "./pages/Auth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -97,6 +99,7 @@ const RequireClub = ({ children }: { children: React.ReactNode }) => {
 
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+    <QueryClientProvider client={queryClient}>
     <LanguageProvider>
     <AuthProvider>
     <ClubBrandingProvider>
@@ -153,6 +156,7 @@ const App = () => (
     </ClubBrandingProvider>
     </AuthProvider>
     </LanguageProvider>
+    </QueryClientProvider>
   </ThemeProvider>
 );
 

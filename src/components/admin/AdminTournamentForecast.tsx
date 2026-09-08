@@ -1,54 +1,35 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Timer, Info, Trophy } from "lucide-react";
-import { hasStarted, type Match, type RoundRobinMatch } from "@/utils/tournament";
-import {
-  buildModeStatsIndex,
-  buildPlayerStatsIndex,
-  forecastTournament,
-  formatDuration,
-  formatEta,
-  type ForecastTournament,
-  type ModeStatsIndex,
-  type PlayerStatsIndex,
-} from "@/utils/tournamentForecast";
-
-const SECONDS_PER_DART_PREF_KEY = "dart-admin-forecast-seconds-per-dart";
-const DEFAULT_SECONDS_PER_DART = 9;
+import { Loader2, Timer, Info } from "lucide-react";
+import { type Match, type RoundRobinMatch } from "@/utils/tournament";
+import { type ForecastTournament } from "@/utils/tournamentForecast";
+import { useTournamentForecastStats } from "@/hooks/useTournamentForecastStats";
+import ForecastCard from "@/components/tournament/ForecastCard";
 
 /** Admin-only: for every currently running tournament, estimates how much longer it'll take —
  *  per remaining round (or, for round-robin, per synthetic board-wave) and in total. Built on the
  *  only historical signal this schema actually has (darts thrown per leg, legs played per match —
  *  see the migration and tournamentForecast.ts for why there's no real wall-clock data to use
- *  instead), so `secondsPerDart` is an admin-tunable input, not a fixed constant. */
+ *  instead), so `secondsPerDart` is an admin-tunable input, not a fixed constant.
+ *
+ *  The stats fetch (modeStats/playerStats/secondsPerDart) and the per-tournament card rendering
+ *  now live in useTournamentForecastStats/ForecastCard (Round 3 Rang 2: this forecast engine used
+ *  to only be reachable from here — extracted so Tournament.tsx can show the exact same forecast
+ *  for the one tournament an organizer actually has open, without duplicating either piece). This
+ *  component keeps only what's genuinely admin-wide: the admin_list_active_tournaments fetch. */
 const AdminTournamentForecast = () => {
-  const [loading, setLoading] = useState(true);
+  const [loadingTournaments, setLoadingTournaments] = useState(true);
   const [tournaments, setTournaments] = useState<ForecastTournament[]>([]);
-  const [modeStats, setModeStats] = useState<ModeStatsIndex>({ legsPerMatch: new Map(), dartsPerLeg: new Map() });
-  const [playerStats, setPlayerStats] = useState<PlayerStatsIndex>(new Map());
-  const [secondsPerDart, setSecondsPerDart] = useState(() => {
-    if (typeof window === "undefined") return DEFAULT_SECONDS_PER_DART;
-    const raw = window.localStorage.getItem(SECONDS_PER_DART_PREF_KEY);
-    const n = raw ? parseFloat(raw) : NaN;
-    return Number.isFinite(n) && n > 0 ? n : DEFAULT_SECONDS_PER_DART;
-  });
-
-  useEffect(() => {
-    window.localStorage.setItem(SECONDS_PER_DART_PREF_KEY, String(secondsPerDart));
-  }, [secondsPerDart]);
+  const { loading: loadingStats, modeStats, playerStats, secondsPerDart, setSecondsPerDart } = useTournamentForecastStats();
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [tRes, modeRes, playerRes] = await Promise.all([
-        supabase.rpc("admin_list_active_tournaments"),
-        supabase.rpc("admin_tournament_forecast_mode_stats"),
-        supabase.rpc("admin_tournament_forecast_player_stats"),
-      ]);
+      const { data } = await supabase.rpc("admin_list_active_tournaments");
       if (cancelled) return;
-      if (tRes.data) {
+      if (data) {
         setTournaments(
-          (tRes.data as unknown as Array<Record<string, unknown>>).map((row) => ({
+          (data as unknown as Array<Record<string, unknown>>).map((row) => ({
             id: row.id as string,
             name: row.name as string,
             mode: row.mode as string,
@@ -61,24 +42,12 @@ const AdminTournamentForecast = () => {
           }))
         );
       }
-      if (modeRes.data) setModeStats(buildModeStatsIndex(modeRes.data));
-      if (playerRes.data) setPlayerStats(buildPlayerStatsIndex(playerRes.data));
-      setLoading(false);
+      setLoadingTournaments(false);
     })();
     return () => { cancelled = true; };
   }, []);
 
-  const forecasts = useMemo(
-    () =>
-      tournaments.map((t) => ({
-        tournament: t,
-        started: hasStarted({ mode: t.mode, bracket: t.bracket }),
-        forecast: forecastTournament(t, secondsPerDart, modeStats, playerStats),
-      })),
-    [tournaments, secondsPerDart, modeStats, playerStats]
-  );
-
-  if (loading) {
+  if (loadingTournaments || loadingStats) {
     return (
       <div role="status" aria-label="Lädt …" className="py-12 flex justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -115,72 +84,20 @@ const AdminTournamentForecast = () => {
         </p>
       </div>
 
-      {forecasts.length === 0 && (
+      {tournaments.length === 0 && (
         <div className="bg-card border border-border rounded-xl p-8 text-center text-sm text-muted-foreground">
           Aktuell läuft kein Turnier.
         </div>
       )}
 
-      {forecasts.map(({ tournament, started, forecast }) => (
-        <div key={tournament.id} className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 bg-muted/30 border-b border-border flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="font-display uppercase text-sm flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-primary" /> {tournament.name}
-            </h3>
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {tournament.mode === "round-robin" ? "Round Robin" : "KO"} · {tournament.players.length} Spieler · {tournament.boards || 2} Boards
-            </span>
-          </div>
-
-          {!started ? (
-            <p className="px-4 py-4 text-sm text-muted-foreground">Noch nicht gestartet — noch keine Prognose möglich.</p>
-          ) : forecast.rounds.length === 0 ? (
-            <p className="px-4 py-4 text-sm text-muted-foreground">Alle Partien entschieden — im Grunde fertig.</p>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/20">
-                    <tr className="text-left text-[10px] uppercase text-muted-foreground">
-                      <th className="px-4 py-2">Runde</th>
-                      <th className="px-4 py-2 text-right">Spiele</th>
-                      <th className="px-4 py-2 text-right">Wellen</th>
-                      <th className="px-4 py-2 text-right">Dauer</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {forecast.rounds.map((r) => (
-                      <tr key={r.round} className="border-t border-border">
-                        <td className="px-4 py-2">
-                          {r.label}
-                          {r.mode === "Extern" && <span className="ml-2 text-[10px] text-muted-foreground uppercase">extern gespielt</span>}
-                        </td>
-                        <td className="px-4 py-2 text-right text-muted-foreground">{r.matchCount}</td>
-                        <td className="px-4 py-2 text-right text-muted-foreground">{r.waves}</td>
-                        <td className="px-4 py-2 text-right">
-                          {r.estimatedSeconds != null ? formatDuration(r.estimatedSeconds) : <span className="text-muted-foreground">–</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="px-4 py-3 border-t border-border bg-muted/10 flex items-center justify-between gap-3 flex-wrap">
-                <span className="text-xs text-muted-foreground">Turnier gesamt</span>
-                {forecast.totalEstimatedSeconds != null ? (
-                  <span className="font-display text-lg text-primary">
-                    noch ca. {formatDuration(forecast.totalEstimatedSeconds)} · fertig gegen {formatEta(forecast.totalEstimatedSeconds)}
-                  </span>
-                ) : (
-                  <span className="text-sm text-muted-foreground">
-                    mindestens {formatDuration(forecast.rounds.reduce((s, r) => s + (r.estimatedSeconds ?? 0), 0))} — enthält extern gespielte Runden ohne Schätzung
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+      {tournaments.map((tournament) => (
+        <ForecastCard
+          key={tournament.id}
+          tournament={tournament}
+          secondsPerDart={secondsPerDart}
+          modeStats={modeStats}
+          playerStats={playerStats}
+        />
       ))}
 
       <div className="bg-card border border-border rounded-xl p-4 flex gap-2 text-[11px] text-muted-foreground">

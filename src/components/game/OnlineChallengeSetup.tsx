@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Wifi, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchClubPlayers, type ClubPlayer } from "@/lib/repositories/players";
+import { usePlayers } from "@/hooks/usePlayers";
 import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
 
 const MODES = ["501", "301", "cricket"] as const;
 const BEST_OF_OPTIONS = [1, 3, 5];
+/** Round 3 Rang 9: an opponent within this many Elo points of your own rating is flagged as a
+ *  "good match" in the challenge list below — a common chess/Elo-style convention for "close
+ *  enough to be a genuinely competitive game", not a hard cutoff on who you CAN challenge. */
+const ELO_CLOSE_MATCH_THRESHOLD = 100;
 
 /** The "online" half of Game.tsx's plain-game setup toggle — challenge a real club member to a
  *  synced two-device match instead of entering local names. Moved here from a standalone dialog
@@ -24,17 +28,25 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
   const { user } = useAuth();
   const { clubId } = useClubBranding();
   const navigate = useNavigate();
-  const [players, setPlayers] = useState<ClubPlayer[]>([]);
+  // Round 3 Rang 4: shared/cached club roster instead of this component's own fetchClubPlayers()
+  // mount effect — see usePlayers.ts. Defaults to [] while loading, same as the old useState did.
+  const { data: players = [] } = usePlayers();
   const [opponentId, setOpponentId] = useState<string>("");
   const [mode, setMode] = useState<(typeof MODES)[number]>("501");
   const [bestOf, setBestOf] = useState(1);
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    fetchClubPlayers().then(setPlayers).catch(() => setPlayers([]));
-  }, []);
-
-  const challengeable = players.filter((p) => p.user_id && p.user_id !== user?.id);
+  // Round 3 Rang 9: my own Elo, to sort/flag opponents by skill match below. Undefined if I
+  // haven't claimed my own club profile yet (players.user_id) — the sort/badge below just no-ops
+  // in that case, same as it always effectively did before this rank (a flat, unsorted list).
+  const myElo = players.find((p) => p.user_id === user?.id)?.elo_rating;
+  const isCloseMatch = (elo: number) => myElo !== undefined && Math.abs(elo - myElo) <= ELO_CLOSE_MATCH_THRESHOLD;
+  const challengeable = players
+    .filter((p) => p.user_id && p.user_id !== user?.id)
+    // Closest-Elo opponents first instead of the roster's default (alphabetical) order — the
+    // whole point of a challenge list is finding someone worth playing, and burying the one
+    // skill-appropriate name among everyone else was exactly as likely as surfacing it.
+    .sort((a, b) => (myElo === undefined ? 0 : Math.abs(a.elo_rating - myElo) - Math.abs(b.elo_rating - myElo)));
 
   const sendChallenge = async () => {
     const opponent = challengeable.find((p) => p.id === opponentId);
@@ -81,6 +93,10 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
                   <input type="radio" name="opponent" className="sr-only" checked={opponentId === p.id} onChange={() => setOpponentId(p.id)} />
                   <span className="text-lg shrink-0">{p.emoji}</span>
                   <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
+                  {isCloseMatch(p.elo_rating) && (
+                    <span className="text-[9px] uppercase tracking-wide text-primary shrink-0">{t("players.goodMatch")}</span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground shrink-0">{Math.round(p.elo_rating)} Elo</span>
                 </label>
               ))}
             </div>

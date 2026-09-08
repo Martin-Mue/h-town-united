@@ -1,4 +1,5 @@
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
+import { directDoubleLabel, type CheckoutDoubleBreakdown } from "@/utils/dartStats";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface CheckoutSuggestionProps {
@@ -8,6 +9,16 @@ interface CheckoutSuggestionProps {
   playerName: string;
   /** This player's career checkout conversion rate (0-100), if known — shows how often suggestions like this actually get converted. */
   personalCheckoutRate?: number | null;
+  /** Round 3 Rang 16: this player's own career hit rate PER double (e.g. "your D16 rate", not
+   *  just your overall checkout rate) — see dartStats.ts's checkoutDoubleBreakdown, the same data
+   *  Statistics.tsx's doubles table already computes from game_legs. Only ever has real entries
+   *  for "direct" remainders (2-40 even, or 50/Bull — see directDoubleLabel's own doc comment),
+   *  the one case where which double a visit was aimed at is actually known from the data rather
+   *  than guessed; that happens to be exactly the case this component can show it for, since a
+   *  direct remainder's suggested route is always that same single double. Falls back to
+   *  `personalCheckoutRate` (the overall rate) whenever the current remaining isn't a direct
+   *  double, or this specific double has no recorded attempts yet. */
+  personalDoubleBreakdown?: CheckoutDoubleBreakdown[] | null;
 }
 
 /**
@@ -17,9 +28,18 @@ interface CheckoutSuggestionProps {
  * remaining crosses in and out of checkout range on nearly every dart near the end of a leg, and
  * an abrupt appear/disappear here was reported as the whole scoreboard "jumping" on every tap.
  */
-const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate }: CheckoutSuggestionProps) => {
+const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, personalDoubleBreakdown }: CheckoutSuggestionProps) => {
   const { t } = useLanguage();
   const route = getCheckoutSuggestion(remaining);
+
+  // Round 3 Rang 16: prefer the rate for THIS exact double when we actually have it (a direct
+  // remainder with recorded attempts) — falls back to the general overall rate otherwise, so a
+  // combination-finish suggestion (e.g. 100 -> T20, D20) still shows something rather than nothing.
+  const doubleLabel = directDoubleLabel(remaining);
+  const doubleStats = doubleLabel ? personalDoubleBreakdown?.find((b) => b.label === doubleLabel) : undefined;
+  const showDoubleSpecific = doubleStats != null && doubleStats.stats.attempts > 0;
+  const displayRate = showDoubleSpecific ? doubleStats.stats.percentage : personalCheckoutRate;
+  const rateTooltip = showDoubleSpecific ? t("game.checkoutRateTooltipDouble") : t("game.checkoutRateTooltip");
 
   return (
     <div className={`grid transition-all duration-200 ease-out ${route ? "grid-rows-[1fr] opacity-100 mt-3 mb-3" : "grid-rows-[0fr] opacity-0"}`}>
@@ -30,9 +50,9 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate }: Che
               <p className="text-xs uppercase tracking-wider text-muted-foreground">
                 Checkout · {playerName}
               </p>
-              {personalCheckoutRate != null && (
-                <p className="text-xs text-muted-foreground" title={t("game.checkoutRateTooltip")}>
-                  {t("game.rateLabel")} <span className="text-foreground font-semibold">{personalCheckoutRate.toFixed(0)}%</span>
+              {displayRate != null && (
+                <p className="text-xs text-muted-foreground" title={rateTooltip}>
+                  {showDoubleSpecific ? doubleLabel : t("game.rateLabel")} <span className="text-foreground font-semibold">{displayRate.toFixed(0)}%</span>
                 </p>
               )}
             </div>

@@ -509,6 +509,13 @@ export interface RoundRobinMatch {
   player2: string;
   winner?: string;
   played: boolean;
+  /** Board number, assigned by assignRrBoards -- see that function's doc comment for why this is
+   *  a display convenience, not a real no-double-booking guarantee the way KO's Match.board is. */
+  board?: number;
+  /** assigned scorekeeper ("Schreiber") for this match, see assignRrScorekeepers. */
+  scorekeeper?: string;
+  /** manually fixed scorekeeper – never overwritten by the auto-assignment. */
+  scorekeeperLocked?: boolean;
   live?: LiveSnapshot;
 }
 
@@ -582,6 +589,115 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
   });
 
   return groupOrder.flatMap((key) => headToHeadRank(groups.get(key)!));
+}
+
+/**
+ * Round-robin's board assignment: unlike KO's buildSchedule/assignScorekeepers, round-robin has no
+ * genuine "round" structure -- every unplayed match is playable from the very start, so there is no
+ * way to guarantee a player never gets called to two boards "at once" the way KO's round-by-round
+ * slots do. This just cycles boards 1..n across the CURRENTLY unplayed matches (in list order) so
+ * the organizer has *a* board number to hand out -- a display convenience for "go to board 3", not
+ * a scheduling guarantee against double-booking. Re-run this after every result (a played match
+ * loses its board) so open boards stay assigned to the matches still waiting.
+ */
+export function assignRrBoards(matches: RoundRobinMatch[], boards: number): RoundRobinMatch[] {
+  const n = Math.max(1, boards || 1);
+  let i = 0;
+  return matches.map((m) => {
+    if (m.played) return m.board === undefined ? m : { ...m, board: undefined };
+    const board = (i % n) + 1;
+    i++;
+    return m.board === board ? m : { ...m, board };
+  });
+}
+
+/**
+ * Round-robin's scorekeeper assignment: parallel to assignScorekeepers but far simpler, since RR has
+ * no round/slot structure to reason about (see assignRrBoards above). For every currently unplayed
+ * match, pick whichever active participant is not one of that match's own two players and currently
+ * has the fewest assignments so far -- a manual lock (scorekeeperLocked) is always kept, and with
+ * opts.keepExisting an existing valid assignment (still an active participant, still not one of the
+ * match's own players) is kept too instead of being reshuffled for no reason.
+ */
+export function assignRrScorekeepers(
+  matches: RoundRobinMatch[],
+  participants: string[],
+  opts: { keepExisting?: boolean } = {}
+): RoundRobinMatch[] {
+  const pool = participants.filter(isRealPlayer);
+  const load: Record<string, number> = {};
+  pool.forEach((p) => (load[p] = 0));
+
+  // preload existing kept/locked assignments' load first, so fresh picks balance around them
+  matches.forEach((m) => {
+    if (m.played) return;
+    const keep = m.scorekeeperLocked || opts.keepExisting;
+    if (
+      keep &&
+      m.scorekeeper &&
+      load[m.scorekeeper] !== undefined &&
+      m.scorekeeper !== m.player1 &&
+      m.scorekeeper !== m.player2
+    ) {
+      load[m.scorekeeper] += 1;
+    }
+  });
+
+  return matches.map((original) => {
+    if (original.played) return original;
+    let m = original;
+    if (m.scorekeeperLocked && m.scorekeeper) {
+      if (pool.includes(m.scorekeeper) && m.scorekeeper !== m.player1 && m.scorekeeper !== m.player2) {
+        return m;
+      }
+      // locked scorekeeper is no longer valid (withdrew, or now one of the two players) -- clear
+      // the lock and fall through to normal (re-)assignment below.
+      m = { ...m, scorekeeperLocked: undefined, scorekeeper: undefined };
+    }
+    if (
+      opts.keepExisting &&
+      m.scorekeeper &&
+      pool.includes(m.scorekeeper) &&
+      m.scorekeeper !== m.player1 &&
+      m.scorekeeper !== m.player2
+    ) {
+      return m;
+    }
+    const candidates = pool.filter((p) => p !== m.player1 && p !== m.player2);
+    if (candidates.length === 0) return m.scorekeeper === undefined ? m : { ...m, scorekeeper: undefined };
+    const minLoad = Math.min(...candidates.map((p) => load[p] ?? 0));
+    const best = candidates.filter((p) => (load[p] ?? 0) === minLoad);
+    const pick = best[Math.floor(Math.random() * best.length)];
+    load[pick] = (load[pick] ?? 0) + 1;
+    return { ...m, scorekeeper: pick };
+  });
+}
+
+/** Removes every not-yet-played match involving `name` (a withdrawal mid-tournament). Already-played
+ *  matches are kept untouched so the standings/history for everyone else stay intact -- unlike KO's
+ *  withdrawPlayer there is no BYE slot to fill in: round-robin simply has one fewer match to play. */
+export function withdrawRrPlayer(matches: RoundRobinMatch[], name: string): RoundRobinMatch[] {
+  return matches.filter((m) => m.played || (m.player1 !== name && m.player2 !== name));
+}
+
+/** Adds a late-joining participant: one fresh, unplayed match against every player already appearing
+ *  anywhere in the bracket (played or not), so the newcomer gets a full round-robin slate against the
+ *  field as it stands today. Call assignRrBoards/assignRrScorekeepers again afterwards to fold the
+ *  new matches into the board/scorekeeper rotation. */
+export function addRrParticipant(matches: RoundRobinMatch[], name: string): RoundRobinMatch[] {
+  const existing = new Set<string>();
+  matches.forEach((m) => {
+    existing.add(m.player1);
+    existing.add(m.player2);
+  });
+  existing.delete(name);
+  const fresh: RoundRobinMatch[] = Array.from(existing).map((opponent) => ({
+    id: `rr-new-${crypto.randomUUID()}`,
+    player1: opponent,
+    player2: name,
+    played: false,
+  }));
+  return [...matches, ...fresh];
 }
 
 /** A tournament counts as started as soon as a real match (no BYE) has a winner. Shared by

@@ -2011,29 +2011,47 @@ const StatisticsPage = () => {
                 </SectionCard>
               )}
 
-              {/* Nemesis / favorite opponent */}
-              {(playerDetailStats.nemesis || playerDetailStats.favoriteOpponent) && (
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-card rounded-xl border border-destructive/30 p-3 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">😈 Nemesis</p>
-                    {playerDetailStats.nemesis ? (
-                      <>
-                        <p className="text-lg font-display text-destructive truncate">{playerDetailStats.nemesis.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{playerDetailStats.nemesis.wins}W-{playerDetailStats.nemesis.losses}L {t("stats.recordAgainstThem")}</p>
-                      </>
-                    ) : <p className="text-xs text-muted-foreground">{t("stats.noDataYet")}</p>}
-                  </div>
+              {/* Nemesis / favorite opponent — Nemesis is deliberately private (Round 3 Rang 3):
+               *  publicly showing which opponent beats a member most, styled destructive/red, on a
+               *  club-wide "browse anyone's profile" view reads as shaming that member in front of
+               *  the whole club rather than an interesting stat. Restricted to the logged-in
+               *  member looking at their OWN profile — favoriteOpponent (flattering, nobody's
+               *  embarrassed by being good against someone) stays visible on anyone's profile. */}
+              {(() => {
+                const isOwnProfile = !!myPlayer && selectedPlayerId === myPlayer.id;
+                const favoriteCard = playerDetailStats.favoriteOpponent && (
                   <div className="bg-card rounded-xl border border-secondary/30 p-3 text-center">
                     <p className="text-xs text-muted-foreground mb-1">🎯 {t("stats.favoriteOpponent")}</p>
-                    {playerDetailStats.favoriteOpponent ? (
-                      <>
-                        <p className="text-lg font-display text-secondary truncate">{playerDetailStats.favoriteOpponent.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{playerDetailStats.favoriteOpponent.wins}W-{playerDetailStats.favoriteOpponent.losses}L {t("stats.recordAgainstThem")}</p>
-                      </>
-                    ) : <p className="text-xs text-muted-foreground">{t("stats.noDataYet")}</p>}
+                    <p className="text-lg font-display text-secondary truncate">{playerDetailStats.favoriteOpponent.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{playerDetailStats.favoriteOpponent.wins}W-{playerDetailStats.favoriteOpponent.losses}L {t("stats.recordAgainstThem")}</p>
                   </div>
-                </div>
-              )}
+                );
+
+                if (!isOwnProfile) {
+                  return favoriteCard ? <div className="mb-4 max-w-[220px]">{favoriteCard}</div> : null;
+                }
+
+                if (!playerDetailStats.nemesis && !favoriteCard) return null;
+                return (
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-card rounded-xl border border-destructive/30 p-3 text-center">
+                      <p className="text-xs text-muted-foreground mb-1">😈 Nemesis</p>
+                      {playerDetailStats.nemesis ? (
+                        <>
+                          <p className="text-lg font-display text-destructive truncate">{playerDetailStats.nemesis.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{playerDetailStats.nemesis.wins}W-{playerDetailStats.nemesis.losses}L {t("stats.recordAgainstThem")}</p>
+                        </>
+                      ) : <p className="text-xs text-muted-foreground">{t("stats.noDataYet")}</p>}
+                    </div>
+                    {favoriteCard || (
+                      <div className="bg-card rounded-xl border border-secondary/30 p-3 text-center">
+                        <p className="text-xs text-muted-foreground mb-1">🎯 {t("stats.favoriteOpponent")}</p>
+                        <p className="text-xs text-muted-foreground">{t("stats.noDataYet")}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Opponents breakdown */}
               {Object.keys(playerDetailStats.opponents).length > 0 && (

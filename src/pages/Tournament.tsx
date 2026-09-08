@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, UserPlus, Monitor, QrCode, RefreshCcw, Target, Smartphone, Swords, Wifi } from "lucide-react";
+import { Trophy, Plus, Play, RotateCcw, Trash2, Loader2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, UserPlus, Monitor, QrCode, RefreshCcw, Target, Smartphone, Swords, Wifi, Timer } from "lucide-react";
 import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import QrCodeDialog from "@/components/QrCodeDialog";
@@ -27,12 +27,16 @@ import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { clubHasFeature } from "@/lib/planFeatures";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
-import { fetchClubPlayers, matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
+import { matchClubPlayer } from "@/lib/repositories/players";
+import { usePlayers } from "@/hooks/usePlayers";
 import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
 import { applyBracketAction } from "@/lib/tournamentMatchSync";
 import { enqueueBracketAction } from "@/lib/offlineQueue";
+import { parsePlayers, parseBracket, parseRoundConfigs, parseAttendance, parsePrestartViews, type RoundConfig } from "@/lib/schemas/tournament";
 import MatchmakingDialog from "@/components/players/MatchmakingDialog";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
+import ForecastCard from "@/components/tournament/ForecastCard";
+import { useTournamentForecastStats } from "@/hooks/useTournamentForecastStats";
 import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
 import htuEmblem from "@/assets/club-emblem.png";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -53,6 +57,10 @@ import {
   currentBoardSchedule,
   isLiveSnapshotFresh,
   assignScorekeepers,
+  assignRrBoards,
+  assignRrScorekeepers,
+  withdrawRrPlayer,
+  addRrParticipant,
   roundLabelFor,
   scorekeeperLabel,
   calcStandings,
@@ -68,11 +76,6 @@ import {
  *  on how many times persistBracket re-fetches and retries against a concurrent write before
  *  giving up, not a real hot path (see those functions' own doc comments for the full reasoning). */
 const BRACKET_WRITE_MAX_ATTEMPTS = 5;
-
-interface RoundConfig {
-  mode: string;      // "501" | "301" | "Cricket" | "Extern"
-  bestOf: number;    // best-of legs
-}
 
 interface SeriesRecord {
   id: string;
@@ -710,6 +713,7 @@ const TournamentPage = () => {
   const [tournamentAverages, setTournamentAverages] = useState<TournamentAverages | null>(null);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
   const [showHighlights, setShowHighlights] = useState(false);
+  const [showForecast, setShowForecast] = useState(false);
   /** How the "Teilnehmer verwalten" list orders players — an active management tool the
    *  organizer is looking something up in, so alphabetical (find-a-name-fast) is the sensible
    *  default; Ø average is there for "who's actually playing well today" at a glance. */
@@ -793,10 +797,21 @@ const TournamentPage = () => {
   const [players, setPlayers] = useState<string[]>([]);
   const [savingTournament, setSavingTournament] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [dbPlayers, setDbPlayers] = useState<ClubPlayer[]>([]);
+  // Round 3 Rang 4: shared/cached club roster (usePlayers.ts) instead of this page's own
+  // fetchDbPlayers()/fetchClubPlayers() call below — `dbPlayers` name kept unchanged so every
+  // existing consumer further down (notifyMatchReady, matchmakingPool, matchClubPlayer calls,
+  // the "add from club members" panel, ...) needs no further changes.
+  const { data: dbPlayers = [] } = usePlayers();
 
   const { session } = useAuth();
   const isAdmin = useIsAdmin(session?.user?.id);
+  // Round 3 Rang 2: the ETA forecast engine (tournamentForecast.ts) used to only be reachable from
+  // Admin's own tab — this surfaces the same forecast for THIS tournament right on the page the
+  // organizer already has open. Still admin-gated (the underlying RPCs are admin-only SECURITY
+  // DEFINER functions, see their migration), so `enabled: isAdmin` skips the fetch entirely for a
+  // non-admin owner/editor instead of firing two RPC calls guaranteed to reject.
+  const { modeStats: forecastModeStats, playerStats: forecastPlayerStats, secondsPerDart: forecastSecondsPerDart } =
+    useTournamentForecastStats(isAdmin);
   const { clubId, club } = useClubBranding();
   // Trial-tier clubs are capped well below the real 64-player ceiling — 8 matches the size this
   // was already offered as a fixed bracket option, so a gated club still gets a genuinely usable
@@ -852,18 +867,18 @@ const TournamentPage = () => {
 
   const mapTournamentRow = (t: Database["public"]["Tables"]["tournaments"]["Row"]): TournamentRecord => ({
     ...t,
-    players: (t.players as unknown as string[]) || [],
-    bracket: (t.bracket as unknown as Match[] | RoundRobinMatch[]) || [],
+    players: parsePlayers(t.players, `tournament ${t.id}`),
+    bracket: parseBracket(t.bracket, `tournament ${t.id}`),
     game_mode: t.game_mode || "501",
     best_of_legs: t.best_of_legs || 3,
     series_id: t.series_id || null,
-    round_configs: (t.round_configs as unknown as RoundConfig[]) || [],
+    round_configs: parseRoundConfigs(t.round_configs, `tournament ${t.id}`),
     public_view: t.public_view || false,
     public_slug: t.public_slug || null,
     boards: t.boards ?? 2,
     live_play_enabled: t.live_play_enabled ?? true,
-    attendance: (t.attendance as unknown as Record<string, boolean>) || {},
-    prestart_views: (t.prestart_views as unknown as string[]) || DEFAULT_PRESTART_VIEWS,
+    attendance: parseAttendance(t.attendance, `tournament ${t.id}`),
+    prestart_views: parsePrestartViews(t.prestart_views, DEFAULT_PRESTART_VIEWS, `tournament ${t.id}`),
     manual_release: t.manual_release ?? false,
   });
 
@@ -877,10 +892,6 @@ const TournamentPage = () => {
       setTournaments(data.map(mapTournamentRow));
     }
     setLoading(false);
-  }, []);
-
-  const fetchDbPlayers = useCallback(async () => {
-    setDbPlayers(await fetchClubPlayers());
   }, []);
 
   /** Push "your match is up next" to whichever of the match's players have claimed their
@@ -899,7 +910,7 @@ const TournamentPage = () => {
     if (data) setSeriesList(data);
   }, []);
 
-  useEffect(() => { fetchTournaments(); fetchDbPlayers(); fetchSeries(); }, [fetchTournaments, fetchDbPlayers, fetchSeries]);
+  useEffect(() => { fetchTournaments(); fetchSeries(); }, [fetchTournaments, fetchSeries]);
 
   // Deep link: /tournament/:id opens straight into that tournament's bracket instead of the flat
   // list — every "back to tournament" link (post-game, series view) now points here instead of
@@ -1146,7 +1157,12 @@ const TournamentPage = () => {
         matches.push({ id: `rr-${id++}`, player1: playerList[i], player2: playerList[j], played: false });
       }
     }
-    return shuffle(matches);
+    // Board/scorekeeper toolkit (Round 3, Rang 1): give the organizer a starting board rotation
+    // and scorekeeper plan right from tournament creation, same as the KO branch already does via
+    // assignScorekeepers -- see assignRrBoards/assignRrScorekeepers in tournament.ts for why RR's
+    // version is a simpler, non-slot-based cousin of the KO functions.
+    const withBoards = assignRrBoards(shuffle(matches), boards || 2);
+    return assignRrScorekeepers(withBoards, playerList);
   };
 
   /** `live_play_enabled` is a recently-added column — if a given Supabase project hasn't had
@@ -1189,13 +1205,13 @@ const TournamentPage = () => {
       }
       const rec: TournamentRecord = {
         ...upd,
-        players: upd.players as unknown as string[],
-        bracket: upd.bracket as unknown as Match[] | RoundRobinMatch[],
-        round_configs: (upd.round_configs as unknown as RoundConfig[]) || [],
+        players: parsePlayers(upd.players, `tournament ${upd.id}`),
+        bracket: parseBracket(upd.bracket, `tournament ${upd.id}`),
+        round_configs: parseRoundConfigs(upd.round_configs, `tournament ${upd.id}`),
         boards: upd.boards ?? boards,
         live_play_enabled: upd.live_play_enabled ?? livePlayEnabled,
-        attendance: (upd.attendance as unknown as Record<string, boolean>) || {},
-        prestart_views: (upd.prestart_views as unknown as string[]) || DEFAULT_PRESTART_VIEWS,
+        attendance: parseAttendance(upd.attendance, `tournament ${upd.id}`),
+        prestart_views: parsePrestartViews(upd.prestart_views, DEFAULT_PRESTART_VIEWS, `tournament ${upd.id}`),
         manual_release: upd.manual_release ?? false,
       };
       setActiveTournament(rec);
@@ -1238,16 +1254,16 @@ const TournamentPage = () => {
 
     const record: TournamentRecord = {
       ...data,
-      players: data.players as unknown as string[],
-      bracket: data.bracket as unknown as Match[] | RoundRobinMatch[],
+      players: parsePlayers(data.players, `tournament ${data.id}`),
+      bracket: parseBracket(data.bracket, `tournament ${data.id}`),
       game_mode: data.game_mode || gameMode,
       best_of_legs: data.best_of_legs || bestOfLegs,
       series_id: data.series_id,
-      round_configs: (data.round_configs as unknown as RoundConfig[]) || [],
+      round_configs: parseRoundConfigs(data.round_configs, `tournament ${data.id}`),
       boards: data.boards ?? boards,
       live_play_enabled: data.live_play_enabled ?? livePlayEnabled,
-      attendance: (data.attendance as unknown as Record<string, boolean>) || {},
-      prestart_views: (data.prestart_views as unknown as string[]) || DEFAULT_PRESTART_VIEWS,
+      attendance: parseAttendance(data.attendance, `tournament ${data.id}`),
+      prestart_views: parsePrestartViews(data.prestart_views, DEFAULT_PRESTART_VIEWS, `tournament ${data.id}`),
       manual_release: data.manual_release ?? false,
     };
     setActiveTournament(record);
@@ -1281,8 +1297,12 @@ const TournamentPage = () => {
     if (!activeTournament) return;
     for (let attempt = 0; attempt < BRACKET_WRITE_MAX_ATTEMPTS; attempt++) {
       const { data: freshRow } = await supabase.from("tournaments").select("bracket, players, updated_at").eq("id", activeTournament.id).single();
-      const freshBracket = (freshRow?.bracket as unknown as Match[] | undefined) ?? (activeTournament.bracket as Match[]);
-      const freshPlayers = (freshRow?.players as unknown as string[] | undefined) ?? activeTournament.players;
+      const freshBracket = freshRow
+        ? (parseBracket(freshRow.bracket, `tournament ${activeTournament.id} (persistBracket)`) as Match[])
+        : (activeTournament.bracket as Match[]);
+      const freshPlayers = freshRow
+        ? parsePlayers(freshRow.players, `tournament ${activeTournament.id} (persistBracket)`)
+        : activeTournament.players;
       const raw = patch(freshBracket);
       const recomputed = recomputeBracket(raw, freshPlayers);
       const withKeepers = assignScorekeepers(recomputed, freshPlayers, {
@@ -1491,8 +1511,12 @@ const TournamentPage = () => {
     setAddingParticipant(true);
     try {
       const { data: freshRow } = await supabase.from("tournaments").select("bracket, players").eq("id", activeTournament.id).single();
-      const freshBracket = (freshRow?.bracket as unknown as Match[] | undefined) ?? (activeTournament.bracket as Match[]);
-      const freshPlayers = (freshRow?.players as unknown as string[] | undefined) ?? activeTournament.players;
+      const freshBracket = freshRow
+        ? (parseBracket(freshRow.bracket, `tournament ${activeTournament.id} (addParticipant)`) as Match[])
+        : (activeTournament.bracket as Match[]);
+      const freshPlayers = freshRow
+        ? parsePlayers(freshRow.players, `tournament ${activeTournament.id} (addParticipant)`)
+        : activeTournament.players;
       const filled = fillByeSlot(freshBracket, trimmed);
       if (!filled) {
         toast({ title: t("common.error"), description: t("tournament.noOpenSlotForNewPlayer"), variant: "destructive" });
@@ -1592,6 +1616,115 @@ const TournamentPage = () => {
   const reshuffleScorekeepers = async () => {
     if (!activeTournament) return;
     await persistBracket((fresh) => [...fresh], { reshuffleKeepers: true });
+    toast({ title: t("tournament.scorekeeperRedrawn") });
+  };
+
+  /**
+   * Round-robin analog of persistBracket above: same re-fetch + patch + CAS-write pattern, but for
+   * RoundRobinMatch[] -- there's no recomputeBracket equivalent here (RR matches don't cascade into
+   * each other the way KO rounds do), so this just re-runs assignRrBoards/assignRrScorekeepers and
+   * recomputes the champion (whoever tops calcStandings, once every match is played). Unlike
+   * persistBracket there's also no "newly playable" push to fire -- every unplayed RR match is
+   * playable from the tournament's very start, so nothing ever newly becomes playable mid-way.
+   */
+  const persistRrBracket = async (
+    patch: (fresh: RoundRobinMatch[]) => RoundRobinMatch[],
+    opts: { reshuffleKeepers?: boolean } = {}
+  ) => {
+    if (!activeTournament) return;
+    for (let attempt = 0; attempt < BRACKET_WRITE_MAX_ATTEMPTS; attempt++) {
+      const { data: freshRow } = await supabase.from("tournaments").select("bracket, players, updated_at").eq("id", activeTournament.id).single();
+      const freshBracket = freshRow
+        ? (parseBracket(freshRow.bracket, `tournament ${activeTournament.id} (persistRrBracket)`) as RoundRobinMatch[])
+        : (activeTournament.bracket as RoundRobinMatch[]);
+      const freshPlayers = freshRow
+        ? parsePlayers(freshRow.players, `tournament ${activeTournament.id} (persistRrBracket)`)
+        : activeTournament.players;
+      const raw = patch(freshBracket);
+      const withBoards = assignRrBoards(raw, activeTournament.boards || 2);
+      const withKeepers = assignRrScorekeepers(withBoards, freshPlayers, { keepExisting: !opts.reshuffleKeepers });
+      const allPlayed = withKeepers.length > 0 && withKeepers.every((m) => m.played);
+      const champion = allPlayed ? calcStandings(withKeepers)[0]?.name || null : null;
+
+      const baseQuery = supabase.from("tournaments").update({
+        bracket: withKeepers as unknown as Json,
+        champion,
+        status: champion ? "finished" : "active",
+      }).eq("id", activeTournament.id);
+      const { data: updated, error } = freshRow?.updated_at
+        ? await baseQuery.eq("updated_at", freshRow.updated_at).select("id")
+        : await baseQuery.select("id");
+      if (error) {
+        toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+        return;
+      }
+      if (!updated || updated.length === 0) continue; // lost the race — re-fetch and retry
+
+      setActiveTournament({ ...activeTournament, bracket: withKeepers, players: freshPlayers, champion, status: champion ? "finished" : "active" });
+      if (champion && seenCeremonyFor !== activeTournament.id) {
+        setCeremonyChampion(champion);
+        setSeenCeremonyFor(activeTournament.id);
+      }
+      return;
+    }
+    toast({ title: t("common.error"), description: t("tournament.bracketWriteConflict") });
+  };
+
+  /** Withdraw a player from a round-robin: drops their not-yet-played matches (withdrawRrPlayer),
+   *  keeps already-played ones for the standings history -- see that function's doc comment. */
+  const withdrawPlayerRr = async (name: string) => {
+    if (!activeTournament) return;
+    const nextPlayers = activeTournament.players.filter((p) => p !== name);
+    const { error } = await supabase.from("tournaments").update({ players: nextPlayers as unknown as Json }).eq("id", activeTournament.id);
+    if (error) {
+      toast({ title: t("common.error"), description: t("tournament.onlyCreatorCanWithdraw"), variant: "destructive" });
+      return;
+    }
+    setActiveTournament({ ...activeTournament, players: nextPlayers });
+    await persistRrBracket((fresh) => withdrawRrPlayer(fresh, name));
+    toast({ title: `${name} ${t("tournament.withdrawn")}`, description: t("tournament.withdrawnDesc") });
+  };
+
+  /** Late sign-up for a round-robin: adds one fresh match against every existing player
+   *  (addRrParticipant) instead of KO's fillByeSlot -- round-robin has no BYE slots to fill. */
+  const addParticipantRr = async (name: string) => {
+    if (!activeTournament) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (activeTournament.players.includes(trimmed)) {
+      toast({ title: t("common.error"), description: t("tournament.playerAlreadyRegistered"), variant: "destructive" });
+      return;
+    }
+    setAddingParticipant(true);
+    try {
+      const nextPlayers = [...activeTournament.players, trimmed];
+      const { error } = await supabase.from("tournaments").update({ players: nextPlayers as unknown as Json }).eq("id", activeTournament.id);
+      if (error) {
+        toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+        return;
+      }
+      setActiveTournament({ ...activeTournament, players: nextPlayers });
+      await persistRrBracket((fresh) => addRrParticipant(fresh, trimmed));
+      setNewParticipantName("");
+      toast({ title: `${trimmed} ${t("tournament.addedToBracket")}`, description: t("tournament.addedToBracketDesc") });
+    } finally {
+      setAddingParticipant(false);
+    }
+  };
+
+  /** Manually set (and lock) the scorekeeper of a single round-robin match. */
+  const setRrMatchScorekeeper = async (matchId: string, keeper: string) => {
+    if (!activeTournament) return;
+    await persistRrBracket((fresh) => fresh.map((m) =>
+      m.id === matchId
+        ? { ...m, scorekeeper: keeper === "__auto" ? undefined : keeper, scorekeeperLocked: keeper !== "__auto" }
+        : m
+    ));
+  };
+
+  const reshuffleRrScorekeepers = async () => {
+    if (!activeTournament) return;
+    await persistRrBracket((fresh) => [...fresh], { reshuffleKeepers: true });
     toast({ title: t("tournament.scorekeeperRedrawn") });
   };
 
@@ -2448,6 +2581,31 @@ const TournamentPage = () => {
     </div>
   );
 
+  // Admin-only ETA forecast for THIS tournament (Round 3 Rang 2) — same collapsible pattern as
+  // highlightsSection above, shared by both the K.O. and round-robin returns.
+  const forecastSection = isAdmin ? (
+    <div className="container mb-4">
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <button onClick={() => setShowForecast((v) => !v)} className="w-full flex items-center justify-between px-4 py-3 text-left">
+          <span className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground">
+            <Timer className="w-4 h-4" /> {t("tournament.tournamentForecast")}
+          </span>
+          {showForecast ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {showForecast && (
+          <div className="px-4 pb-4">
+            <ForecastCard
+              tournament={activeTournament}
+              secondsPerDart={forecastSecondsPerDart}
+              modeStats={forecastModeStats}
+              playerStats={forecastPlayerStats}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   if (isKo) {
     const matches = activeTournament.bracket as Match[];
     const totalRounds = totalRoundsOf(matches);
@@ -2755,6 +2913,7 @@ const TournamentPage = () => {
         )}
 
         {highlightsSection}
+        {forecastSection}
 
         {/* View switcher + tournament management */}
         <div className="container mb-2 flex flex-wrap items-center gap-2">
@@ -3143,6 +3302,7 @@ const TournamentPage = () => {
       )}
 
       {highlightsSection}
+      {forecastSection}
 
       {/* Standings table */}
       <div className="bg-card rounded-xl border border-border p-4 mb-4">
@@ -3177,53 +3337,88 @@ const TournamentPage = () => {
       {/* Upcoming matches */}
       {unplayed.length > 0 && (
         <div className="bg-card rounded-xl border border-border p-4 mb-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.upcomingMatches")} ({unplayed.length})</h3>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 className="font-display text-sm uppercase text-muted-foreground">{t("tournament.upcomingMatches")} ({unplayed.length})</h3>
+            {canEditResults && (
+              <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={reshuffleRrScorekeepers}>
+                <Shuffle className="w-3.5 h-3.5" /> {t("tournament.redrawScorekeepers")}
+              </Button>
+            )}
+          </div>
           <div className="space-y-2">
             {pagedRrUnplayed.visible.map(m => (
-              <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2">
-                <span className="text-sm">{m.player1} <span className="text-muted-foreground">vs</span> {m.player2}</span>
-                {isLiveSnapshotFresh(m.live) && (
-                  <span className="shrink-0 flex items-center gap-1 text-accent text-xs font-display mx-2">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-                    {m.live!.legs1}:{m.live!.legs2}
+              <div key={m.id} className="flex flex-col gap-1.5 bg-muted/30 rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 min-w-0 text-sm">
+                    {m.board != null && (
+                      <Badge variant="outline" className="font-mono text-xs bg-primary/10 text-primary px-2 py-0.5 shrink-0 border-transparent">
+                        {t("camera.board")} {m.board}
+                      </Badge>
+                    )}
+                    <span className="truncate">{m.player1} <span className="text-muted-foreground">vs</span> {m.player2}</span>
                   </span>
-                )}
-                <div className="flex gap-1">
-                  {(activeTournament.live_play_enabled ?? true) && activeTournament.game_mode !== "Extern" && (
-                    <>
-                      <Button size="sm" variant="secondary" className="text-xs h-9 px-2 gap-1" onClick={() => startLiveGameRr(m)}>
-                        <Play className="w-3 h-3" /> {t("game.startGame")}
-                      </Button>
-                      {rrLiveGamePath(m) && (
-                        <QrCodeDialog
-                          url={`${window.location.origin}${rrLiveGamePath(m)}`}
-                          title={t("game.startGame")}
-                          description={t("tournament.scanOnBoardDevice")}
-                          downloadName={`match-${m.id}`}
-                          trigger={
-                            <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" title={t("tournament.qrForThisMatch")} aria-label={t("tournament.qrForThisMatchShow")}>
-                              <QrCode className="w-3.5 h-3.5" />
-                            </Button>
-                          }
-                        />
-                      )}
-                    </>
+                  {isLiveSnapshotFresh(m.live) && (
+                    <span className="shrink-0 flex items-center gap-1 text-accent text-xs font-display mx-2">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                      {m.live!.legs1}:{m.live!.legs2}
+                    </span>
                   )}
-                  {canStartMatchOnline(m.player1, m.player2, m.played) && activeTournament.game_mode !== "Extern" && (
-                    <Button size="sm" variant="outline" className="text-xs h-9 px-2 gap-1" disabled={startingOnlineId === m.id} onClick={() => startMatchOnline(m.id, m.player1, m.player2, activeTournament.game_mode || "501", activeTournament.best_of_legs || 1)}>
-                      {startingOnlineId === m.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} {t("players.playOnline")}
-                    </Button>
-                  )}
-                  {canEditResults && (
-                    <>
-                      <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player1)}>
-                        {m.player1} ✓
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                  <div className="shrink-0 flex items-center gap-1">
+                    <span className="text-xs">✍️</span>
+                    <Select
+                      value={m.scorekeeperLocked && m.scorekeeper ? m.scorekeeper : "__auto"}
+                      onValueChange={(v) => setRrMatchScorekeeper(m.id, v)}
+                    >
+                      <SelectTrigger className="h-7 w-40 text-xs bg-background border-border">
+                        <SelectValue>{m.scorekeeper || "–"}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-border max-h-64">
+                        <SelectItem value="__auto">{t("tournament.automaticTournamentRule")}</SelectItem>
+                        {activeTournament.players
+                          .filter(p => p !== m.player1 && p !== m.player2)
+                          .map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-1">
+                    {(activeTournament.live_play_enabled ?? true) && activeTournament.game_mode !== "Extern" && (
+                      <>
+                        <Button size="sm" variant="secondary" className="text-xs h-9 px-2 gap-1" onClick={() => startLiveGameRr(m)}>
+                          <Play className="w-3 h-3" /> {t("game.startGame")}
+                        </Button>
+                        {rrLiveGamePath(m) && (
+                          <QrCodeDialog
+                            url={`${window.location.origin}${rrLiveGamePath(m)}`}
+                            title={t("game.startGame")}
+                            description={t("tournament.scanOnBoardDevice")}
+                            downloadName={`match-${m.id}`}
+                            trigger={
+                              <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" title={t("tournament.qrForThisMatch")} aria-label={t("tournament.qrForThisMatchShow")}>
+                                <QrCode className="w-3.5 h-3.5" />
+                              </Button>
+                            }
+                          />
+                        )}
+                      </>
+                    )}
+                    {canStartMatchOnline(m.player1, m.player2, m.played) && activeTournament.game_mode !== "Extern" && (
+                      <Button size="sm" variant="outline" className="text-xs h-9 px-2 gap-1" disabled={startingOnlineId === m.id} onClick={() => startMatchOnline(m.id, m.player1, m.player2, activeTournament.game_mode || "501", activeTournament.best_of_legs || 1)}>
+                        {startingOnlineId === m.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} {t("players.playOnline")}
                       </Button>
-                      <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player2)}>
-                        {m.player2} ✓
-                      </Button>
-                    </>
-                  )}
+                    )}
+                    {canEditResults && (
+                      <>
+                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player1)}>
+                          {m.player1} ✓
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player2)}>
+                          {m.player2} ✓
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -3270,6 +3465,99 @@ const TournamentPage = () => {
           <ListPaginationFooter list={pagedRrPlayed} />
         </div>
       )}
+
+      {/* Manage participants — round-robin equivalent of the K.O. schedule tab's panel (board/
+       *  scorekeeper toolkit, Round 3 Rang 1): check-in, late sign-up, withdrawal. Round-robin has
+       *  no tree/schedule sub-tabs to hide this behind, so it's just always shown here. */}
+      {isOwner && (
+        <div className="bg-card border border-border rounded-xl p-4 mt-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h3 className="font-display uppercase text-sm flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
+            <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
+              <button
+                onClick={() => setParticipantSort("alpha")}
+                className={`px-2 py-1 text-[10px] font-medium uppercase tracking-wide ${participantSort === "alpha" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                A-Z
+              </button>
+              <button
+                onClick={() => setParticipantSort("average")}
+                className={`px-2 py-1 text-[10px] font-medium uppercase tracking-wide border-l border-border ${participantSort === "average" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Ø
+              </button>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground mb-3">{t("tournament.withdrawHint")}</p>
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (!addingParticipant) addParticipantRr(newParticipantName); }}
+            className="flex gap-2 mb-1"
+          >
+            <Input
+              value={newParticipantName}
+              onChange={(e) => setNewParticipantName(e.target.value)}
+              placeholder={t("tournament.addParticipantPlaceholder")}
+              className="bg-background border-border text-sm"
+            />
+            <Button type="submit" size="sm" disabled={!newParticipantName.trim() || addingParticipant} className="gap-1.5 shrink-0">
+              {addingParticipant ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+              {t("tournament.addParticipant")}
+            </Button>
+          </form>
+          <p className="text-[11px] text-muted-foreground mb-3">{t("tournament.addParticipantHint")}</p>
+          <div className="flex gap-2 mb-3">
+            <Button size="sm" variant="outline" className="flex-1 gap-1.5 text-xs" onClick={() => setAllAttendance(true)}>
+              <Check className="w-3.5 h-3.5" /> {t("tournament.markAllPresent")}
+            </Button>
+            <Button size="sm" variant="outline" className="flex-1 text-xs text-muted-foreground" onClick={() => setAllAttendance(false)}>
+              {t("tournament.clearAllPresent")}
+            </Button>
+          </div>
+          <div className="space-y-1.5">
+            {sortParticipants(activeTournament.players, participantSort, tournamentAverages).map(p => {
+              const avgRow = tournamentAverages?.participants.find(pa => pa.key === p || pa.name === p);
+              const present = !!activeTournament.attendance?.[p];
+              return (
+                <div key={p} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${present ? "border-secondary/40 bg-secondary/10" : "border-border bg-muted/20"}`}>
+                  <button
+                    onClick={() => toggleAttendance(p)}
+                    role="checkbox" aria-checked={present} aria-label={`${p} ${t("tournament.attendancePresent")}`}
+                    className={`shrink-0 w-9 h-9 rounded-md border-2 flex items-center justify-center transition-colors ${present ? "bg-secondary border-secondary text-secondary-foreground" : "border-muted-foreground/40"}`}
+                  >
+                    {present && <Check className="w-4 h-4" />}
+                  </button>
+                  <span className="flex-1 min-w-0 truncate text-sm font-medium">{p}</span>
+                  {avgRow && (
+                    <span className="shrink-0 text-sm font-display text-primary" title={t("tournament.tournamentAverage")}>
+                      Ø {avgRow.tournamentAverage > 0 ? avgRow.tournamentAverage.toFixed(1) : "–"}
+                    </span>
+                  )}
+                  <AlertDialog open={confirmWithdraw === p} onOpenChange={(open) => setConfirmWithdraw(open ? p : null)}>
+                    <AlertDialogTrigger asChild>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive" title={t("tournament.withdrawCapital")} aria-label={`${p} ${t("tournament.withdrawCapital")}`}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{p} {t("tournament.withdrawConfirmSuffix")}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {t("tournament.allOpenMatchesFrom")} {p} {t("tournament.withdrawWarning")}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => withdrawPlayerRr(p)}>{t("tournament.withdrawCapital")}</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {ceremonyChampion && (
         <TrophyCeremony champion={ceremonyChampion} tournamentName={activeTournament.name} onClose={() => setCeremonyChampion(null)} />
       )}
