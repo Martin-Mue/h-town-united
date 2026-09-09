@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered, Route, Undo2 } from "lucide-react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered, Route, Undo2, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
@@ -285,6 +285,50 @@ function pushHistoryEntry(drillId: string, entry: HistoryEntry, variant?: string
   return next;
 }
 
+// ─── practice streak (2026-09-09) ──────────────────────────────────
+// Same device-local storage as the record/history above (see their own comments for why —
+// there's no server-side "training session" table at all, only per-drill local history) — one
+// shared key across every drill, since the streak is "did you practice today", not "did you
+// practice THIS drill today". A local calendar-date string (not a timestamp) is the unit that
+// matters here — two runs an hour apart on the same day must count as one day, and this is
+// simplest done by comparing "YYYY-MM-DD" strings directly rather than diffing timestamps.
+interface StreakState { current: number; best: number; lastDate: string }
+const STREAK_KEY = "training-streak";
+const todayLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+function loadStreak(): StreakState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STREAK_KEY);
+    return raw ? (JSON.parse(raw) as StreakState) : null;
+  } catch {
+    return null;
+  }
+}
+/** Call once per genuinely completed drill run (same gate as pushHistoryEntry — see its call
+ *  site). A second completed run later the SAME day is a no-op (already counted); a gap of
+ *  exactly one calendar day extends the streak; any bigger gap (or no prior streak at all)
+ *  restarts it at 1. Returns the updated state so the caller can set it straight into render
+ *  state without a redundant loadStreak() right after. */
+function recordPracticeDay(): StreakState {
+  const today = todayLocal();
+  const prev = loadStreak();
+  let next: StreakState;
+  if (prev?.lastDate === today) {
+    next = prev;
+  } else {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+    const current = prev?.lastDate === yStr ? prev.current + 1 : 1;
+    next = { current, best: Math.max(current, prev?.best ?? 0), lastDate: today };
+  }
+  if (typeof window !== "undefined") window.localStorage.setItem(STREAK_KEY, JSON.stringify(next));
+  return next;
+}
+
 /** Given a FINISHED drill state, returns the comparable result for this run, or null if this
  *  particular run doesn't produce one (e.g. a round-cappable drill cut short before actually
  *  reaching the end — see `completedFully` — isn't a fair "how fast can you finish" data point). */
@@ -419,6 +463,9 @@ const TrainingPage = () => {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [rtcFlash, setRtcFlash] = useState(false);
   const [undoStack, setUndoStack] = useState<DrillState[]>([]);
+  // Practice streak (see recordPracticeDay's own doc comment) — loaded once up front so it's
+  // already there to show even before the player finishes their first drill of this session.
+  const [streak, setStreak] = useState<StreakState | null>(() => loadStreak());
 
   // Shanghai Round the Clock: brief visible feedback the instant progress becomes unrecoverable,
   // instead of only a silent state reset the player might not notice until the next dart.
@@ -449,6 +496,7 @@ const TrainingPage = () => {
     const variant = recordVariant(selectedDrill.id, { maxRounds: drillState.maxRounds, rtcStart: drillState.targetList?.[0], targetBase: drillState.targetBase, targetMul: drillState.targetMul });
     const achievedAt = new Date().toISOString();
     setHistory(pushHistoryEntry(selectedDrill.id, { value: candidate.value, achievedAt }, variant));
+    setStreak(recordPracticeDay());
     const existing = loadRecord(selectedDrill.id, variant);
     const isNew = !existing || (candidate.higherIsBetter ? candidate.value > existing.value : candidate.value < existing.value);
     if (isNew) {
@@ -1146,6 +1194,13 @@ const TrainingPage = () => {
                 {t("training.recordLabel")} <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
               </p>
             ) : null}
+            {/* Practice streak (see recordPracticeDay's own doc comment) — 2+ only, same "a lone
+                day isn't a streak yet" reasoning as Game.tsx's legStreak momentum badge. */}
+            {streak && streak.current >= 2 && (
+              <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-accent font-display uppercase text-xs flex items-center justify-center gap-1.5">
+                <Flame className="w-3.5 h-3.5" /> {streak.current} {t("training.daysInARow")}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
               {selectedDrill.id === "shanghai" ? (
                 <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
@@ -1687,6 +1742,11 @@ const TrainingPage = () => {
       <div className="flex items-center gap-3 mb-6">
         <Dumbbell className="w-6 h-6 text-primary" />
         <h2 className="text-2xl font-display uppercase">{t("training.pageTitle")}</h2>
+        {streak && streak.current >= 2 && (
+          <span className="ml-auto flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs font-display text-accent">
+            <Flame className="w-3.5 h-3.5" /> {streak.current}
+          </span>
+        )}
       </div>
 
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">

@@ -522,8 +522,10 @@ export type Database = {
           played_at: string | null
           player1_id: string
           player1_legs_won: number | null
+          player1_name: string | null
           player2_id: string
           player2_legs_won: number | null
+          player2_name: string | null
           round_number: number
           scheduled_date: string | null
           status: string
@@ -539,8 +541,10 @@ export type Database = {
           played_at?: string | null
           player1_id: string
           player1_legs_won?: number | null
+          player1_name?: string | null
           player2_id: string
           player2_legs_won?: number | null
+          player2_name?: string | null
           round_number: number
           scheduled_date?: string | null
           status?: string
@@ -556,8 +560,10 @@ export type Database = {
           played_at?: string | null
           player1_id?: string
           player1_legs_won?: number | null
+          player1_name?: string | null
           player2_id?: string
           player2_legs_won?: number | null
+          player2_name?: string | null
           round_number?: number
           scheduled_date?: string | null
           status?: string
@@ -626,6 +632,8 @@ export type Database = {
           id: string
           name: string
           participant_ids: string[]
+          public_slug: string | null
+          public_view: boolean
           result_mode: string
           status: string
           updated_at: string
@@ -640,6 +648,8 @@ export type Database = {
           id?: string
           name: string
           participant_ids?: string[]
+          public_slug?: string | null
+          public_view?: boolean
           result_mode?: string
           status?: string
           updated_at?: string
@@ -654,6 +664,8 @@ export type Database = {
           id?: string
           name?: string
           participant_ids?: string[]
+          public_slug?: string | null
+          public_view?: boolean
           result_mode?: string
           status?: string
           updated_at?: string
@@ -1251,6 +1263,87 @@ export type Database = {
           name?: string | null
           tagline?: string | null
           theme_preset?: string | null
+        }
+        Relationships: []
+      }
+      league_fixtures_public: {
+        Row: {
+          id: string | null
+          leg: string | null
+          league_id: string | null
+          player1_legs_won: number | null
+          player1_name: string | null
+          player2_legs_won: number | null
+          player2_name: string | null
+          round_number: number | null
+          scheduled_date: string | null
+          status: string | null
+          winner_slot: number | null
+        }
+        Insert: {
+          id?: string | null
+          leg?: string | null
+          league_id?: string | null
+          player1_legs_won?: number | null
+          player1_name?: string | null
+          player2_legs_won?: number | null
+          player2_name?: string | null
+          round_number?: number | null
+          scheduled_date?: string | null
+          status?: string | null
+          winner_slot?: number | null
+        }
+        Update: {
+          id?: string | null
+          leg?: string | null
+          league_id?: string | null
+          player1_legs_won?: number | null
+          player1_name?: string | null
+          player2_legs_won?: number | null
+          player2_name?: string | null
+          round_number?: number | null
+          scheduled_date?: string | null
+          status?: string | null
+          winner_slot?: number | null
+        }
+        Relationships: []
+      }
+      leagues_public: {
+        Row: {
+          best_of_legs: number | null
+          format: string | null
+          game_mode: string | null
+          id: string | null
+          name: string | null
+          participant_ids: string[] | null
+          public_slug: string | null
+          public_view: boolean | null
+          result_mode: string | null
+          status: string | null
+        }
+        Insert: {
+          best_of_legs?: number | null
+          format?: string | null
+          game_mode?: string | null
+          id?: string | null
+          name?: string | null
+          participant_ids?: string[] | null
+          public_slug?: string | null
+          public_view?: boolean | null
+          result_mode?: string | null
+          status?: string | null
+        }
+        Update: {
+          best_of_legs?: number | null
+          format?: string | null
+          game_mode?: string | null
+          id?: string | null
+          name?: string | null
+          participant_ids?: string[] | null
+          public_slug?: string | null
+          public_view?: boolean | null
+          result_mode?: string | null
+          status?: string | null
         }
         Relationships: []
       }

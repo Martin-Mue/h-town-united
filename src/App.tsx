@@ -58,6 +58,7 @@ const Admin = lazyWithReload(() => import("./pages/Admin"));
 const TournamentSeries = lazyWithReload(() => import("./pages/TournamentSeries"));
 const League = lazyWithReload(() => import("./pages/League"));
 const PublicTournament = lazyWithReload(() => import("./pages/PublicTournament"));
+const PublicLeague = lazyWithReload(() => import("./pages/PublicLeague"));
 const Settings = lazyWithReload(() => import("./pages/Settings"));
 const CreateClub = lazyWithReload(() => import("./pages/CreateClub"));
 const InvitePage = lazyWithReload(() => import("./pages/InvitePage"));
@@ -116,6 +117,7 @@ const App = () => (
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/live/:slug" element={<PublicTournament />} />
+              <Route path="/liga-live/:slug" element={<PublicLeague />} />
               <Route path="/invite/:token" element={<InvitePage />} />
               <Route path="/join/:clubId" element={<JoinClubPage />} />
               <Route path="/create-club" element={<ProtectedRoute><CreateClub /></ProtectedRoute>} />

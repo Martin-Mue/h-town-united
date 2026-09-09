@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Users, Swords, Wifi, CalendarDays } from "lucide-react";
+import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Users, Swords, Wifi, CalendarDays, CalendarPlus, Radio, QrCode, Copy } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import { usePlayers } from "@/hooks/usePlayers";
 import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
 import { applyLeagueFixtureResult } from "@/lib/leagueFixtureSync";
+import { downloadIcsEvent } from "@/utils/calendarExport";
+import QrCodeDialog from "@/components/QrCodeDialog";
 import { enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
 import { generateRoundRobinFixtures } from "@/utils/roundRobin";
 import { SectionCard, Eyebrow, RankBadge, RankAvatar } from "@/components/stats/StatPrimitives";
@@ -37,6 +39,10 @@ interface LeagueRow {
   status: string;
   created_by: string;
   created_at: string;
+  /** Öffentliche Liga-Ansicht (2026-09-09) — same opt-in pattern as tournaments'
+   *  public_view/public_slug (see the migration's doc comment for the full precedent). */
+  public_view: boolean;
+  public_slug: string | null;
 }
 
 interface FixtureRow {
@@ -50,6 +56,13 @@ interface FixtureRow {
   winner_id: string | null;
   player1_legs_won: number | null;
   player2_legs_won: number | null;
+  /** Öffentliche Liga-Ansicht (2026-09-09): denormalized at fixture-creation time (createLeague()
+   *  below) so PublicLeague.tsx's anon visitors can see player names without needing access to the
+   *  authenticated-only `players` table — mirrors how tournament brackets already store player
+   *  names as plain strings rather than FKs. Organizer-side rendering in this file still uses
+   *  playerById (the live, editable roster) — these columns exist purely for the public view. */
+  player1_name: string | null;
+  player2_name: string | null;
   /** Round 3 Rang 10: organizer-set matchday (Spieltag) date, shared across every fixture in the
    *  same round_number — distinct from played_at (only set once a fixture is actually finished). */
   scheduled_date: string | null;
@@ -87,6 +100,8 @@ const LeaguePage = () => {
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
   const [savingLeague, setSavingLeague] = useState(false);
   const [editingLeagueId, setEditingLeagueId] = useState<string | null>(null);
+
+  const [publicToggling, setPublicToggling] = useState(false);
 
   const [manualEntryFixture, setManualEntryFixture] = useState<FixtureRow | null>(null);
   const [manualP1Legs, setManualP1Legs] = useState("");
@@ -227,6 +242,10 @@ const LeaguePage = () => {
         generated.map((f) => ({
           league_id: league.id, club_id: clubId, round_number: f.round, leg: f.leg,
           player1_id: f.player1Id, player2_id: f.player2Id,
+          // Denormalized for the public view (see FixtureRow's doc comment) — resolved from the
+          // same roster already loaded for the participant checklist above, nothing extra to fetch.
+          player1_name: playerById.get(f.player1Id)?.name ?? null,
+          player2_name: playerById.get(f.player2Id)?.name ?? null,
         }))
       );
       if (fxError) throw fxError;
@@ -251,6 +270,36 @@ const LeaguePage = () => {
     } catch (err: unknown) {
       toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("league.deleteFailedGeneric"), variant: "destructive" });
     }
+  };
+
+  // Öffentliche Liga-Ansicht (2026-09-09) — same opt-in toggle pattern as Tournament.tsx's
+  // togglePublicView, minus the confirm-dialog-on-disable (a league's public view has no
+  // beamer/tablet watching it live the way a tournament's does, so turning it off going dark
+  // for a spectator mid-glance isn't a real risk here). Refetches via fetchAll() afterwards
+  // rather than an optimistic local update, matching this file's existing saveLeagueEdit/
+  // deleteLeague pattern (activeLeague is derived from `leagues`, not its own state slot).
+  const togglePublicView = async () => {
+    if (!activeLeague) return;
+    setPublicToggling(true);
+    const next = !activeLeague.public_view;
+    let slug = activeLeague.public_slug;
+    if (next && !slug) {
+      slug = `${activeLeague.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "liga"}-${activeLeague.id.slice(0, 6)}`;
+    }
+    const { error } = await supabase.from("leagues").update({ public_view: next, public_slug: slug }).eq("id", activeLeague.id);
+    if (error) {
+      toast({ title: t("common.error"), description: t("league.publicViewToggleFailed"), variant: "destructive" });
+    } else {
+      toast({ title: next ? t("league.publicViewActive") : t("league.publicViewDeactivated"), description: next && slug ? `${window.location.origin}/liga-live/${slug}` : undefined });
+      await fetchAll();
+    }
+    setPublicToggling(false);
+  };
+
+  const copyPublicLink = () => {
+    if (!activeLeague?.public_slug) return;
+    const url = `${window.location.origin}/liga-live/${activeLeague.public_slug}`;
+    navigator.clipboard.writeText(url).then(() => toast({ title: t("tournament.linkCopied"), description: url }));
   };
 
   const startFixtureGame = (f: FixtureRow) => {
@@ -344,6 +393,7 @@ const LeaguePage = () => {
 
   // ─── SINGLE LEAGUE DETAIL ────────────────────────
   if (id && activeLeague) {
+    const isLeagueOrganizer = activeLeague.created_by === session?.user?.id;
     return (
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
         <Link to="/leagues" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground">
@@ -351,15 +401,50 @@ const LeaguePage = () => {
         </Link>
 
         <div className="mb-6">
-          <div className="flex items-center gap-3 mb-1">
-            <Swords className="w-6 h-6 text-accent" />
-            <h2 className="text-2xl font-display uppercase">{activeLeague.name}</h2>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-3 min-w-0">
+              <Swords className="w-6 h-6 text-accent shrink-0" />
+              <h2 className="text-2xl font-display uppercase truncate">{activeLeague.name}</h2>
+            </div>
+            {/* Öffentliche Liga-Ansicht (2026-09-09): organizer-only, same opt-in switch as
+                Tournament.tsx's own "Live-Ansicht" button — everyone else simply never sees it,
+                so the detail view is unchanged for the vast majority of leagues that stay private. */}
+            {isLeagueOrganizer && (
+              <Button variant={activeLeague.public_view ? "default" : "outline"} size="sm" disabled={publicToggling} onClick={togglePublicView} className="gap-1 shrink-0">
+                <Radio className="w-3.5 h-3.5" />
+                {activeLeague.public_view ? t("tournament.liveOn") : t("league.publicViewBtn")}
+              </Button>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
             {activeLeague.game_mode} · {t("stats.firstTo")} {Math.ceil(activeLeague.best_of_legs / 2)} · {activeLeague.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")} ·{" "}
             {activeLeague.result_mode === "live" ? t("league.liveGamesLabel") : t("league.manualEntryLabel")}
           </p>
         </div>
+
+        {activeLeague.public_view && activeLeague.public_slug && (
+          <div className="bg-gradient-to-r from-secondary/10 via-primary/10 to-accent/10 border border-secondary/30 rounded-xl px-4 py-1.5 text-xs flex items-center gap-2 mb-4">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-secondary animate-pulse shrink-0" />
+            <span className="text-muted-foreground shrink-0 hidden sm:inline">{t("league.publicLinkLabel")}</span>
+            <code className="font-mono text-secondary truncate">{window.location.origin}/liga-live/{activeLeague.public_slug}</code>
+            <div className="flex items-center gap-1.5 ml-auto shrink-0">
+              <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" onClick={copyPublicLink}>
+                <Copy className="w-3 h-3" /> {t("common.copy")}
+              </Button>
+              <QrCodeDialog
+                url={`${window.location.origin}/liga-live/${activeLeague.public_slug}`}
+                title={t("league.publicViewBtn")}
+                description={t("league.scanForPublicView")}
+                downloadName={`liga-live-${activeLeague.public_slug}`}
+                trigger={
+                  <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1">
+                    <QrCode className="w-3 h-3" /> QR
+                  </Button>
+                }
+              />
+            </div>
+          </div>
+        )}
 
         <SectionCard className="mb-4">
           <Eyebrow icon={Trophy}>{t("league.standingsTitle")}</Eyebrow>
@@ -440,6 +525,31 @@ const LeaguePage = () => {
                         {new Date(scheduledDate).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
                       </p>
                     ) : null}
+                    {/* Calendar export (2026-09-09) — shown to EVERYONE once a date is set, not
+                        just the organizer (unlike the editable date input above): any participant
+                        might want this specific matchday in their own phone's calendar, and this
+                        is a pure client-side download, nothing to save back. */}
+                    {scheduledDate && (
+                      <Button
+                        size="icon" variant="ghost" className="h-6 w-6 shrink-0"
+                        title={t("league.addToCalendar")}
+                        onClick={() => downloadIcsEvent(
+                          {
+                            date: scheduledDate,
+                            uid: `league-${activeLeague.id}-round-${round}`,
+                            title: `${activeLeague.name} · ${t("league.roundLabel")} ${round}`,
+                            description: roundFixtures.map((f) => {
+                              const p1 = playerById.get(f.player1_id);
+                              const p2 = playerById.get(f.player2_id);
+                              return `${p1?.name ?? "?"} vs ${p2?.name ?? "?"}`;
+                            }).join("\n"),
+                          },
+                          `${activeLeague.name.replace(/\s+/g, "_")}-Runde${round}.ics`,
+                        )}
+                      >
+                        <CalendarPlus className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     {roundFixtures.map((f) => {

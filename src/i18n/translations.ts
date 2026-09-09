@@ -1033,6 +1033,9 @@ export const translations: Record<string, Record<Language, string>> = {
   "training.finish": { de: "Beenden", en: "Finish", fr: "Terminer", pl: "Zakończ", nl: "Beëindigen", tr: "Bitir" },
   "training.newPersonalRecord": { de: "Neuer persönlicher Rekord!", en: "New personal record!", fr: "Nouveau record personnel !", pl: "Nowy rekord osobisty!", nl: "Nieuw persoonlijk record!", tr: "Yeni kişisel rekor!" },
   "training.recordLabel": { de: "Rekord:", en: "Record:", fr: "Record :", pl: "Rekord:", nl: "Record:", tr: "Rekor:" },
+  // Practice streak (2026-09-09) — the number itself is placed in JSX before this suffix, same
+  // convention as game.legsInARow.
+  "training.daysInARow": { de: "Tage in Folge trainiert", en: "days in a row", fr: "jours d'affilée", pl: "dni z rzędu", nl: "dagen op rij", tr: "üst üste gün" },
   "training.yourRecordLabel": { de: "Dein Rekord:", en: "Your record:", fr: "Ton record :", pl: "Twój rekord:", nl: "Jouw record:", tr: "Rekorun:" },
   "training.recentAttemptsLabel": { de: "Letzte Versuche", en: "Recent attempts", fr: "Tentatives récentes", pl: "Ostatnie próby", nl: "Recente pogingen", tr: "Son denemeler" },
   "training.dartsThrownLabel": { de: "Darts geworfen", en: "Darts thrown", fr: "Fléchettes lancées", pl: "Rzucone lotki", nl: "Darts geworpen", tr: "Atılan dartlar" },
@@ -1509,6 +1512,20 @@ export const translations: Record<string, Record<Language, string>> = {
   "league.fixturesTitle": { de: "Spielplan", en: "Fixtures", fr: "Calendrier", pl: "Terminarz", nl: "Speelschema", tr: "Fikstür" },
   "league.noFixturesYet": { de: "Keine Partien.", en: "No matches.", fr: "Aucune partie.", pl: "Brak meczów.", nl: "Geen wedstrijden.", tr: "Maç yok." },
   "league.roundLabel": { de: "Runde", en: "Round", fr: "Manche", pl: "Runda", nl: "Ronde", tr: "Tur" },
+  // Calendar export (2026-09-09) — one-tap .ics download for a Spieltag's scheduled date.
+  "league.addToCalendar": { de: "Zum Kalender hinzufügen", en: "Add to calendar", fr: "Ajouter au calendrier", pl: "Dodaj do kalendarza", nl: "Toevoegen aan agenda", tr: "Takvime ekle" },
+  // Öffentliche Liga-Ansicht (2026-09-09) — organizer-side toggle/share UI (League.tsx) plus the
+  // anonymous read-only page itself (PublicLeague.tsx), mirroring Tournament.tsx's own
+  // public_view/public_slug pattern (reusing its "tournament.liveOn"/"tournament.linkCopied" keys
+  // where the wording is identical either way).
+  "league.publicViewBtn": { de: "Öffentliche Ansicht", en: "Public view", fr: "Vue publique", pl: "Widok publiczny", nl: "Openbare weergave", tr: "Genel görünüm" },
+  "league.publicViewActive": { de: "Öffentliche Ansicht aktiv", en: "Public view active", fr: "Vue publique activée", pl: "Widok publiczny aktywny", nl: "Openbare weergave actief", tr: "Genel görünüm etkin" },
+  "league.publicViewDeactivated": { de: "Öffentliche Ansicht deaktiviert", en: "Public view deactivated", fr: "Vue publique désactivée", pl: "Widok publiczny wyłączony", nl: "Openbare weergave uitgeschakeld", tr: "Genel görünüm devre dışı" },
+  "league.publicViewToggleFailed": { de: "Öffentliche Ansicht konnte nicht umgeschaltet werden.", en: "The public view couldn't be toggled.", fr: "La vue publique n'a pas pu être basculée.", pl: "Nie udało się przełączyć widoku publicznego.", nl: "De openbare weergave kon niet worden omgeschakeld.", tr: "Genel görünüm değiştirilemedi." },
+  "league.publicLinkLabel": { de: "Öffentlicher Link", en: "Public link", fr: "Lien public", pl: "Link publiczny", nl: "Openbare link", tr: "Genel bağlantı" },
+  "league.scanForPublicView": { de: "Scannen für die öffentliche Tabellen-/Spielplan-Ansicht", en: "Scan for the public standings/fixtures view", fr: "Scanner pour la vue publique du classement/calendrier", pl: "Zeskanuj, aby zobaczyć publiczną tabelę/terminarz", nl: "Scan voor de openbare stand-/speelschemaweergave", tr: "Genel puan durumu/fikstür görünümü için tarayın" },
+  "league.publicNotFoundTitle": { de: "Keine öffentliche Liga gefunden", en: "No public league found", fr: "Aucune ligue publique trouvée", pl: "Nie znaleziono publicznej ligi", nl: "Geen openbare competitie gevonden", tr: "Genel lig bulunamadı" },
+  "league.publicNotFoundDesc": { de: "Der Link ist ungültig oder die öffentliche Ansicht wurde deaktiviert.", en: "The link is invalid or the public view was deactivated.", fr: "Le lien est invalide ou la vue publique a été désactivée.", pl: "Link jest nieprawidłowy lub widok publiczny został wyłączony.", nl: "De link is ongeldig of de openbare weergave is uitgeschakeld.", tr: "Bağlantı geçersiz veya genel görünüm devre dışı bırakıldı." },
   "league.firstLegLabel": { de: "Hinrunde", en: "First leg", fr: "Aller", pl: "Runda zasadnicza", nl: "Heenronde", tr: "Gidiş" },
   "league.returnLegLabel": { de: "Rückrunde", en: "Return leg", fr: "Retour", pl: "Runda rewanżowa", nl: "Terugronde", tr: "Dönüş" },
   "league.playBtn": { de: "Spielen", en: "Play", fr: "Jouer", pl: "Graj", nl: "Spelen", tr: "Oyna" },
