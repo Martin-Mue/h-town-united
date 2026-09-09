@@ -11,8 +11,9 @@ function sendPush(userId: string, title: string, body: string): void {
     .catch((err) => console.error("online-match push failed", err));
 }
 
-export function notifyChallengeCreated(opponentUserId: string, challengerName: string, mode: "501" | "301" | "cricket"): void {
-  sendPush(opponentUserId, "Neue Herausforderung", `${challengerName} hat dich zu einem ${mode === "cricket" ? "Cricket" : mode}-Match herausgefordert.`);
+export function notifyChallengeCreated(opponentUserId: string, challengerName: string, mode: "501" | "301" | "cricket" | "custom"): void {
+  const modeLabel = mode === "cricket" ? "Cricket" : mode === "custom" ? "Custom" : mode;
+  sendPush(opponentUserId, "Neue Herausforderung", `${challengerName} hat dich zu einem ${modeLabel}-Match herausgefordert.`);
 }
 
 export function notifyChallengeDeclined(challengerUserId: string, declinerName: string, reason?: string): void {

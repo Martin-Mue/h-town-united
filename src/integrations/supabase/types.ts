@@ -815,7 +815,10 @@ export type Database = {
           club_id: string
           created_at: string
           created_by: string
+          custom_start_score: number | null
           decline_reason: string | null
+          double_in: boolean
+          double_out: boolean
           game_state: Json | null
           id: string
           mode: string
@@ -823,6 +826,7 @@ export type Database = {
           player2_user_id: string
           source_id: string | null
           source_type: string
+          starter: string
           status: string
           updated_at: string
         }
@@ -832,7 +836,10 @@ export type Database = {
           club_id: string
           created_at?: string
           created_by: string
+          custom_start_score?: number | null
           decline_reason?: string | null
+          double_in?: boolean
+          double_out?: boolean
           game_state?: Json | null
           id?: string
           mode: string
@@ -840,6 +847,7 @@ export type Database = {
           player2_user_id: string
           source_id?: string | null
           source_type?: string
+          starter?: string
           status?: string
           updated_at?: string
         }
@@ -849,7 +857,10 @@ export type Database = {
           club_id?: string
           created_at?: string
           created_by?: string
+          custom_start_score?: number | null
           decline_reason?: string | null
+          double_in?: boolean
+          double_out?: boolean
           game_state?: Json | null
           id?: string
           mode?: string
@@ -857,6 +868,7 @@ export type Database = {
           player2_user_id?: string
           source_id?: string | null
           source_type?: string
+          starter?: string
           status?: string
           updated_at?: string
         }

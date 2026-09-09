@@ -1174,6 +1174,14 @@ export const translations: Record<string, Record<Language, string>> = {
   "players.goodMatch": { de: "guter Gegner", en: "good match", fr: "bon adversaire", pl: "dobry przeciwnik", nl: "goede tegenstander", tr: "iyi eşleşme" },
   "players.noOnlineOpponents": { de: "Kein anderes Mitglied mit eigenem Account verfügbar.", en: "No other member with their own account available.", fr: "Aucun autre membre avec son propre compte disponible.", pl: "Brak innego członka z własnym kontem.", nl: "Geen ander lid met een eigen account beschikbaar.", tr: "Kendi hesabı olan başka üye yok." },
   "players.legsFormat": { de: "Format", en: "Format", fr: "Format", pl: "Format", nl: "Formaat", tr: "Format" },
+  // "mehr Einstellungen für Online-Spiele" (2026-09-09): OnlineChallengeSetup's new settings
+  // section (double-in/out, custom start score, who starts) — see PendingOnlineChallenges.tsx's
+  // accept() for how each is consumed.
+  "players.matchSettings": { de: "Einstellungen", en: "Settings", fr: "Paramètres", pl: "Ustawienia", nl: "Instellingen", tr: "Ayarlar" },
+  "players.starterLabel": { de: "Wer beginnt?", en: "Who starts?", fr: "Qui commence ?", pl: "Kto zaczyna?", nl: "Wie begint?", tr: "Kim başlıyor?" },
+  "players.starterChallenger": { de: "Ich", en: "Me", fr: "Moi", pl: "Ja", nl: "Ik", tr: "Ben" },
+  "players.starterOpponent": { de: "Gegner", en: "Opponent", fr: "Adversaire", pl: "Przeciwnik", nl: "Tegenstander", tr: "Rakip" },
+  "players.starterRandom": { de: "Zufall", en: "Random", fr: "Aléatoire", pl: "Losowo", nl: "Willekeurig", tr: "Rastgele" },
   "players.sendChallenge": { de: "Herausfordern", en: "Send challenge", fr: "Défier", pl: "Wyzwij", nl: "Uitdagen", tr: "Meydan oku" },
   "players.challengeSent": { de: "Herausforderung gesendet!", en: "Challenge sent!", fr: "Défi envoyé !", pl: "Wyzwanie wysłane!", nl: "Uitdaging verstuurd!", tr: "Meydan okuma gönderildi!" },
   "players.challengeSentDesc": { de: "Sobald die Person annimmt, geht's für euch beide los.", en: "As soon as they accept, you'll both jump right in.", fr: "Dès que la personne accepte, vous commencez tous les deux.", pl: "Gdy tylko zaakceptuje, zaczynacie oboje.", nl: "Zodra diegene accepteert, beginnen jullie allebei.", tr: "Kabul eder etmez ikiniz de başlarsınız." },

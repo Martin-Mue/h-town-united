@@ -23,7 +23,7 @@ export interface OnlineMatchRow {
   id: string;
   club_id: string;
   status: OnlineMatchStatus;
-  mode: "501" | "301" | "cricket";
+  mode: "501" | "301" | "cricket" | "custom";
   best_of_legs: number;
   player1_user_id: string;
   player2_user_id: string;
