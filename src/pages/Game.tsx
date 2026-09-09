@@ -2749,11 +2749,15 @@ const GamePage = () => {
   // "sticky", but reported as the numbers scrolling separately from the rest of the page, since
   // the camera window itself is a fixed, non-page-scrolling overlay.
   const scoreboardBlock = (
-    // will-change-transform forces this sticky element onto its own compositing layer up front,
-    // instead of leaving that decision to the browser's heuristics — sticky + backdrop-filter is
-    // a known combination that some Android Chrome/WebView versions composite inconsistently
-    // (sticky silently stops tracking scroll), and this is the standard low-risk mitigation.
-    <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 landscape:pt-1.5 landscape:pb-1 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 will-change-transform">
+    // will-change-transform alone (the previous mitigation) turned out not to be reliable enough
+    // in practice — reported on real devices as: the whole bar (undo/camera/cancel-game) missing
+    // before the first throw, only "snapping" into place once a dart is entered, and the header
+    // losing its sticky tracking (becomes scrollable again) right after. Rather than layer on a
+    // second compositing hint on top of one that already didn't hold up, this drops the actual
+    // named culprit — backdrop-filter — entirely: a plain, fully opaque background can't suffer
+    // the sticky+backdrop-filter compositing bug because there's no backdrop-filter left to
+    // trigger it. bg-background alone (no /95, no blur) is the deliberate trade here.
+    <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 landscape:pt-1.5 landscape:pb-1 bg-background border-b border-border/40 will-change-transform">
       {/* Online-match connection health — a dropped/backgrounded realtime channel used to fail
           silently (see useOnlineMatch's connectionStatus doc comment): a player could keep tapping
           on a board that was quietly no longer live. Shown right at the top of the always-visible
@@ -2842,23 +2846,29 @@ const GamePage = () => {
                   card grew taller the instant the first dart registered, shoving everything below
                   (the number pad, mid-tap) down and forcing a scroll. Reserving the space up
                   front keeps the layout stable across the whole round instead of just after it starts. */}
+              {/* Landscape: these badges used to be full portrait size (px-2 py-1 text-sm) inside
+                  an already-narrower card (landscape:p-3 above), which routinely wrapped to 2 rows
+                  and pushed the whole sticky header taller than it needed to be, eating into the
+                  pad/history space below. Smaller padding/font + a lower reserved min-height in
+                  landscape keeps the same information at a size actually proportioned to that
+                  layout instead of just reusing portrait's. */}
               {isActive && cameraEnabled && (
-                <div className="mt-1 flex min-h-8 items-center justify-center gap-1.5 flex-wrap">
+                <div className="mt-1 flex min-h-8 landscape:min-h-6 items-center justify-center gap-1.5 landscape:gap-1 flex-wrap">
                   {pendingCameraDarts.map((t, idx) => (
-                    <span key={idx} className="rounded bg-accent/20 px-2 py-1 text-sm font-display text-accent ring-1 ring-accent/40">
+                    <span key={idx} className="rounded bg-accent/20 px-2 py-1 landscape:px-1.5 landscape:py-0.5 text-sm landscape:text-xs font-display text-accent ring-1 ring-accent/40">
                       {dartLabel(t)}
                     </span>
                   ))}
                 </div>
               )}
               {isActive && (
-                <div className="mt-1 flex min-h-8 items-center justify-center gap-1.5 flex-wrap">
+                <div className="mt-1 flex min-h-8 landscape:min-h-6 items-center justify-center gap-1.5 landscape:gap-1 flex-wrap">
                   {activeRound.map((t, idx) => (
-                    <span key={idx} className="rounded bg-primary/15 px-2 py-1 text-sm font-display text-primary">
+                    <span key={idx} className="rounded bg-primary/15 px-2 py-1 landscape:px-1.5 landscape:py-0.5 text-sm landscape:text-xs font-display text-primary">
                       {dartLabel(t)}
                     </span>
                   ))}
-                  {activeRound.length > 0 && <span className="ml-1 text-sm font-display text-accent">+{currentRoundTotal}</span>}
+                  {activeRound.length > 0 && <span className="ml-1 text-sm landscape:text-xs font-display text-accent">+{currentRoundTotal}</span>}
                 </div>
               )}
               <div className="flex justify-center flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
