@@ -602,6 +602,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "league_fixtures_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "league_fixtures_player1_id_fkey"
             columns: ["player1_id"]
             isOneToOne: false
@@ -1266,6 +1273,76 @@ export type Database = {
           name?: string | null
           tagline?: string | null
           theme_preset?: string | null
+        }
+        Relationships: []
+      }
+      league_fixtures_public: {
+        Row: {
+          id: string | null
+          league_id: string | null
+          leg: string | null
+          player1_legs_won: number | null
+          player1_name: string | null
+          player2_legs_won: number | null
+          player2_name: string | null
+          round_number: number | null
+          scheduled_date: string | null
+          status: string | null
+          winner_slot: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_fixtures_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_fixtures_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leagues_public: {
+        Row: {
+          best_of_legs: number | null
+          format: string | null
+          game_mode: string | null
+          id: string | null
+          name: string | null
+          participant_ids: string[] | null
+          public_slug: string | null
+          public_view: boolean | null
+          result_mode: string | null
+          status: string | null
+        }
+        Insert: {
+          best_of_legs?: number | null
+          format?: string | null
+          game_mode?: string | null
+          id?: string | null
+          name?: string | null
+          participant_ids?: string[] | null
+          public_slug?: string | null
+          public_view?: boolean | null
+          result_mode?: string | null
+          status?: string | null
+        }
+        Update: {
+          best_of_legs?: number | null
+          format?: string | null
+          game_mode?: string | null
+          id?: string | null
+          name?: string | null
+          participant_ids?: string[] | null
+          public_slug?: string | null
+          public_view?: boolean | null
+          result_mode?: string | null
+          status?: string | null
         }
         Relationships: []
       }
