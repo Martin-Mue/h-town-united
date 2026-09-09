@@ -11,6 +11,11 @@ interface UseTournamentLinkParams {
   setMode: Dispatch<SetStateAction<GameMode>>;
   setBestOfLegs: Dispatch<SetStateAction<number>>;
   setCheckoutSuggestionEnabled: Dispatch<SetStateAction<boolean>>;
+  /** Sets-Modus, only ever set when the launching tournament itself has it on (see the
+   *  `sets`/`bestOfSets` query params below) — left untouched (both stay at their normal casual-
+   *  game defaults) for the overwhelming majority of tournament launches, which don't use it. */
+  setSetsEnabled?: Dispatch<SetStateAction<boolean>>;
+  setBestOfSets?: Dispatch<SetStateAction<number>>;
 }
 
 /**
@@ -36,6 +41,8 @@ export function useTournamentLink({
   setMode,
   setBestOfLegs,
   setCheckoutSuggestionEnabled,
+  setSetsEnabled,
+  setBestOfSets,
 }: UseTournamentLinkParams) {
   const tournamentLinkRef = useRef<TournamentLink | null>(initialTournamentLink);
   const [tournamentLinkName, setTournamentLinkName] = useState<string | null>(() =>
@@ -85,6 +92,15 @@ export function useTournamentLink({
 
     const qBestOf = parseInt(searchParams.get("bestOf") || "", 10);
     if (Number.isFinite(qBestOf) && qBestOf > 0) setBestOfLegs(qBestOf);
+
+    // Sets-Modus: only present at all when the tournament itself has it on (see Tournament.tsx's
+    // liveGamePath) — absent for every other launch, so setSetsEnabled/setBestOfSets simply never
+    // get called and the casual-game defaults (off) stand, same as a non-tournament game.
+    if (searchParams.get("sets") === "1") {
+      setSetsEnabled?.(true);
+      const qBestOfSets = parseInt(searchParams.get("bestOfSets") || "", 10);
+      if (Number.isFinite(qBestOfSets) && qBestOfSets > 0) setBestOfSets?.(qBestOfSets);
+    }
     // Only ever read once, right after mount — re-running on every searchParams identity
     // change would clobber the scorekeeper's own edits to the setup form.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -105,6 +105,16 @@ interface TournamentRecord {
   created_at: string;
   game_mode?: string;
   best_of_legs?: number;
+  /** Sets-Modus (see GameState.setsMode's own doc comment in src/types/game.ts) applied
+   *  tournament-wide — undefined/null for the overwhelming majority of tournaments, which play
+   *  a flat best-of-legs match exactly as before. When set, every match in this tournament is a
+   *  best-of-`best_of_sets` sets match, each set itself a best-of-`best_of_legs` legs race
+   *  (best_of_legs is reinterpreted as "legs per set", same convention as the casual-game
+   *  setting). Deliberately tournament-wide rather than per-round-config, unlike best_of_legs/
+   *  game_mode — keeps this V1 simple; a later ask for per-round sets could add it the same way
+   *  round_configs already overrides bestOf per round.
+   */
+  best_of_sets?: number | null;
   series_id?: string | null;
   round_configs?: RoundConfig[];
   public_view?: boolean;
@@ -578,6 +588,11 @@ const TournamentPage = () => {
   const [tournamentMode, setTournamentMode] = useState("ko");
   const [gameMode, setGameMode] = useState("501");
   const [bestOfLegs, setBestOfLegs] = useState(3);
+  // Sets-Modus, tournament-wide — see TournamentRecord.best_of_sets's own doc comment. Off by
+  // default, same as the casual-game setup screen; when off, best_of_sets is written/read as
+  // null/undefined and nothing else in this component (or the live view) changes at all.
+  const [setsEnabled, setSetsEnabled] = useState(false);
+  const [bestOfSets, setBestOfSets] = useState(3);
   const [targetSize, setTargetSize] = useState("auto");
   // Only consulted while targetSize === "auto" — lets the organizer see and override the
   // preliminary-round-vs-BYEs tie-break chooseAutoMainSize otherwise makes silently. Deliberately
@@ -1007,6 +1022,11 @@ const TournamentPage = () => {
    *  Retry once without that field rather than hard-failing the entire save on account of it. */
   const missingLivePlayColumn = (error: { code?: string; message?: string } | null) =>
     !!error && (error.code === "42703" || String(error.message || "").includes("live_play_enabled"));
+  /** Same schema-cache-missing fallback pattern as missingLivePlayColumn, for the newer
+   *  best_of_sets column (see 20260909172031_add_sets_mode_columns.sql's sibling migration for
+   *  tournaments — same convention, different table). */
+  const missingSetsColumn = (error: { code?: string; message?: string } | null) =>
+    !!error && (error.code === "42703" || String(error.message || "").includes("best_of_sets"));
 
   // ─── Start Tournament ──────────────────────────
   const startTournament = async () => {
@@ -1021,6 +1041,7 @@ const TournamentPage = () => {
         mode: tournamentMode,
         game_mode: gameMode,
         best_of_legs: bestOfLegs,
+        best_of_sets: setsEnabled ? bestOfSets : null,
         players: players as unknown as Json,
         bracket: bracket as unknown as Json,
         status: "active",
@@ -1031,8 +1052,8 @@ const TournamentPage = () => {
         live_play_enabled: livePlayEnabled,
       };
       let { data: upd, error: updErr } = await supabase.from("tournaments").update(payload).eq("id", editingId).select().single();
-      if (updErr && missingLivePlayColumn(updErr)) {
-        const { live_play_enabled, ...fallback } = payload;
+      if (updErr && (missingLivePlayColumn(updErr) || missingSetsColumn(updErr))) {
+        const { live_play_enabled, best_of_sets, ...fallback } = payload;
         ({ data: upd, error: updErr } = await supabase.from("tournaments").update(fallback).eq("id", editingId).select().single());
         if (!updErr) toast({ title: t("common.notice"), description: t("tournament.liveGameSettingSaveFailed"), variant: "destructive" });
       }
@@ -1042,6 +1063,7 @@ const TournamentPage = () => {
       }
       const rec: TournamentRecord = {
         ...upd,
+        best_of_sets: upd.best_of_sets ?? (setsEnabled ? bestOfSets : null),
         players: parsePlayers(upd.players, `tournament ${upd.id}`),
         bracket: parseBracket(upd.bracket, `tournament ${upd.id}`) as Match[] | RoundRobinMatch[],
         round_configs: parseRoundConfigs(upd.round_configs, `tournament ${upd.id}`),
@@ -1068,6 +1090,7 @@ const TournamentPage = () => {
       mode: tournamentMode,
       game_mode: gameMode,
       best_of_legs: bestOfLegs,
+      best_of_sets: setsEnabled ? bestOfSets : null,
       user_id: session?.user?.id as string,
       club_id: clubId,
       players: players as unknown as Json,
@@ -1079,8 +1102,8 @@ const TournamentPage = () => {
       live_play_enabled: livePlayEnabled,
     };
     let { data, error } = await supabase.from("tournaments").insert(insertPayload).select().single();
-    if (error && missingLivePlayColumn(error)) {
-      const { live_play_enabled, ...fallback } = insertPayload;
+    if (error && (missingLivePlayColumn(error) || missingSetsColumn(error))) {
+      const { live_play_enabled, best_of_sets, ...fallback } = insertPayload;
       ({ data, error } = await supabase.from("tournaments").insert(fallback).select().single());
     }
 
@@ -1095,6 +1118,7 @@ const TournamentPage = () => {
       bracket: parseBracket(data.bracket, `tournament ${data.id}`) as Match[] | RoundRobinMatch[],
       game_mode: data.game_mode || gameMode,
       best_of_legs: data.best_of_legs || bestOfLegs,
+      best_of_sets: data.best_of_sets ?? (setsEnabled ? bestOfSets : null),
       series_id: data.series_id,
       round_configs: parseRoundConfigs(data.round_configs, `tournament ${data.id}`),
       boards: data.boards ?? boards,
@@ -1644,6 +1668,16 @@ const TournamentPage = () => {
       bestOf: String(bestOf),
       tname: activeTournament!.name,
     });
+    // Sets-Modus (see TournamentRecord.best_of_sets's own doc comment) — read straight off the
+    // tournament here rather than threading a new param through both koLiveGamePath/rrLiveGamePath
+    // call sites, since it's tournament-wide, not per-round like bestOf. Omitted entirely (not
+    // "sets=0") for the overwhelming majority of tournaments that don't use it, so
+    // useTournamentLink's `searchParams.get("sets") === "1"` check on the receiving end never
+    // fires and the casual-game defaults stand untouched.
+    if (activeTournament!.best_of_sets) {
+      params.set("sets", "1");
+      params.set("bestOfSets", String(activeTournament!.best_of_sets));
+    }
     return `/game?${params.toString()}`;
   };
 
@@ -1851,6 +1885,8 @@ const TournamentPage = () => {
     setTournamentMode(t.mode);
     setGameMode(t.game_mode || "501");
     setBestOfLegs(t.best_of_legs || 3);
+    setSetsEnabled(!!t.best_of_sets);
+    setBestOfSets(t.best_of_sets || 3);
     setSeriesId(t.series_id || "none");
     setRoundConfigs(t.round_configs || []);
     setBoards(t.boards || 2);
@@ -2031,7 +2067,7 @@ const TournamentPage = () => {
                 </Select>
               </div>
               <div>
-                <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.firstToLegsLabel")}</label>
+                <label className="text-sm text-muted-foreground mb-1 block">{setsEnabled ? t("game.legsPerSet") : t("tournament.firstToLegsLabel")}</label>
                 <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
                   <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                   <SelectContent className="bg-card border-border">
@@ -2040,6 +2076,33 @@ const TournamentPage = () => {
                 </Select>
               </div>
             </div>
+
+            {/* Sets-Modus, tournament-wide (see TournamentRecord.best_of_sets's own doc comment)
+                — same "Best of X Sätze, je Satz Best of Y Legs" structure as the casual-game
+                setup screen, applied to every match in the tournament at once. Off by default and
+                not offered for Cricket/Extern (matching the leg picker's own scope), so a
+                tournament that doesn't touch this looks and behaves exactly as before. */}
+            {gameMode !== "Cricket" && gameMode !== "Extern" && (
+              <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
+                <div className="min-w-0">
+                  <Label className="text-sm font-medium">{t("game.setsMode")}</Label>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.setsModeDesc")}</p>
+                </div>
+                <Switch checked={setsEnabled} onCheckedChange={setSetsEnabled} />
+              </div>
+            )}
+
+            {gameMode !== "Cricket" && gameMode !== "Extern" && setsEnabled && (
+              <div>
+                <label className="text-sm text-muted-foreground mb-1 block">{t("game.firstToSets")}</label>
+                <Select value={String(bestOfSets)} onValueChange={(v) => setBestOfSets(Number(v))}>
+                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    {[1, 3, 5, 7, 9].map(n => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {tournamentMode !== "round-robin" && (
               <div>
@@ -2596,7 +2659,12 @@ const TournamentPage = () => {
         <div className="container flex items-center justify-between mb-2">
           <div>
             <h2 className="text-lg font-display uppercase leading-tight">{activeTournament.name}</h2>
-            <p className="text-xs text-muted-foreground">{t("tournament.koSystem")} · {activeTournament.players.length} {t("game.playersSuffix")} · {activeTournament.game_mode} · {t("stats.firstTo")} {Math.ceil(activeTournament.best_of_legs / 2)}</p>
+            <p className="text-xs text-muted-foreground">
+              {t("tournament.koSystem")} · {activeTournament.players.length} {t("game.playersSuffix")} · {activeTournament.game_mode} ·{" "}
+              {activeTournament.best_of_sets
+                ? `${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_sets / 2)} ${t("game.setsSuffix")} (${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_legs / 2)} ${t("game.legsPerSet")})`
+                : `${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_legs / 2)}`}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {/* Live-Spiel an/aus lives in the tournament edit form only now — a per-tournament

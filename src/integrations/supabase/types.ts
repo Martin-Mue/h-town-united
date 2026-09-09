@@ -1048,6 +1048,7 @@ export type Database = {
         Row: {
           attendance: Json
           best_of_legs: number
+          best_of_sets: number | null
           boards: number
           bracket: Json
           champion: string | null
@@ -1073,6 +1074,7 @@ export type Database = {
         Insert: {
           attendance?: Json
           best_of_legs?: number
+          best_of_sets?: number | null
           boards?: number
           bracket?: Json
           champion?: string | null
@@ -1098,6 +1100,7 @@ export type Database = {
         Update: {
           attendance?: Json
           best_of_legs?: number
+          best_of_sets?: number | null
           boards?: number
           bracket?: Json
           champion?: string | null
@@ -1318,6 +1321,7 @@ export type Database = {
         Returns: {
           attendance: Json
           best_of_legs: number
+          best_of_sets: number | null
           boards: number
           bracket: Json
           champion: string | null

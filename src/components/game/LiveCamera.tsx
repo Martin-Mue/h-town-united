@@ -327,8 +327,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const lastClipRef = useRef<{ seq: number; blob: Blob; mime: string } | null>(null);
   const clipSegmentTimerRef = useRef<number | null>(null);
   // Every recorded segment gets a sequence number, and getRecentClip() only ever returns the
-  // segment whose number matches pinnedClipSeqRef — see the pinning logic in the watcher loop
-  // below (restartClipSegment call site) for why this indirection exists.
+  // segment whose number matches pinnedClipSeqRef — see the pinning logic at both
+  // restartClipSegment call sites (the automatic board-empty branch in the watcher loop below,
+  // and manualScan) for why this indirection exists. Both END-OF-VISIT triggers must pin, or
+  // whichever one committed the round silently gets no clip (2026-09 field report).
   const clipSegmentSeqRef = useRef(0);
   const pinnedClipSeqRef = useRef<number | null>(null);
 
@@ -1447,6 +1449,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
       throwsSeenRef.current = Math.max(throwsSeenRef.current, dartsRemaining);
       scanLockRef.current = true;
+      // Root cause of "highlight clips stopped appearing": this manual "Jetzt scannen" button is
+      // the OTHER way a visit ends (the automatic board-empty branch in the watcher loop above is
+      // the other), but until this line it never called restartClipSegment()/pinned a seq at all —
+      // so getRecentClip() kept comparing against whatever (stale, or null) seq was pinned by the
+      // PREVIOUS visit and always came back empty for any round confirmed via this button. Mirror
+      // the auto-detected path exactly: cut the clip segment right here, at end-of-visit, and pin
+      // it so the highlight this round is about to produce (see submitDetectedRound in Game.tsx)
+      // actually has a clip to hand back.
+      pinnedClipSeqRef.current = restartClipSegment();
       void runPullScan();
     }
   };

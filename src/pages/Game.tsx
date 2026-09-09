@@ -296,6 +296,8 @@ const GamePage = () => {
     setMode,
     setBestOfLegs,
     setCheckoutSuggestionEnabled,
+    setSetsEnabled,
+    setBestOfSets,
   });
   const { leagueLinkRef } = useLeagueLink({ searchParams, setPlayerNames, setTeamMode, setNumPlayers, setMode, setBestOfLegs });
   // Online-match play (?online=<online_matches.id>) — a THIRD entry path alongside the two above.
@@ -1509,7 +1511,15 @@ const GamePage = () => {
     }
 
     // Highlight → pull the just-recorded rolling-buffer clip, no manual recording needed.
-    if (!busted && (checkedOut || roundTotal >= 100)) {
+    // Thresholds per Martin's 2026-09-09 request: only genuinely good throws — a high checkout
+    // (>50, so routine small finishes like a checkout of 2-40 no longer trigger a clip) or a high
+    // scoring round (>120, up from the old >=100 "any ton" bar). checkedOut also covers the
+    // round-cap "winner" reuse (see its own comment above) — gating on roundTotal here too means
+    // a cap-decided leg only counts as highlight-worthy if the round that ended it was itself a
+    // genuinely big one, same bar as everything else.
+    const isHighlightCheckout = checkedOut && roundTotal > 50;
+    const isHighlightScore = roundTotal > 120;
+    if (!busted && (isHighlightCheckout || isHighlightScore)) {
       const clip = liveCameraRef.current?.getRecentClip();
       if (clip) {
         setClipPopup({
@@ -1518,7 +1528,7 @@ const GamePage = () => {
           total: roundTotal,
           is180: roundTotal === 180,
           isCheckout: checkedOut,
-          isTonPlus: roundTotal >= 100 && roundTotal !== 180,
+          isTonPlus: roundTotal > 120 && roundTotal !== 180,
           playerName: game.players[startIdx].name,
           darts,
           ts: Date.now(),
@@ -1845,8 +1855,14 @@ const GamePage = () => {
     const tournamentWinnerName = (link?.player1Name && link?.player2Name)
       ? (winnerSlot0 === linkPlayer1IsGameSlot0 ? link.player1Name : link.player2Name)
       : game.winnerName!;
-    const tournamentScore1 = linkPlayer1IsGameSlot0 ? game.legsWon[0] : game.legsWon[1];
-    const tournamentScore2 = linkPlayer1IsGameSlot0 ? game.legsWon[1] : game.legsWon[0];
+    // Sets-Modus: game.legsWon only ever holds the FINAL set's tally once this match used sets
+    // (see legLogic.ts's applyLegWin) — showing that alone on the bracket would read as, say,
+    // "3:1" for what was actually a 2:1-in-sets win decided by a 3:1 final set, which is exactly
+    // the wrong number to put on a tournament bracket. game.setsWon (never reset mid-match, see
+    // GameState.setsMode's own doc comment) is the real match score whenever it's present.
+    const legsOrSetsWon = game.setsMode && game.setsWon ? game.setsWon : game.legsWon;
+    const tournamentScore1 = linkPlayer1IsGameSlot0 ? legsOrSetsWon[0] : legsOrSetsWon[1];
+    const tournamentScore2 = linkPlayer1IsGameSlot0 ? legsOrSetsWon[1] : legsOrSetsWon[0];
     try {
       if (typeof navigator !== "undefined" && !navigator.onLine) throw new Error("offline");
       await saveGameRecord(game, session?.user?.id, clubId, pendingGameIdRef.current, link, !!onlineMatchId);
@@ -2207,19 +2223,25 @@ const GamePage = () => {
             </div>
           )}
 
-          {/* Sets-Modus (Runde 5): the standard professional-darts match structure — "Best of X
-              Sätze, je Satz Best of Y Legs" — layered on top of the leg picker above rather than
-              replacing it (that picker's own label switches to "Legs pro Satz" the moment this is
-              on). Deliberately not offered for Cricket (matching the leg picker's own scope) or
-              inside a tournament/league-linked match, whose format is fixed by the bracket/fixture
-              — same restriction the leg picker above already enforces. */}
-          {mode !== "cricket" && !isTournamentMatch && (
+          {/* Sets-Modus (Runde 5, extended to tournaments 2026-09-09): the standard
+              professional-darts match structure — "Best of X Sätze, je Satz Best of Y Legs" —
+              layered on top of the leg picker above rather than replacing it (that picker's own
+              label switches to "Legs pro Satz" the moment this is on). Deliberately not offered
+              for Cricket (matching the leg picker's own scope). For a tournament/league-linked
+              match the format is fixed by the bracket/fixture, same as bestOfLegs above — the
+              switch itself is disabled then, same pattern as that picker — but unlike bestOfLegs
+              (always shown, tournaments always have SOME leg count), this row only renders at all
+              for a tournament match when the tournament actually turned Sets-Modus on: a
+              non-sets tournament (the overwhelming majority, unchanged) must never show a
+              disabled, permanently-off toggle here — see useTournamentLink's sets/bestOfSets
+              query params for where setsEnabled gets set true for a sets-mode tournament match. */}
+          {mode !== "cricket" && (!isTournamentMatch || setsEnabled) && (
             <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
               <div className="min-w-0">
                 <Label className="text-sm font-medium">{t("game.setsMode")}</Label>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.setsModeDesc")}</p>
               </div>
-              <Switch checked={setsEnabled} onCheckedChange={setSetsEnabled} />
+              <Switch checked={setsEnabled} disabled={isTournamentMatch} onCheckedChange={setSetsEnabled} />
             </div>
           )}
 
