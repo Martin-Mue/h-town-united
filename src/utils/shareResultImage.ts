@@ -12,6 +12,10 @@ export interface ShareResultParams {
   winnerName: string;
   bestOfLegs: number;
   players: ShareResultPlayer[];
+  /** KI-Spielbericht (2026-09-09): the AI-generated recap text, when one was already generated
+   *  for this match (see AiMatchReport.tsx / Game.tsx's shareResult()). Optional — omitted
+   *  entirely from the card (not even an empty section) when nobody generated one. */
+  aiReport?: string;
 }
 
 const COLORS = {
@@ -24,11 +28,48 @@ const COLORS = {
   muted: "#8b96a8",
 };
 
+/** Greedy word-wrap for a Canvas 2D context — European-language text is simply space-separated,
+ *  so no need for anything fancier than "does the next word still fit". Assumes `ctx.font` is
+ *  already set to whatever font the wrapped lines will actually be drawn in, since the wrap
+ *  decision depends on that font's measured widths. */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (current && ctx.measureText(test).width > maxWidth) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+const AI_REPORT_FONT = "italic 20px sans-serif";
+const AI_REPORT_LINE_HEIGHT = 30;
+
 /** Draws a shareable match-result card and returns it as a PNG blob. Pure Canvas — no extra dependency. */
 export async function renderResultImage(params: ShareResultParams): Promise<Blob | null> {
   const W = 900;
   const rowH = 90;
-  const H = 420 + params.players.length * rowH;
+  const reportMaxWidth = W - 160;
+  // Wrapped on a throwaway measuring context BEFORE the real canvas is sized — canvas.width/height
+  // must be set up front (setting either clears the canvas), so the final height needs to already
+  // account for however many lines the AI report wraps to.
+  let reportLines: string[] = [];
+  if (params.aiReport) {
+    const measureCtx = document.createElement("canvas").getContext("2d");
+    if (measureCtx) {
+      measureCtx.font = AI_REPORT_FONT;
+      reportLines = wrapText(measureCtx, params.aiReport, reportMaxWidth);
+    }
+  }
+  const reportBlockHeight = reportLines.length > 0 ? 50 + reportLines.length * AI_REPORT_LINE_HEIGHT : 0;
+  const H = 420 + params.players.length * rowH + reportBlockHeight;
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -82,6 +123,22 @@ export async function renderResultImage(params: ShareResultParams): Promise<Blob
     ctx.fillText("LEGS", W - 90, y + 20);
     ctx.textAlign = "left";
   });
+
+  // KI-Spielbericht (2026-09-09): drawn as its own card below the player rows, only when one was
+  // actually generated for this match (reportLines stays empty otherwise, and reportBlockHeight
+  // above already left no extra space to draw into in that case).
+  if (reportLines.length > 0) {
+    const blockTop = tableTop + 55 + params.players.length * rowH - 20;
+    ctx.textAlign = "left";
+    ctx.fillStyle = COLORS.accent;
+    ctx.font = "bold 13px sans-serif";
+    ctx.fillText("📰 KI-SPIELBERICHT", 90, blockTop + 20);
+    ctx.fillStyle = COLORS.text;
+    ctx.font = AI_REPORT_FONT;
+    reportLines.forEach((line, i) => {
+      ctx.fillText(line, 90, blockTop + 20 + 32 + i * AI_REPORT_LINE_HEIGHT);
+    });
+  }
 
   ctx.textAlign = "center";
   ctx.fillStyle = COLORS.muted;
