@@ -35,6 +35,41 @@ const LANGUAGE_NAMES: Record<string, string> = {
   de: "German", en: "English", fr: "French", pl: "Polish", nl: "Dutch", tr: "Turkish",
 };
 
+/** Direct call to Google's own Gemini API (generativelanguage.googleapis.com) using a free-tier
+ *  API key (GOOGLE_AI_API_KEY secret), tried BEFORE the paid Lovable AI Gateway below — this is a
+ *  pure cost optimization, never a reliability trade-off: it returns null (never throws) on ANY
+ *  failure — no key configured, network error, non-2xx response, empty content — so the caller
+ *  falls straight through to the existing Gateway call exactly as it always worked before this
+ *  existed. Free-tier quotas are real and can be hit during a busy club night; silently falling
+ *  back rather than surfacing an error is what makes trying the free tier first safe to do at all. */
+async function callGeminiDirect(systemPrompt: string, userPrompt: string): Promise<string | null> {
+  const key = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!key) return null;
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 0.85, maxOutputTokens: 220 },
+      }),
+    });
+    if (!res.ok) {
+      console.warn("generate-match-report: direct Gemini call failed, falling back to Lovable AI Gateway", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data = await res.json();
+    const text = (data.candidates?.[0]?.content?.parts ?? [])
+      .map((p: { text?: string }) => p.text || "")
+      .join("");
+    return text.trim() || null;
+  } catch (e) {
+    console.warn("generate-match-report: direct Gemini call threw, falling back to Lovable AI Gateway", e);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -91,9 +126,6 @@ serve(async (req) => {
       return jsonResponse({ report: game.ai_report, cached: true });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
     const isDouble = game.player2_name && game.player2_name !== "—";
     const statLines: string[] = [
       `Mode: ${game.mode}${game.best_of_sets ? `, best of ${game.best_of_sets} sets (best of ${game.best_of_legs} legs per set)` : game.best_of_legs > 1 ? `, best of ${game.best_of_legs} legs` : ""}`,
@@ -107,37 +139,48 @@ serve(async (req) => {
     const systemPrompt = `You are an enthusiastic local sports journalist covering amateur darts matches at a small darts club. Given real match stats, write a short, punchy, warm recap — 2 to 4 sentences, plain prose, no markdown, no headline, no quotation marks around the whole thing. Weave the real numbers in naturally instead of just listing them. Never invent facts, names, or numbers beyond what's given. Write entirely in ${LANGUAGE_NAMES[language]}.`;
     const userPrompt = `Match stats:\n${statLines.join("\n")}\n\nWrite the recap now.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        temperature: 0.85,
-        max_tokens: 220,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
+    // Free tier first (see callGeminiDirect's own doc comment) — only reaches the paid Gateway
+    // below when that returned null (no key configured, quota hit, or any other failure).
+    let rawReport = await callGeminiDirect(systemPrompt, userPrompt);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      if (response.status === 429) {
-        return jsonResponse({ error: "Rate limit exceeded. Please wait a moment.", retryable: true }, 429);
+    if (!rawReport) {
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+      if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          temperature: 0.85,
+          max_tokens: 220,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        if (response.status === 429) {
+          return jsonResponse({ error: "Rate limit exceeded. Please wait a moment.", retryable: true }, 429);
+        }
+        if (response.status === 402) {
+          return jsonResponse({ error: "AI credits exhausted. Please top up.", retryable: false }, 402);
+        }
+        console.error("generate-match-report: AI gateway error", response.status, errText);
+        return jsonResponse({ error: "AI report generation failed", retryable: response.status >= 500 }, response.status);
       }
-      if (response.status === 402) {
-        return jsonResponse({ error: "AI credits exhausted. Please top up.", retryable: false }, 402);
-      }
-      console.error("generate-match-report: AI gateway error", response.status, errText);
-      return jsonResponse({ error: "AI report generation failed", retryable: response.status >= 500 }, response.status);
+
+      const aiResult = await response.json();
+      rawReport = String(aiResult.choices?.[0]?.message?.content || "").trim();
     }
 
-    const aiResult = await response.json();
-    let report = String(aiResult.choices?.[0]?.message?.content || "").trim();
+    let report = rawReport ?? "";
     // Defensive trim — the model is instructed to keep this short, but a hard cap avoids an
     // unbounded wall of text ever reaching the DB/UI if it ignores that instruction once.
     if (report.length > 700) report = report.slice(0, 700).trim();

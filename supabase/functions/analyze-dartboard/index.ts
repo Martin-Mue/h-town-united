@@ -42,6 +42,60 @@ function isRateLimited(userId: string): boolean {
   return entry.count > RATE_LIMIT;
 }
 
+/** "data:image/jpeg;base64,AAAA..." -> { mimeType: "image/jpeg", data: "AAAA..." } — Google's
+ *  direct Gemini API wants mime type and raw base64 as separate fields (inline_data), unlike the
+ *  Lovable Gateway's OpenAI-style image_url.url which takes the whole data: URI as one string.
+ *  Falls back to image/jpeg + the input as-is if it isn't already a data: URI (mirrors this same
+ *  file's existing fallback for the Gateway path just below). */
+function splitDataUrl(imageBase64: string): { mimeType: string; data: string } {
+  const match = imageBase64.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/);
+  if (match) return { mimeType: match[1], data: match[2] };
+  return { mimeType: "image/jpeg", data: imageBase64 };
+}
+
+/** Direct call to Google's own Gemini API using a free-tier API key (GOOGLE_AI_API_KEY secret) —
+ *  this is THE highest-volume AI call in the whole app (once per detected round during live-camera
+ *  play, easily dozens of calls per match), so it's also where moving cost off the paid Lovable AI
+ *  Gateway matters most. Tried first, but never allowed to be a reliability regression: returns
+ *  null (never throws) on any failure — no key configured, free-tier quota hit mid-match, network
+ *  error, empty response — so the caller falls straight through to the existing, already-proven
+ *  Gateway path below exactly as before this existed. A live scoring session must never stall just
+ *  because the free tier ran out for the day. */
+async function callGeminiVisionDirect(systemPrompt: string, instructionText: string, imageBase64: string): Promise<string | null> {
+  const key = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!key) return null;
+  try {
+    const { mimeType, data } = splitDataUrl(imageBase64.startsWith("data:") ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`);
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{
+          role: "user",
+          parts: [
+            { text: instructionText },
+            { inline_data: { mime_type: mimeType, data } },
+          ],
+        }],
+        generationConfig: { temperature: 0, maxOutputTokens: 600 },
+      }),
+    });
+    if (!res.ok) {
+      console.warn("analyze-dartboard: direct Gemini call failed, falling back to Lovable AI Gateway", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data2 = await res.json();
+    const text = (data2.candidates?.[0]?.content?.parts ?? [])
+      .map((p: { text?: string }) => p.text || "")
+      .join("");
+    return text.trim() || null;
+  } catch (e) {
+    console.warn("analyze-dartboard: direct Gemini call threw, falling back to Lovable AI Gateway", e);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -69,9 +123,6 @@ serve(async (req) => {
       return jsonResponse({ ...emptyResult, error: "No image provided", status: 400, retryable: false });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
     const systemPrompt = `You score dartboard photos. Return ONLY JSON.
 
 Your #1 job: find EVERY dart currently stuck in the board. Look carefully at the whole
@@ -98,76 +149,90 @@ Return exactly this shape:
 If — and only if — there is truly no dart anywhere on the board, return darts=[], totalScore=0, overallConfidence=0, dartsDetected=0 (still include board if visible).
 If no dartboard is visible, set board=null.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        temperature: 0,
-        max_tokens: 600,
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: {
-                  url: imageBase64.startsWith("data:")
-                    ? imageBase64
-                    : `data:image/jpeg;base64,${imageBase64}`,
+    const instructionText = detectBoard
+      ? "Find the board center and size. If darts are visible, include them. Return only JSON."
+      : "Identify all darts currently stuck in the board. Use dart tips for the score. Return only JSON.";
+
+    // Free tier first (see callGeminiVisionDirect's own doc comment) — only reaches the paid
+    // Gateway below when that returned null (no key configured, quota hit, or any other failure).
+    // Coalesced to "" (never null) up front so every use of `content` below — including inside
+    // the `if (!content)` check itself — stays a plain string with no null-narrowing to reason
+    // about, whether it ends up set here or by the Gateway fallback right after.
+    let content: string = (await callGeminiVisionDirect(systemPrompt, instructionText, imageBase64)) ?? "";
+
+    if (!content) {
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+      if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          temperature: 0,
+          max_tokens: 600,
+          messages: [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: imageBase64.startsWith("data:")
+                      ? imageBase64
+                      : `data:image/jpeg;base64,${imageBase64}`,
+                  },
                 },
-              },
-              {
-                type: "text",
-                text: detectBoard
-                  ? "Find the board center and size. If darts are visible, include them. Return only JSON."
-                  : "Identify all darts currently stuck in the board. Use dart tips for the score. Return only JSON.",
-              },
-            ],
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      if (response.status === 429) {
-        return jsonResponse({
-          ...emptyResult,
-          error: "Rate limit exceeded. Please wait a moment.",
-          status: 429,
-          retryable: true,
-          providerStatus: response.status,
-          providerError: errText,
-        });
-      }
-      if (response.status === 402) {
-        return jsonResponse({
-          ...emptyResult,
-          error: "AI credits exhausted. Please top up.",
-          status: 402,
-          retryable: false,
-          providerStatus: response.status,
-          providerError: errText,
-        });
-      }
-      console.error("AI error:", response.status, errText);
-      return jsonResponse({
-        ...emptyResult,
-        error: "AI analysis failed",
-        status: response.status,
-        retryable: response.status >= 500,
-        providerStatus: response.status,
-        providerError: errText,
+                {
+                  type: "text",
+                  text: instructionText,
+                },
+              ],
+            },
+          ],
+        }),
       });
-    }
 
-    const aiResult = await response.json();
-    const content = aiResult.choices?.[0]?.message?.content || "";
+      if (!response.ok) {
+        const errText = await response.text();
+        if (response.status === 429) {
+          return jsonResponse({
+            ...emptyResult,
+            error: "Rate limit exceeded. Please wait a moment.",
+            status: 429,
+            retryable: true,
+            providerStatus: response.status,
+            providerError: errText,
+          });
+        }
+        if (response.status === 402) {
+          return jsonResponse({
+            ...emptyResult,
+            error: "AI credits exhausted. Please top up.",
+            status: 402,
+            retryable: false,
+            providerStatus: response.status,
+            providerError: errText,
+          });
+        }
+        console.error("AI error:", response.status, errText);
+        return jsonResponse({
+          ...emptyResult,
+          error: "AI analysis failed",
+          status: response.status,
+          retryable: response.status >= 500,
+          providerStatus: response.status,
+          providerError: errText,
+        });
+      }
+
+      const aiResult = await response.json();
+      content = aiResult.choices?.[0]?.message?.content || "";
+    }
 
     // Parse JSON from response (strip markdown if present)
     let parsed;
