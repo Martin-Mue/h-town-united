@@ -39,9 +39,41 @@ export function applyLegWin(base: GameState, prev: GameState, updatedLeg: LegSta
   const n = prev.players.length;
   const legsWon = [...prev.legsWon];
   legsWon[winnerIndex] += 1;
-  const legsToWin = Math.ceil(prev.bestOfLegs / 2);
+  const legsToWinSet = Math.ceil(prev.bestOfLegs / 2);
   const finishedLeg: LegState = { ...updatedLeg, winnerIndex };
-  if (legsWon[winnerIndex] >= legsToWin) {
+  const nextStarter = (finishedLeg.startingPlayerIndex + 1) % n;
+
+  if (legsWon[winnerIndex] >= legsToWinSet) {
+    // This leg decided the current set — or, without setsMode, the whole match (today's
+    // unchanged behavior: `legsWon` just keeps accumulating across the whole match, exactly as
+    // before this field existed).
+    if (prev.setsMode) {
+      const setsWon = [...(prev.setsWon ?? Array(legsWon.length).fill(0))];
+      setsWon[winnerIndex] += 1;
+      const setsToWin = Math.ceil(prev.setsMode.bestOfSets / 2);
+      if (setsWon[winnerIndex] >= setsToWin) {
+        return {
+          ...base,
+          currentLeg: finishedLeg,
+          legsWon,
+          setsWon,
+          isFinished: true,
+          winnerName: prev.teams ? prev.teams[winnerIndex].name : prev.players[winnerIndex].name,
+          winnerIndex,
+        };
+      }
+      // Set decided, match continues: archive the leg (its own legNumber/winnerIndex still
+      // reflect the real leg that just happened — nothing about set boundaries needs to reset
+      // that), start the next set's first leg with legsWon reset to zero for everyone.
+      return {
+        ...base,
+        legsWon: Array(legsWon.length).fill(0),
+        setsWon,
+        completedLegs: [...prev.completedLegs, finishedLeg],
+        currentLeg: createLegState(finishedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams),
+        currentPlayerIndex: nextStarter,
+      };
+    }
     return {
       ...base,
       currentLeg: finishedLeg,
@@ -51,7 +83,6 @@ export function applyLegWin(base: GameState, prev: GameState, updatedLeg: LegSta
       winnerIndex,
     };
   }
-  const nextStarter = (finishedLeg.startingPlayerIndex + 1) % n;
   return {
     ...base,
     legsWon,
@@ -59,6 +90,25 @@ export function applyLegWin(base: GameState, prev: GameState, updatedLeg: LegSta
     currentLeg: createLegState(finishedLeg.legNumber + 1, prev.startScore, nextStarter, prev.players, prev.teams),
     currentPlayerIndex: nextStarter,
   };
+}
+
+/**
+ * Whether winning ONE more leg (bringing legsWon[winnerIndex] to its post-win value) would decide
+ * the whole MATCH right now, not just the current set — without setsMode this is identical to
+ * "reaches bestOfLegs' own majority" (the whole match always was just one set); with setsMode,
+ * reaching that majority only decides the current SET, and the match itself needs setsWon (after
+ * this set) to also reach setsMode.bestOfSets' majority. Shared by every "should this checkout
+ * play the victory sound/announce match-won" side-effect check in Game.tsx (computed BEFORE the
+ * actual setGame(applyLegWin(...)) call, from the pre-throw `game` closure) so those can never
+ * disagree with what applyLegWin itself actually decides a moment later.
+ */
+export function wouldWinMatch(game: GameState, winnerIndex: number): boolean {
+  const legsToWinSet = Math.ceil(game.bestOfLegs / 2);
+  const legsWonAfter = game.legsWon[winnerIndex] + 1;
+  if (legsWonAfter < legsToWinSet) return false;
+  if (!game.setsMode) return true;
+  const setsToWin = Math.ceil(game.setsMode.bestOfSets / 2);
+  return (game.setsWon?.[winnerIndex] ?? 0) + 1 >= setsToWin;
 }
 
 /**

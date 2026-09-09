@@ -138,13 +138,20 @@ export async function saveGameRecord(
     };
   };
 
+  // Total legs won across the WHOLE match, not `game.legsWon` directly — see postGameStats.ts's
+  // own identical helper/comment: with Sets-Modus active, `game.legsWon` only ever holds the
+  // CURRENT set's tally (reset to zero at every set boundary), so at match end it would silently
+  // report just the final set's leg score into a column career stats elsewhere already treat as
+  // "legs won this match".
+  const totalLegsFor = (scoreSlot: number) => allLegs.filter((leg) => leg.winnerIndex === scoreSlot).length;
+
   const gameInsertPayload = {
     id: pendingGameId,
     user_id: userId, club_id: clubId, mode: game.mode, start_score: game.startScore,
     best_of_legs: game.bestOfLegs,
     player1_name: player1Name, player2_name: player2Name,
     player1_id: p1Match?.id || null, player2_id: p2Match?.id || null,
-    player1_legs_won: game.legsWon[top1], player2_legs_won: top2 !== undefined ? game.legsWon[top2] : 0,
+    player1_legs_won: totalLegsFor(top1), player2_legs_won: top2 !== undefined ? totalLegsFor(top2) : 0,
     player1_average: averages[top1], player2_average: top2 !== undefined ? averages[top2] : 0,
     player1_highscore: highs[top1], player2_highscore: top2 !== undefined ? highs[top2] : 0,
     player1_double_rate: doubleRates[top1], player2_double_rate: top2 !== undefined ? doubleRates[top2] : 0,
@@ -156,6 +163,14 @@ export async function saveGameRecord(
     tournament_id: tournamentLink?.tournamentId ?? null,
     played_online: !!playedOnline,
     ...(tournamentLink ? { match_id: tournamentLink.matchId } : {}),
+    // Sets-Modus (Runde 5) — see GameState.setsMode's own doc comment. Omitted entirely (not even
+    // zeroed) when the match wasn't played with Sets-Modus, same reasoning as match_id above:
+    // nothing downstream should distinguish "sets mode with a 0:0 illegal outcome" from "no sets
+    // mode at all" for a query that just checks `best_of_sets IS NOT NULL`.
+    ...(game.setsMode && game.setsWon ? {
+      best_of_sets: game.setsMode.bestOfSets,
+      player1_sets_won: game.setsWon[top1], player2_sets_won: top2 !== undefined ? game.setsWon[top2] : 0,
+    } : {}),
   };
   // Idempotency check: `pendingGameId` is the same client-generated id across retries
   // specifically so a replay after a lost network ack doesn't create a duplicate game. But a
@@ -189,6 +204,15 @@ export async function saveGameRecord(
     // losing the entire game (and silently skipping the tournament bracket write-back below).
     if (insertGameErr && tournamentLink && (insertGameErr.code === "42703" || String(insertGameErr.message || "").includes("match_id"))) {
       const { match_id, ...fallback } = gameInsertPayload;
+      ({ data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(fallback).select("id").single());
+    }
+    // Same guard for the Sets-Modus columns (best_of_sets/player1_sets_won/player2_sets_won) —
+    // only ever reached when this particular match actually used Sets-Modus, so an environment
+    // that's never played one won't hit this retry at all. Dropping just these three columns
+    // still saves the real game/legs/stats underneath; the match is only missing its set score
+    // in history until the migration runs, not lost outright.
+    if (insertGameErr && game.setsMode && (insertGameErr.code === "42703" || String(insertGameErr.message || "").includes("sets_won") || String(insertGameErr.message || "").includes("best_of_sets"))) {
+      const { best_of_sets, player1_sets_won, player2_sets_won, ...fallback } = gameInsertPayload;
       ({ data: insertedGame, error: insertGameErr } = await supabase.from("games").insert(fallback).select("id").single());
     }
     if (insertGameErr) throw insertGameErr;

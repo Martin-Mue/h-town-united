@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricketNumbers } from "./legLogic";
+import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricketNumbers, wouldWinMatch } from "./legLogic";
 import { createLegState, createCricketState } from "./gameStateFactory";
 import type { GameState, LegState, PlayerSlot, CricketPlayerState, DartThrow } from "@/types/game";
 
@@ -79,6 +79,94 @@ describe("applyLegWin", () => {
     // Not finished (needs 3 legs to win a best-of-5) -> currentPlayerIndex gets overwritten by
     // the rotation logic (nextStarter), which is the intended behavior, not the preserved base.
     expect(next.currentPlayerIndex).toBe((finishing.startingPlayerIndex + 1) % 3);
+  });
+});
+
+// Round 5: Sets-Modus — "Best of X Sätze, je Satz Best of Y Legs". bestOfLegs is reused as "legs
+// per set" the moment setsMode is on (see GameState.setsMode's own doc comment); these tests
+// exercise the two genuinely new outcomes applyLegWin can now reach (a leg that only decides the
+// CURRENT set, and a leg that decides the whole match via sets) on top of the four cases above,
+// which already cover the setsMode-absent path staying completely unchanged.
+describe("applyLegWin with setsMode", () => {
+  function makeSetsMatch(numPlayers: number, legsPerSet: number, bestOfSets: number): GameState {
+    const players = makePlayers(numPlayers);
+    return {
+      mode: "501", startScore: 501, bestOfLegs: legsPerSet, players,
+      legsWon: Array(numPlayers).fill(0), setsWon: Array(numPlayers).fill(0),
+      setsMode: { bestOfSets },
+      currentLeg: createLegState(1, 501, 0, players), completedLegs: [],
+      currentPlayerIndex: 0, isFinished: false,
+    };
+  }
+
+  it("winning enough legs to take a set resets legsWon to zero and increments setsWon, without finishing the match", () => {
+    const game = makeSetsMatch(2, 3, 3); // best of 3 sets, each set first to 2 legs
+    game.legsWon = [1, 0]; // P1 one leg from taking set 1
+    const finishing: LegState = { ...game.currentLeg, remaining: [0, 40] };
+    const next = applyLegWin(game, game, finishing, 0);
+
+    expect(next.isFinished).toBe(false);
+    expect(next.setsWon).toEqual([1, 0]);
+    // Set 1 decided -> the NEXT set's leg race starts fresh at 0:0, not carrying over.
+    expect(next.legsWon).toEqual([0, 0]);
+    expect(next.completedLegs).toHaveLength(1);
+    expect(next.currentLeg.remaining).toEqual([501, 501]);
+  });
+
+  it("finishes the match once the sets majority is reached, even though the deciding leg only just took the current set", () => {
+    const game = makeSetsMatch(2, 3, 3); // best of 3 sets -> needs 2 sets to win
+    game.setsWon = [1, 0]; // P1 already took set 1
+    game.legsWon = [1, 0]; // one leg from taking set 2 as well
+    const finishing: LegState = { ...game.currentLeg, remaining: [0, 12] };
+    const next = applyLegWin(game, game, finishing, 0);
+
+    expect(next.isFinished).toBe(true);
+    expect(next.setsWon).toEqual([2, 0]);
+    // The deciding leg's own set score is preserved on legsWon (NOT reset) once the match itself
+    // is over — there's no "next set" to reset it for.
+    expect(next.legsWon).toEqual([2, 0]);
+    expect(next.winnerIndex).toBe(0);
+    expect(next.winnerName).toBe("P1");
+  });
+
+  it("keeps a mid-set leg win from finishing the match even when legsWon alone would look match-deciding under a plain (non-sets) reading", () => {
+    // Best of 5 legs PER SET (so a plain best-of-legs match would end here), but only best of 1
+    // set is needed to decide sets don't collapse a mid-set win into "the match is over".
+    const game = makeSetsMatch(2, 5, 3);
+    game.legsWon = [2, 0]; // two legs from taking set 1 (needs 3 to win the 5-leg set)
+    const finishing: LegState = { ...game.currentLeg, remaining: [0, 100] };
+    const next = applyLegWin(game, game, finishing, 0);
+    expect(next.isFinished).toBe(false);
+    expect(next.setsWon).toEqual([1, 0]);
+  });
+});
+
+describe("wouldWinMatch", () => {
+  it("without setsMode, matches reaching bestOfLegs' own majority", () => {
+    const game = makeMatch(2, 3); // best of 3 legs -> majority is 2
+    game.legsWon = [1, 0];
+    expect(wouldWinMatch(game, 0)).toBe(true); // one more leg (-> 2) decides it
+    expect(wouldWinMatch(game, 1)).toBe(false); // P2 would only be at 1
+  });
+
+  it("with setsMode, a leg that only takes the current set does NOT win the match", () => {
+    const game: GameState = {
+      mode: "501", startScore: 501, bestOfLegs: 3, players: makePlayers(2),
+      legsWon: [1, 0], setsWon: [0, 0], setsMode: { bestOfSets: 3 },
+      currentLeg: createLegState(1, 501, 0, makePlayers(2)), completedLegs: [],
+      currentPlayerIndex: 0, isFinished: false,
+    };
+    expect(wouldWinMatch(game, 0)).toBe(false); // takes set 1 (setsWon -> 1), needs 2 to win
+  });
+
+  it("with setsMode, a leg that takes both the current set AND the sets majority DOES win the match", () => {
+    const game: GameState = {
+      mode: "501", startScore: 501, bestOfLegs: 3, players: makePlayers(2),
+      legsWon: [1, 0], setsWon: [1, 0], setsMode: { bestOfSets: 3 },
+      currentLeg: createLegState(1, 501, 0, makePlayers(2)), completedLegs: [],
+      currentPlayerIndex: 0, isFinished: false,
+    };
+    expect(wouldWinMatch(game, 0)).toBe(true); // takes set 2 (setsWon -> 2), reaching the majority of 3
   });
 });
 

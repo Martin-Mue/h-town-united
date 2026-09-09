@@ -514,4 +514,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Hem kişisel hem de kulüp istatistiklerinde, oynanan bir maça tıklamak artık düzenli bir detay görünümü açıyor: her iki oyuncu için yan yana maç toplamı ve her leg'in gerçek atışlarını tur tur gösterecek şekilde ayrı ayrı açılabilmesi — tıpkı maçtan hemen sonraki gibi, ama istediğin zaman erişilebilir.",
     },
   },
+  {
+    id: "2026-09-09-sets-mode",
+    date: "2026-09-09",
+    title: {
+      de: "Neu: Sätze-Modus",
+      en: "New: Sets mode",
+      fr: "Nouveau : mode sets",
+      pl: "Nowość: tryb setów",
+      nl: "Nieuw: sets-modus",
+      tr: "Yeni: set modu",
+    },
+    description: {
+      de: "Im Spiel-Setup lässt sich jetzt \"Best of X Sätze, je Satz Best of Y Legs\" aktivieren — das klassische Profi-Format. Scoreboard und Ergebnisbildschirm zeigen den Satzstand, nicht nur die Legs im aktuellen Satz.",
+      en: "The game setup now offers \"Best of X sets, each set best of Y legs\" — the classic pro format. The scoreboard and the results screen show the sets score, not just the current set's legs.",
+      fr: "La configuration de partie propose désormais \"meilleur des X sets, chaque set au meilleur des Y legs\" — le format pro classique. Le tableau de score et l'écran de résultats affichent le score des sets, pas seulement les legs du set en cours.",
+      pl: "Konfiguracja gry oferuje teraz \"best of X setów, w każdym secie best of Y legów\" — klasyczny format profesjonalny. Tablica wyników i ekran wyników pokazują wynik setów, a nie tylko legi w bieżącym secie.",
+      nl: "In de spelopzet kun je nu \"best of X sets, elke set best of Y legs\" activeren — het klassieke proformaat. Het scorebord en het resultatenscherm tonen de sets-stand, niet alleen de legs van de huidige set.",
+      tr: "Oyun kurulumunda artık \"X set üstünlüğü, her sette Y leg üstünlüğü\" seçilebiliyor — klasik profesyonel format. Skor tablosu ve sonuç ekranı, sadece mevcut setin leglerini değil set skorunu da gösteriyor.",
+    },
+  },
 ];

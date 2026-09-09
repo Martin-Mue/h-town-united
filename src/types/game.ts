@@ -70,6 +70,20 @@ export interface GameState {
   winnerIndex?: number;
   /** Optional cap on rounds per leg for X01 modes. When all players have played this many rounds and nobody has checked out, the leg ends by remaining score. */
   maxRoundsX01?: number;
+  /** Optional "Sets" match structure layered on top of legs (X01 only — cricket has no setup UI
+   *  for it, see Game.tsx's setup screen). Absent (undefined, the default) means today's plain
+   *  best-of-legs match, completely unaffected — every existing reader of `legsWon`/`bestOfLegs`
+   *  keeps working unchanged. When present, `bestOfLegs` is reinterpreted as "legs that decide ONE
+   *  set" (no separate field needed — it already means exactly that), `legsWon` tracks only the
+   *  CURRENT set's legs and resets to all-zero every time a set is decided, and `setsWon` (same
+   *  index space as legsWon: team index in team mode, player index otherwise) is the match-level
+   *  score across sets. The match itself is decided once a side reaches the majority of
+   *  `setsMode.bestOfSets` — see legLogic.ts's applyLegWin/wouldWinMatch, the only two places that
+   *  need to know this exists. */
+  setsMode?: { bestOfSets: number };
+  /** Match-level sets score, index-aligned with legsWon/legsWon's own slot space. Only meaningful
+   *  (and only ever set) alongside setsMode; absent or all-zero otherwise. */
+  setsWon?: number[];
   /** Cricket-specific state (only for cricket mode, index-aligned with players) */
   cricket?: CricketPlayerState[];
   /** Cricket target numbers actually in play this game. Defaults to CRICKET_NUMBERS; set to a fresh random set when Custom Cricket is enabled. */

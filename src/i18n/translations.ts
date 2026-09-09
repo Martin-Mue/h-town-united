@@ -308,6 +308,15 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.onlineDisconnected": { de: "Verbindung unterbrochen", en: "Connection lost", fr: "Connexion perdue", pl: "Utracono połączenie", nl: "Verbinding verbroken", tr: "Bağlantı kesildi" },
   "game.wins": { de: "Gewinnt!", en: "Wins!", fr: "Gagne !", pl: "Wygrywa!", nl: "Wint!", tr: "Kazandı!" },
   "game.legsSuffix": { de: "Legs", en: "Legs", fr: "Legs", pl: "Legi", nl: "Legs", tr: "Legler" },
+  // Sets-Modus (Runde 5) — "Best of X Sätze, je Satz Best of Y Legs", the standard professional
+  // darts match structure. See GameState.setsMode's own doc comment in types/game.ts.
+  "game.legsPerSet": { de: "Legs pro Satz", en: "Legs per set", fr: "Legs par set", pl: "Legi na seta", nl: "Legs per set", tr: "Set başına leg" },
+  "game.setsMode": { de: "Sätze-Modus", en: "Sets mode", fr: "Mode sets", pl: "Tryb setów", nl: "Sets-modus", tr: "Set modu" },
+  "game.setsModeDesc": { de: "Best of Sätzen, je Satz Best of Legs — das klassische Profi-Format.", en: "Best of sets, each set best of legs — the classic pro format.", fr: "Meilleur des sets, chaque set au meilleur des legs — le format pro classique.", pl: "Best of setów, w każdym secie best of legów — klasyczny format profesjonalny.", nl: "Best of sets, elke set best of legs — het klassieke proformaat.", tr: "Set üstünlüğü, her sette leg üstünlüğü — klasik profesyonel format." },
+  "game.firstToSets": { de: "First to (Sätze)", en: "First to (sets)", fr: "First to (sets)", pl: "First to (sety)", nl: "First to (sets)", tr: "First to (set)" },
+  "game.setsSuffix": { de: "Sätze", en: "Sets", fr: "Sets", pl: "Sety", nl: "Sets", tr: "Set" },
+  "game.set": { de: "Satz", en: "Set", fr: "Set", pl: "Set", nl: "Set", tr: "Set" },
+  "game.inFinalSet": { de: "im finalen Satz", en: "in the final set", fr: "dans le set final", pl: "w ostatnim secie", nl: "in de laatste set", tr: "final setinde" },
   // Round 3 Rang 8: winner overlay used to say nothing at all about whoever didn't win — this is
   // the one line that acknowledges them. {name} is replaced with the losing player/team's name.
   "game.consolationMessage": { de: "Gut gekämpft, {name}! Nächstes Mal klappt's.", en: "Well played, {name}! Next time's yours.", fr: "Bien joué, {name} ! La prochaine fois sera la tienne.", pl: "Dobra gra, {name}! Następnym razem się uda.", nl: "Goed gespeeld, {name}! Volgende keer is het jouwe.", tr: "İyi oynadın, {name}! Bir dahaki sefere senindir." },

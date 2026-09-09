@@ -18,13 +18,20 @@ export function computePostGameStats(game: GameState | null): PostGameStat[] | n
   if (!game || !game.isFinished) return null;
   const allLegs = [...game.completedLegs, game.currentLeg];
   const isCricket = game.mode === "cricket";
+  // Total legs won across the WHOLE match, not `game.legsWon` directly — without Sets-Modus
+  // those are identical (legsWon just accumulates all match long), but with it active,
+  // `legsWon` only ever holds the CURRENT set's tally and resets to zero at every set boundary
+  // (see legLogic.ts's applyLegWin), so reading it straight at match end would silently report
+  // only the final set's leg score instead of the real match-wide total this screen has always
+  // shown for `p.legs`.
+  const totalLegsFor = (scoreSlot: number) => allLegs.filter((leg) => leg.winnerIndex === scoreSlot).length;
   return game.players.map((p, i) => {
     const startingScore = effectiveStartScore(game.startScore, game.players, i, game.teams);
     const perLeg = allLegs.map((leg) => computeLegStatBundle(leg.throws[i] ?? [], startingScore, isCricket));
     const overall = combineStatBundles(perLeg, allLegs.flatMap((leg) => leg.throws[i] ?? []));
     return {
       name: p.name,
-      legs: game.legsWon[teamIndexFor(game.teams, i)],
+      legs: totalLegsFor(teamIndexFor(game.teams, i)),
       perLeg,
       overall,
     };

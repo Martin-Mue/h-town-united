@@ -93,7 +93,7 @@ import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
 import { createLegState, createCricketState } from "@/utils/gameStateFactory";
-import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricketNumbers } from "@/utils/legLogic";
+import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricketNumbers, wouldWinMatch } from "@/utils/legLogic";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult, enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
 import { matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
@@ -149,6 +149,12 @@ const GamePage = () => {
   );
   const [mode, setMode] = useState<GameMode>("501");
   const [bestOfLegs, setBestOfLegs] = useState(3);
+  // Sets-Modus (Runde 5): "Best of X Sätze, je Satz Best of Y Legs" — the standard professional
+  // darts match structure, layered on top of the plain leg race above rather than replacing it
+  // (bestOfLegs becomes "legs per set" the moment this is on; see GameState.setsMode's own doc
+  // comment). Off by default — a flat best-of-legs match is still the common case for casual play.
+  const [setsEnabled, setSetsEnabled] = useState(false);
+  const [bestOfSets, setBestOfSets] = useState(3);
   const [maxRoundsX01, setMaxRoundsX01] = useState<number>(0); // 0 = unlimited
   const [customStartScore, setCustomStartScore] = useState(501);
   const [numPlayers, setNumPlayers] = useState(2);
@@ -822,6 +828,9 @@ const GamePage = () => {
       currentPlayerIndex: starter, isFinished: false,
       maxRoundsX01: mode !== "cricket" && maxRoundsX01 > 0 ? maxRoundsX01 : undefined,
       teams,
+      // Sets-Modus: bestOfLegs above is reinterpreted as "legs per set" once this is set (see
+      // GameState.setsMode's own doc comment) — no separate field needed for that half of it.
+      ...(mode !== "cricket" && setsEnabled ? { setsMode: { bestOfSets }, setsWon: Array(scoreSlots).fill(0) } : {}),
     };
     if (mode === "cricket") {
       const cricketNumbers = customCricket ? generateRandomCricketNumbers() : [...CRICKET_NUMBERS];
@@ -1059,9 +1068,7 @@ const GamePage = () => {
       const nextStarter = (game.currentLeg.startingPlayerIndex + 1) % n;
       setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
       flashScore(teamIdx);
-      const legsWon = game.legsWon[teamIdx] + 1;
-      const legsToWin = Math.ceil(game.bestOfLegs / 2);
-      const matchWon = legsWon >= legsToWin;
+      const matchWon = wouldWinMatch(game, teamIdx);
       triggerConfetti();
       if (soundEnabled) {
         if (matchWon) {
@@ -1085,9 +1092,7 @@ const GamePage = () => {
       // player: the cap resolves for everyone at once, on whichever throw happens to complete it).
       const legWinner = capOutcome.legWinner;
       setDartsThisRound(0);
-      const legsWon = game.legsWon[legWinner] + 1;
-      const legsToWin = Math.ceil(game.bestOfLegs / 2);
-      const matchWon = legsWon >= legsToWin;
+      const matchWon = wouldWinMatch(game, legWinner);
       const nextStarter = (legWinner + 1) % n;
       setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
       flashScore(legWinner);
@@ -1137,9 +1142,7 @@ const GamePage = () => {
   const resolveTiebreak = (winnerIndex: number) => {
     if (!pendingTiebreak || !game) return;
     setPendingTiebreak(null);
-    const legsWon = game.legsWon[winnerIndex] + 1;
-    const legsToWin = Math.ceil(game.bestOfLegs / 2);
-    const matchWon = legsWon >= legsToWin;
+    const matchWon = wouldWinMatch(game, winnerIndex);
     const winnerName = game.teams ? game.teams[winnerIndex].name : game.players[winnerIndex].name;
     setGame((prev) => {
       if (!prev) return prev;
@@ -2192,11 +2195,41 @@ const GamePage = () => {
 
           {mode !== "cricket" && (
             <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("game.firstToLegs")}</label>
+              <label className="text-sm text-muted-foreground mb-1 block">{setsEnabled ? t("game.legsPerSet") : t("game.firstToLegs")}</label>
               <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))} disabled={isTournamentMatch}>
                 <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-card border-border">
                   {[1, 3, 5, 7, 9, 11].map((n) => (
+                    <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Sets-Modus (Runde 5): the standard professional-darts match structure — "Best of X
+              Sätze, je Satz Best of Y Legs" — layered on top of the leg picker above rather than
+              replacing it (that picker's own label switches to "Legs pro Satz" the moment this is
+              on). Deliberately not offered for Cricket (matching the leg picker's own scope) or
+              inside a tournament/league-linked match, whose format is fixed by the bracket/fixture
+              — same restriction the leg picker above already enforces. */}
+          {mode !== "cricket" && !isTournamentMatch && (
+            <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
+              <div className="min-w-0">
+                <Label className="text-sm font-medium">{t("game.setsMode")}</Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.setsModeDesc")}</p>
+              </div>
+              <Switch checked={setsEnabled} onCheckedChange={setSetsEnabled} />
+            </div>
+          )}
+
+          {mode !== "cricket" && setsEnabled && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("game.firstToSets")}</label>
+              <Select value={String(bestOfSets)} onValueChange={(v) => setBestOfSets(parseInt(v))} disabled={isTournamentMatch}>
+                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {[1, 3, 5, 7, 9].map((n) => (
                     <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>
                   ))}
                 </SelectContent>
@@ -2782,6 +2815,7 @@ const GamePage = () => {
                 key: ti, label: t.name, subLabel: memberIdxs.map((pi) => game.players[pi].name).join(" & "),
                 isBot: false, remaining: game.currentLeg.remaining[ti], cricketPoints: game.cricket?.[ti]?.points ?? 0,
                 avg: calculateAverage(throws), p180: count180s(throws), legsWon: game.legsWon[ti],
+                setsWon: game.setsWon?.[ti],
                 isActive: activeTeamIdx === ti,
               };
             })
@@ -2789,7 +2823,7 @@ const GamePage = () => {
               key: i, label: p.name, subLabel: undefined as string | undefined,
               isBot: p.isBot, remaining: game.currentLeg.remaining[i], cricketPoints: game.cricket?.[i]?.points ?? 0,
               avg: calculateAverage(game.currentLeg.throws[i]), p180: count180s(game.currentLeg.throws[i]),
-              legsWon: game.legsWon[i], isActive: activeIdx === i,
+              legsWon: game.legsWon[i], setsWon: game.setsWon?.[i], isActive: activeIdx === i,
             }))
         ).map((card) => {
           const isActive = card.isActive;
@@ -2875,7 +2909,12 @@ const GamePage = () => {
               )}
               <div className="flex justify-center flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
                 <span>Ø {card.avg.toFixed(1)}</span>
-                {game.bestOfLegs > 1 && <span className="text-primary font-bold">{card.legsWon} Legs</span>}
+                {/* Sets-Modus: the match-level score (sets) leads, the current set's leg race
+                    (which resets to 0 every new set — see applyLegWin) follows right after it —
+                    "2 Sätze · 1 Leg" reads as "leading 2 sets, and 1 leg up in the current one",
+                    not as two competing/contradicting numbers. */}
+                {game.setsMode && <span className="text-secondary font-bold">{card.setsWon ?? 0} {t("game.setsSuffix")}</span>}
+                {game.bestOfLegs > 1 && <span className="text-primary font-bold">{card.legsWon} {t("game.legsSuffix")}</span>}
                 {card.p180 > 0 && <span className="text-accent font-bold">🎯{card.p180}</span>}
               </div>
               {/* Active-player extras folded into the card itself (single-out note, dart counter,
@@ -2915,9 +2954,13 @@ const GamePage = () => {
         })}
       </div>
 
-      {/* Leg info bar */}
+      {/* Leg info bar — with Sets-Modus active this also names which set is currently being
+          played, since `game.currentLeg.legNumber` is a running count across the WHOLE match
+          (never reset at a set boundary, see applyLegWin) and would otherwise read like "Leg 7"
+          deep into a sets match with no indication that's actually early in set 3. */}
       {game.bestOfLegs > 1 && (
         <div className="text-center text-xs landscape:text-[10px] text-muted-foreground mt-2 landscape:mt-1">
+          {game.setsMode && <>{t("game.set")} {(game.setsWon ?? []).reduce((s, v) => s + v, 0) + 1} · </>}
           {t("game.leg")} {game.currentLeg.legNumber} · {game.players[game.currentLeg.startingPlayerIndex].name} {t("game.startsFirst")}
         </div>
       )}
@@ -2943,7 +2986,18 @@ const GamePage = () => {
             <Trophy className="w-16 h-16 text-accent mx-auto mb-4" />
             <h2 className="text-3xl font-display uppercase mb-1">{game.winnerName}</h2>
             <p className="text-accent font-display text-xl uppercase mb-4">{t("game.wins")}</p>
-            {game.bestOfLegs > 1 && <p className="text-sm text-muted-foreground mb-4">{game.legsWon.join(" : ")} {t("game.legsSuffix")}</p>}
+            {/* Sets-Modus: the match was actually decided by sets, not by the final set's leg
+                score alone — leading with setsWon (and naming the final set's own leg score
+                underneath, in parentheses, for anyone who wants the detail) avoids the final
+                score reading like "3:1" when the real story was e.g. "2 Sätze : 1, im letzten
+                Satz 3:2". */}
+            {game.setsMode && game.setsWon && (
+              <p className="text-sm text-muted-foreground mb-4">
+                {game.setsWon.join(" : ")} {t("game.setsSuffix")}
+                <span className="text-xs text-muted-foreground/70"> ({game.legsWon.join(" : ")} {t("game.legsSuffix")} {t("game.inFinalSet")})</span>
+              </p>
+            )}
+            {game.bestOfLegs > 1 && !game.setsMode && <p className="text-sm text-muted-foreground mb-4">{game.legsWon.join(" : ")} {t("game.legsSuffix")}</p>}
 
             {/* Round 3 Rang 8: a small supportive line for whoever didn't win — this screen used
                 to be entirely one-sided (trophy + winner name only), with nothing acknowledging
