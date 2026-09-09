@@ -5,7 +5,6 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  Loader2,
   RotateCcw,
   ScanLine,
   Target,
@@ -13,6 +12,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useLanguage } from "@/contexts/LanguageContext";

@@ -8,7 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Loader2, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 
 /** Reached by any authenticated account with no club membership yet -- see RequireClub in
  *  App.tsx. Creates a brand-new club (via the create_club RPC, which also makes this account

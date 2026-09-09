@@ -8,7 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import ClubCrest from "@/components/ClubCrest";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const AuthPage = () => {

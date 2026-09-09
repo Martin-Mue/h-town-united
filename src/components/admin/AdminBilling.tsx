@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { CreditCard, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { CreditCard, CheckCircle2, AlertTriangle } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";

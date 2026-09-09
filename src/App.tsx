@@ -12,7 +12,7 @@ import { queryClient } from "@/lib/queryClient";
 import Layout from "./components/Layout";
 import Auth from "./pages/Auth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { Loader2 } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 
 // Route-level code splitting — each page becomes its own chunk, loaded on first visit
 // instead of all being bundled into the initial page load. `Auth` stays eager since it's

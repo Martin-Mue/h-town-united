@@ -5,8 +5,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Shield, ShieldOff, Trash2, Pencil, PencilOff } from "lucide-react";
-import { AdminIcon } from "@/components/icons/DartIcons";
+import { Shield, ShieldOff, Trash2, Pencil, PencilOff } from "lucide-react";
+import { AdminIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import {
   AlertDialog,
   AlertDialogAction,

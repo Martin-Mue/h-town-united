@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router-dom";
-import { Flame, TrendingUp, Crosshair, Loader2, PartyPopper } from "lucide-react";
-import { DartGameIcon, DartTrophyIcon, SeasonIcon, StatsIcon, TrainingIcon, ClubIcon } from "@/components/icons/DartIcons";
+import { Flame, TrendingUp, Crosshair, PartyPopper } from "lucide-react";
+import { DartGameIcon, DartTrophyIcon, SeasonIcon, StatsIcon, TrainingIcon, ClubIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlayers } from "@/hooks/usePlayers";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow, type ActivityTranslator } from "@/utils/clubActivity";

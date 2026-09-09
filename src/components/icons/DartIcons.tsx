@@ -142,3 +142,23 @@ export const AdminIcon = (props: SVGProps<SVGSVGElement>) => (
     <path d="M8.8 11.9 L10.9 14 L15.3 9.2" />
   </svg>
 );
+
+/** Loading spinner (Design-Sprint Runde 6): every loading state in the app used lucide's generic
+ *  Loader2 — a plain gray dashed-circle spinner identical to what any other app ships, and the
+ *  single most-seen "is something happening" moment in DartSpot (77 call sites across 26 files).
+ *  Unlike the six nav icons above, this one is drawn STANDING (tip down, flight up) and centered
+ *  on the viewBox's own x-axis (x=12) specifically so a caller's `animate-spin` class — the same
+ *  Tailwind utility every existing Loader2 call site already applies, untouched — rotates it
+ *  around its own middle like a compass needle or clock hand, not the off-axis wobble the diagonal
+ *  DartGameIcon above would produce if spun the same way. Same shaft/tip/flight vocabulary as the
+ *  rest of the set, same BASE_PROPS contract (stroke="currentColor" etc.), so every existing call
+ *  site's className (size, color, animate-spin) keeps working completely unchanged — this is a
+ *  drop-in replacement, imported as `Loader2` via a local rename at each import site, not a new
+ *  icon API call sites need to learn. */
+export const DartLoaderIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...BASE_PROPS} {...props}>
+    <path d="M12 19 L12 7.5" />
+    <path d="M9.5 9.8 L12 7 L14.5 9.8" />
+    <circle cx="12" cy="20" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);

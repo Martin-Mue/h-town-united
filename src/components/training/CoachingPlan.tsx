@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Sparkles, Loader2, Play, TrendingUp, Target, Crosshair, Zap, RotateCw, Trophy, Compass } from "lucide-react";
+import { Sparkles, Play, TrendingUp, Target, Crosshair, Zap, RotateCw, Trophy, Compass } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";

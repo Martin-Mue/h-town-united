@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Loader2 } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { LANGUAGES, type Language } from "@/i18n/translations";
 
 const LANGUAGE_PREF_KEY = "dart-language";

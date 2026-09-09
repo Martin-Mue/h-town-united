@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "next-themes";
-import { Palette, Pencil, Check, X, Loader2, Upload } from "lucide-react";
+import { Palette, Pencil, Check, X, Upload } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";

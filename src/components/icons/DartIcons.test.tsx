@@ -24,6 +24,7 @@ import {
   ClubIcon,
   SeasonIcon,
   AdminIcon,
+  DartLoaderIcon,
 } from "./DartIcons";
 
 // @testing-library/react's auto-cleanup relies on detecting global test hooks (vitest's
@@ -33,7 +34,7 @@ import {
 afterEach(cleanup);
 
 const ALL_ICONS = {
-  HomeIcon, DartGameIcon, StatsIcon, TrainingIcon, DartTrophyIcon, ClubIcon, SeasonIcon, AdminIcon,
+  HomeIcon, DartGameIcon, StatsIcon, TrainingIcon, DartTrophyIcon, ClubIcon, SeasonIcon, AdminIcon, DartLoaderIcon,
 } as const;
 
 describe("DartIcons", () => {

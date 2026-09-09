@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Layers, Plus, Trash2, Loader2, Trophy, ArrowLeft, Pencil } from "lucide-react";
+import { Layers, Plus, Trash2, Trophy, ArrowLeft, Pencil } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

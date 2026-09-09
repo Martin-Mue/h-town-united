@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import QrCodeDialog from "@/components/QrCodeDialog";
-import { Loader2, Mail, QrCode, Check, X, Ban, Copy } from "lucide-react";
+import { Mail, QrCode, Check, X, Ban, Copy } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 
 interface PendingInvite {
   id: string;

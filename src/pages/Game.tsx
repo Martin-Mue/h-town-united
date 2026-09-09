@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, Loader2, WifiOff } from "lucide-react";
+import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, WifiOff } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -2749,14 +2750,15 @@ const GamePage = () => {
   // "sticky", but reported as the numbers scrolling separately from the rest of the page, since
   // the camera window itself is a fixed, non-page-scrolling overlay.
   const scoreboardBlock = (
-    // will-change-transform alone (the previous mitigation) turned out not to be reliable enough
-    // in practice — reported on real devices as: the whole bar (undo/camera/cancel-game) missing
-    // before the first throw, only "snapping" into place once a dart is entered, and the header
-    // losing its sticky tracking (becomes scrollable again) right after. Rather than layer on a
-    // second compositing hint on top of one that already didn't hold up, this drops the actual
-    // named culprit — backdrop-filter — entirely: a plain, fully opaque background can't suffer
-    // the sticky+backdrop-filter compositing bug because there's no backdrop-filter left to
-    // trigger it. bg-background alone (no /95, no blur) is the deliberate trade here.
+    // Round 4: still `sticky top-0` here because the camera-enabled branch further below renders
+    // this inside its own single, plain scrolling container — one level of sticky, no CSS grid
+    // underneath it — and that combination was never what real-device reports flagged. The bug
+    // (toolbar missing until the first throw, header losing its sticky tracking right after) kept
+    // reproducing even after removing backdrop-filter, which turned out not to be the actual
+    // cause — the real culprit was the manual-entry branch nesting THIS already-sticky element
+    // inside a second, grid-track-nested sticky wrapper of its own. That branch no longer does
+    // that at all now — see its own comment below for the actual fix. bg-background (no /95, no
+    // blur) is kept here regardless, since a fully opaque header is simply more legible.
     <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 landscape:pt-1.5 landscape:pb-1 bg-background border-b border-border/40 will-change-transform">
       {/* Online-match connection health — a dropped/backgrounded realtime channel used to fail
           silently (see useOnlineMatch's connectionStatus doc comment): a player could keep tapping
@@ -3293,31 +3295,22 @@ const GamePage = () => {
           </div>
         </>
       ) : (
-        // Manual entry: a CSS grid, not a scrolling page. Portrait: 1 column, natural stacking
-        // order (header, pad, history). Landscape: the header — scoreboard, checkout suggestion,
-        // cricket board — spans the FULL width as its own fixed top row (wider player cards, per
-        // the user's ask, instead of being squeezed into a narrow side column), and only the pad
-        // and throw history split into two columns underneath it.
-        //
-        // The header block is `sticky top-0` within whichever ancestor actually scrolls — this
-        // grid itself in portrait (so the page scrolls the same way it always did, but now the
-        // header can never leave the screen while it does), or this grid again in landscape too
-        // now that the header spans both columns instead of living inside just one of them — so
-        // the checkout suggestion and this round's thrown darts (shown on the scoreboard cards)
-        // can no longer disappear by scrolling, which was the original bug.
-        //
-        // Deliberately nothing here is forced smaller than its natural content size (no bare
-        // `min-h-0` on a shared-axis container) — that was tried first and silently overlapped
-        // the header with the pad on a narrow+short phone, because the pad's own natural height
-        // (a full 20-number grid) can exceed what's left after the header on some devices. Grid
-        // avoids that: portrait just grows/scrolls the whole page instead of squeezing anything,
-        // and landscape's `landscape:overflow-y-auto` on the pad/history cells is an explicit,
-        // contained safety net for that same case, not an accidental side effect — the number
-        // grid itself (DartScoreInput's own landscape:grid-cols-10) is what actually keeps that
-        // safety net from engaging in the normal case, by laying the pad out wide-not-tall
-        // instead of just reusing portrait's arrangement at a bigger size.
-        <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[1fr_2fr] landscape:grid-rows-[auto_1fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden">
-          <div className="sticky top-0 z-20 bg-background px-4 landscape:col-span-2 landscape:row-start-1">
+        // Manual entry, Round 4 rewrite: the header used to be `sticky top-0` nested one level
+        // INSIDE a second, also-`sticky top-0` wrapper div that was itself a CSS Grid track —
+        // reported back from real Android devices, twice now (first with backdrop-filter on the
+        // inner sticky element, then without it — see scoreboardBlock's own comment above), as:
+        // the whole Undo/Cam/Sound/Cancel bar missing completely before the first throw, only
+        // snapping into place once a dart is entered, and the header losing its sticky tracking
+        // (becoming scrollable again) right after. Neither backdrop-filter removal nor
+        // will-change-transform fixed it, because neither was the actual cause — nested sticky
+        // positioning inside a CSS Grid track is itself a known compositing trouble spot on some
+        // Android WebView/Chrome builds. This drops position:sticky from this branch entirely:
+        // header and toolbar are now plain `shrink-0` flex siblings that never scroll and never
+        // need to "stick" to anything — exactly the same pattern the camera-enabled branch's own
+        // bottom bar already uses (a few hundred lines up), which was never reported to have this
+        // bug. Only the pad + throw history scroll now, in the middle.
+        <>
+          <div className="shrink-0 bg-background px-4">
             {scoreboardBlock}
             {doubleInBanner}
             {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && (
@@ -3326,80 +3319,70 @@ const GamePage = () => {
             {cricketBoard}
           </div>
 
-          {/* Pad — the number pad is the primary, most-frequently-tapped control, so it sits right
-              after the header in every orientation (not after the throw history, which can grow
-              arbitrarily long). In landscape it's the wider of the two columns below the
-              full-width header (1fr history : 2fr pad). DartScoreInput's own landscape:grid-cols-10
-              (2 wide rows instead of 5 tall ones) is what actually keeps Undo/Cam/Sound on screen
-              without scrolling in practice — verified zero scroll needed on iPad-sized landscape.
-              Tried pinning Undo/Cam/Sound as a separate non-scrolling sibling below the pad card
-              first, so it'd stay reachable even in the rare case the pad card alone doesn't fit —
-              reverted: keeping this cell's own automatic minimum unprotected (needed for THAT to
-              work) reintroduced the same overlap failure as the header/pad split one level up, one
-              level deeper. A single `overflow-y-auto` covering the whole column (pad + actions
-              together) doesn't have that failure mode — worst case, on the shortest landscape
-              phones, reaching Undo needs a short scroll within this column, not a silent overlap. */}
-          <div className="px-4 pt-3 pb-3 landscape:col-start-2 landscape:row-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
-            <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
-              onThrow={throwDart}
-              onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
-              inputMode={dartInputMode} onInputModeChange={setDartInputMode}
-              dartsThisRound={dartsThisRound} />
+          {/* Pad + history — the only part of this layout that scrolls now. Portrait stacks
+              pad-then-history (the pad is the primary, most-frequently-tapped control, so it comes
+              first); landscape splits them into two columns side by side (1fr history : 2fr pad,
+              same ratio as before), so reaching history no longer means scrolling past the pad in
+              that orientation either. */}
+          <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[1fr_2fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden px-4">
+            <div className="pt-3 pb-3 landscape:col-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
+              <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
+                onThrow={throwDart}
+                onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
+                inputMode={dartInputMode} onInputModeChange={setDartInputMode}
+                dartsThisRound={dartsThisRound} />
+            </div>
 
-            <div className="flex gap-2 mt-3">
-              <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
-                <Undo2 className="w-4 h-4" /> {t("game.undo")}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (!clubHasFeature(club?.plan_tier, "camera")) {
-                    toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
-                    return;
-                  }
-                  cameraWantedRef.current = true; setCameraEnabled(true);
-                }}
-                disabled={!!currentPlayer?.isBot}
-                className="gap-1"
-                title={t("game.liveCameraScoring")}
-              >
-                <Camera className="w-4 h-4" /> {t("game.cam")}
-              </Button>
-              <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
-                {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-              </Button>
-              {/* Regression fix: this used to live only at the very end of the (unbounded-height,
-                  can run 20+ rounds) history block below, which in portrait meant scrolling past
-                  the entire history to reach it — reachable in principle, but not in the way
-                  someone mid-game actually looks for it, unlike landscape's separate history
-                  column. Folded in here instead of a new persistent bar of its own: a new row
-                  would add to this cell's vertical budget, exactly what silently caused an overlap
-                  on short phones the last time that was tried (see the comment above this block) —
-                  this costs no extra height, since it's one more button in a row that already
-                  fits. */}
-              <Button variant="outline" onClick={() => setConfirmCancelGame(true)} className="gap-1 text-muted-foreground hover:text-destructive" title={t("game.cancelGame")} aria-label={t("game.cancelGame")}>
-                <RotateCcw className="w-4 h-4" />
-              </Button>
+            {/* Correcting a mis-tap now scrolls independently of the pad instead of always sitting
+                below its full height — a short scroll away in portrait, or right alongside the pad
+                with no scrolling at all in landscape. */}
+            <div className="pb-3 landscape:col-start-1 landscape:row-start-1 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
+              <ThrowHistoryEditor
+                throws={currentThrows}
+                playerName={currentPlayerName}
+                editModeOn={editingThrowIdx !== null}
+                onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
+                openChipIdx={editingChipIdx}
+                onOpenChipChange={setEditingChipIdx}
+                onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
+                onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
+              />
             </div>
           </div>
 
-          {/* History — the one block with genuinely unbounded height (a leg can run 20+ rounds),
-              so it's last in both orientations and the one that scrolls/grows into leftover space
-              instead of pushing the header or the pad around. Cancel Game itself now lives in the
-              always-reachable Undo/Cam/Sound row above — see the comment there. */}
-          <div className="px-4 pb-3 landscape:col-start-1 landscape:row-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
-            <ThrowHistoryEditor
-              throws={currentThrows}
-              playerName={currentPlayerName}
-              editModeOn={editingThrowIdx !== null}
-              onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
-              openChipIdx={editingChipIdx}
-              onOpenChipChange={setEditingChipIdx}
-              onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
-              onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
-            />
+          {/* Footer — always reachable no matter how tall the pad or history above gets, the same
+              non-sticky "shrink-0 border-t" bottom bar the camera-enabled branch already uses
+              successfully. Undo/Cam/Sound/Cancel used to live inside the scrolling pad cell, one
+              more thing that could end up below the fold on a short phone; pinning them here
+              instead guarantees they're on screen from the very first frame, before any dart has
+              been thrown — the actual bug report this rewrite targets. */}
+          <div className="shrink-0 border-t border-border bg-background px-4 py-2.5 flex gap-2">
+            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
+              <Undo2 className="w-4 h-4" /> {t("game.undo")}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!clubHasFeature(club?.plan_tier, "camera")) {
+                  toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
+                  return;
+                }
+                cameraWantedRef.current = true; setCameraEnabled(true);
+              }}
+              disabled={!!currentPlayer?.isBot}
+              className="gap-1"
+              title={t("game.liveCameraScoring")}
+            >
+              <Camera className="w-4 h-4" /> {t("game.cam")}
+            </Button>
+            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </Button>
+            <Button variant="outline" onClick={() => setConfirmCancelGame(true)} className="gap-1 text-muted-foreground hover:text-destructive" title={t("game.cancelGame")} aria-label={t("game.cancelGame")}>
+              <RotateCcw className="w-4 h-4" />
+            </Button>
           </div>
-        </div>
+        </>
       )}
 
       <AlertDialog open={confirmCancelGame} onOpenChange={setConfirmCancelGame}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Timer, Info } from "lucide-react";
+import { Timer, Info } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { type Match, type RoundRobinMatch } from "@/utils/tournament";
 import { type ForecastTournament } from "@/utils/tournamentForecast";
 import { useTournamentForecastStats } from "@/hooks/useTournamentForecastStats";

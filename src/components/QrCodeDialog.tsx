@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Download, Copy, Loader2, QrCode as QrCodeIcon } from "lucide-react";
+import { Download, Copy, QrCode as QrCodeIcon } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { generateQrDataUrl } from "@/lib/qrcode";

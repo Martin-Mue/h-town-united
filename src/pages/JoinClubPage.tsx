@@ -6,7 +6,8 @@ import ClubCrest from "@/components/ClubCrest";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Send, TriangleAlert } from "lucide-react";
+import { Send, TriangleAlert } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import htuLogoFallback from "@/assets/htu-logo.jpg";
 
 interface ClubPreview {
