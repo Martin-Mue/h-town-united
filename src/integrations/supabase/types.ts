@@ -234,6 +234,7 @@ export type Database = {
       }
       games: {
         Row: {
+          ai_report: string | null
           best_of_legs: number
           best_of_sets: number | null
           club_id: string
@@ -268,6 +269,7 @@ export type Database = {
           winner_name: string
         }
         Insert: {
+          ai_report?: string | null
           best_of_legs?: number
           best_of_sets?: number | null
           club_id: string
@@ -302,6 +304,7 @@ export type Database = {
           winner_name: string
         }
         Update: {
+          ai_report?: string | null
           best_of_legs?: number
           best_of_sets?: number | null
           club_id?: string
