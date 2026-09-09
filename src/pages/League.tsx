@@ -220,6 +220,17 @@ const LeaguePage = () => {
     }
   };
 
+  /** `player1_name`/`player2_name` are recently-added columns (Öffentliche Liga-Ansicht,
+   *  2026-09-09) — if this Supabase project hasn't had the migration applied yet, PostgREST
+   *  rejects the whole insert with a schema-cache error and league creation broke entirely on
+   *  account of two columns nothing here strictly needs to function. Same fallback convention as
+   *  Tournament.tsx's missingLivePlayColumn/missingSetsColumn: retry once without them rather than
+   *  hard-failing. A league created via this fallback just won't have denormalized names for the
+   *  public view until the migration's backfill runs (or the league is recreated afterwards) —
+   *  acceptable, since the public view itself is opt-in and off by default anyway. */
+  const missingLeagueNameColumn = (error: { code?: string; message?: string } | null) =>
+    !!error && (error.code === "42703" || String(error.message || "").includes("player1_name") || String(error.message || "").includes("player2_name"));
+
   const createLeague = async () => {
     if (!name.trim() || selectedParticipants.size < 2 || !session?.user?.id || savingLeague) return;
     setSavingLeague(true);
@@ -238,16 +249,19 @@ const LeaguePage = () => {
       if (error) throw error;
 
       const generated = generateRoundRobinFixtures(participantIds, format);
-      const { error: fxError } = await supabase.from("league_fixtures").insert(
-        generated.map((f) => ({
-          league_id: league.id, club_id: clubId, round_number: f.round, leg: f.leg,
-          player1_id: f.player1Id, player2_id: f.player2Id,
-          // Denormalized for the public view (see FixtureRow's doc comment) — resolved from the
-          // same roster already loaded for the participant checklist above, nothing extra to fetch.
-          player1_name: playerById.get(f.player1Id)?.name ?? null,
-          player2_name: playerById.get(f.player2Id)?.name ?? null,
-        }))
-      );
+      const fixtureRows = generated.map((f) => ({
+        league_id: league.id, club_id: clubId, round_number: f.round, leg: f.leg,
+        player1_id: f.player1Id, player2_id: f.player2Id,
+        // Denormalized for the public view (see FixtureRow's doc comment) — resolved from the
+        // same roster already loaded for the participant checklist above, nothing extra to fetch.
+        player1_name: playerById.get(f.player1Id)?.name ?? null,
+        player2_name: playerById.get(f.player2Id)?.name ?? null,
+      }));
+      let { error: fxError } = await supabase.from("league_fixtures").insert(fixtureRows);
+      if (fxError && missingLeagueNameColumn(fxError)) {
+        const strippedRows = fixtureRows.map(({ player1_name: _p1n, player2_name: _p2n, ...rest }) => rest);
+        ({ error: fxError } = await supabase.from("league_fixtures").insert(strippedRows));
+      }
       if (fxError) throw fxError;
 
       toast({ title: t("league.leagueCreatedTitle"), description: `${generated.length} ${t("league.fixturesGeneratedSuffix")}` });
