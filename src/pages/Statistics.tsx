@@ -99,6 +99,10 @@ const CHART_COLORS = [
 
 const TOOLTIP_STYLE = { background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 };
 
+/** How many of a player's most recent games make up the "form" window for the recentFormDelta
+ *  hot/cold badge (see playerDetailStats) — 2026-09-09. */
+const RECENT_FORM_WINDOW = 5;
+
 const StatisticsPage = () => {
   const { toast } = useToast();
   const [games, setGames] = useState<GameRecord[]>([]);
@@ -809,6 +813,20 @@ const StatisticsPage = () => {
     const bestGameAvg = allAvgs.length > 0 ? Math.max(...allAvgs) : 0;
     const worstGameAvg = allAvgs.length > 0 ? Math.min(...allAvgs) : 0;
 
+    // Form trend: recent average vs. the (season/filter-scoped) lifetime average above — a quick
+    // "hot or cold right now" signal distinct from currentStreak (a binary win/loss run) and from
+    // averageTrend (a full-history chart the viewer has to read themselves). playerGames is
+    // newest-first (same ordering averageTrend/currentStreak already rely on via their own
+    // .reverse() calls), so slice(0, N) is exactly "the last N games played". Requires at least
+    // RECENT_FORM_WINDOW games total, same reasoning as the nemesis/favoriteOpponent >= 2 guard
+    // above — otherwise a player's very first game(s) would show a "hot"/"cold" badge that's really
+    // just noise (recentAvg trivially equal to average with nothing to compare against).
+    const recentGames = playerGames.slice(0, RECENT_FORM_WINDOW);
+    const recentAvg = recentGames.length > 0
+      ? recentGames.reduce((sum, g) => sum + Number(g.player1_id === selectedPlayerId ? g.player1_average : g.player2_average), 0) / recentGames.length
+      : 0;
+    const recentFormDelta = playerGames.length >= RECENT_FORM_WINDOW ? recentAvg - average : null;
+
     // Opponents breakdown
     const opponents: Record<string, { wins: number; losses: number }> = {};
     playerGames.forEach(g => {
@@ -833,7 +851,7 @@ const StatisticsPage = () => {
       return rate > bestRate ? { name, losses: r.losses, wins: r.wins } : best;
     }, null);
 
-    return { player, average, highScore, winRate, averageTrend, currentStreak, bestStreak, recentForm, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: playerGames.length };
+    return { player, average, highScore, winRate, averageTrend, currentStreak, bestStreak, recentForm, recentFormDelta, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: playerGames.length };
   }, [selectedPlayerId, filteredGames, players, language]);
 
   const pagedRecentForm = usePagedList(playerDetailStats?.recentForm ?? []);
@@ -1705,7 +1723,22 @@ const StatisticsPage = () => {
                 </div>
 
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("stats.average")}</p>
-                <p className="font-display text-4xl leading-none mt-1">{playerDetailStats.totalGames > 0 ? playerDetailStats.average.toFixed(1) : "–"}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="font-display text-4xl leading-none">{playerDetailStats.totalGames > 0 ? playerDetailStats.average.toFixed(1) : "–"}</p>
+                  {/* Form-Trend: recent-N vs. lifetime average, TrendBadge already existed as a
+                      primitive (StatPrimitives.tsx) but was never actually wired up anywhere in
+                      this file — see recentFormDelta's own doc comment above for why it's null
+                      (not 0, hidden via TrendBadge's own delta===0 check) below RECENT_FORM_WINDOW
+                      games. */}
+                  {playerDetailStats.recentFormDelta !== null && (
+                    <TrendBadge delta={playerDetailStats.recentFormDelta} suffix=" Ø" />
+                  )}
+                </div>
+                {playerDetailStats.recentFormDelta !== null && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {t("stats.formTrendLabel")} ({RECENT_FORM_WINDOW} {t("stats.games")})
+                  </p>
+                )}
 
                 {playerDetailStats.averageTrend.length > 1 && (
                   <div className="mt-3 -mb-1">

@@ -37,7 +37,7 @@ import { useClubBranding } from "@/contexts/ClubBrandingContext";
 interface TournamentRow {
   id: string; name: string; mode: string; status: string;
   champion: string | null; players: string[]; bracket: Match[];
-  game_mode?: string; best_of_legs?: number; boards?: number;
+  game_mode?: string; best_of_legs?: number; best_of_sets?: number | null; boards?: number;
   round_configs?: { mode: string; bestOf: number }[];
   attendance?: Record<string, boolean> | null;
   prestart_views?: string[];
@@ -611,6 +611,16 @@ const FormatStatusPage = ({
         <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-5 flex items-center justify-between text-base">
           <span className="text-muted-foreground">{t("pt.formatLabel")}</span>
           <span className="font-mono text-primary">{tournament.game_mode} · FT{Math.ceil(tournament.best_of_legs / 2)}</span>
+        </div>
+      )}
+
+      {/* Sets-Modus (2026-09-09): tournament-wide, so shown once here rather than repeated on
+          every per-round line above — null/absent for the overwhelming majority of tournaments,
+          which don't use it, so this whole block simply doesn't render for them. */}
+      {!!tournament.best_of_sets && (
+        <div className="rounded-xl border border-secondary/30 bg-secondary/5 p-5 flex items-center justify-between text-base">
+          <span className="text-muted-foreground">{t("game.setsMode")}</span>
+          <span className="font-mono text-secondary">FT{Math.ceil(tournament.best_of_sets / 2)} {t("game.setsSuffix")} · {t("game.legsPerSet")} FT{Math.ceil(tournament.best_of_legs / 2)}</span>
         </div>
       )}
 
@@ -1192,7 +1202,11 @@ const PublicTournamentPage = () => {
                   </>
                 )}
               </span>
-              <span>{t.players.length} {tr("game.playersSuffix")} · {t.game_mode} FT{Math.ceil(t.best_of_legs / 2)} · {boardsCount} {tr("camera.board")}{boardsCount > 1 ? "s" : ""}</span>
+              <span>
+                {t.players.length} {tr("game.playersSuffix")} · {t.game_mode} FT{Math.ceil(t.best_of_legs / 2)}
+                {!!t.best_of_sets && ` (${tr("game.setsSuffix")} FT${Math.ceil(t.best_of_sets / 2)})`}
+                {" "}· {boardsCount} {tr("camera.board")}{boardsCount > 1 ? "s" : ""}
+              </span>
             </p>
           </div>
         </div>

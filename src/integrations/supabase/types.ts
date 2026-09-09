@@ -789,6 +789,7 @@ export type Database = {
       online_matches: {
         Row: {
           best_of_legs: number
+          best_of_sets: number | null
           club_id: string
           created_at: string
           created_by: string
@@ -805,6 +806,7 @@ export type Database = {
         }
         Insert: {
           best_of_legs?: number
+          best_of_sets?: number | null
           club_id: string
           created_at?: string
           created_by: string
@@ -821,6 +823,7 @@ export type Database = {
         }
         Update: {
           best_of_legs?: number
+          best_of_sets?: number | null
           club_id?: string
           created_at?: string
           created_by?: string
@@ -1255,6 +1258,7 @@ export type Database = {
         Row: {
           attendance: Json | null
           best_of_legs: number | null
+          best_of_sets: number | null
           boards: number | null
           bracket: Json | null
           champion: string | null
@@ -1273,6 +1277,7 @@ export type Database = {
         Insert: {
           attendance?: Json | null
           best_of_legs?: number | null
+          best_of_sets?: number | null
           boards?: number | null
           bracket?: Json | null
           champion?: string | null
@@ -1291,6 +1296,7 @@ export type Database = {
         Update: {
           attendance?: Json | null
           best_of_legs?: number | null
+          best_of_sets?: number | null
           boards?: number | null
           bracket?: Json | null
           champion?: string | null

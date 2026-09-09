@@ -15,6 +15,9 @@ interface PendingChallenge {
   player1_user_id: string;
   mode: "501" | "301" | "cricket";
   best_of_legs: number;
+  /** Sets-Modus, only ever set for a tournament-sourced online match whose tournament has it on
+   *  (see online_matches.best_of_sets's own doc comment) — null for every casual 1v1 challenge. */
+  best_of_sets: number | null;
   challengerName: string;
   challengerEmoji: string;
 }
@@ -51,7 +54,7 @@ const PendingOnlineChallenges = () => {
     const load = async () => {
       const { data: pending } = await supabase
         .from("online_matches")
-        .select("id, player1_user_id, mode, best_of_legs")
+        .select("id, player1_user_id, mode, best_of_legs, best_of_sets")
         .eq("player2_user_id", user.id)
         .eq("status", "pending");
       // Matches already accepted — the challenger's own device has no other way to learn "the
@@ -76,6 +79,7 @@ const PendingOnlineChallenges = () => {
           player1_user_id: m.player1_user_id,
           mode: m.mode as PendingChallenge["mode"],
           best_of_legs: m.best_of_legs,
+          best_of_sets: m.best_of_sets ?? null,
           challengerName: byUserId.get(m.player1_user_id)?.name ?? "?",
           challengerEmoji: byUserId.get(m.player1_user_id)?.emoji ?? "🎯",
         }))
@@ -139,6 +143,13 @@ const PendingOnlineChallenges = () => {
       completedLegs: [],
       currentPlayerIndex: 0,
       isFinished: false,
+      // Sets-Modus: only ever set here for a tournament-sourced challenge whose tournament has it
+      // on (see PendingChallenge.best_of_sets's own doc comment) — null/undefined for every casual
+      // 1v1 challenge, same reuse-bestOfLegs-as-legs-per-set convention as everywhere else (see
+      // GameState.setsMode's own doc comment in types/game.ts).
+      ...(challenge.mode !== "cricket" && challenge.best_of_sets
+        ? { setsMode: { bestOfSets: challenge.best_of_sets }, setsWon: [0, 0] }
+        : {}),
     };
     if (challenge.mode === "cricket") {
       newGame.cricketNumbers = undefined; // defaults applied by createCricketState below

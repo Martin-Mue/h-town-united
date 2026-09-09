@@ -2804,6 +2804,22 @@ const GamePage = () => {
   // `shrink-0` flex sibling above it, not sticky within it) — visually indistinguishable from
   // "sticky", but reported as the numbers scrolling separately from the rest of the page, since
   // the camera window itself is a fixed, non-page-scrolling overlay.
+  // Momentum indicator: how many legs in a row the CURRENTLY-LEADING-on-recent-form score slot has
+  // just won, walking backward from the most recently completed leg. Deliberately reads
+  // game.completedLegs (the whole match's history) rather than anything set-scoped — a streak that
+  // spans a Sets-Modus set boundary ("won the last leg of set 1, then the first two of set 2") is
+  // still a real 3-in-a-row and should still read as one, not reset just because setsWon ticked up.
+  // null below 2 in a row on purpose: a lone leg win isn't "momentum", it's just the score.
+  const legStreak = (() => {
+    const legs = game.completedLegs;
+    if (legs.length === 0) return null;
+    const lastWinner = legs[legs.length - 1]?.winnerIndex;
+    if (lastWinner === undefined) return null;
+    let count = 0;
+    for (let i = legs.length - 1; i >= 0 && legs[i].winnerIndex === lastWinner; i--) count++;
+    return count >= 2 ? { slot: lastWinner, count } : null;
+  })();
+
   const scoreboardBlock = (
     // Round 4: still `sticky top-0` here because the camera-enabled branch further below renders
     // this inside its own single, plain scrolling container — one level of sticky, no CSS grid
@@ -2937,6 +2953,9 @@ const GamePage = () => {
                     not as two competing/contradicting numbers. */}
                 {game.setsMode && <span className="text-secondary font-bold">{card.setsWon ?? 0} {t("game.setsSuffix")}</span>}
                 {game.bestOfLegs > 1 && <span className="text-primary font-bold">{card.legsWon} {t("game.legsSuffix")}</span>}
+                {legStreak?.slot === card.key && (
+                  <span className="text-orange-400 font-bold animate-pulse-glow">🔥 {legStreak.count} {t("game.legsInARow")}</span>
+                )}
                 {card.p180 > 0 && <span className="text-accent font-bold">🎯{card.p180}</span>}
               </div>
               {/* Active-player extras folded into the card itself (single-out note, dart counter,

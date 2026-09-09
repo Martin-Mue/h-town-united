@@ -317,6 +317,10 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.setsSuffix": { de: "Sätze", en: "Sets", fr: "Sets", pl: "Sety", nl: "Sets", tr: "Set" },
   "game.set": { de: "Satz", en: "Set", fr: "Set", pl: "Set", nl: "Set", tr: "Set" },
   "game.inFinalSet": { de: "im finalen Satz", en: "in the final set", fr: "dans le set final", pl: "w ostatnim secie", nl: "in de laatste set", tr: "final setinde" },
+  // Momentum indicator (2026-09-09): a small 🔥 badge on the scoreboard card of whoever just won
+  // 2+ legs in a row (see the legStreak computation right above scoreboardBlock) — the count
+  // itself is placed in JSX before this suffix, same convention as legsSuffix/setsSuffix above.
+  "game.legsInARow": { de: "Legs in Folge", en: "legs in a row", fr: "legs d'affilée", pl: "legów z rzędu", nl: "legs op rij", tr: "üst üste leg" },
   // Round 3 Rang 8: winner overlay used to say nothing at all about whoever didn't win — this is
   // the one line that acknowledges them. {name} is replaced with the losing player/team's name.
   "game.consolationMessage": { de: "Gut gekämpft, {name}! Nächstes Mal klappt's.", en: "Well played, {name}! Next time's yours.", fr: "Bien joué, {name} ! La prochaine fois sera la tienne.", pl: "Dobra gra, {name}! Następnym razem się uda.", nl: "Goed gespeeld, {name}! Volgende keer is het jouwe.", tr: "İyi oynadın, {name}! Bir dahaki sefere senindir." },
@@ -599,6 +603,10 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.average": { de: "Ø Average", en: "Ø Average", fr: "Ø Moyenne", pl: "Ø Średnia", nl: "Ø Gemiddelde", tr: "Ø Ortalama" },
   "stats.streak": { de: "Serie", en: "Streak", fr: "Série", pl: "Seria", nl: "Reeks", tr: "Seri" },
   "stats.bestStreak": { de: "Beste Serie", en: "Best streak", fr: "Meilleure série", pl: "Najlepsza seria", nl: "Beste reeks", tr: "En iyi seri" },
+  // Form-Trend badge (2026-09-09): recentFormDelta compares a player's last RECENT_FORM_WINDOW
+  // games' average against their (season-filter-scoped) lifetime average — this is the small
+  // caption under the TrendBadge pill explaining what the +/- number means.
+  "stats.formTrendLabel": { de: "Form: letzte", en: "Form: last", fr: "Forme : derniers", pl: "Forma: ostatnie", nl: "Vorm: laatste", tr: "Form: son" },
   "stats.worstGameAverage": { de: "Schlechtester Game-Ø", en: "Worst game average", fr: "Pire moyenne en partie", pl: "Najgorsza średnia w grze", nl: "Slechtste potje-gemiddelde", tr: "En kötü oyun ortalaması" },
   "stats.checkoutAndOpening": { de: "Checkout & Eröffnung", en: "Checkout & opening", fr: "Checkout & ouverture", pl: "Checkout i otwarcie", nl: "Checkout & opening", tr: "Checkout ve açılış" },
   "stats.checkoutAttempts": { de: "Checkout-Versuche", en: "Checkout attempts", fr: "Tentatives de checkout", pl: "Próby checkoutu", nl: "Checkout-pogingen", tr: "Checkout denemeleri" },

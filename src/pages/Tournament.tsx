@@ -1755,11 +1755,25 @@ const TournamentPage = () => {
         navigate(`/game?online=${existing.id}`);
         return;
       }
-      const { data: created, error } = await supabase.from("online_matches").insert({
+      let { data: created, error } = await supabase.from("online_matches").insert({
         club_id: clubId, source_type: "tournament", source_id: sourceId,
         created_by: myUserId, player1_user_id: myUserId, player2_user_id: opponentUserId,
         mode: mode.toLowerCase() as "501" | "301" | "cricket", best_of_legs: bestOf,
+        // Sets-Modus (see online_matches.best_of_sets's own doc comment) — carried straight from
+        // the tournament, same as best_of_legs above. null for the overwhelming majority of
+        // tournaments, which don't use it.
+        best_of_sets: activeTournament.best_of_sets ?? null,
       }).select("id").single();
+      if (error && missingSetsColumn(error)) {
+        // Same schema-cache-missing fallback as elsewhere in this file — an online match without
+        // Sets-Modus is still a perfectly playable online match, just not one carrying that
+        // (rare, only-just-added) column.
+        ({ data: created, error } = await supabase.from("online_matches").insert({
+          club_id: clubId, source_type: "tournament", source_id: sourceId,
+          created_by: myUserId, player1_user_id: myUserId, player2_user_id: opponentUserId,
+          mode: mode.toLowerCase() as "501" | "301" | "cricket", best_of_legs: bestOf,
+        }).select("id").single());
+      }
       if (error) throw error;
       const myName = myUserId === p1.user_id ? p1.name : p2.name;
       notifyChallengeCreated(opponentUserId, myName, mode.toLowerCase() as "501" | "301" | "cricket");
