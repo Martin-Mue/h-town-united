@@ -160,7 +160,7 @@ export type Database = {
       }
       game_legs: {
         Row: {
-          club_id: string
+          club_id: string | null
           created_at: string
           game_id: string
           id: string
@@ -174,7 +174,7 @@ export type Database = {
           won: boolean
         }
         Insert: {
-          club_id: string
+          club_id?: string | null
           created_at?: string
           game_id: string
           id?: string
@@ -188,7 +188,7 @@ export type Database = {
           won?: boolean
         }
         Update: {
-          club_id?: string
+          club_id?: string | null
           created_at?: string
           game_id?: string
           id?: string
@@ -237,7 +237,7 @@ export type Database = {
           ai_report: string | null
           best_of_legs: number
           best_of_sets: number | null
-          club_id: string
+          club_id: string | null
           created_at: string
           detail_stats: Json
           id: string
@@ -272,7 +272,7 @@ export type Database = {
           ai_report?: string | null
           best_of_legs?: number
           best_of_sets?: number | null
-          club_id: string
+          club_id?: string | null
           created_at?: string
           detail_stats?: Json
           id?: string
@@ -307,7 +307,7 @@ export type Database = {
           ai_report?: string | null
           best_of_legs?: number
           best_of_sets?: number | null
-          club_id?: string
+          club_id?: string | null
           created_at?: string
           detail_stats?: Json
           id?: string
@@ -392,7 +392,7 @@ export type Database = {
       }
       highlight_clips: {
         Row: {
-          club_id: string
+          club_id: string | null
           created_at: string
           darts: Json
           game_id: string | null
@@ -406,7 +406,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          club_id: string
+          club_id?: string | null
           created_at?: string
           darts?: Json
           game_id?: string | null
@@ -420,7 +420,7 @@ export type Database = {
           user_id: string
         }
         Update: {
-          club_id?: string
+          club_id?: string | null
           created_at?: string
           darts?: Json
           game_id?: string | null
@@ -637,14 +637,22 @@ export type Database = {
           club_id: string
           created_at: string
           created_by: string
+          division_level: number
+          division_name: string | null
           format: string
           game_mode: string
           id: string
           name: string
+          next_season_league_id: string | null
           participant_ids: string[]
+          previous_season_league_id: string | null
+          promote_count: number
           public_slug: string | null
           public_view: boolean
+          relegate_count: number
           result_mode: string
+          season_group_id: string | null
+          season_number: number
           status: string
           updated_at: string
         }
@@ -653,14 +661,22 @@ export type Database = {
           club_id?: string
           created_at?: string
           created_by?: string
+          division_level?: number
+          division_name?: string | null
           format?: string
           game_mode?: string
           id?: string
           name: string
+          next_season_league_id?: string | null
           participant_ids?: string[]
+          previous_season_league_id?: string | null
+          promote_count?: number
           public_slug?: string | null
           public_view?: boolean
+          relegate_count?: number
           result_mode?: string
+          season_group_id?: string | null
+          season_number?: number
           status?: string
           updated_at?: string
         }
@@ -669,14 +685,22 @@ export type Database = {
           club_id?: string
           created_at?: string
           created_by?: string
+          division_level?: number
+          division_name?: string | null
           format?: string
           game_mode?: string
           id?: string
           name?: string
+          next_season_league_id?: string | null
           participant_ids?: string[]
+          previous_season_league_id?: string | null
+          promote_count?: number
           public_slug?: string | null
           public_view?: boolean
+          relegate_count?: number
           result_mode?: string
+          season_group_id?: string | null
+          season_number?: number
           status?: string
           updated_at?: string
         }
@@ -693,6 +717,20 @@ export type Database = {
             columns: ["club_id"]
             isOneToOne: false
             referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leagues_next_season_league_id_fkey"
+            columns: ["next_season_league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leagues_previous_season_league_id_fkey"
+            columns: ["previous_season_league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
             referencedColumns: ["id"]
           },
         ]
@@ -808,61 +846,6 @@ export type Database = {
           },
         ]
       }
-      match_reflections: {
-        Row: {
-          club_id: string
-          created_at: string
-          focus_rating: number | null
-          game_id: string
-          id: string
-          improve_next: string | null
-          user_id: string
-          went_well: string | null
-        }
-        Insert: {
-          club_id?: string
-          created_at?: string
-          focus_rating?: number | null
-          game_id: string
-          id?: string
-          improve_next?: string | null
-          user_id?: string
-          went_well?: string | null
-        }
-        Update: {
-          club_id?: string
-          created_at?: string
-          focus_rating?: number | null
-          game_id?: string
-          id?: string
-          improve_next?: string | null
-          user_id?: string
-          went_well?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "match_reflections_club_id_fkey"
-            columns: ["club_id"]
-            isOneToOne: false
-            referencedRelation: "clubs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "match_reflections_club_id_fkey"
-            columns: ["club_id"]
-            isOneToOne: false
-            referencedRelation: "clubs_public"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "match_reflections_game_id_fkey"
-            columns: ["game_id"]
-            isOneToOne: false
-            referencedRelation: "games"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       online_matches: {
         Row: {
           best_of_legs: number
@@ -951,7 +934,7 @@ export type Database = {
           average: number
           bio: string | null
           birthday: string | null
-          club_id: string
+          club_id: string | null
           created_at: string
           dart_weight_g: number | null
           double_rate: number
@@ -977,7 +960,7 @@ export type Database = {
           average?: number
           bio?: string | null
           birthday?: string | null
-          club_id: string
+          club_id?: string | null
           created_at?: string
           dart_weight_g?: number | null
           double_rate?: number
@@ -1003,7 +986,7 @@ export type Database = {
           average?: number
           bio?: string | null
           birthday?: string | null
-          club_id?: string
+          club_id?: string | null
           created_at?: string
           dart_weight_g?: number | null
           double_rate?: number
@@ -1144,7 +1127,7 @@ export type Database = {
           boards: number
           bracket: Json
           champion: string | null
-          club_id: string
+          club_id: string | null
           created_at: string
           game_mode: string
           id: string
@@ -1170,7 +1153,7 @@ export type Database = {
           boards?: number
           bracket?: Json
           champion?: string | null
-          club_id: string
+          club_id?: string | null
           created_at?: string
           game_mode?: string
           id?: string
@@ -1196,7 +1179,7 @@ export type Database = {
           boards?: number
           bracket?: Json
           champion?: string | null
-          club_id?: string
+          club_id?: string | null
           created_at?: string
           game_mode?: string
           id?: string
@@ -1413,6 +1396,87 @@ export type Database = {
         }
         Relationships: []
       }
+      league_fixtures_public: {
+        Row: {
+          id: string | null
+          leg: string | null
+          league_id: string | null
+          player1_legs_won: number | null
+          player1_name: string | null
+          player2_legs_won: number | null
+          player2_name: string | null
+          round_number: number | null
+          scheduled_date: string | null
+          status: string | null
+          winner_slot: number | null
+        }
+        Insert: {
+          id?: string | null
+          leg?: string | null
+          league_id?: string | null
+          player1_legs_won?: number | null
+          player1_name?: string | null
+          player2_legs_won?: number | null
+          player2_name?: string | null
+          round_number?: number | null
+          scheduled_date?: string | null
+          status?: string | null
+          winner_slot?: number | null
+        }
+        Update: {
+          id?: string | null
+          leg?: string | null
+          league_id?: string | null
+          player1_legs_won?: number | null
+          player1_name?: string | null
+          player2_legs_won?: number | null
+          player2_name?: string | null
+          round_number?: number | null
+          scheduled_date?: string | null
+          status?: string | null
+          winner_slot?: number | null
+        }
+        Relationships: []
+      }
+      leagues_public: {
+        Row: {
+          best_of_legs: number | null
+          format: string | null
+          game_mode: string | null
+          id: string | null
+          name: string | null
+          participant_ids: string[] | null
+          public_slug: string | null
+          public_view: boolean | null
+          result_mode: string | null
+          status: string | null
+        }
+        Insert: {
+          best_of_legs?: number | null
+          format?: string | null
+          game_mode?: string | null
+          id?: string | null
+          name?: string | null
+          participant_ids?: string[] | null
+          public_slug?: string | null
+          public_view?: boolean | null
+          result_mode?: string | null
+          status?: string | null
+        }
+        Update: {
+          best_of_legs?: number | null
+          format?: string | null
+          game_mode?: string | null
+          id?: string | null
+          name?: string | null
+          participant_ids?: string[] | null
+          public_slug?: string | null
+          public_view?: boolean | null
+          result_mode?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
       tournaments_public: {
         Row: {
           attendance: Json | null
@@ -1490,7 +1554,7 @@ export type Database = {
           boards: number
           bracket: Json
           champion: string | null
-          club_id: string
+          club_id: string | null
           created_at: string
           game_mode: string
           id: string

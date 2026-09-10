@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered, Route, Undo2, Flame } from "lucide-react";
+import { Dumbbell, Target, RotateCw, Crosshair, Zap, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Lock, Shuffle, Settings2, PartyPopper, Divide, ListOrdered, Route, Undo2, Flame, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
@@ -19,7 +19,7 @@ import { clubHasFeature } from "@/lib/planFeatures";
 const CHECKOUT_DRILL_IDS = ["121-challenge", "pressure-training", "random-finish"];
 
 /** Training drill definition */
-interface TrainingDrill {
+export interface TrainingDrill {
   id: string;
   name: string;
   descriptionKey: string;
@@ -29,8 +29,10 @@ interface TrainingDrill {
   category: "doubles" | "finishing" | "accuracy" | "pressure";
 }
 
-/** Available training drills */
-const TRAINING_DRILLS: TrainingDrill[] = [
+/** Available training drills — exported so Statistics.tsx's personal-scope "Training" tab can
+ *  show every drill's name/icon next to whatever loadAllRecords() finds a saved record for,
+ *  without duplicating this list there. */
+export const TRAINING_DRILLS: TrainingDrill[] = [
   {
     id: "doubles-only",
     name: "Doubles Only",
@@ -148,6 +150,15 @@ const TRAINING_DRILLS: TrainingDrill[] = [
     durationMinutes: 20,
     category: "pressure",
   },
+  {
+    id: "sudden-death",
+    name: "Sudden Death",
+    descriptionKey: "training.suddenDeathDesc",
+    icon: Heart,
+    difficulty: "intermediate",
+    durationMinutes: 10,
+    category: "pressure",
+  },
 ];
 
 interface HalveItRound {
@@ -172,13 +183,13 @@ const HALVE_IT_ROUNDS: HalveItRound[] = [
 const HALVE_IT_START = 40;
 const BOBS_27_ROUNDS = 20;
 
-const DIFFICULTY_COLORS: Record<string, string> = {
+export const DIFFICULTY_COLORS: Record<string, string> = {
   beginner: "bg-secondary/20 text-secondary",
   intermediate: "bg-primary/20 text-primary",
   pro: "bg-accent/20 text-accent",
 };
 
-const DIFFICULTY_LABEL_KEY: Record<string, string> = {
+export const DIFFICULTY_LABEL_KEY: Record<string, string> = {
   beginner: "training.difficultyBeginner",
   intermediate: "training.difficultyIntermediate",
   pro: "training.difficultyPro",
@@ -211,7 +222,7 @@ function randomCheckout(): number {
 // games) best result per drill, so recurring practice has something to actually chase. Only
 // drills with a genuinely comparable single-number outcome get one (see computeRecordCandidate);
 // bull-control is inherently multiplayer/competitive and has no "your" record to speak of.
-interface RecordEntry {
+export interface RecordEntry {
   value: number;
   higherIsBetter: boolean;
   label: string;
@@ -223,7 +234,7 @@ interface RecordEntry {
  *  sustained 30-round 93%. Segmenting the record by round count keeps each comparison apples-to-
  *  apples; every other recordable drill is either fixed-length or gated by `completedFully`, so
  *  no variant is needed for them. */
-function recordVariant(drillId: string, ctx: { maxRounds?: number; rtcStart?: number; targetBase?: number; targetMul?: number }): string | undefined {
+function recordVariant(drillId: string, ctx: { maxRounds?: number; rtcStart?: number; targetBase?: number; targetMul?: number; lives?: number }): string | undefined {
   // Round count alone used to be the whole key — a trivial-target run (e.g. Single-1) hitting
   // 93% at 10 rounds would overwrite a genuinely hard T20 record at the same round count, since
   // both hashed to the same variant. Which target was actually practiced matters at least as much
@@ -233,10 +244,15 @@ function recordVariant(drillId: string, ctx: { maxRounds?: number; rtcStart?: nu
   // whether a round cap is set — a 5-round-capped run starting at 19 (just 2 numbers) isn't a
   // fair comparison against an uncapped full run from 1, so both go into the variant key.
   if (drillId === "shanghai-rtc") return `${ctx.rtcStart ?? 1}-${ctx.maxRounds ?? "open"}`;
+  // Sudden Death: both which field is being hunted AND how many lives you started with change the
+  // difficulty enormously (T20 on 1 life is a wholly different challenge from S1 on 10 lives) —
+  // same reasoning as Target Grind above, just with lives instead of a round cap.
+  if (drillId === "sudden-death") return `${ctx.targetMul ?? 3}x${ctx.targetBase ?? 20}:${ctx.lives ?? 3}`;
   return undefined;
 }
 
-const recordKey = (drillId: string, variant?: string) => `training-record-${drillId}${variant ? `:${variant}` : ""}`;
+const RECORD_KEY_PREFIX = "training-record-";
+const recordKey = (drillId: string, variant?: string) => `${RECORD_KEY_PREFIX}${drillId}${variant ? `:${variant}` : ""}`;
 
 function loadRecord(drillId: string, variant?: string): RecordEntry | null {
   if (typeof window === "undefined") return null;
@@ -251,6 +267,43 @@ function loadRecord(drillId: string, variant?: string): RecordEntry | null {
 function saveRecord(drillId: string, entry: RecordEntry, variant?: string) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(recordKey(drillId, variant), JSON.stringify(entry));
+}
+
+/** One drill's stored personal best, plus which drill/variant it belongs to — `recordKey` above
+ *  bakes both into one opaque localStorage key, so reading them back out needs the reverse. */
+export interface StoredRecordEntry extends RecordEntry {
+  drillId: string;
+  variant?: string;
+}
+
+/** Scans every `training-record-*` entry in localStorage — the only way to enumerate which drills
+ *  (and, for a drill like Target Grind or Sudden Death whose difficulty is player-configurable,
+ *  which specific variants) actually have a saved result, since nothing else tracks that list.
+ *  Used by the "Meine Rekorde"-style overview in Statistics.tsx's personal-scope Training tab. */
+export function loadAllRecords(): StoredRecordEntry[] {
+  if (typeof window === "undefined") return [];
+  const out: StoredRecordEntry[] = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (!key || !key.startsWith(RECORD_KEY_PREFIX)) continue;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      const entry = JSON.parse(raw) as RecordEntry;
+      const rest = key.slice(RECORD_KEY_PREFIX.length);
+      // A variant string can itself contain ":" (e.g. Target Grind's "3x20:10"), so only the
+      // FIRST colon separates drillId from variant — a plain split(":") would wrongly chop a
+      // variant like that into extra pieces.
+      const sep = rest.indexOf(":");
+      const drillId = sep === -1 ? rest : rest.slice(0, sep);
+      const variant = sep === -1 ? undefined : rest.slice(sep + 1);
+      out.push({ ...entry, drillId, variant });
+    } catch {
+      // Malformed entry (shouldn't happen — only this file ever writes these keys) — skip it
+      // rather than let one bad row break the whole overview.
+    }
+  }
+  return out;
 }
 
 // ─── attempt history (trend) ──────────────────────────────────────
@@ -292,13 +345,13 @@ function pushHistoryEntry(drillId: string, entry: HistoryEntry, variant?: string
 // practice THIS drill today". A local calendar-date string (not a timestamp) is the unit that
 // matters here — two runs an hour apart on the same day must count as one day, and this is
 // simplest done by comparing "YYYY-MM-DD" strings directly rather than diffing timestamps.
-interface StreakState { current: number; best: number; lastDate: string }
+export interface StreakState { current: number; best: number; lastDate: string }
 const STREAK_KEY = "training-streak";
 const todayLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-function loadStreak(): StreakState | null {
+export function loadStreak(): StreakState | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(STREAK_KEY);
@@ -356,6 +409,11 @@ function computeRecordCandidate(drillId: string, state: DrillState, t: (key: str
       return { value: state.remaining, higherIsBetter: true, label: t("training.recordFinalScore") };
     case "bobs-27":
       return { value: Math.max(0, state.remaining), higherIsBetter: true, label: t("training.recordFinalScore") };
+    case "sudden-death":
+      // Every run of Sudden Death ends in a loss by design (three misses and you're out) — there's
+      // no "completedFully" gate to fail here, unlike the checkout drills above. The comparable
+      // number is simply how many consecutive hits you racked up before that happened.
+      return { value: state.hits, higherIsBetter: true, label: t("training.recordMostHits") };
     default:
       return null;
   }
@@ -435,6 +493,11 @@ interface DrillState {
    *  the optional round limit ran out first. Personal-record tracking only counts the former;
    *  a session cut short by the round cap isn't a comparable "how fast can you finish" result. */
   completedFully?: boolean;
+  /** Sudden Death: lives remaining (drops on each miss of the current target; drill ends at 0)
+   *  and the starting count it began with (kept alongside so the finished-overlay/record variant
+   *  can still reference "out of how many" after livesRemaining has hit 0). */
+  livesRemaining?: number;
+  startingLives?: number;
 }
 
 /** Pre-start configuration for a drill */
@@ -447,6 +510,8 @@ interface DrillConfig {
   bcStart?: number;
   /** Shanghai Round the Clock: which number (1-20) to start the sequence at. */
   rtcStart?: number;
+  /** Sudden Death: how many misses of the target are allowed before the drill ends. */
+  startingLives?: number;
 }
 
 const TrainingPage = () => {
@@ -480,10 +545,10 @@ const TrainingPage = () => {
   // pre-start screen and the finished-summary screen). Also reacts to the round-cap picker for
   // Target Grind, so the shown record tracks whichever variant is currently selected.
   useEffect(() => {
-    const variant = selectedDrill ? recordVariant(selectedDrill.id, { maxRounds: drillConfig.maxRounds, rtcStart: drillConfig.rtcStart, targetBase: drillConfig.targetBase, targetMul: drillConfig.targetMul }) : undefined;
+    const variant = selectedDrill ? recordVariant(selectedDrill.id, { maxRounds: drillConfig.maxRounds, rtcStart: drillConfig.rtcStart, targetBase: drillConfig.targetBase, targetMul: drillConfig.targetMul, lives: drillConfig.startingLives }) : undefined;
     setCurrentRecord(selectedDrill ? loadRecord(selectedDrill.id, variant) : null);
     setHistory(selectedDrill ? loadHistory(selectedDrill.id, variant) : []);
-  }, [selectedDrill, drillConfig.maxRounds, drillConfig.rtcStart, drillConfig.targetBase, drillConfig.targetMul]);
+  }, [selectedDrill, drillConfig.maxRounds, drillConfig.rtcStart, drillConfig.targetBase, drillConfig.targetMul, drillConfig.startingLives]);
 
   // Compare + persist the instant a run finishes.
   useEffect(() => {
@@ -493,7 +558,7 @@ const TrainingPage = () => {
       setBrokeRecord(false);
       return;
     }
-    const variant = recordVariant(selectedDrill.id, { maxRounds: drillState.maxRounds, rtcStart: drillState.targetList?.[0], targetBase: drillState.targetBase, targetMul: drillState.targetMul });
+    const variant = recordVariant(selectedDrill.id, { maxRounds: drillState.maxRounds, rtcStart: drillState.targetList?.[0], targetBase: drillState.targetBase, targetMul: drillState.targetMul, lives: drillState.startingLives });
     const achievedAt = new Date().toISOString();
     setHistory(pushHistoryEntry(selectedDrill.id, { value: candidate.value, achievedAt }, variant));
     setStreak(recordPracticeDay());
@@ -573,6 +638,17 @@ const TrainingPage = () => {
         state.targetMul = mul;
         state.currentTarget = base * mul;
         state.maxRounds = config.maxRounds ?? 10;
+        break;
+      }
+      case "sudden-death": {
+        const base = config.targetBase ?? 20;
+        const mul = config.targetMul ?? 3;
+        const lives = Math.max(1, config.startingLives ?? 3);
+        state.targetBase = base;
+        state.targetMul = mul;
+        state.currentTarget = base * mul;
+        state.startingLives = lives;
+        state.livesRemaining = lives;
         break;
       }
       case "big-single-lock":
@@ -769,6 +845,26 @@ const TrainingPage = () => {
           if (updated.dartsThrown >= totalDarts) {
             updated.finished = true;
           }
+          break;
+        }
+
+        case "sudden-death": {
+          // Self-contained: unlike target-grind (round-capped) this drill has no round limit at
+          // all — it simply runs until lives hit 0, so it never touches maxRounds/the generic
+          // round-boundary block below (both stay undefined/no-ops for this drill, as confirmed by
+          // reading that block before adding this case).
+          const isHit = baseValue === (prev.targetBase ?? 20) && mul === (prev.targetMul ?? 3);
+          if (isHit) {
+            updated.hits = prev.hits + 1;
+            updated.hitsThisRound = prev.hitsThisRound + 1;
+          } else {
+            const livesLeft = Math.max(0, (prev.livesRemaining ?? prev.startingLives ?? 3) - 1);
+            updated.livesRemaining = livesLeft;
+            if (livesLeft <= 0) {
+              updated.finished = true;
+            }
+          }
+          updated.roundScores = [...(prev.roundScores || []), isHit ? points : 0];
           break;
         }
 
@@ -1183,7 +1279,7 @@ const TrainingPage = () => {
               <CheckCircle className="w-12 h-12 text-secondary mx-auto mb-3" />
             )}
             <h3 className="text-2xl font-display uppercase mb-2">
-              {drillState.shanghaiWin ? t("training.shanghaiWin") : drillState.rtcWin ? t("training.roundTheClockWin") : bobsBusted ? t("training.accountEmpty") : t("training.doneGeneric")}
+              {drillState.shanghaiWin ? t("training.shanghaiWin") : drillState.rtcWin ? t("training.roundTheClockWin") : bobsBusted ? t("training.accountEmpty") : selectedDrill.id === "sudden-death" ? t("training.suddenDeathOver") : t("training.doneGeneric")}
             </h3>
             {brokeRecord ? (
               <div className="mb-4 rounded-lg border border-accent bg-accent/15 px-3 py-2 text-accent font-display uppercase text-sm flex items-center justify-center gap-2 animate-pulse-glow">
@@ -1273,6 +1369,16 @@ const TrainingPage = () => {
                   </div>
                 </>
               )}
+              {selectedDrill.id === "sudden-death" && (
+                <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
+                  <p className="text-2xl font-display">
+                    {(drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("training.livesLabel")}: {drillState.startingLives ?? 3}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Button onClick={restartDrill} variant="outline" className="flex-1 gap-1">
@@ -1331,6 +1437,23 @@ const TrainingPage = () => {
                   <p className="text-xs text-muted-foreground mt-1">
                     {t("training.hitsLabel")}: {drillState.hits} · {t("tournament.roundLabel")} {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10}
                   </p>
+                </div>
+              )}
+              {selectedDrill.id === "sudden-death" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">{t("game.target")}</p>
+                  <p className="text-5xl font-display text-primary">
+                    {(drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20)}
+                  </p>
+                  <div className="flex items-center justify-center gap-1 mt-2">
+                    {Array.from({ length: drillState.startingLives ?? 3 }, (_, i) => (
+                      <Heart
+                        key={i}
+                        className={`w-5 h-5 ${i < (drillState.livesRemaining ?? 0) ? "text-destructive fill-destructive" : "text-muted-foreground/30"}`}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{t("training.hitsLabel")}: {drillState.hits}</p>
                 </div>
               )}
               {selectedDrill.id === "big-single-lock" && (
@@ -1544,6 +1667,7 @@ const TrainingPage = () => {
   if (selectedDrill && !drillState) {
     const supportsRoundLimit = ["around-the-clock", "doubles-only", "big-single-lock", "target-grind", "shanghai-rtc"].includes(selectedDrill.id);
     const isTargetGrind = selectedDrill.id === "target-grind";
+    const isSuddenDeath = selectedDrill.id === "sudden-death";
     const isBullControl = selectedDrill.id === "bull-control";
     const isShanghaiRtc = selectedDrill.id === "shanghai-rtc";
     const bcNames = drillConfig.bcPlayerNames ?? [`${t("stats.player")} 1`, `${t("stats.player")} 2`];
@@ -1635,7 +1759,7 @@ const TrainingPage = () => {
             </div>
           )}
 
-          {(supportsRoundLimit || isTargetGrind) && (
+          {(supportsRoundLimit || isTargetGrind || isSuddenDeath) && (
             <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
               <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
                 <Settings2 className="w-3.5 h-3.5" /> {t("training.settingsHeading")}
@@ -1656,7 +1780,7 @@ const TrainingPage = () => {
                 </div>
               )}
 
-              {isTargetGrind && (
+              {(isTargetGrind || isSuddenDeath) && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">{t("training.chooseTargetField")}</p>
                   <div className="flex gap-2">
@@ -1722,6 +1846,27 @@ const TrainingPage = () => {
                         {t("training.endless")}
                       </button>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {isSuddenDeath && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">{t("training.livesLabel")}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {[1, 2, 3, 5, 10].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setDrillConfig((c) => ({ ...c, startingLives: n }))}
+                        className={`px-3 py-1 rounded-md text-xs border transition-colors ${
+                          (drillConfig.startingLives ?? 3) === n
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background border-border hover:border-primary/40"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

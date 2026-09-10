@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Users, Swords, Wifi, CalendarDays, CalendarPlus, Radio, QrCode, Copy } from "lucide-react";
+import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Users, Swords, Wifi, CalendarDays, CalendarPlus, Radio, QrCode, Copy, Layers, ArrowUp, ArrowDown, X, FlagTriangleRight } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -43,6 +45,17 @@ interface LeagueRow {
    *  public_view/public_slug (see the migration's doc comment for the full precedent). */
   public_view: boolean;
   public_slug: string | null;
+  /** Saison-Liga mit Auf-/Abstieg (2026-09-10) — see the migration's own doc comment for the full
+   *  reasoning. A standalone league (the vast majority) is simply season_number=1,
+   *  division_level=1, with no sibling rows sharing its season_group_id. */
+  season_number: number;
+  division_level: number;
+  division_name: string | null;
+  season_group_id: string | null;
+  relegate_count: number;
+  promote_count: number;
+  previous_season_league_id: string | null;
+  next_season_league_id: string | null;
 }
 
 interface FixtureRow {
@@ -69,6 +82,30 @@ interface FixtureRow {
 }
 
 const BEST_OF_OPTIONS = [1, 3, 5, 7];
+
+interface StandingRow { playerId: string; played: number; won: number; lost: number; points: number; legsFor: number; legsAgainst: number }
+
+/** Pure standings computation, pulled out of the `standings` useMemo below so endSeason() (see
+ *  its own doc comment further down) can reuse the EXACT SAME points/legs-difference ranking for
+ *  every sibling division when a season-liga ends — the ranking that decides who's promoted and
+ *  who's relegated must be identical to what the standings table itself already shows. */
+function computeStandings(participantIds: string[], leagueFixtures: FixtureRow[]): StandingRow[] {
+  const map = new Map<string, StandingRow>();
+  participantIds.forEach((pid) => map.set(pid, { playerId: pid, played: 0, won: 0, lost: 0, points: 0, legsFor: 0, legsAgainst: 0 }));
+  leagueFixtures.filter((f) => f.status === "finished").forEach((f) => {
+    const s1 = map.get(f.player1_id);
+    const s2 = map.get(f.player2_id);
+    if (!s1 || !s2) return;
+    s1.played++; s2.played++;
+    s1.legsFor += f.player1_legs_won ?? 0; s1.legsAgainst += f.player2_legs_won ?? 0;
+    s2.legsFor += f.player2_legs_won ?? 0; s2.legsAgainst += f.player1_legs_won ?? 0;
+    if (f.winner_id === f.player1_id) { s1.won++; s1.points += 2; s2.lost++; }
+    else if (f.winner_id === f.player2_id) { s2.won++; s2.points += 2; s1.lost++; }
+  });
+  return Array.from(map.values()).sort((a, b) =>
+    b.points - a.points || (b.legsFor - b.legsAgainst) - (a.legsFor - a.legsAgainst)
+  );
+}
 
 /** Structured round-robin competition with an auto-generated fixture list — distinct from ad-hoc
  *  Tournament brackets (elimination) and TournamentSeries (points across separately-run
@@ -100,6 +137,18 @@ const LeaguePage = () => {
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
   const [savingLeague, setSavingLeague] = useState(false);
   const [editingLeagueId, setEditingLeagueId] = useState<string | null>(null);
+
+  // Saison-Liga mit Auf-/Abstieg (2026-09-10): opt-in at creation time only — an already-created
+  // simple league can't be converted afterwards (its fixtures are already generated from a single
+  // roster, same reason format/participants aren't editable post-creation either). When on,
+  // `divisions` REPLACES selectedParticipants as the source of truth for who plays where; each
+  // division needs at least 2 participants of its own, same minimum as a plain league.
+  const [seasonLigaMode, setSeasonLigaMode] = useState(false);
+  const [divisions, setDivisions] = useState<{ name: string; participantIds: Set<string> }[]>([
+    { name: "1. Liga", participantIds: new Set() },
+    { name: "2. Liga", participantIds: new Set() },
+  ]);
+  const [swapCount, setSwapCount] = useState(2);
 
   const [publicToggling, setPublicToggling] = useState(false);
 
@@ -148,21 +197,7 @@ const LeaguePage = () => {
 
   const standings = useMemo(() => {
     if (!activeLeague) return [];
-    const map = new Map<string, { playerId: string; played: number; won: number; lost: number; points: number; legsFor: number; legsAgainst: number }>();
-    activeLeague.participant_ids.forEach((pid) => map.set(pid, { playerId: pid, played: 0, won: 0, lost: 0, points: 0, legsFor: 0, legsAgainst: 0 }));
-    fixtures.filter((f) => f.status === "finished").forEach((f) => {
-      const s1 = map.get(f.player1_id);
-      const s2 = map.get(f.player2_id);
-      if (!s1 || !s2) return;
-      s1.played++; s2.played++;
-      s1.legsFor += f.player1_legs_won ?? 0; s1.legsAgainst += f.player2_legs_won ?? 0;
-      s2.legsFor += f.player2_legs_won ?? 0; s2.legsAgainst += f.player1_legs_won ?? 0;
-      if (f.winner_id === f.player1_id) { s1.won++; s1.points += 2; s2.lost++; }
-      else if (f.winner_id === f.player2_id) { s2.won++; s2.points += 2; s1.lost++; }
-    });
-    return Array.from(map.values()).sort((a, b) =>
-      b.points - a.points || (b.legsFor - b.legsAgainst) - (a.legsFor - a.legsAgainst)
-    );
+    return computeStandings(activeLeague.participant_ids, fixtures);
   }, [activeLeague, fixtures]);
 
   const pagedStandings = usePagedList(standings);
@@ -179,7 +214,20 @@ const LeaguePage = () => {
   const resetForm = () => {
     setName(""); setFormat("single"); setResultMode("live"); setGameMode("501"); setBestOfLegs(3);
     setSelectedParticipants(new Set()); setCreating(false); setEditingLeagueId(null);
+    setSeasonLigaMode(false);
+    setDivisions([{ name: "1. Liga", participantIds: new Set() }, { name: "2. Liga", participantIds: new Set() }]);
+    setSwapCount(2);
   };
+
+  const addDivision = () => setDivisions((prev) => [...prev, { name: `${prev.length + 1}. Liga`, participantIds: new Set() }]);
+  const removeDivision = (idx: number) => setDivisions((prev) => prev.length <= 2 ? prev : prev.filter((_, i) => i !== idx));
+  const renameDivision = (idx: number, newName: string) => setDivisions((prev) => prev.map((d, i) => i === idx ? { ...d, name: newName } : d));
+  const toggleDivisionParticipant = (idx: number, pid: string) => setDivisions((prev) => prev.map((d, i) => {
+    if (i !== idx) return d;
+    const next = new Set(d.participantIds);
+    if (next.has(pid)) next.delete(pid); else next.add(pid);
+    return { ...d, participantIds: next };
+  }));
 
   const toggleParticipant = (pid: string) => setSelectedParticipants((prev) => {
     const next = new Set(prev);
@@ -231,10 +279,60 @@ const LeaguePage = () => {
   const missingLeagueNameColumn = (error: { code?: string; message?: string } | null) =>
     !!error && (error.code === "42703" || String(error.message || "").includes("player1_name") || String(error.message || "").includes("player2_name"));
 
+  /** Shared by createLeague() below AND endSeason() further down — generates a round-robin
+   *  fixture list for one league's roster and inserts it, with the same missingLeagueNameColumn
+   *  fallback either caller needs. Pulled out specifically so the season-liga/season-end paths
+   *  (which do this once PER DIVISION) don't have to duplicate the fallback-retry logic. */
+  const insertFixturesForLeague = async (leagueId: string, participantIds: string[], leagueFormat: "single" | "double") => {
+    const generated = generateRoundRobinFixtures(participantIds, leagueFormat);
+    const fixtureRows = generated.map((f) => ({
+      league_id: leagueId, club_id: clubId, round_number: f.round, leg: f.leg,
+      player1_id: f.player1Id, player2_id: f.player2Id,
+      player1_name: playerById.get(f.player1Id)?.name ?? null,
+      player2_name: playerById.get(f.player2Id)?.name ?? null,
+    }));
+    let { error: fxError } = await supabase.from("league_fixtures").insert(fixtureRows);
+    if (fxError && missingLeagueNameColumn(fxError)) {
+      const strippedRows = fixtureRows.map(({ player1_name: _p1n, player2_name: _p2n, ...rest }) => rest);
+      ({ error: fxError } = await supabase.from("league_fixtures").insert(strippedRows));
+    }
+    if (fxError) throw fxError;
+    return generated.length;
+  };
+
   const createLeague = async () => {
-    if (!name.trim() || selectedParticipants.size < 2 || !session?.user?.id || savingLeague) return;
+    if (!name.trim() || !session?.user?.id || savingLeague) return;
+    if (seasonLigaMode ? divisions.some((d) => !d.name.trim() || d.participantIds.size < 2) : selectedParticipants.size < 2) return;
     setSavingLeague(true);
     try {
+      if (seasonLigaMode) {
+        // One shared season_group_id ties every division together across its whole lifetime (see
+        // the migration's doc comment) — generated client-side so it's known before any division
+        // row exists, rather than needing a second round-trip to backfill it onto each insert.
+        const seasonGroupId = crypto.randomUUID();
+        let firstDivisionId: string | null = null;
+        let totalFixtures = 0;
+        for (let i = 0; i < divisions.length; i++) {
+          const d = divisions[i];
+          const participantIds = Array.from(d.participantIds);
+          const { data: league, error } = await supabase.from("leagues").insert({
+            name: `${name.trim()} — ${d.name.trim()}`,
+            format, result_mode: resultMode, game_mode: gameMode, best_of_legs: bestOfLegs,
+            participant_ids: participantIds, club_id: clubId, created_by: session.user.id,
+            division_level: i + 1, division_name: d.name.trim(), season_group_id: seasonGroupId,
+            season_number: 1, promote_count: swapCount, relegate_count: swapCount,
+          }).select().single();
+          if (error) throw error;
+          if (i === 0) firstDivisionId = league.id;
+          totalFixtures += await insertFixturesForLeague(league.id, participantIds, format);
+        }
+        toast({ title: t("league.seasonLigaCreatedTitle"), description: `${divisions.length} ${t("league.divisionsSuffix")} · ${totalFixtures} ${t("league.fixturesGeneratedSuffix")}` });
+        resetForm();
+        await fetchAll();
+        if (firstDivisionId) navigate(`/leagues/${firstDivisionId}`);
+        return;
+      }
+
       const participantIds = Array.from(selectedParticipants);
       const { data: league, error } = await supabase.from("leagues").insert({
         name: name.trim(),
@@ -248,23 +346,9 @@ const LeaguePage = () => {
       }).select().single();
       if (error) throw error;
 
-      const generated = generateRoundRobinFixtures(participantIds, format);
-      const fixtureRows = generated.map((f) => ({
-        league_id: league.id, club_id: clubId, round_number: f.round, leg: f.leg,
-        player1_id: f.player1Id, player2_id: f.player2Id,
-        // Denormalized for the public view (see FixtureRow's doc comment) — resolved from the
-        // same roster already loaded for the participant checklist above, nothing extra to fetch.
-        player1_name: playerById.get(f.player1Id)?.name ?? null,
-        player2_name: playerById.get(f.player2Id)?.name ?? null,
-      }));
-      let { error: fxError } = await supabase.from("league_fixtures").insert(fixtureRows);
-      if (fxError && missingLeagueNameColumn(fxError)) {
-        const strippedRows = fixtureRows.map(({ player1_name: _p1n, player2_name: _p2n, ...rest }) => rest);
-        ({ error: fxError } = await supabase.from("league_fixtures").insert(strippedRows));
-      }
-      if (fxError) throw fxError;
+      const fixtureCount = await insertFixturesForLeague(league.id, participantIds, format);
 
-      toast({ title: t("league.leagueCreatedTitle"), description: `${generated.length} ${t("league.fixturesGeneratedSuffix")}` });
+      toast({ title: t("league.leagueCreatedTitle"), description: `${fixtureCount} ${t("league.fixturesGeneratedSuffix")}` });
       resetForm();
       await fetchAll();
       navigate(`/leagues/${league.id}`);
@@ -308,6 +392,85 @@ const LeaguePage = () => {
       await fetchAll();
     }
     setPublicToggling(false);
+  };
+
+  const [endingSeason, setEndingSeason] = useState(false);
+  const [showEndSeasonDialog, setShowEndSeasonDialog] = useState(false);
+
+  /** Saison beenden & neue Saison starten (2026-09-10): the season-liga payoff — computes final
+   *  standings for EVERY division sharing this league's season_group_id + season_number, applies
+   *  each boundary's promotion/relegation swap (see computeStandings' own doc comment on why the
+   *  ranking must match the visible table), and spins up season_number+1 as a fresh set of league
+   *  rows with reshuffled rosters and a brand new fixture list per division — reusing
+   *  insertFixturesForLeague exactly like createLeague() does. Works just as well for a plain
+   *  single-division league (the loop over boundaries below simply never runs since there's only
+   *  one sibling), so "Saison beenden" is offered on every league, not just season-ligas —
+   *  carrying the roster forward into a fresh fixture list is a useful reset on its own. */
+  const endSeason = async () => {
+    if (!activeLeague || endingSeason || !session?.user?.id) return;
+    setEndingSeason(true);
+    try {
+      const siblings = leagues
+        .filter((l) => l.season_group_id === activeLeague.season_group_id && l.season_number === activeLeague.season_number)
+        .sort((a, b) => a.division_level - b.division_level);
+      const ids = siblings.map((l) => l.id);
+      const { data: allFixturesData, error: fxFetchError } = await supabase
+        .from("league_fixtures").select("*").in("league_id", ids);
+      if (fxFetchError) throw fxFetchError;
+      const allFixtures = (allFixturesData as unknown as FixtureRow[]) ?? [];
+      const fixturesByLeague = new Map<string, FixtureRow[]>();
+      ids.forEach((lid) => fixturesByLeague.set(lid, allFixtures.filter((f) => f.league_id === lid)));
+
+      const standingsByLeague = new Map<string, StandingRow[]>();
+      siblings.forEach((l) => standingsByLeague.set(l.id, computeStandings(l.participant_ids, fixturesByLeague.get(l.id) ?? [])));
+
+      // Start every division's next-season roster as its own current roster, then apply each
+      // adjacent boundary's swap independently — see the migration's doc comment on relegate_count
+      // vs promote_count and why min() is taken (a mismatched pair degrades safely rather than
+      // erroring or leaving mismatched division sizes).
+      const nextRoster = new Map<string, Set<string>>(siblings.map((l) => [l.id, new Set(l.participant_ids)]));
+      for (let i = 0; i < siblings.length - 1; i++) {
+        const upper = siblings[i], lower = siblings[i + 1];
+        const n = Math.min(upper.relegate_count, lower.promote_count);
+        if (n <= 0) continue;
+        const relegated = (standingsByLeague.get(upper.id) ?? []).slice(-n).map((s) => s.playerId);
+        const promoted = (standingsByLeague.get(lower.id) ?? []).slice(0, n).map((s) => s.playerId);
+        relegated.forEach((pid) => { nextRoster.get(upper.id)?.delete(pid); nextRoster.get(lower.id)?.add(pid); });
+        promoted.forEach((pid) => { nextRoster.get(lower.id)?.delete(pid); nextRoster.get(upper.id)?.add(pid); });
+      }
+
+      let newActiveLeagueId: string | null = null;
+      for (const l of siblings) {
+        const participantIds = Array.from(nextRoster.get(l.id) ?? []);
+        const { data: newLeague, error } = await supabase.from("leagues").insert({
+          name: l.name, format: l.format, result_mode: l.result_mode, game_mode: l.game_mode,
+          best_of_legs: l.best_of_legs, participant_ids: participantIds, club_id: clubId,
+          created_by: session.user.id, division_level: l.division_level, division_name: l.division_name,
+          season_group_id: l.season_group_id, season_number: l.season_number + 1,
+          promote_count: l.promote_count, relegate_count: l.relegate_count,
+          previous_season_league_id: l.id,
+        }).select().single();
+        if (error) throw error;
+        await insertFixturesForLeague(newLeague.id, participantIds, l.format);
+        // Best-effort: only succeeds under RLS for divisions THIS user created (see the migration
+        // file's "League creator can update their league" policy) — a season-liga whose divisions
+        // were created by different organizers just won't get every old row's
+        // next_season_league_id/status updated, which only affects the "vorherige/nächste Saison"
+        // navigation link, not correctness of the new season itself (already fully created above
+        // regardless of who owns the old row).
+        await supabase.from("leagues").update({ status: "finished", next_season_league_id: newLeague.id }).eq("id", l.id);
+        if (l.id === activeLeague.id) newActiveLeagueId = newLeague.id;
+      }
+
+      toast({ title: t("league.seasonEndedTitle"), description: `${t("league.seasonLabel")} ${activeLeague.season_number + 1}` });
+      setShowEndSeasonDialog(false);
+      await fetchAll();
+      if (newActiveLeagueId) navigate(`/leagues/${newActiveLeagueId}`);
+    } catch (err: unknown) {
+      toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("league.seasonEndFailedGeneric"), variant: "destructive" });
+    } finally {
+      setEndingSeason(false);
+    }
   };
 
   const copyPublicLink = () => {
@@ -408,6 +571,18 @@ const LeaguePage = () => {
   // ─── SINGLE LEAGUE DETAIL ────────────────────────
   if (id && activeLeague) {
     const isLeagueOrganizer = activeLeague.created_by === session?.user?.id;
+    // Saison-Liga mit Auf-/Abstieg (2026-09-10): every OTHER division of the SAME season (not
+    // every season — last season's divisions are a different season_number and irrelevant to the
+    // navigation/zone-highlighting here), sorted top-division-first, so index 0 is always
+    // division_level 1 regardless of creation order.
+    const seasonSiblings = leagues
+      .filter((l) => l.season_group_id === activeLeague.season_group_id && l.season_number === activeLeague.season_number)
+      .sort((a, b) => a.division_level - b.division_level);
+    const isSeasonLiga = seasonSiblings.length > 1;
+    const myDivisionIdx = seasonSiblings.findIndex((l) => l.id === activeLeague.id);
+    const hasDivisionAbove = myDivisionIdx > 0;
+    const hasDivisionBelow = myDivisionIdx >= 0 && myDivisionIdx < seasonSiblings.length - 1;
+    const unfinishedFixtureCount = fixtures.filter((f) => f.status !== "finished").length;
     return (
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
         <Link to="/leagues" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground">
@@ -434,6 +609,83 @@ const LeaguePage = () => {
             {activeLeague.game_mode} · {t("stats.firstTo")} {Math.ceil(activeLeague.best_of_legs / 2)} · {activeLeague.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")} ·{" "}
             {activeLeague.result_mode === "live" ? t("league.liveGamesLabel") : t("league.manualEntryLabel")}
           </p>
+
+          {/* Saison-Liga mit Auf-/Abstieg (2026-09-10) — season/division context, shown for every
+              league (season badge is harmless even at "Saison 1" of a standalone league) so the
+              prev/next-season and "Saison beenden" controls always have a consistent home. */}
+          <div className="flex items-center flex-wrap gap-1.5 mt-2.5">
+            <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-transparent">
+              {t("league.seasonLabel")} {activeLeague.season_number}
+            </Badge>
+            {isSeasonLiga && (
+              <Badge variant="outline" className="text-[10px] bg-primary/15 text-primary border-transparent">
+                {activeLeague.division_name ?? `${t("league.divisionLabel")} ${activeLeague.division_level}`}
+              </Badge>
+            )}
+            {activeLeague.previous_season_league_id && (
+              <Link to={`/leagues/${activeLeague.previous_season_league_id}`} className="text-[11px] text-muted-foreground hover:text-foreground">
+                ← {t("league.previousSeasonLink")}
+              </Link>
+            )}
+            {activeLeague.next_season_league_id && (
+              <Link to={`/leagues/${activeLeague.next_season_league_id}`} className="text-[11px] text-primary hover:underline">
+                {t("league.nextSeasonLink")} →
+              </Link>
+            )}
+          </div>
+
+          {isSeasonLiga && (
+            <div className="flex items-center flex-wrap gap-1.5 mt-2">
+              {seasonSiblings.map((l) => (
+                <Link
+                  key={l.id}
+                  to={`/leagues/${l.id}`}
+                  className={`px-2.5 py-1 rounded-full text-[11px] border transition-colors ${l.id === activeLeague.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                >
+                  {l.division_name ?? `${t("league.divisionLabel")} ${l.division_level}`}
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {isLeagueOrganizer && (
+            <div className="mt-3">
+              {activeLeague.next_season_league_id ? (
+                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                  <Link to={`/leagues/${activeLeague.next_season_league_id}`}>
+                    <FlagTriangleRight className="w-3.5 h-3.5" /> {t("league.nextSeasonLink")}
+                  </Link>
+                </Button>
+              ) : (
+                <AlertDialog open={showEndSeasonDialog} onOpenChange={setShowEndSeasonDialog}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <FlagTriangleRight className="w-3.5 h-3.5" /> {t("league.endSeasonBtn")}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{t("league.endSeasonDialogTitle")}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {isSeasonLiga ? t("league.endSeasonDialogDescSeasonLiga") : t("league.endSeasonDialogDescSimple")}
+                        {unfinishedFixtureCount > 0 && (
+                          <span className="block mt-2 text-accent">
+                            {unfinishedFixtureCount} {t("league.endSeasonUnfinishedWarning")}
+                          </span>
+                        )}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                      <Button onClick={endSeason} disabled={endingSeason}>
+                        {endingSeason ? t("league.savingBtn") : t("league.endSeasonConfirmBtn")}
+                      </Button>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          )}
         </div>
 
         {activeLeague.public_view && activeLeague.public_slug && (
@@ -484,12 +736,19 @@ const LeaguePage = () => {
               {pagedStandings.visible.map((s) => {
                 const i = standings.indexOf(s);
                 const player = playerById.get(s.playerId);
+                // Saison-Liga mit Auf-/Abstieg (2026-09-10): only meaningful when there's an
+                // actual division to move to/from in this direction — a top division has nowhere
+                // to promote into, a bottom division has nowhere to relegate to.
+                const inPromoteZone = isSeasonLiga && hasDivisionAbove && i < activeLeague.promote_count;
+                const inRelegateZone = isSeasonLiga && hasDivisionBelow && i >= standings.length - activeLeague.relegate_count;
                 return (
-                  <div key={s.playerId} className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-2 px-3 py-2 rounded-lg ${i < 3 ? "bg-muted/50" : "bg-muted/30"}`}>
+                  <div key={s.playerId} className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-2 px-3 py-2 rounded-lg border-l-2 ${inPromoteZone ? "border-l-secondary bg-secondary/5" : inRelegateZone ? "border-l-destructive bg-destructive/5" : "border-l-transparent"} ${i < 3 ? "bg-muted/50" : "bg-muted/30"}`}>
                     <RankBadge rank={i + 1} />
                     <div className="flex items-center gap-2 min-w-0">
                       <RankAvatar emoji={player?.emoji ?? "🎯"} rank={i + 1} size={26} />
                       <span className="text-sm font-medium truncate">{player?.name ?? "?"}</span>
+                      {inPromoteZone && <ArrowUp className="w-3 h-3 text-secondary shrink-0" />}
+                      {inRelegateZone && <ArrowDown className="w-3 h-3 text-destructive shrink-0" />}
                     </div>
                     <span className="w-8 text-center text-xs text-muted-foreground">{s.played}</span>
                     <span className="w-8 text-center text-xs text-muted-foreground">{s.won}</span>
@@ -724,24 +983,91 @@ const LeaguePage = () => {
               {t("league.editRestrictionNotice")}
             </p>
           ) : (
-            <div>
-              <label className="text-sm text-muted-foreground mb-1.5 block">{t("league.participantsLabel")} ({selectedParticipants.size})</label>
-              <div className="space-y-1 max-h-[40vh] overflow-y-auto -mx-1 px-1">
-                {dbPlayers.map((p) => (
-                  <label key={p.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 cursor-pointer">
-                    <Checkbox checked={selectedParticipants.has(p.id)} onCheckedChange={() => toggleParticipant(p.id)} />
-                    <span className="text-lg shrink-0">{p.emoji}</span>
-                    <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            <>
+              {/* Saison-Liga mit Auf-/Abstieg (2026-09-10) — opt-in toggle, only offered at
+                  creation time (see the state declarations' own doc comment for why). */}
+              <label className="flex items-center justify-between gap-3 px-1 py-1 rounded-lg cursor-pointer">
+                <span className="flex items-center gap-2 text-sm">
+                  <Layers className="w-4 h-4 text-primary shrink-0" />
+                  {t("league.seasonLigaToggleLabel")}
+                </span>
+                <Switch checked={seasonLigaMode} onCheckedChange={setSeasonLigaMode} />
+              </label>
+              {seasonLigaMode && (
+                <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-lg p-2.5 -mt-1">
+                  {t("league.seasonLigaExplainer")}
+                </p>
+              )}
+
+              {seasonLigaMode ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm text-muted-foreground mb-1 block">{t("league.swapCountLabel")}</label>
+                    <Select value={String(swapCount)} onValueChange={(v) => setSwapCount(Number(v))}>
+                      <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-card border-border">
+                        {[1, 2, 3, 4].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {divisions.map((d, idx) => (
+                    <div key={idx} className="border border-border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-display uppercase text-muted-foreground shrink-0">{t("league.divisionLabel")} {idx + 1}</span>
+                        <Input
+                          value={d.name}
+                          onChange={(e) => renameDivision(idx, e.target.value)}
+                          className="h-8 bg-muted border-border text-sm flex-1"
+                        />
+                        {divisions.length > 2 && (
+                          <button onClick={() => removeDivision(idx)} className="text-muted-foreground hover:text-destructive shrink-0 p-1">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{t("league.participantsLabel")} ({d.participantIds.size})</p>
+                      <div className="space-y-1 max-h-[22vh] overflow-y-auto -mx-1 px-1">
+                        {dbPlayers.map((p) => (
+                          <label key={p.id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-muted/50 cursor-pointer">
+                            <Checkbox checked={d.participantIds.has(p.id)} onCheckedChange={() => toggleDivisionParticipant(idx, p.id)} />
+                            <span className="text-base shrink-0">{p.emoji}</span>
+                            <span className="flex-1 min-w-0 truncate text-xs">{p.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <Button variant="outline" size="sm" onClick={addDivision} className="w-full gap-1">
+                    <Plus className="w-3.5 h-3.5" /> {t("league.addDivisionBtn")}
+                  </Button>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-sm text-muted-foreground mb-1.5 block">{t("league.participantsLabel")} ({selectedParticipants.size})</label>
+                  <div className="space-y-1 max-h-[40vh] overflow-y-auto -mx-1 px-1">
+                    {dbPlayers.map((p) => (
+                      <label key={p.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 cursor-pointer">
+                        <Checkbox checked={selectedParticipants.has(p.id)} onCheckedChange={() => toggleParticipant(p.id)} />
+                        <span className="text-lg shrink-0">{p.emoji}</span>
+                        <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           <Button
             onClick={editingLeagueId ? saveLeagueEdit : createLeague}
             className="w-full"
-            disabled={!name.trim() || (!editingLeagueId && selectedParticipants.size < 2) || savingLeague}
+            disabled={
+              !name.trim() || savingLeague ||
+              (!editingLeagueId && (seasonLigaMode
+                ? divisions.some((d) => !d.name.trim() || d.participantIds.size < 2)
+                : selectedParticipants.size < 2))
+            }
           >
             {savingLeague ? t("league.savingBtn") : editingLeagueId ? t("league.saveChangesBtn") : t("league.createLeagueBtn")}
           </Button>
@@ -767,6 +1093,12 @@ const LeaguePage = () => {
                   <p className="font-semibold text-sm truncate">{l.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {l.participant_ids.length} {t("league.participantsSuffix")} · {l.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")} · {l.status === "finished" ? t("league.finishedStatusLabel") : t("league.activeStatusLabel")}
+                    {/* Saison-Liga mit Auf-/Abstieg (2026-09-10) — only shown once it's actually
+                        relevant (a division, or past season 1), so a plain league's row is
+                        unchanged from before this feature existed. */}
+                    {(l.division_name || l.season_number > 1) && (
+                      <> · {l.division_name ?? `${t("league.divisionLabel")} ${l.division_level}`}{l.season_number > 1 ? ` · ${t("league.seasonLabel")} ${l.season_number}` : ""}</>
+                    )}
                   </p>
                 </div>
               </Link>

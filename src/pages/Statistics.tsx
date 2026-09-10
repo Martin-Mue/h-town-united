@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, ChevronRight, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2 } from "lucide-react";
+import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, ChevronRight, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2, Dumbbell } from "lucide-react";
+import { TRAINING_DRILLS, loadAllRecords, loadStreak, DIFFICULTY_COLORS, DIFFICULTY_LABEL_KEY, type StoredRecordEntry, type StreakState } from "@/pages/Training";
 import { DartGameIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -137,7 +138,7 @@ const StatisticsPage = () => {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   const [showSeasonRecap, setShowSeasonRecap] = useState(false);
   const [showFieldBreakdown, setShowFieldBreakdown] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "players" | "h2h" | "history" | "highlights">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "players" | "h2h" | "history" | "highlights" | "training">("overview");
   const [viewScope, setViewScope] = useState<"club" | "personal">(() => {
     if (typeof window === "undefined") return "club";
     return window.localStorage.getItem("stats-view-scope") === "personal" ? "personal" : "club";
@@ -1240,8 +1241,28 @@ const StatisticsPage = () => {
     { key: "players" as const, labelKey: "stats.tabMyStats", icon: Users },
     { key: "history" as const, labelKey: "stats.tabMyGames", icon: Target },
     { key: "highlights" as const, labelKey: "stats.tabMyHighlights", icon: Video },
+    { key: "training" as const, labelKey: "stats.tabMyTraining", icon: Dumbbell },
   ];
   const tabs = viewScope === "personal" ? personalTabs : clubTabs;
+
+  // Training records/streak (see Training.tsx's own comments — this is device-local localStorage
+  // data, never synced to Supabase, so it's simply read fresh whenever this tab is actually shown
+  // rather than fetched alongside the rest of this page's Supabase-backed state above).
+  const trainingRecords = useMemo(() => (activeTab === "training" ? loadAllRecords() : []), [activeTab]);
+  const trainingStreak = useMemo(() => (activeTab === "training" ? loadStreak() : null), [activeTab]);
+  const trainingRecordsByDrill = useMemo(() => {
+    const map = new Map<string, StoredRecordEntry[]>();
+    for (const r of trainingRecords) {
+      const list = map.get(r.drillId) ?? [];
+      list.push(r);
+      map.set(r.drillId, list);
+    }
+    return map;
+  }, [trainingRecords]);
+  const trainedDrills = useMemo(
+    () => TRAINING_DRILLS.filter((d) => trainingRecordsByDrill.has(d.id)),
+    [trainingRecordsByDrill],
+  );
 
   return (
     <div className="container py-6 animate-slide-up">
@@ -2351,6 +2372,58 @@ const StatisticsPage = () => {
             </div>
           )}
           <ListPaginationFooter list={pagedClips} />
+        </SectionCard>
+      )}
+
+      {/* TRAINING TAB (personal scope only) — surfaces the device-local personal-best records
+          Training.tsx already tracks per drill (see loadAllRecords' own doc comment for why this
+          can only ever be device-local, not club-wide data), instead of duplicating a second
+          "my records" screen inside Training.tsx itself. */}
+      {activeTab === "training" && (
+        <SectionCard>
+          <Eyebrow icon={Dumbbell}>{t("stats.trainingRecordsHeading")}</Eyebrow>
+          {trainingStreak && trainingStreak.current >= 2 && (
+            <div className="mb-4 w-fit mx-auto rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-accent font-display uppercase text-xs flex items-center justify-center gap-1.5">
+              <Flame className="w-3.5 h-3.5" /> {trainingStreak.current} {t("training.daysInARow")}
+            </div>
+          )}
+          {trainedDrills.length === 0 ? (
+            <div className="text-center py-6">
+              <Dumbbell className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm text-muted-foreground mb-3">{t("stats.noTrainingRecordsYet")}</p>
+              <Button asChild size="sm"><Link to="/training">{t("training.pageTitle")}</Link></Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {trainedDrills.map((drill) => (
+                <div key={drill.id} className="rounded-lg bg-muted/30 p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <drill.icon className="w-4 h-4 text-primary shrink-0" />
+                    <span className="text-sm font-display uppercase truncate">{drill.name}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ml-auto shrink-0 ${DIFFICULTY_COLORS[drill.difficulty]}`}>
+                      {t(DIFFICULTY_LABEL_KEY[drill.difficulty])}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {(trainingRecordsByDrill.get(drill.id) ?? []).map((entry, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs gap-2">
+                        <span className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+                          <Trophy className="w-3 h-3 text-accent shrink-0" />
+                          <span className="truncate">{entry.label}{entry.variant ? ` · ${entry.variant}` : ""}</span>
+                        </span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span className="text-foreground font-semibold">{entry.value}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(entry.achievedAt).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </SectionCard>
       )}
       </>

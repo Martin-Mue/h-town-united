@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.generate-match-report]
 verify_jwt = false
+
+[functions.live-commentary]
+verify_jwt = false

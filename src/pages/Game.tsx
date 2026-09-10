@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, WifiOff } from "lucide-react";
+import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, WifiOff, Sparkles } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
 import OnlineChallengeSetup from "@/components/game/OnlineChallengeSetup";
 import ConfettiBurst from "@/components/ConfettiBurst";
-import MatchReflection from "@/components/game/MatchReflection";
 import AiMatchReport from "@/components/game/AiMatchReport";
 import AnimatedScore from "@/components/AnimatedScore";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, TeamSlot, BotLevel } from "@/types/game";
@@ -86,10 +85,11 @@ import {
   playThrowSound, playBustSound, play180Sound, playCheckoutSound,
   playVictorySound, playTonPlusSound, playTurnSwitchSound, playWalkonSound,
 } from "@/utils/sounds";
-import { speakSequence, buildRoundAnnouncement, getCallerVoice, setCallerVoice, type CallerVoice } from "@/utils/speech";
+import { speakSequence, speakText, buildRoundAnnouncement, getCallerVoice, setCallerVoice, type CallerVoice } from "@/utils/speech";
 import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { clubHasFeature } from "@/lib/planFeatures";
+import { fetchLiveCommentary, getAiCommentaryEnabled, setAiCommentaryEnabled as persistAiCommentaryEnabled, type CommentaryEvent } from "@/lib/aiCommentary";
 import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
@@ -196,6 +196,14 @@ const GamePage = () => {
   const changeCallerVoice = (v: CallerVoice) => {
     setCallerVoice(v);
     setCallerVoiceState(v);
+  };
+  // Live-KI-Kommentator (2026-09-10) — personal opt-in on top of the club's plan-tier gate (see
+  // the toggle button's own comment further down for why both checks exist).
+  const [aiCommentaryEnabled, setAiCommentaryEnabledState] = useState(() => getAiCommentaryEnabled());
+  const toggleAiCommentary = () => {
+    const next = !aiCommentaryEnabled;
+    persistAiCommentaryEnabled(next);
+    setAiCommentaryEnabledState(next);
   };
   const [walkonEnabled, setWalkonEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -1494,6 +1502,35 @@ const GamePage = () => {
         busted, matchWon: curGame.isFinished, winnerName: curGame.winnerName,
       });
       window.setTimeout(() => speakSequence(parts), 160);
+    }
+
+    // Live-KI-Kommentator (2026-09-10) — deliberately sparse: only fires for a genuinely
+    // noteworthy moment (bust, leg/match win, 180, ton-plus), never for a routine sub-100 round,
+    // both to keep the feature feeling like real color commentary rather than narrating every
+    // dart, and to bound the AI-call volume over a full evening of camera-scored legs. Fully
+    // non-blocking and fire-and-forget: fetchLiveCommentary() never throws (see its own doc
+    // comment), and the resulting line — once it arrives, a network round-trip later — is spoken
+    // with interrupt:false so it queues in behind whatever the normal caller is still saying
+    // rather than talking over it.
+    if (aiCommentaryEnabled && clubHasFeature(club?.plan_tier, "ai-commentary") && session?.access_token) {
+      const aiEvent: CommentaryEvent | null =
+        busted ? "bust" :
+        checkedOut && curGame.isFinished ? "match_win" :
+        checkedOut ? "leg_win" :
+        roundTotal === 180 ? "180" :
+        roundTotal > 100 ? "ton_plus" :
+        null;
+      if (aiEvent) {
+        const activePlayerName = game.players[startIdx].name;
+        const nextPlayerName = curGame.players[curGame.currentPlayerIndex].name;
+        const remaining = curGame.mode === "cricket" ? undefined : curGame.currentLeg.remaining[teamIndexFor(curGame.teams, startIdx)];
+        fetchLiveCommentary({
+          event: aiEvent, playerName: activePlayerName, opponentName: nextPlayerName,
+          roundTotal, remaining, mode: curGame.mode, accessToken: session.access_token,
+        }).then((line) => {
+          if (line) window.setTimeout(() => speakText(line, { interrupt: false }), 900);
+        });
+      }
     }
 
     if (!busted && (checkedOut || roundTotal === 180)) triggerConfetti();
@@ -3207,15 +3244,10 @@ const GamePage = () => {
               </div>
             )}
 
-            {/* KI-Spielbericht (2026-09-09) — same gate as MatchReflection right below (only once
-                the game is actually persisted server-side, since gameId is a foreign key into
-                `games`), placed first so the "headline" reads above the private reflection. */}
+            {/* KI-Spielbericht (2026-09-09) — only once the game is actually persisted server-side,
+                since gameId is a foreign key into `games` (the private post-match reflection that
+                used to sit here too was removed 2026-09-10 — see MatchReflection.tsx, now unused). */}
             {gameSaved && !queuedOffline && <AiMatchReport gameId={pendingGameIdRef.current} />}
-
-            {/* Private post-match reflection — only once the game is actually persisted server-side
-                (game_id is a foreign key), so this deliberately sits out the offline-queue window
-                rather than risk writing against a games row that doesn't exist yet. */}
-            {gameSaved && !queuedOffline && <MatchReflection gameId={pendingGameIdRef.current} />}
 
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={shareResult} disabled={sharingResult} className="gap-1.5 shrink-0">
@@ -3342,6 +3374,20 @@ const GamePage = () => {
             )}
 
             {cricketBoard}
+
+            {/* Live-KI-Kommentator (2026-09-10) — only offered once the camera is actually on
+                (there's nothing for it to react to otherwise) and the club's plan includes it;
+                a personal on/off toggle on top of that plan gate, same reasoning as
+                aiCommentary.ts's own doc comment on why both checks exist. */}
+            {cameraEnabled && clubHasFeature(club?.plan_tier, "ai-commentary") && (
+              <button
+                onClick={toggleAiCommentary}
+                className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-xs mb-3 transition-colors ${aiCommentaryEnabled ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
+              >
+                <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> {t("game.aiCommentaryToggle")}</span>
+                <span className="text-[10px] uppercase">{aiCommentaryEnabled ? t("common.on") : t("common.off")}</span>
+              </button>
+            )}
 
             {/* Manual entry stays fully available — just tucked away by default since the camera scores for you. */}
             <button

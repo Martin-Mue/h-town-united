@@ -47,9 +47,9 @@ export const GUIDES: Guide[] = [
         ],
       },
       {
-        heading: "3. Turniere",
+        heading: "3. Turniere & Liga",
         body: [
-          "Unter „Turniere\" könnt ihr richtige Vereins-Events mit Turnierbaum organisieren, bis zu 64 Teilnehmer. Details dazu in der eigenen Anleitung weiter unten.",
+          "Unter „Turniere\" könnt ihr richtige Vereins-Events mit Turnierbaum organisieren, bis zu 64 Teilnehmer. Für eine Runde, die sich über mehrere Wochen zieht, gibt es zusätzlich „Liga\" — jeder gegen jeden, mit laufender Tabelle statt Turnierbaum. Details zu beidem in den eigenen Anleitungen weiter unten.",
         ],
       },
       {
@@ -73,13 +73,25 @@ export const GUIDES: Guide[] = [
       {
         heading: "Spielen",
         body: [
-          "501, 301 (und weitere X01-Varianten) sowie Cricket, wahlweise mit Kamera-Erkennung (die App zählt eure Würfe automatisch vom Board ab) oder manueller Eingabe über ein großes Zahlenfeld. Dazu: optionale Checkout-Vorschläge, ein Münzwurf-Ersatz vor dem Spiel („Bull-off\") inklusive Stechen bei Gleichstand, Undo für den letzten Wurf, automatische Wiederherstellung falls die App mal abstürzt oder geschlossen wird, und eine Sprachansage der Punkte (mehrere Stimmen wählbar, auch abschaltbar).",
+          "501, 301 (und weitere X01-Varianten, inklusive frei wählbarem Custom-Startscore) sowie Cricket (auch mit eigenen Zielzahlen), wahlweise mit Kamera-Erkennung (die App zählt eure Würfe automatisch vom Board ab) oder manueller Eingabe über ein großes Zahlenfeld. Dazu jede Menge Optionen: Team-Modus (2v2 bis 4v4), Bot-Gegner in fünf Schwierigkeitsstufen, ein „Geist-Modus\" gegen die eigene Bestleistung, Handicap-Vorsprung, ein voller Sets-Modus (Best of Sätze, je Satz Best of Legs), ein optionales Aufwärm-Timer vor dem Match und eine cinematische Einlaufsequenz mit Stats-Vergleich und Gewinnwahrscheinlichkeit. Außerdem: optionale Checkout-Vorschläge, ein Münzwurf-Ersatz vor dem Spiel („Bull-off\") inklusive Stechen bei Gleichstand, Undo für den letzten Wurf, automatische Wiederherstellung falls die App mal abstürzt oder geschlossen wird, eine Sprachansage der Punkte (mehrere Stimmen wählbar, auch abschaltbar) und bei Kamera-Scoring ein optionaler KI-Kommentator, der live auf besondere Momente reagiert. Nach dem Spiel lässt sich auf Wunsch ein von KI geschriebener kurzer Spielbericht erstellen. Alle Details dazu in der eigenen Anleitung „Spielmodi & Optionen\" weiter unten.",
+        ],
+      },
+      {
+        heading: "Online spielen",
+        body: [
+          "Statt am selben Gerät lässt sich ein Vereinskollege mit eigenem Account auch direkt herausfordern — das Match läuft dann live und synchron auf zwei Geräten, inklusive Push-Benachrichtigung bei neuer Herausforderung. Modus, Best-of-Legs, Double-In/Out und wer beginnt sind dabei frei einstellbar. Details in der eigenen Anleitung weiter unten.",
         ],
       },
       {
         heading: "Turniere",
         body: [
-          "K.O.-Baum oder Round-Robin, bis zu 64 Teilnehmer, mit Turnierserien über mehrere Events hinweg. Für Zuschauer gibt es eine eigene Live-Ansicht per Link oder QR-Code — ganz ohne Login, mit automatisch rotierenden Perspektiven (laufende Partien, Turnierbaum, Highlights). Der „Board-Modus\" bindet ein Gerät fest an ein bestimmtes Board, das dann selbstständig zur jeweils nächsten anstehenden Partie weiterschaltet. Dazu Anwesenheits-Check-in der Teilnehmer und eine Restzeit-Schätzung für Admins. Alle Details dazu in der eigenen Turnier-Anleitung weiter unten.",
+          "K.O.-Baum oder Round-Robin, bis zu 64 Teilnehmer, mit Turnierserien über mehrere Events hinweg. Für Zuschauer gibt es eine eigene Live-Ansicht per Link oder QR-Code — ganz ohne Login, mit mehreren automatisch rotierenden Perspektiven (laufende Partien, Turnierbaum, Tabelle, Boards, Highlights, u.a.) und sogar einem Zuschauer-Tippspiel, wer eine laufende Partie gewinnt. Der „Board-Modus\" bindet ein Gerät fest an ein bestimmtes Board, das dann selbstständig zur jeweils nächsten anstehenden Partie weiterschaltet. Dazu Anwesenheits-Check-in der Teilnehmer und eine Restzeit-Schätzung für Admins. Alle Details dazu in der eigenen Turnier-Anleitung weiter unten.",
+        ],
+      },
+      {
+        heading: "Liga",
+        body: [
+          "Für eine Runde über mehrere Wochen: jeder gegen jeden mit automatisch erstelltem Spielplan und laufender Tabelle statt Turnierbaum. Auch hier gibt es eine öffentliche Live-Ansicht ohne Login sowie einen Kalender-Export pro Spieltag. Details in der eigenen Liga-Anleitung weiter unten.",
         ],
       },
       {
@@ -91,13 +103,13 @@ export const GUIDES: Guide[] = [
       {
         heading: "Training",
         body: [
-          "Ein eigener Trainingsmodus mit Kamera-Kalibrierung sowie gezielten Übungsvorschlägen, die sich direkt auf deine eigene Aim-Bias-Auswertung beziehen.",
+          "Ein eigener Trainingsmodus mit Kamera-Kalibrierung und 13 verschiedenen Übungen (Doppel, Finish, Genauigkeit, Drucksituationen) — mit persönlichen Rekorden je Übung, einer Trainings-Streak und einem automatisch erstellten Trainingsplan, der sich direkt an deiner eigenen Aim-Bias-Auswertung, deinem Schnitt und deiner Form orientiert. Details in der eigenen Trainings-Anleitung weiter unten.",
         ],
       },
       {
         heading: "Verein & Einstellungen",
         body: [
-          "Admins können Vereinsname, Logo und Farbthema anpassen — jedes Mitglied kann zusätzlich unter „Meine Farbe\" eine eigene Akzentfarbe wählen, ganz ohne Auswirkung auf andere. Die App unterstützt mehrere unabhängige Vereine: ein eigener Verein lässt sich anlegen, neue Mitglieder kommen per Einladungslink dazu. Dazu ein editierbares Impressum, ein Admin-Bereich für Nutzerverwaltung, und die App spricht mehrere Sprachen.",
+          "Admins können Vereinsname, Logo und Farbthema anpassen — jedes Mitglied kann zusätzlich unter „Meine Farbe\" eine eigene Akzentfarbe wählen, ganz ohne Auswirkung auf andere. Die App unterstützt mehrere unabhängige Vereine: ein eigener Verein lässt sich anlegen, neue Mitglieder kommen entweder per gezielter Admin-Einladung oder über einen offenen Beitritts-Link dazu (der dann von einem Admin einzeln bestätigt wird). Neben der klassischen Admin-Rolle gibt es eine „Editor\"-Rolle für Turnier-/Liga-Verwaltung ohne volle Admin-Rechte. Dazu ein editierbares Impressum, ein Admin-Bereich für Nutzerverwaltung inklusive Vereins-Abo, und die App spricht mehrere Sprachen.",
         ],
       },
     ],
@@ -109,19 +121,19 @@ export const GUIDES: Guide[] = [
     sections: [
       {
         body: [
-          "Oben auf der Statistik-Seite wechselst du mit „Verein\" / „Ich\" zwischen den Zahlen des ganzen Vereins und deinen eigenen — direkt darunter gruppieren fünf Reiter alles weiter.",
+          "Oben auf der Statistik-Seite wechselst du mit „Verein\" / „Ich\" zwischen den Zahlen des ganzen Vereins und deinen eigenen — direkt darunter gruppieren fünf Reiter alles weiter. Die Elo-Wertung taucht dabei nicht nur als eigener Wert auf, sondern direkt mit in fast jeder Rangliste. Viele Ansichten lassen sich außerdem nach Spielmodus und Best-of filtern, und einzelne Werte wahlweise als Liste oder als Balkendiagramm anzeigen — im Diagramm auch mehrere Werte gleichzeitig zum Vergleich.",
         ],
       },
       {
         heading: "Übersicht",
         body: [
-          "Vereinsrangliste, Vereinsrekorde (meiste 180er, bester Schnitt, höchstes Finish, …) und wie viele Spiele zuletzt gelaufen sind. Auf jede Rekord-Kachel kannst du tippen, um die komplette Rangliste für genau diesen Wert zu sehen — nicht nur den einen Spitzenreiter.",
+          "Vereinsrangliste, Vereinsrekorde (meiste 180er, bester Schnitt, höchstes Finish, beste MPR im Cricket, …) und wie viele Spiele zuletzt gelaufen sind — inklusive Zeitverlauf-Chart der letzten 30 Tage. Auf jede Rekord-Kachel kannst du tippen, um die komplette Rangliste für genau diesen Wert zu sehen — nicht nur den einen Spitzenreiter.",
         ],
       },
       {
         heading: "Spieler",
         body: [
-          "Wähle ein Vereinsmitglied (oder wechsle oben auf „Ich\" für deine eigenen Werte): Schnitt mit Verlauf, Checkout-Quote, First-9-Schnitt, 180er, Formkurve der letzten Spiele, und wer dein „Angstgegner\" bzw. Lieblingsgegner ist.",
+          "Wähle ein Vereinsmitglied (oder wechsle oben auf „Ich\" für deine eigenen Werte): Schnitt mit Verlauf, Checkout-Quote, First-9-Schnitt, 180er, eine Triple-Analyse (wie oft eine Aufnahme treble-los blieb), Formkurve der letzten Spiele, und — nur in deiner eigenen Ansicht, für niemand anderen sichtbar — wer dein „Angstgegner\" bzw. Lieblingsgegner ist.",
         ],
       },
       {
@@ -163,13 +175,13 @@ export const GUIDES: Guide[] = [
       {
         heading: "Weitere Angaben (optional)",
         body: [
-          "Unter „Mehr über mich\" kannst du zusätzlich Wurfhand, Dartgewicht, Lieblings-Doppel, Wohnort, Mitglied-seit-Jahr, einen Leitspruch und Geburtstag hinterlegen — alles freiwillig, taucht dann aber schön aufbereitet auf deinem Profil auf.",
+          "Unter „Mehr über mich\" kannst du zusätzlich Wurfhand, Dartgewicht, Lieblings-Doppel, Wohnort, Mitglied-seit-Jahr, einen Leitspruch, einen kleinen Steckbrief-Text (z. B. wie du zum Darten gekommen bist) und Geburtstag hinterlegen — alles freiwillig, taucht dann aber schön aufbereitet auf deinem Profil auf.",
         ],
       },
       {
         heading: "Eigenes Profil bearbeiten",
         body: [
-          "Nur du selbst (oder ein Admin bei einem Profil ohne verknüpften Account) kannst ein Profil nachträglich bearbeiten — über den Stift auf der Karte oder im geöffneten Profil.",
+          "Nur du selbst (oder ein Admin bei einem Profil ohne verknüpften Account) kannst ein Profil nachträglich bearbeiten — über den Stift auf der Karte oder im geöffneten Profil. Dort lässt sich auch eine historische 180er-Anzahl aus der Zeit vor der App nachtragen, jahresweise.",
         ],
       },
     ],
@@ -193,19 +205,19 @@ export const GUIDES: Guide[] = [
       {
         heading: "Spielmodus",
         body: [
-          "Spielmodus (501/301/Cricket/extern gespielt) und First-to-Legs für das ganze Turnier. Bei K.O. zusätzlich die Turnierbaum-Größe (am besten „Automatisch\"), verfügbare Boards, ob direkt aus dem Turnierbaum heraus gespielt werden kann, der Auslosungsmodus (zufällig oder manuell), und optional ein abweichender Modus pro Runde (z. B. Finalrunde mit mehr Legs).",
+          "Spielmodus (501/301/Cricket/extern gespielt) und First-to-Legs für das ganze Turnier. Bei K.O. zusätzlich die Turnierbaum-Größe (am besten „Automatisch\"), verfügbare Boards, ob direkt aus dem Turnierbaum heraus gespielt werden kann, der Auslosungsmodus (zufällig oder manuell), und optional ein abweichender Modus pro Runde (z. B. Finalrunde mit mehr Legs). Bei Round-Robin gibt es statt eines Baums eine laufende Tabelle. Ein „Großevent-Modus\" schaltet zusätzliche Anzeigeoptionen für größere Veranstaltungen frei.",
         ],
       },
       {
         heading: "Teilnehmer",
         body: [
-          "Vereinsmitglieder per Klick hinzufügen, per Schnell-Eingabe eintippen, aus einer eingefügten Namensliste übernehmen, oder mit Gast-Platzhaltern auffüllen. Die Teilnehmerliste unten zeigt eine Live-Vorschau des Turnierbaums, sobald genug Spieler eingetragen sind — inklusive Freilosen/Vorrunde, falls die Teilnehmerzahl keine glatte Zweierpotenz ist.",
+          "Vereinsmitglieder per Klick hinzufügen, per Schnell-Eingabe eintippen, aus einer eingefügten Namensliste übernehmen, die Teilnehmerliste eines vorherigen Turniers übernehmen, oder mit Gast-Platzhaltern auffüllen. Die Teilnehmerliste unten zeigt eine Live-Vorschau des Turnierbaums, sobald genug Spieler eingetragen sind — inklusive Freilosen/Vorrunde, falls die Teilnehmerzahl keine glatte Zweierpotenz ist. Auch nach dem Start lässt sich bei Bedarf noch jemand in einen offenen Slot nachtragen oder ein Teilnehmer zurückziehen (mit Warnung, falls dazu schon offene Partien existieren).",
         ],
       },
       {
         heading: "Turnier starten",
         body: [
-          "Ganz unten „Turnier starten\" legt den Turnierbaum an. Danach lässt sich jederzeit direkt aus dem Baum heraus ein Spiel für die anstehende Partie starten.",
+          "Ganz unten „Turnier starten\" legt den Turnierbaum an. Danach lässt sich jederzeit direkt aus dem Baum heraus ein Spiel für die anstehende Partie starten. Ein „Scorekeeper\" für den Abend wird dabei automatisch zugelost — bei Bedarf lässt sich neu auslosen.",
         ],
       },
       {
@@ -217,7 +229,7 @@ export const GUIDES: Guide[] = [
       {
         heading: "Live-Ansicht für Zuschauer",
         body: [
-          "Jedes Turnier hat einen eigenen Teilen-Link (und QR-Code) für eine reine Zuschau-Ansicht — ganz ohne Login. Die Ansicht rotiert automatisch zwischen laufenden Partien, dem Turnierbaum und aktuellen Highlights, ideal für einen Bildschirm an der Wand während des Events.",
+          "Jedes Turnier hat einen eigenen Teilen-Link (und QR-Code) für eine reine Zuschau-Ansicht — ganz ohne Login, mit Vollbild- und Zoom-Steuerung fürs Wandbildschirm. Sie rotiert automatisch durch mehrere einzeln ein-/ausschaltbare Perspektiven (Turnierbaum, Tabelle, laufende Partien, Boards, Teilnehmerliste, Highlights, Modus-Erklärung, QR-Code) und bietet bei K.O.-Turnieren ein Zuschauer-Tippspiel, wer eine laufende Partie gewinnt. Zusätzlich zum turnierweiten Link gibt es pro Partie einen eigenen QR-Code zum Scannen direkt am Board.",
         ],
       },
       {
@@ -229,13 +241,193 @@ export const GUIDES: Guide[] = [
       {
         heading: "Anwesenheit & Turnierserien",
         body: [
-          "Teilnehmer können sich vor Turnierbeginn per Check-in als anwesend markieren. Mehrere Turniere lassen sich außerdem zu einer Turnierserie zusammenfassen, mit einer eigenen Serienwertung über alle enthaltenen Events hinweg.",
+          "Teilnehmer können sich vor Turnierbeginn per Check-in als anwesend markieren — für Admins auch als Sammel-Aktion „alle als anwesend markieren\" bzw. zurücksetzen. Mehrere Turniere lassen sich außerdem zu einer Turnierserie zusammenfassen, mit einer eigenen Serienwertung über alle enthaltenen Events hinweg.",
         ],
       },
       {
         heading: "Nach dem Turnier",
         body: [
-          "Admins sehen während des laufenden Turniers eine Restzeit-Schätzung fürs Voranschreiten der Runden. Nach Abschluss fasst eine Highlight- und Auswertungsseite die besten Momente und Zahlen des Turniers zusammen.",
+          "Admins sehen während des laufenden Turniers eine Restzeit-Schätzung fürs Voranschreiten der Runden. Direkt nach dem entscheidenden Spiel gibt es eine kleine Sieger-Zeremonie mit Konfetti und Fanfare (jederzeit erneut abspielbar), und eine Highlight- und Auswertungsseite fasst danach die besten Momente und Zahlen des Turniers zusammen.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "liga",
+    title: "Liga",
+    teaser: "Jeder gegen jeden über mehrere Wochen, mit laufender Tabelle.",
+    sections: [
+      {
+        body: [
+          "Eine Liga ist die richtige Wahl für eine Runde, die sich über mehrere Wochen zieht, statt an einem Abend entschieden zu werden — jeder gegen jeden, mit laufender Tabelle statt Turnierbaum. Zu finden unter „Liga\".",
+        ],
+      },
+      {
+        heading: "Liga anlegen",
+        body: [
+          "Name, Einfach- oder Hin-und-Rückrunde, Spielmodus (501/301/Cricket) und Best-of-Legs. Dazu die Wahl, ob Ergebnisse aus Online-Matches automatisch übernommen werden oder von Hand eingetragen werden — Format und Teilnehmerliste stehen danach fest, weil der Spielplan direkt daraus erzeugt wird.",
+        ],
+      },
+      {
+        heading: "Spielplan & Tabelle",
+        body: [
+          "Die App erstellt automatisch den kompletten Round-Robin-Spielplan, Runde für Runde. Die Tabelle zeigt Spiele, Siege, Legs und Punkte (2 Punkte pro Sieg), sortiert nach Punkten und bei Gleichstand nach Legdifferenz.",
+        ],
+      },
+      {
+        heading: "Ein Spiel starten",
+        body: [
+          "Aus dem Spielplan heraus auf eine anstehende Partie tippen — entweder als normales Spiel am selben Gerät, oder als Online-Match zwischen den beiden Mitgliedern (genau wie beim direkten Herausfordern, siehe die Anleitung „Online spielen\"). Bei einer Liga mit manueller Ergebniseingabe trägst du stattdessen einfach die Legs beider Spieler ein — auch offline, die Eingabe wird dann automatisch nachgereicht, sobald wieder Verbindung besteht.",
+        ],
+      },
+      {
+        heading: "Spieltage & Kalender",
+        body: [
+          "Wer die Liga angelegt hat, kann jeder Runde ein Datum geben. Ab dann kann JEDES Mitglied den Spieltag per Ein-Klick-Export als Termin (.ics) in den eigenen Kalender übernehmen.",
+        ],
+      },
+      {
+        heading: "Öffentliche Live-Ansicht",
+        body: [
+          "Wie bei Turnieren gibt es einen eigenen Teilen-Link mit QR-Code für eine reine Zuschau-Ansicht ganz ohne Login — zeigt Tabelle und Spielplan read-only und aktualisiert sich automatisch alle paar Sekunden.",
+        ],
+      },
+      {
+        heading: "Bearbeiten & Löschen",
+        body: [
+          "Name, Modus und Best-of-Legs lassen sich jederzeit nachträglich ändern. Die Liga selbst lässt sich (mit Sicherheitsabfrage) auch komplett löschen.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "online-spielen",
+    title: "Online spielen",
+    teaser: "Ein Vereinsmitglied direkt herausfordern — live auf zwei Geräten.",
+    sections: [
+      {
+        body: [
+          "Statt am selben Gerät lässt sich ein anderes Vereinsmitglied mit eigenem Account auch direkt herausfordern, unabhängig von Turnier oder Liga: Das Match läuft danach live und synchron auf beiden Geräten mit — jeder sieht die Würfe des anderen in Echtzeit. Zu finden über „Online spielen\" beim Spiel-Start.",
+        ],
+      },
+      {
+        heading: "Wen herausfordern",
+        body: [
+          "Die Gegnerliste ist nach Elo-Nähe zu deiner eigenen Wertung sortiert, mit einem „Gutes Match\"-Hinweis bei Gegnern innerhalb von 100 Elo-Punkten.",
+        ],
+      },
+      {
+        heading: "Einstellungen",
+        body: [
+          "Modus (501/301/Cricket oder ein frei wählbarer Custom-Startscore) und Best-of-Legs wie gewohnt, dazu Double-In/Double-Out für beide Spieler und wer die erste Aufnahme beginnt (du, dein Gegner, oder per Zufall entschieden).",
+        ],
+      },
+      {
+        heading: "Annehmen oder ablehnen",
+        body: [
+          "Eine offene Herausforderung erscheint auf der Startseite unter „Wer hat mich herausgefordert\" — annehmen startet direkt das Spiel, ablehnen erlaubt optional einen kurzen Kommentar, der dem Herausforderer mitgeschickt wird. Bei neuer Herausforderung sowie Annahme/Ablehnung gibt es jeweils eine Push-Benachrichtigung.",
+        ],
+      },
+      {
+        heading: "Laufendes Match wiederfinden",
+        body: [
+          "Ein bereits angenommenes, noch nicht beendetes Match bleibt als eigene Kachel „Mit … spielen\" auf der Startseite sichtbar, um jederzeit direkt wieder einzusteigen.",
+        ],
+      },
+      {
+        heading: "Faire Paarungen für den Vereinsabend",
+        body: [
+          "Auf der Spieler-Seite lässt sich unter „Faire Paarungen\" außerdem eine ganze Liste anwesender Mitglieder auswählen — die App bildet daraus automatisch Elo-ausgeglichene 1v1-Paarungen (bei ungerader Anzahl mit einem zufälligen Freilos). Über „Neu mischen\" gibt's bei Bedarf eine neue Zufallspaarung.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "training",
+    title: "Training",
+    teaser: "13 Übungen, persönliche Rekorde, Trainings-Streak, Coaching-Plan.",
+    sections: [
+      {
+        body: [
+          "Der Trainingsmodus (eigener Bereich „Training\") bietet gezielte Übungen statt eines normalen Spiels — inklusive Kamera-Kalibrierung, falls mit Kamera trainiert wird.",
+        ],
+      },
+      {
+        heading: "Die Übungen",
+        body: [
+          "13 Drills in vier Kategorien: Doppel (z. B. Doubles Only, Around the Clock), Finish (121 Challenge, Random Finish, Shanghai Round the Clock), Genauigkeit (Target Grind, Big Single Lock, Bull Control, Shanghai) und Drucksituationen (Pressure Training, Random Score, Halve It, Bob's 27). Jede Übung zeigt einen Schwierigkeitsgrad (Anfänger/Fortgeschritten/Profi) und eine Richtzeit.",
+        ],
+      },
+      {
+        heading: "Vor dem Start einstellbar",
+        body: [
+          "Je nach Übung: ein Rundenlimit, das Zielfeld bei Target Grind (z. B. Triple 20), die Startzahl bei Shanghai Round the Clock, oder Spieleranzahl/Startpunkte/Zielzahl bei Bull Control.",
+        ],
+      },
+      {
+        heading: "Deine Fortschritte",
+        body: [
+          "Zu jeder Übung merkt sich die App deinen persönlichen Rekord auf diesem Gerät, mit einer kleinen Trend-Grafik der letzten Versuche. Dazu eine Trainings-Streak, die zählt, an wie vielen Tagen in Folge du trainiert hast.",
+        ],
+      },
+      {
+        heading: "Dein Trainingsplan",
+        body: [
+          "Unter „Dein Trainingsplan\" schlägt die App automatisch passende Übungen vor — basierend auf deiner Doppelquote, deinem Schnitt, deiner aktuellen Form, deinem Highscore und vor allem deiner eigenen Aim-Bias-Auswertung (wohin du tendenziell danebenwirfst). Ein Tipp startet die empfohlene Übung direkt.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "spielmodi-optionen",
+    title: "Spielmodi & Optionen",
+    teaser: "Teams, Bots, Geist-Modus, Sets, Handicap und mehr.",
+    sections: [
+      {
+        body: [
+          "Das Setup-Fenster beim Spielstart hat deutlich mehr zu bieten als nur den Spielmodus — hier der komplette Überblick über alle Extras.",
+        ],
+      },
+      {
+        heading: "Mehrspieler & Teams",
+        body: [
+          "Statt 1v1 lassen sich mehr Spieler hinzufügen, oder ein echter Team-Modus (2v2 bis 4v4) mit selbst benannten Teams aktivieren.",
+        ],
+      },
+      {
+        heading: "Gegen einen Bot",
+        body: [
+          "Fünf Schwierigkeitsstufen mit jeweils angezeigtem Ziel-Schnitt, ideal zum Üben ohne Mitspieler.",
+        ],
+      },
+      {
+        heading: "Geist-Modus",
+        body: [
+          "Statt gegen einen echten Gegner tritt man gegen die eigene bisherige Bestleistung an — während des Legs zeigt die App live an, ob du gerade vor oder hinter deinem Rekordtempo liegst.",
+        ],
+      },
+      {
+        heading: "Handicap & Sets-Modus",
+        body: [
+          "Ein Handicap gibt einem schwächeren Spieler einen festen Punktevorsprung. Der Sets-Modus baut eine vollständige Profi-Turnierstruktur: „Best of\" Sätze, wobei jeder Satz wiederum „Best of\" Legs entscheidet.",
+        ],
+      },
+      {
+        heading: "Vor dem Spiel",
+        body: [
+          "Ein optionaler Aufwärm-Timer (30–120 Sekunden) mit eigenem Wurf- und Punktezähler. Bei 1v1-Partien mit gemeinsamer Vereinshistorie zeigt eine cinematische Einlaufsequenz zusätzlich einen Stats-Vergleich beider Spieler, die Elo-basierte Gewinnwahrscheinlichkeit und — falls vorhanden — eine automatisch generierte Rivalitäts-Story-Zeile.",
+        ],
+      },
+      {
+        heading: "Während des Spiels",
+        body: [
+          "Eine Sprachansage der Punkte (mehrere Stimmen zur Auswahl, darunter auch Yoda), ein „X Legs in Folge\"-Momentum-Hinweis, Undo für den letzten Wurf, und bei X01 ein optionales Rundenlimit pro Leg. Bei Kamera-Scoring lässt sich zusätzlich ein KI-Kommentator zuschalten, der auf besondere Momente (180er, Finish, Legsieg, überworfen) mit einer kurzen, von KI generierten Zuruf-Zeile reagiert — ein Paid-Feature, das du in der Kamera-Ansicht ein- und ausschalten kannst.",
+        ],
+      },
+      {
+        heading: "Nach dem Spiel",
+        body: [
+          "Auf Wunsch lässt sich ein kurzer, von KI geschriebener Spielbericht zum Match generieren.",
         ],
       },
     ],

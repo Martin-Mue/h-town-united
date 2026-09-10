@@ -107,11 +107,26 @@ serve(async (req) => {
     }
     const language = SUPPORTED_LANGUAGES.has(rawLanguage) ? rawLanguage : "de";
 
-    const { data: game, error: gameError } = await callerClient
+    let { data: game, error: gameError } = await callerClient
       .from("games")
       .select("id, ai_report, mode, best_of_legs, best_of_sets, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_double_rate, player2_double_rate, player1_legs_won, player2_legs_won, player1_sets_won, player2_sets_won, winner_name")
       .eq("id", gameId)
       .maybeSingle();
+    // ai_report/best_of_sets/player1_sets_won/player2_sets_won all came from THIS session's own
+    // migrations (20260909193000_add_game_ai_report.sql and the earlier sets-mode ones) — the exact
+    // schema-cache-lag class every other missingXColumn fallback in this codebase guards against
+    // (see League.tsx's missingLeagueNameColumn for the precedent). Without this, a DB that hasn't
+    // had those migrations applied yet fails this SELECT outright and the whole feature 500s —
+    // which is almost certainly what a "Fehlermeldung beim KI-Spielbericht" report means in practice.
+    if (gameError && (gameError.code === "42703" || /ai_report|best_of_sets|sets_won/.test(String(gameError.message || "")))) {
+      const fallback = await callerClient
+        .from("games")
+        .select("id, mode, best_of_legs, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_double_rate, player2_double_rate, player1_legs_won, player2_legs_won, winner_name")
+        .eq("id", gameId)
+        .maybeSingle();
+      gameError = fallback.error;
+      game = fallback.data ? { ...fallback.data, ai_report: null, best_of_sets: null, player1_sets_won: 0, player2_sets_won: 0 } : null;
+    }
     if (gameError) {
       console.error("generate-match-report: game lookup failed", gameError);
       return jsonResponse({ error: "Could not load the match" }, 500);
