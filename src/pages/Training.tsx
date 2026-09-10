@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Dumbbell, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Settings2, PartyPopper, Undo2, Flame, Heart } from "lucide-react";
+import { Dumbbell, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Settings2, PartyPopper, Undo2, Flame, Heart, PiggyBank } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
@@ -32,7 +32,7 @@ import {
 /** Drills with an X01-style countdown checkout target — the only ones a visit-TOTAL (quick-round
  *  presets, typed total, or voice) can apply to, since the other drills need to know WHICH segment
  *  was hit, not just a sum. */
-const CHECKOUT_DRILL_IDS = ["121-challenge", "pressure-training", "random-finish"];
+const CHECKOUT_DRILL_IDS = ["121-challenge", "pressure-training", "random-finish", "legendary-finishes"];
 
 // TrainingDrill, TRAINING_DRILLS, DIFFICULTY_COLORS, DIFFICULTY_LABEL_KEY, and the personal-
 // records/history/streak storage below all now live in @/lib/trainingRecords (2026-09-10) — see
@@ -71,6 +71,12 @@ const BIG_SINGLE_TARGETS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1
 /** Pressure checkout values */
 const PRESSURE_CHECKOUTS = [32, 40, 16, 36, 24, 8, 20, 50, 64, 80];
 
+/** Legendary Finishes: an ascending-difficulty ladder of real, achievable-in-3-darts checkouts
+ *  (all present in CHECKOUT_ROUTES) instead of one fixed or fully random target. Tier badges
+ *  (Bronze < 100, Silver 100-140, Gold ≥ 141 — see the live-view block below) are derived straight
+ *  from the value itself, so no separate tier data is needed here. */
+const LEGENDARY_FINISHES = [40, 60, 81, 100, 121, 141, 160, 170];
+
 const BULL_CONTROL_MAX_PLAYERS = 8;
 
 /** Every remaining score actually achievable in 3 darts ending on a double — a uniform 2-170
@@ -92,12 +98,19 @@ function computeRecordCandidate(drillId: string, state: DrillState, t: (key: str
     case "around-the-clock":
     case "doubles-only":
     case "big-single-lock":
+    case "ghost-race":
       return state.completedFully ? { value: state.dartsThrown, higherIsBetter: false, label: t("training.recordDartsToComplete") } : null;
     case "121-challenge":
       return state.remaining === 0 ? { value: state.dartsThrown, higherIsBetter: false, label: t("training.recordDartsToCheckout") } : null;
     case "pressure-training":
     case "random-finish":
+    case "legendary-finishes":
       return { value: state.dartsThrown, higherIsBetter: false, label: t("training.recordDartsForAllCheckouts") };
+    case "combo-risk":
+      // The record is total BANKED points, not the highest streak reached — banking too late (or
+      // not at all) loses everything unbanked, by design, so the comparable number has to be what
+      // actually survived to the end of the run.
+      return { value: state.bankedPoints ?? 0, higherIsBetter: true, label: t("training.finalBankedLabel") };
     case "target-grind":
     case "random-score":
       return state.dartsThrown > 0
@@ -200,6 +213,12 @@ interface DrillState {
    *  can still reference "out of how many" after livesRemaining has hit 0). */
   livesRemaining?: number;
   startingLives?: number;
+  /** Combo Risk: current consecutive-hit streak, points accumulated on the current streak that
+   *  haven't been banked yet (wiped to 0 by the next miss), and points already safely banked
+   *  (survives a miss — only pendingPoints is ever at risk). */
+  comboStreak?: number;
+  pendingPoints?: number;
+  bankedPoints?: number;
 }
 
 /** Pre-start configuration for a drill */
@@ -311,6 +330,10 @@ const TrainingPage = () => {
 
     switch (drill.id) {
       case "around-the-clock":
+      case "ghost-race":
+        // Ghost Race is mechanically identical to Around the Clock (see processDart's matching
+        // combined case) — the only difference is the live pace-vs-record indicator added in the
+        // live-view JSX, computed on the fly from currentRecord, not stored on DrillState.
         state.targetList = Array.from({ length: 20 }, (_, i) => i + 1);
         state.currentTarget = 1;
         break;
@@ -358,6 +381,23 @@ const TrainingPage = () => {
         state.currentTarget = BIG_SINGLE_TARGETS[0];
         state.lockedIndex = -1;
         break;
+      case "legendary-finishes":
+        state.targetList = [...LEGENDARY_FINISHES];
+        state.currentTarget = LEGENDARY_FINISHES[0];
+        state.remaining = LEGENDARY_FINISHES[0];
+        break;
+      case "combo-risk": {
+        const base = config.targetBase ?? 20;
+        const mul = config.targetMul ?? 3;
+        state.targetBase = base;
+        state.targetMul = mul;
+        state.currentTarget = base * mul;
+        state.maxRounds = config.maxRounds ?? 5;
+        state.comboStreak = 0;
+        state.pendingPoints = 0;
+        state.bankedPoints = 0;
+        break;
+      }
       case "random-score": {
         const randTarget = randomTarget(t);
         state.randomBase = randTarget.base;
@@ -419,8 +459,10 @@ const TrainingPage = () => {
       const updated = { ...prev, dartsThrown: prev.dartsThrown + 1, dartsThisRound: newDartsThisRound };
 
       switch (selectedDrill.id) {
-        case "around-the-clock": {
-          // Hit the current target number (any multiplier)
+        case "around-the-clock":
+        case "ghost-race": {
+          // Hit the current target number (any multiplier) — see startDrill's matching combined
+          // case for why Ghost Race shares this exact mechanic with Around the Clock.
           if (baseValue === prev.currentTarget) {
             updated.hits++;
             const nextIdx = prev.targetIndex + 1;
@@ -534,6 +576,34 @@ const TrainingPage = () => {
           break;
         }
 
+        case "legendary-finishes": {
+          // Same sequential-ladder mechanic as pressure-training (see that case above) — just
+          // walking LEGENDARY_FINISHES instead of PRESSURE_CHECKOUTS.
+          const newRemaining = prev.remaining - points;
+          if (newRemaining === 0) {
+            updated.hits++;
+            const nextIdx = prev.targetIndex + 1;
+            if (nextIdx >= prev.targetList.length) {
+              updated.finished = true;
+            } else {
+              updated.targetIndex = nextIdx;
+              updated.currentTarget = prev.targetList[nextIdx];
+              updated.remaining = prev.targetList[nextIdx];
+            }
+            updated.dartsThisRound = 0;
+          } else if (newRemaining < 0 || newRemaining === 1) {
+            updated.remaining = prev.targetList[prev.targetIndex];
+            updated.dartsThisRound = 0;
+          } else {
+            updated.remaining = newRemaining;
+            if (newDartsThisRound >= 3) {
+              updated.remaining = prev.targetList[prev.targetIndex];
+              updated.dartsThisRound = 0;
+            }
+          }
+          break;
+        }
+
         case "target-grind": {
           // Count hits on chosen target across configured rounds
           if (
@@ -544,6 +614,30 @@ const TrainingPage = () => {
           }
           updated.roundScores = [...(prev.roundScores || []), points];
           const totalDarts = (prev.maxRounds ?? 10) * 3;
+          if (updated.dartsThrown >= totalDarts) {
+            updated.finished = true;
+          }
+          break;
+        }
+
+        case "combo-risk": {
+          // Push-your-luck: a hit on the chosen field extends the current streak and adds
+          // streak-weighted points to the UNBANKED pending pile; any miss wipes pendingPoints (and
+          // the streak) back to 0 — only bankPoints() (triggered by the player's own Bank button,
+          // not by a dart) ever moves points from pending into the safe bankedPoints total. Ends
+          // after a fixed dart budget (maxRounds*3, same convention as target-grind); whatever is
+          // still pending at that point is lost, same as a miss — deliberately, that's the risk.
+          const isHit = baseValue === (prev.targetBase ?? 20) && mul === (prev.targetMul ?? 3);
+          if (isHit) {
+            const newStreak = (prev.comboStreak ?? 0) + 1;
+            updated.comboStreak = newStreak;
+            updated.pendingPoints = (prev.pendingPoints ?? 0) + newStreak * points;
+            updated.hits = prev.hits + 1;
+          } else {
+            updated.comboStreak = 0;
+            updated.pendingPoints = 0;
+          }
+          const totalDarts = (prev.maxRounds ?? 5) * 3;
           if (updated.dartsThrown >= totalDarts) {
             updated.finished = true;
           }
@@ -731,7 +825,7 @@ const TrainingPage = () => {
       }
 
       // End of round handling
-      if (newDartsThisRound >= 3 && !["pressure-training", "random-finish", "121-challenge"].includes(selectedDrill.id)) {
+      if (newDartsThisRound >= 3 && !["pressure-training", "random-finish", "121-challenge", "legendary-finishes"].includes(selectedDrill.id)) {
         updated.dartsThisRound = 0;
         updated.roundsPlayed = (prev.roundsPlayed ?? 0) + 1;
 
@@ -926,10 +1020,37 @@ const TrainingPage = () => {
           }
           break;
         }
+        case "legendary-finishes": {
+          if (newRemaining === 0) {
+            updated.hits = prev.hits + 1;
+            const nextIdx = prev.targetIndex + 1;
+            if (nextIdx >= prev.targetList.length) {
+              updated.finished = true;
+            } else {
+              updated.targetIndex = nextIdx;
+              updated.currentTarget = prev.targetList[nextIdx];
+              updated.remaining = prev.targetList[nextIdx];
+            }
+          } else {
+            updated.remaining = prev.targetList[prev.targetIndex];
+          }
+          break;
+        }
       }
       return updated;
     });
   };
+
+  /** Combo Risk only: voluntarily lock in the current pending streak total before a miss (or the
+   *  dart budget running out) can wipe it. Goes through the same undo snapshot as a real dart so
+   *  a misclick can be taken back exactly like anything else. */
+  const bankPoints = useCallback(() => {
+    pushUndo();
+    setDrillState((prev) => {
+      if (!prev || prev.finished || !(prev.pendingPoints ?? 0)) return prev;
+      return { ...prev, bankedPoints: (prev.bankedPoints ?? 0) + (prev.pendingPoints ?? 0), pendingPoints: 0, comboStreak: 0 };
+    });
+  }, [pushUndo]);
 
   /** Undo the last dart (or last quick-round visit) — restores the pre-mutation snapshot wholesale. */
   const undoLastDart = () => {
@@ -1041,6 +1162,14 @@ const TrainingPage = () => {
                     ))}
                   </div>
                 </div>
+              ) : selectedDrill.id === "combo-risk" ? (
+                <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
+                  <p className="text-2xl font-display text-accent">{drillState.bankedPoints ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("training.finalBankedLabel")}
+                    {(drillState.pendingPoints ?? 0) > 0 ? ` · ${t("training.lostUnbankedLabel")} ${drillState.pendingPoints}` : ""}
+                  </p>
+                </div>
               ) : (
                 <>
                   <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
@@ -1100,11 +1229,32 @@ const TrainingPage = () => {
             <div className="sticky top-0 z-30 -mx-4 px-4 pt-2 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 mb-3">
             <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 text-center">
               {/* Target display */}
-              {selectedDrill.id === "around-the-clock" && (
+              {(selectedDrill.id === "around-the-clock" || selectedDrill.id === "ghost-race") && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">{t("training.hitThe")}</p>
                   <p className="text-5xl font-display text-primary">{drillState.currentTarget}</p>
                   <p className="text-xs text-muted-foreground mt-1">{drillState.targetIndex + 1} / {drillState.targetList.length}</p>
+                  {selectedDrill.id === "ghost-race" && (() => {
+                    // Live pace vs. the player's own personal-best run — approximated from
+                    // currentRecord.value (total darts the record run took) scaled by how far
+                    // through the 20-number ladder this run currently is, no per-dart history
+                    // needed. Positive delta = using FEWER darts than the record's pace at this
+                    // point (ahead); negative = behind.
+                    if (!currentRecord) {
+                      return <p className="text-[11px] text-accent mt-2">{t("training.ghostNoRecordLabel")}</p>;
+                    }
+                    const expectedDarts = Math.round((currentRecord.value * drillState.targetIndex) / 20);
+                    const delta = expectedDarts - drillState.dartsThrown;
+                    return (
+                      <p className={`text-[11px] mt-2 font-display ${delta > 0 ? "text-secondary" : delta < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        🏁 {delta > 0
+                          ? `${delta} ${t("training.ghostAheadLabel")}`
+                          : delta < 0
+                          ? `${Math.abs(delta)} ${t("training.ghostBehindLabel")}`
+                          : t("training.ghostEvenLabel")}
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
               {selectedDrill.id === "doubles-only" && (
@@ -1128,6 +1278,43 @@ const TrainingPage = () => {
                       {t("training.completedOutOf10")} {drillState.hits} / 10
                     </p>
                   )}
+                  {selectedDrill.id === "legendary-finishes" && (
+                    <p className="text-xs mt-1 flex items-center justify-center gap-1.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-display ${
+                        drillState.currentTarget >= 141 ? "bg-accent/20 text-accent"
+                          : drillState.currentTarget >= 100 ? "bg-primary/20 text-primary"
+                          : "bg-secondary/20 text-secondary"
+                      }`}>
+                        {drillState.currentTarget >= 141 ? t("training.tierGold") : drillState.currentTarget >= 100 ? t("training.tierSilver") : t("training.tierBronze")}
+                      </span>
+                      <span className="text-muted-foreground">{t("training.legendLevelLabel")} {drillState.targetIndex + 1}/{drillState.targetList.length}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+              {selectedDrill.id === "combo-risk" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">{t("game.target")}</p>
+                  <p className="text-5xl font-display text-primary">
+                    {(drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20)}
+                  </p>
+                  <div className="flex items-center justify-center gap-4 mt-2">
+                    <div>
+                      <p className="text-xl font-display text-muted-foreground">{drillState.pendingPoints ?? 0}</p>
+                      <p className="text-[10px] text-muted-foreground">{t("training.pendingLabel")}</p>
+                    </div>
+                    <div className="text-muted-foreground">→</div>
+                    <div>
+                      <p className="text-xl font-display text-accent">{drillState.bankedPoints ?? 0}</p>
+                      <p className="text-[10px] text-muted-foreground">{t("training.bankedLabel")}</p>
+                    </div>
+                  </div>
+                  {(drillState.comboStreak ?? 0) > 0 && (
+                    <p className="text-xs text-secondary mt-1.5">🔥 {drillState.comboStreak}x {t("training.comboLabel")}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t("training.dartsUsedOf")} {drillState.dartsThrown} / {(drillState.maxRounds ?? 5) * 3}
+                  </p>
                 </div>
               )}
               {selectedDrill.id === "target-grind" && (
@@ -1340,6 +1527,19 @@ const TrainingPage = () => {
               dartsThisRound={drillState.dartsThisRound}
             />
 
+            {/* Combo Risk: voluntary cash-out, front and center since it's the whole point of the
+                drill — disabled once there's nothing at risk to protect. */}
+            {selectedDrill.id === "combo-risk" && (
+              <Button
+                variant="secondary"
+                onClick={bankPoints}
+                disabled={drillState.finished || !(drillState.pendingPoints ?? 0)}
+                className="w-full mt-3 gap-2"
+              >
+                <PiggyBank className="w-4 h-4" /> {t("training.bankButton")} ({drillState.pendingPoints ?? 0})
+              </Button>
+            )}
+
             {/* Undo + Camera toggle */}
             <div className="flex gap-2 mt-3">
               <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
@@ -1372,6 +1572,7 @@ const TrainingPage = () => {
     const isSuddenDeath = selectedDrill.id === "sudden-death";
     const isBullControl = selectedDrill.id === "bull-control";
     const isShanghaiRtc = selectedDrill.id === "shanghai-rtc";
+    const isComboRisk = selectedDrill.id === "combo-risk";
     const bcNames = drillConfig.bcPlayerNames ?? [`${t("stats.player")} 1`, `${t("stats.player")} 2`];
     return (
       <div className="container py-6 animate-slide-up max-w-lg mx-auto">
@@ -1461,7 +1662,7 @@ const TrainingPage = () => {
             </div>
           )}
 
-          {(supportsRoundLimit || isTargetGrind || isSuddenDeath) && (
+          {(supportsRoundLimit || isTargetGrind || isSuddenDeath || isComboRisk) && (
             <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
               <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
                 <Settings2 className="w-3.5 h-3.5" /> {t("training.settingsHeading")}
@@ -1482,7 +1683,7 @@ const TrainingPage = () => {
                 </div>
               )}
 
-              {(isTargetGrind || isSuddenDeath) && (
+              {(isTargetGrind || isSuddenDeath || isComboRisk) && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">{t("training.chooseTargetField")}</p>
                   <div className="flex gap-2">
@@ -1567,6 +1768,27 @@ const TrainingPage = () => {
                         }`}
                       >
                         {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isComboRisk && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">{t("training.dartBudgetLabel")}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {[5, 7, 10, 15].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setDrillConfig((c) => ({ ...c, maxRounds: n }))}
+                        className={`px-3 py-1 rounded-md text-xs border transition-colors ${
+                          (drillConfig.maxRounds ?? 5) === n
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background border-border hover:border-primary/40"
+                        }`}
+                      >
+                        {n * 3} {t("training.dartsSuffix")}
                       </button>
                     ))}
                   </div>

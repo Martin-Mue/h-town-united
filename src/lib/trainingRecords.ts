@@ -9,7 +9,7 @@
  *  has no such baggage — plain data plus localStorage reads/writes, safe to import from anywhere.
  *  Training.tsx now imports everything below from here instead of defining it locally, so there is
  *  exactly one source of truth either way. */
-import { Target, RotateCw, Crosshair, Zap, Trophy, Lock, Shuffle, PartyPopper, Divide, ListOrdered, Route, Heart } from "lucide-react";
+import { Target, RotateCw, Crosshair, Zap, Trophy, Lock, Shuffle, PartyPopper, Divide, ListOrdered, Route, Heart, Medal, Gauge, PiggyBank } from "lucide-react";
 
 /** Training drill definition */
 export interface TrainingDrill {
@@ -62,6 +62,20 @@ export const TRAINING_DRILLS: TrainingDrill[] = [
     category: "finishing",
   },
   {
+    // 2026-09-10, on request ("gern auch über ein neues finish training nachdenken"): a themed
+    // checkout ladder (40 → 170) instead of one fixed or fully random target — see the drill's own
+    // in-app tier badges (Bronze/Silver/Gold) for the "legendary" framing. Reuses the exact same
+    // sequential-ladder mechanic as pressure-training (see Training.tsx's own case for why), just
+    // with a curated, ascending-difficulty checkout list instead of PRESSURE_CHECKOUTS.
+    id: "legendary-finishes",
+    name: "Legendary Finishes",
+    descriptionKey: "training.legendaryFinishesDesc",
+    icon: Medal,
+    difficulty: "pro",
+    durationMinutes: 15,
+    category: "finishing",
+  },
+  {
     id: "random-finish",
     name: "Random Finish Drill",
     descriptionKey: "training.randomFinishDesc",
@@ -90,6 +104,20 @@ export const TRAINING_DRILLS: TrainingDrill[] = [
     category: "accuracy",
   },
   {
+    // 2026-09-10, on request ("Ghost-Rennen"): plays exactly like Around the Clock (same
+    // targetList/currentTarget mechanic in Training.tsx's startDrill/processDart — literally the
+    // same switch case) but the live view additionally shows whether the current run is ahead of
+    // or behind the pace of the player's own personal-best run for this drill, computed live from
+    // currentRecord — no extra stored state needed, see Training.tsx's ghost-pace block.
+    id: "ghost-race",
+    name: "Ghost Race",
+    descriptionKey: "training.ghostRaceDesc",
+    icon: Gauge,
+    difficulty: "intermediate",
+    durationMinutes: 10,
+    category: "accuracy",
+  },
+  {
     id: "random-score",
     name: "Random Score",
     descriptionKey: "training.randomScoreDesc",
@@ -115,6 +143,19 @@ export const TRAINING_DRILLS: TrainingDrill[] = [
     icon: Crosshair,
     difficulty: "pro",
     durationMinutes: 25,
+    category: "pressure",
+  },
+  {
+    // 2026-09-10, on request ("Combo-Risiko"): push-your-luck — pick a field, each consecutive hit
+    // raises a streak multiplier on top of an accumulating "pending" score, but a single miss wipes
+    // out whatever hasn't been voluntarily banked yet (see Training.tsx's bankPoints handler). The
+    // record is total banked points, not the highest streak — banking too late loses everything.
+    id: "combo-risk",
+    name: "Combo Risk",
+    descriptionKey: "training.comboRiskDesc",
+    icon: PiggyBank,
+    difficulty: "pro",
+    durationMinutes: 15,
     category: "pressure",
   },
   {
@@ -208,6 +249,9 @@ export function recordVariant(drillId: string, ctx: { maxRounds?: number; rtcSta
   // difficulty enormously (T20 on 1 life is a wholly different challenge from S1 on 10 lives) —
   // same reasoning as Target Grind above, just with lives instead of a round cap.
   if (drillId === "sudden-death") return `${ctx.targetMul ?? 3}x${ctx.targetBase ?? 20}:${ctx.lives ?? 3}`;
+  // Combo Risk: which field was chosen changes both how often it hits (streak length) and how
+  // much each hit is worth — same reasoning as Target Grind/Sudden Death above.
+  if (drillId === "combo-risk") return `${ctx.targetMul ?? 3}x${ctx.targetBase ?? 20}`;
   return undefined;
 }
 

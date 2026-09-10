@@ -103,7 +103,7 @@ export const GUIDES: Guide[] = [
       {
         heading: "Training",
         body: [
-          "Ein eigener Trainingsmodus mit Kamera-Kalibrierung und 13 verschiedenen Übungen (Doppel, Finish, Genauigkeit, Drucksituationen) — mit persönlichen Rekorden je Übung, einer Trainings-Streak und einem automatisch erstellten Trainingsplan, der sich direkt an deiner eigenen Aim-Bias-Auswertung, deinem Schnitt und deiner Form orientiert. Details in der eigenen Trainings-Anleitung weiter unten.",
+          "Ein eigener Trainingsmodus mit Kamera-Kalibrierung und 17 verschiedenen Übungen (Doppel, Finish, Genauigkeit, Drucksituationen) — mit persönlichen Rekorden je Übung, einer Trainings-Streak und einem automatisch erstellten Trainingsplan, der sich direkt an deiner eigenen Aim-Bias-Auswertung, deinem Schnitt und deiner Form orientiert. Details in der eigenen Trainings-Anleitung weiter unten.",
         ],
       },
       {
@@ -345,7 +345,7 @@ export const GUIDES: Guide[] = [
   {
     id: "training",
     title: "Training",
-    teaser: "13 Übungen, persönliche Rekorde, Trainings-Streak, Coaching-Plan.",
+    teaser: "17 Übungen, persönliche Rekorde, Trainings-Streak, Coaching-Plan.",
     sections: [
       {
         body: [
@@ -355,7 +355,7 @@ export const GUIDES: Guide[] = [
       {
         heading: "Die Übungen",
         body: [
-          "13 Drills in vier Kategorien: Doppel (z. B. Doubles Only, Around the Clock), Finish (121 Challenge, Random Finish, Shanghai Round the Clock), Genauigkeit (Target Grind, Big Single Lock, Bull Control, Shanghai) und Drucksituationen (Pressure Training, Random Score, Halve It, Bob's 27). Jede Übung zeigt einen Schwierigkeitsgrad (Anfänger/Fortgeschritten/Profi) und eine Richtzeit.",
+          "17 Drills in vier Kategorien, sortiert wie im Filter oben: Doppel (Bob's 27, Doubles Only), Finish (121 Challenge, Legendary Finishes, Random Finish Drill), Genauigkeit (Around the Clock, Big Single Lock, Ghost Race, Random Score, Target Grind) und Drucksituationen (Bull Control, Combo Risk, Halve It, Pressure Training, Shanghai, Shanghai Round the Clock, Sudden Death). Jede Übung zeigt einen Schwierigkeitsgrad (Anfänger/Fortgeschritten/Profi) und eine Richtzeit. Legendary Finishes, Ghost Race und Combo Risk sind die neuesten drei — eine Checkout-Leiter mit Bronze/Silber/Gold-Stufen, ein Rennen gegen das Tempo des eigenen Rekords, und ein Push-your-luck-Modus mit Bank-Knopf.",
         ],
       },
       {

@@ -22,6 +22,15 @@ interface ThrowHistoryEditorProps {
   /** Hides the edit-mode toggle entirely, for viewing a past match's history where corrections no
    *  longer apply — pass editModeOn={false} and no-op callbacks alongside this from the caller. */
   readOnly?: boolean;
+  /** X01 starting score for this leg — when given, each round also shows the running score
+   *  LEFT after that round (not just what was thrown), via plain cumulative subtraction. Safe to
+   *  do naively (no bust-rule replay needed): Game.tsx's bust handling already strips a busted
+   *  visit's darts back out of the persisted `throws` array before it's ever saved (see its own
+   *  `updatedLeg.throws[idx] = ...slice(...)` on bust), so every visit that's actually IN `throws`
+   *  already legitimately counted — exactly the same assumption utils/dartStats.ts's own
+   *  computeCheckoutStats/checkoutRangeBreakdown already rely on. Omit for Cricket (no "remaining
+   *  points" concept there) or when the starting score isn't known. */
+  startingScore?: number;
 }
 
 /**
@@ -32,7 +41,7 @@ interface ThrowHistoryEditorProps {
  * closing after every single edit meant reopening it per dart, which was the actual complaint
  * this component exists to fix.
  */
-const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, openChipIdx, onOpenChipChange, onEditThrow, onDeleteThrow, readOnly }: ThrowHistoryEditorProps) => {
+const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, openChipIdx, onOpenChipChange, onEditThrow, onDeleteThrow, readOnly, startingScore }: ThrowHistoryEditorProps) => {
   const { t } = useLanguage();
   if (throws.length === 0) return null;
 
@@ -51,6 +60,11 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
           const roundThrows = throws.slice(roundIdx * 3, roundIdx * 3 + 3);
           const roundTotal = roundThrows.reduce((s, dart) => s + dart.points, 0);
           const is180 = roundTotal === 180 && roundThrows.length === 3;
+          // Running score LEFT after this round — plain cumulative subtraction over everything
+          // thrown so far. Safe without any bust-rule replay: see startingScore's own doc comment
+          // above (a busted visit's darts never make it into `throws` to begin with).
+          const remainingAfterRound = startingScore === undefined || roundThrows.length < 3 ? undefined
+            : startingScore - throws.slice(0, roundIdx * 3 + roundThrows.length).reduce((s, dart) => s + dart.points, 0);
           return (
             <div key={roundIdx} className={`flex items-center gap-2.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
               <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
@@ -118,6 +132,9 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
               })}
               <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
                 {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
+                {remainingAfterRound !== undefined && (
+                  <span className="text-muted-foreground/60 font-normal"> ({Math.max(0, remainingAfterRound)})</span>
+                )}
               </span>
             </div>
           );

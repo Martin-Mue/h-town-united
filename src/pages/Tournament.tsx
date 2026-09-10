@@ -1915,18 +1915,27 @@ const TournamentPage = () => {
   if (phase === "list") {
     return (
       <div className="container py-6 animate-slide-up">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-y-2 mb-6">
           <div className="flex items-center gap-3">
             <Trophy className="w-6 h-6 text-accent" />
             <h2 className="text-2xl font-display uppercase">{t("tournament.tournaments")}</h2>
           </div>
-          <div className="flex items-center gap-2">
-            <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
-              <Layers className="w-3.5 h-3.5" /> {t("tournament.series")}
-            </Link>
-            <Link to="/leagues" className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-border hover:border-accent/50 transition-colors">
-              <Swords className="w-3.5 h-3.5" /> {t("tournament.leagueMode")}
-            </Link>
+          <div className="flex items-center flex-wrap gap-2">
+            {/* Serien/Liga upgraded from bare text links to real outline Buttons (2026-09-10, on
+                request — "etwas präsenter") — same weight/sizing as every other secondary action
+                next to a primary CTA elsewhere in the app (see League.tsx's own Button asChild
+                pattern), instead of the thin border-only pill styling that made them read as an
+                afterthought next to the solid "Neues Turnier" button. */}
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link to="/tournaments/series">
+                <Layers className="w-3.5 h-3.5" /> {t("tournament.series")}
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link to="/leagues">
+                <Swords className="w-3.5 h-3.5" /> {t("tournament.leagueMode")}
+              </Link>
+            </Button>
             <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
               <Plus className="w-4 h-4" /> {t("tournament.newTournament")}
             </Button>

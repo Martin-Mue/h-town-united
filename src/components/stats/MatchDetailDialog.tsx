@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Trophy, Target, Terminal as TerminalIcon } from "lucide-react";
+import { ChevronDown, ChevronUp, Trophy, Target } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
-import MatchDataTerminal from "@/components/stats/MatchDataTerminal";
 import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
@@ -26,6 +24,10 @@ interface MatchDetailLegRow {
   player_name: string;
   throws: DartThrow[];
   won: boolean;
+  /** X01 starting score for this leg (0/unused for Cricket) — passed straight through to
+   *  ThrowHistoryEditor so it can show the running remaining score per round, see that
+   *  component's own startingScore doc comment for why plain cumulative subtraction is safe. */
+  starting_score: number;
 }
 
 interface MatchDetailDialogProps {
@@ -43,10 +45,6 @@ interface MatchDetailDialogProps {
 const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDialogProps) => {
   const { t, language } = useLanguage();
   const [expandedLeg, setExpandedLeg] = useState<number | null>(null);
-  // One of Round 3's three unscheduled design directions — see MatchDataTerminal.tsx's own doc
-  // comment. A toggle, not a mode Dialog remembers across opens: every match detail reopens in
-  // the normal card view, same as before this existed.
-  const [terminalMode, setTerminalMode] = useState(false);
   const isCricket = game.mode === "cricket";
   const legNumbers = Array.from(new Set(legs.map((l) => l.leg_number))).sort((a, b) => a - b);
 
@@ -65,24 +63,9 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
           <DialogTitle className="flex items-center gap-2 font-display uppercase text-base">
             <Badge variant="outline" className="font-mono shrink-0">{game.mode}</Badge>
             <span className="truncate flex-1 min-w-0">{game.player1_name} vs {game.player2_name}</span>
-            <Button
-              variant={terminalMode ? "secondary" : "ghost"}
-              size="icon"
-              className="w-7 h-7 shrink-0"
-              title={t("stats.terminalViewToggle")}
-              aria-label={t("stats.terminalViewToggle")}
-              aria-pressed={terminalMode}
-              onClick={() => setTerminalMode((v) => !v)}
-            >
-              <TerminalIcon className="w-4 h-4" />
-            </Button>
           </DialogTitle>
         </DialogHeader>
 
-        {terminalMode ? (
-          <MatchDataTerminal game={game} legs={legs} matchTotals={matchTotals} />
-        ) : (
-        <>
         <div className="text-center -mt-1">
           <p className="text-xs text-muted-foreground">
             {new Date(game.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "long", year: "numeric" })}
@@ -162,6 +145,7 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
                             onEditThrow={() => {}}
                             onDeleteThrow={() => {}}
                             readOnly
+                            startingScore={isCricket ? undefined : r.starting_score}
                           />
                         ))}
                       </div>
@@ -172,8 +156,6 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
             </div>
           )}
         </div>
-        </>
-        )}
       </DialogContent>
     </Dialog>
   );
