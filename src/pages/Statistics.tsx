@@ -1219,6 +1219,25 @@ const StatisticsPage = () => {
     return opponent && opponent !== "—" ? `${modeLabel} · vs ${opponent}` : modeLabel;
   };
 
+  // Training records/streak (device-local localStorage data, read fresh whenever the training
+  // tab is shown). Must stay ABOVE the loading early-return — hooks cannot run conditionally.
+  const trainingRecords = useMemo(() => (activeTab === "training" ? loadAllRecords() : []), [activeTab]);
+  const trainingStreak = useMemo(() => (activeTab === "training" ? loadStreak() : null), [activeTab]);
+  const trainingRecordsByDrill = useMemo(() => {
+    const map = new Map<string, StoredRecordEntry[]>();
+    for (const r of trainingRecords) {
+      const list = map.get(r.drillId) ?? [];
+      list.push(r);
+      map.set(r.drillId, list);
+    }
+    return map;
+  }, [trainingRecords]);
+  const trainedDrills = useMemo(
+    () => TRAINING_DRILLS.filter((d) => trainingRecordsByDrill.has(d.id)),
+    [trainingRecordsByDrill],
+  );
+
+
   if (loading) {
     return <div role="status" aria-label={t("stats.loadingStats")} className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
@@ -1245,24 +1264,7 @@ const StatisticsPage = () => {
   ];
   const tabs = viewScope === "personal" ? personalTabs : clubTabs;
 
-  // Training records/streak (see Training.tsx's own comments — this is device-local localStorage
-  // data, never synced to Supabase, so it's simply read fresh whenever this tab is actually shown
-  // rather than fetched alongside the rest of this page's Supabase-backed state above).
-  const trainingRecords = useMemo(() => (activeTab === "training" ? loadAllRecords() : []), [activeTab]);
-  const trainingStreak = useMemo(() => (activeTab === "training" ? loadStreak() : null), [activeTab]);
-  const trainingRecordsByDrill = useMemo(() => {
-    const map = new Map<string, StoredRecordEntry[]>();
-    for (const r of trainingRecords) {
-      const list = map.get(r.drillId) ?? [];
-      list.push(r);
-      map.set(r.drillId, list);
-    }
-    return map;
-  }, [trainingRecords]);
-  const trainedDrills = useMemo(
-    () => TRAINING_DRILLS.filter((d) => trainingRecordsByDrill.has(d.id)),
-    [trainingRecordsByDrill],
-  );
+
 
   return (
     <div className="container py-6 animate-slide-up">
