@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, ChevronRight, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2, Dumbbell } from "lucide-react";
-import { TRAINING_DRILLS, loadAllRecords, loadStreak, DIFFICULTY_COLORS, DIFFICULTY_LABEL_KEY, type StoredRecordEntry, type StreakState } from "@/pages/Training";
+import { TRAINING_DRILLS, loadAllRecords, loadStreak, DIFFICULTY_COLORS, DIFFICULTY_LABEL_KEY, type StoredRecordEntry, type StreakState } from "@/lib/trainingRecords";
 import { DartGameIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
