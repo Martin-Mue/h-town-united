@@ -1245,24 +1245,7 @@ const StatisticsPage = () => {
   ];
   const tabs = viewScope === "personal" ? personalTabs : clubTabs;
 
-  // Training records/streak (see Training.tsx's own comments — this is device-local localStorage
-  // data, never synced to Supabase, so it's simply read fresh whenever this tab is actually shown
-  // rather than fetched alongside the rest of this page's Supabase-backed state above).
-  const trainingRecords = useMemo(() => (activeTab === "training" ? loadAllRecords() : []), [activeTab]);
-  const trainingStreak = useMemo(() => (activeTab === "training" ? loadStreak() : null), [activeTab]);
-  const trainingRecordsByDrill = useMemo(() => {
-    const map = new Map<string, StoredRecordEntry[]>();
-    for (const r of trainingRecords) {
-      const list = map.get(r.drillId) ?? [];
-      list.push(r);
-      map.set(r.drillId, list);
-    }
-    return map;
-  }, [trainingRecords]);
-  const trainedDrills = useMemo(
-    () => TRAINING_DRILLS.filter((d) => trainingRecordsByDrill.has(d.id)),
-    [trainingRecordsByDrill],
-  );
+
 
   return (
     <div className="container py-6 animate-slide-up">
