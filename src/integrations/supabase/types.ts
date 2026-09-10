@@ -637,14 +637,22 @@ export type Database = {
           club_id: string
           created_at: string
           created_by: string
+          division_level: number
+          division_name: string | null
           format: string
           game_mode: string
           id: string
           name: string
+          next_season_league_id: string | null
           participant_ids: string[]
+          previous_season_league_id: string | null
+          promote_count: number
           public_slug: string | null
           public_view: boolean
+          relegate_count: number
           result_mode: string
+          season_group_id: string | null
+          season_number: number
           status: string
           updated_at: string
         }
@@ -653,14 +661,22 @@ export type Database = {
           club_id?: string
           created_at?: string
           created_by?: string
+          division_level?: number
+          division_name?: string | null
           format?: string
           game_mode?: string
           id?: string
           name: string
+          next_season_league_id?: string | null
           participant_ids?: string[]
+          previous_season_league_id?: string | null
+          promote_count?: number
           public_slug?: string | null
           public_view?: boolean
+          relegate_count?: number
           result_mode?: string
+          season_group_id?: string | null
+          season_number?: number
           status?: string
           updated_at?: string
         }
@@ -669,14 +685,22 @@ export type Database = {
           club_id?: string
           created_at?: string
           created_by?: string
+          division_level?: number
+          division_name?: string | null
           format?: string
           game_mode?: string
           id?: string
           name?: string
+          next_season_league_id?: string | null
           participant_ids?: string[]
+          previous_season_league_id?: string | null
+          promote_count?: number
           public_slug?: string | null
           public_view?: boolean
+          relegate_count?: number
           result_mode?: string
+          season_group_id?: string | null
+          season_number?: number
           status?: string
           updated_at?: string
         }
@@ -693,6 +717,34 @@ export type Database = {
             columns: ["club_id"]
             isOneToOne: false
             referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leagues_next_season_league_id_fkey"
+            columns: ["next_season_league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leagues_next_season_league_id_fkey"
+            columns: ["next_season_league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leagues_previous_season_league_id_fkey"
+            columns: ["previous_season_league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leagues_previous_season_league_id_fkey"
+            columns: ["previous_season_league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues_public"
             referencedColumns: ["id"]
           },
         ]

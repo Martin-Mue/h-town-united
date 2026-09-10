@@ -1,0 +1,10 @@
+alter table public.leagues add column if not exists season_number integer not null default 1;
+alter table public.leagues add column if not exists division_level integer not null default 1;
+alter table public.leagues add column if not exists division_name text;
+alter table public.leagues add column if not exists season_group_id uuid;
+alter table public.leagues add column if not exists relegate_count integer not null default 0;
+alter table public.leagues add column if not exists promote_count integer not null default 0;
+alter table public.leagues add column if not exists previous_season_league_id uuid references public.leagues(id) on delete set null;
+alter table public.leagues add column if not exists next_season_league_id uuid references public.leagues(id) on delete set null;
+update public.leagues set season_group_id = id where season_group_id is null;
+create index if not exists idx_leagues_season_group on public.leagues(season_group_id);
