@@ -1219,6 +1219,25 @@ const StatisticsPage = () => {
     return opponent && opponent !== "—" ? `${modeLabel} · vs ${opponent}` : modeLabel;
   };
 
+  // Training records/streak (device-local localStorage data, read fresh whenever the training
+  // tab is shown). Must stay ABOVE the loading early-return — hooks cannot run conditionally.
+  const trainingRecords = useMemo(() => (activeTab === "training" ? loadAllRecords() : []), [activeTab]);
+  const trainingStreak = useMemo(() => (activeTab === "training" ? loadStreak() : null), [activeTab]);
+  const trainingRecordsByDrill = useMemo(() => {
+    const map = new Map<string, StoredRecordEntry[]>();
+    for (const r of trainingRecords) {
+      const list = map.get(r.drillId) ?? [];
+      list.push(r);
+      map.set(r.drillId, list);
+    }
+    return map;
+  }, [trainingRecords]);
+  const trainedDrills = useMemo(
+    () => TRAINING_DRILLS.filter((d) => trainingRecordsByDrill.has(d.id)),
+    [trainingRecordsByDrill],
+  );
+
+
   if (loading) {
     return <div role="status" aria-label={t("stats.loadingStats")} className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
