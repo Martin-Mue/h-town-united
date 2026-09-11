@@ -278,6 +278,16 @@ const PlayersPage = () => {
     setNewBirthday(EMPTY_PLAYER_FORM.birthday);
     setEditingPlayerId(null);
     setIsEditMode(false);
+    setCreateWithoutAccount(false);
+  };
+
+  /** Admin-Weg: Profil für jemanden anlegen, der keinen eigenen Account hat (z. B. Kinder von
+   *  Mitgliedern). Umgeht bewusst den ownPlayerProfile-Guard von openCreateProfile — hier wird
+   *  ja gerade KEIN eigenes Profil erstellt. */
+  const openCreateWalkInProfile = () => {
+    resetForm();
+    setCreateWithoutAccount(true);
+    setDialogOpen(true);
   };
 
   const openCreateProfile = () => {
