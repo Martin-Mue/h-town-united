@@ -133,6 +133,10 @@ const PlayersPage = () => {
   const [newMotto, setNewMotto] = useState("");
   const [newBirthday, setNewBirthday] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
+  /** Admin-Modus: Profil für jemanden anlegen, der (noch) keinen Account hat — der Insert
+   *  lässt dann user_id auf null statt der eigenen Session-ID (RLS-Policy
+   *  "Admins can insert walk-in players"). Verhält sich danach wie jedes andere Walk-in-Profil. */
+  const [createWithoutAccount, setCreateWithoutAccount] = useState(false);
 
   const { toast } = useToast();
   const { session, user } = useAuth();
