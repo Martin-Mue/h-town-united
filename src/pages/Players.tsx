@@ -824,6 +824,18 @@ const PlayersPage = () => {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1" onClick={openCreateProfile}><Plus className="w-4 h-4" /> {t("players.memberButton")}</Button>
           </DialogTrigger>
+          {/* Admin-only: Profil ohne Account (Walk-in) — nutzt denselben Dialog. */}
+          <DialogTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className={`gap-1 ${isAdmin ? "" : "hidden"}`}
+              onClick={openCreateWalkInProfile}
+              title={t("players.walkInHint")}
+            >
+              <Plus className="w-4 h-4" /> {t("players.walkInButton")}
+            </Button>
+          </DialogTrigger>
 
           {/* "Daumenzone" — one of Round 3's three unscheduled design directions. The header
               button above is the only way to add a member, but it sits at the very top of the
