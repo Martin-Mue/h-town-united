@@ -7,10 +7,17 @@
  *  No screenshots yet — GuidesTab/Guide already support an optional `image` (path under
  *  /guides/ in public/) for whenever real ones exist, always with placeholder names, never real
  *  members; there was no way to export an actual screenshot to a file in the session this was
- *  first written in, only view one inline. */
+ *  first written in, only view one inline. That optional `image` exists at two levels: once on
+ *  the Guide itself (a single title shot for the whole guide) and, independently, on each
+ *  GuideSection (a shot that belongs to just that one section). Both are optional and
+ *  independent — a guide can have neither, a title shot only, section shots only, or both. */
 export interface GuideSection {
   heading?: string;
   body: string[];
+  /** Path under /guides/ (public/) for a screenshot that belongs to just this section, or
+   *  undefined if this section has no screenshot yet. Independent of the Guide-level `image`. */
+  image?: string;
+  imageAlt?: string;
 }
 
 export interface Guide {

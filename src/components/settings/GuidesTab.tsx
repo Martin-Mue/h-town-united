@@ -49,6 +49,14 @@ const GuidesTab = () => {
                     {section.body.map((p, pi) => (
                       <p key={pi} className="text-sm text-muted-foreground leading-relaxed">{p}</p>
                     ))}
+                    {section.image && (
+                      <img
+                        src={section.image}
+                        alt={section.imageAlt ?? section.heading ?? guide.title}
+                        className="w-full rounded-lg border border-border mt-2"
+                        loading="lazy"
+                      />
+                    )}
                   </div>
                 ))}
               </div>
