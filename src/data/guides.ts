@@ -4,13 +4,16 @@
  *  substantial enough that machine-quality translation would read worse than just not having it,
  *  and every current member reads German.
  *
- *  No screenshots yet — GuidesTab/Guide already support an optional `image` (path under
- *  /guides/ in public/) for whenever real ones exist, always with placeholder names, never real
- *  members; there was no way to export an actual screenshot to a file in the session this was
- *  first written in, only view one inline. */
+ *  Screenshots under public/guides/ are taken from the real club app but with every member name
+ *  and photo blacked out afterward (OCR-assisted redaction) — never publish a raw screenshot here
+ *  without that pass, since these guides are visible to every member. */
 export interface GuideSection {
   heading?: string;
   body: string[];
+  /** Path under /guides/ (public/) for a screenshot that belongs to just this section, or
+   *  undefined if this section has no screenshot yet. Independent of the Guide-level `image`. */
+  image?: string;
+  imageAlt?: string;
 }
 
 export interface Guide {
@@ -28,6 +31,8 @@ export const GUIDES: Guide[] = [
     id: "erste-schritte",
     title: "Erste Schritte",
     teaser: "Was die App kann und wie du startest.",
+    image: "/guides/erste-schritte.png",
+    imageAlt: "Startseite mit Schnellzugriff und Vereins-Feed",
     sections: [
       {
         body: [
@@ -45,6 +50,8 @@ export const GUIDES: Guide[] = [
         body: [
           "Über „Spiel\" wählst du Spielmodus (501, Cricket, …), Spieler und ob mit oder ohne Kamera gezählt werden soll. Mit Kamera erkennt die App eure Würfe automatisch vom Board — ohne Kamera tippt ihr die Punkte einfach ein.",
         ],
+        image: "/guides/erste-schritte-spiel-starten.png",
+        imageAlt: "Spiel-Setup: Modus, Spieleranzahl und Format wählen",
       },
       {
         heading: "3. Turniere & Liga",
@@ -118,6 +125,8 @@ export const GUIDES: Guide[] = [
     id: "statistiken",
     title: "Statistiken verstehen",
     teaser: "Vereinsrangliste, eigene Werte, direkte Duelle.",
+    image: "/guides/statistiken.png",
+    imageAlt: "Statistik-Übersicht mit Vereinsrekorden",
     sections: [
       {
         body: [
@@ -129,6 +138,8 @@ export const GUIDES: Guide[] = [
         body: [
           "Vereinsrangliste, Vereinsrekorde (meiste 180er, bester Schnitt, höchstes Finish, beste MPR im Cricket, …) und wie viele Spiele zuletzt gelaufen sind — inklusive Zeitverlauf-Chart der letzten 30 Tage. Auf jede Rekord-Kachel kannst du tippen, um die komplette Rangliste für genau diesen Wert zu sehen — nicht nur den einen Spitzenreiter.",
         ],
+        image: "/guides/statistiken-highscore.png",
+        imageAlt: "Highscore-Rangliste des Vereins",
       },
       {
         heading: "Spieler",
@@ -190,6 +201,8 @@ export const GUIDES: Guide[] = [
     id: "turnier-erstellen",
     title: "Turniere",
     teaser: "Vom leeren Formular bis zur Live-Ansicht für Zuschauer.",
+    image: "/guides/turnier-erstellen.png",
+    imageAlt: "Turnier erstellen: Name, Modus und Turnierbaum-Einstellungen",
     sections: [
       {
         body: [
@@ -225,6 +238,8 @@ export const GUIDES: Guide[] = [
         body: [
           "Nach dem Start zeigt der Turnierbaum alle anstehenden Partien. Auf eine Partie tippen startet direkt ein Spiel mit den richtigen Spielern und dem für diese Runde hinterlegten Modus — das Ergebnis trägt sich danach automatisch in den Baum ein. Bracket und Status lassen sich bei Bedarf auch manuell nachkorrigieren.",
         ],
+        image: "/guides/turnier-turnierbaum.png",
+        imageAlt: "Turnierbaum mit laufenden und abgeschlossenen Partien",
       },
       {
         heading: "Live-Ansicht für Zuschauer",
@@ -256,6 +271,8 @@ export const GUIDES: Guide[] = [
     id: "liga",
     title: "Liga",
     teaser: "Jeder gegen jeden über mehrere Wochen, mit laufender Tabelle.",
+    image: "/guides/liga.png",
+    imageAlt: "Liga anlegen: Teilnehmerliste auswählen",
     sections: [
       {
         body: [
@@ -346,6 +363,8 @@ export const GUIDES: Guide[] = [
     id: "training",
     title: "Training",
     teaser: "17 Übungen, persönliche Rekorde, Trainings-Streak, Coaching-Plan.",
+    image: "/guides/training.png",
+    imageAlt: "Übersicht aller Trainingsübungen",
     sections: [
       {
         body: [
@@ -382,6 +401,8 @@ export const GUIDES: Guide[] = [
     id: "spielmodi-optionen",
     title: "Spielmodi & Optionen",
     teaser: "Teams, Bots, Geist-Modus, Sets, Handicap und mehr.",
+    image: "/guides/spielmodi-optionen.png",
+    imageAlt: "Erweiterte Spieloptionen: Bot-Gegner, Handicap, Anwurf",
     sections: [
       {
         body: [
