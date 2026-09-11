@@ -867,12 +867,22 @@ const StatisticsPage = () => {
     // in case a level this app never surfaced elsewhere still shows up in old data.
     const LEGACY_BOT_NAME = /^Bot\s*Lv\.?\s*\d+/i;
     const qualifyingOpponents = Object.entries(opponents).filter(([name, r]) => r.wins + r.losses >= 2 && !botNames.has(name) && !LEGACY_BOT_NAME.test(name));
+    // Bug fix: a tie at the extreme (e.g. every qualifying opponent still sits at 0 losses)
+    // used to fall back to whichever opponent happened to come first from Object.entries —
+    // insertion order, not anything about the matchup — so someone you've a perfect 3-0 record
+    // against could get crowned "Angstgegner" alongside "Lieblingsgegner" for the exact same
+    // record, just because no one else had ever beaten you either. Requiring at least one real
+    // loss/win before an opponent can even be a nemesis/favorite candidate means both stay null
+    // (→ "noch keine Daten") instead of naming someone on a technicality when there isn't yet a
+    // genuine best/worst matchup to report.
     const nemesis = qualifyingOpponents.reduce<{ name: string; losses: number; wins: number } | null>((worst, [name, r]) => {
+      if (r.losses === 0) return worst;
       const rate = r.losses / (r.wins + r.losses);
       const worstRate = worst ? worst.losses / (worst.losses + worst.wins) : -1;
       return rate > worstRate ? { name, losses: r.losses, wins: r.wins } : worst;
     }, null);
     const favoriteOpponent = qualifyingOpponents.reduce<{ name: string; losses: number; wins: number } | null>((best, [name, r]) => {
+      if (r.wins === 0) return best;
       const rate = r.wins / (r.wins + r.losses);
       const bestRate = best ? best.wins / (best.wins + best.losses) : -1;
       return rate > bestRate ? { name, losses: r.losses, wins: r.wins } : best;
