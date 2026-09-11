@@ -858,7 +858,15 @@ const StatisticsPage = () => {
     // shouldn't be able to crown it their "Angstgegner"/favorite opponent — those titles are
     // meant to be about actual rivalries with other people.
     const botNames = new Set(Object.values(BOT_PROFILES).map(p => t(p.nameKey)));
-    const qualifyingOpponents = Object.entries(opponents).filter(([name, r]) => r.wins + r.losses >= 2 && !botNames.has(name));
+    // Legacy bot naming — before bots got persona names (Lucky Luke, Robin Hood, …), an early
+    // version of the league feature saved AI test opponents literally as "Bot Lv.1 · Ligaspieler"
+    // through "Bot Lv.5 · Ligaspieler" (or similar spacing/punctuation). Those old game rows are
+    // still in the database and their opponent name doesn't match any current BOT_PROFILES entry,
+    // so they slipped through the botNames check above and could still surface as someone's
+    // Angstgegner/Lieblingsgegner. Matched by prefix/regex rather than five more literal strings,
+    // in case a level this app never surfaced elsewhere still shows up in old data.
+    const LEGACY_BOT_NAME = /^Bot\s*Lv\.?\s*\d+/i;
+    const qualifyingOpponents = Object.entries(opponents).filter(([name, r]) => r.wins + r.losses >= 2 && !botNames.has(name) && !LEGACY_BOT_NAME.test(name));
     const nemesis = qualifyingOpponents.reduce<{ name: string; losses: number; wins: number } | null>((worst, [name, r]) => {
       const rate = r.losses / (r.wins + r.losses);
       const worstRate = worst ? worst.losses / (worst.losses + worst.wins) : -1;

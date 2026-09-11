@@ -2564,7 +2564,14 @@ const GamePage = () => {
   // and thrown-darts badges above it were simply gone. See the manual-entry branch below for the
   // landscape/portrait split this now enables.
   return (
-    <div className="fixed inset-0 z-40 bg-background flex flex-col animate-slide-up overflow-hidden">
+    // z-[60], not z-40: Layout.tsx's mobile bottom nav (Home/Spiel/Stats/Turnier/Mehr) is its own
+    // `fixed bottom-0 ... z-50` sibling outside this screen's own stacking context, so at z-40 it
+    // always painted UNDER that nav bar — the real cause of "the last bit of the pad/toolbar is
+    // unreachable on my phone" (Screen-Audit Folgefund): nothing here was actually hidden behind
+    // Android system chrome, Layout's own nav was drawn on top of it the whole time. This screen
+    // is meant to fully replace the app chrome while a game is live, so it needs to outrank that
+    // nav bar outright rather than share its z-50.
+    <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-slide-up overflow-hidden">
       {confettiKey !== null && <ConfettiBurst triggerKey={confettiKey} />}
       {/* Winner overlay */}
       {game.isFinished && (
