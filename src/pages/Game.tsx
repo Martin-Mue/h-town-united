@@ -19,6 +19,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import DartScoreInput, { type DartInputMode } from "@/components/game/DartScoreInput";
+import GameSetup from "@/components/game/GameSetup";
+import GameWarmup from "@/components/game/GameWarmup";
+import { GameWalkonIntro, GameWalkonStats } from "@/components/game/GameWalkon";
+import GamePostGame from "@/components/game/GamePostGame";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 // Loaded lazily — LiveCamera pulls in onnxruntime-web + vision utilities (~112KB) that a keyboard-
@@ -75,7 +79,7 @@ const botRangeLabel = (level: BotLevel): string => {
   const [min, max] = BOT_LEVEL_RANGES[level];
   return `${min}–${max}`;
 };
-const BOT_PROFILES: Record<BotLevel, { nameKey: string; average: string }> = {
+export const BOT_PROFILES: Record<BotLevel, { nameKey: string; average: string }> = {
   easy: { nameKey: "game.botLv1", average: botRangeLabel("easy") },
   medium: { nameKey: "game.botLv2", average: botRangeLabel("medium") },
   hard: { nameKey: "game.botLv3", average: botRangeLabel("hard") },
@@ -96,6 +100,7 @@ import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
 import { createLegState, createCricketState } from "@/utils/gameStateFactory";
 import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricketNumbers, wouldWinMatch } from "@/utils/legLogic";
+import { resolveRoundCap, type RoundCapOutcome } from "@/utils/roundCap";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult, enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
 import { matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
@@ -125,7 +130,7 @@ const STATS_DURATION_MS = 4500;
  *  longer than the walk-on/stats beats above since this actually commits to starting a real
  *  match, not just skipping a cosmetic intro; "Bearbeiten" cancels it at any point. */
 const AUTOSTART_DELAY_MS = 5000;
-const MAX_PLAYERS = 8;
+export const MAX_PLAYERS = 8;
 
 // createLegState/createCricketState moved to utils/gameStateFactory.ts (imported above) so the
 // online-match accept flow can build a real starting leg without duplicating this logic.
@@ -1067,20 +1072,12 @@ const GamePage = () => {
     // the unique-winner case fell through to the generic "round continues" branch below, which
     // played the wrong sound, announced "not checked out" via speech, skipped confetti, and read
     // turnStartRemaining from the discarded old leg with the wrong next-player index.
-    let capOutcome: { kind: "tied"; tiedIndexes: number[] } | { kind: "winner"; legWinner: number } | null = null;
+    let capOutcome: RoundCapOutcome = null;
     if (newRemaining !== 0 && newDartsThisRound >= 3) {
-      const cap = game.maxRoundsX01;
-      if (cap && cap > 0) {
-        const throwsAfter = game.players.map((_, i) => (i === idx ? game.currentLeg.throws[i].length + 1 : game.currentLeg.throws[i].length));
-        const roundsPerPlayer = throwsAfter.map((len) => Math.ceil(len / 3));
-        const remainingAfter = game.currentLeg.remaining.map((r, si) => (si === teamIdx ? newRemaining : r));
-        const scoreSlotRounds = remainingAfter.map((_, si) => Math.max(...roundsPerPlayer.filter((_, i) => teamIndexFor(game.teams, i) === si)));
-        if (scoreSlotRounds.every((r) => r >= cap)) {
-          const minRemaining = Math.min(...remainingAfter);
-          const tied = remainingAfter.reduce<number[]>((acc, r, i) => (r === minRemaining ? [...acc, i] : acc), []);
-          capOutcome = tied.length > 1 ? { kind: "tied", tiedIndexes: tied } : { kind: "winner", legWinner: tied[0] };
-        }
-      }
+      const throwsAfter = game.players.map((_, i) => (i === idx ? game.currentLeg.throws[i].length + 1 : game.currentLeg.throws[i].length));
+      const roundsPerPlayer = throwsAfter.map((len) => Math.ceil(len / 3));
+      const remainingAfter = game.currentLeg.remaining.map((r, si) => (si === teamIdx ? newRemaining : r));
+      capOutcome = resolveRoundCap(game.maxRoundsX01, roundsPerPlayer, remainingAfter, game.teams);
     }
 
     if (newRemaining === 0) {
@@ -1437,20 +1434,10 @@ const GamePage = () => {
     // via camera just silently continued past its cap forever, since only manual entry had this.
     // Skipped once a real checkout or the match itself already decided things above — the cap is
     // moot once a leg has already ended some other way this same round.
-    let capOutcome: { kind: "tied"; tiedIndexes: number[] } | { kind: "winner"; legWinner: number } | null = null;
+    let capOutcome: RoundCapOutcome = null;
     if (curGame.mode !== "cricket" && !busted && !checkedOut && !curGame.isFinished) {
-      const cap = curGame.maxRoundsX01;
-      if (cap && cap > 0) {
-        const roundsPerPlayer = curGame.players.map((_, i) => Math.ceil(curGame.currentLeg.throws[i].length / 3));
-        const scoreSlotRounds = curGame.currentLeg.remaining.map((_, si) =>
-          Math.max(...roundsPerPlayer.filter((_, i) => teamIndexFor(curGame.teams, i) === si))
-        );
-        if (scoreSlotRounds.every((r) => r >= cap)) {
-          const minRemaining = Math.min(...curGame.currentLeg.remaining);
-          const tied = curGame.currentLeg.remaining.reduce<number[]>((acc, r, i) => (r === minRemaining ? [...acc, i] : acc), []);
-          capOutcome = tied.length > 1 ? { kind: "tied", tiedIndexes: tied } : { kind: "winner", legWinner: tied[0] };
-        }
-      }
+      const roundsPerPlayer = curGame.players.map((_, i) => Math.ceil(curGame.currentLeg.throws[i].length / 3));
+      capOutcome = resolveRoundCap(curGame.maxRoundsX01, roundsPerPlayer, curGame.currentLeg.remaining, curGame.teams);
     }
 
     if (capOutcome?.kind === "winner") {
@@ -2139,727 +2126,113 @@ const GamePage = () => {
     }
   };
 
+  // ─── SETUP PHASE ────────────────────────────────────
+  // Extracted to GameSetup.tsx (Design-Sprint Phase 3, "Spiel-Screen in eigenständige
+  // Teil-Screens aufteilen") — pure JSX relocation, all state stays here and is passed as props.
   if (phase === "setup") {
-    const activePlayerCount = numPlayers;
-    // Mode/team-mode/player-count/best-of are exactly the fields the tournament bracket already
-    // fixed for this match (see the tid/mid prefill effect above) — editing them here wouldn't
-    // just be pointless, it'd silently desync this game from the bracket entry it's supposed to
-    // report back to. Locked whenever a match is tournament-linked; everything NOT tracked by the
-    // tournament's own data model (double-out, handicap, bot, warmup, who-starts) stays freely
-    // editable, same as a casual game.
-    const isTournamentMatch = !!tournamentLinkName;
-
-    // Board-mode confirmation: a compact "here's the match, starting in Xs" screen instead of
-    // the full form below — mode/players/best-of are already correct from the bracket, so there's
-    // nothing to review there; "Bearbeiten" reveals the full form for the rare case something
-    // else (handicap, warmup, who-starts) needs a look first.
-    if (tournamentLinkRef.current?.board && !autoStartCanceled) {
-      // Blocked outcomes never auto-start and never show a countdown — "blocked-mode" (Extern /
-      // live play off) offers no start button at all (this device isn't meant to play it live),
-      // "blocked-collision" requires an explicit tap, same intent as the flat view's window.confirm
-      // adapted to a real button since a countdown screen shouldn't confirm() mid-render.
-      if (boardStartGate === "blocked-mode" || boardStartGate === "blocked-collision") {
-        return (
-          <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
-            <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 mb-6">
-              <p className="text-xs text-primary font-medium">🏆 {t("game.tournamentMatch")} · {tournamentLinkName}</p>
-            </div>
-            <p className="text-lg font-display mb-1 truncate">{playerNames[0]}</p>
-            <p className="text-xs text-muted-foreground mb-1">vs.</p>
-            <p className="text-lg font-display mb-4 truncate">{playerNames[1]}</p>
-            <p className="text-sm text-muted-foreground bg-muted/30 border border-border rounded-lg px-3 py-3 mb-6">
-              {boardStartGate === "blocked-collision"
-                ? `${playerNames[0]} vs. ${playerNames[1]} ${t("tournament.matchAlreadyRunningConfirm")}`
-                : t("game.boardStartBlocked")}
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setAutoStartCanceled(true)}>{t("common.edit")}</Button>
-              {boardStartGate === "blocked-collision" && (
-                <Button className="flex-1 font-display uppercase" onClick={startGame}>{t("game.startGame")}</Button>
-              )}
-            </div>
-          </div>
-        );
-      }
-      return (
-        <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
-          <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 mb-6">
-            <p className="text-xs text-primary font-medium">🏆 {t("game.tournamentMatch")} · {tournamentLinkName}</p>
-          </div>
-          <p className="text-lg font-display mb-1 truncate">{playerNames[0]}</p>
-          <p className="text-xs text-muted-foreground mb-1">vs.</p>
-          <p className="text-lg font-display mb-4 truncate">{playerNames[1]}</p>
-          <p className="text-xs text-muted-foreground mb-8">{mode} · {t("stats.firstTo")} {Math.ceil(bestOfLegs / 2)}</p>
-          <div className="font-display text-5xl text-primary tabular-nums mb-2">{boardStartGate === "clear" ? autoStartSecondsLeft : "…"}</div>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-6">{t("game.autoStartingIn")}</p>
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setAutoStartCanceled(true)}>{t("common.edit")}</Button>
-            <Button className="flex-1 font-display uppercase" onClick={startGame}>{t("game.startGame")}</Button>
-          </div>
-        </div>
-      );
-    }
-
-    // "Online spielen" replaces this whole local-setup form with a challenge-a-member screen —
-    // only offered for a genuinely casual game; a tournament/league match's opponent and mode are
-    // already fixed by the bracket/fixture, so there's nothing left to challenge someone into.
-    if (setupMode === "online" && !tournamentLinkName && !leagueLinkRef.current) {
-      return <OnlineChallengeSetup onBack={() => setSetupMode("local")} />;
-    }
-
     return (
-      <div className="container py-6 animate-slide-up max-w-lg mx-auto">
-        <h2 className="text-2xl font-display uppercase mb-1 text-center">{t("home.newGame")}</h2>
-        {!tournamentLinkName && !leagueLinkRef.current && (
-          <div className="flex rounded-lg border border-border bg-muted/30 p-1 mb-4 max-w-xs mx-auto">
-            <button type="button" onClick={() => setSetupMode("local")}
-              className={`flex-1 rounded-md py-1.5 text-xs font-medium uppercase tracking-wide transition-colors ${setupMode === "local" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
-              {t("game.setupLocal")}
-            </button>
-            <button type="button" onClick={() => setSetupMode("online")}
-              className={`flex-1 rounded-md py-1.5 text-xs font-medium uppercase tracking-wide transition-colors ${setupMode === "online" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}>
-              {t("game.setupOnline")}
-            </button>
-          </div>
-        )}
-        {tournamentLinkName && (
-          <div className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 mb-5 text-center">
-            <p className="text-xs text-primary font-medium">
-              🏆 {t("game.tournamentMatch")} · {tournamentLinkName}
-            </p>
-            <p className="text-[10px] text-primary/70 mt-0.5">{t("game.tournamentMatchNote")}</p>
-          </div>
-        )}
-        {!tournamentLinkName && <div className="mb-6" />}
-        <div className="space-y-4">
-          <SectionCard className="space-y-4">
-          <Eyebrow icon={Target}>{t("game.setupModeSection")}</Eyebrow>
-          <div>
-            <label className="text-sm text-muted-foreground mb-1 block">{t("game.gameMode")}</label>
-            <Select value={mode} onValueChange={(v) => setMode(v as GameMode)} disabled={isTournamentMatch}>
-              <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-card border-border">
-                <SelectItem value="501">501</SelectItem>
-                <SelectItem value="301">301</SelectItem>
-                <SelectItem value="cricket">Cricket</SelectItem>
-                <SelectItem value="custom">{t("game.custom")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {mode === "custom" && (
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("game.startValue")}</label>
-              <input type="number" value={customStartScore} onChange={(e) => setCustomStartScore(parseInt(e.target.value) || 0)}
-                className="w-full rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground" />
-            </div>
-          )}
-
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
-            <div className="min-w-0">
-              <Label htmlFor="team-mode" className="text-sm">{t("game.teamMode")}</Label>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.teamModeDesc")}</p>
-            </div>
-            <Switch id="team-mode" checked={teamMode} disabled={isTournamentMatch} onCheckedChange={(v) => {
-              setTeamMode(v);
-              if (v && (numPlayers < 4 || numPlayers % 2 !== 0)) setNumPlayers(4);
-            }} />
-          </div>
-
-          {teamMode && (
-            <div className="grid grid-cols-2 gap-2">
-              <input value={teamNames[0]} onChange={(e) => setTeamNames([e.target.value, teamNames[1]])}
-                placeholder={`${t("game.team")} 1`} className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground" />
-              <input value={teamNames[1]} onChange={(e) => setTeamNames([teamNames[0], e.target.value])}
-                placeholder={`${t("game.team")} 2`} className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground" />
-            </div>
-          )}
-
-          <div>
-            <label className="text-sm text-muted-foreground mb-1 block">{teamMode ? t("game.playersPerTeam") : t("game.numPlayers")}</label>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {(teamMode ? [4, 6, 8] : Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2)).map((n) => (
-                <button key={n} onClick={() => setNumPlayers(n)} disabled={isTournamentMatch}
-                  className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-muted border-border text-muted-foreground"} ${isTournamentMatch ? "opacity-50 cursor-not-allowed" : ""}`}>
-                  {teamMode ? `${n / 2} vs ${n / 2}` : `${n} ${t("game.playersSuffix")}`}
-                </button>
-              ))}
-            </div>
-          </div>
-          </SectionCard>
-
-          <SectionCard className="space-y-4">
-          <Eyebrow icon={Trophy}>{t("game.setupFormatSection")}</Eyebrow>
-
-          {mode !== "cricket" && (
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{setsEnabled ? t("game.legsPerSet") : t("game.firstToLegs")}</label>
-              <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(parseInt(v))} disabled={isTournamentMatch}>
-                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  {[1, 3, 5, 7, 9, 11].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Sets-Modus (Runde 5, extended to tournaments 2026-09-09): the standard
-              professional-darts match structure — "Best of X Sätze, je Satz Best of Y Legs" —
-              layered on top of the leg picker above rather than replacing it (that picker's own
-              label switches to "Legs pro Satz" the moment this is on). Deliberately not offered
-              for Cricket (matching the leg picker's own scope). For a tournament/league-linked
-              match the format is fixed by the bracket/fixture, same as bestOfLegs above — the
-              switch itself is disabled then, same pattern as that picker — but unlike bestOfLegs
-              (always shown, tournaments always have SOME leg count), this row only renders at all
-              for a tournament match when the tournament actually turned Sets-Modus on: a
-              non-sets tournament (the overwhelming majority, unchanged) must never show a
-              disabled, permanently-off toggle here — see useTournamentLink's sets/bestOfSets
-              query params for where setsEnabled gets set true for a sets-mode tournament match. */}
-          {mode !== "cricket" && (!isTournamentMatch || setsEnabled) && (
-            <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
-              <div className="min-w-0">
-                <Label className="text-sm font-medium">{t("game.setsMode")}</Label>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.setsModeDesc")}</p>
-              </div>
-              <Switch checked={setsEnabled} disabled={isTournamentMatch} onCheckedChange={setSetsEnabled} />
-            </div>
-          )}
-
-          {mode !== "cricket" && setsEnabled && (
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("game.firstToSets")}</label>
-              <Select value={String(bestOfSets)} onValueChange={(v) => setBestOfSets(parseInt(v))} disabled={isTournamentMatch}>
-                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  {[1, 3, 5, 7, 9].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {mode !== "cricket" && (
-            <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
-              <div className="min-w-0">
-                <Label className="text-sm font-medium">{t("game.checkoutSuggestions")}</Label>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.checkoutSuggestionsDesc")}</p>
-              </div>
-              <Switch checked={checkoutSuggestionEnabled} onCheckedChange={setCheckoutSuggestionEnabled} />
-            </div>
-          )}
-
-          {/* Progressive disclosure (Design Rangliste #16): custom-Cricket numbers and the
-              per-leg round limit are real but genuinely optional settings a first-time player
-              doesn't need in front of them — collapsed until explicitly opened once. */}
-          <button
-            type="button"
-            onClick={revealAdvancedSetup}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showAdvancedSetup ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            {t("game.advancedSettings")}
-          </button>
-
-          {showAdvancedSetup && (
-            <>
-              {mode === "cricket" && (
-                <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
-                  <div className="min-w-0">
-                    <Label htmlFor="custom-cricket" className="text-sm">{t("game.customCricket")}</Label>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.customCricketDesc")}</p>
-                  </div>
-                  <Switch id="custom-cricket" checked={customCricket} onCheckedChange={setCustomCricket} />
-                </div>
-              )}
-
-              {mode !== "cricket" && (
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1 block">{t("game.roundLimitPerLeg")}</label>
-                  <Select value={String(maxRoundsX01)} onValueChange={(v) => setMaxRoundsX01(parseInt(v))}>
-                    <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-card border-border">
-                      <SelectItem value="0">{t("game.noLimit")}</SelectItem>
-                      {[8, 10, 12, 15, 20, 25].map((n) => (
-                        <SelectItem key={n} value={String(n)}>{t("game.max")} {n} {t("game.rounds")}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[10px] text-muted-foreground mt-1">{t("game.roundLimitDesc")}</p>
-                </div>
-              )}
-            </>
-          )}
-          </SectionCard>
-
-          <SectionCard className="space-y-3">
-          <Eyebrow icon={Users}>{t("game.setupPlayersSection")}</Eyebrow>
-
-          {/* Player slots: name, double-out, bot toggle */}
-          <div className="space-y-3">
-            {Array.from({ length: activePlayerCount }, (_, i) => (
-              <div key={i} className={`bg-muted/30 rounded-lg border px-4 py-3 space-y-2 ${teamMode ? (i % 2 === 0 ? "border-primary/30" : "border-secondary/30") : "border-border"}`}>
-                {teamMode && (
-                  <p className={`text-[10px] font-display uppercase ${i % 2 === 0 ? "text-primary" : "text-secondary"}`}>
-                    {i % 2 === 0 ? (teamNames[0] || "Team 1") : (teamNames[1] || "Team 2")}
-                  </p>
-                )}
-                <div className="flex items-center gap-2">
-                  {playerIsBot[i] ? (
-                    <div className="flex-1 rounded-lg bg-secondary/10 border border-secondary/40 px-3 py-2 text-sm text-secondary flex items-center gap-2 min-w-0">
-                      <Bot className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">{botDisplayName(i)}</span>
-                    </div>
-                  ) : (
-                  <>
-                    <input
-                      value={playerNames[i]}
-                      onChange={(e) => setPlayerNames(prev => prev.map((v, idx) => idx === i ? e.target.value : v))}
-                      placeholder={t("game.enterName")}
-                      className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground min-w-0 focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    {dbPlayers.length > 0 && (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="shrink-0 rounded-lg border border-border px-2.5 py-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title={t("game.chooseClubMember")}>
-                            <Users className="w-3.5 h-3.5" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-2" align="end">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 pb-1">{t("game.chooseClubMember")}</p>
-                          <div className="space-y-1 max-h-48 overflow-y-auto">
-                            {dbPlayers.map((dp) => (
-                              <PopoverClose asChild key={dp.id}>
-                                <button onClick={() => {
-                                    // "PIN pro Spieler": a member who set a PIN must confirm it's really
-                                    // them before their name is accepted into this slot; everyone else
-                                    // (the overwhelming majority, PIN is opt-in) is picked immediately,
-                                    // unchanged from before this feature existed.
-                                    if (dp.pin_hash) {
-                                      setPinPrompt({ slotIndex: i, player: dp });
-                                      setPinPromptValue("");
-                                      setPinPromptError(false);
-                                    } else {
-                                      setPlayerNames(prev => prev.map((v, idx) => idx === i ? dp.name : v));
-                                    }
-                                  }}
-                                  className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${playerNames[i] === dp.name ? "bg-primary/15 text-primary" : "hover:bg-muted"}`}>
-                                  <span>{dp.emoji}</span><span className="flex-1 truncate">{dp.name}</span>
-                                  {dp.pin_hash && <Lock className="w-3 h-3 shrink-0 text-muted-foreground" />}
-                                </button>
-                              </PopoverClose>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    )}
-                  </>
-                  )}
-                  <button
-                    onClick={() => setPlayerIsBot(prev => prev.map((v, idx) => idx === i ? !v : v))}
-                    className={`shrink-0 rounded-lg border px-2.5 py-2 flex items-center gap-1 text-xs transition-colors ${playerIsBot[i] ? "bg-secondary/20 border-secondary text-secondary" : "bg-background border-border text-muted-foreground"}`}
-                    title={t("game.botOpponent")}>
-                    <Bot className="w-3.5 h-3.5" /> {t("game.bot")}
-                  </button>
-                </div>
-
-                {playerIsBot[i] && (
-                  <>
-                    {/* 3 columns fits both cases cleanly: 5 bot levels + Ghost = 6 (two full
-                        rows) when Ghost is offered, or 5 alone (a 3+2 last row) when it isn't
-                        (cricket/team mode) — no longer needs a mode-conditional column count now
-                        that there are 2 more bot levels than Ghost had columns to spare for. */}
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {(["easy", "medium", "hard", "elite", "legendary"] as BotLevel[]).map((lvl) => (
-                        <button key={lvl} onClick={() => {
-                          setPlayerBotLevel(prev => prev.map((v, idx) => idx === i ? lvl : v));
-                          setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? "off" : v));
-                        }}
-                          className={`rounded px-2 py-1.5 text-center transition-colors ${playerBotLevel[i] === lvl && playerGhostTarget[i] === "off" ? "bg-secondary/25 text-secondary" : "bg-background text-muted-foreground"}`}>
-                          <span className="block text-[11px] font-display uppercase">{t(BOT_PROFILES[lvl].nameKey)}</span>
-                          <span className="block text-[10px] opacity-70">Ø {BOT_PROFILES[lvl].average}</span>
-                        </button>
-                      ))}
-                      {mode !== "cricket" && !teamMode && (
-                        <button
-                          onClick={() => setPlayerGhostTarget(prev => prev.map((v, idx) => idx === i ? (v === "off" ? "own-pb" : v) : v))}
-                          title={t("game.ghostTooltip")}
-                          className={`rounded px-2 py-1.5 text-center transition-colors ${playerGhostTarget[i] !== "off" ? "bg-accent/25 text-accent" : "bg-background text-muted-foreground"}`}>
-                          <span className="block text-[11px] font-display uppercase">👻 {t("game.ghost")}</span>
-                          <span className="block text-[10px] opacity-70">{t("game.ghostChallenge")}</span>
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Progressive disclosure (Design Rangliste #16): double-in/out and handicap are
-                    real gameplay rules, not cosmetic — but their defaults (straight-in,
-                    double-out, no handicap) already match how most casual club games are played,
-                    so a first-time player isn't forced to make three rule decisions before their
-                    first throw. Same showAdvancedSetup toggle as the Format section above. */}
-                {mode !== "cricket" && showAdvancedSetup && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{playerDoubleIn[i] ? t("game.doubleIn") : t("game.straightIn")}</span>
-                      <Switch checked={playerDoubleIn[i]} onCheckedChange={(v) => setPlayerDoubleIn(prev => prev.map((val, idx) => idx === i ? v : val))} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{playerDoubleOut[i] ? t("game.doubleOut") : t("game.singleOut")}</span>
-                      <Switch checked={playerDoubleOut[i]} onCheckedChange={(v) => setPlayerDoubleOut(prev => prev.map((val, idx) => idx === i ? v : val))} />
-                    </div>
-                    {!teamMode && (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs text-muted-foreground" title={t("game.handicapTooltip")}>{t("game.handicap")}</span>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="number"
-                            min={0}
-                            step={10}
-                            value={playerHandicap[i] || 0}
-                            onChange={(e) => {
-                              const v = Math.max(0, parseInt(e.target.value, 10) || 0);
-                              setPlayerHandicap(prev => prev.map((val, idx) => idx === i ? v : val));
-                            }}
-                            className="w-16 rounded-lg bg-background border border-border px-2 py-1 text-sm text-foreground text-right focus:outline-none focus:ring-1 focus:ring-primary"
-                          />
-                          <span className="text-[10px] text-muted-foreground">{t("game.points")}</span>
-                        </div>
-                      </div>
-                    )}
-                    {!teamMode && playerHandicap[i] > 0 && (
-                      <p className="text-[10px] text-muted-foreground text-right -mt-1.5">
-                        {t("game.startsAt")} {Math.max(2, getStartScore() - playerHandicap[i])} {t("game.insteadOf")} {getStartScore()}
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-          </SectionCard>
-
-          <SectionCard className="space-y-4">
-          <Eyebrow icon={Settings2}>{t("game.setupExtrasSection")}</Eyebrow>
-
-          {/* Sound toggle */}
-          <div className="flex items-center justify-between bg-muted/30 rounded-lg border border-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              {soundEnabled ? <Volume2 className="w-4 h-4 text-primary" /> : <VolumeX className="w-4 h-4 text-muted-foreground" />}
-              <Label className="text-sm font-medium">{t("game.soundHaptics")}</Label>
-            </div>
-            <Switch checked={soundEnabled} onCheckedChange={setSoundEnabled} />
-          </div>
-
-          <div className="bg-muted/30 rounded-lg border border-border px-4 py-3">
-            <div className="flex items-center gap-2 mb-2">
-              {speechEnabled ? <Mic className="w-4 h-4 text-primary" /> : <MicOff className="w-4 h-4 text-muted-foreground" />}
-              <Label className="text-sm font-medium">{t("game.callerVoice")}</Label>
-            </div>
-            <div className="grid grid-cols-4 gap-1.5">
-              {([
-                { value: "male", labelKey: "game.voiceMale" },
-                { value: "female", labelKey: "game.voiceFemale" },
-                { value: "yoda", labelKey: "game.voiceYoda" },
-                { value: "off", labelKey: "game.voiceOff" },
-              ] as { value: CallerVoice; labelKey: string }[]).map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => changeCallerVoice(opt.value)}
-                  className={`py-2 rounded-lg text-xs font-semibold transition-all ${
-                    callerVoice === opt.value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {t(opt.labelKey)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-muted/30 rounded-lg border border-border px-4 py-3 space-y-2">
-            <Label className="text-sm">{t("game.whoStarts")}</Label>
-            <p className="text-[10px] text-muted-foreground -mt-1">{t("game.whoStartsDesc")}</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {(teamMode
-                ? [0, 1]
-                : Array.from({ length: activePlayerCount }, (_, i) => i)
-              ).map((i) => {
-                const label = teamMode
-                  ? (i === 0 ? (teamNames[0].trim() || `${t("game.team")} 1`) : (teamNames[1].trim() || `${t("game.team")} 2`))
-                  : (playerIsBot[i] ? botDisplayName(i) : (playerNames[i]?.trim() || `${t("stats.player")} ${i + 1}`));
-                const isChosen = teamMode ? (starterIndex % 2 === i) : starterIndex === i;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setStarterIndex(i)}
-                    className={`truncate rounded-lg border px-3 py-2 text-sm font-display transition-colors ${
-                      isChosen ? "bg-primary/15 border-primary text-primary" : "bg-background border-border text-muted-foreground"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="bg-muted/30 rounded-lg border border-border px-4 py-3 space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <Label htmlFor="warmup-mode" className="text-sm">{t("game.warmupBeforeMatch")}</Label>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.warmupBeforeMatchDesc")}</p>
-              </div>
-              <Switch id="warmup-mode" checked={warmupEnabled} onCheckedChange={setWarmupEnabled} />
-            </div>
-            {warmupEnabled && (
-              <div className="grid grid-cols-4 gap-1.5 pt-1">
-                {[30, 60, 90, 120].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setWarmupSeconds(s)}
-                    className={`rounded-lg py-1.5 text-xs font-display transition-colors ${warmupSeconds === s ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted-foreground"}`}
-                  >
-                    {s}s
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between gap-3 bg-muted/30 rounded-lg border border-border px-4 py-3">
-            <div className="min-w-0">
-              <Label htmlFor="walkon-mode" className="text-sm">{t("game.walkonIntro")}</Label>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{t("game.walkonIntroDesc")}</p>
-            </div>
-            <Switch id="walkon-mode" checked={walkonEnabled} onCheckedChange={setWalkonEnabled} />
-          </div>
-          </SectionCard>
-
-          <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
-            <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? t("game.startWarmup") : t("game.startGame")}
-          </Button>
-        </div>
-
-        {/* "PIN pro Spieler": confirms it's really that club member before their name lands in
-            the slot — see the roster-picker button above and submitPinPrompt/verifyPin. Purely
-            client-side (works offline), and only ever shown for a player who opted in by setting
-            a PIN in the first place. */}
-        <Dialog open={!!pinPrompt} onOpenChange={(open) => { if (!open) { setPinPrompt(null); setPinPromptValue(""); setPinPromptError(false); } }}>
-          <DialogContent className="max-w-xs">
-            <DialogHeader>
-              <DialogTitle className="font-display uppercase flex items-center gap-2">
-                <Lock className="w-4 h-4" /> {t("game.pinPromptTitle")}
-              </DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground">
-              {t("game.pinPromptDesc").replace("{name}", pinPrompt?.player.name ?? "")}
-            </p>
-            <input
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={4}
-              autoFocus
-              value={pinPromptValue}
-              onChange={(e) => { setPinPromptValue(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinPromptError(false); }}
-              onKeyDown={(e) => { if (e.key === "Enter" && pinPromptValue.length === 4) submitPinPrompt(); }}
-              placeholder="••••"
-              className={`w-full rounded-lg bg-muted border px-3 py-3 text-center text-2xl tracking-[0.5em] text-foreground focus:outline-none focus:ring-1 focus:ring-primary ${pinPromptError ? "border-destructive" : "border-border"}`}
-            />
-            {pinPromptError && <p className="text-xs text-destructive text-center">{t("game.pinPromptWrong")}</p>}
-            <div className="flex gap-2 pt-1">
-              <Button variant="outline" className="flex-1" onClick={() => { setPinPrompt(null); setPinPromptValue(""); setPinPromptError(false); }}>
-                {t("common.cancel")}
-              </Button>
-              <Button className="flex-1" disabled={pinPromptValue.length !== 4 || pinPromptChecking} onClick={submitPinPrompt}>
-                {pinPromptChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : t("game.pinPromptConfirm")}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+      <GameSetup
+        tournamentLinkRef={tournamentLinkRef}
+        tournamentLinkName={tournamentLinkName}
+        leagueLinkRef={leagueLinkRef}
+        autoStartCanceled={autoStartCanceled}
+        setAutoStartCanceled={setAutoStartCanceled}
+        boardStartGate={boardStartGate}
+        autoStartSecondsLeft={autoStartSecondsLeft}
+        startGame={startGame}
+        mode={mode}
+        setMode={setMode}
+        customStartScore={customStartScore}
+        setCustomStartScore={setCustomStartScore}
+        teamMode={teamMode}
+        setTeamMode={setTeamMode}
+        numPlayers={numPlayers}
+        setNumPlayers={setNumPlayers}
+        teamNames={teamNames}
+        setTeamNames={setTeamNames}
+        bestOfLegs={bestOfLegs}
+        setBestOfLegs={setBestOfLegs}
+        setsEnabled={setsEnabled}
+        setSetsEnabled={setSetsEnabled}
+        bestOfSets={bestOfSets}
+        setBestOfSets={setBestOfSets}
+        checkoutSuggestionEnabled={checkoutSuggestionEnabled}
+        setCheckoutSuggestionEnabled={setCheckoutSuggestionEnabled}
+        showAdvancedSetup={showAdvancedSetup}
+        revealAdvancedSetup={revealAdvancedSetup}
+        customCricket={customCricket}
+        setCustomCricket={setCustomCricket}
+        maxRoundsX01={maxRoundsX01}
+        setMaxRoundsX01={setMaxRoundsX01}
+        playerNames={playerNames}
+        setPlayerNames={setPlayerNames}
+        dbPlayers={dbPlayers}
+        playerIsBot={playerIsBot}
+        setPlayerIsBot={setPlayerIsBot}
+        playerBotLevel={playerBotLevel}
+        setPlayerBotLevel={setPlayerBotLevel}
+        playerGhostTarget={playerGhostTarget}
+        setPlayerGhostTarget={setPlayerGhostTarget}
+        playerDoubleIn={playerDoubleIn}
+        setPlayerDoubleIn={setPlayerDoubleIn}
+        playerDoubleOut={playerDoubleOut}
+        setPlayerDoubleOut={setPlayerDoubleOut}
+        playerHandicap={playerHandicap}
+        setPlayerHandicap={setPlayerHandicap}
+        botDisplayName={botDisplayName}
+        getStartScore={getStartScore}
+        pinPrompt={pinPrompt}
+        setPinPrompt={setPinPrompt}
+        pinPromptValue={pinPromptValue}
+        setPinPromptValue={setPinPromptValue}
+        pinPromptError={pinPromptError}
+        setPinPromptError={setPinPromptError}
+        pinPromptChecking={pinPromptChecking}
+        submitPinPrompt={submitPinPrompt}
+        soundEnabled={soundEnabled}
+        setSoundEnabled={setSoundEnabled}
+        speechEnabled={speechEnabled}
+        callerVoice={callerVoice}
+        changeCallerVoice={changeCallerVoice}
+        starterIndex={starterIndex}
+        setStarterIndex={setStarterIndex}
+        warmupEnabled={warmupEnabled}
+        setWarmupEnabled={setWarmupEnabled}
+        warmupSeconds={warmupSeconds}
+        setWarmupSeconds={setWarmupSeconds}
+        walkonEnabled={walkonEnabled}
+        setWalkonEnabled={setWalkonEnabled}
+        setupMode={setupMode}
+        setSetupMode={setSetupMode}
+      />
     );
   }
 
   // ─── WARM-UP PHASE ─────────────────────────────────
+  // Extracted to GameWarmup.tsx (Design-Sprint Phase 3, "Spiel-Screen in eigenständige
+  // Teil-Screens aufteilen") — pure JSX relocation, all state stays here and is passed as props.
   if (phase === "warmup") {
-    const mm = Math.floor(warmupRemaining / 60);
-    const ss = warmupRemaining % 60;
     return (
-      <div className="container py-6 animate-slide-up max-w-lg mx-auto">
-        <div className="text-center mb-4">
-          <h2 className="text-2xl font-display uppercase text-primary">{t("game.warmup")}</h2>
-          <p className="text-xs text-muted-foreground mt-1">{t("game.warmupDesc")}</p>
-        </div>
-
-        <div className="bg-card rounded-2xl border border-primary/30 glow-cyan p-6 mb-4 text-center">
-          <div className="font-display text-6xl tabular-nums text-primary">
-            {mm}:{String(ss).padStart(2, "0")}
-          </div>
-          <div className="flex items-center justify-center gap-4 mt-3 text-xs text-muted-foreground">
-            <span>{warmupDarts} {t("game.dartsSuffix")}</span>
-            <span>·</span>
-            <span>{warmupTotal} {t("game.points")}</span>
-          </div>
-          <div className="flex items-center justify-center gap-2 mt-3">
-            <Button size="sm" variant="outline" onClick={() => setWarmupRemaining((s) => s + 30)}>+30s</Button>
-            <Button size="sm" variant="outline" onClick={() => setWarmupRemaining(0)}>{t("game.endTimer")}</Button>
-          </div>
-        </div>
-
-        <DartScoreInput isDisabled={false} onThrow={submitWarmupDart} />
-
-        <Button onClick={enterMatch} className="w-full mt-4 font-display uppercase text-lg py-6">
-          <Target className="w-5 h-5 mr-2" /> {t("game.letsGo")}
-        </Button>
-      </div>
+      <GameWarmup
+        warmupRemaining={warmupRemaining}
+        warmupDarts={warmupDarts}
+        warmupTotal={warmupTotal}
+        setWarmupRemaining={setWarmupRemaining}
+        submitWarmupDart={submitWarmupDart}
+        enterMatch={enterMatch}
+      />
     );
   }
 
-  // ─── WALK-ON INTRO ──────────────────────────────────
+  // ─── WALK-ON INTRO / STATS ──────────────────────────
+  // Extracted to GameWalkon.tsx (Design-Sprint Phase 3, "Spiel-Screen in eigenständige
+  // Teil-Screens aufteilen") — pure JSX relocation, all state stays here and is passed as props.
   if (phase === "walkon" && game) {
-    const names = game.teams ? game.teams.map((tm) => tm.name) : game.players.map((p) => p.name);
-    const isDuel = names.length === 2;
-    return (
-      <div
-        role="button" tabIndex={0}
-        onClick={() => setPhase(walkonHasStats(game) ? "stats" : "playing")}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPhase(walkonHasStats(game) ? "stats" : "playing"); } }}
-        aria-label={t("game.tapToSkip")}
-        className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-6 cursor-pointer overflow-hidden"
-      >
-        <div className="absolute inset-0 gradient-hero" />
-        <p className="relative text-[11px] uppercase tracking-[0.4em] text-muted-foreground mb-6 animate-slide-up">
-          {t("game.walkonEntranceLabel")}
-        </p>
-        {isDuel ? (
-          <div className="relative flex flex-col items-center gap-3 w-full max-w-md">
-            <h2 className="font-display text-4xl sm:text-5xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full">
-              {names[0]}
-            </h2>
-            <span className="font-display text-lg text-accent animate-scale-in" style={{ animationDelay: "150ms" }}>VS</span>
-            <h2
-              className="font-display text-4xl sm:text-5xl uppercase text-secondary text-center glow-green animate-scale-in truncate max-w-full"
-              style={{ animationDelay: "300ms" }}
-            >
-              {names[1]}
-            </h2>
-          </div>
-        ) : (
-          <div className="relative flex flex-col items-center gap-2 w-full max-w-md">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">{t("game.playersPlaying")}</p>
-            {names.map((name, i) => (
-              <h2
-                key={i}
-                className="font-display text-2xl sm:text-3xl uppercase text-primary text-center glow-cyan animate-scale-in truncate max-w-full"
-                style={{ animationDelay: `${i * 120}ms` }}
-              >
-                {name}
-              </h2>
-            ))}
-          </div>
-        )}
-        <p className="relative text-[10px] uppercase tracking-widest text-muted-foreground mt-8 animate-slide-up" style={{ animationDelay: "400ms" }}>
-          {t("game.tapToSkip")}
-        </p>
-      </div>
-    );
+    return <GameWalkonIntro game={game} walkonHasStats={walkonHasStats} onAdvance={setPhase} />;
   }
 
-  // Second walk-on beat, right after the name/VS card — only for a real (non-team) 1v1 where at
-  // least one side has club history to show (see walkonHasStats). Big, high-contrast, explicitly
-  // labeled per player instead of the easy-to-miss caption this replaced (see commit history):
-  // a screen meant to be glanced at from across a table needs numbers you can read at a glance,
-  // not a footnote.
   if (phase === "stats" && game) {
-    const names = game.players.map((p) => p.name);
-    const a = matchClubPlayer(dbPlayers, names[0]);
-    const b = matchClubPlayer(dbPlayers, names[1]);
-    const statRow = (label: string, value: string) => (
-      <div className="flex flex-col items-center">
-        <p className="font-display text-3xl sm:text-4xl">{value}</p>
-        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
-      </div>
-    );
-    const playerColumn = (name: string, p: ClubPlayer | undefined, nameClass: string) => (
-      <div className="flex-1 flex flex-col items-center gap-5 min-w-0">
-        <h3 className={`font-display text-lg sm:text-2xl uppercase text-center truncate max-w-full ${nameClass}`}>{name}</h3>
-        {p ? (
-          <div className="flex flex-col gap-5 w-full items-center">
-            {statRow("Average", p.games_played > 0 ? Number(p.average).toFixed(1) : "–")}
-            {statRow(t("game.winsLabel"), `${p.games_won}/${p.games_played}`)}
-            {statRow("Elo", String(Math.round(p.elo_rating)))}
-            {statRow(t("game.highscoreLabel"), String(p.high_score))}
-            {statRow("Checkout", `${Number(p.double_rate).toFixed(0)}%`)}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground uppercase tracking-widest mt-2">{t("game.noProfile")}</p>
-        )}
-      </div>
-    );
-    return (
-      <div
-        role="button" tabIndex={0}
-        onClick={() => setPhase("playing")}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPhase("playing"); } }}
-        aria-label={t("game.tapToSkip")}
-        className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center px-4 cursor-pointer overflow-hidden"
-      >
-        <div className="absolute inset-0 gradient-hero" />
-        <p className="relative text-[11px] uppercase tracking-[0.4em] text-muted-foreground mb-8 animate-slide-up">
-          {t("game.statsComparison")}
-        </p>
-        <div className="relative flex items-start justify-center gap-4 sm:gap-10 w-full max-w-lg animate-scale-in">
-          {playerColumn(names[0], a, "text-primary glow-cyan")}
-          <span className="font-display text-xl text-accent pt-1">VS</span>
-          {playerColumn(names[1], b, "text-secondary glow-green")}
-        </div>
-        {walkonH2H && (
-          <div className="relative mt-10 text-center animate-slide-up">
-            <p className="font-display text-3xl uppercase text-accent">
-              {walkonH2H.total > 0 ? `${walkonH2H.aWins} : ${walkonH2H.bWins}` : t("game.firstTime")}
-            </p>
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
-              {walkonH2H.total > 0 ? `${t("game.headToHeadSoFar")} · ${walkonH2H.total} ${t("stats.games")}` : t("game.firstMeeting")}
-            </p>
-            {/* Elo-derived, so meaningful even for a first-ever meeting (total === 0) unlike
-                everything else in this card, which needs real head-to-head history. */}
-            {walkonH2H.aWinProb !== null && (
-              <div className="mt-3 max-w-[240px] mx-auto">
-                <div className="flex justify-between text-[10px] mb-1">
-                  <span className="text-primary font-semibold">{Math.round(walkonH2H.aWinProb)}%</span>
-                  <span className="text-secondary font-semibold">{Math.round(100 - walkonH2H.aWinProb)}%</span>
-                </div>
-                <div className="h-1.5 rounded-full overflow-hidden flex bg-muted">
-                  <div className="h-full bg-primary" style={{ width: `${walkonH2H.aWinProb}%` }} />
-                  <div className="h-full bg-secondary flex-1" />
-                </div>
-                <p className="text-[9px] uppercase tracking-widest text-muted-foreground mt-1">{t("game.winProbability")}</p>
-              </div>
-            )}
-            {/* Average specifically FROM these head-to-head games — a genuinely different number
-                from the lifetime average shown per player above, not a duplicate of it. */}
-            {walkonH2H.total > 0 && (
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
-                {t("game.duelAverage")}: {walkonH2H.aAvg.toFixed(1)} : {walkonH2H.bAvg.toFixed(1)}
-              </p>
-            )}
-            {/* The one true fact worth highlighting from this H2H history (streak, close
-                rivalry, or a revenge framing off the last meeting) — see rivalryStoryline.ts. */}
-            {walkonH2H.storyline && (
-              <p className="text-xs text-accent font-medium mt-3 max-w-xs mx-auto px-2">
-                {walkonH2H.storyline}
-              </p>
-            )}
-          </div>
-        )}
-        <p className="relative text-[10px] uppercase tracking-widest text-muted-foreground mt-10 animate-slide-up">
-          {t("game.tapToStart")}
-        </p>
-      </div>
-    );
+    return <GameWalkonStats game={game} dbPlayers={dbPlayers} walkonH2H={walkonH2H} onAdvance={() => setPhase("playing")} />;
   }
 
   if (!game) return null;
@@ -3196,218 +2569,27 @@ const GamePage = () => {
       {/* Winner overlay */}
       {game.isFinished && (
         <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto overscroll-y-contain py-8">
-          <div className="bg-card border border-primary/30 rounded-2xl p-8 text-center animate-scale-in max-w-md mx-4 glow-cyan">
-            <Trophy className="w-16 h-16 text-accent mx-auto mb-4" />
-            <h2 className="text-3xl font-display uppercase mb-1">{game.winnerName}</h2>
-            <p className="text-accent font-display text-xl uppercase mb-4">{t("game.wins")}</p>
-            {/* Sets-Modus: the match was actually decided by sets, not by the final set's leg
-                score alone — leading with setsWon (and naming the final set's own leg score
-                underneath, in parentheses, for anyone who wants the detail) avoids the final
-                score reading like "3:1" when the real story was e.g. "2 Sätze : 1, im letzten
-                Satz 3:2". */}
-            {game.setsMode && game.setsWon && (
-              <p className="text-sm text-muted-foreground mb-4">
-                {game.setsWon.join(" : ")} {t("game.setsSuffix")}
-                <span className="text-xs text-muted-foreground/70"> ({game.legsWon.join(" : ")} {t("game.legsSuffix")} {t("game.inFinalSet")})</span>
-              </p>
-            )}
-            {game.bestOfLegs > 1 && !game.setsMode && <p className="text-sm text-muted-foreground mb-4">{game.legsWon.join(" : ")} {t("game.legsSuffix")}</p>}
-
-            {/* Round 3 Rang 8: a small supportive line for whoever didn't win — this screen used
-                to be entirely one-sided (trophy + winner name only), with nothing acknowledging
-                the other player at all. Only shown for a genuine 1-on-1 (or 2-team) match, where
-                "the loser" is unambiguous — a 3+-player free-for-all has no single obvious
-                runner-up to address here without a fuller placement breakdown this screen
-                doesn't have. */}
-            {(() => {
-              const participants = game.teams ?? game.players;
-              if (participants.length !== 2 || game.winnerIndex === undefined) return null;
-              const loserName = participants[game.winnerIndex === 0 ? 1 : 0].name;
-              return (
-                <p className="text-sm text-muted-foreground mb-4">
-                  {t("game.consolationMessage").replace("{name}", loserName)}
-                </p>
-              );
-            })()}
-
-            {/* Leg filter — every stat block below (cards, distribution, detailed table, field
-                breakdown) reads through statFor(p), which reacts to this tab. Only shown once
-                there's more than one leg to actually distinguish. */}
-            {postGameStats && postGameStats[0].perLeg.length > 1 && (
-              <div className="flex flex-wrap justify-center gap-1.5 mb-4">
-                <button onClick={() => setSelectedLegTab("all")}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${selectedLegTab === "all" ? "bg-primary/15 text-primary" : "bg-muted/40 text-muted-foreground hover:text-foreground"}`}>
-                  {t("game.overallTab")}
-                </button>
-                {postGameStats[0].perLeg.map((_, li) => (
-                  <button key={li} onClick={() => setSelectedLegTab(li)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${selectedLegTab === li ? "bg-primary/15 text-primary" : "bg-muted/40 text-muted-foreground hover:text-foreground"}`}>
-                    {t("game.leg")} {li + 1}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {postGameStats && (
-              <div className="grid grid-cols-2 gap-3 mb-4 text-left">
-                {postGameStats.map((p) => {
-                  const s = statFor(p);
-                  return (
-                    <div key={p.name} className="bg-muted/50 rounded-lg p-3 text-xs space-y-1">
-                      <p className="font-semibold text-sm truncate">{p.name}</p>
-                      <p className="text-muted-foreground">Ø <span className="text-foreground font-bold">{s.average.toFixed(1)}</span></p>
-                      <p className="text-muted-foreground">High <span className="text-foreground font-bold">{s.highscore}</span></p>
-                      <p className="text-muted-foreground">First 9 <span className="text-foreground font-bold">{s.first9.toFixed(1)}</span></p>
-                      {s.s180 > 0 && <p className="text-accent font-bold">🎯 {s.s180}× 180!</p>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Round-score distribution (40+ through 180) — always visible, not gated behind
-                "detaillierte Statistiken", since seeing HOW an average was built up (a run of
-                steady 60s vs. one lucky 180) is exactly what a post-match glance is for. */}
-            {postGameStats && postGameStats.some((p) => statFor(p).tierBreakdown.some((tier) => tier.count > 0)) && (
-              <div className="bg-muted/30 rounded-lg p-3 mb-4 text-xs overflow-x-auto">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 text-left">{t("game.scoreDistribution")}</p>
-                <div className="grid gap-y-1" style={{ gridTemplateColumns: `1fr repeat(${postGameStats.length}, 1fr)` }}>
-                  <span />
-                  {postGameStats.map((p) => <span key={p.name} className="font-semibold text-primary text-center truncate">{p.name}</span>)}
-                  {statFor(postGameStats[0]).tierBreakdown.map((tier, ti) => (
-                    <span key={tier.label} className="contents">
-                      <span className="text-left text-muted-foreground">{tier.label}</span>
-                      {postGameStats.map((p) => {
-                        const count = statFor(p).tierBreakdown[ti].count;
-                        return (
-                          <span key={p.name} className={`text-center font-display ${tier.label === "180" && count > 0 ? "text-accent font-bold" : ""}`}>
-                            {count || "–"}
-                          </span>
-                        );
-                      })}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {postGameStats && (
-              <button onClick={() => setShowDetailedStats(!showDetailedStats)} className="text-xs text-primary underline mb-4 block mx-auto">
-                {showDetailedStats ? t("game.lessStats") : t("game.detailedStats")}
-              </button>
-            )}
-
-            {/* Detailed stats deliberately does NOT repeat Ø/First9/Highscore/100+/180! — those
-                are already visible above (the cards and the distribution table), so this only
-                adds numbers that aren't shown anywhere else yet. */}
-            {showDetailedStats && postGameStats && (
-              <div className="bg-muted/30 rounded-lg p-4 mb-4 text-xs overflow-x-auto">
-                <div className="grid gap-y-2" style={{ gridTemplateColumns: `1fr repeat(${postGameStats.length}, 1fr)` }}>
-                  <span className="text-muted-foreground text-left">{t("game.statistic")}</span>
-                  {postGameStats.map(p => <span key={p.name} className="font-semibold text-primary text-center truncate">{p.name}</span>)}
-
-                  {[
-                    { l: t("game.throwsCount"), v: (p: typeof postGameStats[number]) => statFor(p).totalThrows },
-                    { l: t("game.rounds"), v: (p: typeof postGameStats[number]) => Math.ceil(statFor(p).totalThrows / 3) },
-                    { l: t("game.checkoutRate"), v: (p: typeof postGameStats[number]) => {
-                        const c = statFor(p).checkout;
-                        return c.attempts > 0 ? `${c.hits}/${c.attempts} (${c.percentage.toFixed(0)}%)` : "–";
-                      } },
-                    { l: t("game.triplesLabel"), v: (p: typeof postGameStats[number]) => statFor(p).triples },
-                    { l: t("game.points"), v: (p: typeof postGameStats[number]) => statFor(p).totalPoints },
-                  ].map(row => (
-                    <span key={row.l} className="contents">
-                      <span className="text-left text-muted-foreground">{row.l}</span>
-                      {postGameStats.map(p => <span key={p.name} className="text-center font-display">{row.v(p)}</span>)}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Individual-field breakdown — exactly which segments (Triple 20, Single 1, ...)
-                    were hit and how often. Only the numbers that actually got hit by anyone get a
-                    row, since most matches leave most of the board untouched. */}
-                {visibleSegmentRows.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-border/40">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 text-left">{t("game.fieldBreakdown")}</p>
-                    <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${postGameStats.length}, 1fr)` }}>
-                      {postGameStats.map((p) => {
-                        const segments = statFor(p).segments;
-                        return (
-                          <div key={p.name}>
-                            <p className="text-[10px] font-semibold text-primary text-center truncate mb-1">{p.name}</p>
-                            <table className="w-full text-[10px]">
-                              <thead>
-                                <tr className="text-muted-foreground">
-                                  <th className="text-left font-normal"> </th>
-                                  <th className="font-normal">S</th>
-                                  <th className="font-normal">D</th>
-                                  <th className="font-normal">T</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {visibleSegmentRows.map((n) => (
-                                  <tr key={n}>
-                                    <td className="text-left text-muted-foreground">{n === 25 ? "Bull" : n}</td>
-                                    <td className="text-center font-display">{segmentCount(segments, n, 1) || "·"}</td>
-                                    <td className="text-center font-display">{segmentCount(segments, n, 2) || "·"}</td>
-                                    <td className="text-center font-display">{n === 25 ? <span className="text-muted-foreground/40">–</span> : (segmentCount(segments, n, 3) || "·")}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                            {segments.misses > 0 && (
-                              <p className="text-[9px] text-muted-foreground text-center mt-1">Miss ×{segments.misses}</p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* KI-Spielbericht (2026-09-09) — only once the game is actually persisted server-side,
-                since gameId is a foreign key into `games` (the private post-match reflection that
-                used to sit here too was removed 2026-09-10 — see MatchReflection.tsx, now unused). */}
-            {gameSaved && !queuedOffline && <AiMatchReport gameId={pendingGameIdRef.current} />}
-
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={shareResult} disabled={sharingResult} className="gap-1.5 shrink-0">
-                <Share2 className="w-4 h-4" /> {sharingResult ? "…" : t("game.share")}
-              </Button>
-              {/* Rematch only for a plain, freely-configured game — a tournament/league match
-                  comes from a fixed bracket/fixture, not a setup a rematch could just re-run. */}
-              {!tournamentLinkName && !leagueLinkRef.current && (
-                <Button variant="outline" onClick={startRematch} className="gap-1.5 shrink-0">
-                  <RotateCcw className="w-4 h-4" /> {t("game.rematch")}
-                </Button>
-              )}
-              {tournamentLinkName ? (
-                <Button
-                  onClick={() => {
-                    const link = tournamentLinkRef.current;
-                    if (!link) { navigate("/tournament"); return; }
-                    navigate(link.board ? `/tournament/${link.tournamentId}?board=${link.board}` : `/tournament/${link.tournamentId}`);
-                  }}
-                  className="flex-1 font-display uppercase"
-                >
-                  {t("game.backToTournament")}
-                </Button>
-              ) : leagueLinkRef.current ? (
-                <Button onClick={() => navigate(`/leagues/${leagueLinkRef.current!.leagueId}`)} className="flex-1 font-display uppercase">
-                  {t("game.backToLeague")}
-                </Button>
-              ) : (
-                <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">{t("home.newGame")}</Button>
-              )}
-            </div>
-            {gameSaved && (
-              <p className="text-[10px] text-muted-foreground mt-2">
-                {queuedOffline ? t("game.savedOffline") : t("game.gameSaved")}
-              </p>
-            )}
-          </div>
+          <GamePostGame
+            game={game}
+            postGameStats={postGameStats}
+            statFor={statFor}
+            selectedLegTab={selectedLegTab}
+            setSelectedLegTab={setSelectedLegTab}
+            showDetailedStats={showDetailedStats}
+            setShowDetailedStats={setShowDetailedStats}
+            visibleSegmentRows={visibleSegmentRows}
+            gameSaved={gameSaved}
+            queuedOffline={queuedOffline}
+            pendingGameIdRef={pendingGameIdRef}
+            sharingResult={sharingResult}
+            shareResult={shareResult}
+            tournamentLinkName={tournamentLinkName}
+            tournamentLinkRef={tournamentLinkRef}
+            leagueLinkRef={leagueLinkRef}
+            startRematch={startRematch}
+            resetGame={resetGame}
+            navigate={navigate}
+          />
         </div>
       )}
 
