@@ -2619,10 +2619,47 @@ const GamePage = () => {
 
       {cameraEnabled ? (
         <>
+          {/* Toolbar — moved above the scoreboard instead of pinned to the bottom of the screen
+              (Screen-Audit Richtung 2). It was a plain shrink-0 flex sibling, never itself
+              `position: fixed`, but still reported as invisible in portrait on Android — the
+              system gesture/nav bar there can overlap the very bottom of a `fixed inset-0`
+              screen even when nothing on the page is fixed to it. A top-anchored bar sits next
+              to the status bar instead, which every Capacitor Android build already keeps clear,
+              sidestepping that whole class of bug rather than chasing its exact cause blind.
+              Übernimmt jetzt auch den Spielabbruch-Button, der vorher als eigener Ghost-Button
+              unten im Scroll-Bereich saß — dieselben 4 Aktionen wie im Handeingabe-Zweig. */}
+          <div className="shrink-0 px-4 pt-2 pb-2 flex gap-2 border-b border-border/40">
+            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
+              <Undo2 className="w-4 h-4" /> {t("game.undo")}
+            </Button>
+            <Button
+              variant={showManualInput ? "default" : "outline"}
+              onClick={() => setShowManualInput((v) => !v)}
+              className="gap-1"
+              title={t("game.toggleManualEntry")}
+            >
+              <Keyboard className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => { cameraWantedRef.current = false; setCameraEnabled(false); }}
+              className="gap-1"
+              title={t("game.closeCamera")}
+            >
+              <Camera className="w-4 h-4" /> {t("game.camOff")}
+            </Button>
+            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </Button>
+            <Button variant="outline" onClick={() => setConfirmCancelGame(true)} className="gap-1 text-muted-foreground hover:text-destructive" title={t("game.cancelGame")} aria-label={t("game.cancelGame")}>
+              <RotateCcw className="w-4 h-4" />
+            </Button>
+          </div>
+
           {/* The scoreboard now scrolls WITH everything else in this region (sticky to ITS top,
               not fixed above it) — the outer window (and the page behind it) still never scrolls
               while the camera is open, only this one region does. */}
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 pb-3">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 pb-3" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
             {scoreboardBlock}
             {doubleInBanner}
             {pendingCheckoutChoice && (
@@ -2735,36 +2772,6 @@ const GamePage = () => {
               onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
               onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
             />
-
-            <Button variant="ghost" onClick={() => setConfirmCancelGame(true)} className="w-full mt-3 text-muted-foreground">
-              <RotateCcw className="w-4 h-4 mr-2" /> {t("game.cancelGame")}
-            </Button>
-          </div>
-
-          {/* Compact bottom bar — always reachable, no matter how tall the camera/manual-input content gets. */}
-          <div className="shrink-0 border-t border-border bg-background/95 backdrop-blur px-4 py-2.5 flex gap-2">
-            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
-              <Undo2 className="w-4 h-4" /> {t("game.undo")}
-            </Button>
-            <Button
-              variant={showManualInput ? "default" : "outline"}
-              onClick={() => setShowManualInput((v) => !v)}
-              className="gap-1"
-              title={t("game.toggleManualEntry")}
-            >
-              <Keyboard className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="default"
-              onClick={() => { cameraWantedRef.current = false; setCameraEnabled(false); }}
-              className="gap-1"
-              title={t("game.closeCamera")}
-            >
-              <Camera className="w-4 h-4" /> {t("game.camOff")}
-            </Button>
-            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </Button>
           </div>
         </>
       ) : (
@@ -2783,57 +2790,12 @@ const GamePage = () => {
         // bottom bar already uses (a few hundred lines up), which was never reported to have this
         // bug. Only the pad + throw history scroll now, in the middle.
         <>
-          <div className="shrink-0 bg-background px-4">
-            {scoreboardBlock}
-            {doubleInBanner}
-            {/* Screen-Audit Richtung 1 — same always-mounted fix as the camera branch above. */}
-            <CheckoutSuggestion
-              active={checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
-              remaining={currentRemaining} playerName={currentPlayerName}
-              personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
-              personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
-            />
-            {cricketBoard}
-          </div>
-
-          {/* Pad + history — the only part of this layout that scrolls now. Portrait stacks
-              pad-then-history (the pad is the primary, most-frequently-tapped control, so it comes
-              first); landscape splits them into two columns side by side (1fr history : 2fr pad,
-              same ratio as before), so reaching history no longer means scrolling past the pad in
-              that orientation either. */}
-          <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[1fr_2fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden px-4">
-            <div className="pt-3 pb-3 landscape:col-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
-              <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
-                onThrow={throwDart}
-                onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
-                inputMode={dartInputMode} onInputModeChange={setDartInputMode}
-                dartsThisRound={dartsThisRound} />
-            </div>
-
-            {/* Correcting a mis-tap now scrolls independently of the pad instead of always sitting
-                below its full height — a short scroll away in portrait, or right alongside the pad
-                with no scrolling at all in landscape. */}
-            <div className="pb-3 landscape:col-start-1 landscape:row-start-1 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain">
-              <ThrowHistoryEditor
-                throws={currentThrows}
-                playerName={currentPlayerName}
-                editModeOn={editingThrowIdx !== null}
-                onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
-                openChipIdx={editingChipIdx}
-                onOpenChipChange={setEditingChipIdx}
-                onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
-                onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
-              />
-            </div>
-          </div>
-
-          {/* Footer — always reachable no matter how tall the pad or history above gets, the same
-              non-sticky "shrink-0 border-t" bottom bar the camera-enabled branch already uses
-              successfully. Undo/Cam/Sound/Cancel used to live inside the scrolling pad cell, one
-              more thing that could end up below the fold on a short phone; pinning them here
-              instead guarantees they're on screen from the very first frame, before any dart has
-              been thrown — the actual bug report this rewrite targets. */}
-          <div className="shrink-0 border-t border-border bg-background px-4 py-2.5 flex gap-2">
+          {/* Toolbar — moved above the scoreboard (Screen-Audit Richtung 2), same reasoning as
+              the camera-enabled branch above: a bottom-pinned bar was still reported invisible in
+              portrait on Android even as a plain shrink-0 flex sibling, most likely the system
+              gesture/nav bar overlapping the very bottom of this `fixed inset-0` screen. Top-
+              anchored, next to the status bar, sidesteps that class of bug entirely. */}
+          <div className="shrink-0 bg-background px-4 pt-2 pb-2 flex gap-2 border-b border-border/40">
             <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
               <Undo2 className="w-4 h-4" /> {t("game.undo")}
             </Button>
@@ -2858,6 +2820,50 @@ const GamePage = () => {
             <Button variant="outline" onClick={() => setConfirmCancelGame(true)} className="gap-1 text-muted-foreground hover:text-destructive" title={t("game.cancelGame")} aria-label={t("game.cancelGame")}>
               <RotateCcw className="w-4 h-4" />
             </Button>
+          </div>
+
+          <div className="shrink-0 bg-background px-4">
+            {scoreboardBlock}
+            {doubleInBanner}
+            {/* Screen-Audit Richtung 1 — same always-mounted fix as the camera branch above. */}
+            <CheckoutSuggestion
+              active={checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
+              remaining={currentRemaining} playerName={currentPlayerName}
+              personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
+              personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
+            />
+            {cricketBoard}
+          </div>
+
+          {/* Pad + history — the only part of this layout that scrolls now. Portrait stacks
+              pad-then-history (the pad is the primary, most-frequently-tapped control, so it comes
+              first); landscape splits them into two columns side by side (1fr history : 2fr pad,
+              same ratio as before), so reaching history no longer means scrolling past the pad in
+              that orientation either. */}
+          <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[1fr_2fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden px-4">
+            <div className="pt-3 pb-3 landscape:col-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+              <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
+                onThrow={throwDart}
+                onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
+                inputMode={dartInputMode} onInputModeChange={setDartInputMode}
+                dartsThisRound={dartsThisRound} />
+            </div>
+
+            {/* Correcting a mis-tap now scrolls independently of the pad instead of always sitting
+                below its full height — a short scroll away in portrait, or right alongside the pad
+                with no scrolling at all in landscape. */}
+            <div className="pb-3 landscape:col-start-1 landscape:row-start-1 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+              <ThrowHistoryEditor
+                throws={currentThrows}
+                playerName={currentPlayerName}
+                editModeOn={editingThrowIdx !== null}
+                onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
+                openChipIdx={editingChipIdx}
+                onOpenChipChange={setEditingChipIdx}
+                onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
+                onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
+              />
+            </div>
           </div>
         </>
       )}
