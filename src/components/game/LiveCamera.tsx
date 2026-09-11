@@ -157,11 +157,47 @@ const loadTrainingDataEnabled = (): boolean => {
   return window.localStorage.getItem(TRAINING_DATA_KEY) !== "off";
 };
 
+/**
+ * UX-Audit Befund #2 (Trainingsfoto-Zustimmung, Option A): the toggle above defaulted ON with
+ * no explicit decision moment — a player could go through their first camera-scored round
+ * never realizing a board photo just got uploaded. This gate asks exactly once, full-screen,
+ * before the camera panel becomes usable; whatever the answer, TRAINING_DATA_KEY above is set
+ * accordingly and stays changeable any time via the toggle further down (same key, same effect).
+ */
+const TRAINING_CONSENT_ASKED_KEY = "dartcam-training-consent-asked";
+const loadTrainingConsentAsked = (): boolean => {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(TRAINING_CONSENT_ASKED_KEY) === "yes";
+};
+
+/**
+ * UX-Audit Befund #3 (Kalibrierungs-Guide, Option B): the four calibration taps only ever had
+ * the small status line ("Kalibrierung 1/4: Tippe auf Doppel 20 (oben)") to go on — easy to miss,
+ * no situative diagram. Shown once automatically before the first-ever calibration, and re-
+ * openable any time via the "?" button on the calibration screen. Order MUST mirror CALIB_KEYS
+ * below exactly (D20 oben → D3 unten → D11 links → D6 rechts) — that's the real tap order the
+ * app asks for, not a clockwise sweep, so the guide has to match it or it actively misleads.
+ */
+const CALIB_GUIDE_SEEN_KEY = "dartcam-calib-guide-seen";
+const loadCalibGuideSeen = (): boolean => {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(CALIB_GUIDE_SEEN_KEY) === "yes";
+};
+
 const CALIB_KEY = "dartcam-calibration-v5";
 /** Translation keys (not literal strings — this is module scope, no access to the language
  *  context) resolved via t() at each call site. */
 const CALIB_LABEL_KEYS = ["camera.calibD20", "camera.calibD3", "camera.calibD11", "camera.calibD6"] as const;
 const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
+// Schematic-diagram positions for the calibration guide overlay, in the SAME order as CALIB_KEYS
+// above — top (D20), bottom (D3), left (D11), right (D6). NOT a clockwise sweep; matches the real
+// tap order the app asks for, on a 0-100 viewBox circle centered at (50,50).
+const CALIB_GUIDE_POINTS = [
+  { x: 50, y: 15 }, // D20 — oben
+  { x: 50, y: 85 }, // D3 — unten
+  { x: 15, y: 50 }, // D11 — links
+  { x: 85, y: 50 }, // D6 — rechts
+] as const;
 
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
 // remembers which physical board it's pointed at, and calibration + camera-device choice are
@@ -386,6 +422,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (typeof window !== "undefined") window.localStorage.setItem(TRAINING_DATA_KEY, enabled ? "on" : "off");
     setTrainingDataEnabledState(enabled);
   };
+  const [trainingConsentAsked, setTrainingConsentAskedState] = useState<boolean>(() => loadTrainingConsentAsked());
+  const answerTrainingConsent = (enabled: boolean) => {
+    setTrainingDataEnabled(enabled);
+    if (typeof window !== "undefined") window.localStorage.setItem(TRAINING_CONSENT_ASKED_KEY, "yes");
+    setTrainingConsentAskedState(true);
+  };
+  const [showCalibGuide, setShowCalibGuide] = useState(false);
+  const [calibGuideStep, setCalibGuideStep] = useState(0);
+  const dismissCalibGuide = () => {
+    if (typeof window !== "undefined") window.localStorage.setItem(CALIB_GUIDE_SEEN_KEY, "yes");
+    setShowCalibGuide(false);
+  };
   // Snapshot of the image pair a scan was just run on, held onto until the round is committed
   // (by then `preRemovalImageDataRef`/`emptyImageDataRef` have already been cleared/overwritten
   // for the next throw) — see uploadTrainingSample.
@@ -446,6 +494,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // auch hier: removeDart/discardRound feuern erst nach Bestätigung im AlertDialog.
   const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
   const [confirmRemoveIndex, setConfirmRemoveIndex] = useState<number | null>(null);
+  // UX-Audit Befund #4, Option B (Kamera-Review-Layout, "Alle drei auf einen Blick"): all three
+  // darts already listed at once (kept — the "one at a time" alternative would have been a step
+  // backward), but corrections went through two tiny native <select> dropdowns — exactly the
+  // "winzige Bedienelemente an kritischer Stelle" the original audit flagged. Tapping a row now
+  // expands it in place into large tap targets; the other rows stay visible in their compact
+  // summary form, matching the chosen mockup. Only one row open at a time.
+  const [expandedReviewIndex, setExpandedReviewIndex] = useState<number | null>(null);
   const calibOverlayRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1158,6 +1213,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setPendingTaps([]);
       setPhase("calibrate");
       setStatus(`${t("camera.calibStep")} 1/4: ${t("camera.tapOn")} ${t(CALIB_LABEL_KEYS[0])}`);
+      if (!loadCalibGuideSeen()) {
+        setCalibGuideStep(0);
+        setShowCalibGuide(true);
+      }
     }
   };
 
@@ -1562,6 +1621,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     playRoundCommittedSound();
     setAccumulated([]);
     accumulatedRef.current = [];
+    setExpandedReviewIndex(null);
     setError(null);
     setScanFailed(false);
     setNeedsReview(false);
@@ -1578,6 +1638,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setNeedsReview(false);
     setAccumulated([]);
     accumulatedRef.current = [];
+    setExpandedReviewIndex(null);
     setError(null);
     setGeminiSuggestion(null);
     const sig = buildSignature();
@@ -1610,6 +1671,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const removeDart = (i: number) => {
     setAccumulated((prev) => prev.filter((_, k) => k !== i));
+    setExpandedReviewIndex(null);
   };
 
   const adjustDart = (
@@ -1737,6 +1799,38 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   return (
     <div className="mb-3 space-y-2 rounded-xl border border-border gradient-card shadow-elevation-sm p-3">
+      {/* UX-Audit Befund #2, Option A (Vollbild-Gate, einmalig): blocks the whole panel until
+          answered once; camera preview may already be initializing underneath (a separate OS
+          permission, not this consent), but nothing here is interactive and no round can be
+          committed — so no training upload can fire — before this is answered. Changeable any
+          time afterward via the toggle further down in this same panel (same TRAINING_DATA_KEY). */}
+      {!trainingConsentAsked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-border gradient-card shadow-elevation-lg p-5">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+              <Camera className="h-7 w-7 text-primary" />
+            </div>
+            <h3 className="mb-2 text-center font-display text-base uppercase">
+              {t("camera.trainingConsentTitle")}
+            </h3>
+            <p className="mb-4 text-center text-xs leading-relaxed text-muted-foreground">
+              {t("camera.trainingDataDesc")}
+            </p>
+            <div className="space-y-2">
+              <Button className="w-full justify-center gap-2" onClick={() => answerTrainingConsent(true)}>
+                <Check className="h-4 w-4" /> {t("camera.trainingConsentAccept")}
+              </Button>
+              <Button variant="outline" className="w-full justify-center gap-2" onClick={() => answerTrainingConsent(false)}>
+                <X className="h-4 w-4" /> {t("camera.trainingConsentDecline")}
+              </Button>
+            </div>
+            <p className="mt-4 text-center text-[10px] text-muted-foreground">
+              {t("camera.trainingConsentFootnote")}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Camera className="h-4 w-4 text-primary" />
@@ -1810,6 +1904,72 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 <TapMagnifier fx={activeTap.x} fy={activeTap.y} />
               </>
             )}
+          </div>
+        )}
+
+        {/* UX-Audit Befund #3, Option B (Kalibrierungs-Guide): re-openable any time via the "?"
+            button, not just shown once and gone — a player who skipped it or forgot can call it
+            back up on demand instead of muddling through the tiny status line alone. */}
+        {phase === "calibrate" && !showCalibGuide && (
+          <button
+            type="button"
+            onClick={() => { setCalibGuideStep(0); setShowCalibGuide(true); }}
+            className="absolute right-2 top-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-background/85 text-xs font-bold text-muted-foreground shadow"
+            title={t("camera.calibGuideReopenTitle")}
+            aria-label={t("camera.calibGuideReopenTitle")}
+          >
+            ?
+          </button>
+        )}
+
+        {phase === "calibrate" && showCalibGuide && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/92 backdrop-blur-sm p-4">
+            <div className="w-full max-w-[240px] rounded-xl border border-border gradient-card shadow-elevation-md p-4 text-center">
+              <p className="mb-2 font-display text-[10px] uppercase tracking-widest text-muted-foreground">
+                {t("camera.calibGuideStepLabel")} {calibGuideStep + 1}/4
+              </p>
+              <svg viewBox="0 0 100 100" className="mx-auto mb-3 h-24 w-24">
+                <circle cx="50" cy="50" r="38" fill="none" stroke="hsl(var(--border))" strokeWidth="1.5" />
+                <circle cx="50" cy="50" r="24" fill="none" stroke="hsl(var(--border))" strokeWidth="1.5" />
+                {CALIB_GUIDE_POINTS.map((p, i) => (
+                  <circle
+                    key={i}
+                    cx={p.x}
+                    cy={p.y}
+                    r={i === calibGuideStep ? 6 : 4}
+                    fill={i === calibGuideStep ? "hsl(var(--primary))" : "hsl(var(--muted))"}
+                    stroke={i === calibGuideStep ? "hsl(var(--primary))" : "hsl(var(--border))"}
+                    strokeWidth={1}
+                  />
+                ))}
+              </svg>
+              <p className="mb-1 font-display text-sm uppercase">
+                {t("camera.tapOn")} {t(CALIB_LABEL_KEYS[calibGuideStep])}
+              </p>
+              {calibGuideStep === 0 && (
+                <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">{t("camera.calibGuideBody")}</p>
+              )}
+              <div className="mb-3 flex justify-center gap-1">
+                {CALIB_GUIDE_POINTS.map((_, i) => (
+                  <span key={i} className={`h-1.5 w-4 rounded-full ${i === calibGuideStep ? "bg-primary" : "bg-muted"}`} />
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" className="flex-1" onClick={dismissCalibGuide}>
+                  {t("camera.calibGuideSkip")}
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    if (calibGuideStep < CALIB_GUIDE_POINTS.length - 1) setCalibGuideStep((s) => s + 1);
+                    else dismissCalibGuide();
+                  }}
+                >
+                  {calibGuideStep < CALIB_GUIDE_POINTS.length - 1 ? t("camera.calibGuideNext") : t("camera.calibGuideStart")}
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -2124,84 +2284,126 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       {accumulated.length > 0 && (
         <div className="space-y-1.5">
-          {accumulated.map((dart, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-lg bg-muted p-2">
-              <span className="w-10 text-[10px] text-muted-foreground">{t("game.dartCounterLabel")} {i + 1}</span>
-              <select
-                value={dart.multiplier}
-                onChange={(e) => adjustDart(i, "multiplier", Number(e.target.value))}
-                className="rounded border border-border bg-background px-1 py-1 text-xs"
-                disabled={dart.baseValue === 0}
-              >
-                <option value={1}>S</option>
-                <option value={2}>D</option>
-                {/* No triple ring in the bull — offering it there just invites picking a
-                    combination that can't correspond to a real dart. */}
-                <option value={3} disabled={dart.baseValue === 25}>T</option>
-              </select>
-              <select
-                value={dart.baseValue}
-                onChange={(e) => adjustDart(i, "baseValue", Number(e.target.value))}
-                className="flex-1 rounded border border-border bg-background px-1 py-1 text-xs"
-              >
-                <option value={0}>{t("game.miss")}</option>
-                {Array.from({ length: 20 }, (_, k) => k + 1).map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-                <option value={25}>{t("camera.bullOption")}</option>
-              </select>
-              <span className="w-10 text-right font-display text-primary">{dart.points}</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-9 w-9 ${repositioningIndex === i ? "text-accent" : ""}`}
-                onClick={() => {
-                  if (repositioningIndex === i) {
-                    cancelReposition();
-                    return;
-                  }
-                  setRepositioningIndex(i);
-                  // Pre-seed the draft at the dart's current position so there's already a
-                  // visible marker to nudge/re-tap from, instead of starting from nothing.
-                  setRepositionDraft(hasPosition(dart) ? toFullFrameXY(dart) : null);
-                }}
-                title={t("camera.correctPositionTitle")}
-              >
-                <Target className="h-3.5 w-3.5" />
-              </Button>
-              <AlertDialog open={confirmRemoveIndex === i} onOpenChange={(open) => setConfirmRemoveIndex(open ? i : null)}>
-                <AlertDialogTrigger asChild>
+          {accumulated.map((dart, i) => {
+            const isOpen = expandedReviewIndex === i;
+            return (
+              <div key={i} className={`rounded-lg bg-muted overflow-hidden ${isOpen ? "ring-1 ring-primary/40" : ""}`}>
+                <div className="flex items-center gap-2 p-2">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedReviewIndex(isOpen ? null : i)}
+                    className="flex flex-1 items-center gap-2 text-left min-w-0"
+                  >
+                    <span className="w-10 shrink-0 text-[10px] text-muted-foreground">{t("game.dartCounterLabel")} {i + 1}</span>
+                    <span className="flex-1 truncate font-display text-sm text-foreground">
+                      {dart.baseValue === 0 ? t("game.miss") : dartLabel(dart)}
+                    </span>
+                    <span className="shrink-0 font-display text-primary">{dart.points}</span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  </button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9"
-                    title={t("camera.removeDartTitle")}
+                    className={`h-9 w-9 shrink-0 ${repositioningIndex === i ? "text-accent" : ""}`}
+                    onClick={() => {
+                      if (repositioningIndex === i) {
+                        cancelReposition();
+                        return;
+                      }
+                      setRepositioningIndex(i);
+                      // Pre-seed the draft at the dart's current position so there's already a
+                      // visible marker to nudge/re-tap from, instead of starting from nothing.
+                      setRepositionDraft(hasPosition(dart) ? toFullFrameXY(dart) : null);
+                    }}
+                    title={t("camera.correctPositionTitle")}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Target className="h-3.5 w-3.5" />
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>{t("camera.removeDartConfirmTitle")}</AlertDialogTitle>
-                    <AlertDialogDescription>{t("camera.removeDartConfirmDesc")}</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => {
-                        removeDart(i);
-                        setConfirmRemoveIndex(null);
-                      }}
-                    >
-                      {t("camera.removeDartConfirm")}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          ))}
+                  <AlertDialog open={confirmRemoveIndex === i} onOpenChange={(open) => setConfirmRemoveIndex(open ? i : null)}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0"
+                        title={t("camera.removeDartTitle")}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{t("camera.removeDartConfirmTitle")}</AlertDialogTitle>
+                        <AlertDialogDescription>{t("camera.removeDartConfirmDesc")}</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            removeDart(i);
+                            setConfirmRemoveIndex(null);
+                          }}
+                        >
+                          {t("camera.removeDartConfirm")}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+
+                {isOpen && (
+                  <div className="space-y-1.5 border-t border-border/60 bg-background/40 p-2.5">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {([[1, "S"], [2, "D"], [3, "T"]] as const).map(([m, label]) => (
+                        <button
+                          key={m}
+                          type="button"
+                          disabled={dart.baseValue === 0 || (dart.baseValue === 25 && m === 3)}
+                          onClick={() => adjustDart(i, "multiplier", m)}
+                          className={`rounded-lg py-2.5 text-sm font-display font-medium transition-colors disabled:opacity-40 ${
+                            dart.multiplier === m ? "bg-primary text-primary-foreground" : "bg-muted-foreground/10 text-foreground/80"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => adjustDart(i, "baseValue", 0)}
+                        className={`col-span-5 rounded-lg py-2 text-xs font-medium transition-colors ${
+                          dart.baseValue === 0 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/10 text-foreground/80"
+                        }`}
+                      >
+                        {t("game.miss")}
+                      </button>
+                      {Array.from({ length: 20 }, (_, k) => k + 1).map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => adjustDart(i, "baseValue", v)}
+                          className={`rounded-lg py-2 text-xs font-display transition-colors ${
+                            dart.baseValue === v ? "bg-secondary text-secondary-foreground font-bold" : "bg-muted-foreground/10 text-foreground/80"
+                          }`}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => adjustDart(i, "baseValue", 25)}
+                        className={`col-span-5 rounded-lg py-2 text-xs font-medium transition-colors ${
+                          dart.baseValue === 25 ? "bg-secondary text-secondary-foreground font-bold" : "bg-muted-foreground/10 text-foreground/80"
+                        }`}
+                      >
+                        {t("camera.bullOption")}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

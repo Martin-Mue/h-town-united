@@ -138,6 +138,19 @@ const StatisticsPage = () => {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   const [showSeasonRecap, setShowSeasonRecap] = useState(false);
   const [showFieldBreakdown, setShowFieldBreakdown] = useState(false);
+  // UX-Audit Befund #7 (Einfach/Profi): the player-detail view mixed a handful of intuitive
+  // numbers (Spiele, Sieg-Quote, Schnitt) with genuinely jargon-heavy cards (Aim-Bias,
+  // Clutch-Quote, Checkout-Breakdown, MPR) at the same visual weight — fine for a turnier-erprobten
+  // Spieler, overwhelming for a Gelegenheitswerfer. "Profi" cards stay one tap away instead of
+  // disappearing, and the choice is remembered per device like viewScope below.
+  const [statsDetailMode, setStatsDetailMode] = useState<"simple" | "pro">(() => {
+    if (typeof window === "undefined") return "simple";
+    return window.localStorage.getItem("stats-detail-mode") === "pro" ? "pro" : "simple";
+  });
+  const setStatsDetailModePersist = (mode: "simple" | "pro") => {
+    if (typeof window !== "undefined") window.localStorage.setItem("stats-detail-mode", mode);
+    setStatsDetailMode(mode);
+  };
   const [activeTab, setActiveTab] = useState<"overview" | "players" | "h2h" | "history" | "highlights" | "training">("overview");
   const [viewScope, setViewScope] = useState<"club" | "personal">(() => {
     if (typeof window === "undefined") return "club";
@@ -1776,6 +1789,26 @@ const StatisticsPage = () => {
                 </div>
               </SectionCard>
 
+              {/* Einfach/Profi-Umschalter — siehe statsDetailMode-Kommentar oben. Direkt unter dem
+                  Header, damit sofort klar ist, dass hier mehr Tiefe wartet, statt sie unauffällig
+                  zwischen den Karten zu verstecken. */}
+              <div className="flex bg-muted rounded-full p-1 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setStatsDetailModePersist("simple")}
+                  className={`flex-1 text-center py-1.5 rounded-full text-xs font-bold transition-all ${statsDetailMode === "simple" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}
+                >
+                  {t("stats.simpleMode")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatsDetailModePersist("pro")}
+                  className={`flex-1 text-center py-1.5 rounded-full text-xs font-bold transition-all ${statsDetailMode === "pro" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}
+                >
+                  {t("stats.proMode")}
+                </button>
+              </div>
+
               {/* 180s: app-tracked + manually backfilled, combined per year. Placed right after
                   the header (not buried below checkout/cricket/aim-bias) and accent-highlighted
                   since it's the club's single most-hyped stat. Always shown for your own profile
@@ -1842,7 +1875,7 @@ const StatisticsPage = () => {
               </div>
 
               {/* Checkout & first-9 (from dart-by-dart data — only available for games played since this was added) */}
-              {advancedByPlayer[playerDetailStats.player.id] && (
+              {statsDetailMode === "pro" && advancedByPlayer[playerDetailStats.player.id] && (
                 <SectionCard className="mb-4">
                   <Eyebrow icon={Crosshair}>{t("stats.checkoutAndOpening")}</Eyebrow>
                   <div className="grid grid-cols-4 gap-2 items-start">
@@ -1868,7 +1901,7 @@ const StatisticsPage = () => {
                   finishes are actually breaking down; this splits the same attempts/hits by the
                   remaining-score range they started on, and (for the subset where it's actually
                   knowable, see dartStats.ts) by the specific double. */}
-              {advancedByPlayer[playerDetailStats.player.id] && advancedByPlayer[playerDetailStats.player.id].checkout.attempts > 0 && (
+              {statsDetailMode === "pro" && advancedByPlayer[playerDetailStats.player.id] && advancedByPlayer[playerDetailStats.player.id].checkout.attempts > 0 && (
                 <SectionCard className="mb-4">
                   <Eyebrow icon={Crosshair}>{t("stats.checkoutBreakdown")}</Eyebrow>
                   <p className="text-[10px] text-muted-foreground mb-3">{t("stats.checkoutByRangeLabel")}</p>
@@ -1906,7 +1939,7 @@ const StatisticsPage = () => {
 
               {/* Round-score distribution (40+ through 180) — same X01-only scope as the
                   checkout/first-9 card above, respects the active time/year/mode/best-of filters. */}
-              {playerScoringBreakdown && playerScoringBreakdown.tiers.some((tier) => tier.count > 0) && (
+              {statsDetailMode === "pro" && playerScoringBreakdown && playerScoringBreakdown.tiers.some((tier) => tier.count > 0) && (
                 <SectionCard className="mb-4">
                   <Eyebrow icon={BarChart3}>{t("game.scoreDistribution")}</Eyebrow>
                   <ResponsiveContainer width="100%" height={140}>
@@ -1922,7 +1955,7 @@ const StatisticsPage = () => {
 
               {/* Individual-field breakdown — optional/opt-in extra detail on exactly which
                   segments (Triple 20, Single 1, ...) were hit and how often. */}
-              {playerScoringBreakdown && (
+              {statsDetailMode === "pro" && playerScoringBreakdown && (
                 <SectionCard className="mb-4">
                   <button onClick={() => setShowFieldBreakdown(!showFieldBreakdown)} className="w-full flex items-center justify-between gap-2 text-left">
                     <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
@@ -1965,7 +1998,7 @@ const StatisticsPage = () => {
               )}
 
               {/* Cricket-specific stats (from dart-by-dart data on Cricket legs) */}
-              {cricketByPlayer[playerDetailStats.player.id] && (
+              {statsDetailMode === "pro" && cricketByPlayer[playerDetailStats.player.id] && (
                 <SectionCard className="mb-4">
                   <Eyebrow icon={Target}>Cricket</Eyebrow>
                   <div className="grid grid-cols-3 gap-2">
@@ -1976,34 +2009,36 @@ const StatisticsPage = () => {
                 </SectionCard>
               )}
 
-              {playerAimBias && <AimBiasCard bias={playerAimBias} />}
-              {playerClutchStats && <ClutchCard stats={playerClutchStats} />}
+              {statsDetailMode === "pro" && playerAimBias && <AimBiasCard bias={playerAimBias} />}
+              {statsDetailMode === "pro" && playerClutchStats && <ClutchCard stats={playerClutchStats} />}
 
               {/* Throw heatmap — only camera-scored throws carry a tip position. UX-Audit Befund
                   #5: this card used to disappear entirely at zero points, so a player who never
                   used camera scoring saw nothing — indistinguishable from a bug. Now the card
                   stays, explaining what's missing and how to get it, instead of just vanishing. */}
-              <SectionCard className="mb-4">
-                <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
-                  <Crosshair className="w-4 h-4" /> {t("stats.throwHeatmap")}
-                </h3>
-                {playerHeatmapPoints.length > 0 ? (
-                  <>
-                    <p className="text-[10px] text-muted-foreground mb-3">
-                      {playerHeatmapPoints.length} {t("stats.cameraThrowsCaptured")}
-                    </p>
-                    <DartboardHeatmap points={playerHeatmapPoints} />
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center text-center py-6 px-2">
-                    <Video className="w-8 h-8 opacity-40 mb-2" />
-                    <p className="text-xs text-muted-foreground max-w-[28ch]">{t("stats.heatmapEmptyHint")}</p>
-                  </div>
-                )}
-              </SectionCard>
+              {statsDetailMode === "pro" && (
+                <SectionCard className="mb-4">
+                  <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
+                    <Crosshair className="w-4 h-4" /> {t("stats.throwHeatmap")}
+                  </h3>
+                  {playerHeatmapPoints.length > 0 ? (
+                    <>
+                      <p className="text-[10px] text-muted-foreground mb-3">
+                        {playerHeatmapPoints.length} {t("stats.cameraThrowsCaptured")}
+                      </p>
+                      <DartboardHeatmap points={playerHeatmapPoints} />
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center text-center py-6 px-2">
+                      <Video className="w-8 h-8 opacity-40 mb-2" />
+                      <p className="text-xs text-muted-foreground max-w-[28ch]">{t("stats.heatmapEmptyHint")}</p>
+                    </div>
+                  )}
+                </SectionCard>
+              )}
 
               {/* Average trend */}
-              {playerDetailStats.averageTrend.length > 0 && (
+              {statsDetailMode === "pro" && playerDetailStats.averageTrend.length > 0 && (
                 <SectionCard className="mb-4">
                   <Eyebrow icon={TrendingUp}>{t("stats.averageTrend")}</Eyebrow>
                   <ResponsiveContainer width="100%" height={160}>
@@ -2029,7 +2064,7 @@ const StatisticsPage = () => {
                   reference value (see playerFirst9Trend's own doc comment for why it's tracked
                   separately from averageTrend rather than derived from it). Addresses the
                   roadmap's "First-9-Average als Trendlinie statt Einzelwert" ask directly. */}
-              {playerFirst9Trend.length > 0 && (
+              {statsDetailMode === "pro" && playerFirst9Trend.length > 0 && (
                 <SectionCard className="mb-4">
                   <Eyebrow icon={TrendingUp}>{t("stats.first9Trend")}</Eyebrow>
                   <ResponsiveContainer width="100%" height={160}>
