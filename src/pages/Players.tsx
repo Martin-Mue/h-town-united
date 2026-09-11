@@ -530,7 +530,9 @@ const PlayersPage = () => {
         name: newName.trim(),
         nickname: newNickname.trim() || null,
         emoji: newEmoji,
-        user_id: session?.user?.id,
+        // Walk-in-Profil (Admin legt für jemanden ohne Account an): user_id bleibt null,
+        // erlaubt durch die RLS-Policy "Admins can insert walk-in players".
+        user_id: createWithoutAccount ? null : session?.user?.id,
         club_id: clubId,
         bio: newBio.trim() || null,
         throwing_hand: newHand || null,
