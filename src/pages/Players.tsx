@@ -133,6 +133,10 @@ const PlayersPage = () => {
   const [newMotto, setNewMotto] = useState("");
   const [newBirthday, setNewBirthday] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
+  /** Admin-Modus: Profil für jemanden anlegen, der (noch) keinen Account hat — der Insert
+   *  lässt dann user_id auf null statt der eigenen Session-ID (RLS-Policy
+   *  "Admins can insert walk-in players"). Verhält sich danach wie jedes andere Walk-in-Profil. */
+  const [createWithoutAccount, setCreateWithoutAccount] = useState(false);
 
   const { toast } = useToast();
   const { session, user } = useAuth();
@@ -274,6 +278,16 @@ const PlayersPage = () => {
     setNewBirthday(EMPTY_PLAYER_FORM.birthday);
     setEditingPlayerId(null);
     setIsEditMode(false);
+    setCreateWithoutAccount(false);
+  };
+
+  /** Admin-Weg: Profil für jemanden anlegen, der keinen eigenen Account hat (z. B. Kinder von
+   *  Mitgliedern). Umgeht bewusst den ownPlayerProfile-Guard von openCreateProfile — hier wird
+   *  ja gerade KEIN eigenes Profil erstellt. */
+  const openCreateWalkInProfile = () => {
+    resetForm();
+    setCreateWithoutAccount(true);
+    setDialogOpen(true);
   };
 
   const openCreateProfile = () => {
@@ -516,7 +530,9 @@ const PlayersPage = () => {
         name: newName.trim(),
         nickname: newNickname.trim() || null,
         emoji: newEmoji,
-        user_id: session?.user?.id,
+        // Walk-in-Profil (Admin legt für jemanden ohne Account an): user_id bleibt null,
+        // erlaubt durch die RLS-Policy "Admins can insert walk-in players".
+        user_id: createWithoutAccount ? null : session?.user?.id,
         club_id: clubId,
         bio: newBio.trim() || null,
         throwing_hand: newHand || null,
@@ -808,6 +824,18 @@ const PlayersPage = () => {
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1" onClick={openCreateProfile}><Plus className="w-4 h-4" /> {t("players.memberButton")}</Button>
           </DialogTrigger>
+          {/* Admin-only: Profil ohne Account (Walk-in) — nutzt denselben Dialog. */}
+          <DialogTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className={`gap-1 ${isAdmin ? "" : "hidden"}`}
+              onClick={openCreateWalkInProfile}
+              title={t("players.walkInHint")}
+            >
+              <Plus className="w-4 h-4" /> {t("players.walkInButton")}
+            </Button>
+          </DialogTrigger>
 
           {/* "Daumenzone" — one of Round 3's three unscheduled design directions. The header
               button above is the only way to add a member, but it sits at the very top of the
@@ -831,9 +859,27 @@ const PlayersPage = () => {
           </Button>
           <DialogContent className="bg-card border-border max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-display uppercase">{isEditMode ? t("players.editPlayerProfileTitle") : t("players.newMemberTitle")}</DialogTitle>
+              <DialogTitle className="font-display uppercase">{isEditMode ? t("players.editPlayerProfileTitle") : createWithoutAccount ? t("players.walkInTitle") : t("players.newMemberTitle")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {/* Admin-Umschalter: eigenes Profil vs. Profil ohne Account. Existiert bereits ein
+                  eigenes Profil, bleibt nur der Walk-in-Weg (ein zweites eigenes Profil wäre
+                  ein Duplikat). */}
+              {isAdmin && !isEditMode && (
+                <label className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/30 p-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createWithoutAccount}
+                    disabled={!!ownPlayerProfile}
+                    onChange={(e) => setCreateWithoutAccount(e.target.checked)}
+                    className="mt-0.5 accent-primary w-4 h-4"
+                  />
+                  <span>
+                    <span className="text-sm font-medium block">{t("players.walkInToggleLabel")}</span>
+                    <span className="text-xs text-muted-foreground">{t("players.walkInHint")}</span>
+                  </span>
+                </label>
+              )}
               <div>
                 <Label>{t("players.nameRequired")}</Label>
                 <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("players.firstLastNamePlaceholder")} className="bg-muted border-border" />
