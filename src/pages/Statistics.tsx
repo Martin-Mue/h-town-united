@@ -928,6 +928,37 @@ const StatisticsPage = () => {
     return points;
   }, [selectedPlayerId, filteredGames, gameLegs]);
 
+  // Zonen-Intensität (Design-Sprint Runde 3 Punkt 1, Option B): every recorded throw already
+  // carries baseValue+multiplier — that's literally how it was scored, manual entry or camera —
+  // so zone-level hit counts can be built for every player from day one, not just the ones who
+  // use camera scoring. This is deliberately a SEPARATE pass over the same leg data rather than
+  // folding into the loop above: that loop only ever sees throws with boardU/boardV, this one
+  // needs every throw regardless. totalZoneThrows (returned alongside) also drives the card's
+  // empty-state check below, replacing the old points-only check.
+  const { zoneCounts: playerZoneCounts, totalZoneThrows } = useMemo(() => {
+    const byNumber: Record<number, { single: number; treble: number; double: number }> = {};
+    for (let n = 1; n <= 20; n++) byNumber[n] = { single: 0, treble: 0, double: 0 };
+    let bull25 = 0, bull50 = 0, total = 0;
+    if (!selectedPlayerId) return { zoneCounts: { byNumber, bull25, bull50 }, totalZoneThrows: 0 };
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    gameLegs.forEach((leg) => {
+      if (leg.player_id !== selectedPlayerId || !filteredIds.has(leg.game_id) || !Array.isArray(leg.throws)) return;
+      (leg.throws as unknown as DartThrow[]).forEach((t) => {
+        if (typeof t.baseValue !== "number" || typeof t.multiplier !== "number" || t.baseValue <= 0) return; // skip misses — no wedge to shade
+        total++;
+        if (t.baseValue === 25) {
+          if (t.multiplier === 2) bull50++; else bull25++;
+          return;
+        }
+        if (t.baseValue < 1 || t.baseValue > 20 || !byNumber[t.baseValue]) return;
+        if (t.multiplier === 3) byNumber[t.baseValue].treble++;
+        else if (t.multiplier === 2) byNumber[t.baseValue].double++;
+        else byNumber[t.baseValue].single++;
+      });
+    });
+    return { zoneCounts: { byNumber, bull25, bull50 }, totalZoneThrows: total };
+  }, [selectedPlayerId, filteredGames, gameLegs]);
+
   // Same source data as the heatmap above, fed through computeAimBias instead of just plotted —
   // see aimBias.ts for why this is one pooled statistic across every wedge rather than a
   // per-number breakdown (which would need far more samples per segment than any club has yet).
@@ -2012,21 +2043,26 @@ const StatisticsPage = () => {
               {statsDetailMode === "pro" && playerAimBias && <AimBiasCard bias={playerAimBias} />}
               {statsDetailMode === "pro" && playerClutchStats && <ClutchCard stats={playerClutchStats} />}
 
-              {/* Throw heatmap — only camera-scored throws carry a tip position. UX-Audit Befund
-                  #5: this card used to disappear entirely at zero points, so a player who never
-                  used camera scoring saw nothing — indistinguishable from a bug. Now the card
-                  stays, explaining what's missing and how to get it, instead of just vanishing. */}
+              {/* Throw heatmap — Zonen-Intensität (Design-Sprint Runde 3 Punkt 1, Option B): the
+                  board now shades every zone by combined manual+camera hit frequency, so this
+                  works from a player's very first recorded throw, camera or not; camera-scored
+                  throws additionally still get plotted as precise dots on top. UX-Audit Befund #5
+                  (this card used to disappear entirely at zero points, indistinguishable from a
+                  bug) is handled the same way as before — the card stays and explains what's
+                  still missing — just with the empty case now genuinely rare (no throws at all
+                  yet) instead of "no camera games yet". */}
               {statsDetailMode === "pro" && (
                 <SectionCard className="mb-4">
                   <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
                     <Crosshair className="w-4 h-4" /> {t("stats.throwHeatmap")}
                   </h3>
-                  {playerHeatmapPoints.length > 0 ? (
+                  {totalZoneThrows > 0 ? (
                     <>
                       <p className="text-[10px] text-muted-foreground mb-3">
-                        {playerHeatmapPoints.length} {t("stats.cameraThrowsCaptured")}
+                        {totalZoneThrows} {t("stats.zoneThrowsCaptured")}
+                        {playerHeatmapPoints.length > 0 && <> · {playerHeatmapPoints.length} {t("stats.cameraThrowsCaptured")}</>}
                       </p>
-                      <DartboardHeatmap points={playerHeatmapPoints} />
+                      <DartboardHeatmap points={playerHeatmapPoints} zoneCounts={playerZoneCounts} />
                     </>
                   ) : (
                     <div className="flex flex-col items-center text-center py-6 px-2">

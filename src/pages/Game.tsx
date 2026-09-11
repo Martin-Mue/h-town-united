@@ -3014,29 +3014,69 @@ const GamePage = () => {
           // number on screen is never stale.
           const displayRemaining = previewRemaining;
           const isFlashing = scoreFlash?.slot === card.key;
+          // "An der Oché" Broadcast-Arena (Design-Sprint Runde 3 Punkt 2, Richtung A): both
+          // player cards now sit on the same fixed-dark broadcast surface used everywhere else
+          // this look was rolled out (see index.css's .broadcast-panel comment) — the active
+          // player's name gets the solid cyan broadcast-tag, the waiting player's the same
+          // angled tag shape recolored neutral, exactly mirroring PublicTournament.tsx's
+          // Board-Übersicht card. Score-state colors (accent on preview/flash, muted while
+          // waiting) stay hardcoded hsl() rather than the usual text-accent/text-muted-foreground
+          // classes for the same reason as everywhere else on this panel: those Tailwind tokens
+          // are tuned per light/dark theme, but this panel's background never follows the theme.
+          const activeHsl = "hsl(185 85% 48%)";
+          const scoreColor = isFlashing || showPreview ? "hsl(45 100% 58%)" : isActive ? "hsl(210 15% 94%)" : "hsl(210 15% 55%)";
+          // Everything below this point still leans on ordinary Tailwind semantic classes
+          // (text-muted-foreground, text-primary, bg-accent/20, …) for the footer badges, dart
+          // pills and active-player extras — instead of hand-converting every one of those to a
+          // hardcoded color, the card overrides the underlying CSS variables themselves to their
+          // *dark*-theme values, the same way the top-level `.dark` block in index.css defines
+          // them. Every semantic class nested inside then resolves correctly no matter the
+          // viewer's own light/dark setting, without needing to touch each usage individually.
+          const darkVarOverrides = {
+            "--background": "222 30% 5%", "--foreground": "210 15% 92%",
+            "--card": "222 25% 9%", "--card-foreground": "210 15% 92%",
+            "--primary": "185 85% 48%", "--primary-foreground": "222 30% 5%",
+            "--secondary": "155 65% 42%", "--secondary-foreground": "0 0% 100%",
+            "--muted": "222 20% 14%", "--muted-foreground": "222 12% 50%",
+            "--accent": "45 100% 58%", "--accent-foreground": "222 30% 5%",
+            "--destructive": "0 72% 51%", "--destructive-foreground": "0 0% 100%",
+            "--border": "222 18% 14%",
+          } as any;
           return (
             <div key={card.key}
-              className={`bg-card rounded-xl p-4 landscape:p-3 border-2 transition-all text-center ${isActive ? "border-primary glow-cyan" : "border-border opacity-80"}`}>
+              className={`broadcast-panel p-4 landscape:p-3 border-2 transition-all text-center ${isActive ? "glow-cyan" : "opacity-80"}`}
+              style={{ ...darkVarOverrides, borderColor: isActive ? activeHsl : "hsl(222 18% 20%)" }}>
               <div className="flex items-center justify-center gap-1.5">
-                {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse-glow" />}
-                {card.isBot && <Bot className="w-3 h-3 text-secondary shrink-0" />}
-                <p className={`text-sm truncate ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>{card.label}</p>
+                {isActive && <span className="inline-block h-2 w-2 rounded-full animate-pulse-glow" style={{ background: activeHsl }} />}
+                {card.isBot && <Bot className="w-3 h-3 shrink-0" style={{ color: "hsl(155 65% 55%)" }} />}
+                <span
+                  className="broadcast-tag inline-flex max-w-full px-2.5 py-0.5 rounded-[2px]"
+                  style={!isActive ? { background: "hsl(222 20% 18%)" } : undefined}
+                >
+                  <span
+                    className="text-sm font-display font-semibold truncate max-w-[8.5rem]"
+                    style={{ color: isActive ? undefined : "hsl(210 15% 78%)" }}
+                  >
+                    {card.label}
+                  </span>
+                </span>
               </div>
               {card.subLabel && (
-                <p className={`text-[10px] truncate ${isActive ? "text-primary/70" : "text-muted-foreground/70"}`}>
+                <p className="text-[10px] truncate mt-0.5" style={{ color: isActive ? "hsl(185 60% 65%)" : "hsl(210 15% 50%)" }}>
                   {card.subLabel}{isActive ? ` · ${t("game.turnLabel")}: ${currentPlayerName}` : ""}
                 </p>
               )}
               {isActive && card.isBot && botThinking ? (
-                <p className="text-sm font-display mt-1 text-secondary animate-pulse">Bot {t("game.isThrowing")}…</p>
+                <p className="text-sm font-display mt-1 animate-pulse" style={{ color: "hsl(155 65% 55%)" }}>Bot {t("game.isThrowing")}…</p>
               ) : (
                 // Deliberately the SAME size in both orientations (no landscape: shrink) — this is
                 // the number a player reads from throwing distance, not from right up close, and
                 // landscape has its own dedicated column now (see the playing-phase layout below)
                 // with room to spare, so there's no longer a reason to make it smaller there.
-                <p className={`text-5xl font-display mt-1 transition-colors ${
-                  isFlashing ? "text-accent animate-pulse-glow" : showPreview ? "text-accent" : isActive ? "text-foreground" : "text-muted-foreground"
-                }`}>
+                <p
+                  className={`text-5xl font-display mt-1 transition-colors tabular-nums ${isFlashing ? "animate-pulse-glow" : ""}`}
+                  style={{ color: scoreColor, textShadow: isActive ? `0 0 22px ${scoreColor}80` : undefined }}
+                >
                   <AnimatedScore value={isCricket ? card.cricketPoints : displayRemaining} />
                 </p>
               )}

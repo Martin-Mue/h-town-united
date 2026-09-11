@@ -233,23 +233,33 @@ const DashboardPage = () => {
 
       <PendingOnlineChallenges />
 
-      {/* Quick action cards */}
+      {/* Quick action cards — "An der Oché" Broadcast-Arena look (Design-Sprint Runde 3 Punkt 2,
+          Richtung A): the same fixed-dark broadcast surface as PublicTournament.tsx's Beamer view,
+          now on the app's single highest-traffic screen too. Colors cycle cyan/gold/green across
+          the six tiles the way the mockup did across its two — same three brand hues the rest of
+          the app already uses (action / special / success), just introduced here at broadcast
+          saturation. Deliberately hardcoded hsl() (the *dark*-theme token values), not the
+          text-primary/text-accent Tailwind classes: those flip with the viewer's own light/dark
+          setting, but this panel's background never does (see the .broadcast-panel comment in
+          index.css) — a light-mode-tuned hue on a fixed-dark tile would be low-contrast half the time. */}
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("home.quickAccess")}</h2>
       <div className="grid grid-cols-2 gap-3 mb-6">
-        {QUICK_ACTIONS.map((action) => (
-          <Link key={action.to} to={action.to}
-            // Design-Sprint Runde 5 Rang 1: the home dashboard -- the single highest-traffic
-            // screen in the app -- was missed entirely by Runde 3's card-surface sweep and was
-            // still on the flat pre-Sprint `bg-card` fill. Same gradient-card + elevation as every
-            // other card shell now, with a stronger hover elevation on top since this is the
-            // primary tap target on the page.
-            className="gradient-card border border-border rounded-xl p-4 shadow-elevation-sm hover:border-primary/40 hover:shadow-elevation-md active:scale-95 active:border-primary/40 active:bg-primary/5 transition-all group"
-            style={{ transitionTimingFunction: "var(--ease-press)" }}>
-            <action.icon className="w-6 h-6 text-primary mb-2 group-hover:scale-110 group-active:scale-110 transition-transform" />
-            <p className="font-semibold text-sm">{t(action.labelKey)}</p>
-            <p className="text-xs text-muted-foreground">{t(action.descKey)}</p>
-          </Link>
-        ))}
+        {QUICK_ACTIONS.map((action, i) => {
+          const accent = [
+            { hex: "hsl(185 85% 48%)", ring: "hsl(185 40% 22%)" }, // cyan — primary
+            { hex: "hsl(45 100% 58%)", ring: "hsl(45 40% 22%)" },  // gold — accent
+            { hex: "hsl(155 65% 42%)", ring: "hsl(155 40% 22%)" }, // green — secondary
+          ][i % 3];
+          return (
+            <Link key={action.to} to={action.to}
+              className="broadcast-panel p-4 active:scale-95 transition-all group"
+              style={{ transitionTimingFunction: "var(--ease-press)", border: `1px solid ${accent.ring}` }}>
+              <action.icon className="w-6 h-6 mb-2 group-hover:scale-110 group-active:scale-110 transition-transform" style={{ color: accent.hex }} />
+              <p className="font-semibold text-sm" style={{ color: "hsl(210 15% 92%)" }}>{t(action.labelKey)}</p>
+              <p className="text-xs" style={{ color: "hsl(210 15% 55%)" }}>{t(action.descKey)}</p>
+            </Link>
+          );
+        })}
       </div>
 
       {/* Club activity feed — notable moments (180s, personal bests, win streaks) from the last

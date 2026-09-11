@@ -2640,12 +2640,21 @@ const TournamentPage = () => {
               <p className="text-xs text-muted-foreground mt-1">{t("tournament.championSuffix")}</p>
             </div>
           ) : current ? (
-            <div className="bg-card border-2 border-primary/40 rounded-2xl p-6 glow-cyan">
-              <p className="text-[10px] uppercase tracking-wider text-primary mb-3">{roundLabel(current.match.round, totalRounds)}</p>
-              <p className="text-lg font-display mb-1">{current.match.player1}</p>
-              <p className="text-xs text-muted-foreground mb-1">vs.</p>
-              <p className="text-lg font-display mb-4">{current.match.player2}</p>
-              <p className="text-xs text-muted-foreground mb-4">
+            // "An der Oché" Broadcast-Arena (Design-Sprint Runde 3 Punkt 2, Richtung A): the
+            // board-mode kiosk screen — this IS "standing at the oché about to play", the exact
+            // moment the mockups were about — gets the same fixed-dark broadcast surface as
+            // PublicTournament.tsx's Board-Übersicht, with a broadcast-tag round-label pill in
+            // place of the old plain uppercase caption. The start button underneath is left as a
+            // normal Button (not re-themed) on purpose — it's the one interactive control here
+            // and should keep following the app's own light/dark theme like every other button.
+            <div className="broadcast-panel border-2 border-primary/60 p-6 glow-cyan">
+              <span className="broadcast-tag inline-flex px-3 py-1 rounded-[2px] mb-3">
+                <span className="font-display font-semibold text-[10px] uppercase tracking-wide">{roundLabel(current.match.round, totalRounds)}</span>
+              </span>
+              <p className="text-lg font-display mb-1" style={{ color: "hsl(210 15% 92%)" }}>{current.match.player1}</p>
+              <p className="text-xs mb-1" style={{ color: "hsl(210 15% 55%)" }}>vs.</p>
+              <p className="text-lg font-display mb-4" style={{ color: "hsl(210 15% 92%)" }}>{current.match.player2}</p>
+              <p className="text-xs mb-4" style={{ color: "hsl(210 15% 55%)" }}>
                 {resolveRoundMode(current.match.round)} · {t("stats.firstTo")} {Math.ceil(resolveRoundBestOf(current.match.round) / 2)}
               </p>
               {currentStartable ? (
@@ -2653,7 +2662,7 @@ const TournamentPage = () => {
                   <Play className="w-5 h-5" /> {t("game.startGame")}
                 </Button>
               ) : (
-                <p className="text-xs text-muted-foreground bg-muted/30 border border-border rounded-lg px-3 py-2">
+                <p className="text-xs rounded-lg px-3 py-2" style={{ color: "hsl(210 15% 55%)", background: "hsl(222 20% 14% / 0.5)", border: "1px solid hsl(222 18% 20%)" }}>
                   {!(activeTournament.live_play_enabled ?? true) ? t("tournament.matchNotLiveDisabled") : t("tournament.matchNotLiveExtern")}
                 </p>
               )}
