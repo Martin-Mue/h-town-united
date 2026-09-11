@@ -1979,18 +1979,28 @@ const StatisticsPage = () => {
               {playerAimBias && <AimBiasCard bias={playerAimBias} />}
               {playerClutchStats && <ClutchCard stats={playerClutchStats} />}
 
-              {/* Throw heatmap — only camera-scored throws carry a tip position */}
-              {playerHeatmapPoints.length > 0 && (
-                <SectionCard className="mb-4">
-                  <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
-                    <Crosshair className="w-4 h-4" /> {t("stats.throwHeatmap")}
-                  </h3>
-                  <p className="text-[10px] text-muted-foreground mb-3">
-                    {playerHeatmapPoints.length} {t("stats.cameraThrowsCaptured")}
-                  </p>
-                  <DartboardHeatmap points={playerHeatmapPoints} />
-                </SectionCard>
-              )}
+              {/* Throw heatmap — only camera-scored throws carry a tip position. UX-Audit Befund
+                  #5: this card used to disappear entirely at zero points, so a player who never
+                  used camera scoring saw nothing — indistinguishable from a bug. Now the card
+                  stays, explaining what's missing and how to get it, instead of just vanishing. */}
+              <SectionCard className="mb-4">
+                <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
+                  <Crosshair className="w-4 h-4" /> {t("stats.throwHeatmap")}
+                </h3>
+                {playerHeatmapPoints.length > 0 ? (
+                  <>
+                    <p className="text-[10px] text-muted-foreground mb-3">
+                      {playerHeatmapPoints.length} {t("stats.cameraThrowsCaptured")}
+                    </p>
+                    <DartboardHeatmap points={playerHeatmapPoints} />
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center text-center py-6 px-2">
+                    <Video className="w-8 h-8 opacity-40 mb-2" />
+                    <p className="text-xs text-muted-foreground max-w-[28ch]">{t("stats.heatmapEmptyHint")}</p>
+                  </div>
+                )}
+              </SectionCard>
 
               {/* Average trend */}
               {playerDetailStats.averageTrend.length > 0 && (

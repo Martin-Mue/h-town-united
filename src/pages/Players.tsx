@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info, Trash2, KeyRound } from "lucide-react";
-import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
+import { DartLoaderIcon as Loader2, DartGameIcon } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -848,11 +848,20 @@ const PlayersPage = () => {
 
         {/* Charts — at 0 games every value in both datasets is 0, which renders as a collapsed
             radar (a single invisible point) and two zero-width bars: just axis labels over blank
-            space, reading as broken rather than "no data yet". */}
+            space, reading as broken rather than "no data yet". UX-Audit Befund #4: previously
+            plain centered text with no visual anchor — now aligned with the Dashboard's
+            established empty-state pattern (Index.tsx "noch keine Spiele" card): same
+            DartGameIcon at reduced opacity, same clickable card that sends you to start a game,
+            since that's the one action that actually produces the missing data. */}
         {selectedPlayer.games_played === 0 ? (
-          <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 mb-6 text-center text-sm text-muted-foreground">
+          <Link
+            to="/game"
+            className="block gradient-card border border-border shadow-elevation-sm hover:border-primary/40 active:scale-[0.98] active:border-primary/40 rounded-xl px-4 py-6 mb-6 text-center text-sm text-muted-foreground transition-all"
+            style={{ transitionTimingFunction: "var(--ease-press)" }}
+          >
+            <DartGameIcon className="w-10 h-10 mx-auto mb-2 opacity-40" />
             {t("players.noStatsYetForCharts")}
-          </div>
+          </Link>
         ) : (
           <Suspense fallback={<div className="h-[180px] mb-6 flex items-center justify-center text-muted-foreground text-sm">{t("players.loadingCharts")}</div>}>
             <PlayerStatsCharts skillRadarData={skillRadarData} winLossData={winLossData} />

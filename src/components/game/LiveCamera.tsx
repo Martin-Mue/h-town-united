@@ -15,6 +15,10 @@ import {
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -436,6 +440,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
   const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
   const [activeTap, setActiveTap] = useState<{ x: number; y: number } | null>(null);
+  // UX-Audit Befund #1 (Kamera-Review): Löschen/Verwerfen lösten bisher sofort aus, ohne
+  // Rückfrage — anders als überall sonst in der App, wo destruktive Aktionen bestätigt werden
+  // (siehe Players.tsx confirmDeleteId, Tournament.tsx Match-Reset). Dieselbe Absicherung jetzt
+  // auch hier: removeDart/discardRound feuern erst nach Bestätigung im AlertDialog.
+  const [confirmDiscardOpen, setConfirmDiscardOpen] = useState(false);
+  const [confirmRemoveIndex, setConfirmRemoveIndex] = useState<number | null>(null);
   const calibOverlayRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -2161,15 +2171,35 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               >
                 <Target className="h-3.5 w-3.5" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9"
-                onClick={() => removeDart(i)}
-                title={t("camera.removeDartTitle")}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
+              <AlertDialog open={confirmRemoveIndex === i} onOpenChange={(open) => setConfirmRemoveIndex(open ? i : null)}>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    title={t("camera.removeDartTitle")}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t("camera.removeDartConfirmTitle")}</AlertDialogTitle>
+                    <AlertDialogDescription>{t("camera.removeDartConfirmDesc")}</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        removeDart(i);
+                        setConfirmRemoveIndex(null);
+                      }}
+                    >
+                      {t("camera.removeDartConfirm")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           ))}
         </div>
@@ -2193,15 +2223,35 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <ScanLine className="h-4 w-4" /> {t("camera.scanNow")}
         </Button>
         {accumulated.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={discardRound}
-            className="gap-1"
-            title={t("camera.discardDetectedTitle")}
-          >
-            <RotateCcw className="h-4 w-4" /> {t("camera.discard")}
-          </Button>
+          <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1"
+                title={t("camera.discardDetectedTitle")}
+              >
+                <RotateCcw className="h-4 w-4" /> {t("camera.discard")}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("camera.discardRoundConfirmTitle")}</AlertDialogTitle>
+                <AlertDialogDescription>{t("camera.discardRoundConfirmDesc")}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    discardRound();
+                    setConfirmDiscardOpen(false);
+                  }}
+                >
+                  {t("camera.discard")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
         {/* Gated on a complete round OR a confirmed end-of-visit, not just accumulated.length > 0
             — darts fill in incrementally as they're thrown (see scoreNewlyLandedDart), so
