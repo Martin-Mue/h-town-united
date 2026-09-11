@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
-import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info, Trash2 } from "lucide-react";
+import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info, Trash2, KeyRound } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { compressImage } from "@/utils/imageCompression";
 import { SectionCard, StatTile } from "@/components/stats/StatPrimitives";
+import { generatePinSalt, hashPin, isValidPinFormat } from "@/lib/playerPin";
 
 // recharts (~390KB) is only needed once a player's detail view is open, not for browsing
 // the roster list — split into its own chunk instead of loading it for every /players visit.
@@ -68,6 +69,10 @@ interface PlayerProfile {
   joined_year?: number | null;
   motto?: string | null;
   birthday?: string | null;
+  /** "PIN pro Spieler" (local-game opponent confirmation, @/lib/playerPin) — a salted hash+salt,
+   *  or null/undefined if no PIN is set. Comes along for free via this page's `select("*")`. */
+  pin_hash?: string | null;
+  pin_salt?: string | null;
 }
 
 const EMOJI_AVATARS = ["🎯", "🏆", "⭐", "🔥", "💎", "🦅", "🐉", "🎪"];
@@ -144,6 +149,15 @@ const PlayersPage = () => {
   const isAdmin = useIsAdmin(user?.id);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // "PIN pro Spieler" (@/lib/playerPin): set/change here covers both self-service (own linked
+  // profile) and admin-for-walk-in (no account) — same permission shape as canEditPlayer below,
+  // enforced again server-side by the set_player_pin RPC. Reset-to-null is separately allowed
+  // for an admin on ANY player (e.g. someone forgot theirs), via admin_reset_player_pin.
+  const [pinNew, setPinNew] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pinResetting, setPinResetting] = useState(false);
 
   /** Your own linked profile, always — plus, for an admin, any UNLINKED (walk-in, no account)
    *  profile. Without this, a walk-in player's name/photo could never be fixed at all (user_id
@@ -246,6 +260,54 @@ const PlayersPage = () => {
       }
     }
     setDeletingId(null);
+  };
+
+  // Reset the PIN form whenever a different profile is opened — otherwise a half-typed PIN for
+  // one player could get submitted against whichever profile happens to be open next.
+  useEffect(() => {
+    setPinNew(""); setPinConfirm("");
+  }, [selectedPlayer?.id]);
+
+  /** Sets/changes `player`'s PIN — permission (self, or admin-for-walk-in) is re-checked
+   *  server-side by the set_player_pin RPC regardless of what canEditPlayer already gated. */
+  const savePlayerPin = async (player: PlayerProfile) => {
+    if (!isValidPinFormat(pinNew)) {
+      toast({ title: t("players.pinInvalidFormat"), variant: "destructive" });
+      return;
+    }
+    if (pinNew !== pinConfirm) {
+      toast({ title: t("players.pinMismatch"), variant: "destructive" });
+      return;
+    }
+    setPinSaving(true);
+    const salt = generatePinSalt();
+    const hash = await hashPin(pinNew, salt);
+    const { error } = await supabase.rpc("set_player_pin", { p_player_id: player.id, p_pin_hash: hash, p_pin_salt: salt });
+    setPinSaving(false);
+    if (error) {
+      toast({ title: t("players.pinSaveFailed"), description: error.message, variant: "destructive" });
+      return;
+    }
+    setPinNew(""); setPinConfirm("");
+    setPlayers((prev) => prev.map((p) => (p.id === player.id ? { ...p, pin_hash: hash, pin_salt: salt } : p)));
+    setSelectedPlayer((prev) => (prev && prev.id === player.id ? { ...prev, pin_hash: hash, pin_salt: salt } : prev));
+    toast({ title: t("players.pinSaved") });
+  };
+
+  /** Admin-only: clears ANY player's PIN (e.g. they forgot it) via admin_reset_player_pin — a
+   *  separate RPC from set_player_pin since this is allowed regardless of who owns the profile,
+   *  not just self/walk-in. */
+  const adminResetPlayerPin = async (player: PlayerProfile) => {
+    setPinResetting(true);
+    const { error } = await supabase.rpc("admin_reset_player_pin", { p_player_id: player.id });
+    setPinResetting(false);
+    if (error) {
+      toast({ title: t("players.pinSaveFailed"), description: error.message, variant: "destructive" });
+      return;
+    }
+    setPlayers((prev) => prev.map((p) => (p.id === player.id ? { ...p, pin_hash: null, pin_salt: null } : p)));
+    setSelectedPlayer((prev) => (prev && prev.id === player.id ? { ...prev, pin_hash: null, pin_salt: null } : prev));
+    toast({ title: t("players.pinRemoved") });
   };
 
   useEffect(() => {
@@ -669,6 +731,59 @@ const PlayersPage = () => {
             </Button>
           )}
         </div>
+
+        {/* "PIN pro Spieler" (@/lib/playerPin): a set/change form for your own profile or, as
+            admin, a walk-in (no-account) member's — same reach as the Edit button above. For a
+            player WITH an account that isn't you, an admin still gets a bare reset-to-null
+            (they forgot it), but can't choose a new one on that member's behalf. */}
+        {(canEditPlayer(selectedPlayer) || (isAdmin && selectedPlayer.pin_hash)) && (
+          <SectionCard className="mb-6">
+            <div className="flex items-center gap-3 mb-3">
+              <KeyRound className="w-5 h-5 text-muted-foreground shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{t("players.pinSectionTitle")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {canEditPlayer(selectedPlayer)
+                    ? (selectedPlayer.user_id === user?.id ? t("players.pinSectionDescSelf") : t("players.pinSectionDescAdmin"))
+                    : (selectedPlayer.pin_hash ? t("players.pinCurrentSet") : t("players.pinNotSet"))}
+                </p>
+              </div>
+            </div>
+
+            {canEditPlayer(selectedPlayer) ? (
+              <>
+                <p className="text-xs text-muted-foreground mb-2">
+                  {selectedPlayer.pin_hash ? t("players.pinCurrentSet") : t("players.pinNotSet")}
+                </p>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
+                    value={pinNew} onChange={(e) => setPinNew(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder={t("players.pinNewPlaceholder")}
+                    className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground text-center tracking-widest" />
+                  <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
+                    value={pinConfirm} onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder={t("players.pinConfirmPlaceholder")}
+                    className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground text-center tracking-widest" />
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="flex-1 gap-1.5" disabled={pinSaving || pinNew.length !== 4} onClick={() => savePlayerPin(selectedPlayer)}>
+                    {pinSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    {selectedPlayer.pin_hash ? t("players.pinChangeButton") : t("players.pinSetButton")}
+                  </Button>
+                  {selectedPlayer.pin_hash && (
+                    <Button size="sm" variant="outline" disabled={pinResetting} onClick={() => adminResetPlayerPin(selectedPlayer)}>
+                      {pinResetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("players.pinRemoveButton")}
+                    </Button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <Button size="sm" variant="outline" disabled={pinResetting} onClick={() => adminResetPlayerPin(selectedPlayer)}>
+                {pinResetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("players.pinResetAdminButton")}
+              </Button>
+            )}
+          </SectionCard>
+        )}
 
         {/* Motto */}
         {selectedPlayer.motto && (

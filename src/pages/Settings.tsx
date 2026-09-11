@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Settings as SettingsIcon, Moon, Bell, FileText, TriangleAlert, Languages, Pencil, Check, X, Palette, BookOpen, SlidersHorizontal } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Settings as SettingsIcon, Moon, Bell, FileText, TriangleAlert, Languages, Pencil, Check, X, Palette, BookOpen, SlidersHorizontal, KeyRound } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { usePlayers, PLAYERS_QUERY_KEY } from "@/hooks/usePlayers";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -18,6 +20,7 @@ import { LANGUAGES, type Language } from "@/i18n/translations";
 import { CLUB_THEME_PRESETS, resolveClubTheme, DEFAULT_CLUB_THEME_PRESET_ID } from "@/lib/clubThemePresets";
 import { SectionCard } from "@/components/stats/StatPrimitives";
 import GuidesTab from "@/components/settings/GuidesTab";
+import { generatePinSalt, hashPin, isValidPinFormat } from "@/lib/playerPin";
 
 const LANGUAGE_LABEL_KEY: Record<Language, string> = {
   de: "settings.german", en: "settings.english", fr: "settings.french",
@@ -50,11 +53,59 @@ const SettingsPage = () => {
   const { language, setLanguage, t } = useLanguage();
   const push = usePushSubscription(user?.id);
   const { club, personalThemePreset, setPersonalThemePreset } = useClubBranding();
+  const queryClient = useQueryClient();
+  const { data: dbPlayers = [] } = usePlayers();
+  const myPlayer = dbPlayers.find((p) => p.user_id === user?.id);
 
   const [impressum, setImpressum] = useState<ImpressumRow | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Omit<ImpressumRow, "id">>(EMPTY_IMPRESSUM);
   const [saving, setSaving] = useState(false);
+
+  // "PIN pro Spieler": self-service set/change/remove for your own linked profile — see
+  // @/lib/playerPin and the set_player_pin RPC (its own check enforces this is only ever your
+  // own row; an admin sets/resets a walk-in profile's PIN from Players.tsx instead).
+  const [pinNew, setPinNew] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pinRemoving, setPinRemoving] = useState(false);
+
+  const savePin = async () => {
+    if (!myPlayer) return;
+    if (!isValidPinFormat(pinNew)) {
+      toast({ title: t("players.pinInvalidFormat"), variant: "destructive" });
+      return;
+    }
+    if (pinNew !== pinConfirm) {
+      toast({ title: t("players.pinMismatch"), variant: "destructive" });
+      return;
+    }
+    setPinSaving(true);
+    const salt = generatePinSalt();
+    const hash = await hashPin(pinNew, salt);
+    const { error } = await supabase.rpc("set_player_pin", { p_player_id: myPlayer.id, p_pin_hash: hash, p_pin_salt: salt });
+    setPinSaving(false);
+    if (error) {
+      toast({ title: t("players.pinSaveFailed"), description: error.message, variant: "destructive" });
+      return;
+    }
+    setPinNew(""); setPinConfirm("");
+    queryClient.invalidateQueries({ queryKey: PLAYERS_QUERY_KEY });
+    toast({ title: t("players.pinSaved") });
+  };
+
+  const removePin = async () => {
+    if (!myPlayer) return;
+    setPinRemoving(true);
+    const { error } = await supabase.rpc("set_player_pin", { p_player_id: myPlayer.id, p_pin_hash: null, p_pin_salt: null });
+    setPinRemoving(false);
+    if (error) {
+      toast({ title: t("players.pinSaveFailed"), description: error.message, variant: "destructive" });
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: PLAYERS_QUERY_KEY });
+    toast({ title: t("players.pinRemoved") });
+  };
 
   const [activeTab, setActiveTab] = useState<"settings" | "guides">("settings");
 
@@ -216,6 +267,45 @@ const SettingsPage = () => {
             })}
           </div>
         </SectionCard>
+
+        {/* "PIN pro Spieler": only meaningful once you have a linked profile at all — a bare
+            account with no players row (not yet created one, see Players.tsx) has nothing to
+            attach a PIN to. */}
+        {myPlayer && (
+          <SectionCard>
+            <div className="flex items-center gap-3 mb-3">
+              <KeyRound className="w-5 h-5 text-muted-foreground shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{t("players.pinSectionTitle")}</p>
+                <p className="text-xs text-muted-foreground">{t("players.pinSectionDescSelf")}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">
+              {myPlayer.pin_hash ? t("players.pinCurrentSet") : t("players.pinNotSet")}
+            </p>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
+                value={pinNew} onChange={(e) => setPinNew(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder={t("players.pinNewPlaceholder")}
+                className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground text-center tracking-widest" />
+              <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
+                value={pinConfirm} onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder={t("players.pinConfirmPlaceholder")}
+                className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground text-center tracking-widest" />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" className="flex-1 gap-1.5" disabled={pinSaving || pinNew.length !== 4} onClick={savePin}>
+                {pinSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                {myPlayer.pin_hash ? t("players.pinChangeButton") : t("players.pinSetButton")}
+              </Button>
+              {myPlayer.pin_hash && (
+                <Button size="sm" variant="outline" disabled={pinRemoving} onClick={removePin}>
+                  {pinRemoving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("players.pinRemoveButton")}
+                </Button>
+              )}
+            </div>
+          </SectionCard>
+        )}
       </div>
 
       <SectionCard>

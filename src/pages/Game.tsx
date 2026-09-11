@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, WifiOff, Sparkles } from "lucide-react";
+import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, WifiOff, Sparkles, Lock } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -98,6 +99,7 @@ import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricke
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult, enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
 import { matchClubPlayer, type ClubPlayer } from "@/lib/repositories/players";
+import { verifyPin } from "@/lib/playerPin";
 import { usePlayers } from "@/hooks/usePlayers";
 import { isLiveSnapshotFresh, totalRoundsOf, type Match, type RoundRobinMatch } from "@/utils/tournament";
 import { ghostRemainingSequence, compareToGhost } from "@/utils/ghostMode";
@@ -173,6 +175,13 @@ const GamePage = () => {
   const [starterIndex, setStarterIndex] = useState(0);
   const [teamNames, setTeamNames] = useState<[string, string]>(["Team 1", "Team 2"]);
   const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
+  // "PIN pro Spieler": which roster slot is waiting on a PIN, and for which club member — see
+  // the roster-picker button in the setup form and submitPinPrompt below. Verification is fully
+  // client-side against that player's stored hash+salt (@/lib/playerPin), so it works offline.
+  const [pinPrompt, setPinPrompt] = useState<{ slotIndex: number; player: ClubPlayer } | null>(null);
+  const [pinPromptValue, setPinPromptValue] = useState("");
+  const [pinPromptError, setPinPromptError] = useState(false);
+  const [pinPromptChecking, setPinPromptChecking] = useState(false);
   const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(Array(MAX_PLAYERS).fill(true));
   const [playerDoubleIn, setPlayerDoubleIn] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
   const [playerHandicap, setPlayerHandicap] = useState<number[]>(Array(MAX_PLAYERS).fill(0));
@@ -2107,6 +2116,29 @@ const GamePage = () => {
   }
 
   // ─── SETUP PHASE ───────────────────────────────
+  // "PIN pro Spieler": verifies the entered PIN against the selected club member's stored
+  // hash+salt (@/lib/playerPin) entirely client-side — no network round-trip, so it works
+  // offline once the roster (usePlayers/dbPlayers, including pin_hash/pin_salt) is loaded. On
+  // success the name is written into the slot exactly like the no-PIN path always did; on
+  // failure the field just clears for another try — no lockout, this is a casual "is this really
+  // you" check among club mates, not a security boundary against someone who's actually trying.
+  const submitPinPrompt = async () => {
+    if (!pinPrompt || pinPromptValue.length !== 4) return;
+    setPinPromptChecking(true);
+    const ok = await verifyPin(pinPromptValue, pinPrompt.player.pin_salt ?? "", pinPrompt.player.pin_hash ?? "");
+    setPinPromptChecking(false);
+    if (ok) {
+      const { slotIndex, player } = pinPrompt;
+      setPlayerNames(prev => prev.map((v, idx) => idx === slotIndex ? player.name : v));
+      setPinPrompt(null);
+      setPinPromptValue("");
+      setPinPromptError(false);
+    } else {
+      setPinPromptError(true);
+      setPinPromptValue("");
+    }
+  };
+
   if (phase === "setup") {
     const activePlayerCount = numPlayers;
     // Mode/team-mode/player-count/best-of are exactly the fields the tournament bracket already
@@ -2400,9 +2432,22 @@ const GamePage = () => {
                           <div className="space-y-1 max-h-48 overflow-y-auto">
                             {dbPlayers.map((dp) => (
                               <PopoverClose asChild key={dp.id}>
-                                <button onClick={() => setPlayerNames(prev => prev.map((v, idx) => idx === i ? dp.name : v))}
+                                <button onClick={() => {
+                                    // "PIN pro Spieler": a member who set a PIN must confirm it's really
+                                    // them before their name is accepted into this slot; everyone else
+                                    // (the overwhelming majority, PIN is opt-in) is picked immediately,
+                                    // unchanged from before this feature existed.
+                                    if (dp.pin_hash) {
+                                      setPinPrompt({ slotIndex: i, player: dp });
+                                      setPinPromptValue("");
+                                      setPinPromptError(false);
+                                    } else {
+                                      setPlayerNames(prev => prev.map((v, idx) => idx === i ? dp.name : v));
+                                    }
+                                  }}
                                   className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${playerNames[i] === dp.name ? "bg-primary/15 text-primary" : "hover:bg-muted"}`}>
-                                  <span>{dp.emoji}</span><span>{dp.name}</span>
+                                  <span>{dp.emoji}</span><span className="flex-1 truncate">{dp.name}</span>
+                                  {dp.pin_hash && <Lock className="w-3 h-3 shrink-0 text-muted-foreground" />}
                                 </button>
                               </PopoverClose>
                             ))}
@@ -2596,6 +2641,44 @@ const GamePage = () => {
             <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? t("game.startWarmup") : t("game.startGame")}
           </Button>
         </div>
+
+        {/* "PIN pro Spieler": confirms it's really that club member before their name lands in
+            the slot — see the roster-picker button above and submitPinPrompt/verifyPin. Purely
+            client-side (works offline), and only ever shown for a player who opted in by setting
+            a PIN in the first place. */}
+        <Dialog open={!!pinPrompt} onOpenChange={(open) => { if (!open) { setPinPrompt(null); setPinPromptValue(""); setPinPromptError(false); } }}>
+          <DialogContent className="max-w-xs">
+            <DialogHeader>
+              <DialogTitle className="font-display uppercase flex items-center gap-2">
+                <Lock className="w-4 h-4" /> {t("game.pinPromptTitle")}
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              {t("game.pinPromptDesc").replace("{name}", pinPrompt?.player.name ?? "")}
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              autoFocus
+              value={pinPromptValue}
+              onChange={(e) => { setPinPromptValue(e.target.value.replace(/\D/g, "").slice(0, 4)); setPinPromptError(false); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && pinPromptValue.length === 4) submitPinPrompt(); }}
+              placeholder="••••"
+              className={`w-full rounded-lg bg-muted border px-3 py-3 text-center text-2xl tracking-[0.5em] text-foreground focus:outline-none focus:ring-1 focus:ring-primary ${pinPromptError ? "border-destructive" : "border-border"}`}
+            />
+            {pinPromptError && <p className="text-xs text-destructive text-center">{t("game.pinPromptWrong")}</p>}
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => { setPinPrompt(null); setPinPromptValue(""); setPinPromptError(false); }}>
+                {t("common.cancel")}
+              </Button>
+              <Button className="flex-1" disabled={pinPromptValue.length !== 4 || pinPromptChecking} onClick={submitPinPrompt}>
+                {pinPromptChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : t("game.pinPromptConfirm")}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

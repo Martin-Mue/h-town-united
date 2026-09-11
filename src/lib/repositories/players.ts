@@ -16,13 +16,20 @@ export interface ClubPlayer {
   elo_rating: number;
   double_rate: number;
   joined_year: number | null;
+  /** "PIN pro Spieler" (local-game opponent confirmation, see @/lib/playerPin): a salted SHA-256
+   *  hash + its salt, or null if this player hasn't set a PIN. Deliberately readable by every
+   *  club member (same as every other roster field) so the local game setup screen can verify a
+   *  PIN entirely client-side, offline — this is a casual "is it really you" check among club
+   *  mates, not a real auth boundary, so that tradeoff is acceptable here. */
+  pin_hash: string | null;
+  pin_salt: string | null;
 }
 
 /** Full club roster, alphabetical — used for player pickers (Game/Training setup) and
  *  name→id resolution (Tournament push notifications, bracket entry). */
 export async function fetchClubPlayers(): Promise<ClubPlayer[]> {
   const { data, error } = await supabase.from("players")
-    .select("id, name, emoji, user_id, games_played, games_won, average, high_score, elo_rating, double_rate, joined_year").order("name");
+    .select("id, name, emoji, user_id, games_played, games_won, average, high_score, elo_rating, double_rate, joined_year, pin_hash, pin_salt").order("name");
   if (error) throw error;
   return data ?? [];
 }
