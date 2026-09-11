@@ -859,9 +859,27 @@ const PlayersPage = () => {
           </Button>
           <DialogContent className="bg-card border-border max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-display uppercase">{isEditMode ? t("players.editPlayerProfileTitle") : t("players.newMemberTitle")}</DialogTitle>
+              <DialogTitle className="font-display uppercase">{isEditMode ? t("players.editPlayerProfileTitle") : createWithoutAccount ? t("players.walkInTitle") : t("players.newMemberTitle")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {/* Admin-Umschalter: eigenes Profil vs. Profil ohne Account. Existiert bereits ein
+                  eigenes Profil, bleibt nur der Walk-in-Weg (ein zweites eigenes Profil wäre
+                  ein Duplikat). */}
+              {isAdmin && !isEditMode && (
+                <label className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/30 p-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createWithoutAccount}
+                    disabled={!!ownPlayerProfile}
+                    onChange={(e) => setCreateWithoutAccount(e.target.checked)}
+                    className="mt-0.5 accent-primary w-4 h-4"
+                  />
+                  <span>
+                    <span className="text-sm font-medium block">{t("players.walkInToggleLabel")}</span>
+                    <span className="text-xs text-muted-foreground">{t("players.walkInHint")}</span>
+                  </span>
+                </label>
+              )}
               <div>
                 <Label>{t("players.nameRequired")}</Label>
                 <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t("players.firstLastNamePlaceholder")} className="bg-muted border-border" />
