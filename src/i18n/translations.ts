@@ -664,6 +664,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.recordAgainstThem": { de: "gegen sie", en: "against them", fr: "contre eux", pl: "przeciwko nim", nl: "tegen hen", tr: "onlara karşı" },
   "stats.noDataYet": { de: "Noch keine Daten", en: "No data yet", fr: "Pas encore de données", pl: "Brak jeszcze danych", nl: "Nog geen data", tr: "Henüz veri yok" },
   "stats.favoriteOpponent": { de: "Lieblingsgegner", en: "Favorite opponent", fr: "Adversaire préféré", pl: "Ulubiony przeciwnik", nl: "Favoriete tegenstander", tr: "Favori rakip" },
+  "stats.nemesis": { de: "Angstgegner", en: "Nemesis", fr: "Bête noire", pl: "Zmora", nl: "Schrikbeeld", tr: "Korkulu rakip" },
   "stats.opponentRecord": { de: "Gegner-Bilanz", en: "Opponent record", fr: "Bilan par adversaire", pl: "Bilans z przeciwnikami", nl: "Tegenstanderbalans", tr: "Rakip istatistikleri" },
   "stats.selectAPlayer": { de: "Wähle einen Spieler aus.", en: "Select a player.", fr: "Sélectionne un joueur.", pl: "Wybierz gracza.", nl: "Selecteer een speler.", tr: "Bir oyuncu seç." },
   "stats.directDuels": { de: "direkte Duelle", en: "head-to-head games", fr: "duels directs", pl: "bezpośrednich pojedynków", nl: "directe duels", tr: "doğrudan karşılaşma" },

@@ -39,6 +39,7 @@ import ClutchCard from "@/components/stats/ClutchCard";
 import { combine180Breakdown, manualEntriesApplicable, type Manual180Entry } from "@/utils/manual180";
 import Manual180Editor from "@/components/stats/Manual180Editor";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { BOT_PROFILES } from "@/pages/Game";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import SeasonRecap from "@/components/stats/SeasonRecap";
@@ -852,8 +853,12 @@ const StatisticsPage = () => {
     });
 
     // Nemesis / favorite opponent — needs at least 2 games against them so a single fluke
-    // result doesn't get crowned "0% win rate against X" or "100% against Y".
-    const qualifyingOpponents = Object.entries(opponents).filter(([, r]) => r.wins + r.losses >= 2);
+    // result doesn't get crowned "0% win rate against X" or "100% against Y". Bots are excluded
+    // entirely: they're not real club members, so a bot dominating or losing to someone
+    // shouldn't be able to crown it their "Angstgegner"/favorite opponent — those titles are
+    // meant to be about actual rivalries with other people.
+    const botNames = new Set(Object.values(BOT_PROFILES).map(p => t(p.nameKey)));
+    const qualifyingOpponents = Object.entries(opponents).filter(([name, r]) => r.wins + r.losses >= 2 && !botNames.has(name));
     const nemesis = qualifyingOpponents.reduce<{ name: string; losses: number; wins: number } | null>((worst, [name, r]) => {
       const rate = r.losses / (r.wins + r.losses);
       const worstRate = worst ? worst.losses / (worst.losses + worst.wins) : -1;
@@ -1573,7 +1578,12 @@ const StatisticsPage = () => {
           <div className="mb-2">
             <Eyebrow icon={Trophy}>{t("stats.clubRecords")}</Eyebrow>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 md:grid-cols-4">
+          {/* pt-2 matters here, not just visual symmetry with pb-2: setting overflow-x without an
+              explicit overflow-y makes the browser compute overflow-y as "auto" too (CSS spec
+              quirk — you can't have one axis scrollable and the other visible), which silently
+              clips anything that bleeds above the box's own top edge — e.g. the first row's
+              hover/focus ring — unless there's padding to absorb it. */}
+          <div className="flex gap-3 overflow-x-auto pt-2 pb-2 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 md:grid-cols-4">
             {[
               { labelKey: "stats.oneEighties", value: club180Total, sub: bestOneEighties.name, icon: Target, tone: "accent" as const, sortKey: "one_eighties" as const },
               { labelKey: "stats.highestScore", value: clubStats.bestHighscore.val, sub: clubStats.bestHighscore.name, icon: Trophy, tone: "accent" as const, sortKey: "high_score" as const },
@@ -2171,7 +2181,7 @@ const StatisticsPage = () => {
                 return (
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="bg-card rounded-xl border border-destructive/30 p-3 text-center">
-                      <p className="text-xs text-muted-foreground mb-1">😈 Nemesis</p>
+                      <p className="text-xs text-muted-foreground mb-1">😈 {t("stats.nemesis")}</p>
                       {playerDetailStats.nemesis ? (
                         <>
                           <p className="text-lg font-display text-destructive truncate">{playerDetailStats.nemesis.name}</p>

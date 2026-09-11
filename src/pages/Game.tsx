@@ -2654,7 +2654,16 @@ const GamePage = () => {
                 </div>
               </div>
             )}
-            {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null} />}
+            {/* Screen-Audit Richtung 1 (reservierte Status-Zone): always mounted now, gate passed
+                in as `active` — see CheckoutSuggestion's own doc comment for why the old
+                `{condition && <CheckoutSuggestion/>}` wrapping caused the "scoreboard jumps"
+                complaint on every turn change, not just on remaining-score changes. */}
+            <CheckoutSuggestion
+              active={checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
+              remaining={currentRemaining} playerName={currentPlayerName}
+              personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
+              personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
+            />
 
             {!currentPlayer?.isBot && (
               // A camera/ONNX failure on an unfamiliar Android/browser combo only takes down this
@@ -2777,9 +2786,13 @@ const GamePage = () => {
           <div className="shrink-0 bg-background px-4">
             {scoreboardBlock}
             {doubleInBanner}
-            {checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true) && (
-              <CheckoutSuggestion remaining={currentRemaining} playerName={currentPlayerName} personalCheckoutRate={checkoutRates[currentPlayerName] ?? null} personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null} />
-            )}
+            {/* Screen-Audit Richtung 1 — same always-mounted fix as the camera branch above. */}
+            <CheckoutSuggestion
+              active={checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
+              remaining={currentRemaining} playerName={currentPlayerName}
+              personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
+              personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
+            />
             {cricketBoard}
           </div>
 
