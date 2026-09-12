@@ -150,6 +150,16 @@ const PlayersPage = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  /** Admin-only "Konto verknüpfen": club members who've signed up but have no player profile of
+   *  their own yet — i.e. exactly who a walk-in (no-account) profile's real account might now
+   *  belong to (tournament-day ask, 2026-09-12: keep a walk-in's stats/history under the SAME
+   *  row instead of that member starting over with a fresh, empty self-service profile). Reuses
+   *  admin_user_activity (already club-scoped, admin-only, and already LEFT JOINs players by
+   *  user_id) rather than adding a new RPC just to enumerate this. */
+  const [linkableAccounts, setLinkableAccounts] = useState<{ user_id: string; email: string }[]>([]);
+  const [linkTarget, setLinkTarget] = useState<Record<string, string>>({});
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+
   // "PIN pro Spieler" (@/lib/playerPin): set/change here covers both self-service (own linked
   // profile) and admin-for-walk-in (no account) — same permission shape as canEditPlayer below,
   // enforced again server-side by the set_player_pin RPC. Reset-to-null is separately allowed
@@ -235,6 +245,18 @@ const PlayersPage = () => {
     fetchPlayers();
   }, [fetchPlayers]);
 
+  useEffect(() => {
+    if (!isAdmin) { setLinkableAccounts([]); return; }
+    supabase.rpc("admin_user_activity").then(({ data, error }) => {
+      if (error) return; // non-fatal — the "Konto verknüpfen" picker just stays empty
+      setLinkableAccounts(
+        ((data ?? []) as { user_id: string; email: string; player_name: string | null }[])
+          .filter((row) => !row.player_name)
+          .map((row) => ({ user_id: row.user_id, email: row.email }))
+      );
+    });
+  }, [isAdmin]);
+
   /** Admin-only: removes a player profile outright — the only way to get rid of ones created
    *  directly here without a linked account (user_id is NULL, so the self-service delete policy
    *  can never match them). Games/stats referencing this player_id are untouched. */
@@ -260,6 +282,42 @@ const PlayersPage = () => {
       }
     }
     setDeletingId(null);
+  };
+
+  /** Admin-only: attaches an existing walk-in profile (no account, `user_id` NULL) to a club
+   *  member who has since signed up with email, instead of that member creating a brand-new
+   *  profile and losing the walk-in's accumulated stats/history. No new migration/RPC needed —
+   *  the players UPDATE RLS policy is already club-scoped ("true" within the club) and
+   *  restrict_player_profile_edits_to_owner already special-cases exactly this (admin +
+   *  OLD.user_id IS NULL, same club) to allow changing user_id; this is a plain update through
+   *  those existing rules, same shape as deletePlayer's own "0 rows back = RLS silently said no"
+   *  check above. */
+  const linkPlayerAccount = async (player: PlayerProfile) => {
+    const targetUserId = linkTarget[player.id];
+    if (!targetUserId) return;
+    setLinkingId(player.id);
+    const { data: updatedRows, error } = await supabase
+      .from("players")
+      .update({ user_id: targetUserId })
+      .eq("id", player.id)
+      .is("user_id", null)
+      .select("id");
+    if (error) {
+      toast({ title: t("players.errorTitle"), description: error.message, variant: "destructive" });
+    } else if (!updatedRows || updatedRows.length === 0) {
+      toast({ title: t("players.errorTitle"), description: t("players.linkAccountConflict"), variant: "destructive" });
+    } else {
+      const linkedEmail = linkableAccounts.find((a) => a.user_id === targetUserId)?.email;
+      setPlayers((prev) => prev.map((p) => (p.id === player.id ? { ...p, user_id: targetUserId } : p)));
+      setLinkableAccounts((prev) => prev.filter((a) => a.user_id !== targetUserId));
+      setLinkTarget((prev) => {
+        const next = { ...prev };
+        delete next[player.id];
+        return next;
+      });
+      toast({ title: `${player.name} ${t("players.linkAccountSuccessSuffix")}`, description: linkedEmail });
+    }
+    setLinkingId(null);
   };
 
   // Reset the PIN form whenever a different profile is opened — otherwise a half-typed PIN for
@@ -1270,6 +1328,39 @@ const PlayersPage = () => {
                     <div className="mt-3 space-y-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
                       {player.motto && <p className="font-display italic text-sm">“{player.motto}”</p>}
                       {player.bio && <p className="text-xs text-muted-foreground line-clamp-4 whitespace-pre-line">{player.bio}</p>}
+                    </div>
+                  )}
+                  {isAdmin && !player.user_id && (
+                    <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+                      <p className="text-xs font-medium flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> {t("players.linkAccountLabel")}</p>
+                      <p className="text-[11px] text-muted-foreground">{t("players.linkAccountDesc")}</p>
+                      {linkableAccounts.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground italic">{t("players.linkAccountEmpty")}</p>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Select
+                            value={linkTarget[player.id] ?? ""}
+                            onValueChange={(v) => setLinkTarget((prev) => ({ ...prev, [player.id]: v }))}
+                          >
+                            <SelectTrigger className="h-9 text-xs flex-1">
+                              <SelectValue placeholder={t("players.linkAccountPlaceholder")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {linkableAccounts.map((a) => (
+                                <SelectItem key={a.user_id} value={a.user_id} className="text-xs">{a.email}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            className="h-9 text-xs shrink-0"
+                            disabled={!linkTarget[player.id] || linkingId === player.id}
+                            onClick={() => linkPlayerAccount(player)}
+                          >
+                            {linkingId === player.id ? t("players.linkAccountLinking") : t("players.linkAccountBtn")}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                   {isAdmin && !player.user_id && (

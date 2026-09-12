@@ -2,7 +2,17 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: without it, iOS Safari/WKWebView reports every env(safe-area-inset-*)
+         as 0, so Game.tsx's `max(0.75rem, env(safe-area-inset-bottom))` padding (already written
+         throughout its scoreboard layout, see that file) silently never got the extra bottom
+         inset it was written for — the game screen is a `fixed inset-0` overlay, and on an
+         iPhone with a home-indicator bar, content sat right up against (and could be nudged by)
+         that gesture area with nothing accounting for it. This is also the standard fix for the
+         iOS-only "page jumps as Safari's own address-bar chrome shows/hides while scrolling"
+         class of bug (2026-09-12 tournament-day report: "Scoreboard springt, Scroll-Probleme,
+         wirkt auf iPhone weniger stabil als auf Android") — Android's WebView never had this
+         particular failure mode, which is why it went unnoticed there. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- title/description/author/OG/favicon below are placeholders, overwritten at build time by
          the html-identity Vite plugin (see vite.config.ts) from the same club-identity.ts
          CLUB_IDENTITY object the PWA manifest and native app already use as their single source

@@ -710,6 +710,31 @@ export function hasStarted(t: { mode: string; bracket: Match[] | RoundRobinMatch
   );
 }
 
+/**
+ * Stricter than hasStarted() (which only flips once a REAL match has a recorded WINNER): also
+ * counts a tournament as underway once any match has a live broadcast snapshot, or (KO only) a
+ * leg already tallied via the "+1" button, even before the very first result lands. hasStarted()
+ * intentionally keeps its original meaning (PublicTournament.tsx's pre-start rotation gate
+ * genuinely wants "first result", not "first leg thrown") — this exists specifically to gate
+ * Tournament.tsx's "Bearbeiten" (setup-form edit), which regenerates the WHOLE bracket on save.
+ * Several boards can be mid-leg on round 1 with zero results recorded yet — hasStarted() alone
+ * let "Bearbeiten" stay reachable through that whole window, so a tournament-day "kleine
+ * Änderung" (board count, live-play toggle, …) saved through that form could — and on
+ * 2026-09-12, did, again — silently reshuffle the entire bracket underneath players already
+ * mid-match. See startTournament's editingId branch for the second half of this fix (it now also
+ * skips regeneration outright whenever the roster/mode didn't actually change, regardless of how
+ * this gate is reached).
+ */
+export function isTournamentUnderway(t: { mode: string; bracket: Match[] | RoundRobinMatch[] }): boolean {
+  if (hasStarted(t)) return true;
+  if (t.mode === "round-robin") {
+    return ((t.bracket as RoundRobinMatch[]) || []).some((m) => isLiveSnapshotFresh(m.live));
+  }
+  return ((t.bracket as Match[]) || []).some(
+    (m) => isRealPlayer(m.player1) && isRealPlayer(m.player2) && (!!m.score1 || !!m.score2 || isLiveSnapshotFresh(m.live))
+  );
+}
+
 /** Every selectable live-view page, shared between PublicTournament.tsx (rotation + pre-start
  *  gating) and Tournament.tsx (the organizer's pre-start-visibility checkboxes) so both draw on
  *  one taxonomy instead of two hand-kept copies. */

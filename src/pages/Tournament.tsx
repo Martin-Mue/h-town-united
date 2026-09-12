@@ -67,6 +67,7 @@ import {
   calcStandings,
   newlyPlayableMatches,
   hasStarted,
+  isTournamentUnderway,
   boardHasFutureMatch,
   DEFAULT_PRESTART_VIEWS,
   type RotationSlot,
@@ -649,6 +650,10 @@ const TournamentPage = () => {
   const [players, setPlayers] = useState<string[]>([]);
   const [savingTournament, setSavingTournament] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** Snapshot of the tournament being edited, taken the moment "Bearbeiten" is opened — lets
+   *  startTournament's editingId branch tell "roster/mode genuinely changed, a redraw is
+   *  intended" apart from "just tweaked a setting", see that function's own comment. */
+  const [editingSource, setEditingSource] = useState<TournamentRecord | null>(null);
   // Round 3 Rang 4: shared/cached club roster (usePlayers.ts) instead of this page's own
   // fetchDbPlayers()/fetchClubPlayers() call below — `dbPlayers` name kept unchanged so every
   // existing consumer further down (notifyMatchReady, matchmakingPool, matchClubPlayer calls,
@@ -1033,9 +1038,26 @@ const TournamentPage = () => {
     if (players.length < 2 || savingTournament) return;
     setSavingTournament(true);
     try {
-    const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
 
     if (editingId) {
+      // Regenerating the bracket from scratch (fresh seeding/shuffle) is only appropriate when
+      // the roster or the KO/round-robin mode actually changed since "Bearbeiten" was opened —
+      // see editingSource's doc comment above. Saving a "kleine Änderung" (board count,
+      // live-play toggle, name, best-of, …) with the SAME players must reuse the exact existing
+      // bracket byte-for-byte instead: this used to call generateKoBracket/generateRoundRobin
+      // completely unconditionally on every save, which — combined with editTournament always
+      // resetting drawMode to "random" with a brand-new drawSeed — reshuffled every pairing on
+      // literally every single settings save, including ones made while boards were already
+      // mid-match with zero results in yet (the recurring "Turnierbaum hat sich neu gemischt"
+      // bug; isTournamentUnderway above/below narrows when "Bearbeiten" is even reachable, this
+      // is the second, independent half of the fix in case that gate is ever bypassed).
+      const sameRoster = !!editingSource &&
+        editingSource.mode === tournamentMode &&
+        editingSource.players.length === players.length &&
+        editingSource.players.every((p) => players.includes(p));
+      const bracket = sameRoster
+        ? editingSource!.bracket
+        : (tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players));
       const payload: Database["public"]["Tables"]["tournaments"]["Update"] = {
         name: tournamentName || t("tournament.bigEvent"),
         mode: tournamentMode,
@@ -1044,8 +1066,8 @@ const TournamentPage = () => {
         best_of_sets: setsEnabled ? bestOfSets : null,
         players: players as unknown as Json,
         bracket: bracket as unknown as Json,
-        status: "active",
-        champion: null,
+        status: sameRoster ? (editingSource!.status || "active") : "active",
+        champion: sameRoster ? (editingSource!.champion ?? null) : null,
         series_id: seriesId === "none" ? null : seriesId,
         round_configs: roundConfigs as unknown as Json,
         boards,
@@ -1075,6 +1097,7 @@ const TournamentPage = () => {
       };
       setActiveTournament(rec);
       setEditingId(null);
+      setEditingSource(null);
       setBracketView(defaultBracketView(rec.bracket as Match[]));
       setPhase("bracket");
       setPlayers([]);
@@ -1085,6 +1108,7 @@ const TournamentPage = () => {
       return;
     }
 
+    const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
     const insertPayload: Database["public"]["Tables"]["tournaments"]["Insert"] = {
       name: tournamentName || "Großevent",
       mode: tournamentMode,
@@ -1642,18 +1666,19 @@ const TournamentPage = () => {
 
   /** "Extern" rounds are explicitly played outside the app (a different system/board) — no live-game option for those.
    *  `live_play_enabled` is a per-tournament opt-out: pure bracket display + manual entry only.
-   *  Also restricted to whichever match is actually up next per the board schedule — with
-   *  several rounds simultaneously playable (normal once a bracket fills in), letting "Spiel
-   *  starten" fire for any of them out of order was reported as too error-prone in real use. */
+   *
+   *  Used to ALSO restrict this to whichever match was exactly next per the board schedule
+   *  (currentBoardSchedule's "now" slot) — added after out-of-order starts were reported as too
+   *  error-prone. Tournament-day feedback (2026-09-12) walked that back: with a smoker or someone
+   *  briefly away from a board, THAT one match couldn't start yet while other open, fully playable
+   *  matches sat blocked behind it in the schedule for no reason — exactly the scenario the old
+   *  restriction couldn't handle. Any open+playable match may now start at any time; the board
+   *  schedule (currentBoardSchedule) still drives the "now on board" overview strip and Board-Modus
+   *  as a suggestion, it just no longer gates the button. If double-booked boards/scorekeepers turn
+   *  out to be a real problem again, add a soft warning here (like startLiveGame's existing
+   *  isLiveSnapshotFresh confirm) rather than reinstating a hard block. */
   const canStartLiveGame = (match: Match): boolean => {
-    if (!(activeTournament?.live_play_enabled ?? true) || !isPlayable(match) || !!match.winner || resolveRoundMode(match.round) === "Extern") {
-      return false;
-    }
-    if (activeTournament && activeTournament.mode !== "round-robin") {
-      const schedule = currentBoardSchedule(activeTournament.bracket as Match[], activeTournament.boards || 2);
-      return schedule.now.some((e) => e.match.id === match.id);
-    }
-    return true;
+    return (activeTournament?.live_play_enabled ?? true) && isPlayable(match) && !match.winner && resolveRoundMode(match.round) !== "Extern";
   };
 
   /** Opens Game.tsx prefilled for this match — playing stays entirely optional, this is purely
@@ -1895,6 +1920,7 @@ const TournamentPage = () => {
   /** Load an unstarted tournament back into the setup screen. */
   const editTournament = (t: TournamentRecord) => {
     setEditingId(t.id);
+    setEditingSource(t);
     setTournamentName(t.name);
     setTournamentMode(t.mode);
     setGameMode(t.game_mode || "501");
@@ -1936,7 +1962,7 @@ const TournamentPage = () => {
                 <Swords className="w-3.5 h-3.5" /> {t("tournament.leagueMode")}
               </Link>
             </Button>
-            <Button size="sm" onClick={() => { setEditingId(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
+            <Button size="sm" onClick={() => { setEditingId(null); setEditingSource(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
               <Plus className="w-4 h-4" /> {t("tournament.newTournament")}
             </Button>
           </div>
@@ -1999,7 +2025,7 @@ const TournamentPage = () => {
                   </div>
                   {tourn.champion && <p className="text-xs text-accent mt-1">🏆 {tourn.champion}</p>}
                 </button>
-                {!hasStarted(tourn) && isOwnerOf(tourn) && (
+                {!isTournamentUnderway(tourn) && isOwnerOf(tourn) && (
                   <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); editTournament(tourn); }} className="text-xs">
                     {t("common.edit")}
                   </Button>
@@ -2038,7 +2064,7 @@ const TournamentPage = () => {
   if (phase === "setup") {
     return (
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
-        <Button variant="ghost" onClick={() => { setEditingId(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm"><ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}</Button>
+        <Button variant="ghost" onClick={() => { setEditingId(null); setEditingSource(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm"><ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}</Button>
         <div className="relative overflow-hidden mb-6 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-4 shadow-[0_0_30px_hsl(var(--primary)/0.12)]">
           <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> {t("tournament.bigEventMode")}</div>
           <h2 className="text-2xl font-display uppercase">{editingId ? t("tournament.editTournamentHeading") : t("tournament.createTournamentHeading")}</h2>
@@ -2733,7 +2759,7 @@ const TournamentPage = () => {
             ))}
             {/* Link/QR live here only, in the "Beamer-Link" banner below — having them here
                 too duplicated the exact same link/QR right on top of each other. */}
-            {!hasStarted(activeTournament) && isOwner && (
+            {!isTournamentUnderway(activeTournament) && isOwner && (
               <Button variant="outline" size="sm" onClick={() => editTournament(activeTournament)}>
                 {t("common.edit")}
               </Button>
