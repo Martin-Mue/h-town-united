@@ -133,7 +133,10 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
       if (!parsed.currentTurnId) return; // lobby created but no turn under way yet
 
       if (parsed.currentTurnFinished) {
-        if (parsed.currentTurnId !== lastCommittedTurnIdRef.current) {
+        // Same guard as the matchFinished branch above: don't commit a turn Autodarts marked
+        // "finished" before its throws[] were actually populated in this same poll response --
+        // wait for a later tick that carries the real darts instead of forwarding an empty round.
+        if (parsed.currentTurnId !== lastCommittedTurnIdRef.current && parsed.currentTurnThrows.length > 0) {
           callbacksRef.current.onRoundCommit(parsed.currentTurnThrows, forced);
           lastCommittedTurnIdRef.current = parsed.currentTurnId;
         }
@@ -233,6 +236,13 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
     return () => {
       cancelled = true;
       stopPolling();
+      // Covers the case the `!enabled` branch above doesn't: the component unmounting outright
+      // (navigating away mid-match) while a lobby is still open, rather than `enabled` flipping to
+      // false while it stays mounted. Same best-effort courtesy call either way.
+      if (matchIdRef.current) {
+        void finishMatch(boardNumber, matchIdRef.current);
+        matchIdRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, boardNumber]);
