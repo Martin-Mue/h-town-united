@@ -38,8 +38,8 @@ set search_path to 'public'
 -- below, before this function's OWN, deliberately-informative timeout handling ever got a chance
 -- to fire) -- this function legitimately needs more time for the outbound Autodarts call, so it
 -- asks for it explicitly rather than trying to guess a polling window that stays just under
--- whatever the platform default happens to be.
-set statement_timeout to '15000'
+-- whatever the platform default happens to be. Must stay above the ~21s polling loop ceiling below.
+set statement_timeout to '25000'
 as $function$
 declare
   v_club_id uuid;
@@ -54,6 +54,7 @@ declare
   v_request_id bigint;
   v_err_message text;
   v_poll_attempt int;
+  v_cloud_warning text;
 begin
   -- Lets this function's own writes to the sensitive columns below past
   -- restrict_autodarts_board_credential_edits (see the follow-up migration that introduced this
@@ -108,62 +109,75 @@ begin
   end if;
 
   if p_cloud_email is not null and p_cloud_password is not null then
-    -- Confirmed live: POST https://api.autodarts.com/auth/v1/login, plain JSON body
-    -- {email, password, client_id}, client_id "autodarts-play" (NOT the old Keycloak
-    -- "autodarts-app"). Origin/Referer are NOT optional -- the API's CORS/client validation
-    -- rejects "autodarts-play" as an "unknown client_id" without them, confirmed live by testing
-    -- with and without.
-    v_request_id := net.http_post(
-      url := 'https://api.autodarts.com/auth/v1/login',
-      body := jsonb_build_object('email', p_cloud_email, 'password', p_cloud_password, 'client_id', 'autodarts-play'),
-      headers := jsonb_build_object('Content-Type', 'application/json', 'Origin', 'https://play.autodarts.com', 'Referer', 'https://play.autodarts.com/'),
-      timeout_milliseconds := 10000
-    );
-    -- Polls net._http_response every 300ms (up to ~10.5s, comfortably inside the statement_timeout
-    -- override above) instead of one fixed sleep -- pg_net's background worker writes the row
-    -- whenever the request actually finishes, which real-credential logins (server-side password
-    -- hashing/verification takes real time) showed varies noticeably more than the throwaway
-    -- wrong-credential probes this was originally tuned against.
-    for v_poll_attempt in 1..35 loop
-      select status_code, content::jsonb into v_login_status, v_login_response
-        from net._http_response where id = v_request_id;
-      exit when v_login_status is not null;
-      perform pg_sleep(0.3);
-    end loop;
+    -- Wrapped in its own sub-block (PL/pgSQL's BEGIN/EXCEPTION implicitly opens a savepoint): a
+    -- real bug found live -- any raised exception here, uncaught, rolled back the WHOLE function's
+    -- transaction, including the row insert and local-key save that already succeeded above.
+    -- Now a cloud-login failure only undoes ITS OWN partial work and is reported back as
+    -- credentialsWarning in the return value below, matching this function's own "connect is
+    -- additive, never all-or-nothing across cloud+local" doc comment intent from the start.
+    begin
+      -- Confirmed live: POST https://api.autodarts.com/auth/v1/login, plain JSON body
+      -- {email, password, client_id}, client_id "autodarts-play" (NOT the old Keycloak
+      -- "autodarts-app"). Origin/Referer are NOT optional -- the API's CORS/client validation
+      -- rejects "autodarts-play" as an "unknown client_id" without them, confirmed live by testing
+      -- with and without.
+      v_request_id := net.http_post(
+        url := 'https://api.autodarts.com/auth/v1/login',
+        body := jsonb_build_object('email', p_cloud_email, 'password', p_cloud_password, 'client_id', 'autodarts-play'),
+        headers := jsonb_build_object('Content-Type', 'application/json', 'Origin', 'https://play.autodarts.com', 'Referer', 'https://play.autodarts.com/'),
+        timeout_milliseconds := 20000
+      );
+      -- Polls net._http_response every 300ms up to ~21s -- a real account's login (full
+      -- password-hash verification, and possibly rate-limited after this integration's own
+      -- repeated test traffic during development) took noticeably longer than the throwaway
+      -- wrong-credential/nonexistent-account probes this was originally tuned against.
+      for v_poll_attempt in 1..70 loop
+        select status_code, content::jsonb into v_login_status, v_login_response
+          from net._http_response where id = v_request_id;
+        exit when v_login_status is not null;
+        perform pg_sleep(0.3);
+      end loop;
 
-    if v_login_status is null then
-      update public.autodarts_boards set status = 'error', last_error = 'Autodarts-Login: keine Antwort (Timeout)', updated_at = now() where id = v_row_id;
-      raise exception 'Autodarts-Login: keine Antwort erhalten (Netzwerk-Timeout)';
-    end if;
+      if v_login_status is null then
+        raise exception 'Autodarts-Login: keine Antwort erhalten (Netzwerk-Timeout)';
+      end if;
 
-    if v_login_status <> 200 then
-      v_err_message := coalesce(v_login_response->'error'->>'message', 'unbekannter Fehler, Status ' || v_login_status);
-      update public.autodarts_boards set status = 'error', last_error = v_err_message, updated_at = now() where id = v_row_id;
-      raise exception 'Autodarts-Login fehlgeschlagen: %', v_err_message;
-    end if;
+      if v_login_status <> 200 then
+        raise exception 'Autodarts-Login fehlgeschlagen: %', coalesce(v_login_response->'error'->>'message', 'unbekannter Fehler, Status ' || v_login_status);
+      end if;
 
-    -- Every other confirmed-live Autodarts response uses camelCase (createdAt, isPrivate,
-    -- gameFinished, ...) -- coalescing both casings costs nothing and protects against the one
-    -- casing guess being wrong for this specific endpoint.
-    v_access_token := coalesce(v_login_response->>'accessToken', v_login_response->>'access_token');
-    v_refresh_token := coalesce(v_login_response->>'refreshToken', v_login_response->>'refresh_token');
-    v_expires_in := coalesce(nullif(v_login_response->>'expiresIn','')::int, nullif(v_login_response->>'expires_in','')::int, 900);
+      -- Every other confirmed-live Autodarts response uses camelCase (createdAt, isPrivate,
+      -- gameFinished, ...) -- coalescing both casings costs nothing and protects against the one
+      -- casing guess being wrong for this specific endpoint.
+      v_access_token := coalesce(v_login_response->>'accessToken', v_login_response->>'access_token');
+      v_refresh_token := coalesce(v_login_response->>'refreshToken', v_login_response->>'refresh_token');
+      v_expires_in := coalesce(nullif(v_login_response->>'expiresIn','')::int, nullif(v_login_response->>'expires_in','')::int, 900);
 
-    if v_refresh_token is null then
-      v_err_message := 'Unerwartetes Antwortformat -- gefundene Felder: ' || (select string_agg(k, ', ') from jsonb_object_keys(v_login_response) as k);
-      update public.autodarts_boards set status = 'error', last_error = v_err_message, updated_at = now() where id = v_row_id;
-      raise exception '%', v_err_message;
-    end if;
+      if v_refresh_token is null then
+        raise exception 'Unerwartetes Antwortformat -- gefundene Felder: %', (select string_agg(k, ', ') from jsonb_object_keys(v_login_response) as k);
+      end if;
 
-    update public.autodarts_boards
-    set refresh_token_ciphertext = encode(extensions.pgp_sym_encrypt(v_refresh_token, v_passphrase), 'base64'),
-        autodarts_user_email = p_cloud_email,
-        token_updated_at = now(),
-        updated_at = now()
-    where id = v_row_id;
+      update public.autodarts_boards
+      set refresh_token_ciphertext = encode(extensions.pgp_sym_encrypt(v_refresh_token, v_passphrase), 'base64'),
+          autodarts_user_email = p_cloud_email,
+          token_updated_at = now(),
+          status = 'connected',
+          last_error = null,
+          updated_at = now()
+      where id = v_row_id;
+    exception when others then
+      v_cloud_warning := sqlerrm;
+      update public.autodarts_boards set status = 'error', last_error = v_cloud_warning, updated_at = now() where id = v_row_id;
+    end;
   end if;
 
-  return jsonb_build_object('status', 'connected', 'boardNumber', p_board_number, 'accessToken', v_access_token, 'expiresIn', v_expires_in);
+  return jsonb_build_object(
+    'status', 'connected',
+    'boardNumber', p_board_number,
+    'accessToken', v_access_token,
+    'expiresIn', v_expires_in,
+    'credentialsWarning', v_cloud_warning
+  );
 end;
 $function$;
 
@@ -175,7 +189,8 @@ returns jsonb
 language plpgsql
 security definer
 set search_path to 'public'
-set statement_timeout to '15000'
+-- Same headroom as autodarts_connect_board, same reason -- see that function's own comment.
+set statement_timeout to '25000'
 as $function$
 declare
   v_club_id uuid;
@@ -222,9 +237,9 @@ begin
       url := 'https://api.autodarts.com/auth/v1/refresh',
       body := jsonb_build_object('refreshToken', v_stored_refresh_token, 'client_id', 'autodarts-play'),
       headers := jsonb_build_object('Content-Type', 'application/json', 'Origin', 'https://play.autodarts.com', 'Referer', 'https://play.autodarts.com/'),
-      timeout_milliseconds := 10000
+      timeout_milliseconds := 20000
     );
-    for v_poll_attempt in 1..35 loop
+    for v_poll_attempt in 1..70 loop
       select status_code, content::jsonb into v_refresh_status, v_refresh_response from net._http_response where id = v_request_id;
       exit when v_refresh_status is not null;
       perform pg_sleep(0.3);

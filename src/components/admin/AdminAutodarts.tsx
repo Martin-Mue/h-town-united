@@ -110,7 +110,7 @@ const AdminAutodarts = () => {
       // deployable here (Lovable Cloud has no self-service Edge Function deploy and the
       // account's monthly agent credits were exhausted), so this RPC-based path is the real,
       // live implementation, not a placeholder.
-      const { error } = await supabase.rpc("autodarts_connect_board", {
+      const { data, error } = await supabase.rpc("autodarts_connect_board", {
         p_board_number: boardNumber,
         p_label: form.label.trim() || null,
         p_connection_mode: form.connectionMode,
@@ -121,7 +121,15 @@ const AdminAutodarts = () => {
         p_local_ip: hasLocal ? form.localIp.trim() || null : null,
       });
       if (error) throw new Error(error.message);
-      toast({ title: "Board verbunden", description: `"${form.label || `Board ${boardNumber}`}" ist einsatzbereit.` });
+      // A cloud-login failure no longer throws (see autodarts_connect_board's own doc comment on
+      // why) -- it comes back as this field instead, alongside a still-successful save of
+      // whatever DID work (e.g. the local API key entered in the same submit).
+      const credentialsWarning = (data as { credentialsWarning?: string | null } | null)?.credentialsWarning;
+      if (credentialsWarning) {
+        toast({ title: "Board gespeichert, Cloud-Login aber fehlgeschlagen", description: credentialsWarning, variant: "destructive" });
+      } else {
+        toast({ title: "Board verbunden", description: `"${form.label || `Board ${boardNumber}`}" ist einsatzbereit.` });
+      }
       setForm(emptyForm);
       setFormOpen(false);
       void load();
