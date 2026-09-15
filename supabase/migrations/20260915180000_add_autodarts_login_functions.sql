@@ -46,6 +46,7 @@ declare
   v_expires_in int;
   v_request_id bigint;
   v_err_message text;
+  v_poll_attempt int;
 begin
   -- Lets this function's own writes to the sensitive columns below past
   -- restrict_autodarts_board_credential_edits (see the follow-up migration that introduced this
@@ -111,9 +112,18 @@ begin
       headers := jsonb_build_object('Content-Type', 'application/json', 'Origin', 'https://play.autodarts.com', 'Referer', 'https://play.autodarts.com/'),
       timeout_milliseconds := 8000
     );
-    perform pg_sleep(2);
-    select status_code, content::jsonb into v_login_status, v_login_response
-      from net._http_response where id = v_request_id;
+    -- Polls net._http_response every 300ms instead of one fixed sleep -- pg_net's background
+    -- worker writes the row whenever the request actually finishes, which real-credential logins
+    -- (server-side password hashing/verification takes real time) showed varies noticeably more
+    -- than the throwaway wrong-credential probes this was originally tuned against; a fixed 2s
+    -- sleep was too short and surfaced as a false "Netzwerk-Timeout" even though the request itself
+    -- was still in flight, well inside the 8s timeout_milliseconds ceiling above.
+    for v_poll_attempt in 1..27 loop
+      select status_code, content::jsonb into v_login_status, v_login_response
+        from net._http_response where id = v_request_id;
+      exit when v_login_status is not null;
+      perform pg_sleep(0.3);
+    end loop;
 
     if v_login_status is null then
       update public.autodarts_boards set status = 'error', last_error = 'Autodarts-Login: keine Antwort (Timeout)', updated_at = now() where id = v_row_id;
@@ -173,6 +183,7 @@ declare
   v_request_id bigint;
   v_result jsonb := '{}'::jsonb;
   v_local_api_key text;
+  v_poll_attempt int;
 begin
   perform set_config('darts.autodarts_internal_write', 'on', true);
 
@@ -206,8 +217,11 @@ begin
       headers := jsonb_build_object('Content-Type', 'application/json', 'Origin', 'https://play.autodarts.com', 'Referer', 'https://play.autodarts.com/'),
       timeout_milliseconds := 8000
     );
-    perform pg_sleep(2);
-    select status_code, content::jsonb into v_refresh_status, v_refresh_response from net._http_response where id = v_request_id;
+    for v_poll_attempt in 1..27 loop
+      select status_code, content::jsonb into v_refresh_status, v_refresh_response from net._http_response where id = v_request_id;
+      exit when v_refresh_status is not null;
+      perform pg_sleep(0.3);
+    end loop;
 
     if v_refresh_status = 200 then
       v_access_token := coalesce(v_refresh_response->>'accessToken', v_refresh_response->>'access_token');
