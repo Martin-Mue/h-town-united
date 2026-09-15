@@ -1,6 +1,6 @@
 /** Feature keys gated by a club's plan_tier. Kept to exactly the features that actually have a
  *  real call site — no speculative stub entries for features nobody gates yet. */
-export type PlanFeature = "camera" | "largeTournaments" | "ai-commentary";
+export type PlanFeature = "camera" | "largeTournaments" | "ai-commentary" | "autodarts";
 
 /** `free_locked` (H-Town, permanently exempt) and `paid` get everything; `trial` (the default for
  *  a newly self-created club) is gated on the features above until a real subscription exists.

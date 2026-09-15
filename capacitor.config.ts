@@ -16,6 +16,13 @@ const config: CapacitorConfig = {
     url: "https://h-town-united.lovable.app",
     androidScheme: "https",
   },
+  // allowMixedContent is Capacitor's OWN mixed-content gate, separate from (and required in
+  // addition to) the Android-level network_security_config.xml cleartextTrafficPermitted flag --
+  // without both, the WebView still blocks the Autodarts local-board ws://<ip>:3180 connection
+  // even though the OS-level policy allows it. See network_security_config.xml's own comment.
+  android: {
+    allowMixedContent: true,
+  },
 };
 
 export default config;

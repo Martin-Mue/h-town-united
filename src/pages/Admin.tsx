@@ -24,6 +24,7 @@ import AdminTournamentForecast from "@/components/admin/AdminTournamentForecast"
 import AdminInvites from "@/components/admin/AdminInvites";
 import AdminClubBranding from "@/components/admin/AdminClubBranding";
 import AdminBilling from "@/components/admin/AdminBilling";
+import AdminAutodarts from "@/components/admin/AdminAutodarts";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
@@ -134,6 +135,10 @@ const AdminPage = () => {
           <TabsTrigger value="invites">{t("admin.tabInvites")}</TabsTrigger>
           <TabsTrigger value="branding">{t("admin.tabBranding")}</TabsTrigger>
           <TabsTrigger value="billing">{t("admin.tabBilling")}</TabsTrigger>
+          {/* Proper noun (product name), same in every language -- not routed through t() like the
+              other tabs, same reasoning AdminAutodarts.tsx itself uses plain German strings rather
+              than pulling in translation keys for a Paid-Plan admin feature. */}
+          <TabsTrigger value="autodarts">Autodarts</TabsTrigger>
           <TabsTrigger value="stats">{t("admin.tabStats")}</TabsTrigger>
           <TabsTrigger value="forecast">{t("admin.tabForecast")}</TabsTrigger>
         </TabsList>
@@ -280,6 +285,10 @@ const AdminPage = () => {
 
         <TabsContent value="billing">
           <AdminBilling />
+        </TabsContent>
+
+        <TabsContent value="autodarts">
+          <AdminAutodarts />
         </TabsContent>
 
         <TabsContent value="stats">

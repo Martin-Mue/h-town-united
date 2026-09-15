@@ -6,25 +6,7 @@ import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-
-/** supabase-js's FunctionsHttpError.message is just a generic "Edge Function returned a non-2xx
- *  status code" — the function's own `{ error: "..." }` JSON body (the actually useful part,
- *  e.g. "Stripe is not configured...") only lives on `error.context`, the raw Response object,
- *  and has to be read out separately. Without this, every server-side failure here looked
- *  identical in the toast regardless of cause — confirmed live 2026-09-03 when a real Stripe
- *  rejection was completely hidden behind the generic message. */
-async function describeFunctionError(error: unknown): Promise<string> {
-  const context = (error as { context?: Response })?.context;
-  if (context && typeof context.json === "function") {
-    try {
-      const body = await context.json();
-      if (body?.error) return String(body.error);
-    } catch {
-      // context wasn't JSON (or already consumed) — fall through to the generic message below.
-    }
-  }
-  return error instanceof Error ? error.message : "Unbekannter Fehler.";
-}
+import { describeFunctionError } from "@/lib/functionErrors";
 
 /** Kept in sync with the two live Stripe prices by hand (STRIPE_PRICE_ID_MONTHLY/_YEARLY on the
  *  create-checkout-session edge function) — there's no third place this reads from, so if either

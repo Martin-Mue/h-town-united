@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.live-commentary]
 verify_jwt = false
+
+[functions.autodarts-auth]
+verify_jwt = false

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Allows cleartext (ws:// / http://) traffic app-wide so the Autodarts local-board integration
+     (AutodartsLiveScore.tsx's optional "poll now" nudge) can reach a LAN board manager
+     (http://<board-ip>:3180) from the Android WebView. Scoping this to specific hosts isn't
+     practical -- board IPs are admin-entered, arbitrary LAN addresses, and Android's Network
+     Security Config only matches by hostname/domain, not by IP/CIDR range. The app's own primary
+     content always loads over real HTTPS regardless of this setting (see capacitor.config.ts's
+     server.url) -- this only widens what the WebView will additionally allow. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

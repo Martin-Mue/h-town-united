@@ -31,6 +31,8 @@ import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 // the code-split the way a value import of the same module would.
 const LiveCamera = lazy(() => import("@/components/game/LiveCamera"));
 import type { DetectedDart, LiveCameraHandle } from "@/components/game/LiveCamera";
+const AutodartsLiveScore = lazy(() => import("@/components/game/AutodartsLiveScore"));
+import type { AutodartsLiveScoreHandle } from "@/components/game/AutodartsLiveScore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
 import OnlineChallengeSetup from "@/components/game/OnlineChallengeSetup";
@@ -380,7 +382,9 @@ const GamePage = () => {
   // the bot-auto-play effect below force-closes for bot turns. Lets the camera come back on its
   // own once play returns to a human, instead of the player having to re-tap "Cam" every turn.
   const cameraWantedRef = useRef(false);
-  const [pendingCameraDarts, setPendingCameraDarts] = useState<DetectedDart[]>([]);
+  // Shared between LiveCamera and AutodartsLiveScore's onPendingChange -- the two are mutually
+  // exclusive per game (see autodartsEnabled), so one "in-progress visit" preview slot is enough.
+  const [pendingLiveDarts, setPendingLiveDarts] = useState<DetectedDart[]>([]);
   // Set when a camera-detected round's total lands exactly on a finish under double-out AND the
   // visit mixes at least one double with at least one non-double dart — genuinely ambiguous from
   // a single end-of-visit photo (see resolveX01Visit's doc comment): it could be a valid checkout
@@ -394,6 +398,28 @@ const GamePage = () => {
   // index in team mode, player index otherwise) — same space as GameState.currentLeg.remaining.
   const [pendingTiebreak, setPendingTiebreak] = useState<{ tiedIndexes: number[] } | null>(null);
   const liveCameraRef = useRef<LiveCameraHandle>(null);
+  const autodartsLiveScoreRef = useRef<AutodartsLiveScoreHandle>(null);
+  // Autodarts: fixed on/off for the whole game (chosen in GameSetup), unlike the camera's own
+  // freely-toggled cameraEnabled above — see GameSetup.tsx's own doc comment on why.
+  const [autodartsEnabled, setAutodartsEnabled] = useState(false);
+  const [autodartsBoardNumber, setAutodartsBoardNumber] = useState<number | null>(null);
+  const [autodartsBoards, setAutodartsBoards] = useState<{ id: string; boardNumber: number; label: string | null; status: string }[]>([]);
+  const autodartsAvailable = clubHasFeature(club?.plan_tier, "autodarts");
+  // Loaded once per club for GameSetup's board picker -- non-sensitive columns only (see the
+  // autodarts_boards migration's grants), same as any other per-club setup data fetched here.
+  useEffect(() => {
+    if (!clubId || !autodartsAvailable) { setAutodartsBoards([]); return; }
+    let cancelled = false;
+    supabase
+      .from("autodarts_boards")
+      .select("id, board_number, label, status")
+      .eq("club_id", clubId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setAutodartsBoards((data ?? []).map((b) => ({ id: b.id, boardNumber: b.board_number, label: b.label, status: b.status })));
+      });
+    return () => { cancelled = true; };
+  }, [clubId, autodartsAvailable]);
   const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
   const [confettiKey, setConfettiKey] = useState<number | null>(null);
   /** 180s and checkouts get a quick confetti burst — the same falling-piece look as the
@@ -622,6 +648,19 @@ const GamePage = () => {
     // tournamentLinkRef's identity never changes (see the snapshot-mirroring effect above for why
     // it's listed at all despite that).
   }, [tournamentLinkName, tournamentLinkRef]);
+
+  // Board-mode has no human "pick a scoring source" step (the countdown screen auto-starts), so a
+  // tournament board wired to a connected Autodarts board is switched on automatically here —
+  // matched purely by board NUMBER (tournamentLinkRef.current.board, the existing tournament-board
+  // concept) against autodarts_boards.board_number, never assumed. A board this club hasn't also
+  // connected in Autodarts (the common case today) simply leaves autodartsEnabled false, same as
+  // any casual game — this never forces Autodarts on incorrectly.
+  useEffect(() => {
+    const boardNumber = tournamentLinkRef.current?.board;
+    if (!boardNumber) return;
+    const match = autodartsBoards.find((b) => b.boardNumber === boardNumber && b.status === "connected");
+    if (match) { setAutodartsEnabled(true); setAutodartsBoardNumber(match.boardNumber); }
+  }, [tournamentLinkRef, autodartsBoards]);
 
   // Pushes a lightweight "score right now" snapshot to the tournament's public live view while
   // a tournament-linked match is being played — debounced so it fires a couple seconds after
@@ -1472,7 +1511,7 @@ const GamePage = () => {
     setGame(curGame);
     setDartsThisRound(curDarts);
     setTurnStartRemaining(curStart);
-    setPendingCameraDarts([]);
+    setPendingLiveDarts([]);
     flashScore(teamIndexFor(curGame.teams, startIdx));
     // Cap reached but tied on lowest remaining — same bull-off prompt handleX01Throw raises,
     // doesn't block the normal player-advance above (matches its behavior: the tie is a
@@ -2204,6 +2243,12 @@ const GamePage = () => {
         setWalkonEnabled={setWalkonEnabled}
         setupMode={setupMode}
         setSetupMode={setSetupMode}
+        autodartsAvailable={autodartsAvailable}
+        autodartsBoards={autodartsBoards}
+        autodartsEnabled={autodartsEnabled}
+        setAutodartsEnabled={setAutodartsEnabled}
+        autodartsBoardNumber={autodartsBoardNumber}
+        setAutodartsBoardNumber={setAutodartsBoardNumber}
       />
     );
   }
@@ -2372,8 +2417,8 @@ const GamePage = () => {
         ).map((card) => {
           const isActive = card.isActive;
           const activeRound = isActive ? currentRoundScores : [];
-          const pendingTotal = isActive && cameraEnabled
-            ? pendingCameraDarts.reduce((s, d) => s + d.points, 0)
+          const pendingTotal = isActive && (cameraEnabled || autodartsEnabled)
+            ? pendingLiveDarts.reduce((s, d) => s + d.points, 0)
             : 0;
           const previewRemaining = !isCricket && pendingTotal > 0
             ? Math.max(0, card.remaining - pendingTotal)
@@ -2454,15 +2499,15 @@ const GamePage = () => {
                 </p>
               )}
               {/* min-h reserves this line even while showPreview is false, same reasoning as the
-                  pendingCameraDarts/activeRound block below — without it, this line popping in and
+                  pendingLiveDarts/activeRound block below — without it, this line popping in and
                   out exactly as a checkout comes into range (pendingTotal only goes positive once a
-                  camera dart lands) shifted the sticky scoreboard's own height on every such dart,
-                  the most visible moment for it to happen. */}
+                  camera/Autodarts dart lands) shifted the sticky scoreboard's own height on every
+                  such dart, the most visible moment for it to happen. */}
               <p className="text-[10px] text-muted-foreground -mt-1 min-h-[14px]">
                 {showPreview && `(${card.remaining} − ${pendingTotal} live)`}
               </p>
               {/* min-h reserves this row's space even before the first dart of the round lands —
-                  it used to only exist once pendingCameraDarts/activeRound had content, so the
+                  it used to only exist once pendingLiveDarts/activeRound had content, so the
                   card grew taller the instant the first dart registered, shoving everything below
                   (the number pad, mid-tap) down and forcing a scroll. Reserving the space up
                   front keeps the layout stable across the whole round instead of just after it starts. */}
@@ -2472,9 +2517,9 @@ const GamePage = () => {
                   pad/history space below. Smaller padding/font + a lower reserved min-height in
                   landscape keeps the same information at a size actually proportioned to that
                   layout instead of just reusing portrait's. */}
-              {isActive && cameraEnabled && (
+              {isActive && (cameraEnabled || autodartsEnabled) && (
                 <div className="mt-1 flex min-h-8 landscape:min-h-6 items-center justify-center gap-1.5 landscape:gap-1 flex-wrap">
-                  {pendingCameraDarts.map((t, idx) => (
+                  {pendingLiveDarts.map((t, idx) => (
                     <span key={idx} className="rounded bg-accent/20 px-2 py-1 landscape:px-1.5 landscape:py-0.5 text-sm landscape:text-xs font-display text-accent ring-1 ring-accent/40">
                       {dartLabel(t)}
                     </span>
@@ -2709,7 +2754,7 @@ const GamePage = () => {
               personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
             />
 
-            {!currentPlayer?.isBot && (
+            {!currentPlayer?.isBot && !autodartsEnabled && (
               // A camera/ONNX failure on an unfamiliar Android/browser combo only takes down this
               // card, not the whole match — manual entry (further below) stays fully available
               // either way. Suspense's fallback only ever shows for the brief one-time chunk
@@ -2720,12 +2765,43 @@ const GamePage = () => {
                     ref={liveCameraRef}
                     enabled={cameraEnabled}
                     paused={!!pendingCheckoutChoice || !!pendingTiebreak}
-                    onClose={() => { cameraWantedRef.current = false; setCameraEnabled(false); setPendingCameraDarts([]); }}
+                    onClose={() => { cameraWantedRef.current = false; setCameraEnabled(false); setPendingLiveDarts([]); }}
                     onRoundCommit={submitDetectedRound}
-                    onPendingChange={setPendingCameraDarts}
+                    onPendingChange={setPendingLiveDarts}
                     dartsRemaining={Math.max(1, 3 - dartsThisRound)}
                     playerName={currentPlayerName}
                     onRequestManualEntry={() => setShowManualInput(true)}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            )}
+
+            {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
+              // Sibling to the LiveCamera block above, never both at once (mutually exclusive via
+              // autodartsEnabled) — same ErrorBoundary/Suspense safety net, same reasoning: a
+              // connection problem here only takes down this card, manual entry stays available.
+              <ErrorBoundary label="Autodarts">
+                <Suspense fallback={<div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
+                  <AutodartsLiveScore
+                    ref={autodartsLiveScoreRef}
+                    enabled={phase === "playing"}
+                    paused={!!pendingCheckoutChoice || !!pendingTiebreak}
+                    onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); }}
+                    onRoundCommit={submitDetectedRound}
+                    onPendingChange={setPendingLiveDarts}
+                    dartsRemaining={Math.max(1, 3 - dartsThisRound)}
+                    playerName={currentPlayerName}
+                    onRequestManualEntry={() => setShowManualInput(true)}
+                    boardNumber={autodartsBoardNumber}
+                    gameConfig={{
+                      baseScore: game.startScore === 301 ? 301 : 501,
+                      // Match-wide even though doubleOut is technically per-player in Dartspot's
+                      // own model (asymmetric house rules) -- GameSetup only offers Autodarts for
+                      // exactly 2 non-team players, and Autodarts' own lobby has one outMode for
+                      // the whole match, so player 1's setting stands in for both.
+                      doubleOut: game.players[0]?.doubleOut ?? true,
+                      legs: game.bestOfLegs,
+                    }}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -2806,21 +2882,26 @@ const GamePage = () => {
             <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
               <Undo2 className="w-4 h-4" /> {t("game.undo")}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!clubHasFeature(club?.plan_tier, "camera")) {
-                  toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
-                  return;
-                }
-                cameraWantedRef.current = true; setCameraEnabled(true);
-              }}
-              disabled={!!currentPlayer?.isBot}
-              className="gap-1"
-              title={t("game.liveCameraScoring")}
-            >
-              <Camera className="w-4 h-4" /> {t("game.cam")}
-            </Button>
+            {!autodartsEnabled && (
+              // Hidden rather than just disabled when Autodarts is this game's fixed scoring
+              // source — there's nothing to toggle (see GameSetup.tsx's doc comment on why
+              // Autodarts can't be freely switched mid-leg the way the camera can).
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!clubHasFeature(club?.plan_tier, "camera")) {
+                    toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
+                    return;
+                  }
+                  cameraWantedRef.current = true; setCameraEnabled(true);
+                }}
+                disabled={!!currentPlayer?.isBot}
+                className="gap-1"
+                title={t("game.liveCameraScoring")}
+              >
+                <Camera className="w-4 h-4" /> {t("game.cam")}
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </Button>

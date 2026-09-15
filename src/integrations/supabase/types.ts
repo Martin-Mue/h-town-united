@@ -14,6 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      autodarts_boards: {
+        Row: {
+          autodarts_board_id: string | null
+          autodarts_user_email: string | null
+          board_number: number
+          club_id: string
+          connection_mode: string
+          created_at: string
+          id: string
+          label: string | null
+          last_error: string | null
+          local_api_key_ciphertext: string | null
+          local_api_key_iv: string | null
+          local_ip: string | null
+          refresh_token_ciphertext: string | null
+          refresh_token_iv: string | null
+          status: string
+          token_updated_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          autodarts_board_id?: string | null
+          autodarts_user_email?: string | null
+          board_number: number
+          club_id: string
+          connection_mode?: string
+          created_at?: string
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          local_api_key_ciphertext?: string | null
+          local_api_key_iv?: string | null
+          local_ip?: string | null
+          refresh_token_ciphertext?: string | null
+          refresh_token_iv?: string | null
+          status?: string
+          token_updated_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          autodarts_board_id?: string | null
+          autodarts_user_email?: string | null
+          board_number?: number
+          club_id?: string
+          connection_mode?: string
+          created_at?: string
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          local_api_key_ciphertext?: string | null
+          local_api_key_iv?: string | null
+          local_ip?: string | null
+          refresh_token_ciphertext?: string | null
+          refresh_token_iv?: string | null
+          status?: string
+          token_updated_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autodarts_boards_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autodarts_boards_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       club_invites: {
         Row: {
           accepted_at: string | null
@@ -1019,6 +1094,8 @@ export type Database = {
           motto: string | null
           name: string
           nickname: string | null
+          pin_hash: string | null
+          pin_salt: string | null
           throwing_hand: string | null
           updated_at: string
           user_id: string | null
@@ -1045,6 +1122,8 @@ export type Database = {
           motto?: string | null
           name: string
           nickname?: string | null
+          pin_hash?: string | null
+          pin_salt?: string | null
           throwing_hand?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1071,6 +1150,8 @@ export type Database = {
           motto?: string | null
           name?: string
           nickname?: string | null
+          pin_hash?: string | null
+          pin_salt?: string | null
           throwing_hand?: string | null
           updated_at?: string
           user_id?: string | null
@@ -1586,6 +1667,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      admin_reset_player_pin: {
+        Args: { p_player_id: string }
+        Returns: undefined
+      }
       admin_set_role: {
         Args: {
           _grant: boolean
@@ -1721,6 +1806,10 @@ export type Database = {
       request_to_join_club: { Args: { _club_id: string }; Returns: string }
       respond_to_join_request: {
         Args: { _approve: boolean; _request_id: string }
+        Returns: undefined
+      }
+      set_player_pin: {
+        Args: { p_pin_hash: string; p_pin_salt: string; p_player_id: string }
         Returns: undefined
       }
       submit_online_throw: {

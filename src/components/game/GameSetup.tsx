@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction, MutableRefObject } from "react";
-import { Trophy, Target, Users, Volume2, VolumeX, Mic, MicOff, Bot, ChevronUp, ChevronDown, Settings2, Lock } from "lucide-react";
+import { Trophy, Target, Users, Volume2, VolumeX, Mic, MicOff, Bot, ChevronUp, ChevronDown, Settings2, Lock, Radio } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -102,6 +102,19 @@ interface GameSetupProps {
   // Local-vs-online setup toggle (not persisted, see Game.tsx's own declaration comment)
   setupMode: "local" | "online";
   setSetupMode: Dispatch<SetStateAction<"local" | "online">>;
+
+  // Autodarts scoring source (see AutodartsLiveScore.tsx / AdminAutodarts.tsx). Deliberately its
+  // own on/off flag rather than folded into a single "camera vs autodarts vs manual" enum: the
+  // camera's own enable/disable button (live inside Game.tsx's playing phase) stays completely
+  // untouched by this -- unlike the camera, Autodarts can't be freely toggled mid-leg (starting a
+  // Free Game lobby is a real action against Autodarts' own platform for the whole match, not a
+  // per-turn option), so it's fixed once at setup instead of living next to the "Cam" button.
+  autodartsAvailable: boolean;
+  autodartsBoards: { id: string; boardNumber: number; label: string | null; status: string }[];
+  autodartsEnabled: boolean;
+  setAutodartsEnabled: Dispatch<SetStateAction<boolean>>;
+  autodartsBoardNumber: number | null;
+  setAutodartsBoardNumber: Dispatch<SetStateAction<number | null>>;
 }
 
 /**
@@ -128,6 +141,7 @@ const GameSetup = (props: GameSetupProps) => {
     soundEnabled, setSoundEnabled, speechEnabled, callerVoice, changeCallerVoice,
     starterIndex, setStarterIndex, warmupEnabled, setWarmupEnabled, warmupSeconds, setWarmupSeconds,
     walkonEnabled, setWalkonEnabled, setupMode, setSetupMode,
+    autodartsAvailable, autodartsBoards, autodartsEnabled, setAutodartsEnabled, autodartsBoardNumber, setAutodartsBoardNumber,
   } = props;
   const { t } = useLanguage();
 
@@ -384,6 +398,54 @@ const GameSetup = (props: GameSetupProps) => {
           </>
         )}
         </SectionCard>
+
+        {/* Autodarts as a third scoring source alongside Kamera/Handeingabe -- only offered when
+            the club has a connected board AND the match shape is something a Free Game lobby can
+            actually represent today (see AutodartsLiveScore.tsx's own scope note: X01 only, no
+            teams, exactly 2 players -- Cricket/teams/3+ players are a later extension, not a
+            silent wrong guess here). */}
+        {autodartsAvailable && autodartsBoards.length > 0 && !teamMode && numPlayers === 2 && (mode === "501" || mode === "301") && (
+          <SectionCard className="space-y-3">
+          <Eyebrow icon={Radio}>Autodarts</Eyebrow>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div className="min-w-0">
+              <Label htmlFor="autodarts-enabled" className="text-sm">Über Autodarts-Board spielen</Label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {playerIsBot.slice(0, numPlayers).some(Boolean)
+                  ? "Nicht möglich mit einem Bot-Spieler — Autodarts erkennt nur echte Würfe."
+                  : "Ein verbundenes Autodarts-Board übernimmt die Wurferkennung für dieses Spiel."}
+              </p>
+            </div>
+            <Switch
+              id="autodarts-enabled"
+              checked={autodartsEnabled}
+              disabled={playerIsBot.slice(0, numPlayers).some(Boolean)}
+              onCheckedChange={(v) => {
+                setAutodartsEnabled(v);
+                if (v && autodartsBoardNumber === null) {
+                  const firstConnected = autodartsBoards.find((b) => b.status === "connected") ?? autodartsBoards[0];
+                  if (firstConnected) setAutodartsBoardNumber(firstConnected.boardNumber);
+                }
+              }}
+            />
+          </div>
+          {autodartsEnabled && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">Board</label>
+              <Select value={autodartsBoardNumber !== null ? String(autodartsBoardNumber) : undefined} onValueChange={(v) => setAutodartsBoardNumber(parseInt(v))}>
+                <SelectTrigger className="bg-muted border-border"><SelectValue placeholder="Board wählen" /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {autodartsBoards.map((b) => (
+                    <SelectItem key={b.id} value={String(b.boardNumber)} disabled={b.status !== "connected"}>
+                      {b.label || `Board ${b.boardNumber}`}{b.status !== "connected" ? " (nicht verbunden)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          </SectionCard>
+        )}
 
         <SectionCard className="space-y-3">
         <Eyebrow icon={Users}>{t("game.setupPlayersSection")}</Eyebrow>
