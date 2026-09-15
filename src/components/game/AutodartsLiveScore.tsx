@@ -60,15 +60,13 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
 
   const accessTokenRef = useRef<{ token: string; expiresAt: number } | null>(null);
   const matchIdRef = useRef<string | null>(null);
-  // The in-progress visit's darts as last reported by Autodarts. A completed visit is detected
-  // purely by this array's length growing to 3 or dropping back down between polls — not by
-  // guessing a "current player index" field name, which is far less certain to exist under any
-  // particular name in the (unofficial, unverified) state response. See autodartsClient.ts.
-  const lastThrowsSeenRef = useRef<DetectedDart[]>([]);
-  // Set right after committing a full 3-dart visit, so a state response that still briefly shows
-  // those same 3 throws on the next tick or two (before Autodarts' own turn rollover lands) can't
-  // be committed a second time. Cleared once a poll confirms the throw count actually dropped.
-  const awaitingRolloverRef = useRef(false);
+  // Which turn (by Autodarts' own stable turns[].id, confirmed live 2026-09-15 -- see
+  // autodartsClient.ts) has already been committed via onRoundCommit, so a turn that's still
+  // showing as "finished" on the next poll or two (before Autodarts appends the next turn) can't be
+  // committed a second time. Keying off the turn's own id rather than throw count/player index
+  // avoids the ambiguity either of those would have around edge cases (e.g. two consecutive turns
+  // for the same player index in an unusual mode, or a turn ending on fewer than 3 darts).
+  const lastCommittedTurnIdRef = useRef<string | null>(null);
   const consecutiveFailuresRef = useRef(0);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const localSocketRef = useRef<WebSocket | null>(null);
@@ -120,39 +118,35 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
       setPhase("live");
       setErrorMessage(null);
 
-      if (parsed.isFinished) {
-        if (parsed.throwsThisTurn.length > 0) callbacksRef.current.onRoundCommit(parsed.throwsThisTurn);
+      // A confirmed-live bust is unambiguous straight from Autodarts (it saw the real throw order,
+      // unlike a single after-the-fact camera photo) -- forcing it skips Game.tsx's ambiguous-
+      // checkout prompt for exactly this one well-understood case. Checkout is deliberately NOT
+      // force-resolved the same way: pinpointing which of up to 3 darts finished the leg still
+      // depends on the one still-unconfirmed part of this integration (the populated shape of an
+      // individual throws[] entry) -- so checkouts still go through the existing prompt as a safe
+      // default rather than risking a wrong forced resolution.
+      const forced = parsed.currentTurnBusted ? ({ kind: "bust" } as const) : undefined;
+
+      if (parsed.matchFinished) {
+        if (parsed.currentTurnId && parsed.currentTurnId !== lastCommittedTurnIdRef.current && parsed.currentTurnThrows.length > 0) {
+          callbacksRef.current.onRoundCommit(parsed.currentTurnThrows, forced);
+          lastCommittedTurnIdRef.current = parsed.currentTurnId;
+        }
         stopPolling();
         return;
       }
 
-      if (awaitingRolloverRef.current) {
-        if (parsed.throwsThisTurn.length < 3) {
-          awaitingRolloverRef.current = false;
-          lastThrowsSeenRef.current = parsed.throwsThisTurn;
-          if (parsed.throwsThisTurn.length > 0) callbacksRef.current.onPendingChange?.(parsed.throwsThisTurn);
+      if (!parsed.currentTurnId) return; // lobby created but no turn under way yet
+
+      if (parsed.currentTurnFinished) {
+        if (parsed.currentTurnId !== lastCommittedTurnIdRef.current) {
+          callbacksRef.current.onRoundCommit(parsed.currentTurnThrows, forced);
+          lastCommittedTurnIdRef.current = parsed.currentTurnId;
         }
-        return;
-      }
-
-      const prev = lastThrowsSeenRef.current;
-      const curr = parsed.throwsThisTurn;
-
-      if (curr.length < prev.length) {
-        // Turn rolled over without us ever seeing a length-3 tick (e.g. a very fast poll cadence
-        // relative to the checkout) -- the last complete picture we had (`prev`) IS the finished visit.
-        if (prev.length > 0) callbacksRef.current.onRoundCommit(prev);
-        lastThrowsSeenRef.current = curr;
-        if (curr.length > 0) callbacksRef.current.onPendingChange?.(curr);
-        return;
-      }
-      if (curr.length > prev.length) {
-        lastThrowsSeenRef.current = curr;
-        callbacksRef.current.onPendingChange?.(curr);
-      }
-      if (curr.length >= 3) {
-        callbacksRef.current.onRoundCommit(curr);
-        awaitingRolloverRef.current = true;
+        // else: already committed this exact turn, just waiting for Autodarts to append the next
+        // one -- no-op rather than re-committing.
+      } else {
+        callbacksRef.current.onPendingChange?.(parsed.currentTurnThrows);
       }
     } catch (e) {
       consecutiveFailuresRef.current += 1;
@@ -210,8 +204,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         if (token) void finishMatch(token, matchId);
       }
       matchIdRef.current = null;
-      lastThrowsSeenRef.current = [];
-      awaitingRolloverRef.current = false;
+      lastCommittedTurnIdRef.current = null;
       consecutiveFailuresRef.current = 0;
       setPhase("connecting");
       setErrorMessage(null);
@@ -227,8 +220,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         const { matchId } = await createFreeGameLobby(token, gameConfig);
         if (cancelled) return;
         matchIdRef.current = matchId;
-        lastThrowsSeenRef.current = [];
-        awaitingRolloverRef.current = false;
+        lastCommittedTurnIdRef.current = null;
         consecutiveFailuresRef.current = 0;
         setPhase("live");
         pollTimerRef.current = setInterval(() => {
