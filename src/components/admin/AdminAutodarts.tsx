@@ -47,6 +47,7 @@ const AdminAutodarts = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [connectingLabel, setConnectingLabel] = useState<string | null>(null);
 
   const available = clubHasFeature(club?.plan_tier, "autodarts");
 
@@ -90,6 +91,40 @@ const AdminAutodarts = () => {
     void load();
   };
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /** autodarts_connect_board only ENQUEUES the Autodarts login (a single fire-and-forget
+   *  net.http_post) and returns immediately with status "connecting" -- it never itself waits on
+   *  Autodarts. This polls the cheap, non-blocking autodarts_check_connect_status every ~1.5s
+   *  until the board's row resolves to "connected"/"error", same pattern already used for live
+   *  match state in AutodartsLiveScore.tsx. Client gives up updating the UI after ~90s of polling,
+   *  but the row keeps resolving server-side regardless -- load() on next tab visit picks it up. */
+  const pollConnectStatus = async (boardNumber: number, label: string) => {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await sleep(1500);
+      const { data, error } = await supabase.rpc("autodarts_check_connect_status", { p_board_number: boardNumber });
+      if (error) {
+        toast({ title: "Verbindung fehlgeschlagen", description: error.message, variant: "destructive" });
+        return;
+      }
+      const status = (data as { status?: string; lastError?: string | null } | null)?.status;
+      if (status === "connected") {
+        toast({ title: "Board verbunden", description: `"${label || `Board ${boardNumber}`}" ist einsatzbereit.` });
+        void load();
+        return;
+      }
+      if (status === "error") {
+        const lastError = (data as { lastError?: string | null } | null)?.lastError;
+        toast({ title: "Board gespeichert, Cloud-Login aber fehlgeschlagen", description: lastError ?? "Unbekannter Fehler.", variant: "destructive" });
+        void load();
+        return;
+      }
+      // still "connecting" -- keep polling
+    }
+    toast({ title: "Verbindung dauert ungewöhnlich lange", description: "Autodarts antwortet noch nicht. Der Status aktualisiert sich im Hintergrund -- schau in ein paar Minuten nochmal in dieser Liste vorbei.", variant: "destructive" });
+    void load();
+  };
+
   const submit = async () => {
     const boardNumber = Number(form.boardNumber);
     if (!Number.isInteger(boardNumber) || boardNumber <= 0) {
@@ -102,6 +137,7 @@ const AdminAutodarts = () => {
       toast({ title: "Keine Zugangsdaten angegeben", description: "Bitte Cloud-Login und/oder lokalen API-Key ausfüllen.", variant: "destructive" });
       return;
     }
+    const label = form.label;
     setSubmitting(true);
     try {
       // A Postgres RPC, not an edge function — see autodarts_connect_board's own definition.
@@ -121,18 +157,21 @@ const AdminAutodarts = () => {
         p_local_ip: hasLocal ? form.localIp.trim() || null : null,
       });
       if (error) throw new Error(error.message);
-      // A cloud-login failure no longer throws (see autodarts_connect_board's own doc comment on
-      // why) -- it comes back as this field instead, alongside a still-successful save of
-      // whatever DID work (e.g. the local API key entered in the same submit).
-      const credentialsWarning = (data as { credentialsWarning?: string | null } | null)?.credentialsWarning;
-      if (credentialsWarning) {
-        toast({ title: "Board gespeichert, Cloud-Login aber fehlgeschlagen", description: credentialsWarning, variant: "destructive" });
-      } else {
-        toast({ title: "Board verbunden", description: `"${form.label || `Board ${boardNumber}`}" ist einsatzbereit.` });
-      }
       setForm(emptyForm);
       setFormOpen(false);
       void load();
+      const status = (data as { status?: string } | null)?.status;
+      if (status === "connecting") {
+        setSubmitting(false);
+        setConnectingLabel(label || `Board ${boardNumber}`);
+        try {
+          await pollConnectStatus(boardNumber, label);
+        } finally {
+          setConnectingLabel(null);
+        }
+        return;
+      }
+      toast({ title: "Board verbunden", description: `"${label || `Board ${boardNumber}`}" ist einsatzbereit.` });
     } catch (err) {
       toast({ title: "Verbindung fehlgeschlagen", description: err instanceof Error ? err.message : "Unbekannter Fehler.", variant: "destructive" });
     } finally {
@@ -166,6 +205,13 @@ const AdminAutodarts = () => {
             <Plus className="w-4 h-4" /> Board verbinden
           </Button>
         </div>
+
+        {connectingLabel && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 p-3 mb-3 text-xs">
+            <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+            <span>Verbinde „{connectingLabel}“ mit Autodarts … das kann bis zu einer Minute dauern.</span>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
