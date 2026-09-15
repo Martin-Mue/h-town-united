@@ -1715,6 +1715,23 @@ export type Database = {
         Args: { p_game_id: string }
         Returns: undefined
       }
+      autodarts_connect_board: {
+        Args: {
+          p_board_number: number
+          p_cloud_email: string
+          p_cloud_password: string
+          p_connection_mode: string
+          p_label: string
+          p_local_api_key: string
+          p_local_board_id: string
+          p_local_ip: string
+        }
+        Returns: Json
+      }
+      autodarts_refresh_board: {
+        Args: { p_board_number: number }
+        Returns: Json
+      }
       cast_match_prediction: {
         Args: {
           _match_id: string

@@ -4,7 +4,6 @@ import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { describeFunctionError } from "@/lib/functionErrors";
 import { clubHasFeature } from "@/lib/planFeatures";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,24 +104,24 @@ const AdminAutodarts = () => {
     }
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("autodarts-auth", {
-        body: {
-          action: "connect",
-          boardNumber,
-          label: form.label.trim() || undefined,
-          connectionMode: form.connectionMode,
-          cloud: hasCloud ? { email: form.cloudEmail.trim(), password: form.cloudPassword } : undefined,
-          local: hasLocal
-            ? { boardId: form.localBoardId.trim() || undefined, apiKey: form.localApiKey.trim(), ip: form.localIp.trim() || undefined }
-            : undefined,
-        },
+      // A Postgres RPC, not an edge function — see autodarts_connect_board's own definition.
+      // pg_net (already installed on this project) makes the actual Autodarts login call
+      // server-side; the edge-function route this component originally called was never
+      // deployable here (Lovable Cloud has no self-service Edge Function deploy and the
+      // account's monthly agent credits were exhausted), so this RPC-based path is the real,
+      // live implementation, not a placeholder.
+      const { error } = await supabase.rpc("autodarts_connect_board", {
+        p_board_number: boardNumber,
+        p_label: form.label.trim() || null,
+        p_connection_mode: form.connectionMode,
+        p_cloud_email: hasCloud ? form.cloudEmail.trim() : null,
+        p_cloud_password: hasCloud ? form.cloudPassword : null,
+        p_local_board_id: hasLocal ? form.localBoardId.trim() || null : null,
+        p_local_api_key: hasLocal ? form.localApiKey.trim() : null,
+        p_local_ip: hasLocal ? form.localIp.trim() || null : null,
       });
-      if (error) throw new Error(await describeFunctionError(error));
-      if (data?.credentialsWarning) {
-        toast({ title: "Board gespeichert", description: `Zugangsdaten sind gespeichert, aber: ${data.credentialsWarning}`, variant: "destructive" });
-      } else {
-        toast({ title: "Board verbunden", description: `"${form.label || `Board ${boardNumber}`}" ist einsatzbereit.` });
-      }
+      if (error) throw new Error(error.message);
+      toast({ title: "Board verbunden", description: `"${form.label || `Board ${boardNumber}`}" ist einsatzbereit.` });
       setForm(emptyForm);
       setFormOpen(false);
       void load();

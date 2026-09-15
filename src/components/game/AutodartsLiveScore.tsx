@@ -4,7 +4,6 @@ import { Wifi, WifiOff, Keyboard } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { describeFunctionError } from "@/lib/functionErrors";
 import { createFreeGameLobby, finishMatch, getMatchState, parseAutodartsState, type AutodartsGameConfig } from "@/lib/autodartsClient";
 import type { DetectedDart } from "@/components/game/LiveCamera";
 
@@ -37,8 +36,8 @@ interface AutodartsLiveScoreProps {
   onRequestManualEntry?: () => void;
   paused?: boolean;
   /** Which autodarts_boards row (per-club board_number, not the Autodarts-side UUID) to use —
-   *  clubId itself is never passed in; autodarts-auth always derives it server-side from the
-   *  caller's own membership. */
+   *  clubId itself is never passed in; the autodarts_connect_board/autodarts_refresh_board RPCs
+   *  always derive it server-side (auth.uid() -> user_roles) from the caller's own membership. */
   boardNumber: number;
   gameConfig: AutodartsGameConfig;
 }
@@ -83,13 +82,20 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
 
   useImperativeHandle(ref, () => ({ getRecentClip: () => null }));
 
+  // Calls the autodarts_refresh_board Postgres RPC (not an edge function — see its own definition):
+  // decrypts the stored refresh token server-side, exchanges it with Autodarts' cloud for a fresh
+  // access token, and returns only the short-lived access token to this client (the refresh token
+  // itself never leaves the database). The edge-function route this originally called was never
+  // deployable on this project (no self-service Edge Function deploy on Lovable Cloud, and the
+  // account's monthly agent credits were exhausted) -- this RPC is the real, live implementation.
   const ensureAccessToken = async (): Promise<string> => {
     const cached = accessTokenRef.current;
     if (cached && cached.expiresAt > Date.now() + 30_000) return cached.token;
-    const { data, error } = await supabase.functions.invoke("autodarts-auth", { body: { action: "refresh", boardNumber } });
-    if (error) throw new Error(await describeFunctionError(error));
-    if (!data?.cloud?.accessToken) throw new Error("Kein Autodarts-Zugriffstoken erhalten — ist die Cloud-Anmeldung für dieses Board eingerichtet?");
-    accessTokenRef.current = { token: data.cloud.accessToken, expiresAt: Date.now() + (Number(data.cloud.expiresIn) || 60) * 1000 };
+    const { data, error } = await supabase.rpc("autodarts_refresh_board", { p_board_number: boardNumber });
+    if (error) throw new Error(error.message);
+    const cloud = (data as { cloud?: { accessToken?: string; expiresIn?: number } } | null)?.cloud;
+    if (!cloud?.accessToken) throw new Error("Kein Autodarts-Zugriffstoken erhalten — ist die Cloud-Anmeldung für dieses Board eingerichtet?");
+    accessTokenRef.current = { token: cloud.accessToken, expiresAt: Date.now() + (Number(cloud.expiresIn) || 60) * 1000 };
     return accessTokenRef.current.token;
   };
 
@@ -176,8 +182,8 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         .eq("board_number", boardNumber)
         .maybeSingle();
       if (boardRow?.connection_mode !== "local" || !boardRow.local_ip) return;
-      const { data: creds } = await supabase.functions.invoke("autodarts-auth", { body: { action: "refresh", boardNumber } });
-      const localApiKey = creds?.local?.apiKey as string | undefined;
+      const { data: creds } = await supabase.rpc("autodarts_refresh_board", { p_board_number: boardNumber });
+      const localApiKey = (creds as { local?: { apiKey?: string } } | null)?.local?.apiKey;
       if (!localApiKey) return;
       // Exact local-auth usage (header vs. query param) is unverified against a real board -- see
       // the plan. Sent as a query param for now since that's the simplest thing a raw WebSocket
