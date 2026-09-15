@@ -1,20 +1,21 @@
+import { supabase } from "@/integrations/supabase/client";
 import type { DetectedDart } from "@/components/game/LiveCamera";
 
 /**
- * Plain functions for talking to Autodarts' own cloud API directly from the client, using a
- * short-lived access token minted by the `autodarts-auth` edge function (see AutodartsLiveScore.tsx
- * for where that token comes from). Autodarts has no official public API — every URL/shape below is
- * reconstructed from real, working community client code (see the Autodarts-Integration plan for
- * sourcing), graded by confidence in the comments. Nothing here should be "corrected" by guessing
- * harder — if a call starts failing, that's a signal to re-verify against a live board, not to
- * silently change the shape.
+ * Client-side callers for the autodarts_start_match/autodarts_poll_match/autodarts_finish_match
+ * Postgres RPCs (see the matching migration) -- NOT direct calls to Autodarts' own API. A live CORS
+ * probe (2026-09-15, from this app's own deployed origin) confirmed api.autodarts.com restricts
+ * every endpoint -- not just the login one -- to Origin/Referer https://play.autodarts.com, so a
+ * browser can never call it directly regardless of how a valid access token was obtained. Every
+ * Autodarts call, including ordinary match-state polling, has to be proxied through
+ * Postgres+pg_net, which isn't subject to browser CORS at all (server-to-server). Net effect: the
+ * Autodarts access token itself never reaches this client anymore, for anything.
+ *
+ * Autodarts has no official public API -- every URL/field name referenced in the underlying
+ * Postgres functions was reconstructed from real, live DevTools captures of the actual Autodarts
+ * web app (see the Autodarts-Integration plan and the migrations' own comments for sourcing and
+ * confidence level per field).
  */
-
-// Confirmed live 2026-09-15 from the actual Autodarts web app's own DevTools Network tab
-// (GET https://api.autodarts.com/gs/v0/matches/<id>) -- .com, NOT .io. The earlier .io guess came
-// from real ESP32 firmware source and was wrong here, presumably stale/superseded -- this is why
-// the code favors what's freshly verified over what's merely "from a working reference".
-const AUTODARTS_API_BASE = "https://api.autodarts.com";
 
 export interface AutodartsGameConfig {
   baseScore: 301 | 501;
@@ -22,70 +23,39 @@ export interface AutodartsGameConfig {
   legs: number;
 }
 
-async function autodartsFetch(accessToken: string, path: string, init?: RequestInit): Promise<unknown> {
-  const res = await fetch(`${AUTODARTS_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+/** Starts a private single-player "Free Game" lobby with the given X01 settings and immediately
+ *  starts it, entirely server-side. Throws (with the RPC's own descriptive message) on any
+ *  failure, which AutodartsLiveScore treats as a connection failure and falls back to manual entry
+ *  -- it never silently mis-starts a game on a wrong guess. */
+export async function createFreeGameLobby(boardNumber: number, config: AutodartsGameConfig): Promise<{ matchId: string }> {
+  const { data, error } = await supabase.rpc("autodarts_start_match", {
+    p_board_number: boardNumber,
+    p_base_score: config.baseScore,
+    p_double_out: config.doubleOut,
+    p_legs: config.legs,
   });
-  if (!res.ok) throw new Error(`Autodarts API ${path} -> ${res.status}`);
-  if (res.status === 204) return null;
-  return res.json().catch(() => null);
+  if (error) throw new Error(error.message);
+  const matchId = (data as { matchId?: string } | null)?.matchId;
+  if (!matchId) throw new Error("Autodarts: Lobby-Erstellung lieferte keine Match-ID");
+  return { matchId };
 }
 
-/**
- * Starts a private single-player "Free Game" lobby with the given X01 settings and immediately
- * starts it. Body shape and bullOffMode="Off" confirmed live 2026-09-15 from the real Autodarts web
- * app's own DevTools capture (see autodartsClient's header comment) — high confidence now, not a
- * guess. "Off" is deliberate, not just what was observed: Dartspot already decides who starts (its
- * own bull-off/starter-swap feature) before ever creating this lobby, so Autodarts' own bull-off
- * procedure would be redundant at best, conflicting at worst.
- *
- * The lobby's own `id` is reused as the match id once started (confirmed live: the exact same id
- * appeared on both the pre-start lobby object and the post-start match object) — there is no
- * separate "matchId" returned by the start call.
- */
-export async function createFreeGameLobby(accessToken: string, config: AutodartsGameConfig): Promise<{ matchId: string }> {
-  const lobby = (await autodartsFetch(accessToken, "/gs/v0/lobbies", {
-    method: "POST",
-    body: JSON.stringify({
-      variant: "X01",
-      isPrivate: true,
-      bullOffMode: "Off",
-      settings: {
-        baseScore: config.baseScore,
-        inMode: "Straight",
-        outMode: config.doubleOut ? "Double" : "Straight",
-        maxRounds: 50,
-        bullMode: "25/50",
-      },
-      legs: config.legs,
-    }),
-  })) as { id?: string } | null;
-  const lobbyId = lobby?.id;
-  if (!lobbyId) throw new Error("Autodarts: Lobby-Erstellung lieferte keine Lobby-ID");
-
-  await autodartsFetch(accessToken, `/gs/v0/lobbies/${lobbyId}/start`, { method: "POST" });
-  return { matchId: lobbyId };
-}
-
-/** Best-effort, never-throws teardown — closing the remote lobby is a courtesy so it doesn't sit
- *  open forever, not something a finished/abandoned local game should ever wait on or fail over. */
-export async function finishMatch(accessToken: string, matchId: string): Promise<void> {
+/** Best-effort, never-throws teardown -- closing the remote lobby is a courtesy so it doesn't sit
+ *  open forever, not something a finished/abandoned local game should ever wait on or fail over.
+ *  The RPC itself already swallows its own failures; this wraps the call too in case the RPC
+ *  invocation itself (network hiccup to Supabase, say) fails. */
+export async function finishMatch(boardNumber: number, matchId: string): Promise<void> {
   try {
-    await autodartsFetch(accessToken, `/gs/v0/matches/${matchId}/finish`, { method: "POST" });
+    await supabase.rpc("autodarts_finish_match", { p_board_number: boardNumber, p_match_id: matchId });
   } catch (e) {
     console.warn("autodartsClient.finishMatch failed (non-fatal)", e);
   }
 }
 
-/** Confirmed live 2026-09-15: GET /gs/v0/matches/{id} (bare, no "/state" suffix — the community doc
- *  this was originally guessed from was wrong about the path shape). */
-export async function getMatchState(accessToken: string, matchId: string): Promise<unknown> {
-  return autodartsFetch(accessToken, `/gs/v0/matches/${matchId}`);
+export async function getMatchState(boardNumber: number, matchId: string): Promise<unknown> {
+  const { data, error } = await supabase.rpc("autodarts_poll_match", { p_board_number: boardNumber, p_match_id: matchId });
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export interface AutodartsPollState {
@@ -140,12 +110,13 @@ function mapSegmentToDetectedDart(segment: { number?: number; multiplier?: numbe
 const ZERO_DATE_PREFIX = "0001-01-01";
 
 /**
- * Parses one `/gs/v0/matches/{id}` poll response into a small, normalized shape. Field NAMES/
- * LOCATIONS below are confirmed live (2026-09-15, real DevTools capture from the actual Autodarts
- * web app) — only the populated shape of one individual `throws[]` entry is still a guess (see
- * AutodartsPollState's own doc comment). Never throws: an unexpected shape just parses to "nothing
- * new yet" rather than crashing, which naturally counts toward AutodartsLiveScore's
- * consecutive-failure → manual-entry fallback.
+ * Parses one `autodarts_poll_match` response (Autodarts' raw `/gs/v0/matches/{id}` body, passed
+ * through unchanged by the RPC) into a small, normalized shape. Field NAMES/LOCATIONS below are
+ * confirmed live (2026-09-15, real DevTools capture from the actual Autodarts web app) — only the
+ * populated shape of one individual `throws[]` entry is still a guess (see AutodartsPollState's own
+ * doc comment). Never throws: an unexpected shape just parses to "nothing new yet" rather than
+ * crashing, which naturally counts toward AutodartsLiveScore's consecutive-failure → manual-entry
+ * fallback.
  */
 export function parseAutodartsState(raw: unknown): AutodartsPollState {
   try {

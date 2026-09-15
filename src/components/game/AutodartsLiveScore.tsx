@@ -57,8 +57,13 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
   const [phase, setPhase] = useState<Phase>("connecting");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const accessTokenRef = useRef<{ token: string; expiresAt: number } | null>(null);
   const matchIdRef = useRef<string | null>(null);
+  // Guards against overlapping poll ticks: each tick now round-trips through a Postgres RPC that
+  // itself calls out to Autodarts (see autodartsClient.ts's header comment on why this can't be a
+  // direct client-side call), which is measurably slower than the old direct-fetch design -- a
+  // single tick can take longer than POLL_INTERVAL_MS, and setInterval doesn't wait for the
+  // previous callback to finish on its own.
+  const pollInFlightRef = useRef(false);
   // Which turn (by Autodarts' own stable turns[].id, confirmed live 2026-09-15 -- see
   // autodartsClient.ts) has already been committed via onRoundCommit, so a turn that's still
   // showing as "finished" on the next poll or two (before Autodarts appends the next turn) can't be
@@ -82,23 +87,6 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
 
   useImperativeHandle(ref, () => ({ getRecentClip: () => null }));
 
-  // Calls the autodarts_refresh_board Postgres RPC (not an edge function — see its own definition):
-  // decrypts the stored refresh token server-side, exchanges it with Autodarts' cloud for a fresh
-  // access token, and returns only the short-lived access token to this client (the refresh token
-  // itself never leaves the database). The edge-function route this originally called was never
-  // deployable on this project (no self-service Edge Function deploy on Lovable Cloud, and the
-  // account's monthly agent credits were exhausted) -- this RPC is the real, live implementation.
-  const ensureAccessToken = async (): Promise<string> => {
-    const cached = accessTokenRef.current;
-    if (cached && cached.expiresAt > Date.now() + 30_000) return cached.token;
-    const { data, error } = await supabase.rpc("autodarts_refresh_board", { p_board_number: boardNumber });
-    if (error) throw new Error(error.message);
-    const cloud = (data as { cloud?: { accessToken?: string; expiresIn?: number } } | null)?.cloud;
-    if (!cloud?.accessToken) throw new Error("Kein Autodarts-Zugriffstoken erhalten — ist die Cloud-Anmeldung für dieses Board eingerichtet?");
-    accessTokenRef.current = { token: cloud.accessToken, expiresAt: Date.now() + (Number(cloud.expiresIn) || 60) * 1000 };
-    return accessTokenRef.current.token;
-  };
-
   const stopPolling = () => {
     if (pollTimerRef.current) {
       clearInterval(pollTimerRef.current);
@@ -115,10 +103,10 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
   };
 
   const pollTick = async () => {
-    if (pausedRef.current || !matchIdRef.current) return;
+    if (pausedRef.current || !matchIdRef.current || pollInFlightRef.current) return;
+    pollInFlightRef.current = true;
     try {
-      const token = await ensureAccessToken();
-      const raw = await getMatchState(token, matchIdRef.current);
+      const raw = await getMatchState(boardNumber, matchIdRef.current);
       const parsed = parseAutodartsState(raw);
       consecutiveFailuresRef.current = 0;
       setPhase("live");
@@ -166,6 +154,8 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         // connection, mirroring LiveCamera's own "never blocks, degrades gracefully" stance.
         callbacksRef.current.onRequestManualEntry?.();
       }
+    } finally {
+      pollInFlightRef.current = false;
     }
   };
 
@@ -205,9 +195,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
     if (!enabled) {
       stopPolling();
       if (matchIdRef.current) {
-        const token = accessTokenRef.current?.token;
-        const matchId = matchIdRef.current;
-        if (token) void finishMatch(token, matchId);
+        void finishMatch(boardNumber, matchIdRef.current);
       }
       matchIdRef.current = null;
       lastCommittedTurnIdRef.current = null;
@@ -222,8 +210,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
       setPhase("connecting");
       setErrorMessage(null);
       try {
-        const token = await ensureAccessToken();
-        const { matchId } = await createFreeGameLobby(token, gameConfig);
+        const { matchId } = await createFreeGameLobby(boardNumber, gameConfig);
         if (cancelled) return;
         matchIdRef.current = matchId;
         lastCommittedTurnIdRef.current = null;

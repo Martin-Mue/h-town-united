@@ -1728,8 +1728,25 @@ export type Database = {
         }
         Returns: Json
       }
+      autodarts_finish_match: {
+        Args: { p_board_number: number; p_match_id: string }
+        Returns: undefined
+      }
+      autodarts_poll_match: {
+        Args: { p_board_number: number; p_match_id: string }
+        Returns: Json
+      }
       autodarts_refresh_board: {
         Args: { p_board_number: number }
+        Returns: Json
+      }
+      autodarts_start_match: {
+        Args: {
+          p_base_score: number
+          p_board_number: number
+          p_double_out: boolean
+          p_legs: number
+        }
         Returns: Json
       }
       cast_match_prediction: {
