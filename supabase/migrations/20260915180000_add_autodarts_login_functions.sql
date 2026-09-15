@@ -33,6 +33,13 @@ returns jsonb
 language plpgsql
 security definer
 set search_path to 'public'
+-- Overrides the authenticated role's own statement_timeout (hit live: PostgREST killed the call
+-- with "57014 canceling statement due to statement timeout" partway through the polling loop
+-- below, before this function's OWN, deliberately-informative timeout handling ever got a chance
+-- to fire) -- this function legitimately needs more time for the outbound Autodarts call, so it
+-- asks for it explicitly rather than trying to guess a polling window that stays just under
+-- whatever the platform default happens to be.
+set statement_timeout to '15000'
 as $function$
 declare
   v_club_id uuid;
@@ -110,15 +117,14 @@ begin
       url := 'https://api.autodarts.com/auth/v1/login',
       body := jsonb_build_object('email', p_cloud_email, 'password', p_cloud_password, 'client_id', 'autodarts-play'),
       headers := jsonb_build_object('Content-Type', 'application/json', 'Origin', 'https://play.autodarts.com', 'Referer', 'https://play.autodarts.com/'),
-      timeout_milliseconds := 8000
+      timeout_milliseconds := 10000
     );
-    -- Polls net._http_response every 300ms instead of one fixed sleep -- pg_net's background
-    -- worker writes the row whenever the request actually finishes, which real-credential logins
-    -- (server-side password hashing/verification takes real time) showed varies noticeably more
-    -- than the throwaway wrong-credential probes this was originally tuned against; a fixed 2s
-    -- sleep was too short and surfaced as a false "Netzwerk-Timeout" even though the request itself
-    -- was still in flight, well inside the 8s timeout_milliseconds ceiling above.
-    for v_poll_attempt in 1..27 loop
+    -- Polls net._http_response every 300ms (up to ~10.5s, comfortably inside the statement_timeout
+    -- override above) instead of one fixed sleep -- pg_net's background worker writes the row
+    -- whenever the request actually finishes, which real-credential logins (server-side password
+    -- hashing/verification takes real time) showed varies noticeably more than the throwaway
+    -- wrong-credential probes this was originally tuned against.
+    for v_poll_attempt in 1..35 loop
       select status_code, content::jsonb into v_login_status, v_login_response
         from net._http_response where id = v_request_id;
       exit when v_login_status is not null;
@@ -169,6 +175,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path to 'public'
+set statement_timeout to '15000'
 as $function$
 declare
   v_club_id uuid;
@@ -215,9 +222,9 @@ begin
       url := 'https://api.autodarts.com/auth/v1/refresh',
       body := jsonb_build_object('refreshToken', v_stored_refresh_token, 'client_id', 'autodarts-play'),
       headers := jsonb_build_object('Content-Type', 'application/json', 'Origin', 'https://play.autodarts.com', 'Referer', 'https://play.autodarts.com/'),
-      timeout_milliseconds := 8000
+      timeout_milliseconds := 10000
     );
-    for v_poll_attempt in 1..27 loop
+    for v_poll_attempt in 1..35 loop
       select status_code, content::jsonb into v_refresh_status, v_refresh_response from net._http_response where id = v_request_id;
       exit when v_refresh_status is not null;
       perform pg_sleep(0.3);
