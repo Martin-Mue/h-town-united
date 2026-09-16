@@ -2776,6 +2776,17 @@ const GamePage = () => {
               </ErrorBoundary>
             )}
 
+            {/* TEMPORARY diagnostic, remove once the "nothing renders" live report is resolved:
+                the render condition right below evaluated false on a real device even though the
+                setup toggle was on and a board was picked, with no visible error either -- this
+                surfaces the exact runtime values so the next test tells us WHICH part was falsy
+                instead of guessing blind again. */}
+            {phase === "playing" && (
+              <p className="text-[9px] text-muted-foreground/60 mb-1 font-mono">
+                AD-debug: enabled={String(autodartsEnabled)} board={String(autodartsBoardNumber)} isBot={String(!!currentPlayer?.isBot)}
+              </p>
+            )}
+
             {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
               // Sibling to the LiveCamera block above, never both at once (mutually exclusive via
               // autodartsEnabled) — same ErrorBoundary/Suspense safety net, same reasoning: a
