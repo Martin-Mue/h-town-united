@@ -20,25 +20,30 @@
 -- Dartspot hinterlegten Boards zeigten in Autodarts selbst "has never been connected", und ein
 -- druckfrisch (ganz ohne Reload) gestartetes Spiel zeigte trotzdem nichts.
 --
--- Drei Teile bleiben Bestes-Wissen-Rekonstruktion aus dem Web-Client-Code, NICHT live gegen ein
--- echtes Match bestaetigt:
---  (a) pg_net kann kein echtes PUT senden (nur get/post/delete, siehe pg_net-Dokumentation/-Issues)
---      -- Schritt 2 geht deshalb als POST mit X-HTTP-Method-Override:PUT raus, einer verbreiteten,
---      aber fuer Autodarts' Server NICHT bestaetigten Konvention. Schlaegt das fehl, bleibt es
---      wirkungslos (siehe Fehlerbehandlung unten), aendert aber nichts an den sonst schon
---      funktionierenden Schritten.
---  (b) Welches Geraet auswaehlen, wenn mehrere vorhanden sind -- bevorzugt ein verbundenes
---      Lens-Geraet, sonst irgendein verbundenes Geraet, sonst als letzter Ruckfall die frueher
---      vom Nutzer hinterlegte autodarts_board_id (fuer ein klassisches Hardware-Board -- fuer
---      Lens nie zutreffend, da dessen Geraete-ID pro Erkennungssession neu vergeben wird).
---  (c) Die userId fuer den Zuweisungs-Aufruf -- aus dem "sub"-Claim des Access-Tokens dekodiert
---      (Standard-JWT-Konvention), da die echte Web-App sie stattdessen aus ihrem eigenen
---      Session-Objekt liest, auf das wir keinen Zugriff haben.
+-- ZWEITER Anlauf (dieselbe Migrationsdatei, noch vor dem ersten Live-Test aktualisiert): Schritt 2
+-- als PUT ist mit pg_net gar nicht sendbar (nur get/post/delete existieren -- direkt gegen
+-- pg_get_function_arguments() der net-Schema-Funktionen geprueft, nicht nur vermutet) und der
+-- erste Versuch (POST mit X-HTTP-Method-Override:PUT-Header) hat live nachweislich NICHT
+-- funktioniert -- ein druckfrisches Spiel mit diesem "Fix" bereits aktiv zeigte weiterhin exakt
+-- gar nichts. Stattdessen jetzt konsequent nur GET/POST/DELETE: Host-Spieler zuerst per DELETE
+-- entfernen (harmlos falls er noch gar nicht existiert), dann per POST /lobbies/{id}/players neu
+-- hinzufuegen -- addPlayer's eigene Signatur im Web-Client-Code ({name,hostId,boardId}) zeigt,
+-- dass das Board schon BEIM HINZUFUEGEN mitgegeben werden kann, ganz ohne je ein PUT zu brauchen.
 --
--- Ein Fehlschlag in JEDEM dieser drei Teile darf das Spiel trotzdem starten lassen (der Nutzer
--- kann notfalls manuell in Autodarts zuweisen) statt das ganze Match platzen zu lassen -- daher
--- als eigener, fehlerisolierter Unterblock statt die Lobby-Erstellung/-Start davon abhaengig zu
--- machen.
+-- Zwei Teile bleiben Bestes-Wissen-Rekonstruktion aus dem Web-Client-Code, NICHT live gegen ein
+-- echtes Match bestaetigt:
+--  (a) Welches Geraet auswaehlen, wenn mehrere vorhanden sind -- bevorzugt das fuer dieses
+--      board_number hinterlegte, sonst ein verbundenes Lens-Geraet, sonst irgendein verbundenes
+--      Geraet, sonst als letzter Ruckfall die frueher vom Nutzer hinterlegte autodarts_board_id.
+--  (b) Ob eine frische Lobby den Ersteller automatisch als ersten Spieler eintraegt (dann macht
+--      das DELETE vor dem POST tatsaechlich etwas) oder nicht (dann ist das DELETE ein
+--      wirkungsloser 404, den wir ignorieren) -- beide Faelle fuehren zum selben Endzustand.
+--      Die userId selbst ist inzwischen bestaetigt korrekt: der Web-Client-Code selbst dekodiert
+--      sie identisch aus dem "sub"-Claim des Access-Tokens (getUserId:()=>w?.sub||``).
+--
+-- Ein Fehlschlag in JEDEM Teil darf das Spiel trotzdem starten lassen (der Nutzer kann notfalls
+-- manuell in Autodarts zuweisen) statt das ganze Match platzen zu lassen -- daher als eigener,
+-- fehlerisolierter Unterblock statt die Lobby-Erstellung/-Start davon abhaengig zu machen.
 create or replace function public._jwt_claim(p_token text, p_claim text)
 returns text
 language plpgsql
@@ -189,11 +194,24 @@ begin
     if v_autoscoring_device_id is not null then
       v_host_user_id := public._jwt_claim(v_access_token, 'sub');
       if v_host_user_id is not null then
+        -- Auf die Antwort der DELETE warten (nicht nur abschicken) -- pg_net verarbeitet seine
+        -- Warteschlange nicht zwingend streng der Reihe nach; ohne das koennte der folgende POST
+        -- (neu hinzufuegen) beim Server ankommen, bevor die Entfernung dort tatsaechlich
+        -- durchgelaufen ist.
+        v_request_id := net.http_delete(url := 'https://api.autodarts.com/gs/v0/lobbies/' || v_lobby_id || '/players/by-userid/' || v_host_user_id, headers := v_auth_headers, timeout_milliseconds := 8000);
+        for v_poll_attempt in 1..20 loop
+          exit when exists (select 1 from net._http_response where id = v_request_id);
+          perform pg_sleep(0.3);
+        end loop;
         select h.status_code, h.content into v_assign_status, v_assign_response
         from public._autodarts_http_post_polled(
-          'https://api.autodarts.com/gs/v0/lobbies/' || v_lobby_id || '/players/by-userid/' || v_host_user_id || '/board',
-          jsonb_build_object('boardId', v_autoscoring_device_id),
-          v_auth_headers || jsonb_build_object('X-HTTP-Method-Override', 'PUT'),
+          'https://api.autodarts.com/gs/v0/lobbies/' || v_lobby_id || '/players',
+          jsonb_build_object(
+            'name', coalesce(public._jwt_claim(v_access_token, 'preferred_username'), 'Dartspot'),
+            'hostId', v_host_user_id,
+            'boardId', v_autoscoring_device_id
+          ),
+          v_auth_headers,
           8000, 20, 1
         ) h;
       end if;
