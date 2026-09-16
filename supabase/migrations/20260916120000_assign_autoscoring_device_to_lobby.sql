@@ -153,10 +153,28 @@ begin
     end loop;
 
     if v_boards_status = 200 and jsonb_typeof(v_boards_response) = 'array' then
-      select b->>'id' into v_autoscoring_device_id
-      from jsonb_array_elements(v_boards_response) b
-      where b->>'deviceType' = 'lens' and coalesce((b->>'connected')::boolean, false) = true
-      limit 1;
+      -- Reihenfolge bewusst so, damit ein Verein mit MEHREREN echten, gleichzeitig verbundenen
+      -- Boards nicht zufaellig das falsche abbekommt, sobald echte Hardware (nicht nur Lens)
+      -- dazukommt: zuerst das fuer GENAU dieses board_number hinterlegte Geraet, falls es gerade
+      -- als verbunden gemeldet wird -- respektiert die explizite Zuordnung des Nutzers und
+      -- funktioniert fuer ein echtes Board genauso wie fuer Lens mit fest hinterlegter ID.
+      if v_stored_board_id is not null then
+        select b->>'id' into v_autoscoring_device_id
+        from jsonb_array_elements(v_boards_response) b
+        where b->>'id' = v_stored_board_id and coalesce((b->>'connected')::boolean, false) = true
+        limit 1;
+      end if;
+      -- Sonst: irgendein verbundenes Lens-Geraet (der bisher einzige real getestete Fall -- Lens
+      -- vergibt seine Geraete-ID neu pro Erkennungssession, daher nie vorab in autodarts_board_id
+      -- hinterlegbar).
+      if v_autoscoring_device_id is null then
+        select b->>'id' into v_autoscoring_device_id
+        from jsonb_array_elements(v_boards_response) b
+        where b->>'deviceType' = 'lens' and coalesce((b->>'connected')::boolean, false) = true
+        limit 1;
+      end if;
+      -- Letzter Ruckfall: irgendein verbundenes Geraet ueberhaupt (Ein-Board-Verein ohne
+      -- hinterlegte ID und ohne Lens -- z.B. ein frisch verbundenes echtes Board).
       if v_autoscoring_device_id is null then
         select b->>'id' into v_autoscoring_device_id
         from jsonb_array_elements(v_boards_response) b
