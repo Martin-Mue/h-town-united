@@ -329,20 +329,32 @@ const GamePage = () => {
   // The actual sync effects live further down (after pendingGameIdRef exists), see there.
   const onlineMatchId = searchParams.get("online");
   const onlineMatch = useOnlineMatch(onlineMatchId ?? undefined, session?.user?.id);
+  // Autodarts: fixed on/off for the whole game (chosen in GameSetup), unlike the camera's own
+  // freely-toggled cameraEnabled above — see GameSetup.tsx's own doc comment on why. Declared here
+  // (rather than alongside the rest of the Autodarts state further down) specifically so the
+  // snapshot-save effect just below can depend on them — moving that effect instead would put it
+  // even further from the other localStorage-mirroring state it already sits next to.
+  // Seeded from initialSnapshot (see activeGameSnapshot.ts's own doc comment on why) -- otherwise
+  // a reload mid-Autodarts-scored game silently lands back in "playing" with Autodarts off and no
+  // error, indistinguishable from it never having been enabled at all.
+  const [autodartsEnabled, setAutodartsEnabled] = useState(() => initialSnapshot?.autodartsEnabled ?? false);
+  const [autodartsBoardNumber, setAutodartsBoardNumber] = useState<number | null>(() => initialSnapshot?.autodartsBoardNumber ?? null);
   // Mirror the in-progress game to localStorage on every change — see loadActiveGameSnapshot's
   // doc comment. Cleared once the leg is decided (below) or on an explicit new-game reset
   // (resetGame), since a finished game's durability is the existing save/offline-queue path's
   // job, not this snapshot's.
   useEffect(() => {
     if (phase === "playing" && game && !game.isFinished) {
-      saveActiveGameSnapshot({ game, dartsThisRound, turnStartRemaining, tournamentLink: tournamentLinkRef.current });
+      saveActiveGameSnapshot({ game, dartsThisRound, turnStartRemaining, tournamentLink: tournamentLinkRef.current, autodartsEnabled, autodartsBoardNumber });
     }
     // dartsThisRound/turnStartRemaining included deliberately — without them a snapshot taken
     // mid-visit (after game changed but before either was re-derived) could be saved with stale
     // values. tournamentLinkRef's own identity never changes (a ref, now returned from
     // useTournamentLink instead of a bare useRef() call, but still just a ref) — listed only to
     // satisfy the lint rule, which can no longer see that stability across the hook boundary.
-  }, [game, phase, dartsThisRound, turnStartRemaining, tournamentLinkRef]);
+    // autodartsEnabled/autodartsBoardNumber included for the same reason as dartsThisRound above
+    // -- see activeGameSnapshot.ts's own doc comment on the silent-reload bug this closes.
+  }, [game, phase, dartsThisRound, turnStartRemaining, tournamentLinkRef, autodartsEnabled, autodartsBoardNumber]);
   // Board-mode auto-start: a board-linked match counts down to starting itself instead of
   // waiting for a tap on "Spiel starten" — "Bearbeiten" (below) cancels it for the rare case
   // something (handicap, warmup, ...) needs adjusting first. Not persisted in the crash-recovery
@@ -399,10 +411,6 @@ const GamePage = () => {
   const [pendingTiebreak, setPendingTiebreak] = useState<{ tiedIndexes: number[] } | null>(null);
   const liveCameraRef = useRef<LiveCameraHandle>(null);
   const autodartsLiveScoreRef = useRef<AutodartsLiveScoreHandle>(null);
-  // Autodarts: fixed on/off for the whole game (chosen in GameSetup), unlike the camera's own
-  // freely-toggled cameraEnabled above — see GameSetup.tsx's own doc comment on why.
-  const [autodartsEnabled, setAutodartsEnabled] = useState(false);
-  const [autodartsBoardNumber, setAutodartsBoardNumber] = useState<number | null>(null);
   const [autodartsBoards, setAutodartsBoards] = useState<{ id: string; boardNumber: number; label: string | null; status: string }[]>([]);
   const autodartsAvailable = clubHasFeature(club?.plan_tier, "autodarts");
   // Loaded once per club for GameSetup's board picker -- non-sensitive columns only (see the

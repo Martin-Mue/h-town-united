@@ -22,6 +22,17 @@ export interface ActiveGameSnapshot {
   dartsThisRound: number;
   turnStartRemaining: number;
   tournamentLink: TournamentLink | null;
+  /** Optional so an old snapshot (written before Autodarts existed) still deserializes as "not
+   *  scoring via Autodarts" rather than being rejected outright -- a reload mid-camera-scored or
+   *  mid-manual game never had either field to begin with, and should stay that way, not suddenly
+   *  gain a phantom Autodarts session. Without these, a reload mid-Autodarts-scored game (e.g. the
+   *  OS reclaiming a backgrounded tab while the player briefly switched to Autodarts' own app to
+   *  check detection) silently restored the game and scoreboard perfectly but dropped back to
+   *  autodartsEnabled=false with no error at all -- indistinguishable from Autodarts simply never
+   *  having been turned on, which is exactly the "nothing happens, not even connecting" symptom
+   *  reported live against a real board. */
+  autodartsEnabled?: boolean;
+  autodartsBoardNumber?: number | null;
 }
 
 /**
