@@ -339,22 +339,31 @@ const GamePage = () => {
   // error, indistinguishable from it never having been enabled at all.
   const [autodartsEnabled, setAutodartsEnabled] = useState(() => initialSnapshot?.autodartsEnabled ?? false);
   const [autodartsBoardNumber, setAutodartsBoardNumber] = useState<number | null>(() => initialSnapshot?.autodartsBoardNumber ?? null);
+  // Mirrors AutodartsLiveScore's own internal matchIdRef/lastCommittedTurnIdRef out here purely so
+  // the snapshot below can carry them across a reload -- Game.tsx itself never reads these for
+  // anything else (AutodartsLiveScore already tracks a turn it started polling against on its own).
+  // Fed back in as initialMatchId/initialLastCommittedTurnId on the next mount; see that component's
+  // and activeGameSnapshot.ts's own doc comments for the duplicate-lobby/re-committed-turn bug this
+  // closes.
+  const [autodartsMatchId, setAutodartsMatchId] = useState<string | null>(() => initialSnapshot?.autodartsMatchId ?? null);
+  const [autodartsLastCommittedTurnId, setAutodartsLastCommittedTurnId] = useState<string | null>(() => initialSnapshot?.autodartsLastCommittedTurnId ?? null);
   // Mirror the in-progress game to localStorage on every change — see loadActiveGameSnapshot's
   // doc comment. Cleared once the leg is decided (below) or on an explicit new-game reset
   // (resetGame), since a finished game's durability is the existing save/offline-queue path's
   // job, not this snapshot's.
   useEffect(() => {
     if (phase === "playing" && game && !game.isFinished) {
-      saveActiveGameSnapshot({ game, dartsThisRound, turnStartRemaining, tournamentLink: tournamentLinkRef.current, autodartsEnabled, autodartsBoardNumber });
+      saveActiveGameSnapshot({ game, dartsThisRound, turnStartRemaining, tournamentLink: tournamentLinkRef.current, autodartsEnabled, autodartsBoardNumber, autodartsMatchId, autodartsLastCommittedTurnId });
     }
     // dartsThisRound/turnStartRemaining included deliberately — without them a snapshot taken
     // mid-visit (after game changed but before either was re-derived) could be saved with stale
     // values. tournamentLinkRef's own identity never changes (a ref, now returned from
     // useTournamentLink instead of a bare useRef() call, but still just a ref) — listed only to
     // satisfy the lint rule, which can no longer see that stability across the hook boundary.
-    // autodartsEnabled/autodartsBoardNumber included for the same reason as dartsThisRound above
-    // -- see activeGameSnapshot.ts's own doc comment on the silent-reload bug this closes.
-  }, [game, phase, dartsThisRound, turnStartRemaining, tournamentLinkRef, autodartsEnabled, autodartsBoardNumber]);
+    // autodartsEnabled/autodartsBoardNumber/autodartsMatchId/autodartsLastCommittedTurnId included
+    // for the same reason as dartsThisRound above -- see activeGameSnapshot.ts's own doc comments
+    // on the silent-reload bugs these close.
+  }, [game, phase, dartsThisRound, turnStartRemaining, tournamentLinkRef, autodartsEnabled, autodartsBoardNumber, autodartsMatchId, autodartsLastCommittedTurnId]);
   // Board-mode auto-start: a board-linked match counts down to starting itself instead of
   // waiting for a tap on "Spiel starten" — "Bearbeiten" (below) cancels it for the rare case
   // something (handicap, warmup, ...) needs adjusting first. Not persisted in the crash-recovery
@@ -2805,13 +2814,17 @@ const GamePage = () => {
                     ref={autodartsLiveScoreRef}
                     enabled={phase === "playing"}
                     paused={!!pendingCheckoutChoice || !!pendingTiebreak}
-                    onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); }}
+                    onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsMatchId(null); setAutodartsLastCommittedTurnId(null); }}
                     onRoundCommit={submitDetectedRound}
                     onPendingChange={setPendingLiveDarts}
                     dartsRemaining={Math.max(1, 3 - dartsThisRound)}
                     playerName={currentPlayerName}
                     onRequestManualEntry={() => setShowManualInput(true)}
                     boardNumber={autodartsBoardNumber}
+                    initialMatchId={autodartsMatchId}
+                    initialLastCommittedTurnId={autodartsLastCommittedTurnId}
+                    onMatchIdChange={setAutodartsMatchId}
+                    onTurnCommitted={setAutodartsLastCommittedTurnId}
                     gameConfig={{
                       baseScore: game.startScore === 301 ? 301 : 501,
                       // Match-wide even though doubleOut is technically per-player in Dartspot's

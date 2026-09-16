@@ -33,6 +33,16 @@ export interface ActiveGameSnapshot {
    *  reported live against a real board. */
   autodartsEnabled?: boolean;
   autodartsBoardNumber?: number | null;
+  /** The currently-open Autodarts match (if any) and the last turn already committed into `game`
+   *  via it — without these, restoring autodartsEnabled/autodartsBoardNumber alone (see above)
+   *  fixes the "Autodarts silently looks off" symptom but reopens a narrower one: the resumed
+   *  AutodartsLiveScore would have no memory of the match it was already polling, so it'd start a
+   *  SECOND lobby (orphaning the first, which the real board/Lens session may still be bound to)
+   *  and re-commit whatever turn was already scored into `game` before the reload as if it were
+   *  brand new (no lastCommittedTurnId to compare against). See AutodartsLiveScore.tsx's
+   *  initialMatchId/initialLastCommittedTurnId props, which these feed directly. */
+  autodartsMatchId?: string | null;
+  autodartsLastCommittedTurnId?: string | null;
 }
 
 /**

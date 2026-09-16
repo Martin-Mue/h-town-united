@@ -40,6 +40,23 @@ interface AutodartsLiveScoreProps {
    *  always derive it server-side (auth.uid() -> user_roles) from the caller's own membership. */
   boardNumber: number;
   gameConfig: AutodartsGameConfig;
+  /** Resume an already-open Autodarts match instead of starting a fresh Free Game lobby — set
+   *  from Game.tsx's crash-recovery snapshot (see activeGameSnapshot.ts). Without this, a reload
+   *  mid-match (the OS reclaiming a backgrounded tab, a pull-to-refresh, ...) would create a
+   *  SECOND lobby on the very next connect while the real board/Lens session is still bound to
+   *  the first one, and would re-commit whatever turn was already scored before the reload (no
+   *  lastCommittedTurnIdRef to compare against on a fresh mount) as a brand new one. Only consulted
+   *  on the very first connect after mount -- once a fresh matchId exists in matchIdRef, further
+   *  reconnects within the same mount always mean "actually start over" (enabled went false then
+   *  true again), never "resume". */
+  initialMatchId?: string | null;
+  initialLastCommittedTurnId?: string | null;
+  /** Mirrors matchIdRef/lastCommittedTurnIdRef out to Game.tsx so its crash-recovery snapshot can
+   *  carry initialMatchId/initialLastCommittedTurnId forward across a reload -- these live as
+   *  refs in here (no reason to re-render on every poll tick), so the snapshot-owning parent has
+   *  no other way to observe their current value. */
+  onMatchIdChange?: (matchId: string | null) => void;
+  onTurnCommitted?: (turnId: string) => void;
 }
 
 const POLL_INTERVAL_MS = 1750;
@@ -51,7 +68,7 @@ const MAX_CONSECUTIVE_FAILURES = 6;
 type Phase = "connecting" | "live" | "error";
 
 const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveScoreProps>(function AutodartsLiveScore(
-  { onRoundCommit, onPendingChange, enabled, onClose, playerName, onRequestManualEntry, paused, boardNumber, gameConfig },
+  { onRoundCommit, onPendingChange, enabled, onClose, playerName, onRequestManualEntry, paused, boardNumber, gameConfig, initialMatchId, initialLastCommittedTurnId, onMatchIdChange, onTurnCommitted },
   ref,
 ) {
   const [phase, setPhase] = useState<Phase>("connecting");
@@ -80,9 +97,9 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
   }, [paused]);
   // Read from inside the poll loop without re-creating the interval on every render — the loop
   // itself is only set up once per connect (see the `enabled` effect below).
-  const callbacksRef = useRef({ onRoundCommit, onPendingChange, onRequestManualEntry });
+  const callbacksRef = useRef({ onRoundCommit, onPendingChange, onRequestManualEntry, onMatchIdChange, onTurnCommitted });
   useEffect(() => {
-    callbacksRef.current = { onRoundCommit, onPendingChange, onRequestManualEntry };
+    callbacksRef.current = { onRoundCommit, onPendingChange, onRequestManualEntry, onMatchIdChange, onTurnCommitted };
   });
 
   useImperativeHandle(ref, () => ({ getRecentClip: () => null }));
@@ -125,6 +142,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         if (parsed.currentTurnId && parsed.currentTurnId !== lastCommittedTurnIdRef.current && parsed.currentTurnThrows.length > 0) {
           callbacksRef.current.onRoundCommit(parsed.currentTurnThrows, forced);
           lastCommittedTurnIdRef.current = parsed.currentTurnId;
+          callbacksRef.current.onTurnCommitted?.(parsed.currentTurnId);
         }
         stopPolling();
         return;
@@ -139,6 +157,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         if (parsed.currentTurnId !== lastCommittedTurnIdRef.current && parsed.currentTurnThrows.length > 0) {
           callbacksRef.current.onRoundCommit(parsed.currentTurnThrows, forced);
           lastCommittedTurnIdRef.current = parsed.currentTurnId;
+          if (parsed.currentTurnId) callbacksRef.current.onTurnCommitted?.(parsed.currentTurnId);
         }
         // else: already committed this exact turn, just waiting for Autodarts to append the next
         // one -- no-op rather than re-committing.
@@ -205,6 +224,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
       consecutiveFailuresRef.current = 0;
       setPhase("connecting");
       setErrorMessage(null);
+      callbacksRef.current.onMatchIdChange?.(null);
       return;
     }
 
@@ -213,10 +233,19 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
       setPhase("connecting");
       setErrorMessage(null);
       try {
-        const { matchId } = await createFreeGameLobby(boardNumber, gameConfig);
-        if (cancelled) return;
-        matchIdRef.current = matchId;
-        lastCommittedTurnIdRef.current = null;
+        // Resume rather than start fresh iff a prior matchId survived (crash-recovery snapshot,
+        // see this prop's own doc comment) -- only meaningful on this very first run after mount,
+        // since matchIdRef itself is what tracks "already resumed/created this mount".
+        if (initialMatchId && !matchIdRef.current) {
+          matchIdRef.current = initialMatchId;
+          lastCommittedTurnIdRef.current = initialLastCommittedTurnId ?? null;
+        } else {
+          const { matchId } = await createFreeGameLobby(boardNumber, gameConfig);
+          if (cancelled) return;
+          matchIdRef.current = matchId;
+          lastCommittedTurnIdRef.current = null;
+        }
+        callbacksRef.current.onMatchIdChange?.(matchIdRef.current);
         consecutiveFailuresRef.current = 0;
         setPhase("live");
         pollTimerRef.current = setInterval(() => {
@@ -244,6 +273,10 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         matchIdRef.current = null;
       }
     };
+    // initialMatchId/initialLastCommittedTurnId deliberately excluded -- they're a one-shot seed
+    // for the very first connect after mount (see this effect's own resume branch above), not a
+    // signal to reconnect on every value change (Game.tsx updates them via onMatchIdChange as a
+    // side effect of THIS component's own state, which would otherwise re-trigger this effect).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, boardNumber]);
 
