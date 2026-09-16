@@ -35,9 +35,19 @@ export async function createFreeGameLobby(boardNumber: number, config: Autodarts
     p_legs: config.legs,
   });
   if (error) throw new Error(error.message);
-  const matchId = (data as { matchId?: string } | null)?.matchId;
-  if (!matchId) throw new Error("Autodarts: Lobby-Erstellung lieferte keine Match-ID");
-  return { matchId };
+  // The RPC itself no longer throws for a lobby/token/device-assignment failure (see its own
+  // migration comment on why: a raised exception rolled back the whole transaction, including the
+  // debug trace it was trying to persist for exactly this failure) -- it returns
+  // {status:"error", message, debug} instead, still logged to autodarts_boards.last_match_debug
+  // either way. Surface data.message here so the UI/console keep the SAME level of detail as
+  // before, just sourced from the payload instead of a thrown Postgres error.
+  const result = data as { matchId?: string; status?: string; message?: string; debug?: unknown } | null;
+  if (result?.status === "error") {
+    console.warn("autodartsClient.createFreeGameLobby: server-reported failure", result.debug);
+    throw new Error(result.message || "Autodarts: Lobby-Erstellung fehlgeschlagen");
+  }
+  if (!result?.matchId) throw new Error("Autodarts: Lobby-Erstellung lieferte keine Match-ID");
+  return { matchId: result.matchId };
 }
 
 /** Best-effort, never-throws teardown -- closing the remote lobby is a courtesy so it doesn't sit
