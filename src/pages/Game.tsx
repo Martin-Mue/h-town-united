@@ -2793,11 +2793,6 @@ const GamePage = () => {
               </ErrorBoundary>
             )}
 
-            {/* TEMPORARY diagnostic, remove once the "nothing renders" live report is resolved:
-                the render condition right below evaluated false on a real device even though the
-                setup toggle was on and a board was picked, with no visible error either -- this
-                surfaces the exact runtime values so the next test tells us WHICH part was falsy
-                instead of guessing blind again. */}
             {phase === "playing" && (
               <p className="text-[9px] text-muted-foreground/60 mb-1 font-mono">
                 AD-debug: enabled={String(autodartsEnabled)} board={String(autodartsBoardNumber)} isBot={String(!!currentPlayer?.isBot)}
@@ -2953,6 +2948,50 @@ const GamePage = () => {
               personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
             />
             {cricketBoard}
+
+            {/* ROOT CAUSE of "Autodarts never shows anything, ever" (found 2026-09-16 via a local
+                auth-bypassed render test, not live device access): this AutodartsLiveScore block
+                previously existed ONLY in the `cameraEnabled` branch above (copied next to
+                LiveCamera when Autodarts was first added). Camera and Autodarts are mutually
+                exclusive scoring sources -- cameraEnabled is never true while playing an
+                Autodarts-scored game -- so this branch (the actual "manual entry" layout, which is
+                what always renders whenever Autodarts is active) never had it at all. Every
+                backend fix made today (device assignment, crash-recovery persistence, ...) was
+                real and worth keeping, but none of it could ever have been exercised live: the
+                component never mounted, so createFreeGameLobby/autodarts_start_match was never
+                even called. */}
+            {phase === "playing" && (
+              <p className="text-[9px] text-muted-foreground/60 mt-1 font-mono">
+                AD-debug: enabled={String(autodartsEnabled)} board={String(autodartsBoardNumber)} isBot={String(!!currentPlayer?.isBot)}
+              </p>
+            )}
+            {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
+              <ErrorBoundary label="Autodarts">
+                <Suspense fallback={<div className="flex justify-center py-2"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
+                  <AutodartsLiveScore
+                    ref={autodartsLiveScoreRef}
+                    enabled={phase === "playing"}
+                    paused={!!pendingCheckoutChoice || !!pendingTiebreak}
+                    onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsMatchId(null); setAutodartsLastCommittedTurnId(null); }}
+                    onRoundCommit={submitDetectedRound}
+                    onPendingChange={setPendingLiveDarts}
+                    dartsRemaining={Math.max(1, 3 - dartsThisRound)}
+                    playerName={currentPlayerName}
+                    onRequestManualEntry={() => setShowManualInput(true)}
+                    boardNumber={autodartsBoardNumber}
+                    initialMatchId={autodartsMatchId}
+                    initialLastCommittedTurnId={autodartsLastCommittedTurnId}
+                    onMatchIdChange={setAutodartsMatchId}
+                    onTurnCommitted={setAutodartsLastCommittedTurnId}
+                    gameConfig={{
+                      baseScore: game.startScore === 301 ? 301 : 501,
+                      doubleOut: game.players[0]?.doubleOut ?? true,
+                      legs: game.bestOfLegs,
+                    }}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            )}
           </div>
 
           {/* Pad + history — the only part of this layout that scrolls now. Portrait stacks
