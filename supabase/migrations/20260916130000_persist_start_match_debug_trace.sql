@@ -70,12 +70,23 @@ begin
 
   v_stored_refresh_token := extensions.pgp_sym_decrypt(decode(v_row.refresh_token_ciphertext, 'base64'), v_passphrase);
 
+  -- retry_count=1 (NICHT mehrfach wiederholen) ist hier bewusst, anders als bei der Lobby-
+  -- Erstellung: Refresh-Tokens rotieren typischerweise bei jeder Benutzung (einmal gueltig). Live
+  -- beobachtet: mehrere Refresh-Versuche in Folge hingen alle bei ~54s (3 Retries a ~18s) fest,
+  -- obwohl ein frischer, unabhaengiger Test-Aufruf (falscher Token) sofort eine saubere Antwort
+  -- bekam -- das deutet darauf hin, dass ein FRUEHERER Versuch serverseitig eigentlich durchging
+  -- (den gespeicherten Token verbrauchte/rotierte), unsere Wartezeit aber schon abgelaufen war,
+  -- sodass jeder folgende Versuch (und jeder Retry) mit dem jetzt bereits verbrauchten alten Token
+  -- arbeitete -- ein sich selbst verstaerkender Fehlzustand. Ein Retry auf denselben (potenziell
+  -- schon konsumierten) Token drauf ist hier keine sichere Wiederholung wie bei der (idempotenten)
+  -- Lobby-Erstellung, sondern kann das Problem aktiv verschlimmern. Stattdessen: nur EIN Versuch,
+  -- dafuer mit voller Geduld (waehrend 100 mal 300ms warten).
   select h.status_code, h.content into v_refresh_status, v_refresh_response
   from public._autodarts_http_post_polled(
     'https://api.autodarts.com/auth/v1/refresh',
     jsonb_build_object('refreshToken', v_stored_refresh_token, 'client_id', 'autodarts-play'),
     v_browser_headers,
-    20000, 60, 3
+    25000, 100, 1
   ) h;
 
   if v_refresh_status is null or v_refresh_status <> 200 then
