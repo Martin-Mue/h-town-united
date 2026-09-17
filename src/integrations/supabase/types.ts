@@ -1719,6 +1719,10 @@ export type Database = {
         Args: { p_board_number: number }
         Returns: Json
       }
+      autodarts_check_start_match_status: {
+        Args: { p_board_number: number }
+        Returns: Json
+      }
       autodarts_connect_board: {
         Args: {
           p_board_number: number

@@ -24,30 +24,42 @@ export interface AutodartsGameConfig {
 }
 
 /** Starts a private single-player "Free Game" lobby with the given X01 settings and immediately
- *  starts it, entirely server-side. Throws (with the RPC's own descriptive message) on any
- *  failure, which AutodartsLiveScore treats as a connection failure and falls back to manual entry
- *  -- it never silently mis-starts a game on a wrong guess. */
+ *  starts it, server-side. autodarts_start_match itself only ENQUEUES the first step and returns
+ *  right away -- it can't synchronously wait on pg_net's background worker from within its own
+ *  transaction (that request would be invisible to the worker until the transaction commits, so
+ *  polling for it inside the same call can never succeed -- confirmed against pg_net's own
+ *  documented behavior, and the actual root cause of a full day of mysterious "Status timeout"
+ *  failures across every endpoint this integration touches). Real progress happens via repeated
+ *  calls to autodarts_check_start_match_status, exactly the same enqueue-then-poll-separately
+ *  pattern autodarts_connect_board/autodarts_check_connect_status already used correctly. */
 export async function createFreeGameLobby(boardNumber: number, config: AutodartsGameConfig): Promise<{ matchId: string }> {
-  const { data, error } = await supabase.rpc("autodarts_start_match", {
+  const { error: startError } = await supabase.rpc("autodarts_start_match", {
     p_board_number: boardNumber,
     p_base_score: config.baseScore,
     p_double_out: config.doubleOut,
     p_legs: config.legs,
   });
-  if (error) throw new Error(error.message);
-  // The RPC itself no longer throws for a lobby/token/device-assignment failure (see its own
-  // migration comment on why: a raised exception rolled back the whole transaction, including the
-  // debug trace it was trying to persist for exactly this failure) -- it returns
-  // {status:"error", message, debug} instead, still logged to autodarts_boards.last_match_debug
-  // either way. Surface data.message here so the UI/console keep the SAME level of detail as
-  // before, just sourced from the payload instead of a thrown Postgres error.
-  const result = data as { matchId?: string; status?: string; message?: string; debug?: unknown } | null;
-  if (result?.status === "error") {
-    console.warn("autodartsClient.createFreeGameLobby: server-reported failure", result.debug);
-    throw new Error(result.message || "Autodarts: Lobby-Erstellung fehlgeschlagen");
+  if (startError) throw new Error(startError.message);
+
+  // Each real step (token refresh, lobby create, device lookup, lobby start) is its own pg_net
+  // round-trip, resolved on a separate poll tick -- a handful of quick steps land well inside this
+  // window in practice, but a slow Autodarts response on any one step can still eat several ticks.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const { data, error } = await supabase.rpc("autodarts_check_start_match_status", { p_board_number: boardNumber });
+    if (error) throw new Error(error.message);
+    const result = data as { status?: string; matchId?: string; message?: string; step?: string } | null;
+    if (result?.status === "connected") {
+      if (!result.matchId) throw new Error("Autodarts: Lobby-Erstellung lieferte keine Match-ID");
+      return { matchId: result.matchId };
+    }
+    if (result?.status === "error") {
+      console.warn("autodartsClient.createFreeGameLobby: server-reported failure", result);
+      throw new Error(result.message || "Autodarts: Lobby-Erstellung fehlgeschlagen");
+    }
+    // status === "pending" -- still working through the steps, keep polling.
   }
-  if (!result?.matchId) throw new Error("Autodarts: Lobby-Erstellung lieferte keine Match-ID");
-  return { matchId: result.matchId };
+  throw new Error("Autodarts: Lobby-Erstellung dauert ungewöhnlich lange");
 }
 
 /** Best-effort, never-throws teardown -- closing the remote lobby is a courtesy so it doesn't sit
