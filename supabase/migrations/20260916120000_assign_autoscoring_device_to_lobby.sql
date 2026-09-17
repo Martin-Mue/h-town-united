@@ -80,7 +80,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path to 'public'
-set statement_timeout to '45000'
+set statement_timeout to '90000'
 as $function$
 declare
   v_club_id uuid;
@@ -120,6 +120,12 @@ begin
     'Accept', 'application/json, text/plain, */*', 'Accept-Language', 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7'
   );
 
+  -- Erste echte Lobby-Erstellung ueberhaupt (die Komponente hat vorher nie gemountet) zeigte live:
+  -- net._http_response bekam ueberhaupt keinen Eintrag fuer diesen Aufruf, obwohl ein
+  -- Token-Refresh direkt davor problemlos durchlief -- dasselbe "Worker kommt nicht rechtzeitig
+  -- durch"-Muster wie beim Login vor zwei Tagen. Mehr Geduld/Wiederholungen speziell hier (ein
+  -- einmaliger Aufruf pro Spielstart, UX-Kosten vertretbar) statt eine weitere ursache-blinde
+  -- Vermutung.
   select h.status_code, h.content into v_lobby_status, v_lobby_response
   from public._autodarts_http_post_polled(
     'https://api.autodarts.com/gs/v0/lobbies',
@@ -133,7 +139,7 @@ begin
       'legs', p_legs
     ),
     v_auth_headers,
-    15000, 50, 2
+    20000, 60, 3
   ) h;
 
   if v_lobby_status is null then
