@@ -276,6 +276,9 @@ const GamePage = () => {
   /** Which specific dart (by its flat index into the current player's throws array) currently has
    *  its value-edit popover open, inside the corrector dialog. */
   const [editingChipIdx, setEditingChipIdx] = useState<number | null>(null);
+  /** Which round's "add a missing dart" popover is open, inside the corrector dialog — see
+   *  ThrowHistoryEditor's onAddThrow doc comment for why this can only ever be the trailing round. */
+  const [addingRoundIdx, setAddingRoundIdx] = useState<number | null>(null);
   const [showDetailedStats, setShowDetailedStats] = useState(false);
   const [sharingResult, setSharingResult] = useState(false);
   const [gameSaved, setGameSaved] = useState(false);
@@ -1016,6 +1019,13 @@ const GamePage = () => {
   useEffect(() => {
     setCorrectorOpen(false);
   }, [game?.currentPlayerIndex, game?.currentLeg.legNumber]);
+
+  // Discards whichever chip/round popover was mid-correction the moment the dialog itself closes
+  // (Fertig, the auto-close above, or the person just dismissing it) — so reopening it always
+  // starts clean instead of possibly resuming a popover pointed at a dart that's since changed.
+  useEffect(() => {
+    if (!correctorOpen) { setEditingChipIdx(null); setAddingRoundIdx(null); }
+  }, [correctorOpen]);
 
   /** Save undo snapshot before each throw */
   const saveUndo = () => {
@@ -2632,16 +2642,19 @@ const GamePage = () => {
         })}
       </div>
 
-      {/* Leg info bar — with Sets-Modus active this also names which set is currently being
-          played, since `game.currentLeg.legNumber` is a running count across the WHOLE match
-          (never reset at a set boundary, see applyLegWin) and would otherwise read like "Leg 7"
-          deep into a sets match with no indication that's actually early in set 3. */}
-      {game.bestOfLegs > 1 && (
-        <div className="text-center text-xs landscape:text-[10px] text-muted-foreground mt-2 landscape:mt-1">
-          {game.setsMode && <>{t("game.set")} {(game.setsWon ?? []).reduce((s, v) => s + v, 0) + 1} · </>}
-          {t("game.leg")} {game.currentLeg.legNumber} · {game.players[game.currentLeg.startingPlayerIndex].name} {t("game.startsFirst")}
-        </div>
-      )}
+      {/* Leg/round info bar — always shown now (used to be gated on bestOfLegs > 1, so a single-leg
+          match never showed who started at all). With Sets-Modus active this also names which set
+          is currently being played, since `game.currentLeg.legNumber` is a running count across
+          the WHOLE match (never reset at a set boundary, see applyLegWin) and would otherwise read
+          like "Leg 7" deep into a sets match with no indication that's actually early in set 3.
+          Round number is the CURRENT player's own trip count (their throws so far, including this
+          round's partial progress, chunked into 3s) — there was previously no indication anywhere
+          on screen of which round of the leg was in progress. */}
+      <div className="text-center text-xs landscape:text-[10px] text-muted-foreground mt-2 landscape:mt-1">
+        {game.setsMode && <>{t("game.set")} {(game.setsWon ?? []).reduce((s, v) => s + v, 0) + 1} · </>}
+        {game.bestOfLegs > 1 && <>{t("game.leg")} {game.currentLeg.legNumber} · </>}
+        {t("game.roundLabel")} {Math.floor(currentThrows.length / 3) + 1} · {game.players[game.currentLeg.startingPlayerIndex].name} {t("game.startsFirst")}
+      </div>
     </div>
   );
 
@@ -3074,6 +3087,17 @@ const GamePage = () => {
             onOpenChipChange={setEditingChipIdx}
             onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
             onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
+            onAddThrow={(base, mul) => {
+              // Always the trailing round (see ThrowHistoryEditor's onAddThrow doc comment) —
+              // recording it is exactly what a real dart for the CURRENT player does, so this
+              // reuses that same handler (bust/checkout/round-switch and all) instead of a
+              // parallel implementation. Clears the little popover itself; the dialog closing
+              // (if this happened to complete the leg or the round) is the auto-close effect's job.
+              (isCricket ? handleCricketThrow : handleX01Throw)(base, mul);
+              setAddingRoundIdx(null);
+            }}
+            openAddRoundIdx={addingRoundIdx}
+            onOpenAddRoundChange={setAddingRoundIdx}
             startingScore={isCricket ? undefined : effectiveStartScore(game.startScore, game.players, activeIdx, game.teams)}
           />
           {/* Undo reaches in here too — the toolbar's own Undo button sits behind this modal's

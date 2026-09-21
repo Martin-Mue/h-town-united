@@ -1,4 +1,4 @@
-import { Edit2, Pencil, X } from "lucide-react";
+import { Edit2, Pencil, Plus, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -19,6 +19,18 @@ interface ThrowHistoryEditorProps {
    *  into a different visit the way removing one would). */
   onEditThrow: (throwIndex: number, base: number, multiplier: 1 | 2 | 3) => void;
   onDeleteThrow: (throwIndex: number) => void;
+  /** Records one more dart for whichever round is short of 3 — chunking `throws` into groups of
+   *  exactly 3 (see the round-building loop below) means the ONLY round that can ever be short is
+   *  the trailing one, so "complete the short round" and "throw the next dart for this player" are
+   *  the same operation; the caller can just feed this straight into its own normal throw handler.
+   *  Lets a round left short by an earlier accidental deletion (or a genuinely partial current
+   *  round) be completed instead of staying permanently short. Optional: omit alongside
+   *  openAddRoundIdx/onOpenAddRoundChange for a caller with no use for it (MatchDetailDialog's
+   *  read-only past-match view). */
+  onAddThrow?: (base: number, multiplier: 1 | 2 | 3) => void;
+  /** Which round's "+ hinzufügen" popover is open (controlled, same reasoning as openChipIdx). */
+  openAddRoundIdx?: number | null;
+  onOpenAddRoundChange?: (roundIdx: number | null) => void;
   /** Hides the edit-mode toggle entirely, for viewing a past match's history where corrections no
    *  longer apply — pass editModeOn={false} and no-op callbacks alongside this from the caller. */
   readOnly?: boolean;
@@ -40,14 +52,19 @@ interface ThrowHistoryEditorProps {
 }
 
 /**
- * Round-by-round throw history with two correction tools per dart: tap the chip to change its
- * VALUE in place (a compact one-tap-commits grid, same "no separate multiplier step" philosophy
- * as DartScoreInput, just smaller to fit a popover), or the small × badge to remove it outright.
- * Edit mode (the "Bearbeiten" toggle) stays on across multiple corrections in the same pass —
- * closing after every single edit meant reopening it per dart, which was the actual complaint
- * this component exists to fix.
+ * Round-by-round throw history with correction tools per dart: tap the chip to open a popover
+ * that either changes its VALUE (a compact one-tap-commits grid, same "no separate multiplier
+ * step" philosophy as DartScoreInput, just smaller to fit a popover) or deletes it outright via
+ * that SAME popover's own "Wurf löschen" button — deliberately not a separate always-visible
+ * delete badge floating on the chip's corner (an earlier version had one): with two stacked tap
+ * targets that close together, a tap meant for "open the editor" could land on "delete" instead,
+ * with no confirmation at all, exactly the mis-tap a real user hit against this component. Routing
+ * every deletion through the popover means it always takes two deliberate taps, never one
+ * accidental one. Edit mode (the "Bearbeiten" toggle) stays on across multiple corrections in the
+ * same pass — closing after every single edit meant reopening it per dart, which was the actual
+ * complaint this component exists to fix.
  */
-const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, openChipIdx, onOpenChipChange, onEditThrow, onDeleteThrow, readOnly, onOpenCorrector, startingScore }: ThrowHistoryEditorProps) => {
+const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, openChipIdx, onOpenChipChange, onEditThrow, onDeleteThrow, onAddThrow, openAddRoundIdx, onOpenAddRoundChange, readOnly, onOpenCorrector, startingScore }: ThrowHistoryEditorProps) => {
   const { t } = useLanguage();
   if (throws.length === 0) return null;
 
@@ -82,7 +99,7 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
               {roundThrows.map((dart, i) => {
                 const globalIdx = roundIdx * 3 + i;
                 const chip = (
-                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-mono ${
+                  <span className={`inline-block px-2.5 py-1 rounded text-sm font-mono ${
                     dart.multiplier === 3 ? "bg-primary/20 text-primary" :
                     dart.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
                   }`}>
@@ -90,7 +107,7 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
                   </span>
                 );
                 return (
-                  <div key={globalIdx} className="relative group">
+                  <div key={globalIdx}>
                     {editModeOn ? (
                       <Popover open={openChipIdx === globalIdx} onOpenChange={(open) => onOpenChipChange(open ? globalIdx : null)}>
                         <PopoverTrigger asChild>
@@ -124,23 +141,50 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
                         </PopoverContent>
                       </Popover>
                     ) : chip}
-                    {editModeOn && (
-                      // The hit area is deliberately bigger than the visible red dot (a common
-                      // accessible-touch-target pattern) — at the dot's own size this sat right on
-                      // top of the (much bigger) number chip underneath, and a slightly-off tap
-                      // meant to hit one or the other landed on the wrong control, exactly the
-                      // "fehleranfällig" complaint from a real tournament's scorekeepers.
-                      <button onClick={() => onDeleteThrow(globalIdx)}
-                        title={t("game.deleteThrow")} aria-label={t("game.deleteThrow")}
-                        className="absolute -top-2.5 -right-2.5 w-6 h-6 flex items-center justify-center">
-                        <span className="w-4 h-4 bg-destructive rounded-full flex items-center justify-center">
-                          <X className="w-2.5 h-2.5 text-destructive-foreground" />
-                        </span>
-                      </button>
-                    )}
                   </div>
                 );
               })}
+              {/* Completes a round that's short of 3 darts — a genuinely partial current round,
+                  or one a deletion left short — instead of it staying permanently incomplete.
+                  Inserts right after this round's last real dart, so a round left short by an
+                  earlier deletion (with later rounds already recorded after it) re-aligns every
+                  later round back to its correct 3-dart grouping as a side effect: rounds are
+                  grouped purely by flat array position (see the Math.ceil(throws.length/3) above),
+                  so restoring this round's own count is what puts every later dart back in the
+                  round it actually belongs to. */}
+              {editModeOn && onAddThrow && onOpenAddRoundChange && roundThrows.length < 3 && (
+                <Popover open={openAddRoundIdx === roundIdx} onOpenChange={(open) => onOpenAddRoundChange(open ? roundIdx : null)}>
+                  <PopoverTrigger asChild>
+                    <button title={t("game.addThrow")} aria-label={t("game.addThrow")}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-dashed border-primary/40 text-primary hover:bg-primary/10">
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-2" align="start">
+                    <div className="grid grid-cols-5 gap-1 mb-1.5">
+                      {NUMBERS.map((v) => (
+                        <div key={v} className="rounded-md overflow-hidden border border-border/60">
+                          <button
+                            onClick={() => onAddThrow(v, 1)}
+                            className="w-full py-1 text-xs font-bold bg-muted text-foreground hover:bg-muted/70 active:scale-95"
+                          >
+                            {v}
+                          </button>
+                          <div className="grid grid-cols-2 gap-px bg-border/60">
+                            <button onClick={() => onAddThrow(v, 3)} className="py-1 text-[10px] font-bold bg-primary/15 text-primary hover:bg-primary/30 active:scale-95">T</button>
+                            <button onClick={() => onAddThrow(v, 2)} className="py-1 text-[10px] font-bold bg-secondary/15 text-secondary hover:bg-secondary/30 active:scale-95">D</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => onAddThrow(0, 1)} className="flex-1 py-1.5 rounded-md text-xs font-bold bg-accent/15 text-accent hover:bg-accent/25">{t("game.miss")}</button>
+                      <button onClick={() => onAddThrow(25, 1)} className="flex-1 py-1.5 rounded-md text-xs font-bold bg-accent/15 text-accent hover:bg-accent/25">{t("game.bull")}</button>
+                      <button onClick={() => onAddThrow(25, 2)} className="flex-1 py-1.5 rounded-md text-xs font-bold bg-accent/15 text-accent hover:bg-accent/25">{t("game.bullseye")}</button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
               <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
                 {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
                 {remainingAfterRound !== undefined && (
