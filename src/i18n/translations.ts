@@ -440,6 +440,8 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.edit": { de: "Bearbeiten", en: "Edit", fr: "Modifier", pl: "Edytuj", nl: "Bewerken", tr: "Düzenle" },
   "game.changeValue": { de: "Wert ändern", en: "Change value", fr: "Modifier la valeur", pl: "Zmień wartość", nl: "Waarde wijzigen", tr: "Değeri değiştir" },
   "game.deleteThrow": { de: "Wurf löschen", en: "Delete throw", fr: "Supprimer le lancer", pl: "Usuń rzut", nl: "Worp verwijderen", tr: "Atışı sil" },
+  "game.correctThrows": { de: "Korrigieren", en: "Correct", fr: "Corriger", pl: "Popraw", nl: "Corrigeren", tr: "Düzelt" },
+  "game.correctThrowsTitle": { de: "Wurf korrigieren", en: "Correct throws", fr: "Corriger les lancers", pl: "Popraw rzuty", nl: "Worpen corrigeren", tr: "Atışları düzelt" },
   "game.miss": { de: "Miss", en: "Miss", fr: "Miss", pl: "Miss", nl: "Miss", tr: "Iska" },
   "game.bull": { de: "Bull", en: "Bull", fr: "Bull", pl: "Bull", nl: "Bull", tr: "Bull" },
   "game.bullseye": { de: "Bullseye", en: "Bullseye", fr: "Bullseye", pl: "Bullseye", nl: "Bullseye", tr: "Bullseye" },

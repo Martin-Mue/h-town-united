@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense, type CSSProperties } from "react";
 import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, WifiOff, Sparkles, Lock } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
@@ -266,10 +266,15 @@ const GamePage = () => {
   // dart (bot logic, camera detection) — DartScoreInput's buttons always pass explicit values.
   const selectedScore = 20;
   const multiplier = 1;
-  const [editingThrowIdx, setEditingThrowIdx] = useState<number | null>(null);
-  /** Which specific dart (by its flat index into that player's throws array) currently has its
-   *  value-edit popover open — separate from editingThrowIdx above, which is just the "edit mode
-   *  is on for this history card at all" toggle. */
+  /** Whether the "Wurf korrigieren" dialog is open — replaces a former page-level edit-mode flag
+   *  that was never reset on turn/leg change, undo, or new game, so it could silently stay "on"
+   *  and point at whichever player/bot happened to be active by the time it rendered next. Local
+   *  dialog state can't leak that way: closing the dialog (including the auto-close effect below)
+   *  throws the whole question away, by construction, rather than needing to remember to reset a
+   *  flag from every place the game state can move on. */
+  const [correctorOpen, setCorrectorOpen] = useState(false);
+  /** Which specific dart (by its flat index into the current player's throws array) currently has
+   *  its value-edit popover open, inside the corrector dialog. */
   const [editingChipIdx, setEditingChipIdx] = useState<number | null>(null);
   const [showDetailedStats, setShowDetailedStats] = useState(false);
   const [sharingResult, setSharingResult] = useState(false);
@@ -1004,6 +1009,14 @@ const GamePage = () => {
     if (game) remainingRef.current = [...game.currentLeg.remaining];
   }, [game]);
 
+  // Safety net for the "Wurf korrigieren" dialog: if the turn or leg moves on while it's open
+  // (a camera/Autodarts round committing in the background, or a leg finishing) close it rather
+  // than leave it silently pointed at throws that are no longer the ones on screen — this is the
+  // actual fix for the old edit-mode-leaks-across-turns bug, not just a reset triggered by it.
+  useEffect(() => {
+    setCorrectorOpen(false);
+  }, [game?.currentPlayerIndex, game?.currentLeg.legNumber]);
+
   /** Save undo snapshot before each throw */
   const saveUndo = () => {
     if (!game) return;
@@ -1652,6 +1665,11 @@ const GamePage = () => {
   };
 
   const deleteThrow = (playerIdx: number, throwIndex: number) => {
+    // Correcting a dart mid-visit invalidates any bot plan already cached for the CURRENT round
+    // (its darts/cursor were computed against the pre-correction throws/remaining) — same reason
+    // undoLastDart clears this. The corrector is only reachable on a human's own turn, but this
+    // costs nothing and means no future call site can reintroduce the desync bug this once was.
+    botPlanRef.current = null;
     // If the deleted dart belonged to the current player's still-open round (one of the last
     // `dartsThisRound` entries), the round's dart counter must shrink with it — otherwise the
     // 3-dot counter and the "this round" scorecard chip stay one dart ahead of what's actually
@@ -1678,9 +1696,8 @@ const GamePage = () => {
     });
     if (isCurrentRoundThrow) setDartsThisRound((d) => Math.max(0, d - 1));
     setEditingChipIdx(null);
-    // Edit MODE (editingThrowIdx) deliberately stays open — correcting one mis-tap rarely means
-    // that was the only one this round, and re-opening "Bearbeiten" per dart was exactly the
-    // friction being fixed here.
+    // The corrector DIALOG deliberately stays open — correcting one mis-tap rarely means that was
+    // the only one this round, and closing per dart was exactly the friction being fixed here.
   };
 
   /** Changes a past dart's recorded value IN PLACE (same array index) instead of removing it —
@@ -1695,6 +1712,8 @@ const GamePage = () => {
     const oldDart = game.currentLeg.throws[playerIdx]?.[throwIndex];
     if (!oldDart) return;
     const newPoints = pointsFor(newBase, newMultiplier);
+    // See deleteThrow's own comment on botPlanRef — same reasoning applies here.
+    botPlanRef.current = null;
 
     if (game.mode === "cricket") {
       setGame((prev) => {
@@ -2476,7 +2495,7 @@ const GamePage = () => {
             "--accent": "45 100% 58%", "--accent-foreground": "222 30% 5%",
             "--destructive": "0 72% 51%", "--destructive-foreground": "0 0% 100%",
             "--border": "222 18% 14%",
-          } as any;
+          } as CSSProperties;
           return (
             <div key={card.key}
               className={`broadcast-panel p-4 landscape:p-3 border-2 transition-all text-center ${isActive ? "glow-cyan" : "opacity-80"}`}
@@ -2793,12 +2812,6 @@ const GamePage = () => {
               </ErrorBoundary>
             )}
 
-            {phase === "playing" && (
-              <p className="text-[9px] text-muted-foreground/60 mb-1 font-mono">
-                AD-debug: enabled={String(autodartsEnabled)} board={String(autodartsBoardNumber)} isBot={String(!!currentPlayer?.isBot)}
-              </p>
-            )}
-
             {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
               // Sibling to the LiveCamera block above, never both at once (mutually exclusive via
               // autodartsEnabled) — same ErrorBoundary/Suspense safety net, same reasoning: a
@@ -2875,12 +2888,14 @@ const GamePage = () => {
             <ThrowHistoryEditor
               throws={currentThrows}
               playerName={currentPlayerName}
-              editModeOn={editingThrowIdx !== null}
-              onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
-              openChipIdx={editingChipIdx}
-              onOpenChipChange={setEditingChipIdx}
-              onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
-              onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
+              editModeOn={false}
+              onToggleEditMode={() => {}}
+              openChipIdx={null}
+              onOpenChipChange={() => {}}
+              onEditThrow={() => {}}
+              onDeleteThrow={() => {}}
+              readOnly
+              onOpenCorrector={currentPlayer?.isBot ? undefined : () => setCorrectorOpen(true)}
             />
           </div>
         </>
@@ -2960,11 +2975,6 @@ const GamePage = () => {
                 real and worth keeping, but none of it could ever have been exercised live: the
                 component never mounted, so createFreeGameLobby/autodarts_start_match was never
                 even called. */}
-            {phase === "playing" && (
-              <p className="text-[9px] text-muted-foreground/60 mt-1 font-mono">
-                AD-debug: enabled={String(autodartsEnabled)} board={String(autodartsBoardNumber)} isBot={String(!!currentPlayer?.isBot)}
-              </p>
-            )}
             {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
               <ErrorBoundary label="Autodarts">
                 <Suspense fallback={<div className="flex justify-center py-2"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
@@ -3015,17 +3025,46 @@ const GamePage = () => {
               <ThrowHistoryEditor
                 throws={currentThrows}
                 playerName={currentPlayerName}
-                editModeOn={editingThrowIdx !== null}
-                onToggleEditMode={() => setEditingThrowIdx(editingThrowIdx !== null ? null : 0)}
-                openChipIdx={editingChipIdx}
-                onOpenChipChange={setEditingChipIdx}
-                onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
-                onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
+                editModeOn={false}
+                onToggleEditMode={() => {}}
+                openChipIdx={null}
+                onOpenChipChange={() => {}}
+                onEditThrow={() => {}}
+                onDeleteThrow={() => {}}
+                readOnly
+                onOpenCorrector={currentPlayer?.isBot ? undefined : () => setCorrectorOpen(true)}
               />
             </div>
           </div>
         </>
       )}
+
+      {/* "Wurf korrigieren" — replaces the old inline always-mounted edit toggle. Dialog-local
+          state (editingChipIdx is the only piece carried over, and it's harmless on its own)
+          means there's no page-level "edit mode" flag left to desync from whose turn it actually
+          is; see correctorOpen's own doc comment. Only ever opened for the CURRENT player (the
+          "Korrigieren" entry point above is hidden outright during a bot's turn), so this always
+          targets currentThrows/activeIdx, same data the read-only card already shows. */}
+      <Dialog open={correctorOpen} onOpenChange={setCorrectorOpen}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display uppercase text-base">
+              {t("game.correctThrowsTitle")} · {currentPlayerName}
+            </DialogTitle>
+          </DialogHeader>
+          <ThrowHistoryEditor
+            throws={currentThrows}
+            playerName={currentPlayerName}
+            editModeOn
+            onToggleEditMode={() => {}}
+            openChipIdx={editingChipIdx}
+            onOpenChipChange={setEditingChipIdx}
+            onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
+            onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
+            startingScore={isCricket ? undefined : effectiveStartScore(game.startScore, game.players, activeIdx, game.teams)}
+          />
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={confirmCancelGame} onOpenChange={setConfirmCancelGame}>
         <AlertDialogContent>

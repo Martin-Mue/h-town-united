@@ -105,8 +105,12 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
           })}
         </div>
       )}
-      {onQuickRound && midVisit && (
-        <p className="text-[10px] text-muted-foreground text-center -mt-1.5 mb-2">
+      {/* invisible rather than conditionally rendered — this line mounting/unmounting between the
+          first and later darts of a round shifted the mode-tab row's height under the player's
+          thumb mid-round, one of the "bars jump on phone" reports. Reserving it (blank until
+          midVisit) keeps the pad's height constant across the whole round. */}
+      {onQuickRound && (
+        <p className={`text-[10px] text-muted-foreground text-center -mt-1.5 mb-2 ${midVisit ? "" : "invisible"}`}>
           {t("game.modeLockedNote")}
         </p>
       )}

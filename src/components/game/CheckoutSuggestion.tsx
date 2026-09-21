@@ -36,9 +36,16 @@ interface CheckoutSuggestionProps {
 /**
  * Displays the preferred checkout route for the current remaining score.
  * Content only exists when a valid checkout exists (score 2–170), but the wrapper stays mounted
- * and animates height/opacity via the CSS grid 0fr/1fr row trick instead of mounting/unmounting —
- * remaining crosses in and out of checkout range on nearly every dart near the end of a leg, and
- * an abrupt appear/disappear here was reported as the whole scoreboard "jumping" on every tap.
+ * and animates open/closed instead of mounting/unmounting — remaining crosses in and out of
+ * checkout range near the end of a leg, and an abrupt appear/disappear here was reported as the
+ * whole scoreboard "jumping".
+ *
+ * Animates `max-height` (a fixed cap well above the card's real height) rather than the
+ * `grid-template-rows: 0fr/1fr` trick this used before: that's the more common CSS-only pattern
+ * for "animate to an unknown height", but animating between fractional `fr` units is inconsistently
+ * smooth across mobile browser engines specifically — some silently snap instead of transitioning,
+ * which reads as exactly the "springt" complaint this component's history was already trying to
+ * fix. max-height/opacity/margin are all plain, universally-interpolated properties.
  */
 const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, personalDoubleBreakdown, active = true }: CheckoutSuggestionProps) => {
   const { t } = useLanguage();
@@ -54,42 +61,40 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, perso
   const rateTooltip = showDoubleSpecific ? t("game.checkoutRateTooltipDouble") : t("game.checkoutRateTooltip");
 
   return (
-    <div className={`grid transition-all duration-200 ease-out ${route ? "grid-rows-[1fr] opacity-100 mt-3 mb-3" : "grid-rows-[0fr] opacity-0"}`}>
-      <div className="overflow-hidden">
-        {route && (
-          <div className="bg-muted/50 rounded-lg px-4 py-3 border border-primary/20">
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                Checkout · {playerName}
+    <div className={`overflow-hidden transition-[max-height,opacity,margin] duration-200 ease-out ${route ? "max-h-32 opacity-100 mt-3 mb-3" : "max-h-0 opacity-0 mt-0 mb-0"}`}>
+      {route && (
+        <div className="bg-muted/50 rounded-lg px-4 py-3 border border-primary/20">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              Checkout · {playerName}
+            </p>
+            {displayRate != null && (
+              <p className="text-xs text-muted-foreground" title={rateTooltip}>
+                {showDoubleSpecific ? doubleLabel : t("game.rateLabel")} <span className="text-foreground font-semibold">{displayRate.toFixed(0)}%</span>
               </p>
-              {displayRate != null && (
-                <p className="text-xs text-muted-foreground" title={rateTooltip}>
-                  {showDoubleSpecific ? doubleLabel : t("game.rateLabel")} <span className="text-foreground font-semibold">{displayRate.toFixed(0)}%</span>
-                </p>
-              )}
-            </div>
-            {/* The route itself is the whole point of this card — sized to read from throwing
-                distance, not just from up close, same as the scoreboard's own remaining-score
-                number. */}
-            <div className="flex items-center gap-2">
-              {route.map((dart, i) => (
-                <span key={i} className="flex items-center gap-2">
-                  <span className={`text-2xl font-bold ${
-                    dart.startsWith("D") ? "text-secondary" :
-                    dart.startsWith("T") ? "text-primary" :
-                    dart === "Bull" ? "text-accent" :
-                    "text-foreground"
-                  }`}>
-                    {dart}
-                  </span>
-                  {i < route.length - 1 && <span className="text-lg text-muted-foreground">→</span>}
-                </span>
-              ))}
-              <span className="text-sm text-muted-foreground ml-auto">{remaining}</span>
-            </div>
+            )}
           </div>
-        )}
-      </div>
+          {/* The route itself is the whole point of this card — sized to read from throwing
+              distance, not just from up close, same as the scoreboard's own remaining-score
+              number. */}
+          <div className="flex items-center gap-2">
+            {route.map((dart, i) => (
+              <span key={i} className="flex items-center gap-2">
+                <span className={`text-2xl font-bold ${
+                  dart.startsWith("D") ? "text-secondary" :
+                  dart.startsWith("T") ? "text-primary" :
+                  dart === "Bull" ? "text-accent" :
+                  "text-foreground"
+                }`}>
+                  {dart}
+                </span>
+                {i < route.length - 1 && <span className="text-lg text-muted-foreground">→</span>}
+              </span>
+            ))}
+            <span className="text-sm text-muted-foreground ml-auto">{remaining}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

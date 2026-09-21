@@ -534,4 +534,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Oyun kurulumunda artık \"X set üstünlüğü, her sette Y leg üstünlüğü\" seçilebiliyor — klasik profesyonel format. Skor tablosu ve sonuç ekranı, sadece mevcut setin leglerini değil set skorunu da gösteriyor.",
     },
   },
+  {
+    id: "2026-09-21-throw-correction-redesign",
+    date: "2026-09-21",
+    title: {
+      de: "Würfe korrigieren neu gestaltet",
+      en: "Redesigned throw correction",
+      fr: "Correction des lancers repensée",
+      pl: "Nowy sposób poprawiania rzutów",
+      nl: "Worpen corrigeren vernieuwd",
+      tr: "Atış düzeltme yeniden tasarlandı",
+    },
+    description: {
+      de: "Ein Wurf korrigieren geht jetzt über einen eigenen, klaren Dialog statt eines fummeligen Bearbeiten-Modus — der alte Zustand blieb manchmal über einen Spielerwechsel hinweg aktiv und konnte bei Bot-Partien den Spielstand durcheinanderbringen. Außerdem springen Checkout-Vorschlag und Zahlenfeld nicht mehr, wenn sich die Anzeige ändert.",
+      en: "Correcting a throw now opens a clear, dedicated dialog instead of a fiddly edit-mode toggle — the old toggle could stay active across a turn change and, in bot games, scramble the game state. The checkout suggestion and number pad also no longer jump when the display changes.",
+      fr: "Corriger un lancer ouvre désormais une boîte de dialogue claire et dédiée au lieu d'un mode d'édition capricieux — l'ancien bouton pouvait rester actif après un changement de joueur et, dans les parties contre un bot, perturber l'état de la partie. La suggestion de checkout et le pavé numérique ne sautent plus non plus lors des changements d'affichage.",
+      pl: "Poprawianie rzutu otwiera teraz osobne, przejrzyste okno zamiast niewygodnego trybu edycji — stary przełącznik mógł pozostać aktywny po zmianie gracza i w grach z botem psuć stan gry. Podpowiedź checkout i klawiatura numeryczna też już nie \"skaczą\" przy zmianach widoku.",
+      nl: "Een worp corrigeren opent nu een duidelijk, eigen dialoogvenster in plaats van een omslachtige bewerkmodus — de oude schakelaar kon actief blijven na een beurtwissel en bij potjes tegen een bot de spelstatus in de war brengen. Ook springen de checkout-suggestie en het cijferveld niet meer bij wisselende weergaves.",
+      tr: "Bir atışı düzeltmek artık zahmetli bir düzenleme modu yerine ayrı, net bir pencerede yapılıyor — eski anahtar, sıra değişiminden sonra da açık kalabiliyor ve bot ile oynanan oyunlarda oyun durumunu bozabiliyordu. Checkout önerisi ve tuş takımı da artık görünüm değiştiğinde zıplamıyor.",
+    },
+  },
 ];

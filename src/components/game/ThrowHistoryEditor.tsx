@@ -1,4 +1,4 @@
-import { Edit2, X } from "lucide-react";
+import { Edit2, Pencil, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -22,6 +22,12 @@ interface ThrowHistoryEditorProps {
   /** Hides the edit-mode toggle entirely, for viewing a past match's history where corrections no
    *  longer apply — pass editModeOn={false} and no-op callbacks alongside this from the caller. */
   readOnly?: boolean;
+  /** Only meaningful alongside readOnly: renders a "Korrigieren" button in the header (replacing
+   *  the hidden Bearbeiten toggle) that hands control back to the caller instead of flipping
+   *  editModeOn locally — Game.tsx uses this to open a dedicated correction dialog rather than
+   *  editing inline, see that dialog's own doc comment for why. Omit to render no header button
+   *  at all (MatchDetailDialog's plain past-match replay). */
+  onOpenCorrector?: () => void;
   /** X01 starting score for this leg — when given, each round also shows the running score
    *  LEFT after that round (not just what was thrown), via plain cumulative subtraction. Safe to
    *  do naively (no bust-rule replay needed): Game.tsx's bust handling already strips a busted
@@ -41,7 +47,7 @@ interface ThrowHistoryEditorProps {
  * closing after every single edit meant reopening it per dart, which was the actual complaint
  * this component exists to fix.
  */
-const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, openChipIdx, onOpenChipChange, onEditThrow, onDeleteThrow, readOnly, startingScore }: ThrowHistoryEditorProps) => {
+const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, openChipIdx, onOpenChipChange, onEditThrow, onDeleteThrow, readOnly, onOpenCorrector, startingScore }: ThrowHistoryEditorProps) => {
   const { t } = useLanguage();
   if (throws.length === 0) return null;
 
@@ -52,6 +58,11 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
         {!readOnly && (
           <button onClick={onToggleEditMode} className="text-xs text-primary flex items-center gap-1">
             <Edit2 className="w-3 h-3" /> {editModeOn ? t("game.done") : t("game.edit")}
+          </button>
+        )}
+        {readOnly && onOpenCorrector && (
+          <button onClick={onOpenCorrector} className="text-xs text-primary flex items-center gap-1">
+            <Pencil className="w-3 h-3" /> {t("game.correctThrows")}
           </button>
         )}
       </div>
