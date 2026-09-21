@@ -198,6 +198,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.highestScore": { de: "Höchster Score", en: "Highest score", fr: "Meilleur score", pl: "Najwyższy wynik", nl: "Hoogste score", tr: "En yüksek skor" },
   "stats.bestAverage": { de: "Bester Ø", en: "Best average", fr: "Meilleure moyenne", pl: "Najlepsza średnia", nl: "Beste gemiddelde", tr: "En iyi ortalama" },
   "stats.bestGameAverage": { de: "Bester Game-Ø", en: "Best game average", fr: "Meilleure moyenne en partie", pl: "Najlepsza średnia w grze", nl: "Beste potje-gemiddelde", tr: "En iyi oyun ortalaması" },
+  "stats.bestLegAverage": { de: "Beste Leg-Average", en: "Best leg average", fr: "Meilleure moyenne en leg", pl: "Najlepsza średnia w legu", nl: "Beste leg-gemiddelde", tr: "En iyi leg ortalaması" },
   "stats.mostWins": { de: "Meiste Siege", en: "Most wins", fr: "Plus de victoires", pl: "Najwięcej zwycięstw", nl: "Meeste overwinningen", tr: "En çok galibiyet" },
   "stats.highestFinish": { de: "Höchstes Finish", en: "Highest finish", fr: "Meilleur finish", pl: "Najwyższe zakończenie", nl: "Hoogste finish", tr: "En yüksek bitiriş" },
   "stats.bestCheckoutPct": { de: "Beste Checkout %", en: "Best checkout %", fr: "Meilleur % de checkout", pl: "Najlepszy % checkoutu", nl: "Beste checkout %", tr: "En iyi checkout %" },

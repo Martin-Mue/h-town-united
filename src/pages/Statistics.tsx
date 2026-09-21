@@ -122,7 +122,7 @@ const StatisticsPage = () => {
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
   const [confirmDeleteClipId, setConfirmDeleteClipId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo" | "one_eighties" | "highest_checkout" | "mpr" | "best_game_avg" | "fewest_darts">("average");
+  const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo" | "one_eighties" | "highest_checkout" | "mpr" | "best_game_avg" | "fewest_darts" | "best_leg_avg">("average");
   const [rankingFocusKey, setRankingFocusKey] = useState<typeof sortBy | null>(null);
   const [rankingViewMode, setRankingViewMode] = useState<"list" | "bar">("list");
   // Which stats appear in the bar view — independent from sortBy/rankingFocusKey (those stay
@@ -132,7 +132,7 @@ const StatisticsPage = () => {
   const [sharingCard, setSharingCard] = useState(false);
   const rankingStatKeys: (typeof sortBy)[] = [
     "points", "elo", "average", "games_won", "win_rate", "high_score",
-    "checkout", "one_eighties", "highest_checkout", "mpr", "best_game_avg", "fewest_darts",
+    "checkout", "one_eighties", "highest_checkout", "mpr", "best_game_avg", "best_leg_avg", "fewest_darts",
   ];
   const [compareP1, setCompareP1] = useState<string>("");
   const [compareP2, setCompareP2] = useState<string>("");
@@ -445,6 +445,35 @@ const StatisticsPage = () => {
     }, { name: "-", val: 0 });
   }, [playerShortestLegById, players]);
 
+  // Best single-leg 3-dart average, plus how many darts that particular leg took — same
+  // X01-only/filtered-games/real-player-id scope as playerShortestLegById above, but eligible
+  // even if the leg was LOST (matches bestGameAvg/highestGameAvg's own precedent: an average
+  // record isn't gated on winning the way "darts to checkout" necessarily is) and with no minimum
+  // dart count either, same reasoning as those two.
+  const playerBestLegAvgById = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const modeById = new Map(games.map((g) => [g.id, g.mode]));
+    const result: Record<string, { avg: number; darts: number }> = {};
+    gameLegs.forEach((leg) => {
+      if (!filteredIds.has(leg.game_id) || !leg.player_id) return;
+      if (modeById.get(leg.game_id) === "cricket") return;
+      if (!Array.isArray(leg.throws) || leg.throws.length === 0) return;
+      const avg = average(leg.throws);
+      if (result[leg.player_id] === undefined || avg > result[leg.player_id].avg) {
+        result[leg.player_id] = { avg, darts: leg.throws.length };
+      }
+    });
+    return result;
+  }, [gameLegs, filteredGames, games]);
+
+  const bestLegAvg = useMemo(() => {
+    return Object.entries(playerBestLegAvgById).reduce((best, [id, entry]) => {
+      const p = players.find((pl) => pl.id === id);
+      if (!p) return best;
+      return entry.avg > best.val ? { name: p.name, val: entry.avg, darts: entry.darts } : best;
+    }, { name: "-", val: 0, darts: 0 });
+  }, [playerBestLegAvgById, players]);
+
   // Cricket-specific stats (MPR, hit rate) — separate from the X01-only checkout/first-9 bucket above.
   const cricketByPlayer = useMemo(() => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
@@ -630,6 +659,7 @@ const StatisticsPage = () => {
       }
       if (sortBy === "mpr") return (cricketByPlayer[b.id]?.cricket.mpr ?? 0) - (cricketByPlayer[a.id]?.cricket.mpr ?? 0);
       if (sortBy === "best_game_avg") return (playerBestGameAvgById[b.id] ?? 0) - (playerBestGameAvgById[a.id] ?? 0);
+      if (sortBy === "best_leg_avg") return (playerBestLegAvgById[b.id]?.avg ?? 0) - (playerBestLegAvgById[a.id]?.avg ?? 0);
       if (sortBy === "fewest_darts") {
         // Fewer is better here, unlike every other stat above — nobody's own value at all
         // (never won a leg yet) sorts to the very end instead of tying for first at 0.
@@ -639,7 +669,7 @@ const StatisticsPage = () => {
       }
       return (b.elo_rating ?? 1000) - (a.elo_rating ?? 1000); // sortBy === "elo", the last remaining case
     });
-  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive, player180TotalById, cricketByPlayer, playerBestGameAvgById, playerShortestLegById, leaguePointsByPlayer]);
+  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive, player180TotalById, cricketByPlayer, playerBestGameAvgById, playerShortestLegById, playerBestLegAvgById, leaguePointsByPlayer]);
 
   const pagedLeaderboard = usePagedList(leaderboard);
 
@@ -659,6 +689,7 @@ const StatisticsPage = () => {
       case "highest_checkout": return t("stats.highestFinish");
       case "mpr": return "MPR";
       case "best_game_avg": return t("stats.bestGameAverage");
+      case "best_leg_avg": return t("stats.bestLegAverage");
       case "fewest_darts": return t("stats.fewestDartsToCheckout");
     }
   };
@@ -679,6 +710,7 @@ const StatisticsPage = () => {
       case "highest_checkout": return advancedByPlayer[p.id]?.checkout.highestCheckout ?? 0;
       case "mpr": return (cricketByPlayer[p.id]?.cricket.mpr ?? 0).toFixed(2);
       case "best_game_avg": return (playerBestGameAvgById[p.id] ?? 0).toFixed(1);
+      case "best_leg_avg": return (playerBestLegAvgById[p.id]?.avg ?? 0).toFixed(1);
       case "fewest_darts": return playerShortestLegById[p.id] ?? "–";
       default: return Math.round(p.elo_rating ?? 1000); // elo
     }
@@ -1607,6 +1639,7 @@ const StatisticsPage = () => {
               { labelKey: "stats.highestScore", value: clubStats.bestHighscore.val, sub: clubStats.bestHighscore.name, icon: Trophy, tone: "accent" as const, sortKey: "high_score" as const },
               { labelKey: "stats.bestAverage", value: clubStats.bestAvg.val.toFixed(1), sub: clubStats.bestAvg.name, icon: Flame, tone: "destructive" as const, sortKey: "average" as const },
               { labelKey: "stats.bestGameAverage", value: clubStats.highestGameAvg.val.toFixed(1), sub: clubStats.highestGameAvg.name, icon: Zap, tone: "secondary" as const, sortKey: "best_game_avg" as const },
+              { labelKey: "stats.bestLegAverage", value: bestLegAvg.val ? bestLegAvg.val.toFixed(1) : "-", sub: bestLegAvg.val ? `${bestLegAvg.name} · ${bestLegAvg.darts} Darts` : "-", icon: TrendingUp, tone: "primary" as const, sortKey: "best_leg_avg" as const },
               { labelKey: "stats.mostWins", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, tone: "primary" as const, sortKey: "games_won" as const },
               { labelKey: "stats.highestFinish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, tone: "accent" as const, sortKey: "highest_checkout" as const },
               { labelKey: "stats.bestCheckoutPct", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, tone: "secondary" as const, sortKey: "checkout" as const },
@@ -1734,6 +1767,7 @@ const StatisticsPage = () => {
                     <SelectItem value="highest_checkout">{t("stats.highestFinish")}</SelectItem>
                     <SelectItem value="mpr">MPR</SelectItem>
                     <SelectItem value="best_game_avg">{t("stats.bestGameAverage")}</SelectItem>
+                    <SelectItem value="best_leg_avg">{t("stats.bestLegAverage")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1932,6 +1966,20 @@ const StatisticsPage = () => {
                   <StatTile label={t("stats.worstGameAverage")} value={playerDetailStats.totalGames > 0 ? playerDetailStats.worstGameAvg.toFixed(1) : "–"} tone="destructive" />
                 </SectionCard>
               </div>
+
+              {/* Best single LEG average (as opposed to the two game-level tiles above) — only
+                  rendered once this player actually has an eligible leg, same reasoning as
+                  bestGameAvg/worstGameAvg's own "totalGames > 0" guard just above: 0 would
+                  otherwise be indistinguishable from a genuine 0.0 average. */}
+              {playerBestLegAvgById[playerDetailStats.player.id] && (
+                <SectionCard className="mb-4">
+                  <StatTile
+                    label={`${t("stats.bestLegAverage")} · ${playerBestLegAvgById[playerDetailStats.player.id].darts} Darts`}
+                    value={playerBestLegAvgById[playerDetailStats.player.id].avg.toFixed(1)}
+                    tone="primary"
+                  />
+                </SectionCard>
+              )}
 
               {/* Checkout & first-9 (from dart-by-dart data — only available for games played since this was added) */}
               {statsDetailMode === "pro" && advancedByPlayer[playerDetailStats.player.id] && (
