@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -1670,6 +1670,11 @@ const GamePage = () => {
     // undoLastDart clears this. The corrector is only reachable on a human's own turn, but this
     // costs nothing and means no future call site can reintroduce the desync bug this once was.
     botPlanRef.current = null;
+    // A correction is a mutation to `game` like any other — pushing it onto the SAME undo stack a
+    // real throw uses means the corrector dialog's own Undo button (and the main toolbar one) can
+    // step back a correction exactly like any other action, rather than corrections being a
+    // dead-end you can only "fix" by re-editing back to what you remember it was.
+    saveUndo();
     // If the deleted dart belonged to the current player's still-open round (one of the last
     // `dartsThisRound` entries), the round's dart counter must shrink with it — otherwise the
     // 3-dot counter and the "this round" scorecard chip stay one dart ahead of what's actually
@@ -1716,6 +1721,8 @@ const GamePage = () => {
     botPlanRef.current = null;
 
     if (game.mode === "cricket") {
+      // See deleteThrow's own comment on saveUndo — same reasoning applies here.
+      saveUndo();
       setGame((prev) => {
         if (!prev) return prev;
         const newThrows = [...prev.currentLeg.throws[playerIdx]];
@@ -1750,6 +1757,9 @@ const GamePage = () => {
       return;
     }
 
+    // Only pushed once the edit is confirmed valid — an edit the bust-check just rejected never
+    // touched `game` at all, so it has nothing to undo and shouldn't cost an undo-stack entry.
+    saveUndo();
     remainingRef.current[teamIdx] = newRemaining;
     setGame((prev) => {
       if (!prev) return prev;
@@ -2895,7 +2905,7 @@ const GamePage = () => {
               onEditThrow={() => {}}
               onDeleteThrow={() => {}}
               readOnly
-              onOpenCorrector={currentPlayer?.isBot ? undefined : () => setCorrectorOpen(true)}
+              onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
             />
           </div>
         </>
@@ -3032,7 +3042,7 @@ const GamePage = () => {
                 onEditThrow={() => {}}
                 onDeleteThrow={() => {}}
                 readOnly
-                onOpenCorrector={currentPlayer?.isBot ? undefined : () => setCorrectorOpen(true)}
+                onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
               />
             </div>
           </div>
@@ -3043,10 +3053,13 @@ const GamePage = () => {
           state (editingChipIdx is the only piece carried over, and it's harmless on its own)
           means there's no page-level "edit mode" flag left to desync from whose turn it actually
           is; see correctorOpen's own doc comment. Only ever opened for the CURRENT player (the
-          "Korrigieren" entry point above is hidden outright during a bot's turn), so this always
-          targets currentThrows/activeIdx, same data the read-only card already shows. */}
+          "Korrigieren" entry point above is hidden outright during a bot's turn, and during an
+          online match for the same reason the toolbar's own Undo button is — see onlineMatchId),
+          so this always targets currentThrows/activeIdx, same data the read-only card already
+          shows. hideClose: "Fertig" (wired to close the dialog, below) is the one explicit way to
+          leave — no separate X to compete with it, per Martin's 2026-09-21 request. */}
       <Dialog open={correctorOpen} onOpenChange={setCorrectorOpen}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent hideClose className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display uppercase text-base">
               {t("game.correctThrowsTitle")} · {currentPlayerName}
@@ -3056,13 +3069,28 @@ const GamePage = () => {
             throws={currentThrows}
             playerName={currentPlayerName}
             editModeOn
-            onToggleEditMode={() => {}}
+            onToggleEditMode={() => setCorrectorOpen(false)}
             openChipIdx={editingChipIdx}
             onOpenChipChange={setEditingChipIdx}
             onEditThrow={(throwIdx, base, mul) => editThrowValue(activeIdx, throwIdx, base, mul)}
             onDeleteThrow={(throwIdx) => deleteThrow(activeIdx, throwIdx)}
             startingScore={isCricket ? undefined : effectiveStartScore(game.startScore, game.players, activeIdx, game.teams)}
           />
+          {/* Undo reaches in here too — the toolbar's own Undo button sits behind this modal's
+              overlay and can't be clicked while it's open, but a correction is just one more
+              mutation on the same undo stack a real throw uses (see deleteThrow/editThrowValue's
+              own saveUndo calls), so it needs to be reachable from wherever a mutation just
+              happened, not only from the screen the dialog is currently covering. */}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={undoLastDart}
+              disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId}
+              className="gap-1.5"
+            >
+              <Undo2 className="w-4 h-4" /> {t("game.undo")}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -119,9 +119,15 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
           grid and "Eintippen" field already use, so it only ever shows up where a visit-total
           submission is actually wired up. Deliberately requires an explicit tap to confirm before
           anything is submitted (see useVoiceScoring's own doc comment) — a misheard "80" instead
-          of "180" must never silently corrupt a real leg the way a mistapped button already can't. */}
-      {onQuickRound && voice.supported && !midVisit && (
-        <div className="mb-2.5">
+          of "180" must never silently corrupt a real leg the way a mistapped button already can't.
+          Stays mounted (invisible, not removed) across midVisit instead of unmounting — same
+          "reserve the space" fix as the mode-lock hint just above: this whole block disappearing
+          the instant the first dart of a round landed, then popping back after the round, was the
+          other half of the "scoreboard jumps" report (voice.supported/isDisabled aren't affected
+          by hiding it this way — useVoiceScoring's own recognition session lives in the hook,
+          called unconditionally above, not tied to whether this JSX is visible). */}
+      {onQuickRound && voice.supported && (
+        <div className={`mb-2.5 ${midVisit ? "invisible" : ""}`}>
           {voice.candidate !== null ? (
             <div className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm border ${voiceCandidateValid ? "bg-primary/10 border-primary/30" : "bg-destructive/10 border-destructive/30"}`}>
               <span className="font-display text-base">
