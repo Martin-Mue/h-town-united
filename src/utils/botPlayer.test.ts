@@ -47,7 +47,7 @@ describe("rollConfigForLevel", () => {
       const weakest = configForAverage(min);
       const sharpest = configForAverage(max);
       for (let i = 0; i < 30; i++) {
-        const rolled = rollConfigForLevel(level);
+        const rolled = rollConfigForLevel(level).config;
         expect(rolled.miss).toBeLessThanOrEqual(weakest.miss);
         expect(rolled.miss).toBeGreaterThanOrEqual(sharpest.miss);
         expect(rolled.doubleHitChance).toBeGreaterThanOrEqual(weakest.doubleHitChance);
@@ -61,7 +61,7 @@ describe("rollConfigForLevel", () => {
     // already (legendary's 80-100 range collapsing to ~89 for anything above it, before
     // LEGENDARY_CEILING was added as a real interpolation target for the top half).
     const [min, max] = BOT_LEVEL_RANGES.legendary;
-    const rolls = Array.from({ length: 40 }, () => rollConfigForLevel("legendary"));
+    const rolls = Array.from({ length: 40 }, () => rollConfigForLevel("legendary").config);
     const weakest = configForAverage(min);
     const sharpest = configForAverage(max);
     const span = weakest.miss - sharpest.miss;
@@ -82,10 +82,9 @@ describe("elite/legendary miss realism (Round 3 Rang 11)", () => {
   });
 
   it("elite and legendary complete-miss far less often than their raw `miss` probability, because most of it now lands on a neighboring single instead of scoring zero", () => {
-    // Elite/legendary's tuned miss fields (0.121 / 0.094) are themselves HIGHER than their
-    // pre-Rang-11 values (0.105 / 0.075) — see LEVEL_CONFIG's own doc comment — precisely because
-    // most of that probability mass no longer means a true zero. The genuinely-scores-zero rate
-    // should come out well below both the old AND new raw miss numbers.
+    // Elite/legendary's raw miss fields (0.113 / 0.084 as of the 2026-09-21 retune) still mean
+    // mostly a near-miss single rather than a true zero, same as the original Round-3-Rang-11
+    // change this test guards — see LEVEL_CONFIG's own doc comment.
     const eliteRate = zeroDartRate("elite");
     const legendaryRate = zeroDartRate("legendary");
     expect(eliteRate).toBeGreaterThan(0);
@@ -96,10 +95,11 @@ describe("elite/legendary miss realism (Round 3 Rang 11)", () => {
     expect(legendaryRate).toBeLessThan(eliteRate);
   });
 
-  it("keeps elite/legendary's own measured 3-dart average close to its documented anchor despite the miss-model change", () => {
-    // The whole point of retuning `miss`/`aimedTriple` alongside missNeighborChance was to hold
-    // the ladder's documented averages (~71 elite, ~89 legendary) steady — this is a regression
-    // guard against that retuning drifting apart from the realism change in a future edit.
+  it("keeps elite/legendary's own measured 3-dart average close to its documented anchor", () => {
+    // Regression guard for LEVEL_CONFIG drifting apart from the scoring-only anchors documented
+    // at the top of this file (~76.6 elite, ~98.1 legendary as of the 2026-09-21 retune) — this is
+    // the SCORING-ONLY average (HUGE_REMAINING, no checkout phase), not the lower real-full-leg
+    // average that retune was actually about; see that same doc comment for why they differ.
     function threeDartAverage(level: "elite" | "legendary", visits: number): number {
       let points = 0, darts = 0;
       for (let i = 0; i < visits; i++) {
@@ -108,9 +108,9 @@ describe("elite/legendary miss realism (Round 3 Rang 11)", () => {
       }
       return (points / darts) * 3;
     }
-    expect(threeDartAverage("elite", 4000)).toBeGreaterThan(67);
-    expect(threeDartAverage("elite", 4000)).toBeLessThan(75);
-    expect(threeDartAverage("legendary", 4000)).toBeGreaterThan(85);
-    expect(threeDartAverage("legendary", 4000)).toBeLessThan(94);
+    expect(threeDartAverage("elite", 4000)).toBeGreaterThan(73);
+    expect(threeDartAverage("elite", 4000)).toBeLessThan(80);
+    expect(threeDartAverage("legendary", 4000)).toBeGreaterThan(94);
+    expect(threeDartAverage("legendary", 4000)).toBeLessThan(101);
   });
 });
