@@ -2,7 +2,7 @@ import { Edit2, Pencil, Plus, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
-import type { DartThrow } from "@/utils/dartStats";
+import { isHoleThrow, type DartThrow } from "@/utils/dartStats";
 
 const NUMBERS = Array.from({ length: 20 }, (_, i) => i + 1);
 
@@ -86,32 +86,49 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
       <div className="space-y-1">
         {Array.from({ length: Math.ceil(throws.length / 3) }, (_, roundIdx) => {
           const roundThrows = throws.slice(roundIdx * 3, roundIdx * 3 + 3);
+          // A round with an unfilled hole (see isHoleThrow) isn't really complete even though it
+          // occupies all 3 array slots — its total/running-remaining would be misleadingly LOW
+          // (the hole itself always contributes 0) until it's filled back in, so both display as
+          // "..." exactly like a genuinely-partial round does.
+          const hasHole = roundThrows.some(isHoleThrow);
+          const roundComplete = roundThrows.length === 3 && !hasHole;
           const roundTotal = roundThrows.reduce((s, dart) => s + dart.points, 0);
-          const is180 = roundTotal === 180 && roundThrows.length === 3;
+          const is180 = roundTotal === 180 && roundComplete;
           // Running score LEFT after this round — plain cumulative subtraction over everything
           // thrown so far. Safe without any bust-rule replay: see startingScore's own doc comment
           // above (a busted visit's darts never make it into `throws` to begin with).
-          const remainingAfterRound = startingScore === undefined || roundThrows.length < 3 ? undefined
+          const remainingAfterRound = startingScore === undefined || !roundComplete ? undefined
             : startingScore - throws.slice(0, roundIdx * 3 + roundThrows.length).reduce((s, dart) => s + dart.points, 0);
           return (
             <div key={roundIdx} className={`flex items-center gap-2.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
               <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
               {roundThrows.map((dart, i) => {
                 const globalIdx = roundIdx * 3 + i;
-                const chip = (
+                const isHole = isHoleThrow(dart);
+                const chip = isHole ? null : (
                   <span className={`inline-block px-2.5 py-1 rounded text-sm font-mono ${
                     dart.multiplier === 3 ? "bg-primary/20 text-primary" :
                     dart.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
-                  }`}>
+                  } ${dart.corrected ? "ring-2 ring-amber-500/70" : ""}`}
+                    title={dart.corrected ? t("game.correctedMarker") : undefined}
+                  >
                     {dart.multiplier === 3 ? "T" : dart.multiplier === 2 ? "D" : ""}{dart.baseValue === 50 ? t("game.bull") : dart.baseValue === 0 ? t("game.miss") : dart.baseValue}
                   </span>
+                );
+                const holeButton = (
+                  <button title={t("game.addThrow")} aria-label={t("game.addThrow")}
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-dashed border-primary/40 text-primary hover:bg-primary/10">
+                    <Plus className="w-4 h-4" />
+                  </button>
                 );
                 return (
                   <div key={globalIdx}>
                     {editModeOn ? (
                       <Popover open={openChipIdx === globalIdx} onOpenChange={(open) => onOpenChipChange(open ? globalIdx : null)}>
                         <PopoverTrigger asChild>
-                          <button title={t("game.changeValue")} aria-label={t("game.changeValue")}>{chip}</button>
+                          {isHole ? holeButton : (
+                            <button title={t("game.changeValue")} aria-label={t("game.changeValue")}>{chip}</button>
+                          )}
                         </PopoverTrigger>
                         <PopoverContent className="w-64 p-2" align="start">
                           <div className="grid grid-cols-5 gap-1 mb-1.5">
@@ -135,12 +152,21 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
                             <button onClick={() => onEditThrow(globalIdx, 25, 1)} className="flex-1 py-1.5 rounded-md text-xs font-bold bg-accent/15 text-accent hover:bg-accent/25">{t("game.bull")}</button>
                             <button onClick={() => onEditThrow(globalIdx, 25, 2)} className="flex-1 py-1.5 rounded-md text-xs font-bold bg-accent/15 text-accent hover:bg-accent/25">{t("game.bullseye")}</button>
                           </div>
-                          <Button variant="destructive" size="sm" onClick={() => onDeleteThrow(globalIdx)} className="w-full gap-1.5">
-                            <X className="w-3.5 h-3.5" /> {t("game.deleteThrow")}
-                          </Button>
+                          {/* Nothing real to delete for a hole — deleting IS what created it. */}
+                          {!isHole && (
+                            <Button variant="destructive" size="sm" onClick={() => onDeleteThrow(globalIdx)} className="w-full gap-1.5">
+                              <X className="w-3.5 h-3.5" /> {t("game.deleteThrow")}
+                            </Button>
+                          )}
                         </PopoverContent>
                       </Popover>
-                    ) : chip}
+                    ) : (
+                      // Read-only view: a hole here would mean a leg finished without the
+                      // correction that made it ever being resolved — shouldn't normally happen,
+                      // but shown as an inert placeholder rather than the interactive-looking "+"
+                      // if it ever does.
+                      isHole ? <span className="inline-flex w-8 h-8 rounded-full border border-dashed border-muted-foreground/30" /> : chip
+                    )}
                   </div>
                 );
               })}
@@ -186,7 +212,7 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
                 </Popover>
               )}
               <span className={`text-xs font-display ml-auto ${is180 ? "text-accent" : "text-muted-foreground"}`}>
-                {roundThrows.length === 3 ? roundTotal : "..."}{is180 && " 🎯"}
+                {roundComplete ? roundTotal : "..."}{is180 && " 🎯"}
                 {remainingAfterRound !== undefined && (
                   <span className="text-muted-foreground/60 font-normal"> ({Math.max(0, remainingAfterRound)})</span>
                 )}

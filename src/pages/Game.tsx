@@ -66,6 +66,8 @@ import {
   isAchievableVisitTotal,
   segmentCount,
   SEGMENT_NUMBERS,
+  isHoleThrow,
+  HOLE_THROW,
   type StatBundle,
   type CheckoutDoubleBreakdown,
 } from "@/utils/dartStats";
@@ -595,6 +597,10 @@ const GamePage = () => {
   // leg). Never explicitly cleared between legs (a new leg number is simply a cache miss, which
   // rolls its own fresh entry) — only reset on a genuinely new game, same as botPlanRef.
   const botLegConfigRef = useRef<Record<string, LevelConfig>>({});
+  // The average each bot PLAYER's most recent leg-roll targeted, keyed by player index — fed back
+  // into rollConfigForLevel as `previousAvg` so this leg's roll drifts from last leg's instead of
+  // being independent, per rollConfigForLevel's own doc comment. Reset alongside botLegConfigRef.
+  const botPrevAvgRef = useRef<Record<number, number>>({});
   const [checkoutRates, setCheckoutRates] = useState<Record<string, number>>({});
   // Round 3 Rang 16: per-player, per-double hit rates (e.g. "your D16 rate") alongside the flat
   // overall checkoutRates above — see CheckoutSuggestion.tsx's personalDoubleBreakdown prop doc
@@ -939,6 +945,7 @@ const GamePage = () => {
     setUndoStack([]);
     botPlanRef.current = null;
     botLegConfigRef.current = {};
+    botPrevAvgRef.current = {};
     pendingGameIdRef.current = crypto.randomUUID();
     setQueuedOffline(false);
     if (warmupEnabled) {
@@ -1688,13 +1695,19 @@ const GamePage = () => {
     // If the deleted dart belonged to the current player's still-open round (one of the last
     // `dartsThisRound` entries), the round's dart counter must shrink with it — otherwise the
     // 3-dot counter and the "this round" scorecard chip stay one dart ahead of what's actually
-    // left, and the next thrown dart lands at the wrong position in the round.
+    // left, and the next thrown dart lands at the wrong position in the round. A PAST round
+    // (anything else) instead leaves a hole in place — see isHoleThrow's own doc comment for why:
+    // splicing it out would shift every later round's darts back by one array position, silently
+    // reshuffling which round they visually belong to, exactly the "übrige Würfe rücken nach"
+    // complaint this replaced. The live round has no "later rounds" to protect, so shrinking it
+    // (the original behavior) stays correct and simpler there.
     let isCurrentRoundThrow = false;
     setGame((prev) => {
       if (!prev) return prev;
       const throws = [...prev.currentLeg.throws[playerIdx]];
       isCurrentRoundThrow = playerIdx === prev.currentPlayerIndex && throwIndex >= throws.length - dartsThisRound;
-      const removed = throws.splice(throwIndex, 1)[0];
+      const removed = isCurrentRoundThrow ? throws.splice(throwIndex, 1)[0] : throws[throwIndex];
+      if (!isCurrentRoundThrow) throws[throwIndex] = HOLE_THROW;
       const updatedLeg: LegState = { ...prev.currentLeg, throws: [...prev.currentLeg.throws], remaining: [...prev.currentLeg.remaining] };
       updatedLeg.throws[playerIdx] = throws;
       if (prev.mode === "cricket") {
@@ -1702,7 +1715,8 @@ const GamePage = () => {
         // below — whether a hit still scored points depended on whether every opponent had
         // already closed that number AT THE TIME, which a simple point reversal can't undo
         // correctly. Replay the whole leg from scratch instead — see replayCricketState's own
-        // comment for why this is a correctness requirement, not just thoroughness.
+        // comment for why this is a correctness requirement, not just thoroughness (it already
+        // knows to skip a hole rather than treat it as a real dart).
         const cricket = replayCricketState(updatedLeg.throws, prev.currentLeg.startingPlayerIndex, prev.teams, prev.cricketNumbers ?? CRICKET_NUMBERS);
         return { ...prev, currentLeg: updatedLeg, cricket };
       }
@@ -1736,7 +1750,7 @@ const GamePage = () => {
       setGame((prev) => {
         if (!prev) return prev;
         const newThrows = [...prev.currentLeg.throws[playerIdx]];
-        newThrows[throwIndex] = { baseValue: newBase, multiplier: newMultiplier, points: newPoints };
+        newThrows[throwIndex] = { baseValue: newBase, multiplier: newMultiplier, points: newPoints, corrected: true };
         const updatedLeg: LegState = { ...prev.currentLeg, throws: [...prev.currentLeg.throws] };
         updatedLeg.throws[playerIdx] = newThrows;
         // Cricket marks/points can't be patched incrementally — see deleteThrow's own comment
@@ -1774,7 +1788,7 @@ const GamePage = () => {
     setGame((prev) => {
       if (!prev) return prev;
       const newThrows = [...prev.currentLeg.throws[playerIdx]];
-      newThrows[throwIndex] = { baseValue: newBase, multiplier: newMultiplier, points: newPoints };
+      newThrows[throwIndex] = { baseValue: newBase, multiplier: newMultiplier, points: newPoints, corrected: true };
       const updatedLeg: LegState = { ...prev.currentLeg, throws: [...prev.currentLeg.throws], remaining: [...prev.currentLeg.remaining] };
       updatedLeg.throws[playerIdx] = newThrows;
       updatedLeg.remaining[teamIdx] = newRemaining;
@@ -1864,6 +1878,7 @@ const GamePage = () => {
     if (botTimerRef.current) { clearTimeout(botTimerRef.current); botTimerRef.current = null; }
     botPlanRef.current = null;
     botLegConfigRef.current = {};
+    botPrevAvgRef.current = {};
     clearActiveGameSnapshot();
     setPhase("setup"); setGame(null); setGameSaved(false); setShowDetailedStats(false);
     setSelectedLegTab("all");
@@ -1933,9 +1948,15 @@ const GamePage = () => {
       // Not a Geist-bot: still don't play the exact same average every leg — a real opponent
       // has better and worse legs too. Rolled once per (player, leg) and cached, not re-rolled
       // per dart, so a leg stays internally consistent while the NEXT leg gets its own fresh
-      // "how's this leg going for them" roll. See rollConfigForLevel's own doc comment.
+      // "how's this leg going for them" roll, drifting from THIS player's last one rather than an
+      // independent pick — see rollConfigForLevel's own doc comment.
       const legKey = `${idx}-${game.currentLeg.legNumber}`;
-      botConfig = botLegConfigRef.current[legKey] ??= rollConfigForLevel(level);
+      if (!(legKey in botLegConfigRef.current)) {
+        const roll = rollConfigForLevel(level, botPrevAvgRef.current[idx]);
+        botLegConfigRef.current[legKey] = roll.config;
+        botPrevAvgRef.current[idx] = roll.avg;
+      }
+      botConfig = botLegConfigRef.current[legKey];
     }
 
     botTimerRef.current = setTimeout(() => {

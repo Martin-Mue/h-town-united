@@ -16,6 +16,11 @@ export interface DartThrow {
   /** Tip position in board-relative unit coordinates (0,0 = bull, radius ~1 = double edge), camera-scored throws only. Camera-framing-independent, so safe to aggregate across games/devices for a throw heatmap. */
   boardU?: number;
   boardV?: number;
+  /** Set when this dart's value was set via the throw corrector (a genuine edit, or filling in a
+   *  hole left by deleting a dart from a past round) rather than actually thrown live — lets
+   *  ThrowHistoryEditor mark it visually so a corrected value stays distinguishable from what was
+   *  really thrown, instead of looking identical to the rest of the round. */
+  corrected?: boolean;
 }
 
 /** A single player slot in the match (human or bot) */

@@ -17,7 +17,21 @@ export interface DartThrow {
   /** Tip position in board-relative unit coordinates (0,0 = bull, radius ~1 = double edge), camera-scored throws only. */
   boardU?: number;
   boardV?: number;
+  /** Set when this dart's value was set via the throw corrector rather than thrown live — see the
+   *  same field on types/game.ts's own DartThrow for why. */
+  corrected?: boolean;
 }
+
+/** A placeholder left in place of a dart deleted from a PAST (already-complete) round via the
+ *  throw corrector — not a real thrown dart. -1 is never a valid baseValue (real values are
+ *  0/1-20/25/50), so it can't collide with a genuine miss (baseValue 0, a real dart that scored
+ *  nothing). Written in place rather than spliced out specifically so every OTHER round keeps its
+ *  exact original grouping — rounds are chunked purely by array position (see ThrowHistoryEditor),
+ *  so removing an element would silently reshuffle every later dart into the wrong-looking round.
+ *  Meant to be short-lived: filled back in via the same edit path a real dart's value uses (see
+ *  Game.tsx's onEditThrow/deleteThrow), never intentionally left in a saved/finished leg. */
+export const isHoleThrow = (t: DartThrow): boolean => t.baseValue === -1;
+export const HOLE_THROW: DartThrow = { baseValue: -1, multiplier: 1, points: 0 };
 
 /** Darts grouped into visits of up to 3. */
 const visits = (throws: DartThrow[]): DartThrow[][] => {

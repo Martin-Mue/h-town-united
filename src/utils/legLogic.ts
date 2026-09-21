@@ -1,6 +1,7 @@
 import type { GameState, LegState, DartThrow, CricketPlayerState, TeamSlot } from "@/types/game";
 import { createLegState, createCricketState } from "@/utils/gameStateFactory";
 import { teamIndexFor } from "@/utils/teamUtils";
+import { isHoleThrow } from "@/utils/dartStats";
 
 /**
  * Round 3 Rang 12: split out of Game.tsx verbatim (previously four module-level functions sitting
@@ -174,6 +175,11 @@ export function replayCricketState(
     const myState = cricket[teamIdx];
     for (let i = 0; i < take; i++) {
       const d = arr[cursors[active] + i];
+      // A hole (a dart deleted from a past round via the corrector, not yet refilled — see
+      // isHoleThrow's own doc comment) occupies a real slot in the array so every OTHER round
+      // keeps its position, but it isn't a real dart: it had no effect when "thrown" and gets
+      // none here either. The turn still advances past it below, same as for a real dart.
+      if (isHoleThrow(d)) continue;
       const others = cricket.filter((_, j) => j !== teamIdx);
       const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
       applyCricketDart(myState, others, cricketNumbers, targetNumber, d.baseValue, d.multiplier);

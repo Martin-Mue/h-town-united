@@ -442,6 +442,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.changeValue": { de: "Wert ändern", en: "Change value", fr: "Modifier la valeur", pl: "Zmień wartość", nl: "Waarde wijzigen", tr: "Değeri değiştir" },
   "game.deleteThrow": { de: "Wurf löschen", en: "Delete throw", fr: "Supprimer le lancer", pl: "Usuń rzut", nl: "Worp verwijderen", tr: "Atışı sil" },
   "game.addThrow": { de: "Wurf hinzufügen", en: "Add throw", fr: "Ajouter un lancer", pl: "Dodaj rzut", nl: "Worp toevoegen", tr: "Atış ekle" },
+  "game.correctedMarker": { de: "Nachträglich korrigiert", en: "Corrected after the fact", fr: "Corrigé après coup", pl: "Poprawione później", nl: "Achteraf gecorrigeerd", tr: "Sonradan düzeltildi" },
   "game.correctThrows": { de: "Korrigieren", en: "Correct", fr: "Corriger", pl: "Popraw", nl: "Corrigeren", tr: "Düzelt" },
   "game.correctThrowsTitle": { de: "Wurf korrigieren", en: "Correct throws", fr: "Corriger les lancers", pl: "Popraw rzuty", nl: "Worpen corrigeren", tr: "Atışları düzelt" },
   "game.miss": { de: "Miss", en: "Miss", fr: "Miss", pl: "Miss", nl: "Miss", tr: "Iska" },
