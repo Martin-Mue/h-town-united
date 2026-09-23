@@ -60,6 +60,9 @@ interface GameRecord {
     /** Legacy shape from before detail_stats covered every player, not just the top 2. */
     player1?: DetailStat | null;
     player2?: DetailStat | null;
+    /** See gameSync.ts — rides along here so per-leg/per-game stat views can tell a doubles/team
+     *  match apart from a 1v1 or free-for-all one without a schema migration. */
+    isTeamGame?: boolean;
   } | null;
 }
 
@@ -422,13 +425,22 @@ const StatisticsPage = () => {
   // Same X01-only/filtered-games/real-player-id scope as advancedByPlayer above; only WON legs
   // count (a checkout, by definition, means finishing the leg) — a lost leg has no "darts to
   // checkout" of its own. 0 doubles as "no won leg yet" since a real checkout is never 0 darts.
+  //
+  // Team games excluded entirely: in a doubles leg `won` is true for BOTH teammates (see
+  // gameSync.ts's `won: leg.winnerIndex === teamIndexFor(...)`), but each player's own `throws`
+  // only ever holds THEIR OWN turns within that shared leg (teamUtils.ts — "throws stay per
+  // individual player"). Crediting whichever teammate happened to have the smaller personal dart
+  // count with a "checkout in N darts" record is meaningless — they may not have thrown the
+  // finishing dart at all, just had fewer turns before their partner did.
   const playerShortestLegById = useMemo(() => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
     const modeById = new Map(games.map((g) => [g.id, g.mode]));
+    const teamGameIds = new Set(games.filter((g) => g.detail_stats?.isTeamGame).map((g) => g.id));
     const result: Record<string, number> = {};
     gameLegs.forEach((leg) => {
       if (!filteredIds.has(leg.game_id) || !leg.player_id || !leg.won) return;
       if (modeById.get(leg.game_id) === "cricket") return;
+      if (teamGameIds.has(leg.game_id)) return;
       if (!Array.isArray(leg.throws) || leg.throws.length === 0) return;
       if (result[leg.player_id] === undefined || leg.throws.length < result[leg.player_id]) {
         result[leg.player_id] = leg.throws.length;
@@ -450,13 +462,19 @@ const StatisticsPage = () => {
   // even if the leg was LOST (matches bestGameAvg/highestGameAvg's own precedent: an average
   // record isn't gated on winning the way "darts to checkout" necessarily is) and with no minimum
   // dart count either, same reasoning as those two.
+  //
+  // Team games excluded too, same reasoning as playerShortestLegById above: a single teammate's
+  // own subset of turns within a shared leg isn't a real solo leg average (it may cover as few as
+  // one turn before their partner took over).
   const playerBestLegAvgById = useMemo(() => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
     const modeById = new Map(games.map((g) => [g.id, g.mode]));
+    const teamGameIds = new Set(games.filter((g) => g.detail_stats?.isTeamGame).map((g) => g.id));
     const result: Record<string, { avg: number; darts: number }> = {};
     gameLegs.forEach((leg) => {
       if (!filteredIds.has(leg.game_id) || !leg.player_id) return;
       if (modeById.get(leg.game_id) === "cricket") return;
+      if (teamGameIds.has(leg.game_id)) return;
       if (!Array.isArray(leg.throws) || leg.throws.length === 0) return;
       const avg = average(leg.throws);
       if (result[leg.player_id] === undefined || avg > result[leg.player_id].avg) {
@@ -804,84 +822,122 @@ const StatisticsPage = () => {
     if (!selectedPlayerId) return null;
     const player = players.find(p => p.id === selectedPlayerId);
     if (!player) return null;
-    const playerGames = filteredGames.filter(g => g.player1_id === selectedPlayerId || g.player2_id === selectedPlayerId);
-    // Bug fix: the header card used to show player.average/player.high_score/winRate straight
-    // from the lifetime `players` row while every other number on this same view (averageTrend,
-    // recentForm, bestGameAvg, totalGames, ...) was already correctly recomputed from the
-    // filtered `playerGames` — so applying a season/date filter changed some numbers on screen
-    // but silently left others (average, highscore, win rate) at their lifetime value, which
-    // read as "the filter doesn't work". `average`/`highScore` below reuse the exact same
-    // per-game columns/convention as bestGameAvg/worstGameAvg further down (mean/max of each
-    // game's own player1_average/player1_highscore), so all of them agree with each other.
-    const gameAverages = playerGames.map(g => Number(g.player1_id === selectedPlayerId ? g.player1_average : g.player2_average));
-    const average = gameAverages.length > 0 ? gameAverages.reduce((a, b) => a + b, 0) / gameAverages.length : 0;
-    const highScore = playerGames.length > 0
-      ? Math.max(...playerGames.map(g => g.player1_id === selectedPlayerId ? g.player1_highscore : g.player2_highscore))
-      : 0;
-    const wins = playerGames.filter(g => g.winner_name === (g.player1_id === selectedPlayerId ? g.player1_name : g.player2_name)).length;
-    const winRate = playerGames.length > 0 ? Math.round((wins / playerGames.length) * 100) : 0;
+
+    const filteredIds = new Set(filteredGames.map(g => g.id));
+    const gamesById = new Map(filteredGames.map(g => [g.id, g]));
+
+    // Every leg row across ALL players (not just this one) for the filtered games — needed below
+    // to resolve a team game's real roster (who was actually on which side).
+    const allLegsByGame = new Map<string, GameLegRecord[]>();
+    gameLegs.forEach(leg => {
+      if (!filteredIds.has(leg.game_id)) return;
+      (allLegsByGame.get(leg.game_id) ?? allLegsByGame.set(leg.game_id, []).get(leg.game_id)!).push(leg);
+    });
+
+    // Bug fix: this used to be `filteredGames.filter(g => g.player1_id === selectedPlayerId ||
+    // g.player2_id === selectedPlayerId)` — but games.player1_id/player2_id only ever name the
+    // top-2 finisher (free-for-all) or ONE representative per team (doubles — see teamUtils.ts's
+    // "throws stay per individual player" and gameSync.ts's top1/top2 ranking). A doubles player
+    // who wasn't picked as their team's representative had their matches silently missing from
+    // their ENTIRE profile (average, win rate, recent form, first-9 trend, ...) — this is why a
+    // member could play two doubles matches in one evening and see only one of them here, and why
+    // their own average could disagree with the club ranking (which is built from game_legs and
+    // so never had this gap). Now derived from this player's own game_legs rows instead, which
+    // exist for every real participant regardless of team role — and this player's own average/
+    // high score for each game is recomputed from their own leg throws rather than read from
+    // games.player1_average/player2_average, which for a team game only ever holds the one
+    // representative's numbers anyway.
+    type OwnGame = { g: GameRecord; average: number; highScore: number; won: boolean; opponent: string; teammate: string | null };
+    const ownGames: OwnGame[] = [];
+    allLegsByGame.forEach((legs, gameId) => {
+      const own = legs.filter(l => l.player_id === selectedPlayerId);
+      if (own.length === 0) return;
+      const g = gamesById.get(gameId);
+      if (!g) return;
+      const throws = own.flatMap(l => (Array.isArray(l.throws) ? l.throws : []) as DartThrow[]);
+      const isTeam = !!g.detail_stats?.isTeamGame;
+      const side = own[0].player_index % 2; // teams are always exactly 2, interleaved — see teamUtils.ts
+      const ownName = isTeam ? (side === 0 ? g.player1_name : g.player2_name) : player.name;
+      const opponent = isTeam
+        ? (side === 0 ? g.player2_name : g.player1_name)
+        : (g.player1_id === selectedPlayerId ? g.player2_name : g.player1_name);
+      // The actual teammate's real name (never the "Team 1"/"Team 2" placeholder) — see
+      // GameSetup.tsx's default teamNames — so recentForm below can show the true pairing.
+      const teammate = isTeam
+        ? (legs.find(l => l.player_id !== selectedPlayerId && l.player_index % 2 === side)?.player_name ?? null)
+        : null;
+      ownGames.push({
+        g,
+        average: throws.length > 0 ? average(throws) : 0,
+        highScore: throws.length > 0 ? highestVisit(throws) : 0,
+        won: g.winner_name === ownName,
+        opponent,
+        teammate,
+      });
+    });
+    ownGames.sort((a, b) => new Date(b.g.played_at).getTime() - new Date(a.g.played_at).getTime());
+
+    const avgOf = (list: OwnGame[]) => list.length > 0 ? list.reduce((s, o) => s + o.average, 0) / list.length : 0;
+    const overallAverage = avgOf(ownGames);
+    const highScore = ownGames.length > 0 ? Math.max(...ownGames.map(o => o.highScore)) : 0;
+    const wins = ownGames.filter(o => o.won).length;
+    const winRate = ownGames.length > 0 ? Math.round((wins / ownGames.length) * 100) : 0;
 
     // Average trend (oldest first)
     let runningAvg = 0;
-    const averageTrend = [...playerGames].reverse().map((g, i) => {
-      const avg = g.player1_id === selectedPlayerId ? g.player1_average : g.player2_average;
-      runningAvg = (runningAvg * i + Number(avg)) / (i + 1);
+    const averageTrend = [...ownGames].reverse().map((o, i) => {
+      runningAvg = (runningAvg * i + o.average) / (i + 1);
       return {
         game: i + 1,
-        date: new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" }),
-        average: Number(avg).toFixed(1),
+        date: new Date(o.g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" }),
+        average: o.average.toFixed(1),
         runningAvg: runningAvg.toFixed(1),
       };
     });
 
     // Win streak
     let currentStreak = 0, bestStreak = 0;
-    [...playerGames].reverse().forEach(g => {
-      const isP1 = g.player1_id === selectedPlayerId;
-      const won = g.winner_name === (isP1 ? g.player1_name : g.player2_name);
-      if (won) { currentStreak++; bestStreak = Math.max(bestStreak, currentStreak); }
+    [...ownGames].reverse().forEach(o => {
+      if (o.won) { currentStreak++; bestStreak = Math.max(bestStreak, currentStreak); }
       else currentStreak = 0;
     });
 
     // Recent form — full history, windowed for display by usePagedList in the render below
-    // rather than hard-capped here.
-    const recentForm = playerGames.map(g => {
-      const isP1 = g.player1_id === selectedPlayerId;
-      return {
-        won: g.winner_name === (isP1 ? g.player1_name : g.player2_name),
-        avg: Number(isP1 ? g.player1_average : g.player2_average),
-        opponent: isP1 ? g.player2_name : g.player1_name,
-        date: new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" }),
-      };
-    });
+    // rather than hard-capped here. `teammate` is only set for team games — the render below
+    // shows it alongside `opponent` so a doubles match shows the real pairing instead of the
+    // "Team 1"/"Team 2" placeholder name.
+    const recentForm = ownGames.map(o => ({
+      won: o.won,
+      avg: o.average,
+      opponent: o.opponent,
+      teammate: o.teammate,
+      date: new Date(o.g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" }),
+    }));
 
     // Best/worst game avg
-    const allAvgs = playerGames.map(g => Number(g.player1_id === selectedPlayerId ? g.player1_average : g.player2_average));
+    const allAvgs = ownGames.map(o => o.average);
     const bestGameAvg = allAvgs.length > 0 ? Math.max(...allAvgs) : 0;
     const worstGameAvg = allAvgs.length > 0 ? Math.min(...allAvgs) : 0;
 
     // Form trend: recent average vs. the (season/filter-scoped) lifetime average above — a quick
     // "hot or cold right now" signal distinct from currentStreak (a binary win/loss run) and from
-    // averageTrend (a full-history chart the viewer has to read themselves). playerGames is
+    // averageTrend (a full-history chart the viewer has to read themselves). ownGames is
     // newest-first (same ordering averageTrend/currentStreak already rely on via their own
     // .reverse() calls), so slice(0, N) is exactly "the last N games played". Requires at least
     // RECENT_FORM_WINDOW games total, same reasoning as the nemesis/favoriteOpponent >= 2 guard
     // above — otherwise a player's very first game(s) would show a "hot"/"cold" badge that's really
     // just noise (recentAvg trivially equal to average with nothing to compare against).
-    const recentGames = playerGames.slice(0, RECENT_FORM_WINDOW);
-    const recentAvg = recentGames.length > 0
-      ? recentGames.reduce((sum, g) => sum + Number(g.player1_id === selectedPlayerId ? g.player1_average : g.player2_average), 0) / recentGames.length
-      : 0;
-    const recentFormDelta = playerGames.length >= RECENT_FORM_WINDOW ? recentAvg - average : null;
+    const recentGames = ownGames.slice(0, RECENT_FORM_WINDOW);
+    const recentAvg = avgOf(recentGames);
+    const recentFormDelta = ownGames.length >= RECENT_FORM_WINDOW ? recentAvg - overallAverage : null;
 
-    // Opponents breakdown
+    // Opponents breakdown — keyed by the real opposing name/pairing (never the raw "Team 1"/
+    // "Team 2" placeholder), so a doubles record reads as an actual rivalry, not a generic label.
     const opponents: Record<string, { wins: number; losses: number }> = {};
-    playerGames.forEach(g => {
-      const isP1 = g.player1_id === selectedPlayerId;
-      const opp = isP1 ? g.player2_name : g.player1_name;
-      if (!opponents[opp]) opponents[opp] = { wins: 0, losses: 0 };
-      if (g.winner_name === (isP1 ? g.player1_name : g.player2_name)) opponents[opp].wins++;
-      else opponents[opp].losses++;
+    ownGames.forEach(o => {
+      if (!opponents[o.opponent]) opponents[o.opponent] = { wins: 0, losses: 0 };
+      if (o.won) opponents[o.opponent].wins++;
+      else opponents[o.opponent].losses++;
     });
 
     // Nemesis / favorite opponent — needs at least 2 games against them so a single fluke
@@ -920,10 +976,32 @@ const StatisticsPage = () => {
       return rate > bestRate ? { name, losses: r.losses, wins: r.wins } : best;
     }, null);
 
-    return { player, average, highScore, winRate, averageTrend, currentStreak, bestStreak, recentForm, recentFormDelta, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: playerGames.length };
-  }, [selectedPlayerId, filteredGames, players, language]);
+    // Full ranked list of this player's own single-leg averages, not just the single best entry
+    // (bestLegAvg's underlying playerBestLegAvgById above) — lets the club ranking's "beste
+    // Leg-Average" stat link through to more than one number. Same X01-only/team-excluded scope
+    // as playerBestLegAvgById/playerShortestLegById further up (a teammate's own dart subset
+    // within a shared leg isn't a real solo leg average — see those two for the full reasoning).
+    const legAverages: { avg: number; darts: number; date: string }[] = [];
+    allLegsByGame.forEach((legs, gameId) => {
+      const g = gamesById.get(gameId);
+      if (!g || g.mode === "cricket" || g.detail_stats?.isTeamGame) return;
+      legs.forEach(l => {
+        if (l.player_id !== selectedPlayerId || !Array.isArray(l.throws) || l.throws.length === 0) return;
+        legAverages.push({
+          avg: average(l.throws),
+          darts: l.throws.length,
+          date: new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit", year: "numeric" }),
+        });
+      });
+    });
+    legAverages.sort((a, b) => b.avg - a.avg);
+    const top20LegAverages = legAverages.slice(0, 20);
+
+    return { player, average: overallAverage, highScore, winRate, averageTrend, currentStreak, bestStreak, recentForm, recentFormDelta, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: ownGames.length, top20LegAverages };
+  }, [selectedPlayerId, filteredGames, gameLegs, players, language]);
 
   const pagedRecentForm = usePagedList(playerDetailStats?.recentForm ?? []);
+  const pagedTop20LegAverages = usePagedList(playerDetailStats?.top20LegAverages ?? []);
 
   // First-9 average over time, oldest first — same shape/convention as averageTrend above, so it
   // can reuse the same Sparkline/AreaChart components. Unlike averageTrend (which reads a
@@ -937,21 +1015,26 @@ const StatisticsPage = () => {
   const playerFirst9Trend = useMemo(() => {
     if (!selectedPlayerId) return [];
     const modeById = new Map(games.map((g) => [g.id, g.mode]));
-    const playerGames = filteredGames.filter((g) => g.player1_id === selectedPlayerId || g.player2_id === selectedPlayerId);
-    const gameIds = new Set(playerGames.map((g) => g.id));
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const gamesById = new Map(filteredGames.map((g) => [g.id, g]));
+    // Derived from this player's own game_legs rows (never games.player1_id/player2_id — see
+    // playerDetailStats's own doc comment above for why that misses a non-representative doubles
+    // player's matches entirely).
     const first9sByGame: Record<string, number[]> = {};
     gameLegs.forEach((leg) => {
-      if (leg.player_id !== selectedPlayerId || !gameIds.has(leg.game_id)) return;
+      if (leg.player_id !== selectedPlayerId || !filteredIds.has(leg.game_id)) return;
       if (modeById.get(leg.game_id) === "cricket") return;
       if (!Array.isArray(leg.throws) || leg.throws.length === 0) return;
       (first9sByGame[leg.game_id] ||= []).push(first9Average(leg.throws));
     });
+    const playerGames = [...gamesById.values()]
+      .filter((g) => first9sByGame[g.id])
+      .sort((a, b) => new Date(b.played_at).getTime() - new Date(a.played_at).getTime());
     let runningAvg = 0;
     let n = 0;
     const trend: { game: number; date: string; first9: string; runningFirst9: string }[] = [];
     [...playerGames].reverse().forEach((g) => {
       const vals = first9sByGame[g.id];
-      if (!vals || vals.length === 0) return; // no X01 legs with throws recorded for this game
       const gameFirst9 = vals.reduce((a, b) => a + b, 0) / vals.length;
       n++;
       runningAvg = (runningAvg * (n - 1) + gameFirst9) / n;
@@ -1981,6 +2064,25 @@ const StatisticsPage = () => {
                 </SectionCard>
               )}
 
+              {/* Full ranked list behind the single "beste Leg-Average" tile above — collapsed
+                  to a 5-row teaser like every other long list in the app (see usePagedList). */}
+              {playerDetailStats.top20LegAverages.length > 0 && (
+                <SectionCard className="mb-4">
+                  <Eyebrow icon={TrendingUp}>{t("stats.top20LegAverages")}</Eyebrow>
+                  <div className="space-y-1">
+                    {pagedTop20LegAverages.visible.map((entry, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 text-xs px-2 py-1 rounded bg-muted/30">
+                        <span className="shrink-0 font-bold text-muted-foreground w-5">{i + 1}.</span>
+                        <span className="shrink-0 font-display font-semibold text-primary">{entry.avg.toFixed(1)}</span>
+                        <span className="shrink-0 text-muted-foreground">{entry.darts} Darts</span>
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground text-right">{entry.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <ListPaginationFooter list={pagedTop20LegAverages} />
+                </SectionCard>
+              )}
+
               {/* Checkout & first-9 (from dart-by-dart data — only available for games played since this was added) */}
               {statsDetailMode === "pro" && advancedByPlayer[playerDetailStats.player.id] && (
                 <SectionCard className="mb-4">
@@ -2213,7 +2315,9 @@ const StatisticsPage = () => {
                     {pagedRecentForm.visible.map((f, i) => (
                       <div key={i} className="flex items-center justify-between gap-2 text-xs px-2 py-1 rounded bg-muted/30">
                         <span className={`shrink-0 font-bold ${f.won ? "text-secondary" : "text-destructive"}`}>{f.won ? t("stats.win") : t("stats.lossAbbrev")}</span>
-                        <span className="min-w-0 flex-1 truncate text-muted-foreground">vs {f.opponent}</span>
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                          vs {f.opponent}{f.teammate ? ` · ${t("stats.withTeammate")} ${f.teammate}` : ""}
+                        </span>
                         <span className="shrink-0 font-display">Ø {f.avg.toFixed(1)}</span>
                         <span className="shrink-0 text-muted-foreground">{f.date}</span>
                       </div>

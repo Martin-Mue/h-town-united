@@ -2558,7 +2558,16 @@ const GamePage = () => {
               </div>
               {card.subLabel && (
                 <p className="text-[10px] truncate mt-0.5" style={{ color: isActive ? "hsl(185 60% 65%)" : "hsl(210 15% 50%)" }}>
-                  {card.subLabel}{isActive ? ` · ${t("game.turnLabel")}: ${currentPlayerName}` : ""}
+                  {card.subLabel}
+                </p>
+              )}
+              {/* Whose turn within the team — used to be appended to the tiny roster line above
+                  as one long "PlayerA & PlayerB · Am Zug: PlayerA" string, which was both too
+                  small and, once combined with a real roster, too long to read at a glance. Its
+                  own bigger, bolder, highlighted line instead. */}
+              {isActive && card.subLabel && (
+                <p className="text-sm font-display font-bold truncate mt-0.5" style={{ color: activeHsl }}>
+                  {t("game.turnLabel")}: {currentPlayerName}
                 </p>
               )}
               {isActive && card.isBot && botThinking ? (
