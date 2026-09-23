@@ -470,15 +470,21 @@ const StatisticsPage = () => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
     const modeById = new Map(games.map((g) => [g.id, g.mode]));
     const teamGameIds = new Set(games.filter((g) => g.detail_stats?.isTeamGame).map((g) => g.id));
-    const result: Record<string, { avg: number; darts: number }> = {};
+    // `mode` rides along so every display of this record (club tile, personal tile, Top 20 list)
+    // can show which game mode it came from — a 301 leg and a 501 leg both land in the same
+    // "leg average" pool since the 3-dart-average formula itself doesn't care about the starting
+    // score, but showing an unlabelled number next to a plain dart count read as "which game was
+    // this?" confusing without it.
+    const result: Record<string, { avg: number; darts: number; mode: string }> = {};
     gameLegs.forEach((leg) => {
       if (!filteredIds.has(leg.game_id) || !leg.player_id) return;
-      if (modeById.get(leg.game_id) === "cricket") return;
+      const mode = modeById.get(leg.game_id);
+      if (!mode || mode === "cricket") return;
       if (teamGameIds.has(leg.game_id)) return;
       if (!Array.isArray(leg.throws) || leg.throws.length === 0) return;
       const avg = average(leg.throws);
       if (result[leg.player_id] === undefined || avg > result[leg.player_id].avg) {
-        result[leg.player_id] = { avg, darts: leg.throws.length };
+        result[leg.player_id] = { avg, darts: leg.throws.length, mode };
       }
     });
     return result;
@@ -488,8 +494,8 @@ const StatisticsPage = () => {
     return Object.entries(playerBestLegAvgById).reduce((best, [id, entry]) => {
       const p = players.find((pl) => pl.id === id);
       if (!p) return best;
-      return entry.avg > best.val ? { name: p.name, val: entry.avg, darts: entry.darts } : best;
-    }, { name: "-", val: 0, darts: 0 });
+      return entry.avg > best.val ? { name: p.name, val: entry.avg, darts: entry.darts, mode: entry.mode } : best;
+    }, { name: "-", val: 0, darts: 0, mode: "" });
   }, [playerBestLegAvgById, players]);
 
   // Cricket-specific stats (MPR, hit rate) — separate from the X01-only checkout/first-9 bucket above.
@@ -981,7 +987,7 @@ const StatisticsPage = () => {
     // Leg-Average" stat link through to more than one number. Same X01-only/team-excluded scope
     // as playerBestLegAvgById/playerShortestLegById further up (a teammate's own dart subset
     // within a shared leg isn't a real solo leg average — see those two for the full reasoning).
-    const legAverages: { avg: number; darts: number; date: string }[] = [];
+    const legAverages: { avg: number; darts: number; date: string; mode: string }[] = [];
     allLegsByGame.forEach((legs, gameId) => {
       const g = gamesById.get(gameId);
       if (!g || g.mode === "cricket" || g.detail_stats?.isTeamGame) return;
@@ -991,6 +997,7 @@ const StatisticsPage = () => {
           avg: average(l.throws),
           darts: l.throws.length,
           date: new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit", year: "numeric" }),
+          mode: g.mode,
         });
       });
     });
@@ -1722,7 +1729,7 @@ const StatisticsPage = () => {
               { labelKey: "stats.highestScore", value: clubStats.bestHighscore.val, sub: clubStats.bestHighscore.name, icon: Trophy, tone: "accent" as const, sortKey: "high_score" as const },
               { labelKey: "stats.bestAverage", value: clubStats.bestAvg.val.toFixed(1), sub: clubStats.bestAvg.name, icon: Flame, tone: "destructive" as const, sortKey: "average" as const },
               { labelKey: "stats.bestGameAverage", value: clubStats.highestGameAvg.val.toFixed(1), sub: clubStats.highestGameAvg.name, icon: Zap, tone: "secondary" as const, sortKey: "best_game_avg" as const },
-              { labelKey: "stats.bestLegAverage", value: bestLegAvg.val ? bestLegAvg.val.toFixed(1) : "-", sub: bestLegAvg.val ? `${bestLegAvg.name} · ${bestLegAvg.darts} Darts` : "-", icon: TrendingUp, tone: "primary" as const, sortKey: "best_leg_avg" as const },
+              { labelKey: "stats.bestLegAverage", value: bestLegAvg.val ? bestLegAvg.val.toFixed(1) : "-", sub: bestLegAvg.val ? `${bestLegAvg.name} · ${bestLegAvg.mode} · ${bestLegAvg.darts} Darts` : "-", icon: TrendingUp, tone: "primary" as const, sortKey: "best_leg_avg" as const },
               { labelKey: "stats.mostWins", value: clubStats.mostWins.val, sub: clubStats.mostWins.name, icon: Award, tone: "primary" as const, sortKey: "games_won" as const },
               { labelKey: "stats.highestFinish", value: bestHighestCheckout.val || "-", sub: bestHighestCheckout.name, icon: Crosshair, tone: "accent" as const, sortKey: "highest_checkout" as const },
               { labelKey: "stats.bestCheckoutPct", value: bestCheckoutRate.val ? `${bestCheckoutRate.val.toFixed(0)}%` : "-", sub: bestCheckoutRate.name, icon: Percent, tone: "secondary" as const, sortKey: "checkout" as const },
@@ -2057,7 +2064,7 @@ const StatisticsPage = () => {
               {playerBestLegAvgById[playerDetailStats.player.id] && (
                 <SectionCard className="mb-4">
                   <StatTile
-                    label={`${t("stats.bestLegAverage")} · ${playerBestLegAvgById[playerDetailStats.player.id].darts} Darts`}
+                    label={`${t("stats.bestLegAverage")} · ${playerBestLegAvgById[playerDetailStats.player.id].mode} · ${playerBestLegAvgById[playerDetailStats.player.id].darts} Darts`}
                     value={playerBestLegAvgById[playerDetailStats.player.id].avg.toFixed(1)}
                     tone="primary"
                   />
@@ -2074,6 +2081,7 @@ const StatisticsPage = () => {
                       <div key={i} className="flex items-center justify-between gap-2 text-xs px-2 py-1 rounded bg-muted/30">
                         <span className="shrink-0 font-bold text-muted-foreground w-5">{i + 1}.</span>
                         <span className="shrink-0 font-display font-semibold text-primary">{entry.avg.toFixed(1)}</span>
+                        <Badge variant="outline" className="shrink-0 font-mono text-[10px] px-1.5 py-0">{entry.mode}</Badge>
                         <span className="shrink-0 text-muted-foreground">{entry.darts} Darts</span>
                         <span className="min-w-0 flex-1 truncate text-muted-foreground text-right">{entry.date}</span>
                       </div>
