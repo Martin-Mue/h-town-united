@@ -227,6 +227,35 @@ describe("computeTournamentAverages", () => {
     const { participants } = computeTournamentAverages(games);
     expect(participants[0].key).toBe("p2");
   });
+
+  it("fills in a team game's non-representative teammate from their own leg throws when legs are passed", () => {
+    // games.player1_id/player2_id only ever names ONE representative per side — p3 (Martin's
+    // teammate) has no game row of their own, only leg rows.
+    const games: TournamentStatsGameRow[] = [game({ id: "g1" })];
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p3", player_name: "Teammate", starting_score: 501, won: true, game_id: "g1", throws: [dart(20, 3), dart(20, 3), dart(20, 3)] }, // 180 avg
+    ];
+    const { participants } = computeTournamentAverages(games, legs);
+    expect(participants).toHaveLength(3);
+    const teammate = participants.find((p) => p.key === "p3")!;
+    expect(teammate.tournamentAverage).toBe(180);
+    expect(teammate.gamesPlayed).toBe(1);
+  });
+
+  it("does not double-count a representative player's own leg rows when legs are passed", () => {
+    const games: TournamentStatsGameRow[] = [game({ id: "g1", player1_average: 45 })];
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: true, game_id: "g1", throws: [dart(20, 3)] },
+    ];
+    const { participants } = computeTournamentAverages(games, legs);
+    expect(participants).toHaveLength(2);
+    expect(participants.find((p) => p.key === "p1")!.tournamentAverage).toBe(45);
+  });
+
+  it("omitting legs entirely reproduces the old games-only behavior", () => {
+    const games: TournamentStatsGameRow[] = [game({ id: "g1" })];
+    expect(computeTournamentAverages(games)).toEqual(computeTournamentAverages(games, undefined));
+  });
 });
 
 describe("mergeTournamentStats", () => {
@@ -284,6 +313,20 @@ describe("computeLegAveragesByGame", () => {
     ];
     const byGame = computeLegAveragesByGame(legs, games);
     expect(byGame.size).toBe(0);
+  });
+
+  it("skips a team game's non-representative teammate instead of merging their throws into the wrong side", () => {
+    const legs: TournamentStatsLegRow[] = [
+      { player_id: "p1", player_name: "Martin", starting_score: 501, won: true, game_id: "g1", leg_number: 1, throws: [dart(20, 3), dart(20, 3), dart(20, 3)] }, // 180 avg
+      { player_id: "p2", player_name: "Kevin", starting_score: 501, won: false, game_id: "g1", leg_number: 1, throws: [dart(1, 1), dart(1, 1), dart(1, 1)] }, // 3 avg
+      // Neither player1_id ("p1") nor player2_id ("p2") — a teammate with no known side.
+      { player_id: "p3", player_name: "Teammate", starting_score: 501, won: false, game_id: "g1", leg_number: 1, throws: [dart(1, 1)] },
+    ];
+    const byGame = computeLegAveragesByGame(legs, games);
+    const legAverages = byGame.get("g1")!;
+    expect(legAverages).toHaveLength(1);
+    // p2's own 3-avg must survive untouched — not overwritten/blended with p3's throws.
+    expect(legAverages[0]).toEqual({ player1Average: 180, player2Average: 3, player1Darts: 3, player2Darts: 3, winner: 1 });
   });
 });
 

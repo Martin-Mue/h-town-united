@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Mic, MicOff, Check, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -57,7 +57,7 @@ interface DartScoreInputProps {
  * want different tradeoffs between speed and per-dart detail, and the same scorekeeper may want to
  * switch mid-game (e.g. per-dart while it's close, typed totals once a leg is a formality).
  */
-const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputModeChange, dartsThisRound = 0 }: DartScoreInputProps) => {
+const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onInputModeChange, dartsThisRound = 0 }: DartScoreInputProps) => {
   const { t, language } = useLanguage();
   const [localMode, setLocalMode] = useState<DartInputMode>("single");
   const [totalText, setTotalText] = useState("");
@@ -282,6 +282,7 @@ const DartScoreInput = ({ isDisabled, onThrow, onQuickRound, inputMode, onInputM
       )}
     </div>
   );
-};
+});
+DartScoreInput.displayName = "DartScoreInput";
 
 export default DartScoreInput;

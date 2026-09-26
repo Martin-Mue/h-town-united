@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, ChevronRight, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2, Dumbbell } from "lucide-react";
 import { TRAINING_DRILLS, loadAllRecords, loadStreak, DIFFICULTY_COLORS, DIFFICULTY_LABEL_KEY, type StoredRecordEntry, type StreakState } from "@/lib/trainingRecords";
 import { DartGameIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
@@ -44,6 +45,7 @@ import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import SeasonRecap from "@/components/stats/SeasonRecap";
 import { usePagedList } from "@/hooks/usePagedList";
+import { usePlayers } from "@/hooks/usePlayers";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Sparkles } from "lucide-react";
 import { Eyebrow, SectionCard, StatTile, TrendBadge, Sparkline, RingStat, RankAvatar, RankBadge, BarRow, TONE_TEXT as TONE_ICON } from "@/components/stats/StatPrimitives";
@@ -108,14 +110,68 @@ const TOOLTIP_STYLE = { background: "hsl(var(--popover))", border: "1px solid hs
  *  hot/cold badge (see playerDetailStats) — 2026-09-09. */
 const RECENT_FORM_WINDOW = 5;
 
+// react-query cache keys + fetchers for this page's own data (players comes from the shared
+// usePlayers() hook instead — see below). Previously all six of these were a single plain
+// useState/useEffect fetch with no cache at all: every mount (including just tabbing away from
+// Statistics and back) re-downloaded the full 500-game/4000-leg/dart-by-dart payload from
+// scratch. Splitting them into their own cached queries means the shared queryClient's staleTime
+// (see queryClient.ts) now actually applies here too, and a mutation (deleting a highlight clip,
+// editing a manual 180 entry) can invalidate just its own slice instead of refetching everything.
+const STATS_GAMES_QUERY_KEY = ["stats-games"] as const;
+const STATS_GAME_LEGS_QUERY_KEY = ["stats-game-legs"] as const;
+const STATS_HIGHLIGHT_CLIPS_QUERY_KEY = ["stats-highlight-clips"] as const;
+const STATS_MANUAL_180_QUERY_KEY = ["stats-manual-180"] as const;
+const STATS_LEAGUE_FIXTURES_QUERY_KEY = ["stats-league-fixtures"] as const;
+
+async function fetchStatsGames(): Promise<GameRecord[]> {
+  const { data, error } = await supabase.from("games")
+    .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats, played_online")
+    .order("played_at", { ascending: false }).limit(500);
+  if (error) throw error;
+  return (data ?? []) as GameRecord[];
+}
+
+async function fetchStatsGameLegs(): Promise<GameLegRecord[]> {
+  // No user_id/created_at — only the dart-by-dart fields the stats views actually read.
+  // `throws` (per-dart JSON) still dominates the payload, but this at least skips the rest.
+  const { data, error } = await supabase.from("game_legs")
+    .select("id, game_id, leg_number, player_index, player_name, player_id, starting_score, throws, won")
+    .order("created_at", { ascending: false }).limit(4000);
+  if (error) throw error;
+  return (data ?? []) as unknown as GameLegRecord[];
+}
+
+async function fetchStatsHighlightClips(): Promise<HighlightClipRecord[]> {
+  const { data, error } = await supabase.from("highlight_clips").select("*").order("created_at", { ascending: false }).limit(200);
+  if (error) throw error;
+  return (data ?? []) as unknown as HighlightClipRecord[];
+}
+
+async function fetchStatsManual180Entries(): Promise<{ id: string; player_id: string; year: number; count: number }[]> {
+  const { data, error } = await supabase.from("manual_180_entries").select("id, player_id, year, count");
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function fetchStatsLeagueFixtures(): Promise<LeagueFixtureRecord[]> {
+  // Only finished fixtures carry a winner — "Punkte (Saison)" below only ever needs those.
+  const { data, error } = await supabase.from("league_fixtures").select("id, status, winner_id, player1_id, player2_id, played_at").eq("status", "finished");
+  if (error) throw error;
+  return (data ?? []) as unknown as LeagueFixtureRecord[];
+}
+
 const StatisticsPage = () => {
   const { toast } = useToast();
-  const [games, setGames] = useState<GameRecord[]>([]);
-  const [players, setPlayers] = useState<PlayerStats[]>([]);
-  const [gameLegs, setGameLegs] = useState<GameLegRecord[]>([]);
-  const [highlightClips, setHighlightClips] = useState<HighlightClipRecord[]>([]);
-  const [manual180Entries, setManual180Entries] = useState<{ id: string; player_id: string; year: number; count: number }[]>([]);
-  const [leagueFixtures, setLeagueFixtures] = useState<LeagueFixtureRecord[]>([]);
+  const queryClient = useQueryClient();
+  const { data: games = [], isPending: gamesLoading } = useQuery({ queryKey: STATS_GAMES_QUERY_KEY, queryFn: fetchStatsGames });
+  // Shared, already-cached roster query (see usePlayers.ts) instead of an independent fetch —
+  // this page used to re-download the whole roster on its own even though Index/League/
+  // Tournament/Game already keep it warm in the same cache.
+  const { data: players = [], isPending: playersLoading } = usePlayers();
+  const { data: gameLegs = [], isPending: gameLegsLoading } = useQuery({ queryKey: STATS_GAME_LEGS_QUERY_KEY, queryFn: fetchStatsGameLegs });
+  const { data: highlightClips = [], isPending: highlightClipsLoading } = useQuery({ queryKey: STATS_HIGHLIGHT_CLIPS_QUERY_KEY, queryFn: fetchStatsHighlightClips });
+  const { data: manual180Entries = [], isPending: manual180Loading } = useQuery({ queryKey: STATS_MANUAL_180_QUERY_KEY, queryFn: fetchStatsManual180Entries });
+  const { data: leagueFixtures = [], isPending: leagueFixturesLoading } = useQuery({ queryKey: STATS_LEAGUE_FIXTURES_QUERY_KEY, queryFn: fetchStatsLeagueFixtures });
   // storage_path -> short-lived signed URL. The dart-clips bucket is private (see migration
   // 20260816090000_security_advisor_fixes), so plain getPublicUrl() no longer resolves to
   // anything playable — every clip needs a signed URL fetched under the viewer's own auth.
@@ -124,7 +180,10 @@ const StatisticsPage = () => {
   const [cleaningUpClips, setCleaningUpClips] = useState(false);
   const [deletingClipId, setDeletingClipId] = useState<string | null>(null);
   const [confirmDeleteClipId, setConfirmDeleteClipId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // True only until every query has its first data in hand (matches the old plain-fetch
+  // behavior — a background refetch after that, e.g. from a mutation invalidating one slice,
+  // no longer blanks the whole page the way the old single `loading` state used to imply).
+  const loading = gamesLoading || playersLoading || gameLegsLoading || highlightClipsLoading || manual180Loading || leagueFixturesLoading;
   const [sortBy, setSortBy] = useState<"average" | "games_won" | "high_score" | "win_rate" | "checkout" | "points" | "elo" | "one_eighties" | "highest_checkout" | "mpr" | "best_game_avg" | "fewest_darts" | "best_leg_avg">("average");
   const [rankingFocusKey, setRankingFocusKey] = useState<typeof sortBy | null>(null);
   const [rankingViewMode, setRankingViewMode] = useState<"list" | "bar">("list");
@@ -173,32 +232,6 @@ const StatisticsPage = () => {
   const { session } = useAuth();
   const { t, language } = useLanguage();
   const { name: clubName } = useClubBranding();
-
-  const fetchData = useCallback(async () => {
-    const [gamesRes, playersRes, legsRes, clipsRes, manual180Res, leagueFixturesRes] = await Promise.all([
-      supabase.from("games")
-        .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats, played_online")
-        .order("played_at", { ascending: false }).limit(500),
-      supabase.from("players").select("id, name, games_played, games_won, average, high_score, double_rate, elo_rating, emoji, user_id").order("average", { ascending: false }),
-      // No user_id/created_at — only the dart-by-dart fields the stats views actually read.
-      // `throws` (per-dart JSON) still dominates the payload, but this at least skips the rest.
-      supabase.from("game_legs").select("id, game_id, leg_number, player_index, player_name, player_id, starting_score, throws, won")
-        .order("created_at", { ascending: false }).limit(4000),
-      supabase.from("highlight_clips").select("*").order("created_at", { ascending: false }).limit(200),
-      supabase.from("manual_180_entries").select("id, player_id, year, count"),
-      // Only finished fixtures carry a winner — "Punkte (Saison)" below only ever needs those.
-      supabase.from("league_fixtures").select("id, status, winner_id, player1_id, player2_id, played_at").eq("status", "finished"),
-    ]);
-    if (gamesRes.data) setGames(gamesRes.data as GameRecord[]);
-    if (playersRes.data) setPlayers(playersRes.data);
-    if (legsRes.data) setGameLegs(legsRes.data as unknown as GameLegRecord[]);
-    if (clipsRes.data) setHighlightClips(clipsRes.data as unknown as HighlightClipRecord[]);
-    if (manual180Res.data) setManual180Entries(manual180Res.data);
-    if (leagueFixturesRes.data) setLeagueFixtures(leagueFixturesRes.data as unknown as LeagueFixtureRecord[]);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
 
   // Filtered games — drives every aggregation below
   const filteredGames = useMemo(() => {
@@ -523,6 +556,40 @@ const StatisticsPage = () => {
       .reduce((best, p) => (p.cricket.mpr > best.val ? { name: p.name, val: p.cricket.mpr } : best), { name: "-", val: 0 });
   }, [cricketByPlayer]);
 
+  // Every (player, game) pair's own single-game average, pooling ALL of that player's own throws
+  // across every leg of that one game — same pooling gameSync.ts's saveGameRecord uses when it
+  // writes games.player1_average/player2_average, so a representative player's entry here always
+  // agrees with their game row's own column. Built from game_legs (every real participant), not
+  // games.player1_id/player2_id (the top-2/one-representative-per-team seats only), so a team
+  // game's non-representative players get a real entry too — same "representative-only" gap
+  // already fixed for playerDetailStats/career stats elsewhere in this file.
+  const playerGameAveragesById = useMemo(() => {
+    const filteredIds = new Set(filteredGames.map((g) => g.id));
+    const byPlayerGame: Record<string, Record<string, DartThrow[]>> = {};
+    gameLegs.forEach((leg) => {
+      if (!filteredIds.has(leg.game_id) || !leg.player_id || !Array.isArray(leg.throws)) return;
+      const byGame = byPlayerGame[leg.player_id] || (byPlayerGame[leg.player_id] = {});
+      (byGame[leg.game_id] || (byGame[leg.game_id] = [])).push(...leg.throws);
+    });
+    const result: Record<string, { gameId: string; avg: number }[]> = {};
+    Object.entries(byPlayerGame).forEach(([playerId, byGame]) => {
+      result[playerId] = Object.entries(byGame).map(([gameId, throws]) => ({ gameId, avg: average(throws) }));
+    });
+    return result;
+  }, [gameLegs, filteredGames]);
+
+  // Per-player best single-game average — same source as clubStats.highestGameAvg below, just
+  // grouped by player instead of reduced to one club-wide winner, so "Bester Game-Ø" can also
+  // drive a full ranked list (like every other Records tile), not just show the #1 name.
+  const playerBestGameAvgById = useMemo(() => {
+    const result: Record<string, number> = {};
+    Object.entries(playerGameAveragesById).forEach(([playerId, entries]) => {
+      const best = entries.reduce((m, e) => Math.max(m, e.avg), 0);
+      if (best > 0) result[playerId] = best;
+    });
+    return result;
+  }, [playerGameAveragesById]);
+
   const resetFilters = () => {
     setFilterTime("all"); setFilterYear("all"); setFilterMode("all"); setFilterPlayerId("all"); setFilterBestOf("all");
   };
@@ -540,34 +607,17 @@ const StatisticsPage = () => {
     const bestHighscore = players.reduce((best, p) => p.high_score > best.val ? { name: p.name, val: p.high_score, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const mostGames = players.reduce((best, p) => p.games_played > best.val ? { name: p.name, val: p.games_played, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const totalDarts = filteredGames.reduce((s, g) => s + g.player1_total_throws + g.player2_total_throws, 0);
-    // Each side is only a record CANDIDATE if it's actually linked to a roster player — a
-    // freely-typed guest name (the "Spieler 1"/"Spieler 2" defaults) has no club history and
-    // must not be able to set a club record just because that game's row happens to carry a
-    // high average. The opponent side of the SAME game is unaffected: a real member's own
-    // average from that game is still fully eligible either way.
-    const highestGameAvg = filteredGames.reduce((best, g) => {
-      const candidates = [
-        { name: g.player1_name, id: g.player1_id, val: g.player1_average },
-        { name: g.player2_name, id: g.player2_id, val: g.player2_average },
-      ];
-      return candidates.reduce((b, c) => (c.id && c.val > b.val ? { name: c.name, val: c.val } : b), best);
+    // playerGameAveragesById is keyed by game_legs.player_id, which — unlike a freely typed
+    // "Spieler 1"/"Spieler 2" guest name — is only ever set for a matched roster member, so
+    // (unlike the old games-row version of this) no separate guest-name guard is needed here.
+    const highestGameAvg = Object.entries(playerBestGameAvgById).reduce((best, [id, val]) => {
+      const p = players.find((pl) => pl.id === id);
+      return p && val > best.val ? { name: p.name, val } : best;
     }, { name: "-", val: 0 });
     const mostWins = players.reduce((best, p) => p.games_won > best.val ? { name: p.name, val: p.games_won, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const onlineGames = filteredGames.reduce((s, g) => s + (g.played_online ? 1 : 0), 0);
     return { totalGames, totalPlayers, avgOfAverages, bestAvg, bestHighscore, mostGames, totalDarts, highestGameAvg, mostWins, onlineGames, localGames: totalGames - onlineGames };
-  }, [filteredGames, players]);
-
-  // Per-player best single-game average — same source rows as clubStats.highestGameAvg above,
-  // just grouped by player instead of reduced to one club-wide winner, so "Bester Game-Ø" can
-  // also drive a full ranked list (like every other Records tile), not just show the #1 name.
-  const playerBestGameAvgById = useMemo(() => {
-    const result: Record<string, number> = {};
-    filteredGames.forEach((g) => {
-      if (g.player1_id && g.player1_average > (result[g.player1_id] ?? 0)) result[g.player1_id] = g.player1_average;
-      if (g.player2_id && g.player2_average > (result[g.player2_id] ?? 0)) result[g.player2_id] = g.player2_average;
-    });
-    return result;
-  }, [filteredGames]);
+  }, [filteredGames, players, playerBestGameAvgById]);
 
   // 180s across the WHOLE club (every player, camera-tracked + manually backfilled), scoped to
   // whatever filter is active — same filteredGames convention every other club stat above
@@ -1004,7 +1054,7 @@ const StatisticsPage = () => {
     legAverages.sort((a, b) => b.avg - a.avg);
     const top20LegAverages = legAverages.slice(0, 20);
 
-    return { player, average: overallAverage, highScore, winRate, averageTrend, currentStreak, bestStreak, recentForm, recentFormDelta, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: ownGames.length, top20LegAverages };
+    return { player, average: overallAverage, highScore, winRate, wins, averageTrend, currentStreak, bestStreak, recentForm, recentFormDelta, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: ownGames.length, top20LegAverages };
   }, [selectedPlayerId, filteredGames, gameLegs, players, language]);
 
   const pagedRecentForm = usePagedList(playerDetailStats?.recentForm ?? []);
@@ -1169,12 +1219,13 @@ const StatisticsPage = () => {
       .filter((c) => c.player_id === selectedPlayerId && c.game_id && filteredIds.has(c.game_id))
       .sort((a, b) => b.points - a.points)
       .slice(0, 4);
-    const playerGames = filteredGames.filter((g) => g.player1_id === selectedPlayerId || g.player2_id === selectedPlayerId);
-    const wins = playerGames.filter((g) => g.winner_name === (g.player1_id === selectedPlayerId ? g.player1_name : g.player2_name)).length;
     return {
       player: playerDetailStats.player,
       games: playerDetailStats.totalGames,
-      wins,
+      // playerDetailStats.wins is already game_legs-derived (covers a team game's non-
+      // representative players too) — recomputing from games.player1_id/player2_id here used to
+      // miss those same players, the "representative-only" gap fixed elsewhere in this file.
+      wins: playerDetailStats.wins,
       winRate: playerDetailStats.winRate,
       total180s,
       bestCheckout: checkout?.highestCheckout ?? 0,
@@ -1217,37 +1268,57 @@ const StatisticsPage = () => {
     const p1 = players.find(p => p.id === compareP1);
     const p2 = players.find(p => p.id === compareP2);
     if (!p1 || !p2) return null;
-    const h2hGames = filteredGames.filter(g =>
-      (g.player1_id === compareP1 && g.player2_id === compareP2) || (g.player1_id === compareP2 && g.player2_id === compareP1)
-    );
-    let p1Wins = 0, p2Wins = 0, p1AvgSum = 0, p2AvgSum = 0;
-    h2hGames.forEach(g => {
-      const isP1First = g.player1_id === compareP1;
-      const myAvg = isP1First ? g.player1_average : g.player2_average;
-      const oppAvg = isP1First ? g.player2_average : g.player1_average;
-      p1AvgSum += Number(myAvg); p2AvgSum += Number(oppAvg);
-      if (g.winner_name === p1.name) p1Wins++; else if (g.winner_name === p2.name) p2Wins++;
+
+    // Built from game_legs rather than games.player1_id/player2_id, which for a team game only
+    // ever names ONE representative per side — a non-representative teammate's own duels were
+    // silently invisible here before, same gap already fixed for playerDetailStats above. A game
+    // only counts as a genuine head-to-head if both players are on OPPOSING sides; two players on
+    // the same team aren't duelling each other just because they're both in the same game.
+    const filteredIds = new Set(filteredGames.map(g => g.id));
+    const gamesById = new Map(filteredGames.map(g => [g.id, g]));
+    const legsByGame = new Map<string, GameLegRecord[]>();
+    gameLegs.forEach(l => {
+      if (!filteredIds.has(l.game_id)) return;
+      (legsByGame.get(l.game_id) ?? legsByGame.set(l.game_id, []).get(l.game_id)!).push(l);
+    });
+
+    let p1Wins = 0, p2Wins = 0, p1AvgSum = 0, p2AvgSum = 0, h2hCount = 0;
+    legsByGame.forEach((legs, gameId) => {
+      const g = gamesById.get(gameId);
+      if (!g) return;
+      const p1Leg = legs.find(l => l.player_id === compareP1);
+      const p2Leg = legs.find(l => l.player_id === compareP2);
+      if (!p1Leg || !p2Leg) return;
+      const isTeam = !!g.detail_stats?.isTeamGame;
+      const p1Side = p1Leg.player_index % 2;
+      const p2Side = p2Leg.player_index % 2;
+      if (isTeam && p1Side === p2Side) return; // same team — not a duel
+      h2hCount++;
+      const throwsFor = (playerId: string) => legs.filter(l => l.player_id === playerId).flatMap(l => (Array.isArray(l.throws) ? l.throws : []) as DartThrow[]);
+      const p1Throws = throwsFor(compareP1);
+      const p2Throws = throwsFor(compareP2);
+      p1AvgSum += p1Throws.length > 0 ? average(p1Throws) : 0;
+      p2AvgSum += p2Throws.length > 0 ? average(p2Throws) : 0;
+      // Non-team games: winner_id names the actual winning player directly. Team games:
+      // winner_name only ever names the winning side's ONE representative, so compare against
+      // that side's own representative name instead of p1/p2's own name.
+      const p1Won = isTeam ? g.winner_name === (p1Side === 0 ? g.player1_name : g.player2_name) : g.winner_id === compareP1;
+      if (p1Won) p1Wins++; else p2Wins++;
     });
     // "Beste Game-Ø" is each player's own best single-game average across ALL their games (same
-    // definition as the per-player tab's bestGameAvg), not scoped to just this pairing — unlike
-    // "Ø im Duell" right next to it, which IS deliberately h2h-only. Two players who've barely
-    // played each other would otherwise show a misleadingly low "best" here.
-    const bestGameAvgFor = (playerId: string) => {
-      const theirAvgs = filteredGames
-        .filter(g => g.player1_id === playerId || g.player2_id === playerId)
-        .map(g => Number(g.player1_id === playerId ? g.player1_average : g.player2_average));
-      return theirAvgs.length > 0 ? Math.max(...theirAvgs) : 0;
-    };
-    const p1BestGameAvg = bestGameAvgFor(compareP1);
-    const p2BestGameAvg = bestGameAvgFor(compareP2);
+    // definition as the per-player tab's bestGameAvg, and now the same shared source), not scoped
+    // to just this pairing — unlike "Ø im Duell" right next to it, which IS deliberately h2h-only.
+    // Two players who've barely played each other would otherwise show a misleadingly low "best".
+    const p1BestGameAvg = playerBestGameAvgById[compareP1] ?? 0;
+    const p2BestGameAvg = playerBestGameAvgById[compareP2] ?? 0;
     const winRate = (p: PlayerStats) => p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
     return {
-      p1, p2, h2hGames: h2hGames.length, p1Wins, p2Wins,
+      p1, p2, h2hGames: h2hCount, p1Wins, p2Wins,
       // "–" (not "0"/"0.0") when there are no head-to-head games yet — "Ø im Duell" is scoped to
       // just this matchup, unlike Ø Gesamt/Highscore/Beste Game-Ø in the same table (career-wide),
       // so a bare 0 here read as a real (very low) stat instead of "no data for this pairing".
-      p1AvgH2H: h2hGames.length > 0 ? (p1AvgSum / h2hGames.length).toFixed(1) : "–",
-      p2AvgH2H: h2hGames.length > 0 ? (p2AvgSum / h2hGames.length).toFixed(1) : "–",
+      p1AvgH2H: h2hCount > 0 ? (p1AvgSum / h2hCount).toFixed(1) : "–",
+      p2AvgH2H: h2hCount > 0 ? (p2AvgSum / h2hCount).toFixed(1) : "–",
       p1HighestAvg: p1BestGameAvg > 0 ? p1BestGameAvg.toFixed(1) : "–",
       p2HighestAvg: p2BestGameAvg > 0 ? p2BestGameAvg.toFixed(1) : "–",
       radar: [
@@ -1258,17 +1329,21 @@ const StatisticsPage = () => {
         { skill: "Checkout %", p1: Number(p1.double_rate), p2: Number(p2.double_rate) },
       ],
     };
-  }, [compareP1, compareP2, players, filteredGames]);
+  }, [compareP1, compareP2, players, filteredGames, gameLegs, playerBestGameAvgById]);
 
   // The player profile linked to the logged-in account (see Players.tsx's own user_id linkage) —
   // drives the entire "Ich" (personal) scope below. A member can play without ever linking a
   // profile, so this can legitimately be undefined.
   const myPlayer = useMemo(() => players.find((p) => p.user_id === session?.user?.id), [players, session]);
 
-  const personalGames = useMemo(
-    () => (myPlayer ? filteredGames.filter((g) => g.player1_id === myPlayer.id || g.player2_id === myPlayer.id) : []),
-    [filteredGames, myPlayer],
-  );
+  const personalGames = useMemo(() => {
+    if (!myPlayer) return [];
+    // games.player1_id/player2_id alone would miss a team game where myPlayer wasn't picked as
+    // their team's representative — the same gap fixed for playerDetailStats above. game_legs
+    // has a row for every real participant regardless of team role, so union it in.
+    const legGameIds = new Set(gameLegs.filter((l) => l.player_id === myPlayer.id).map((l) => l.game_id));
+    return filteredGames.filter((g) => g.player1_id === myPlayer.id || g.player2_id === myPlayer.id || legGameIds.has(g.id));
+  }, [filteredGames, myPlayer, gameLegs]);
 
   // Jumping into personal scope locks the existing player-detail view (see the "players" tab
   // below) onto the logged-in member's own profile instead of leaving it on whatever was last
@@ -1369,7 +1444,7 @@ const StatisticsPage = () => {
     try {
       await supabase.storage.from("dart-clips").remove([clip.storage_path]);
       await supabase.from("highlight_clips").delete().eq("id", clip.id);
-      setHighlightClips((prev) => prev.filter((c) => c.id !== clip.id));
+      queryClient.setQueryData<HighlightClipRecord[]>(STATS_HIGHLIGHT_CLIPS_QUERY_KEY, (prev) => (prev ?? []).filter((c) => c.id !== clip.id));
     } finally {
       setDeletingClipId(null);
     }
@@ -1389,7 +1464,7 @@ const StatisticsPage = () => {
       await supabase.storage.from("dart-clips").remove(oldClips.map((c) => c.storage_path));
       await supabase.from("highlight_clips").delete().in("id", oldClips.map((c) => c.id));
       const removedIds = new Set(oldClips.map((c) => c.id));
-      setHighlightClips((prev) => prev.filter((c) => !removedIds.has(c.id)));
+      queryClient.setQueryData<HighlightClipRecord[]>(STATS_HIGHLIGHT_CLIPS_QUERY_KEY, (prev) => (prev ?? []).filter((c) => !removedIds.has(c.id)));
     } finally {
       setCleaningUpClips(false);
     }
@@ -2015,7 +2090,7 @@ const StatisticsPage = () => {
                     <Manual180Editor
                       playerId={selectedPlayerId}
                       entries={manual180Entries.filter((e) => e.player_id === selectedPlayerId)}
-                      onChanged={fetchData}
+                      onChanged={() => queryClient.invalidateQueries({ queryKey: STATS_MANUAL_180_QUERY_KEY })}
                     />
                   )}
                 </SectionCard>

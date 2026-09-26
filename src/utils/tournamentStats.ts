@@ -207,8 +207,17 @@ export function computeTournamentHighlights(legs: TournamentStatsLegRow[]): Tour
  * comment on why "mean of per-game averages", not a raw pooled-dart average). Needs no per-dart
  * data at all, so this works identically whether the tournament was scored by camera or entirely
  * by hand — unlike computeTournamentHighlights above, which needs real per-dart records.
+ *
+ * `games` rows only ever name ONE representative per side (player1_id/player2_id — see
+ * gameSync.ts), so a team game's non-representative teammate has no entry from that pass alone —
+ * they'd be silently missing from the whole participants leaderboard, not just show a wrong
+ * number. The optional `legs` param (pass the same raw game_legs-shaped rows
+ * computeTournamentHighlights already takes) fills exactly those gaps in: for any leg naming a
+ * real player_id the games pass didn't already cover for that game, pool their own throws for
+ * that game (same per-game pooling as everywhere else) and add it as their own entry. Backward
+ * compatible — omitting `legs` (or passing none) reproduces the old games-only behavior exactly.
  */
-export function computeTournamentAverages(games: TournamentStatsGameRow[]): TournamentAverages {
+export function computeTournamentAverages(games: TournamentStatsGameRow[], legs?: TournamentStatsLegRow[]): TournamentAverages {
   const byKey = new Map<string, { name: string; averages: number[] }>();
   const add = (key: string, name: string, avg: number) => {
     if (!avg) return;
@@ -216,9 +225,30 @@ export function computeTournamentAverages(games: TournamentStatsGameRow[]): Tour
     entry.averages.push(avg);
     byKey.set(key, entry);
   };
+  const coveredPlayerIdsByGame = new Map<string, Set<string>>();
   for (const g of games) {
     add(g.player1_id ?? g.player1_name, g.player1_name, Number(g.player1_average));
     add(g.player2_id ?? g.player2_name, g.player2_name, Number(g.player2_average));
+    const covered = new Set<string>();
+    if (g.player1_id) covered.add(g.player1_id);
+    if (g.player2_id) covered.add(g.player2_id);
+    coveredPlayerIdsByGame.set(g.id, covered);
+  }
+
+  if (legs && legs.length > 0) {
+    const throwsByPlayerGame = new Map<string, Map<string, DartThrow[]>>();
+    const nameByPlayerId = new Map<string, string>();
+    for (const l of legs) {
+      if (!l.player_id || !l.game_id || !Array.isArray(l.throws) || l.throws.length === 0) continue;
+      if (coveredPlayerIdsByGame.get(l.game_id)?.has(l.player_id)) continue; // already counted above
+      nameByPlayerId.set(l.player_id, l.player_name);
+      const byGame = throwsByPlayerGame.get(l.player_id) ?? new Map<string, DartThrow[]>();
+      byGame.set(l.game_id, [...(byGame.get(l.game_id) ?? []), ...l.throws]);
+      throwsByPlayerGame.set(l.player_id, byGame);
+    }
+    throwsByPlayerGame.forEach((byGame, playerId) => {
+      byGame.forEach((throws) => add(playerId, nameByPlayerId.get(playerId) ?? playerId, average(throws)));
+    });
   }
 
   const participants = [...byKey.entries()]
@@ -246,6 +276,14 @@ export function computeTournamentAverages(games: TournamentStatsGameRow[]): Tour
  * against the matching `games` row's own player1_id/player1_name rather than array order or a
  * `player_index` column, since this is the only place that already has both pieces of data at
  * hand and it keeps TournamentStatsLegRow itself free of game-level fields.
+ *
+ * A team game's non-representative teammate matches NEITHER player1_id nor player2_id (those
+ * only ever name one representative per side — see gameSync.ts) — their leg rows are skipped
+ * entirely rather than falling into an `else` bucket, which used to silently merge their throws
+ * into whichever side they didn't happen to match, corrupting that side's per-leg average. No
+ * `player_index` column is available here to resolve their real side instead (see above), so an
+ * incomplete-but-correct drill-down (their own turns just don't contribute) beats a complete but
+ * wrong one.
  */
 export function computeLegAveragesByGame(
   legs: TournamentStatsLegRow[],
@@ -259,6 +297,8 @@ export function computeLegAveragesByGame(
     const g = gameById.get(l.game_id);
     if (!g) continue;
     const isPlayer1 = l.player_id ? l.player_id === g.player1_id : l.player_name === g.player1_name;
+    const isPlayer2 = l.player_id ? l.player_id === g.player2_id : l.player_name === g.player2_name;
+    if (!isPlayer1 && !isPlayer2) continue;
     const perLegNum = byGame.get(l.game_id) ?? new Map<number, Partial<GameLegAverage>>();
     const entry = perLegNum.get(l.leg_number) ?? {};
     const avg = average(l.throws);

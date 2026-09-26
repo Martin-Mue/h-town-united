@@ -1843,6 +1843,20 @@ const GamePage = () => {
     submitDetectedRound(splitQuickRound(total), undefined, true);
   };
 
+  // Stable identity for the onThrow/onQuickRound props DartScoreInput takes (it's wrapped in
+  // React.memo) — throwDart/handleQuickRound above are still plain closures recreated every
+  // render, same as everything else in this component. Same latest-closure-via-ref technique
+  // remainingRef uses higher up, just for callback IDENTITY instead of avoiding a stale value
+  // read: without this, memo on DartScoreInput would still re-render the whole 20-number/
+  // double/triple grid on every scoreFlash/botThinking tick, since a plain inline function prop
+  // changes identity every render regardless of what memo does on the receiving end.
+  const throwDartRef = useRef(throwDart);
+  throwDartRef.current = throwDart;
+  const stableThrowDart = useCallback((base: number, mul: number) => throwDartRef.current(base, mul), []);
+  const handleQuickRoundRef = useRef(handleQuickRound);
+  handleQuickRoundRef.current = handleQuickRound;
+  const stableHandleQuickRound = useCallback((total: number) => handleQuickRoundRef.current(total), []);
+
   const shareResult = async () => {
     if (!game || !postGameStats || sharingResult) return;
     setSharingResult(true);
@@ -2927,8 +2941,8 @@ const GamePage = () => {
 
             {showManualInput && (
               <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice || (!!onlineMatchId && !onlineMatch.isMyTurn)}
-                onThrow={throwDart}
-                onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
+                onThrow={stableThrowDart}
+                onQuickRound={!isCricket && !currentPlayer?.isBot ? stableHandleQuickRound : undefined}
                 inputMode={dartInputMode} onInputModeChange={setDartInputMode}
                 dartsThisRound={dartsThisRound} />
             )}
@@ -3065,8 +3079,8 @@ const GamePage = () => {
           <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[1fr_2fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden px-4">
             <div className="pt-3 pb-3 landscape:col-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
               <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
-                onThrow={throwDart}
-                onQuickRound={!isCricket && !currentPlayer?.isBot ? handleQuickRound : undefined}
+                onThrow={stableThrowDart}
+                onQuickRound={!isCricket && !currentPlayer?.isBot ? stableHandleQuickRound : undefined}
                 inputMode={dartInputMode} onInputModeChange={setDartInputMode}
                 dartsThisRound={dartsThisRound} />
             </div>

@@ -1,10 +1,16 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, lazy, Suspense } from "react";
 import { Dumbbell, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Settings2, PartyPopper, Undo2, Flame, Heart, PiggyBank } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import CoachingPlan from "@/components/training/CoachingPlan";
-import LiveCamera, { type DetectedDart } from "@/components/game/LiveCamera";
+// Loaded lazily, same as Game.tsx's own identical import — LiveCamera pulls in onnxruntime-web +
+// vision utilities (~112KB) that cameraEnabled (default false, see below) has no use for on a
+// manual/quick-round drill. Type-only imports are erased at compile time, so they don't defeat
+// the code-split the way a value import of the same module would.
+const LiveCamera = lazy(() => import("@/components/game/LiveCamera"));
+import type { DetectedDart } from "@/components/game/LiveCamera";
 import { CHECKOUT_ROUTES } from "@/utils/checkoutTable";
 import { isAchievableVisitTotal } from "@/utils/dartStats";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -1506,15 +1512,19 @@ const TrainingPage = () => {
               </div>
             )}
 
-            {/* Live Camera (auto-scoring) */}
+            {/* Live Camera (auto-scoring) — Suspense's fallback only ever shows for the brief
+                one-time chunk download the first time a drill's camera is turned on, same as
+                Game.tsx's identical block. */}
             {cameraEnabled && (
-              <LiveCamera
-                enabled={cameraEnabled}
-                onClose={() => setCameraEnabled(false)}
-                onRoundCommit={handleCameraRound}
-                dartsRemaining={Math.max(1, 3 - drillState.dartsThisRound)}
-                playerName={t("training.trainingPlayerName")}
-              />
+              <Suspense fallback={<div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
+                <LiveCamera
+                  enabled={cameraEnabled}
+                  onClose={() => setCameraEnabled(false)}
+                  onRoundCommit={handleCameraRound}
+                  dartsRemaining={Math.max(1, 3 - drillState.dartsThisRound)}
+                  playerName={t("training.trainingPlayerName")}
+                />
+              </Suspense>
             )}
 
             {/* Score input — quick-round/typed-total/voice only for the 3 checkout-style drills,
