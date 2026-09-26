@@ -928,7 +928,10 @@ const PublicTournamentPage = () => {
       }
     });
     const gameRows = [...gamesByGameId.values()];
-    const averages = computeTournamentAverages(gameRows);
+    // Passing the raw leg rows too fills in a team game's non-representative teammates in the
+    // participants leaderboard — gameRows alone only ever names the one representative per side
+    // (games.player1_id/player2_id), the same gap already fixed for the member-facing stats page.
+    const averages = computeTournamentAverages(gameRows, rows);
     // Per-leg breakdown intentionally uses the UNFILTERED rows — a withdrawn player's own
     // already-played matches still show their real leg-by-leg average when expanded, same as the
     // match row itself (averages.games below) already isn't roster-filtered either.
