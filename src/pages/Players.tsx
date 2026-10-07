@@ -579,6 +579,13 @@ const PlayersPage = () => {
   /** Creates a new player with optional photos */
   const addPlayer = async () => {
     if (!newName.trim() || savingPlayer) return;
+    // Letzte Sicherung: ein Profil MIT Account-Verknüpfung darf pro Login nur einmal entstehen.
+    // Wer schon eins hat und hier jemand anderen anlegt, hätte sonst einen Fremden auf den
+    // eigenen Account verlinkt (Fall "Korti" beim Dienstagsturnier).
+    if (!isEditMode && !createWithoutAccount && ownPlayerProfile) {
+      toast({ title: t("players.alreadyHaveProfile"), description: t("players.useWalkInForOthers"), variant: "destructive" });
+      return;
+    }
     setSavingPlayer(true);
     try {
 
@@ -1061,6 +1068,11 @@ const PlayersPage = () => {
                     <span className="text-xs text-muted-foreground">{t("players.walkInHint")}</span>
                   </span>
                 </label>
+              )}
+              {!isEditMode && !createWithoutAccount && (
+                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-200">
+                  {t("players.ownAccountWarning")}
+                </div>
               )}
               <div>
                 <Label>{t("players.nameRequired")}</Label>
