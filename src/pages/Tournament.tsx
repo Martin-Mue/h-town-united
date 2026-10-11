@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react";
-import { Trophy, Plus, Play, RotateCcw, Trash2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, UserPlus, Monitor, QrCode, RefreshCcw, Target, Smartphone, Swords, Wifi, Timer } from "lucide-react";
+import { ClipboardCheck, Trophy, Plus, Play, RotateCcw, Trash2, Users, Check, Sparkles, Layers, Radio, Copy, Zap, Maximize2, ZoomIn, ZoomOut, ChevronDown, ChevronUp, Shuffle, ArrowUp, ArrowDown, ArrowLeft, Settings2, PencilLine, ListOrdered, Network, UserMinus, UserPlus, Monitor, QrCode, RefreshCcw, Target, Smartphone, Swords, Wifi, Timer } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
+import QuickResultDialog from "@/components/tournament/QuickResultDialog";
 import QrCodeDialog from "@/components/QrCodeDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -151,7 +152,9 @@ interface BracketViewportProps {
   totalRounds: number;
   activeTournament: TournamentRecord;
   roundLabel: (round: number, total: number) => string;
-  setKoWinner: (matchId: string, winner: string) => void;
+  setKoWinner: (matchId: string, winner: string, score1?: number, score2?: number) => void | Promise<void>;
+  /** Legs (or sets) needed to win a match of the given round — drives the quick result dialog. */
+  firstToForRound: (round: number) => number;
   setKoScore: (matchId: string, slot: 1 | 2) => void;
   resetKoMatch: (matchId: string) => void;
   onEditMatch?: (match: Match) => void;
@@ -176,7 +179,7 @@ interface BracketViewportProps {
   onEditRoundMode: (round: number) => void;
 }
 
-const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, canStartOnlineGame, onStartOnlineGame, startingOnlineId, isOwner, canEditResults, onEditRoundMode }: BracketViewportProps) => {
+const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, setKoWinner, firstToForRound, setKoScore, resetKoMatch, onEditMatch, canStartLiveGame, onStartLiveGame, getLiveGameUrl, canStartOnlineGame, onStartOnlineGame, startingOnlineId, isOwner, canEditResults, onEditRoundMode }: BracketViewportProps) => {
   // v2 — no continuous auto-measurement (see PublicTournament.tsx's LiveBracket for the same
   // change + full rationale): fixed, always-legible scale by default, native scroll for
   // overflow, manual zoom, and "fit to screen" as a one-time on-demand measurement instead of
@@ -296,6 +299,21 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
             )}
             {match.board ? <span className="font-mono">{t("camera.board")} {match.board}</span> : null}
           </span>
+        </div>
+      )}
+      {canEditResults && !match.winner && isPlayable(match) && (
+        <div className="flex border-t border-border/60">
+          <QuickResultDialog
+            player1={match.player1!}
+            player2={match.player2!}
+            firstTo={firstToForRound(match.round)}
+            onSubmit={(w, s1, s2) => setKoWinner(match.id, w, s1, s2)}
+            trigger={
+              <Button variant="ghost" size="sm" className="flex-1 rounded-none h-9 text-xs gap-1.5">
+                <ClipboardCheck className="w-3.5 h-3.5" /> {t("tournament.quickResult")}
+              </Button>
+            }
+          />
         </div>
       )}
       {canStartLiveGame(match) && (
@@ -1652,6 +1670,10 @@ const TournamentPage = () => {
     return cfg?.mode || activeTournament?.game_mode || "501";
   };
 
+  /** Legs — or, with Sets-Modus, sets — a side needs to win a match of this round. */
+  const firstToForRound = (round: number): number =>
+    Math.ceil((activeTournament?.best_of_sets ? activeTournament.best_of_sets : resolveRoundBestOf(round)) / 2);
+
   const resolveRoundBestOf = (round: number): number => {
     const cfg = (activeTournament?.round_configs || [])[roundConfigIndex(round)];
     return cfg?.bestOf || activeTournament?.best_of_legs || 3;
@@ -3003,6 +3025,7 @@ const TournamentPage = () => {
             activeTournament={activeTournament}
             roundLabel={roundLabel}
             setKoWinner={setKoWinner}
+            firstToForRound={firstToForRound}
             setKoScore={setKoScore}
             resetKoMatch={resetKoMatch}
             onEditMatch={(m) => { setEditMatch(m); setEditP1(m.player1 === BYE ? "" : m.player1 || ""); setEditP2(m.player2 === BYE ? "" : m.player2 || ""); }}
@@ -3042,6 +3065,19 @@ const TournamentPage = () => {
                         <span className="flex-1 truncate uppercase tracking-wide">
                           <strong>{e.match.player1}</strong> <span className="text-muted-foreground">vs</span> <strong>{e.match.player2}</strong>
                         </span>
+                        {canEditResults && isPlayable(e.match) && (
+                          <QuickResultDialog
+                            player1={e.match.player1!}
+                            player2={e.match.player2!}
+                            firstTo={firstToForRound(e.match.round)}
+                            onSubmit={(w, s1, s2) => setKoWinner(e.match.id, w, s1, s2)}
+                            trigger={
+                              <Button size="icon" variant="outline" className="h-9 w-9 shrink-0" title={t("tournament.quickResult")} aria-label={t("tournament.quickResult")}>
+                                <ClipboardCheck className="w-4 h-4" />
+                              </Button>
+                            }
+                          />
+                        )}
                         {isLiveSnapshotFresh(e.match.live) && (
                           <span className="shrink-0 flex items-center gap-1 text-accent text-xs font-display">
                             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />

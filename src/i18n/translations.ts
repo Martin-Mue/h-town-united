@@ -1703,6 +1703,9 @@ export const translations: Record<string, Record<Language, string>> = {
   "pt.youPicked": { de: "Dein Tipp:", en: "Your tip:", fr: "Votre pronostic :", pl: "Twój typ:", nl: "Jouw tip:", tr: "Tahminin:" },
   "pt.prevRound": { de: "Vorherige Runde", en: "Previous round", fr: "Tour précédent", pl: "Poprzednia runda", nl: "Vorige ronde", tr: "Önceki tur" },
   "pt.nextRound": { de: "Nächste Runde", en: "Next round", fr: "Tour suivant", pl: "Następna runda", nl: "Volgende ronde", tr: "Sonraki tur" },
+  "tournament.quickResult": { de: "Ergebnis eintragen", en: "Enter result", fr: "Saisir le résultat", pl: "Wpisz wynik", nl: "Uitslag invoeren", tr: "Sonucu gir" },
+  "tournament.quickResultDesc": { de: "Für Spiele außerhalb der App (z. B. in DartsMind): Sieger und Endstand mit einem Tipp festhalten.", en: "For matches played outside the app (e.g. in DartsMind): record winner and final score in one tap.", fr: "Pour les matchs joués hors de l'app (p. ex. dans DartsMind) : enregistrez vainqueur et score final en un geste.", pl: "Dla meczów rozegranych poza aplikacją (np. w DartsMind): zapisz zwycięzcę i wynik jednym kliknięciem.", nl: "Voor wedstrijden buiten de app (bijv. in DartsMind): leg winnaar en eindstand vast met één tik.", tr: "Uygulama dışında oynanan maçlar için (örn. DartsMind): kazananı ve sonucu tek dokunuşla kaydedin." },
+  "tournament.quickResultWins": { de: "gewinnt", en: "wins", fr: "gagne", pl: "wygrywa", nl: "wint", tr: "kazanır" },
 };
 
 export function translate(key: string, language: Language): string {

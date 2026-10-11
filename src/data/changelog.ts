@@ -614,4 +614,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Turnuvalar artık çiftler olarak oynanabilir (takımlar rastgele, dengeli veya sıraya göre). Telefonda canlı görünüm tek seferde bir tur gösterir, skor tablosu daha sade ve tahmin oyunu anonim tahmin sayısını ve sonuç özetini gösterir.",
     },
   },
+  {
+    id: "2026-10-11-quick-result",
+    date: "2026-10-11",
+    title: {
+      de: "Ergebnis mit einem Tipp eintragen",
+      en: "Enter a result in one tap",
+      fr: "Saisir un résultat en un geste",
+      pl: "Wynik jednym kliknięciem",
+      nl: "Uitslag met één tik invoeren",
+      tr: "Sonucu tek dokunuşla girin",
+    },
+    description: {
+      de: "Für Spiele außerhalb der App (z. B. in DartsMind): In Turnierbaum und Spielplan Sieger und Endstand mit einem Tipp festhalten.",
+      en: "For matches played outside the app (e.g. in DartsMind): record winner and final score in one tap from the bracket or schedule.",
+      fr: "Pour les matchs joués hors de l'app (p. ex. DartsMind) : enregistrez vainqueur et score final en un geste depuis le tableau ou le planning.",
+      pl: "Dla meczów poza aplikacją (np. DartsMind): zapisz zwycięzcę i wynik jednym kliknięciem w drabince lub harmonogramie.",
+      nl: "Voor wedstrijden buiten de app (bijv. DartsMind): leg winnaar en eindstand vast met één tik in schema of speelplan.",
+      tr: "Uygulama dışında oynanan maçlar için (örn. DartsMind): kazananı ve sonucu ağaçtan veya programdan tek dokunuşla kaydedin.",
+    },
+  },
 ];
