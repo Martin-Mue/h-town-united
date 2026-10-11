@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { GameMode } from "@/types/game";
 import type { TournamentLink } from "@/lib/activeGameSnapshot";
+import { isTeamName, splitTeamName } from "@/utils/tournamentTeams";
 
 interface UseTournamentLinkParams {
   searchParams: URLSearchParams;
   initialTournamentLink: TournamentLink | null;
   setPlayerNames: Dispatch<SetStateAction<string[]>>;
   setTeamMode: Dispatch<SetStateAction<boolean>>;
+  /** Doppelturnier: a team-vs-team match sets both team names (the full "Anna & Ben" bracket names). */
+  setTeamNames?: Dispatch<SetStateAction<[string, string]>>;
   setNumPlayers: Dispatch<SetStateAction<number>>;
   setMode: Dispatch<SetStateAction<GameMode>>;
   setBestOfLegs: Dispatch<SetStateAction<number>>;
@@ -37,6 +40,7 @@ export function useTournamentLink({
   initialTournamentLink,
   setPlayerNames,
   setTeamMode,
+  setTeamNames,
   setNumPlayers,
   setMode,
   setBestOfLegs,
@@ -76,16 +80,26 @@ export function useTournamentLink({
     setTournamentLinkName(tname || "Turnier");
     setCheckoutSuggestionEnabled(false);
 
-    if (p1 || p2) {
-      setPlayerNames((prev) => {
-        const next = [...prev];
-        if (p1) next[0] = p1;
-        if (p2) next[1] = p2;
-        return next;
-      });
+    if (p1 && p2 && isTeamName(p1) && isTeamName(p2) && setTeamNames) {
+      // Doubles match: two throwers per team, interleaved [A-1, B-1, A-2, B-2] as team mode expects.
+      const [a1, a2 = ""] = splitTeamName(p1);
+      const [b1, b2 = ""] = splitTeamName(p2);
+      setPlayerNames([a1, b1, a2, b2]);
+      setTeamNames([p1, p2]);
+      setTeamMode(true);
+      setNumPlayers(4);
+    } else {
+      if (p1 || p2) {
+        setPlayerNames((prev) => {
+          const next = [...prev];
+          if (p1) next[0] = p1;
+          if (p2) next[1] = p2;
+          return next;
+        });
+      }
+      setTeamMode(false);
+      setNumPlayers(2);
     }
-    setTeamMode(false);
-    setNumPlayers(2);
 
     const qMode = searchParams.get("mode");
     if (qMode === "501" || qMode === "301" || qMode === "cricket") setMode(qMode);

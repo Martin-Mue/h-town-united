@@ -327,6 +327,7 @@ const GamePage = () => {
     initialTournamentLink: initialSnapshot?.tournamentLink ?? null,
     setPlayerNames,
     setTeamMode,
+    setTeamNames,
     setNumPlayers,
     setMode,
     setBestOfLegs,
@@ -2492,7 +2493,9 @@ const GamePage = () => {
               const memberIdxs = game.players.map((_, pi) => pi).filter((pi) => teamIndexFor(game.teams, pi) === ti);
               const throws = memberIdxs.flatMap((pi) => game.currentLeg.throws[pi]);
               return {
-                key: ti, label: t.name, subLabel: memberIdxs.map((pi) => game.players[pi].name).join(" & "),
+                key: ti, label: t.name,
+                // Doubles-tournament teams are already named "Anna & Ben" — repeating the roster under it is noise.
+                subLabel: (() => { const roster = memberIdxs.map((pi) => game.players[pi].name).join(" & "); return roster === t.name ? undefined : roster; })(),
                 isBot: false, remaining: game.currentLeg.remaining[ti], cricketPoints: game.cricket?.[ti]?.points ?? 0,
                 avg: calculateAverage(throws), p180: count180s(throws), legsWon: game.legsWon[ti],
                 setsWon: game.setsWon?.[ti],
@@ -2553,22 +2556,42 @@ const GamePage = () => {
           } as CSSProperties;
           return (
             <div key={card.key}
-              className={`broadcast-panel p-4 landscape:p-3 border-2 transition-all text-center ${isActive ? "glow-cyan" : "opacity-80"}`}
-              style={{ ...darkVarOverrides, borderColor: isActive ? activeHsl : "hsl(222 18% 20%)" }}>
-              <div className="flex items-center justify-center gap-1.5">
-                {isActive && <span className="inline-block h-2 w-2 rounded-full animate-pulse-glow" style={{ background: activeHsl }} />}
-                {card.isBot && <Bot className="w-3 h-3 shrink-0" style={{ color: "hsl(155 65% 55%)" }} />}
-                <span
-                  className="broadcast-tag inline-flex max-w-full px-2.5 py-0.5 rounded-[2px]"
-                  style={!isActive ? { background: "hsl(222 20% 18%)" } : undefined}
-                >
+              className={`relative overflow-hidden rounded-2xl border p-3 landscape:p-2.5 transition-all text-center ${isActive ? "shadow-[0_8px_28px_-10px_hsl(185_85%_48%/0.55)]" : "opacity-70"}`}
+              style={{
+                ...darkVarOverrides,
+                color: "hsl(210 15% 92%)",
+                background: isActive ? "linear-gradient(165deg, hsl(222 28% 13%), hsl(222 30% 7%))" : "hsl(222 28% 8%)",
+                borderColor: isActive ? "hsl(185 85% 48% / 0.7)" : "hsl(222 18% 16%)",
+              }}>
+              {isActive && <span aria-hidden className="absolute inset-x-0 top-0 h-[3px]" style={{ background: activeHsl }} />}
+              <div className="flex items-center justify-between gap-2 text-left">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {isActive && <span className="inline-block h-2 w-2 shrink-0 rounded-full animate-pulse-glow" style={{ background: activeHsl }} />}
+                  {card.isBot && <Bot className="w-3 h-3 shrink-0" style={{ color: "hsl(155 65% 55%)" }} />}
                   <span
-                    className="text-sm font-display font-semibold truncate max-w-[8.5rem]"
-                    style={{ color: isActive ? undefined : "hsl(210 15% 78%)" }}
+                    className="text-sm font-display font-semibold truncate"
+                    style={{ color: isActive ? "hsl(210 15% 96%)" : "hsl(210 15% 70%)" }}
                   >
                     {card.label}
                   </span>
-                </span>
+                </div>
+                {/* Match score as chips next to the name (Sets-Modus: sets lead, the current set's
+                    leg race follows — "2 Sätze · 1 Leg" reads as leading 2 sets and 1 leg up in the
+                    current one, not as two competing numbers). */}
+                {(game.setsMode || game.bestOfLegs > 1) && (
+                  <div className="flex items-center gap-1 shrink-0 text-xs font-display font-bold tabular-nums">
+                    {game.setsMode && (
+                      <span className="rounded-md px-1.5 py-0.5" style={{ background: "hsl(155 65% 42% / 0.2)", color: "hsl(155 65% 60%)" }}>
+                        {card.setsWon ?? 0} {t("game.setsSuffix")}
+                      </span>
+                    )}
+                    {game.bestOfLegs > 1 && (
+                      <span className="rounded-md px-1.5 py-0.5" style={{ background: "hsl(185 85% 48% / 0.18)", color: "hsl(185 85% 62%)" }}>
+                        {card.legsWon} {t("game.legsSuffix")}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               {card.subLabel && (
                 <p className="text-[10px] truncate mt-0.5" style={{ color: isActive ? "hsl(185 60% 65%)" : "hsl(210 15% 50%)" }}>
@@ -2579,7 +2602,7 @@ const GamePage = () => {
                   as one long "PlayerA & PlayerB · Am Zug: PlayerA" string, which was both too
                   small and, once combined with a real roster, too long to read at a glance. Its
                   own bigger, bolder, highlighted line instead. */}
-              {isActive && card.subLabel && (
+              {isActive && game.teams && (
                 <p className="text-sm font-display font-bold truncate mt-0.5" style={{ color: activeHsl }}>
                   {t("game.turnLabel")}: {currentPlayerName}
                 </p>
@@ -2592,7 +2615,7 @@ const GamePage = () => {
                 // landscape has its own dedicated column now (see the playing-phase layout below)
                 // with room to spare, so there's no longer a reason to make it smaller there.
                 <p
-                  className={`text-5xl font-display mt-1 transition-colors tabular-nums ${isFlashing ? "animate-pulse-glow" : ""}`}
+                  className={`text-6xl leading-none font-display mt-2 mb-1 transition-colors tabular-nums ${isFlashing ? "animate-pulse-glow" : ""}`}
                   style={{ color: scoreColor, textShadow: isActive ? `0 0 22px ${scoreColor}80` : undefined }}
                 >
                   <AnimatedScore value={isCricket ? card.cricketPoints : displayRemaining} />
@@ -2636,14 +2659,12 @@ const GamePage = () => {
                   {activeRound.length > 0 && <span className="ml-1 text-sm landscape:text-xs font-display text-accent">+{currentRoundTotal}</span>}
                 </div>
               )}
-              <div className="flex justify-center flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
-                <span>Ø {card.avg.toFixed(1)}</span>
+              <div className="flex justify-center flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
+                <span>Ø <span className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 85%)" }}>{card.avg.toFixed(1)}</span></span>
                 {/* Sets-Modus: the match-level score (sets) leads, the current set's leg race
                     (which resets to 0 every new set — see applyLegWin) follows right after it —
                     "2 Sätze · 1 Leg" reads as "leading 2 sets, and 1 leg up in the current one",
                     not as two competing/contradicting numbers. */}
-                {game.setsMode && <span className="text-secondary font-bold">{card.setsWon ?? 0} {t("game.setsSuffix")}</span>}
-                {game.bestOfLegs > 1 && <span className="text-primary font-bold">{card.legsWon} {t("game.legsSuffix")}</span>}
                 {legStreak?.slot === card.key && (
                   <span className="text-orange-400 font-bold animate-pulse-glow">🔥 {legStreak.count} {t("game.legsInARow")}</span>
                 )}

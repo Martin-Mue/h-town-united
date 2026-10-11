@@ -6,6 +6,8 @@ import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import MatchPredictionsPanel from "@/components/tournament/MatchPredictionsPanel";
+import MobileBracket from "@/components/tournament/MobileBracket";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useMatchPredictions } from "@/hooks/useMatchPredictions";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -61,7 +63,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
     <div className="space-y-4">
       <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
-        <div className="grid grid-cols-[auto_1fr_repeat(4,40px)] gap-x-2 gap-y-1 text-xs">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_repeat(4,32px)] gap-x-2 gap-y-1 text-xs">
           <span className="text-muted-foreground">#</span>
           <span className="text-muted-foreground">{t("stats.player")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.playedAbbrev")}</span>
@@ -73,7 +75,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
               <span className={`font-display ${i === 0 ? "text-accent" : ""}`}>
                 {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
               </span>
-              <span className="font-semibold truncate">{s.name}</span>
+              <span className="font-semibold break-words leading-tight min-w-0">{s.name}</span>
               <span className="text-center">{s.played}</span>
               <span className="text-center text-secondary">{s.won}</span>
               <span className="text-center text-destructive">{s.lost}</span>
@@ -89,7 +91,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
           <div className="space-y-1.5">
             {unplayed.map((m) => (
               <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2 text-sm">
-                <span className="truncate uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {m.player2}</span>
+                <span className="min-w-0 break-words uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {m.player2}</span>
               </div>
             ))}
           </div>
@@ -102,7 +104,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
           <div className="space-y-1">
             {played.map((m) => (
               <div key={m.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
-                <span className="truncate uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {m.player2}</span>
+                <span className="min-w-0 break-words uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {m.player2}</span>
                 <span className="text-xs text-secondary font-medium shrink-0 ml-2">{m.winner} ✓</span>
               </div>
             ))}
@@ -786,6 +788,7 @@ const DEFAULT_ROTATION_SLOTS: Record<RotationSlot, boolean> = {
 };
 
 const PublicTournamentPage = () => {
+  const isMobile = useIsMobile();
   const { slug } = useParams<{ slug: string }>();
   // Aliased to `tr` (not the usual `t`) — this component already uses `t` for the tournament
   // record itself (a name from long before this page had any translations, too widely
@@ -1427,7 +1430,15 @@ const PublicTournamentPage = () => {
               view (see view === "boards" above) is the one place for that now, so switching to
               tree/list/round-robin isn't showing the same live-match cards twice. */}
           {isKo ? (
-            view === "tree" ? (
+            isMobile ? (
+              <MobileBracket
+                matches={matches}
+                totalRounds={totalRounds}
+                roundConfigs={t.round_configs}
+                fallbackMode={t.game_mode}
+                fallbackBestOf={t.best_of_legs}
+              />
+            ) : view === "tree" ? (
               <LiveBracket
                 matches={matches}
                 totalRounds={totalRounds}

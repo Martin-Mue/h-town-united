@@ -222,7 +222,9 @@ export function fillByeSlot(matches: Match[], playerName: string): Match[] | nul
  *  since it runs outside a component with no pre-loaded roster to reuse). Was reimplemented
  *  identically in both places instead of shared. */
 export function resolveMatchUserIds(match: Match, roster: { name: string; user_id: string | null }[]): string[] {
+  // A doubles team ("Anna & Ben") notifies both of its members.
   return [match.player1, match.player2]
+    .flatMap((name) => (name && name.includes(" & ") ? name.split(" & ").map((x) => x.trim()) : [name]))
     .map((name) => roster.find((p) => p.name === name)?.user_id)
     .filter((id): id is string => !!id);
 }

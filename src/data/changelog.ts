@@ -594,4 +594,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Kişisel istatistik görünümünde (kulüp sıralamasından tıklayarak da ulaşılabilir) artık tek bir en iyi değer yerine, kendi en iyi 20 leg ortalamanın açılabilir bir listesi var.",
     },
   },
+  {
+    id: "2026-10-11-doubles-mobile-predictions",
+    date: "2026-10-11",
+    title: {
+      de: "Doppelturniere, Handy-Ansicht und Tipp-Auswertung",
+      en: "Doubles tournaments, phone view and tip results",
+      fr: "Tournois en double, vue mobile et résultats des pronostics",
+      pl: "Turnieje deblowe, widok mobilny i wyniki typów",
+      nl: "Dubbeltoernooien, telefoonweergave en tipuitslag",
+      tr: "Çiftler turnuvaları, telefon görünümü ve tahmin sonuçları",
+    },
+    description: {
+      de: "Turniere lassen sich jetzt als Doppel spielen (Teams zufällig, ausgewogen oder nach Reihenfolge bilden). Die Live-Ansicht zeigt auf dem Handy eine Runde nach der anderen statt eines winzigen Baums, das Scoreboard ist aufgeräumter, und das Tippspiel zeigt die anonyme Zahl der Tipps sowie eine Auswertung.",
+      en: "Tournaments can now be played as doubles (build teams randomly, balanced or by list order). On phones the live view shows one round at a time instead of a tiny tree, the scoreboard is cleaner, and the prediction game shows the anonymous number of tips plus a results summary.",
+      fr: "Les tournois peuvent désormais se jouer en double (équipes au hasard, équilibrées ou dans l'ordre). Sur mobile, la vue en direct affiche un tour à la fois, le tableau de score est plus clair et le jeu de pronostics affiche le nombre anonyme de pronostics et une évaluation.",
+      pl: "Turnieje można teraz grać w deblu (zespoły losowo, wyrównane lub wg kolejności). Na telefonie podgląd na żywo pokazuje jedną rundę naraz, tablica wyników jest czytelniejsza, a typowanie pokazuje anonimową liczbę typów i podsumowanie.",
+      nl: "Toernooien kunnen nu als dubbel worden gespeeld (teams willekeurig, evenwichtig of op volgorde). Op de telefoon toont de live-weergave één ronde tegelijk, het scorebord is overzichtelijker en het voorspellingsspel toont het anonieme aantal tips en een uitslag.",
+      tr: "Turnuvalar artık çiftler olarak oynanabilir (takımlar rastgele, dengeli veya sıraya göre). Telefonda canlı görünüm tek seferde bir tur gösterir, skor tablosu daha sade ve tahmin oyunu anonim tahmin sayısını ve sonuç özetini gösterir.",
+    },
+  },
 ];

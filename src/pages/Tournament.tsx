@@ -83,6 +83,7 @@ import {
   fairSeededOrder,
   buildSeeding,
 } from "@/utils/bracketSeeding";
+import { isTeamName, splitTeamName, pairIntoTeams, dissolveTeams, type PairingStrategy } from "@/utils/tournamentTeams";
 
 /** Shared with tournamentMatchSync.ts's recordMatchResult/applyBracketAction — a defensive bound
  *  on how many times persistBracket re-fetches and retries against a concurrent write before
@@ -648,6 +649,8 @@ const TournamentPage = () => {
   const [guestCount, setGuestCount] = useState(8);
   const [bulkInput, setBulkInput] = useState("");
   const [players, setPlayers] = useState<string[]>([]);
+  /** Doppelturnier: participants are two-person teams ("Anna & Ben"), see utils/tournamentTeams.ts. */
+  const [doublesEnabled, setDoublesEnabled] = useState(false);
   const [savingTournament, setSavingTournament] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   /** Snapshot of the tournament being edited, taken the moment "Bearbeiten" is opened — lets
@@ -941,7 +944,24 @@ const TournamentPage = () => {
 
   const shufflePlayers = () => setPlayers((prev) => shuffle(prev));
 
-  const eloByName = useMemo(() => new Map(dbPlayers.map((p) => [p.name, p.elo_rating ?? 1000])), [dbPlayers]);
+  const eloByName = useMemo(() => {
+    const map = new Map<string, number>(dbPlayers.map((p) => [p.name, p.elo_rating ?? 1000]));
+    // A team's strength for fair seeding = the mean of its members' ratings.
+    for (const name of players) {
+      if (!isTeamName(name)) continue;
+      const parts = splitTeamName(name);
+      map.set(name, parts.reduce((sum, m) => sum + (map.get(m) ?? 1000), 0) / Math.max(1, parts.length));
+    }
+    return map;
+  }, [dbPlayers, players]);
+
+  const singlesInList = players.filter((p) => !isTeamName(p));
+  const pairUpPlayers = (strategy: PairingStrategy) => {
+    const { teams, leftover } = pairIntoTeams(singlesInList, strategy, { rating: (n) => eloByName.get(n) ?? 1000 });
+    setPlayers([...players.filter(isTeamName), ...teams, ...(leftover ? [leftover] : [])]);
+    if (leftover) toast({ title: t("tournament.doublesOddTitle"), description: `${leftover}: ${t("tournament.doublesOddDesc")}` });
+  };
+  const dissolveAllTeams = () => setPlayers(dissolveTeams(players));
   // For the "Faire Paarungen" helper below — a quick 1v1-balance reference while adding
   // participants, separate from (and not a replacement for) the actual bracket seeding above.
   // Real emoji/Elo for anyone matching a roster row (case-insensitive, same convention as
@@ -1036,6 +1056,10 @@ const TournamentPage = () => {
   // ─── Start Tournament ──────────────────────────
   const startTournament = async () => {
     if (players.length < 2 || savingTournament) return;
+    if (doublesEnabled && players.some((p) => !isTeamName(p))) {
+      toast({ title: t("tournament.doublesUnpairedTitle"), description: t("tournament.doublesUnpairedDesc"), variant: "destructive" });
+      return;
+    }
     setSavingTournament(true);
     try {
 
@@ -1932,6 +1956,7 @@ const TournamentPage = () => {
     setBoards(t.boards || 2);
     setLivePlayEnabled(t.live_play_enabled ?? true);
     setPlayers(t.players || []);
+    setDoublesEnabled((t.players || []).some(isTeamName));
     setDrawMode("random");
     setDrawSeed(Math.floor(Math.random() * 1e9));
     setPhase("setup");
@@ -2291,6 +2316,30 @@ const TournamentPage = () => {
 
           <SectionCard className="space-y-4">
             <Eyebrow icon={Users}>{t("tournament.participants")}</Eyebrow>
+
+          {/* Doppelturnier */}
+          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="doubles-enabled" className="text-sm">{t("tournament.doubles")}</Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{t("tournament.doublesDesc")}</p>
+              </div>
+              <Switch id="doubles-enabled" checked={doublesEnabled} onCheckedChange={(v) => { setDoublesEnabled(v); if (!v) dissolveAllTeams(); }} />
+            </div>
+            {doublesEnabled && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {t("tournament.doublesHint")} ({players.filter(isTeamName).length} {t("tournament.doublesTeams")}, {singlesInList.length} {t("tournament.doublesSingles")})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("random")}><Shuffle className="w-3.5 h-3.5 mr-1" />{t("tournament.pairRandom")}</Button>
+                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("balanced")}>{t("tournament.pairBalanced")}</Button>
+                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("order")}>{t("tournament.pairInOrder")}</Button>
+                  {players.some(isTeamName) && <Button size="sm" variant="ghost" className="text-destructive" onClick={dissolveAllTeams}>{t("tournament.dissolveTeams")}</Button>}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Add from club members */}
           {dbPlayers.length > 0 && (
@@ -2960,7 +3009,7 @@ const TournamentPage = () => {
             canStartLiveGame={canStartLiveGame}
             onStartLiveGame={startLiveGame}
             getLiveGameUrl={(m) => { const p = koLiveGamePath(m); return p ? `${window.location.origin}${p}` : null; }}
-            canStartOnlineGame={(m) => canStartMatchOnline(m.player1, m.player2, !!m.winner) && resolveRoundMode(m.round) !== "Extern"}
+            canStartOnlineGame={(m) => canStartMatchOnline(m.player1, m.player2, !!m.winner) && !isTeamName(m.player1) && resolveRoundMode(m.round) !== "Extern"}
             onStartOnlineGame={(m) => startMatchOnline(m.id, m.player1!, m.player2!, resolveRoundMode(m.round), resolveRoundBestOf(m.round))}
             startingOnlineId={startingOnlineId}
             isOwner={isOwner}

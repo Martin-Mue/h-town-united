@@ -46,6 +46,8 @@ export const chooseAutoMainSize = (count: number, preference: "auto" | "prelim" 
 // default those straight to the always-readable "Spielplan" list instead of the tree.
 export const defaultBracketView = (bracket: Match[] | undefined): "tree" | "schedule" => {
   if (!bracket || bracket.length === 0) return "tree";
+  // Phones: the mirrored tree is scaled down to unreadable, the Spielplan list is not.
+  if (typeof window !== "undefined" && window.innerWidth < 768) return "schedule";
   const totalRounds = totalRoundsOf(bracket);
   return totalRounds >= 5 ? "schedule" : "tree";
 };
