@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminStats from "@/components/admin/AdminStats";
+import AdminTrainingReview from "@/components/admin/AdminTrainingReview";
 import AdminTournamentForecast from "@/components/admin/AdminTournamentForecast";
 import AdminInvites from "@/components/admin/AdminInvites";
 import AdminClubBranding from "@/components/admin/AdminClubBranding";
@@ -140,6 +141,7 @@ const AdminPage = () => {
               than pulling in translation keys for a Paid-Plan admin feature. */}
           <TabsTrigger value="autodarts">Autodarts</TabsTrigger>
           <TabsTrigger value="stats">{t("admin.tabStats")}</TabsTrigger>
+          <TabsTrigger value="trainer">KI-Trainer</TabsTrigger>
           <TabsTrigger value="forecast">{t("admin.tabForecast")}</TabsTrigger>
         </TabsList>
 
@@ -293,6 +295,10 @@ const AdminPage = () => {
 
         <TabsContent value="stats">
           <AdminStats />
+        </TabsContent>
+
+        <TabsContent value="trainer">
+          <AdminTrainingReview />
         </TabsContent>
 
         <TabsContent value="forecast">
