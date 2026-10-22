@@ -32,7 +32,8 @@ for (const sample of samples) {
   const split = isValidation(sample.id) ? "val" : "train";
   const comma = sample.image.indexOf(",");
   fs.writeFileSync(path.join(outDir, "images", split, `${sample.id}.jpg`), Buffer.from(sample.image.slice(comma + 1), "base64"));
-  const lines = sample.darts.map((d) => `0 ${d.x.toFixed(6)} ${d.y.toFixed(6)} ${boxSize} ${boxSize}`);
+  const clamp01 = (v) => Math.min(1, Math.max(0, v)); // YOLO drops images whose labels leave 0..1
+  const lines = sample.darts.map((d) => `0 ${clamp01(d.x).toFixed(6)} ${clamp01(d.y).toFixed(6)} ${boxSize} ${boxSize}`);
   fs.writeFileSync(path.join(outDir, "labels", split, `${sample.id}.txt`), lines.join("\n") + "\n");
   counts[split] += 1;
 }

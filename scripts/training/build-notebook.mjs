@@ -26,8 +26,10 @@ shutil.copy(OLD_PT, "/content/best.pt")  # Original in Drive bleibt unberührt
 
 print("Lade training-set-yolo.zip hoch:")
 uploaded = files.upload()
-assert "training-set-yolo.zip" in uploaded, "training-set-yolo.zip fehlt"
-zipfile.ZipFile("training-set-yolo.zip").extractall("/content/ds")
+zip_names = [n for n in uploaded if n.lower().endswith(".zip")]
+assert zip_names, "Keine .zip hochgeladen"
+shutil.rmtree("/content/ds", ignore_errors=True)  # frisch entpacken, auch bei erneutem Ausführen
+zipfile.ZipFile(zip_names[0]).extractall("/content/ds")
 # Zips made with Windows PowerShell store paths with backslashes; move such files into real folders.
 for name in os.listdir("/content/ds"):
     if "\\" in name:
@@ -57,9 +59,11 @@ for split in ["train", "val"]:
                 best[c] = (float(b.conf), b.xywhn[0].tolist())
         if len(best) == 4:
             lbl = img.replace("/images/", "/labels/").rsplit(".", 1)[0] + ".txt"
-            with open(lbl, "a") as f:
-                for c, (_, xywh) in sorted(best.items()):
-                    f.write(f"{c} " + " ".join(f"{v:.6f}" for v in xywh) + "\n")
+            # keep only the dart lines (class 0) so re-running this cell never duplicates corners
+            dart_lines = [ln for ln in open(lbl).read().splitlines() if ln.startswith("0 ")]
+            corner_lines = [f"{c} " + " ".join(f"{v:.6f}" for v in xywh) for c, (_, xywh) in sorted(best.items())]
+            with open(lbl, "w") as f:
+                f.write("\n".join(dart_lines + corner_lines) + "\n")
             added += 1
         else:
             skipped += 1
@@ -73,8 +77,14 @@ with open(f"{DS}/data.yaml", "w") as f:
   md(String.raw`## 2. Vorher-Messung
 Die Werte merken: Wichtig ist dart (Zeile mit mAP50) und dass cal_* nicht einbrechen.`),
 
-  code(String.raw`before = old.val(data=f"{DS}/data.yaml", imgsz=800, plots=False)
-print("VORHER  dart mAP50:", before.box.ap50[0], " alle Klassen mAP50:", before.box.map50)`),
+  code(String.raw`def ap50_by_class(metrics):
+    # ap50 only lists classes that occur in the validation set, so map it by class id
+    return {int(c): float(a) for c, a in zip(metrics.box.ap_class_index, metrics.box.ap50)}
+
+before = old.val(data=f"{DS}/data.yaml", imgsz=800, plots=False)
+before_ap = ap50_by_class(before)
+print("VORHER  AP50 je Klasse:", {old.names[c]: round(a, 3) for c, a in before_ap.items()})
+print("VORHER  mAP50 gesamt:", round(float(before.box.map50), 3))`),
 
   md(String.raw`## 3. Nachtrainieren
 Niedrige Lernrate, Backbone (erste 10 Schichten) eingefroren, kein Spiegeln (das würde die Ecken vertauschen). patience stoppt früh, wenn es nicht besser wird.`),
@@ -84,27 +94,33 @@ model.train(
     data=f"{DS}/data.yaml", imgsz=800, epochs=40, batch=16,
     lr0=0.002, lrf=0.1, optimizer="AdamW", freeze=10, patience=12,
     fliplr=0.0, flipud=0.0, degrees=5, scale=0.25, mosaic=0.5, close_mosaic=8,
-    project="runs", name="dartspot_ft", exist_ok=True,
-)`),
+    project="/content/runs", name="dartspot_ft", exist_ok=True,
+)
+BEST_NEW = str(model.trainer.best)
+print("Neues Modell:", BEST_NEW)`),
 
   md(String.raw`## 4. Nachher-Messung und Entscheidung`),
 
-  code(String.raw`new = YOLO("runs/dartspot_ft/weights/best.pt")
+  code(String.raw`new = YOLO(BEST_NEW)
 after = new.val(data=f"{DS}/data.yaml", imgsz=800, plots=False)
-print("VORHER  dart mAP50:", before.box.ap50[0], " alle:", before.box.map50)
-print("NACHHER dart mAP50:", after.box.ap50[0], " alle:", after.box.map50)
+after_ap = ap50_by_class(after)
+print("Klasse   vorher  nachher")
 for i, n in new.names.items():
-    print(f"{n:7s} vorher {before.box.ap50[i]:.3f}  nachher {after.box.ap50[i]:.3f}")
+    b, a = before_ap.get(i), after_ap.get(i)
+    print(f"{n:7s}  {b if b is None else round(b, 3)}   {a if a is None else round(a, 3)}")
+print("mAP50 gesamt: vorher", round(float(before.box.map50), 3), "nachher", round(float(after.box.map50), 3))
 print()
 print("Nur übernehmen, wenn dart deutlich besser ist UND cal_1..cal_4 nicht schlechter werden.")`),
 
   md(String.raw`## 5. Export für die App
 Erzeugt best.onnx (800x800). In der App ersetzt du public/models/best.onnx damit; das alte Modell vorher aufheben.`),
 
-  code(String.raw`onnx_path = new.export(format="onnx", imgsz=800, opset=12, simplify=True, dynamic=False)
+  code(String.raw`# Gleiche Export-Einstellungen wie beim ersten Training (das lief in der App einwandfrei)
+onnx_path = new.export(format="onnx", imgsz=800)
+print("ONNX:", onnx_path)
 from google.colab import files
 files.download(onnx_path)
-files.download("runs/dartspot_ft/weights/best.pt")  # neues .pt für das nächste Mal aufheben`),
+files.download(BEST_NEW)  # neues .pt für das nächste Mal aufheben`),
 ];
 
 const notebook = {
