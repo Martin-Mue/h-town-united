@@ -10,12 +10,14 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
       autodarts_boards: {
         Row: {
+          access_token: string | null
+          access_token_expires_at: string | null
           autodarts_board_id: string | null
           autodarts_user_email: string | null
           board_number: number
@@ -25,9 +27,14 @@ export type Database = {
           id: string
           label: string | null
           last_error: string | null
+          last_match_debug: Json | null
           local_api_key_ciphertext: string | null
           local_api_key_iv: string | null
           local_ip: string | null
+          pending_login_request_id: number | null
+          pending_match_setup: Json | null
+          pending_poll_kind: string | null
+          pending_poll_request_id: number | null
           refresh_token_ciphertext: string | null
           refresh_token_iv: string | null
           status: string
@@ -35,6 +42,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
           autodarts_board_id?: string | null
           autodarts_user_email?: string | null
           board_number: number
@@ -44,9 +53,14 @@ export type Database = {
           id?: string
           label?: string | null
           last_error?: string | null
+          last_match_debug?: Json | null
           local_api_key_ciphertext?: string | null
           local_api_key_iv?: string | null
           local_ip?: string | null
+          pending_login_request_id?: number | null
+          pending_match_setup?: Json | null
+          pending_poll_kind?: string | null
+          pending_poll_request_id?: number | null
           refresh_token_ciphertext?: string | null
           refresh_token_iv?: string | null
           status?: string
@@ -54,6 +68,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
           autodarts_board_id?: string | null
           autodarts_user_email?: string | null
           board_number?: number
@@ -63,9 +79,14 @@ export type Database = {
           id?: string
           label?: string | null
           last_error?: string | null
+          last_match_debug?: Json | null
           local_api_key_ciphertext?: string | null
           local_api_key_iv?: string | null
           local_ip?: string | null
+          pending_login_request_id?: number | null
+          pending_match_setup?: Json | null
+          pending_poll_kind?: string | null
+          pending_poll_request_id?: number | null
           refresh_token_ciphertext?: string | null
           refresh_token_iv?: string | null
           status?: string
@@ -1375,6 +1396,8 @@ export type Database = {
       training_samples: {
         Row: {
           after_path: string
+          ai_notes: string | null
+          ai_segments: Json | null
           before_path: string
           board: string
           calib_taps: Json | null
@@ -1383,10 +1406,15 @@ export type Database = {
           id: string
           image_size: number
           labels: Json
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           user_id: string
         }
         Insert: {
           after_path: string
+          ai_notes?: string | null
+          ai_segments?: Json | null
           before_path: string
           board?: string
           calib_taps?: Json | null
@@ -1395,10 +1423,15 @@ export type Database = {
           id?: string
           image_size?: number
           labels?: Json
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           user_id: string
         }
         Update: {
           after_path?: string
+          ai_notes?: string | null
+          ai_segments?: Json | null
           before_path?: string
           board?: string
           calib_taps?: Json | null
@@ -1407,6 +1440,9 @@ export type Database = {
           id?: string
           image_size?: number
           labels?: Json
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           user_id?: string
         }
         Relationships: []
@@ -1608,6 +1644,32 @@ export type Database = {
       }
     }
     Functions: {
+      _autodarts_cached_token: {
+        Args: { p_board_id: string; p_club_id: string }
+        Returns: string
+      }
+      _autodarts_get_access_token: {
+        Args: { p_board_id: string; p_club_id: string }
+        Returns: string
+      }
+      _autodarts_http_post_polled: {
+        Args: {
+          p_body: Json
+          p_headers: Json
+          p_poll_attempts?: number
+          p_retry_count?: number
+          p_timeout_ms?: number
+          p_url: string
+        }
+        Returns: {
+          content: Json
+          status_code: number
+        }[]
+      }
+      _jwt_claim: {
+        Args: { p_claim: string; p_token: string }
+        Returns: string
+      }
       accept_club_invite: { Args: { _token: string }; Returns: string }
       accept_online_match: {
         Args: { _initial_game_state: Json; _match_id: string }
