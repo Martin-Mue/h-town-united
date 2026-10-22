@@ -153,6 +153,46 @@ const AdminTrainingReview = () => {
     }
   };
 
+  const [exportingDataset, setExportingDataset] = useState(false);
+
+  /** Downloads every CONFIRMED sample (final after-image + dart tip positions) as one json file —
+   *  the input for scripts/build-yolo-dataset.mjs, which turns it into the folder layout the
+   *  Colab fine-tune expects. Only confirmed samples, so unreviewed labels never reach training. */
+  const exportDataset = async () => {
+    setExportingDataset(true);
+    try {
+      const { data, error } = await supabase
+        .from("training_samples")
+        .select("id, after_path, labels, camera_zoom")
+        .eq("review_status", "confirmed")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        toast({ title: "Nichts zu exportieren", description: "Es gibt noch keine bestätigten Samples." });
+        return;
+      }
+      const samples = [];
+      for (const row of data) {
+        const after = await supabase.storage.from("dart-training").download(row.after_path);
+        if (after.error || !after.data) continue;
+        const darts = (row.labels as unknown as SampleLabel[]).filter((d) => typeof d.x === "number" && typeof d.y === "number");
+        if (darts.length === 0) continue;
+        samples.push({ id: row.id, camera_zoom: row.camera_zoom, darts: darts.map((d) => ({ x: d.x, y: d.y })), image: await blobToDataUrl(after.data) });
+      }
+      const file = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), samples })], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(file);
+      link.download = `training-dataset-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      toast({ title: `${samples.length} bestätigte Samples exportiert` });
+    } catch (err) {
+      toast({ title: "Export fehlgeschlagen", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setExportingDataset(false);
+    }
+  };
+
   /** Applies a verdict file produced by the AI review (array of AiVerdict) to the matching rows. */
   const importVerdicts = async (file: File) => {
     try {
@@ -224,6 +264,10 @@ const AdminTrainingReview = () => {
           onChange={(e) => { const file = e.target.files?.[0]; if (file) void importVerdicts(file); e.target.value = ""; }}
         />
       </div>
+
+      <Button size="sm" variant="secondary" className="w-full gap-1" onClick={exportDataset} disabled={exportingDataset || counts.confirmed === 0}>
+        {exportingDataset ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Trainingsset exportieren ({counts.confirmed} bestätigt)
+      </Button>
 
       <p className="text-xs text-muted-foreground">
         Bestätigt nach Zoomstufe: {Object.keys(zoomCounts).length === 0
