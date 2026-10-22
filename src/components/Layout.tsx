@@ -54,7 +54,10 @@ const Layout = ({ children }: { children: ReactNode }) => {
   // Verein and (for admins) Admin move into a "Mehr" drawer instead of competing for a 5th/6th/
   // 7th equal-weight slot. Desktop's top nav further below is untouched — no such constraint there.
   const CORE_MOBILE_PATHS = new Set(["/", "/game", "/tournament", "/statistics"]);
-  const coreMobileItems = NAV_ITEMS.filter((item) => CORE_MOBILE_PATHS.has(item.to));
+  // Fixed visual order, with "Spielen" in the middle as the raised primary action — the one thing
+  // every session starts with — flanked by the two read-only views on each side.
+  const MOBILE_ORDER = ["/", "/tournament", "/game", "/statistics"];
+  const coreMobileItems = MOBILE_ORDER.map((to) => NAV_ITEMS.find((item) => item.to === to)!).filter((item) => CORE_MOBILE_PATHS.has(item.to));
   const moreMobileItems = [
     ...NAV_ITEMS.filter((item) => !CORE_MOBILE_PATHS.has(item.to)),
     ...(isAdmin ? [{ to: "/admin", icon: AdminIcon, labelKey: "nav.admin" }] : []),
@@ -190,7 +193,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
             as one continuous motion instead of two independent icon color changes. Also lands
             under the "Mehr" slot itself (last column) when the active route is one of the items
             tucked inside the drawer, so the nav never goes fully unhighlighted. */}
-        {mobileActiveIndex >= 0 && (
+        {mobileActiveIndex >= 0 && coreMobileItems[mobileActiveIndex]?.to !== "/game" && (
           <div
             aria-hidden="true"
             className="absolute top-1 bottom-1 rounded-lg bg-primary/10 pointer-events-none"
@@ -205,6 +208,22 @@ const Layout = ({ children }: { children: ReactNode }) => {
         )}
         {coreMobileItems.map((item) => {
           const isActive = location.pathname === item.to;
+          if (item.to === "/game") {
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-label={t(item.labelKey)}
+                className="relative flex flex-col items-center min-w-0 active:scale-95 transition-transform"
+                style={{ transitionTimingFunction: "var(--ease-press)" }}
+              >
+                <span className={`-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_20px_-4px_hsl(var(--primary)/0.7)] ring-4 ring-card ${isActive ? "glow-cyan" : ""}`}>
+                  <item.icon className="w-7 h-7" />
+                </span>
+                <span className={`mt-0.5 text-xs truncate max-w-full ${isActive ? "text-primary" : "text-muted-foreground"}`}>{t(item.labelKey)}</span>
+              </Link>
+            );
+          }
           return (
             <Link
               key={item.to}

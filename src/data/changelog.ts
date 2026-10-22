@@ -654,4 +654,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Sıradaki oyuncu artık büyük skoru görüyor. Geri al ve yazma/kamera geçişi üstte; diğer her şey (ses, atışı düzelt, oyunu iptal et) ⋯ menüsünde.",
     },
   },
+  {
+    id: "2026-10-22-bottom-nav",
+    date: "2026-10-22",
+    title: {
+      de: "Neue Navigation unten",
+      en: "New bottom navigation",
+      fr: "Nouvelle navigation en bas",
+      pl: "Nowa dolna nawigacja",
+      nl: "Nieuwe navigatie onderaan",
+      tr: "Yeni alt gezinme",
+    },
+    description: {
+      de: "Spielen ist jetzt der große Button in der Mitte. Daneben: Home, Turnier, Statistik und Mehr (Training, Verein, Admin).",
+      en: "Play is now the big button in the middle, next to Home, Tournament, Stats and More (Training, Club, Admin).",
+      fr: "Jouer est maintenant le grand bouton central, à côté d'Accueil, Tournoi, Stats et Plus (Entraînement, Club, Admin).",
+      pl: "Gra to teraz duży przycisk pośrodku, obok Start, Turniej, Statystyki i Więcej (Trening, Klub, Admin).",
+      nl: "Spelen is nu de grote knop in het midden, naast Home, Toernooi, Stats en Meer (Training, Club, Admin).",
+      tr: "Oyna artık ortadaki büyük düğme; yanında Ana sayfa, Turnuva, İstatistik ve Daha fazla (Antrenman, Kulüp, Admin).",
+    },
+  },
 ];
