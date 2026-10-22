@@ -1396,6 +1396,8 @@ export type Database = {
       training_samples: {
         Row: {
           after_path: string
+          ai_notes: string | null
+          ai_segments: Json | null
           before_path: string
           board: string
           calib_taps: Json | null
@@ -1404,10 +1406,15 @@ export type Database = {
           id: string
           image_size: number
           labels: Json
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           user_id: string
         }
         Insert: {
           after_path: string
+          ai_notes?: string | null
+          ai_segments?: Json | null
           before_path: string
           board?: string
           calib_taps?: Json | null
@@ -1416,10 +1423,15 @@ export type Database = {
           id?: string
           image_size?: number
           labels?: Json
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           user_id: string
         }
         Update: {
           after_path?: string
+          ai_notes?: string | null
+          ai_segments?: Json | null
           before_path?: string
           board?: string
           calib_taps?: Json | null
@@ -1428,6 +1440,9 @@ export type Database = {
           id?: string
           image_size?: number
           labels?: Json
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           user_id?: string
         }
         Relationships: []
