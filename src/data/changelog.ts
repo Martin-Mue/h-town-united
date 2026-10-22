@@ -634,4 +634,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Uygulama dışında oynanan maçlar için (örn. DartsMind): kazananı ve sonucu ağaçtan veya programdan tek dokunuşla kaydedin.",
     },
   },
+  {
+    id: "2026-10-22-game-screen-redesign",
+    date: "2026-10-22",
+    title: {
+      de: "Neuer, aufgeräumter Spielscreen",
+      en: "New, cleaner game screen",
+      fr: "Nouvel écran de jeu épuré",
+      pl: "Nowy, czytelniejszy ekran gry",
+      nl: "Nieuw, overzichtelijker spelscherm",
+      tr: "Yeni, sadeleştirilmiş oyun ekranı",
+    },
+    description: {
+      de: "Der Spieler am Zug hat jetzt die große Punkteanzeige. Rückgängig und der Wechsel zwischen Tippen und Kamera sind oben, alles andere (Sound, Wurf korrigieren, Spiel abbrechen) steckt hinter dem ⋯-Menü.",
+      en: "The player on the oche now gets the big score. Undo and the switch between tapping and camera are on top; everything else (sound, correct throw, cancel game) sits behind the ⋯ menu.",
+      fr: "Le joueur au lancer a maintenant le grand score. Annuler et le choix saisie/caméra sont en haut ; le reste (son, corriger, annuler la partie) est dans le menu ⋯.",
+      pl: "Gracz na rzucie ma teraz duży wynik. Cofnij i przełącznik wpisywanie/kamera są na górze; reszta (dźwięk, popraw rzut, anuluj grę) jest w menu ⋯.",
+      nl: "De speler aan de beurt krijgt nu de grote score. Ongedaan maken en de keuze tikken/camera staan bovenaan; de rest (geluid, worp corrigeren, potje afbreken) zit in het ⋯-menu.",
+      tr: "Sıradaki oyuncu artık büyük skoru görüyor. Geri al ve yazma/kamera geçişi üstte; diğer her şey (ses, atışı düzelt, oyunu iptal et) ⋯ menüsünde.",
+    },
+  },
 ];

@@ -24,6 +24,7 @@ import GameWarmup from "@/components/game/GameWarmup";
 import { GameWalkonIntro, GameWalkonStats } from "@/components/game/GameWalkon";
 import GamePostGame from "@/components/game/GamePostGame";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
+import GameControlBar from "@/components/game/GameControlBar";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 // Loaded lazily — LiveCamera pulls in onnxruntime-web + vision utilities (~112KB) that a keyboard-
 // only match (or any bot game, which never renders this at all — see the !currentPlayer?.isBot
@@ -2383,7 +2384,10 @@ const GamePage = () => {
   // 4 stays a plain 2x2 on mobile (already balanced); 5+ gets 3 columns instead of 2 even
   // below md — otherwise a 6/7/8-player game stacks 3-4 rows tall on a phone, pushing the dart
   // pad below the thumb-reachable zone before a single dart's been thrown.
-  const numCols = scoreLabels.length <= 2 ? "grid-cols-2" : scoreLabels.length === 3 ? "grid-cols-3" : scoreLabels.length === 4 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3 md:grid-cols-4";
+  const focusedSlot = game.teams ? activeTeamIdx : activeIdx;
+  // Two-sided matches: the side on the oche gets the larger column so the number being played
+  // for dominates, the waiting side shrinks to a glanceable summary.
+  const numCols = scoreLabels.length === 2 ? (focusedSlot === 0 ? "grid-cols-[3fr_2fr]" : "grid-cols-[2fr_3fr]") : scoreLabels.length <= 2 ? "grid-cols-2" : scoreLabels.length === 3 ? "grid-cols-3" : scoreLabels.length === 4 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3 md:grid-cols-4";
   const awaitingDoubleIn = !isCricket && (currentPlayer?.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[activeTeamIdx] ?? true);
 
   const doubleInBanner = awaitingDoubleIn ? (
@@ -2615,7 +2619,7 @@ const GamePage = () => {
                 // landscape has its own dedicated column now (see the playing-phase layout below)
                 // with room to spare, so there's no longer a reason to make it smaller there.
                 <p
-                  className={`text-6xl leading-none font-display mt-2 mb-1 transition-colors tabular-nums ${isFlashing ? "animate-pulse-glow" : ""}`}
+                  className={`${isActive ? "text-7xl" : "text-4xl"} leading-none font-display mt-2 mb-1 transition-all tabular-nums ${isFlashing ? "animate-pulse-glow" : ""}`}
                   style={{ color: scoreColor, textShadow: isActive ? `0 0 22px ${scoreColor}80` : undefined }}
                 >
                   <AnimatedScore value={isCricket ? card.cricketPoints : displayRemaining} />
@@ -2795,42 +2799,22 @@ const GamePage = () => {
 
       {cameraEnabled ? (
         <>
-          {/* Toolbar — moved above the scoreboard instead of pinned to the bottom of the screen
-              (Screen-Audit Richtung 2). It was a plain shrink-0 flex sibling, never itself
-              `position: fixed`, but still reported as invisible in portrait on Android — the
-              system gesture/nav bar there can overlap the very bottom of a `fixed inset-0`
-              screen even when nothing on the page is fixed to it. A top-anchored bar sits next
-              to the status bar instead, which every Capacitor Android build already keeps clear,
-              sidestepping that whole class of bug rather than chasing its exact cause blind.
-              Übernimmt jetzt auch den Spielabbruch-Button, der vorher als eigener Ghost-Button
-              unten im Scroll-Bereich saß — dieselben 4 Aktionen wie im Handeingabe-Zweig. */}
-          <div className="shrink-0 px-4 pt-2 pb-2 flex gap-2 border-b border-border/40">
-            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
-              <Undo2 className="w-4 h-4" /> {t("game.undo")}
-            </Button>
-            <Button
-              variant={showManualInput ? "default" : "outline"}
-              onClick={() => setShowManualInput((v) => !v)}
-              className="gap-1"
-              title={t("game.toggleManualEntry")}
-            >
-              <Keyboard className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="default"
-              onClick={() => { cameraWantedRef.current = false; setCameraEnabled(false); }}
-              className="gap-1"
-              title={t("game.closeCamera")}
-            >
-              <Camera className="w-4 h-4" /> {t("game.camOff")}
-            </Button>
-            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </Button>
-            <Button variant="outline" onClick={() => setConfirmCancelGame(true)} className="gap-1 text-muted-foreground hover:text-destructive" title={t("game.cancelGame")} aria-label={t("game.cancelGame")}>
-              <RotateCcw className="w-4 h-4" />
-            </Button>
-          </div>
+          <GameControlBar
+            onUndo={undoLastDart}
+            undoDisabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId}
+            undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined}
+            scoring={{
+              cameraEnabled: true,
+              cameraDisabled: false,
+              onSelectManual: () => { cameraWantedRef.current = false; setCameraEnabled(false); },
+              onSelectCamera: () => {},
+            }}
+            soundEnabled={soundEnabled}
+            onToggleSound={() => setSoundEnabled(!soundEnabled)}
+            onCancelGame={() => setConfirmCancelGame(true)}
+            aiCommentary={clubHasFeature(club?.plan_tier, "ai-commentary") ? { enabled: aiCommentaryEnabled, onToggle: toggleAiCommentary } : undefined}
+            onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
+          />
 
           {/* The scoreboard now scrolls WITH everything else in this region (sticky to ITS top,
               not fixed above it) — the outer window (and the page behind it) still never scrolls
@@ -2937,19 +2921,7 @@ const GamePage = () => {
 
             {cricketBoard}
 
-            {/* Live-KI-Kommentator (2026-09-10) — only offered once the camera is actually on
-                (there's nothing for it to react to otherwise) and the club's plan includes it;
-                a personal on/off toggle on top of that plan gate, same reasoning as
-                aiCommentary.ts's own doc comment on why both checks exist. */}
-            {cameraEnabled && clubHasFeature(club?.plan_tier, "ai-commentary") && (
-              <button
-                onClick={toggleAiCommentary}
-                className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-xs mb-3 transition-colors ${aiCommentaryEnabled ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}
-              >
-                <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> {t("game.aiCommentaryToggle")}</span>
-                <span className="text-[10px] uppercase">{aiCommentaryEnabled ? t("common.on") : t("common.off")}</span>
-              </button>
-            )}
+
 
             {/* Manual entry stays fully available — just tucked away by default since the camera scores for you. */}
             <button
@@ -3003,42 +2975,27 @@ const GamePage = () => {
         // bottom bar already uses (a few hundred lines up), which was never reported to have this
         // bug. Only the pad + throw history scroll now, in the middle.
         <>
-          {/* Toolbar — moved above the scoreboard (Screen-Audit Richtung 2), same reasoning as
-              the camera-enabled branch above: a bottom-pinned bar was still reported invisible in
-              portrait on Android even as a plain shrink-0 flex sibling, most likely the system
-              gesture/nav bar overlapping the very bottom of this `fixed inset-0` screen. Top-
-              anchored, next to the status bar, sidesteps that class of bug entirely. */}
-          <div className="shrink-0 bg-background px-4 pt-2 pb-2 flex gap-2 border-b border-border/40">
-            <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId} title={onlineMatchId ? t("game.undoDisabledOnline") : undefined} className="flex-1 gap-1">
-              <Undo2 className="w-4 h-4" /> {t("game.undo")}
-            </Button>
-            {!autodartsEnabled && (
-              // Hidden rather than just disabled when Autodarts is this game's fixed scoring
-              // source — there's nothing to toggle (see GameSetup.tsx's doc comment on why
-              // Autodarts can't be freely switched mid-leg the way the camera can).
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (!clubHasFeature(club?.plan_tier, "camera")) {
-                    toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
-                    return;
-                  }
-                  cameraWantedRef.current = true; setCameraEnabled(true);
-                }}
-                disabled={!!currentPlayer?.isBot}
-                className="gap-1"
-                title={t("game.liveCameraScoring")}
-              >
-                <Camera className="w-4 h-4" /> {t("game.cam")}
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setSoundEnabled(!soundEnabled)} className="gap-1" title={soundEnabled ? t("game.soundOff") : t("game.soundOn")} aria-label={soundEnabled ? t("game.soundOff") : t("game.soundOn")}>
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </Button>
-            <Button variant="outline" onClick={() => setConfirmCancelGame(true)} className="gap-1 text-muted-foreground hover:text-destructive" title={t("game.cancelGame")} aria-label={t("game.cancelGame")}>
-              <RotateCcw className="w-4 h-4" />
-            </Button>
-          </div>
+          <GameControlBar
+            onUndo={undoLastDart}
+            undoDisabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId}
+            undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined}
+            scoring={autodartsEnabled ? undefined : {
+              cameraEnabled: false,
+              cameraDisabled: !!currentPlayer?.isBot,
+              onSelectManual: () => {},
+              onSelectCamera: () => {
+                if (!clubHasFeature(club?.plan_tier, "camera")) {
+                  toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
+                  return;
+                }
+                cameraWantedRef.current = true; setCameraEnabled(true);
+              },
+            }}
+            soundEnabled={soundEnabled}
+            onToggleSound={() => setSoundEnabled(!soundEnabled)}
+            onCancelGame={() => setConfirmCancelGame(true)}
+            onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
+          />
 
           <div className="shrink-0 bg-background px-4">
             {scoreboardBlock}
