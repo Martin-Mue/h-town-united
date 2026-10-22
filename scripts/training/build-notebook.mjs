@@ -28,6 +28,12 @@ print("Lade training-set-yolo.zip hoch:")
 uploaded = files.upload()
 assert "training-set-yolo.zip" in uploaded, "training-set-yolo.zip fehlt"
 zipfile.ZipFile("training-set-yolo.zip").extractall("/content/ds")
+# Zips made with Windows PowerShell store paths with backslashes; move such files into real folders.
+for name in os.listdir("/content/ds"):
+    if "\\" in name:
+        target = os.path.join("/content/ds", name.replace("\\", "/"))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.move(os.path.join("/content/ds", name), target)
 DS = "/content/ds" if os.path.exists("/content/ds/data.yaml") else "/content/ds/training-set-yolo"
 print("Datensatz:", DS, os.listdir(DS))`),
 
