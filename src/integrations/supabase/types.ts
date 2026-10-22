@@ -1415,9 +1415,6 @@ export type Database = {
           after_path: string
           ai_notes?: string | null
           ai_segments?: Json | null
-          review_status?: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
           before_path: string
           board?: string
           calib_taps?: Json | null
@@ -1435,9 +1432,6 @@ export type Database = {
           after_path?: string
           ai_notes?: string | null
           ai_segments?: Json | null
-          review_status?: string
-          reviewed_at?: string | null
-          reviewed_by?: string | null
           before_path?: string
           board?: string
           calib_taps?: Json | null

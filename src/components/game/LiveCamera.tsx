@@ -437,7 +437,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // Snapshot of the image pair a scan was just run on, held onto until the round is committed
   // (by then `preRemovalImageDataRef`/`emptyImageDataRef` have already been cleared/overwritten
   // for the next throw) — see uploadTrainingSample.
-  const pendingTrainingCaptureRef = useRef<{ before: ImageData; after: ImageData } | null>(null);
+  // `modelAfter` is the full-resolution, unclipped frame the ONNX model actually runs on — preferred as
+  // the training image, because the 420px circle-clipped analysis frame looks nothing like the input
+  // the model sees at inference (black corners, a fraction of the resolution). Same crop, so the
+  // dart positions (0-1 fractions) are valid on either image.
+  const pendingTrainingCaptureRef = useRef<{ before: ImageData; after: ImageData; modelAfter: ImageData | null } | null>(null);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -968,7 +972,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    *  off of. `darts` is the FINAL, possibly player-corrected list at the moment of commit, which
    *  is exactly the free label this whole feature exists to capture. */
   const uploadTrainingSample = async (
-    capture: { before: ImageData; after: ImageData },
+    capture: { before: ImageData; after: ImageData; modelAfter: ImageData | null },
     darts: DetectedDart[],
   ) => {
     try {
@@ -983,9 +987,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
       if (!userId) return;
+      const trainingAfter = capture.modelAfter ?? capture.after;
       const [beforeBlob, afterBlob] = await Promise.all([
         imageDataToBlob(capture.before),
-        imageDataToBlob(capture.after),
+        imageDataToBlob(trainingAfter),
       ]);
       if (!beforeBlob || !afterBlob) return;
       const prefix = `${userId}/${crypto.randomUUID()}`;
@@ -999,7 +1004,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         board: activeBoard,
         before_path: `${prefix}/before.jpg`,
         after_path: `${prefix}/after.jpg`,
-        image_size: VISION_ANALYSIS_SIZE,
+        image_size: trainingAfter.width,
         labels,
         // Read live off `calib` right here at commit time (not a value captured back when the
         // scan started) — lets the set later be evaluated/stratified by zoom level and camera
@@ -1473,7 +1478,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setGeminiSuggestion(null);
       playScanStartSound();
       if (trainingDataEnabled && emptyImageDataRef.current && preRemovalImageDataRef.current) {
-        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current, after: preRemovalImageDataRef.current };
+        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current, after: preRemovalImageDataRef.current, modelAfter: preRemovalModelFrameRef.current };
       }
       const overallConfidence = alreadyIdentified.reduce((s, d) => s + d.confidence, 0) / alreadyIdentified.length;
       setLastConfidence(overallConfidence);
@@ -1525,7 +1530,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (trainingDataEnabled) {
         // Stash the reference (not a copy) before the finally block below nulls these refs —
         // consumed at commit time with whatever the player ends up confirming/correcting.
-        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current!, after: preRemovalImageDataRef.current! };
+        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current!, after: preRemovalImageDataRef.current!, modelAfter: preRemovalModelFrameRef.current };
       }
       const modelFrame = preRemovalModelFrameRef.current;
       const modelResult = modelReadyRef.current && modelFrame
