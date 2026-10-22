@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Check, X } from "lucide-react";
+import { Check, X, Download, Upload } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +32,23 @@ const STATUS_LABELS: Record<ReviewStatus, string> = {
   confirmed: "Bestätigt",
   rejected: "Verworfen",
 };
+
+const EXPORT_BATCH_SIZE = 40;
+
+const blobToDataUrl = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+
+interface AiVerdict {
+  id: string;
+  status: "confirmed" | "needs_review" | "rejected";
+  ai_segments?: { baseValue: number; multiplier: number }[];
+  notes?: string;
+}
 
 const dartText = (d: { baseValue: number; multiplier: number }) =>
   d.baseValue === 0 ? "Miss" : d.baseValue === 50 ? "Bull" : `${["", "", "D", "T"][d.multiplier] ?? ""}${d.baseValue}`;
@@ -86,6 +103,83 @@ const AdminTrainingReview = () => {
 
   useEffect(() => { void load(); }, [load]);
 
+  const [exporting, setExporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  /** Downloads the next batch of unreviewed samples as ONE json file (images inlined as data URLs)
+   *  so an AI session can look at them offline — the bucket is private, so there is no other way
+   *  to hand the images over. Pair with importVerdicts below for the way back. */
+  const exportBatch = async () => {
+    setExporting(true);
+    try {
+      const { data, error } = await supabase
+        .from("training_samples")
+        .select("id, before_path, after_path, labels, camera_zoom, image_size")
+        .eq("review_status", "pending")
+        .order("created_at", { ascending: true })
+        .limit(EXPORT_BATCH_SIZE);
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        toast({ title: "Nichts zu exportieren", description: "Es gibt keine ungeprüften Samples." });
+        return;
+      }
+      const samples = [];
+      for (const row of data) {
+        const [before, after] = await Promise.all([
+          supabase.storage.from("dart-training").download(row.before_path),
+          supabase.storage.from("dart-training").download(row.after_path),
+        ]);
+        if (before.error || after.error || !before.data || !after.data) continue;
+        samples.push({
+          id: row.id,
+          labels: row.labels,
+          camera_zoom: row.camera_zoom,
+          image_size: row.image_size,
+          before: await blobToDataUrl(before.data),
+          after: await blobToDataUrl(after.data),
+        });
+      }
+      const file = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), samples })], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(file);
+      link.download = `training-batch-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      toast({ title: `${samples.length} Samples exportiert` });
+    } catch (err) {
+      toast({ title: "Export fehlgeschlagen", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  /** Applies a verdict file produced by the AI review (array of AiVerdict) to the matching rows. */
+  const importVerdicts = async (file: File) => {
+    try {
+      const verdicts = JSON.parse(await file.text()) as AiVerdict[];
+      let applied = 0;
+      for (const v of verdicts) {
+        if (!["confirmed", "needs_review", "rejected"].includes(v.status)) continue;
+        const { error } = await supabase
+          .from("training_samples")
+          .update({
+            review_status: v.status,
+            ai_segments: v.ai_segments ?? null,
+            ai_notes: v.notes ?? null,
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: "ai",
+          })
+          .eq("id", v.id)
+          .eq("review_status", "pending");
+        if (!error) applied += 1;
+      }
+      toast({ title: `${applied} von ${verdicts.length} Ergebnissen übernommen` });
+      await load();
+    } catch (err) {
+      toast({ title: "Import fehlgeschlagen", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    }
+  };
+
   const decide = async (id: string, status: "confirmed" | "rejected") => {
     const { error } = await supabase
       .from("training_samples")
@@ -113,6 +207,22 @@ const AdminTrainingReview = () => {
             <p className="text-xs text-muted-foreground">{STATUS_LABELS[status]}</p>
           </button>
         ))}
+      </div>
+
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={exportBatch} disabled={exporting}>
+          {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Batch exportieren
+        </Button>
+        <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => importInputRef.current?.click()}>
+          <Upload className="w-4 h-4" /> KI-Ergebnis importieren
+        </Button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json"
+          className="hidden"
+          onChange={(e) => { const file = e.target.files?.[0]; if (file) void importVerdicts(file); e.target.value = ""; }}
+        />
       </div>
 
       <p className="text-xs text-muted-foreground">
