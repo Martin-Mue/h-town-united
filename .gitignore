@@ -28,3 +28,10 @@ src/i18n/generated
 *.njsproj
 *.sln
 *.sw?
+
+# Training data exports (large, regenerated from the admin KI-Trainer tab)
+training-batch*.json
+training-dataset*.json
+verdicts-batch*.json
+training-set-yolo/
+training-set-yolo.zip
