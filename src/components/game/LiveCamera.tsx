@@ -26,6 +26,8 @@ import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision"
 import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
 import { computeHomography } from "@/utils/homography";
 import { pointsFor, dartLabel } from "@/utils/x01Rules";
+import BoardCalibrator from "@/components/game/BoardCalibrator";
+import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
 import {
   boardTransformFromTaps,
   scoreFromBoardPoint,
@@ -177,35 +179,8 @@ const loadTrainingConsentAsked = (): boolean => {
   return window.localStorage.getItem(TRAINING_CONSENT_ASKED_KEY) === "yes";
 };
 
-/**
- * UX-Audit Befund #3 (Kalibrierungs-Guide, Option B): the four calibration taps only ever had
- * the small status line ("Kalibrierung 1/4: Tippe auf Doppel 20 (oben)") to go on — easy to miss,
- * no situative diagram. Shown once automatically before the first-ever calibration, and re-
- * openable any time via the "?" button on the calibration screen. Order MUST mirror CALIB_KEYS
- * below exactly (D20 oben → D3 unten → D11 links → D6 rechts) — that's the real tap order the
- * app asks for, not a clockwise sweep, so the guide has to match it or it actively misleads.
- */
-const CALIB_GUIDE_SEEN_KEY = "dartcam-calib-guide-seen";
-const loadCalibGuideSeen = (): boolean => {
-  if (typeof window === "undefined") return true;
-  return window.localStorage.getItem(CALIB_GUIDE_SEEN_KEY) === "yes";
-};
-
 const CALIB_KEY = "dartcam-calibration-v5";
-/** Translation keys (not literal strings — this is module scope, no access to the language
- *  context) resolved via t() at each call site. */
-const CALIB_LABEL_KEYS = ["camera.calibD20", "camera.calibD3", "camera.calibD11", "camera.calibD6"] as const;
 const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
-// Schematic-diagram positions for the calibration guide overlay, in the SAME order as CALIB_KEYS
-// above — top (D20), bottom (D3), left (D11), right (D6). NOT a clockwise sweep; matches the real
-// tap order the app asks for, on a 0-100 viewBox circle centered at (50,50).
-const CALIB_GUIDE_POINTS = [
-  { x: 50, y: 15 }, // D20 — oben
-  { x: 50, y: 85 }, // D3 — unten
-  { x: 15, y: 50 }, // D11 — links
-  { x: 85, y: 50 }, // D6 — rechts
-] as const;
-
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
 // remembers which physical board it's pointed at, and calibration + camera-device choice are
 // namespaced per board so the same tablet can be reassigned between boards over an evening
@@ -327,16 +302,6 @@ const MapMarker = ({ fx, fy, className, children }: { fx: number; fy: number; cl
   </div>
 );
 
-/** The gold "magnifier" ring + center dot used wherever a tap needs precise placement
- *  (calibration taps, dart-reposition taps) — a target big enough to see clearly, with a small
- *  dot pinpointing the exact tapped pixel. */
-const TapMagnifier = ({ fx, fy }: { fx: number; fy: number }) => (
-  <MapMarker fx={fx} fy={fy} className="pointer-events-none">
-    <div className="h-14 w-14 rounded-full border-2 border-accent shadow-lg glow-gold" />
-    <div className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-background" />
-  </MapMarker>
-);
-
 const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
 
 const hasPosition = (d: DetectedDart) =>
@@ -437,12 +402,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (typeof window !== "undefined") window.localStorage.setItem(TRAINING_CONSENT_ASKED_KEY, "yes");
     setTrainingConsentAskedState(true);
   };
-  const [showCalibGuide, setShowCalibGuide] = useState(false);
-  const [calibGuideStep, setCalibGuideStep] = useState(0);
-  const dismissCalibGuide = () => {
-    if (typeof window !== "undefined") window.localStorage.setItem(CALIB_GUIDE_SEEN_KEY, "yes");
-    setShowCalibGuide(false);
-  };
   // Snapshot of the image pair a scan was just run on, held onto until the round is committed
   // (by then `preRemovalImageDataRef`/`emptyImageDataRef` have already been cleared/overwritten
   // for the next throw) — see uploadTrainingSample.
@@ -495,8 +454,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // fine-tune the wrong position/label association instead of fixing it.
   const [repositioningIndex, setRepositioningIndex] = useState<number | null>(null);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
-  const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
-  const [activeTap, setActiveTap] = useState<{ x: number; y: number } | null>(null);
+  // Calibration being edited on screen (camera-video fractions: D20, D3, D11, D6) and where it came from.
+  const [calibDraft, setCalibDraft] = useState<{ x: number; y: number }[] | null>(null);
+  const [calibDraftSource, setCalibDraftSource] = useState<"auto" | "manual">("manual");
+  // Native size of the camera picture, once known — the video box takes exactly this aspect ratio,
+  // so the whole picture is always visible (a square box with object-cover used to cut away the
+  // top and bottom of a portrait picture, or the sides of a landscape one, hiding board parts).
+  const [videoSize, setVideoSize] = useState<{ w: number; h: number } | null>(null);
+  const syncVideoSize = () => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth || !v.videoHeight) return;
+    setVideoSize((prev) => (prev && prev.w === v.videoWidth && prev.h === v.videoHeight ? prev : { w: v.videoWidth, h: v.videoHeight }));
+  };
   // UX-Audit Befund #1 (Kamera-Review): Löschen/Verwerfen lösten bisher sofort aus, ohne
   // Rückfrage — anders als überall sonst in der App, wo destruktive Aktionen bestätigt werden
   // (siehe Players.tsx confirmDeleteId, Tournament.tsx Match-Reset). Dieselbe Absicherung jetzt
@@ -510,14 +479,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // expands it in place into large tap targets; the other rows stay visible in their compact
   // summary form, matching the chosen mockup. Only one row open at a time.
   const [expandedReviewIndex, setExpandedReviewIndex] = useState<number | null>(null);
-  // True right after the model calibrated by itself, until the player confirms the overlay looks
-  // right (one tap) or asks to redo it — auto-calibration used to just proceed silently.
-  const [autoCalibNeedsCheck, setAutoCalibNeedsCheck] = useState(false);
   // How many of the four corners the model found with confidence in the last automatic attempt —
   // shown when it falls back to manual tapping, so "why didn't it work on my board?" has a visible
   // answer instead of a silent fallback.
   const [autoCalibFoundCount, setAutoCalibFoundCount] = useState<number | null>(null);
-  const calibOverlayRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     accumulatedRef.current = accumulated;
@@ -644,6 +609,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       return { url: URL.createObjectURL(clip.blob), mime: clip.mime, blob: clip.blob };
     },
   }), []);
+
+  // Keep the video box's aspect ratio in step with the picture (phone rotated, camera switched).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.addEventListener("resize", syncVideoSize);
+    return () => v.removeEventListener("resize", syncVideoSize);
+  }, [enabled]);
 
   // ─── camera lifecycle ───────────────────────────────────────────────
   useEffect(() => {
@@ -1090,31 +1063,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     }
   };
 
-  const handleCalibTap = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
-    if (phase !== "calibrate") return;
-    const target = e.currentTarget as HTMLDivElement;
-    const rect = target.getBoundingClientRect();
-    const point = "touches" in e
-      ? (e.touches[0] || e.changedTouches[0])
-      : (e as React.MouseEvent<HTMLDivElement>);
-    const clientX = (point as { clientX: number }).clientX;
-    const clientY = (point as { clientY: number }).clientY;
-    const nx = clamp((clientX - rect.left) / rect.width, 0, 1);
-    const ny = clamp((clientY - rect.top) / rect.height, 0, 1);
-    setActiveTap({ x: nx, y: ny });
-  };
-
-  const nudgeActive = (dx: number, dy: number) => {
-    setActiveTap((prev) => prev
-      ? { x: clamp(prev.x + dx, 0, 1), y: clamp(prev.y + dy, 0, 1) }
-      : { x: 0.5, y: 0.5 });
-  };
-
   /** Validates and commits 4 [D20,D3,D11,D6] points as the board calibration — shared by the
    *  manual 4-tap flow and the model-based auto-calibration below, so both go through the exact
    *  same degenerate-calibration rejection and crop-framing math. Returns false (and leaves
    *  `calib` untouched) if the 4 points don't form a usable calibration. */
-  const applyCalibrationTaps = (next: { x: number; y: number }[], source: "auto" | "manual"): boolean => {
+  const applyCalibrationTaps = (next: { x: number; y: number }[], source: "auto" | "manual", confirmed = source === "manual"): boolean => {
     if (next.length !== 4) return false;
     const cx = (next[2].x + next[3].x) / 2;
     const cy = (next[0].y + next[1].y) / 2;
@@ -1133,40 +1086,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // can't place a point outside the region the model actually saw. More margin here reduces
     // how often a real dart near the double ring falls outside the captured frame entirely.
     const size = clamp(Math.max(w, h) * 1.18, MIN_ANALYSIS_SIZE, 0.98);
-    setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next, source, confirmed: source === "manual" }));
+    setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next, source, confirmed }));
     // Show the D20/D3/D11/D6 check by default right after (re)calibrating instead of requiring
     // an extra manual tap to verify — the whole point of that overlay is catching a bad
     // calibration immediately, so it should be the default view of a fresh one, not opt-in.
     setShowCalibDebug(true);
     return true;
-  };
-
-  const confirmActiveTap = () => {
-    const tap = activeTap ?? { x: 0.5, y: 0.5 };
-    const next = [...pendingTaps, tap];
-    setPendingTaps(next);
-    setActiveTap(null);
-    if (next.length >= 4) {
-      // `next` is in on-screen box-fraction space (that's what handleCalibTap/nudgeActive record,
-      // and what the crosshair/dot markers above render directly) — but applyCalibrationTaps
-      // feeds boardTransformFromTaps/cropRect, which both work in native-video-frame fraction
-      // space (same convention tryAutoCalibrate's model-derived taps already use via
-      // cropXYToFullFrame). Convert here, once, at the commit point, instead of carrying two
-      // different coordinate conventions through the rest of the calibration state.
-      const videoSpace = next.map((t) => screenFractionToVideoFraction(t.x, t.y) ?? t);
-      if (!applyCalibrationTaps(videoSpace, "manual")) {
-        setPendingTaps([]);
-        setActiveTap(null);
-        setStatus(t("camera.calibInvalid"));
-        return;
-      }
-      setPendingTaps([]);
-      resetLoop();
-      setPhase("live");
-      setStatus(t("camera.calibratedReady"));
-    } else {
-      setStatus(`${t("camera.calibStep")} ${next.length + 1}/4: ${t(CALIB_LABEL_KEYS[next.length])}`);
-    }
   };
 
   /**
@@ -1175,27 +1100,28 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    * What those classes mean was measured, not guessed (see MODEL_CORNER_ANGLES_DEG in
    * cameraGeometry.ts): cal_1 top, cal_2 bottom, cal_3 left, cal_4 right, each on the wire crossing
    * 9° beside D20/D3/D11/D6, not in the middle of the double. tapsFromModelCorners turns the four
-   * found points into the equivalent D20/D3/D11/D6 taps, after which automatic and manual
-   * calibration are the same thing. (The first version assigned the classes to the wrong corners
+   * found points into the equivalent D20/D3/D11/D6 taps, which become the STARTING POSITION of the
+   * handles in the calibration view — the player checks the drawn rings against the real wires and
+   * drags where needed, so a wrong or missing suggestion costs a few seconds, not a bad session. (The first version assigned the classes to the wrong corners
    * and ignored the 9° offset — it only never showed because the model could not load at all, see
    * onnxRuntimeFiles in vite.config.ts.)
    */
-  const tryAutoCalibrate = async (): Promise<boolean> => {
+  const tryAutoCalibrate = async (): Promise<{ x: number; y: number }[] | null> => {
     const frame = grabImageData(MODEL_INPUT_SIZE, false);
-    if (!frame) return false;
+    if (!frame) return null;
     const result = await detectCalibrationPointsWithModel(frame);
     // Always log the raw per-class detections — success or fail — this is the one place a bad
     // calibration actually originates, and without real numbers every threshold tweak here is
     // just another guess.
     console.info("[LiveCamera] auto-calibration raw candidates", result.points);
-    if (result.unavailable) return false;
+    if (result.unavailable) return null;
     const found = [result.points.cal_1, result.points.cal_2, result.points.cal_3, result.points.cal_4];
     setAutoCalibFoundCount(found.filter(Boolean).length);
-    if (found.some((p) => !p)) return false;
+    if (found.some((p) => !p)) return null;
     const fullFrame = found.map((p) => cropXYToFullFrame(p!.x, p!.y));
-    if (fullFrame.some((p) => !p)) return false;
+    if (fullFrame.some((p) => !p)) return null;
     const taps = tapsFromModelCorners(fullFrame.map((p) => ({ x: p!.fx, y: p!.fy })));
-    if (!taps) return false;
+    if (!taps) return null;
     console.info("[LiveCamera] auto-calibration taps (full-frame coords)", taps);
     // Sanity check: cropRect() is centered on calib.x/calib.y at auto-calibration time (no taps
     // yet, so it's still the default 0.5/0.5 center-ish crop) — the board's own center should
@@ -1208,11 +1134,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const MAX_CENTER_OFFSET = 0.3;
     if (Math.abs(centerFx - 0.5) > MAX_CENTER_OFFSET || Math.abs(centerFy - 0.5) > MAX_CENTER_OFFSET) {
       console.warn("[LiveCamera] auto-calibration rejected: implausible center", { centerFx, centerFy, taps });
-      return false;
+      return null;
     }
-    const applied = applyCalibrationTaps(taps, "auto");
-    console.info("[LiveCamera] auto-calibration", applied ? "applied" : "rejected by applyCalibrationTaps (degenerate spread)", taps);
-    return applied;
+    return taps;
   };
 
   /** Clears any existing calibration and re-runs "try the model first, else manual taps" — used
@@ -1222,36 +1146,40 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const runLocalCalibrationFlow = async () => {
     resetLoop();
     // Wait for the model to actually finish loading (idempotent — instant if already loaded)
-    // before deciding whether auto-calibration is even possible. Just checking modelReadyRef
-    // immediately would almost always lose the race: the model (12MB+ WASM compile) rarely
-    // finishes within the ~600ms autoDetectBoard runs after camera start, so auto-calibration
-    // would silently never fire in practice.
+    // before deciding whether a suggestion is even possible.
     setPhase("detecting");
     setStatus(t("camera.modelLoadingCalib"));
     const modelOk = await preloadDartModel();
     modelReadyRef.current = modelOk;
     setModelReady(modelOk);
     setAutoCalibFoundCount(null);
-    const autoOk = modelOk && (await tryAutoCalibrate());
+    const suggestion = modelOk ? await tryAutoCalibrate() : null;
     resetLoop();
-    if (autoOk) {
-      setPhase("live");
-      setStatus(t("camera.autoCalibratedReady"));
-      setAutoCalibNeedsCheck(true);
-      // Surface the D20/D3/D11/D6 debug dots immediately so the auto-calibration result is
-      // visually checkable against the real board right away, instead of requiring the user to
-      // already know the separate toggle exists. Still just sets the same showCalibDebug state
-      // the manual button controls, so tapping "Punkte ausblenden" dismisses it as normal.
-      setShowCalibDebug(true);
-    } else {
-      setPendingTaps([]);
-      setPhase("calibrate");
-      setStatus(`${t("camera.calibStep")} 1/4: ${t("camera.tapOn")} ${t(CALIB_LABEL_KEYS[0])}`);
-      if (!loadCalibGuideSeen()) {
-        setCalibGuideStep(0);
-        setShowCalibGuide(true);
-      }
+    const size = videoSize ?? (videoRef.current ? { w: videoRef.current.videoWidth, h: videoRef.current.videoHeight } : { w: 1, h: 1 });
+    setCalibDraft(suggestion ?? (calib.taps?.length === 4 ? calib.taps : defaultCalibrationTaps(size)));
+    setCalibDraftSource(suggestion ? "auto" : "manual");
+    setPhase("calibrate");
+    setStatus(t(suggestion ? "camera.calibAiApplied" : "camera.calibDragHint"));
+  };
+
+  /** Commits the calibration shown on screen (handles as the player left them). */
+  const confirmCalibration = () => {
+    if (!calibDraft) return;
+    if (!applyCalibrationTaps(calibDraft, calibDraftSource, true)) {
+      setStatus(t("camera.calibInvalid"));
+      return;
     }
+    setCalibDraft(null);
+    resetLoop();
+    setPhase("live");
+    setStatus(t("camera.calibratedReady"));
+  };
+
+  const cancelCalibration = () => {
+    setCalibDraft(null);
+    resetLoop();
+    setPhase("live");
+    setStatus(t("camera.readyThrowFirst"));
   };
 
   // Previously dead code — nothing in the UI called this, so once a device had a saved
@@ -1271,8 +1199,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setActiveBoard(board);
     setCalib(loadCalib(calibKeyFor(board)));
     setSelectedDeviceId(loadDeviceId(board));
-    setPendingTaps([]);
-    setActiveTap(null);
+    setCalibDraft(null);
     // A pending/unreviewed round from the board being left behind must not survive the switch —
     // otherwise tapping "Übernehmen" afterwards attributes board A's darts to whatever game is
     // active for board B, since onRoundCommit only knows the darts, not which board they're from.
@@ -1869,111 +1796,29 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </Button>
       </div>
 
-      <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
+      <div
+        className="relative mx-auto overflow-hidden rounded-lg border border-border bg-muted"
+        style={{
+          aspectRatio: videoSize ? `${videoSize.w} / ${videoSize.h}` : "1 / 1",
+          width: `min(100%, calc(60dvh * ${videoSize ? videoSize.w / videoSize.h : 1}))`,
+        }}
+      >
         <video
           ref={videoRef}
           playsInline
           muted
+          onLoadedMetadata={syncVideoSize}
           className="h-full w-full object-cover"
         />
         <canvas ref={canvasRef} className="hidden" />
 
-        {phase === "calibrate" && (
-          <div
-            ref={calibOverlayRef}
-            className="absolute inset-0 z-20 cursor-crosshair select-none bg-background/30"
-            onClick={handleCalibTap}
-          >
-            {/* Only the tap surface and geometry-pinned markers live on top of the video itself —
-                step instructions and the fine-tune controls render below the video instead (see
-                the status bar and the "Fein justieren" panel further down), so they can never
-                cover the exact board spot the player needs to see and tap. What used to be a
-                fixed top-of-frame pill was a real problem here specifically: D20's real tap
-                target is ALSO at the top of the frame. */}
-            {/* already confirmed taps */}
-            {pendingTaps.map((t, i) => (
-              <MapMarker key={i} fx={t.x} fy={t.y} className="pointer-events-none h-3 w-3 rounded-full bg-secondary ring-2 ring-background">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded bg-secondary/90 px-1 text-[9px] font-mono text-secondary-foreground">
-                  {CALIB_KEYS[i]}
-                </span>
-              </MapMarker>
-            ))}
-            {/* active draggable marker */}
-            {activeTap && (
-              <>
-                {/* crosshair lines through active point */}
-                <div className="pointer-events-none absolute left-0 right-0 h-px bg-accent/60" style={{ top: `${activeTap.y * 100}%` }} />
-                <div className="pointer-events-none absolute top-0 bottom-0 w-px bg-accent/60" style={{ left: `${activeTap.x * 100}%` }} />
-                <TapMagnifier fx={activeTap.x} fy={activeTap.y} />
-              </>
-            )}
-          </div>
-        )}
-
-        {/* UX-Audit Befund #3, Option B (Kalibrierungs-Guide): re-openable any time via the "?"
-            button, not just shown once and gone — a player who skipped it or forgot can call it
-            back up on demand instead of muddling through the tiny status line alone. */}
-        {phase === "calibrate" && !showCalibGuide && (
-          <button
-            type="button"
-            onClick={() => { setCalibGuideStep(0); setShowCalibGuide(true); }}
-            className="absolute right-2 top-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-background/85 text-xs font-bold text-muted-foreground shadow"
-            title={t("camera.calibGuideReopenTitle")}
-            aria-label={t("camera.calibGuideReopenTitle")}
-          >
-            ?
-          </button>
-        )}
-
-        {phase === "calibrate" && showCalibGuide && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/92 backdrop-blur-sm p-4">
-            <div className="w-full max-w-[240px] rounded-xl border border-border gradient-card shadow-elevation-md p-4 text-center">
-              <p className="mb-2 font-display text-[10px] uppercase tracking-widest text-muted-foreground">
-                {t("camera.calibGuideStepLabel")} {calibGuideStep + 1}/4
-              </p>
-              <svg viewBox="0 0 100 100" className="mx-auto mb-3 h-24 w-24">
-                <circle cx="50" cy="50" r="38" fill="none" stroke="hsl(var(--border))" strokeWidth="1.5" />
-                <circle cx="50" cy="50" r="24" fill="none" stroke="hsl(var(--border))" strokeWidth="1.5" />
-                {CALIB_GUIDE_POINTS.map((p, i) => (
-                  <circle
-                    key={i}
-                    cx={p.x}
-                    cy={p.y}
-                    r={i === calibGuideStep ? 6 : 4}
-                    fill={i === calibGuideStep ? "hsl(var(--primary))" : "hsl(var(--muted))"}
-                    stroke={i === calibGuideStep ? "hsl(var(--primary))" : "hsl(var(--border))"}
-                    strokeWidth={1}
-                  />
-                ))}
-              </svg>
-              <p className="mb-1 font-display text-sm uppercase">
-                {t("camera.tapOn")} {t(CALIB_LABEL_KEYS[calibGuideStep])}
-              </p>
-              {calibGuideStep === 0 && (
-                <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">{t("camera.calibGuideBody")}</p>
-              )}
-              <div className="mb-3 flex justify-center gap-1">
-                {CALIB_GUIDE_POINTS.map((_, i) => (
-                  <span key={i} className={`h-1.5 w-4 rounded-full ${i === calibGuideStep ? "bg-primary" : "bg-muted"}`} />
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" className="flex-1" onClick={dismissCalibGuide}>
-                  {t("camera.calibGuideSkip")}
-                </Button>
-                <Button
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => {
-                    if (calibGuideStep < CALIB_GUIDE_POINTS.length - 1) setCalibGuideStep((s) => s + 1);
-                    else dismissCalibGuide();
-                  }}
-                >
-                  {calibGuideStep < CALIB_GUIDE_POINTS.length - 1 ? t("camera.calibGuideNext") : t("camera.calibGuideStart")}
-                </Button>
-              </div>
-            </div>
-          </div>
+        {phase === "calibrate" && calibDraft && videoSize && (
+          <BoardCalibrator
+            videoRef={videoRef}
+            videoSize={videoSize}
+            taps={calibDraft}
+            onChange={(taps) => { setCalibDraft(taps); setCalibDraftSource("manual"); }}
+          />
         )}
 
         {(phase === "live" || phase === "scanning" || phase === "detecting") && ringRect && (
@@ -2109,53 +1954,41 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           old calibration step pill sat at the top of the frame, exactly where D20 needs
           tapping). Keeping this docked immediately below the video (not down in the review list)
           still means no scrolling to reach it. */}
-      {phase === "calibrate" && autoCalibFoundCount !== null && (
-        <div className="rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-center text-[11px] text-muted-foreground">
-          {t("camera.autoCalibFound").replace("{n}", String(autoCalibFoundCount))}
-        </div>
-      )}
-
-      {phase === "live" && autoCalibNeedsCheck && accumulated.length === 0 && (calib.taps?.length ?? 0) === 4 && (
-        <div className="rounded-lg border border-primary/40 bg-primary/10 p-2.5">
-          <p className="mb-2 text-center text-[11px] text-foreground">{t("camera.calibCheckPrompt")}</p>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="flex-1" onClick={() => { setAutoCalibNeedsCheck(false); restartCalibration(); }}>
-              {t("camera.calibCheckRedo")}
-            </Button>
-            <Button size="sm" className="flex-1 gap-1 font-display uppercase" onClick={() => { setAutoCalibNeedsCheck(false); setCalib((prev) => ({ ...prev, confirmed: true })); }}>
-              <Check className="h-4 w-4" /> {t("camera.calibCheckYes")}
-            </Button>
-          </div>
-        </div>
-      )}
-
       {phase === "live" && trackingStatus === "warn" && (
         <div className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-center text-[11px] font-medium text-accent">
           {t("camera.boardDrifted")}
         </div>
       )}
 
-      {phase === "calibrate" && activeTap && (
-        <div className="rounded-lg border border-border bg-card p-2 shadow-sm">
-          <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
-            {t("camera.fineAdjustThenConfirm")}
-          </div>
-          <div className="mx-auto grid w-32 grid-cols-3 gap-1">
-            <div />
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, -0.005)} title={t("camera.nudgeUp")} aria-label={t("camera.nudgeUp")}>▲</Button>
-            <div />
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(-0.005, 0)} title={t("camera.nudgeLeft")} aria-label={t("camera.nudgeLeft")}>◀</Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setActiveTap(null)} title={t("camera.resetPoint")}>
+      {phase === "calibrate" && calibDraft && (
+        <div className="space-y-2 rounded-lg border border-border bg-card p-2.5 shadow-sm">
+          <p className="text-center text-[11px] leading-snug text-muted-foreground">{t("camera.calibDragHint")}</p>
+          {autoCalibFoundCount !== null && autoCalibFoundCount < 4 && (
+            <p className="text-center text-[11px] text-muted-foreground">{t("camera.autoCalibFound").replace("{n}", String(autoCalibFoundCount))}</p>
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => void runLocalCalibrationFlow()}>
+              {t("camera.calibAiSuggest")}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={() => { setCalibDraft(defaultCalibrationTaps(videoSize ?? { w: 1, h: 1 })); setCalibDraftSource("manual"); }}
+              title={t("camera.calibReset")}
+              aria-label={t("camera.calibReset")}
+            >
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0.005, 0)} title={t("camera.nudgeRight")} aria-label={t("camera.nudgeRight")}>▶</Button>
-            <div />
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeActive(0, 0.005)} title={t("camera.nudgeDown")} aria-label={t("camera.nudgeDown")}>▼</Button>
-            <div />
+            <Button size="sm" className="flex-1 gap-1 font-display uppercase" onClick={confirmCalibration}>
+              <Check className="h-4 w-4" /> {t("camera.calibDone")}
+            </Button>
           </div>
-          <Button size="sm" className="mt-2 w-full gap-1 font-display uppercase" onClick={confirmActiveTap}>
-            <Check className="h-4 w-4" /> {t("camera.confirmPoint")}
-          </Button>
+          {(calib.taps?.length ?? 0) === 4 && (
+            <button type="button" onClick={cancelCalibration} className="w-full text-center text-[11px] text-muted-foreground underline">
+              {t("common.cancel")}
+            </button>
+          )}
         </div>
       )}
 
