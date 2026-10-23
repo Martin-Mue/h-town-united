@@ -138,6 +138,12 @@ interface Calibration {
   size: number;
   zoom: number;
   taps?: { x: number; y: number }[]; // 4 reference points in normalized video coords: D20, D3, D11, D6
+  /** How these taps came about: the model found them ("auto") or the player tapped them
+   *  ("manual"). Saved with the calibration so training samples can say which kind produced them. */
+  source?: "auto" | "manual";
+  /** Manual taps count as confirmed right away; an automatic result becomes confirmed once the
+   *  player taps "Passt" on the check bar. */
+  confirmed?: boolean;
 }
 
 /**
@@ -289,6 +295,8 @@ const loadCalib = (key: string = CALIB_KEY): Calibration => {
       size: clamp(Number(p?.size) || 0.82, 0.4, 0.98),
       zoom: clamp(Number(p?.zoom) || DEFAULT_ZOOM, 1, 4),
       taps,
+      source: taps && (p?.source === "auto" || p?.source === "manual") ? p.source : undefined,
+      confirmed: taps && typeof p?.confirmed === "boolean" ? p.confirmed : undefined,
     };
   } catch {
     return { x: 0.5, y: 0.5, size: 0.82, zoom: DEFAULT_ZOOM };
@@ -966,6 +974,35 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setGeminiSuggestion(result);
   };
 
+  /** Everything needed to turn this sample's calibration into corner labels later, written at
+   *  capture time when the real video size and crop are known (reconstructing them afterwards
+   *  from the taps alone is guesswork — the video orientation isn't stored anywhere else).
+   *  `corners` are the four D20/D3/D11/D6 points as 0-1 fractions of the saved training image
+   *  (same crop for the analysis frame and the model frame, so they hold for either). */
+  const buildCalibrationMeta = () => {
+    const v = videoRef.current;
+    const rect = cropRect();
+    if (!v || !rect || !v.videoWidth || !v.videoHeight) return null;
+    const corners = calib.taps?.length === 4
+      ? Object.fromEntries(CALIB_KEYS.map((key, i) => {
+          const t = calib.taps![i];
+          return [key, { x: (t.x * v.videoWidth - rect.sx) / rect.side, y: (t.y * v.videoHeight - rect.sy) / rect.side }];
+        }))
+      : null;
+    return {
+      version: 1,
+      source: calib.source ?? "unknown",
+      confirmed: calib.confirmed ?? null,
+      video: { w: v.videoWidth, h: v.videoHeight },
+      crop: { sx: rect.sx, sy: rect.sy, side: rect.side },
+      calib: { x: calib.x, y: calib.y, size: calib.size, zoom: calib.zoom },
+      corners,
+      cornersInsideImage: corners
+        ? Object.values(corners).every((c) => c.x >= 0 && c.x <= 1 && c.y >= 0 && c.y <= 1)
+        : false,
+    };
+  };
+
   /** Best-effort background upload of one training sample (see TRAINING_DATA_KEY doc comment) —
    *  never throws into the caller and never blocks/slows down the actual scoring flow it hangs
    *  off of. `darts` is the FINAL, possibly player-corrected list at the moment of commit, which
@@ -992,13 +1029,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         imageDataToBlob(trainingAfter),
       ]);
       if (!beforeBlob || !afterBlob) return;
+      const calibrationMeta = buildCalibrationMeta();
       const prefix = `${userId}/${crypto.randomUUID()}`;
       const [beforeUp, afterUp] = await Promise.all([
         supabase.storage.from("dart-training").upload(`${prefix}/before.jpg`, beforeBlob, { contentType: "image/jpeg" }),
         supabase.storage.from("dart-training").upload(`${prefix}/after.jpg`, afterBlob, { contentType: "image/jpeg" }),
       ]);
       if (beforeUp.error || afterUp.error) return;
-      await supabase.from("training_samples").insert({
+      const row = {
         user_id: userId,
         board: activeBoard,
         before_path: `${prefix}/before.jpg`,
@@ -1010,7 +1048,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         // angle instead of accumulating blind to how skewed its coverage is toward one setup.
         camera_zoom: calib.zoom,
         calib_taps: calib.taps ?? null,
-      });
+      };
+      const { error: insertError } = await supabase.from("training_samples").insert({ ...row, calibration_meta: calibrationMeta });
+      // Until the calibration_meta column exists in a given database, PostgREST rejects the whole
+      // row — keep collecting samples without the metadata instead of silently losing them.
+      if (insertError && /calibration_meta/.test(insertError.message ?? "")) {
+        await supabase.from("training_samples").insert(row);
+      }
     } catch (err) {
       console.warn("[LiveCamera] training sample upload skipped", err);
     }
@@ -1065,7 +1109,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    *  manual 4-tap flow and the model-based auto-calibration below, so both go through the exact
    *  same degenerate-calibration rejection and crop-framing math. Returns false (and leaves
    *  `calib` untouched) if the 4 points don't form a usable calibration. */
-  const applyCalibrationTaps = (next: { x: number; y: number }[]): boolean => {
+  const applyCalibrationTaps = (next: { x: number; y: number }[], source: "auto" | "manual"): boolean => {
     if (next.length !== 4) return false;
     const cx = (next[2].x + next[3].x) / 2;
     const cy = (next[0].y + next[1].y) / 2;
@@ -1084,7 +1128,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // can't place a point outside the region the model actually saw. More margin here reduces
     // how often a real dart near the double ring falls outside the captured frame entirely.
     const size = clamp(Math.max(w, h) * 1.18, MIN_ANALYSIS_SIZE, 0.98);
-    setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next }));
+    setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next, source, confirmed: source === "manual" }));
     // Show the D20/D3/D11/D6 check by default right after (re)calibrating instead of requiring
     // an extra manual tap to verify — the whole point of that overlay is catching a bad
     // calibration immediately, so it should be the default view of a fresh one, not opt-in.
@@ -1105,7 +1149,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // cropXYToFullFrame). Convert here, once, at the commit point, instead of carrying two
       // different coordinate conventions through the rest of the calibration state.
       const videoSpace = next.map((t) => screenFractionToVideoFraction(t.x, t.y) ?? t);
-      if (!applyCalibrationTaps(videoSpace)) {
+      if (!applyCalibrationTaps(videoSpace, "manual")) {
         setPendingTaps([]);
         setActiveTap(null);
         setStatus(t("camera.calibInvalid"));
@@ -1182,7 +1226,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       { x: full.D11.fx, y: full.D11.fy },
       { x: full.D6.fx, y: full.D6.fy },
     ];
-    const applied = applyCalibrationTaps(taps);
+    const applied = applyCalibrationTaps(taps, "auto");
     console.info("[LiveCamera] auto-calibration", applied ? "applied" : "rejected by applyCalibrationTaps (degenerate spread)", taps);
     return applied;
   };
@@ -2087,7 +2131,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             <Button size="sm" variant="outline" className="flex-1" onClick={() => { setAutoCalibNeedsCheck(false); restartCalibration(); }}>
               {t("camera.calibCheckRedo")}
             </Button>
-            <Button size="sm" className="flex-1 gap-1 font-display uppercase" onClick={() => setAutoCalibNeedsCheck(false)}>
+            <Button size="sm" className="flex-1 gap-1 font-display uppercase" onClick={() => { setAutoCalibNeedsCheck(false); setCalib((prev) => ({ ...prev, confirmed: true })); }}>
               <Check className="h-4 w-4" /> {t("camera.calibCheckYes")}
             </Button>
           </div>

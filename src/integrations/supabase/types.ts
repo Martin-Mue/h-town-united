@@ -1401,6 +1401,7 @@ export type Database = {
           before_path: string
           board: string
           calib_taps: Json | null
+          calibration_meta: Json | null
           camera_zoom: number | null
           created_at: string
           id: string
@@ -1418,6 +1419,7 @@ export type Database = {
           before_path: string
           board?: string
           calib_taps?: Json | null
+          calibration_meta?: Json | null
           camera_zoom?: number | null
           created_at?: string
           id?: string
@@ -1435,6 +1437,7 @@ export type Database = {
           before_path?: string
           board?: string
           calib_taps?: Json | null
+          calibration_meta?: Json | null
           camera_zoom?: number | null
           created_at?: string
           id?: string

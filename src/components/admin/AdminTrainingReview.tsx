@@ -161,11 +161,21 @@ const AdminTrainingReview = () => {
   const exportDataset = async () => {
     setExportingDataset(true);
     try {
-      const { data, error } = await supabase
+      let result = await supabase
         .from("training_samples")
-        .select("id, after_path, labels, camera_zoom")
+        .select("id, after_path, labels, camera_zoom, image_size, calibration_meta")
         .eq("review_status", "confirmed")
         .order("created_at", { ascending: true });
+      if (result.error && /calibration_meta/.test(result.error.message)) {
+        // Database without the calibration_meta column yet — export the rest.
+        const fallback = await supabase
+          .from("training_samples")
+          .select("id, after_path, labels, camera_zoom, image_size")
+          .eq("review_status", "confirmed")
+          .order("created_at", { ascending: true });
+        result = { ...fallback, data: fallback.data?.map((r) => ({ ...r, calibration_meta: null })) ?? null } as typeof result;
+      }
+      const { data, error } = result;
       if (error) throw error;
       if (!data || data.length === 0) {
         toast({ title: "Nichts zu exportieren", description: "Es gibt noch keine bestätigten Samples." });
@@ -177,7 +187,14 @@ const AdminTrainingReview = () => {
         if (after.error || !after.data) continue;
         const darts = (row.labels as unknown as SampleLabel[]).filter((d) => typeof d.x === "number" && typeof d.y === "number");
         if (darts.length === 0) continue;
-        samples.push({ id: row.id, camera_zoom: row.camera_zoom, darts: darts.map((d) => ({ x: d.x, y: d.y })), image: await blobToDataUrl(after.data) });
+        samples.push({
+          id: row.id,
+          camera_zoom: row.camera_zoom,
+          image_size: row.image_size,
+          calibration_meta: row.calibration_meta,
+          darts: darts.map((d) => ({ x: d.x, y: d.y })),
+          image: await blobToDataUrl(after.data),
+        });
       }
       const file = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), samples })], { type: "application/json" });
       const link = document.createElement("a");
