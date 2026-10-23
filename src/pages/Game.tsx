@@ -460,6 +460,25 @@ const GamePage = () => {
     setConfettiKey(key);
     setTimeout(() => setConfettiKey((k) => (k === key ? null : k)), 3000);
   };
+  /** Short "X wins leg N" banner shown when a leg (not the whole match — that has its own overlay)
+   *  just ended. Driven by completedLegs growing, so an undo (which shrinks it) never triggers it. */
+  const [legWonBanner, setLegWonBanner] = useState<{ winner: string; legNumber: number } | null>(null);
+  const completedLegCount = game?.completedLegs.length ?? 0;
+  const previousCompletedLegCount = useRef(completedLegCount);
+  useEffect(() => {
+    const grew = completedLegCount > previousCompletedLegCount.current;
+    previousCompletedLegCount.current = completedLegCount;
+    if (!grew || !game || game.isFinished) return;
+    const lastLeg = game.completedLegs[game.completedLegs.length - 1];
+    const winnerSlot = lastLeg?.winnerIndex;
+    if (winnerSlot === undefined) return;
+    const winner = game.teams ? game.teams[winnerSlot]?.name : game.players[winnerSlot]?.name;
+    if (!winner) return;
+    setLegWonBanner({ winner, legNumber: lastLeg.legNumber });
+    const timer = window.setTimeout(() => setLegWonBanner(null), 2600);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedLegCount]);
   // While the camera is on, the game view becomes a fixed, non-scrolling window — the
   // manual number pad isn't needed for scoring then, so it's tucked behind this toggle.
   const [showManualInput, setShowManualInput] = useState(false);
@@ -2499,7 +2518,7 @@ const GamePage = () => {
           on a board that was quietly no longer live. Shown right at the top of the always-visible
           sticky scoreboard, not buried in a toast that could be missed. */}
       {onlineMatchId && onlineMatch.connectionStatus !== "connected" && (
-        <div className="flex items-center justify-center gap-1.5 mb-2 py-1 rounded-md bg-accent/10 text-accent text-[11px] font-medium">
+        <div className="flex items-center justify-center gap-1.5 mb-2 mx-auto w-fit px-3 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent text-[11px] font-semibold">
           {onlineMatch.connectionStatus === "reconnecting" ? (
             <><Loader2 className="w-3 h-3 animate-spin" /> {t("game.onlineReconnecting")}</>
           ) : (
@@ -2632,7 +2651,7 @@ const GamePage = () => {
                 </p>
               )}
               {isActive && card.isBot && botThinking ? (
-                <p className="text-sm font-display mt-1 animate-pulse" style={{ color: "hsl(155 65% 55%)" }}>Bot {t("game.isThrowing")}…</p>
+                <p className="mx-auto mt-3 mb-2 flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-sm font-display animate-pulse" style={{ color: "hsl(155 65% 60%)", background: "hsl(155 65% 42% / 0.15)", boxShadow: "inset 0 0 0 1px hsl(155 65% 42% / 0.4)" }}><Bot className="w-4 h-4" /> {t("game.isThrowing")}…</p>
               ) : (
                 // Deliberately the SAME size in both orientations (no landscape: shrink) — this is
                 // the number a player reads from throwing distance, not from right up close, and
@@ -2799,6 +2818,14 @@ const GamePage = () => {
     // nav bar outright rather than share its z-50.
     <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-slide-up overflow-hidden">
       {confettiKey !== null && <ConfettiBurst triggerKey={confettiKey} />}
+      {legWonBanner && (
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-[65] flex justify-center px-4" role="status">
+          <div className="animate-slide-up flex items-center gap-2 rounded-full border border-primary/50 bg-background/95 px-4 py-2 shadow-[0_8px_28px_-8px_hsl(185_85%_48%/0.6)]">
+            <Trophy className="h-4 w-4 text-accent" />
+            <span className="font-display text-sm font-semibold">{legWonBanner.winner} · {t("game.leg")} {legWonBanner.legNumber} {t("game.legWonSuffix")}</span>
+          </div>
+        </div>
+      )}
       {/* Winner overlay */}
       {game.isFinished && (
         <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto overscroll-y-contain py-8">
@@ -2827,7 +2854,7 @@ const GamePage = () => {
       )}
 
       {pendingTiebreak && (
-        <div className="mx-4 mb-3 rounded-lg border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
+        <div className="mx-4 mb-3 rounded-2xl border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
           <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.tiebreakReached")}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {pendingTiebreak.tiedIndexes.map((i) => scoreLabels[i]).join(" vs. ")} {t("game.tiebreakTied")}
@@ -2876,7 +2903,7 @@ const GamePage = () => {
             {scoreboardBlock}
             {doubleInBanner}
             {pendingCheckoutChoice && (
-              <div className="mb-3 rounded-lg border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
+              <div className="mb-3 rounded-2xl border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
                 <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.possibleFinishDetected")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {t("game.whichDartWasLast")}
@@ -2979,7 +3006,7 @@ const GamePage = () => {
             {/* Manual entry stays fully available — just tucked away by default since the camera scores for you. */}
             <button
               onClick={() => setShowManualInput((v) => !v)}
-              className="w-full flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted mb-3"
+              className={`w-full flex items-center justify-between rounded-xl border px-3 py-2.5 text-xs font-medium transition-colors mb-3 ${showManualInput ? "border-primary/40 bg-primary/10 text-primary" : "border-border bg-muted/30 text-muted-foreground hover:bg-muted"}`}
             >
               <span className="flex items-center gap-1.5"><Keyboard className="w-3.5 h-3.5" /> {t("game.manualEntry")}</span>
               {showManualInput ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}

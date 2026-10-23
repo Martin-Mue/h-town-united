@@ -874,4 +874,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Her oyuncu kartı artık leg ve maç ortalamasını ayrı gösteriyor; ayrıca legde atılan dartları ve son turun skorunu da. Checkout yolu, leg satırının yanındaki düğmeyle istenirse gösterilip gizlenebilir.",
     },
   },
+  {
+    id: "2026-10-23-play-screen-round-two",
+    date: "2026-10-23",
+    title: {
+      de: "Spielscreen: Zahlenfeld, Cricket und Leg-Gewinn",
+      en: "Play screen: number pad, Cricket and leg wins",
+      fr: "Écran de jeu : pavé numérique, Cricket et victoire de leg",
+      pl: "Ekran gry: klawiatura liczb, Cricket i wygrany leg",
+      nl: "Speelscherm: cijferpaneel, Cricket en leg-winst",
+      tr: "Oyun ekranı: sayı tuşları, Cricket ve leg galibiyeti",
+    },
+    description: {
+      de: "Das Zahlenfeld ist kompakter (5 Spalten, größere T/D-Felder), die Wurfhistorie und die Cricket-Tafel haben den neuen Look (geschlossene Zahlen als Badge, aktive Spalte hervorgehoben), der Bot-Hinweis ist eine Pille, und nach jedem Leg erscheint kurz, wer es gewonnen hat.",
+      en: "The number pad is more compact (5 columns, bigger T/D targets), the throw history and Cricket board got the new look (closed numbers as a badge, active column highlighted), the bot hint is a pill, and after each leg a short banner shows who won it.",
+      fr: "Le pavé numérique est plus compact (5 colonnes, cases T/D plus grandes), l'historique des lancers et le tableau Cricket adoptent le nouveau style (numéros fermés en badge, colonne active mise en avant), l'indication du bot est une pastille, et après chaque leg une bannière indique qui l'a gagné.",
+      pl: "Klawiatura liczb jest bardziej zwarta (5 kolumn, większe pola T/D), historia rzutów i tablica Cricket mają nowy wygląd (zamknięte liczby jako plakietka, wyróżniona aktywna kolumna), wskazówka bota to pigułka, a po każdym legu krótki baner pokazuje, kto go wygrał.",
+      nl: "Het cijferpaneel is compacter (5 kolommen, grotere T/D-vlakken), de worpgeschiedenis en het Cricket-bord hebben de nieuwe look (gesloten nummers als badge, actieve kolom uitgelicht), de bot-melding is een pil en na elke leg toont een korte banner wie hem won.",
+      tr: "Sayı tuşları daha kompakt (5 sütun, daha büyük T/D alanları), atış geçmişi ve Cricket tablosu yeni görünüme kavuştu (kapanan sayılar rozet olarak, aktif sütun vurgulu), bot uyarısı bir hap oldu ve her legden sonra kısa bir bantta kimin kazandığı görünüyor.",
+    },
+  },
 ];

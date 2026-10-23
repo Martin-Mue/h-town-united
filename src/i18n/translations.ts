@@ -303,6 +303,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.dartsThrownShort": { de: "Darts", en: "Darts", fr: "Fléch.", pl: "Lotki", nl: "Darts", tr: "Dart" },
   "game.lastVisitShort": { de: "Letzte", en: "Last", fr: "Dernier", pl: "Ostatni", nl: "Laatste", tr: "Son" },
   "game.checkoutToggle": { de: "Checkout", en: "Checkout", fr: "Checkout", pl: "Checkout", nl: "Checkout", tr: "Checkout" },
+  "game.legWonSuffix": { de: "gewonnen", en: "won", fr: "gagné", pl: "wygrany", nl: "gewonnen", tr: "kazanıldı" },
   "game.leg": { de: "Leg", en: "Leg", fr: "Leg", pl: "Leg", nl: "Leg", tr: "Leg" },
   "game.roundLabel": { de: "Runde", en: "Round", fr: "Manche", pl: "Runda", nl: "Ronde", tr: "Tur" },
   "game.overallTab": { de: "Gesamt", en: "Overall", fr: "Total", pl: "Ogółem", nl: "Totaal", tr: "Genel" },

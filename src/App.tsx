@@ -119,7 +119,6 @@ const App = () => (
               <Route path="/live/:slug" element={<PublicTournament />} />
               <Route path="/liga-live/:slug" element={<PublicLeague />} />
               <Route path="/invite/:token" element={<InvitePage />} />
-              <Route path="/dev-game-preview" element={<Game />} />
               <Route path="/join/:clubId" element={<JoinClubPage />} />
               <Route path="/create-club" element={<ProtectedRoute><CreateClub /></ProtectedRoute>} />
               <Route
