@@ -282,11 +282,14 @@ const GameSetup = (props: GameSetupProps) => {
 
         <div>
           <label className="text-sm text-muted-foreground mb-1 block">{teamMode ? t("game.playersPerTeam") : t("game.numPlayers")}</label>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+          {/* One segmented row (just the number — the label above says what it counts) instead of a
+              wrapping grid of "N Spieler" buttons: 7 options fit a phone width in a single line. */}
+          <div className="flex gap-1 rounded-xl bg-muted/50 p-1">
             {(teamMode ? [4, 6, 8] : Array.from({ length: MAX_PLAYERS - 1 }, (_, i) => i + 2)).map((n) => (
               <button key={n} onClick={() => setNumPlayers(n)} disabled={isTournamentMatch}
-                className={`rounded-lg border px-3 py-2 text-sm font-display transition-colors ${numPlayers === n ? "bg-primary/15 border-primary text-primary" : "bg-muted border-border text-muted-foreground"} ${isTournamentMatch ? "opacity-50 cursor-not-allowed" : ""}`}>
-                {teamMode ? `${n / 2} vs ${n / 2}` : `${n} ${t("game.playersSuffix")}`}
+                aria-label={teamMode ? `${n / 2} vs ${n / 2}` : `${n} ${t("game.playersSuffix")}`}
+                className={`flex-1 rounded-lg px-2 py-2 text-sm font-display font-semibold transition-colors ${numPlayers === n ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"} ${isTournamentMatch ? "opacity-50 cursor-not-allowed" : ""}`}>
+                {teamMode ? `${n / 2} vs ${n / 2}` : n}
               </button>
             ))}
           </div>

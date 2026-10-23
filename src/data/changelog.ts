@@ -894,4 +894,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Sayı tuşları daha kompakt (5 sütun, daha büyük T/D alanları), atış geçmişi ve Cricket tablosu yeni görünüme kavuştu (kapanan sayılar rozet olarak, aktif sütun vurgulu), bot uyarısı bir hap oldu ve her legden sonra kısa bir bantta kimin kazandığı görünüyor.",
     },
   },
+  {
+    id: "2026-10-23-setup-warmup-liveview-polish",
+    date: "2026-10-23",
+    title: {
+      de: "Setup, Aufwärmen und Live-Ansicht frischer",
+      en: "Fresher setup, warm-up and live view",
+      fr: "Configuration, échauffement et vue live rafraîchis",
+      pl: "Odświeżone ustawienia, rozgrzewka i widok na żywo",
+      nl: "Frissere setup, warming-up en live-weergave",
+      tr: "Daha taze kurulum, ısınma ve canlı görünüm",
+    },
+    description: {
+      de: "Die Spielerzahl wählst du jetzt in einer einzigen Zeile, der Aufwärm-Timer hat einen größeren, klareren Auftritt, und die Reiter der Turnier-Live-Ansicht sind als runde Pillen gestaltet.",
+      en: "You now pick the number of players in a single row, the warm-up timer has a bigger, clearer look, and the tabs of the tournament live view are rounded pills.",
+      fr: "Le nombre de joueurs se choisit désormais sur une seule ligne, le minuteur d'échauffement est plus grand et plus lisible, et les onglets de la vue live du tournoi sont des pastilles arrondies.",
+      pl: "Liczbę graczy wybierasz teraz w jednym rzędzie, timer rozgrzewki jest większy i czytelniejszy, a zakładki widoku na żywo turnieju to zaokrąglone pigułki.",
+      nl: "Het aantal spelers kies je nu in één rij, de warming-uptimer is groter en duidelijker, en de tabs van de toernooi-live-weergave zijn ronde pillen.",
+      tr: "Oyuncu sayısını artık tek satırda seçiyorsun, ısınma sayacı daha büyük ve net, turnuva canlı görünümünün sekmeleri yuvarlak haplar halinde.",
+    },
+  },
 ];

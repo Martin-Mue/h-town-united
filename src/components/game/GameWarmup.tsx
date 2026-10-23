@@ -31,18 +31,18 @@ const GameWarmup = ({ warmupRemaining, warmupDarts, warmupTotal, setWarmupRemain
         <p className="text-xs text-muted-foreground mt-1">{t("game.warmupDesc")}</p>
       </div>
 
-      <div className="bg-card rounded-2xl border border-primary/30 glow-cyan p-6 mb-4 text-center">
-        <div className="font-display text-6xl tabular-nums text-primary">
+      <div className="relative overflow-hidden rounded-2xl border border-primary/40 bg-gradient-to-b from-primary/10 to-card glow-cyan p-6 mb-4 text-center">
+        <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-primary" />
+        <div className="font-display text-7xl tabular-nums text-primary leading-none">
           {mm}:{String(ss).padStart(2, "0")}
         </div>
-        <div className="flex items-center justify-center gap-4 mt-3 text-xs text-muted-foreground">
-          <span>{warmupDarts} {t("game.dartsSuffix")}</span>
-          <span>·</span>
-          <span>{warmupTotal} {t("game.points")}</span>
+        <div className="flex items-center justify-center gap-2 mt-4 text-xs text-muted-foreground">
+          <span className="rounded-full bg-white/[0.06] px-3 py-1">{warmupDarts} {t("game.dartsSuffix")}</span>
+          <span className="rounded-full bg-white/[0.06] px-3 py-1">{warmupTotal} {t("game.points")}</span>
         </div>
         <div className="flex items-center justify-center gap-2 mt-3">
-          <Button size="sm" variant="outline" onClick={() => setWarmupRemaining((s) => s + 30)}>+30s</Button>
-          <Button size="sm" variant="outline" onClick={() => setWarmupRemaining(0)}>{t("game.endTimer")}</Button>
+          <Button size="sm" variant="outline" className="rounded-full" onClick={() => setWarmupRemaining((s) => s + 30)}>+30s</Button>
+          <Button size="sm" variant="outline" className="rounded-full" onClick={() => setWarmupRemaining(0)}>{t("game.endTimer")}</Button>
         </div>
       </div>
 
