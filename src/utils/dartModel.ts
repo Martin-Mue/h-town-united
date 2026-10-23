@@ -36,7 +36,7 @@ ort.env.wasm.numThreads = 1;
 export const MODEL_INPUT_SIZE = 800;
 
 // The query string changes with every retrained model so browsers never keep serving the previous one.
-const MODEL_URL = "/models/best.onnx?v=2026-10-23-tip";
+const MODEL_URL = "/models/best.onnx?v=2026-10-24-v4";
 // Order matches the model's embedded `names` metadata exactly — index IS the class id.
 const CLASS_NAMES = ["dart", "cal_1", "cal_2", "cal_3", "cal_4"] as const;
 type CalLabel = Exclude<(typeof CLASS_NAMES)[number], "dart">;
