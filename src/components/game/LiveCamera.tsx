@@ -513,6 +513,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // True right after the model calibrated by itself, until the player confirms the overlay looks
   // right (one tap) or asks to redo it — auto-calibration used to just proceed silently.
   const [autoCalibNeedsCheck, setAutoCalibNeedsCheck] = useState(false);
+  // How many of the four corners the model found with confidence in the last automatic attempt —
+  // shown when it falls back to manual tapping, so "why didn't it work on my board?" has a visible
+  // answer instead of a silent fallback.
+  const [autoCalibFoundCount, setAutoCalibFoundCount] = useState<number | null>(null);
   const calibOverlayRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1186,6 +1190,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     console.info("[LiveCamera] auto-calibration raw candidates", result.points);
     if (result.unavailable) return false;
     const found = [result.points.cal_1, result.points.cal_2, result.points.cal_3, result.points.cal_4];
+    setAutoCalibFoundCount(found.filter(Boolean).length);
     if (found.some((p) => !p)) return false;
     const fullFrame = found.map((p) => cropXYToFullFrame(p!.x, p!.y));
     if (fullFrame.some((p) => !p)) return false;
@@ -1226,6 +1231,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const modelOk = await preloadDartModel();
     modelReadyRef.current = modelOk;
     setModelReady(modelOk);
+    setAutoCalibFoundCount(null);
     const autoOk = modelOk && (await tryAutoCalibrate());
     resetLoop();
     if (autoOk) {
@@ -2103,6 +2109,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           old calibration step pill sat at the top of the frame, exactly where D20 needs
           tapping). Keeping this docked immediately below the video (not down in the review list)
           still means no scrolling to reach it. */}
+      {phase === "calibrate" && autoCalibFoundCount !== null && (
+        <div className="rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-center text-[11px] text-muted-foreground">
+          {t("camera.autoCalibFound").replace("{n}", String(autoCalibFoundCount))}
+        </div>
+      )}
+
       {phase === "live" && autoCalibNeedsCheck && accumulated.length === 0 && (calib.taps?.length ?? 0) === 4 && (
         <div className="rounded-lg border border-primary/40 bg-primary/10 p-2.5">
           <p className="mb-2 text-center text-[11px] text-foreground">{t("camera.calibCheckPrompt")}</p>
