@@ -24,12 +24,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
 import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
-import { computeHomography } from "@/utils/homography";
 import { pointsFor, dartLabel } from "@/utils/x01Rules";
 import BoardCalibrator from "@/components/game/BoardCalibrator";
 import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
 import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, RECT_BOARD_RADIUS } from "@/utils/boardRectify";
-import { applyHomography } from "@/utils/homography";
+import { applyHomography, computeHomography } from "@/utils/homography";
+import DartReviewFrame from "@/components/game/DartReviewFrame";
+import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
   boardTransformFromTaps,
   scoreFromBoardPoint,
@@ -85,6 +86,9 @@ export interface DetectedDart {
   /** Tip position in board-relative unit coordinates (0,0 = bull, radius ~1 = double edge) — camera-framing-independent, safe to persist/aggregate (see heatmap). */
   boardU?: number;
   boardV?: number;
+  /** The player picked this score from the correction chips: the position is the middle of that
+   *  field, not a measured tip — fine for the score, not to be trained on as a tip position. */
+  snapped?: boolean;
 }
 
 interface LiveCameraProps {
@@ -463,6 +467,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [repositioningIndex, setRepositioningIndex] = useState<number | null>(null);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
   // Calibration being edited on screen (camera-video fractions: D20, D3, D11, D6) and where it came from.
+  // The frozen picture of the finished visit (darts still in the board) the review works on, and
+  // which dart is selected there.
+  const [reviewFrame, setReviewFrame] = useState<{ url: string } | null>(null);
+  const [selectedReviewIndex, setSelectedReviewIndex] = useState<number | null>(null);
   const [calibDraft, setCalibDraft] = useState<{ x: number; y: number }[] | null>(null);
   const [calibDraftSource, setCalibDraftSource] = useState<"auto" | "manual">("manual");
   // Native size of the camera picture, once known — the video box takes exactly this aspect ratio,
@@ -491,6 +499,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // shown when it falls back to manual tapping, so "why didn't it work on my board?" has a visible
   // answer instead of a silent fallback.
   const [autoCalibFoundCount, setAutoCalibFoundCount] = useState<number | null>(null);
+
+  // The frozen review picture only lives as long as the review it belongs to.
+  useEffect(() => {
+    if (needsReview) return;
+    setSelectedReviewIndex(null);
+    setReviewFrame((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  }, [needsReview]);
 
   useEffect(() => {
     accumulatedRef.current = accumulated;
@@ -1117,7 +1135,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // DART_SCORE_THRESHOLD against this data later.
       const labels = darts
         .filter(hasPosition)
-        .map((d) => ({ x: d.x, y: d.y, baseValue: d.baseValue, multiplier: d.multiplier, boardU: d.boardU, boardV: d.boardV, confidence: d.confidence }));
+        .map((d) => ({ x: d.x, y: d.y, baseValue: d.baseValue, multiplier: d.multiplier, boardU: d.boardU, boardV: d.boardV, confidence: d.confidence, snapped: d.snapped === true }));
       if (labels.length === 0) return;
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
@@ -1548,7 +1566,23 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   }, [enabled, phase, dartsRemaining, paused, boardMissing]);
 
   // ─── scan: analyze the pre-removal frame after darts are pulled ─────
+  /** Keeps the picture of the visit that just ended (darts still stuck in) for the review. */
+  const freezeReviewFrame = () => {
+    const frame = preRemovalModelFrameRef.current ?? preRemovalImageDataRef.current;
+    if (!frame) return;
+    void imageDataToBlob(frame, 0.9).then((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      setReviewFrame((prev) => {
+        if (prev) URL.revokeObjectURL(prev.url);
+        return { url };
+      });
+      setSelectedReviewIndex(null);
+    });
+  };
+
   const runPullScan = async () => {
+    freezeReviewFrame();
     // Every dart in this visit was already identified incrementally, in true chronological
     // order, as it landed (see scoreNewlyLandedDart) — nothing left to batch-detect, and
     // re-running detection now would only risk REPLACING a correctly-ordered result with a
@@ -1857,6 +1891,57 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setRepositioningIndex(null);
   };
 
+  /** The player dragged/tapped the tip of dart `index` to this spot on the review frame. */
+  const moveDartTo = (index: number, x: number, y: number) => {
+    const transform = boardTransformFromTaps(calib.taps, { x: calib.x, y: calib.y });
+    const full = frameXYToFull(x, y);
+    setAccumulated((prev) => {
+      const d = prev[index];
+      if (!d) return prev;
+      let updated: DetectedDart = { ...d, x, y, confidence: 1, snapped: false };
+      if (transform && full) {
+        const scored = scoreFromBoardPoint(full.fx, full.fy, transform);
+        updated = { ...updated, baseValue: scored.baseValue, multiplier: scored.multiplier, points: scored.points, boardU: scored.u, boardV: scored.v };
+      }
+      const next = [...prev];
+      next[index] = updated;
+      return next;
+    });
+  };
+
+  /** The player chose a different score for dart `index` from the chips: set it, and move the dart
+   *  into that field (nearest sensible point) so position and score never contradict each other. */
+  const applyDartChoice = (index: number, choice: ScoreChoice) => {
+    const taps = effectiveTaps();
+    const toCanonical = taps ? computeHomography(taps, CANON_BOARD_POINTS) : null;
+    const canonToVideo = taps ? computeHomography(CANON_BOARD_POINTS, taps) : null;
+    setAccumulated((prev) => {
+      const d = prev[index];
+      if (!d) return prev;
+      const full = toFullFrameXY(d);
+      const near = toCanonical && full ? applyHomography(toCanonical, { x: full.fx, y: full.fy }) : null;
+      const target = canonicalPointForChoice(choice, near);
+      let position: { x: number; y: number } | null = null;
+      if (rectMapping()) {
+        position = canonicalToRect(target.x, target.y);
+      } else if (canonToVideo) {
+        const video = applyHomography(canonToVideo, target);
+        position = fullToFrameXY(video.x, video.y);
+      }
+      const next = [...prev];
+      next[index] = {
+        ...d,
+        baseValue: choice.baseValue,
+        multiplier: choice.multiplier,
+        points: pointsFor(choice.baseValue, choice.multiplier),
+        confidence: 1,
+        snapped: true,
+        ...(position ? { x: position.x, y: position.y, boardU: target.x, boardV: target.y } : {}),
+      };
+      return next;
+    });
+  };
+
   const roundTotal = accumulated.reduce((s, d) => s + d.points, 0);
 
   // Tracking-health ring: green once calibrated and the live-tracked board center hasn't
@@ -1925,8 +2010,26 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </Button>
       </div>
 
+      {needsReview && reviewFrame && (
+        <DartReviewFrame
+          imageUrl={reviewFrame.url}
+          darts={accumulated.map((d) => ({ x: d.x ?? 0.5, y: d.y ?? 0.5, baseValue: d.baseValue, multiplier: d.multiplier }))}
+          selectedIndex={selectedReviewIndex}
+          onSelect={setSelectedReviewIndex}
+          onMove={moveDartTo}
+          onChoose={applyDartChoice}
+          labels={{
+            hintPick: t("camera.reviewHintPick"),
+            hintMove: t("camera.reviewHintMove"),
+            miss: t("game.miss"),
+            bullOuter: "25",
+            bullInner: "Bull",
+          }}
+        />
+      )}
+
       <div
-        className="relative mx-auto overflow-hidden rounded-lg border border-border bg-muted"
+        className={`relative mx-auto overflow-hidden rounded-lg border border-border bg-muted ${needsReview && reviewFrame ? "hidden" : ""}`}
         style={{
           aspectRatio: videoSize ? `${videoSize.w} / ${videoSize.h}` : "1 / 1",
           width: `min(100%, calc(60dvh * ${videoSize ? videoSize.w / videoSize.h : 1}))`,
