@@ -11,11 +11,12 @@ const cells = [
 
 Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**. Danach **Laufzeit → Alle ausführen** – ein Durchlauf, keine Zwischenschritte.
 
-Dein altes Modell wird aus Google Drive geladen (DeepDarts-Dataset/training_runs/dart_yolov8n/weights/best.pt). Hochladen musst du nur das Datenset (training-set-rectified.zip).
+Dein altes Modell wird aus Google Drive geladen (DeepDarts-Dataset/training_runs/dart_yolov8n/weights/best.pt). Hochladen musst du nur das Datenset (training-set-rectified-v3.zip).
 
 Was anders ist als beim ersten Versuch:
 - Die Bilder sind genau das, was die App dem Modell zeigt: das Board von oben entzerrt (20 oben), die vier Ecken sind echte Labels.
-- Die Dart-Labels liegen auf der **Dartspitze** (nicht auf dem Flight), mit einer größeren Box (6 % der Bildbreite), damit die Messlatte nicht an winzigen Boxen scheitert.
+- Die Dart-Labels liegen auf der **Dartspitze** (nicht auf dem Flight), jetzt mit kleinerer Box (4 % der Bildbreite): bei dicht beieinander steckenden Darts überlappen große Boxen so stark, dass das Modell sie zu einem Dart verschmilzt.
+- Neu im Datenset: die geprüften Bilder vom 23.10. mit allen sichtbaren Darts, viele davon dichte Gruppen.
 - Gemessen wird **der Abstand zur echten Spitze in Millimetern** (nicht AP50): wie viele Darts liegen innerhalb von 8,5 / 17 / 34 mm?
 - Zwei Trainingsvarianten laufen nacheinander, das beste Modell (nach Spitzenfehler) wird automatisch exportiert.`),
 
@@ -28,7 +29,7 @@ OLD_PT = "/content/drive/MyDrive/DeepDarts-Dataset/training_runs/dart_yolov8n/we
 assert os.path.exists(OLD_PT), "best.pt nicht gefunden - Pfad in OLD_PT anpassen"
 shutil.copy(OLD_PT, "/content/best.pt")  # Original in Drive bleibt unberührt
 
-print("Lade training-set-rectified.zip hoch:")
+print("Lade training-set-rectified-v3.zip hoch:")
 uploaded = files.upload()
 zip_names = [n for n in uploaded if n.lower().endswith(".zip")]
 assert zip_names, "Keine .zip hochgeladen"
@@ -62,11 +63,15 @@ def read_darts(label_file):
             out.append((float(p[1]), float(p[2])))
     return out
 
-def tip_metrics(model, split="val", conf=0.12):
+def tip_metrics(model, split="val", conf=0.12, dense_only=False):
     # conf=0.12 wie in der App: dort zaehlt auch ein schwacher Fund, wenn er auf veraenderten Pixeln liegt
     errors, n_pred, n_gt = [], 0, 0
     for img in sorted(glob.glob(f"{DS}/images/{split}/*.jpg")):
         gt = read_darts(img.replace("/images/", "/labels/").rsplit(".", 1)[0] + ".txt")
+        if dense_only:  # only darts that have another dart within 25 mm next to them (tight groups)
+            gt = [g for g in gt if any(o is not g and math.hypot(o[0] - g[0], o[1] - g[1]) * MM_PER_UNIT < 25 for o in gt)]
+            if not gt:
+                continue
         res = model.predict(img, imgsz=800, conf=conf, verbose=False)[0]
         preds = [(float(b.xywhn[0][0]), float(b.xywhn[0][1])) for b in res.boxes if int(b.cls) == 0]
         n_pred += len(preds); n_gt += len(gt)
@@ -97,8 +102,10 @@ def show(name, m):
 
   code(String.raw`old = YOLO("/content/best.pt")
 old_tip = tip_metrics(old)
+old_dense = tip_metrics(old, dense_only=True)
 old_ap = ap50_by_class(old.val(data=f"{DS}/data.yaml", imgsz=800, plots=False))
 show("ALT", old_tip)
+show("ALT dicht", old_dense)
 print("ALT AP50 je Klasse:", {old.names[c]: round(a, 3) for c, a in old_ap.items()})`),
 
   md(String.raw`## Training – zwei Varianten
@@ -119,16 +126,19 @@ for name, cfg in CONFIGS.items():
     )
     best_path = str(m.trainer.best)
     trained = YOLO(best_path)
-    results[name] = {"path": best_path, "tip": tip_metrics(trained),
+    results[name] = {"path": best_path, "tip": tip_metrics(trained), "dense": tip_metrics(trained, dense_only=True),
                      "ap": ap50_by_class(trained.val(data=f"{DS}/data.yaml", imgsz=800, plots=False))}
-    show(name, results[name]["tip"])`),
+    show(name, results[name]["tip"])
+    show(name + " dicht", results[name]["dense"])`),
 
   md(String.raw`## Ergebnis und Auswahl
 Gewinner = höchste Trefferquote innerhalb 17 mm, aber nur, wenn die vier Ecken (cal_1..cal_4) nicht schlechter geworden sind als beim alten Modell.`),
 
   code(String.raw`show("ALT", old_tip)
+show("ALT dicht", old_dense)
 for name, r in results.items():
     show(name, r["tip"])
+    show(name + " dicht", r["dense"])
     print("   AP50 je Klasse:", {YOLO(r["path"]).names[c]: round(a, 3) for c, a in r["ap"].items()})
 
 def corners_ok(r):

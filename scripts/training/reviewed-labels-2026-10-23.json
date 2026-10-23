@@ -1,0 +1,12 @@
+{
+  "note": "Review of the 40 samples in training-batch-2026-10-23.json (already straightened frames). Per sample number: the darts the player confirmed stay; 'removeLabels' lists labels (1-based) that sat on the wrong spot; 'add' lists visible darts the app missed (fractions of the 800px frame).",
+  "samples": {
+    "003": { "add": [[0.5156, 0.7578], [0.4205, 0.2948]] },
+    "004": { "add": [[0.4311, 0.5056], [0.4083, 0.8499]] },
+    "005": { "removeLabels": [2], "add": [[0.4743, 0.7273]] },
+    "007": { "add": [[0.4931, 0.2251]] },
+    "008": { "add": [[0.4757, 0.4777]] },
+    "018": { "add": [[0.454, 0.797]] },
+    "021": { "add": [[0.554, 0.217]] }
+  }
+}
