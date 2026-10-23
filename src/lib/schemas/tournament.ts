@@ -67,6 +67,8 @@ const roundRobinMatchSchema = z
     player2: z.string(),
     winner: z.string().optional(),
     played: z.boolean(),
+    score1: z.number().optional(),
+    score2: z.number().optional(),
     board: z.number().optional(),
     scorekeeper: z.string().optional(),
     scorekeeperLocked: z.boolean().optional(),

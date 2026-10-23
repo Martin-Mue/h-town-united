@@ -514,6 +514,11 @@ export interface RoundRobinMatch {
   player2: string;
   winner?: string;
   played: boolean;
+  /** Legs (or sets, when played in Sets-Modus) won by player1/player2 — only present when the
+   *  result came from a live-scored game; a manually tapped winner has no score. Feeds the
+   *  leg-difference column of the standings. */
+  score1?: number;
+  score2?: number;
   /** Board number, assigned by assignRrBoards -- see that function's doc comment for why this is
    *  a display convenience, not a real no-double-booking guarantee the way KO's Match.board is. */
   board?: number;
@@ -545,9 +550,12 @@ export interface RoundRobinStanding {
   won: number;
   lost: number;
   points: number;
+  /** Legs won / conceded across all played matches that carry a score (see RoundRobinMatch.score1). */
+  legsFor: number;
+  legsAgainst: number;
 }
 
-/** Round-robin table: 2 points per win, sorted by points then wins. No head-to-head/leg-diff tiebreaker. */
+/** Round-robin table: 2 points per win, sorted by points then wins, then head-to-head, then leg difference. */
 /**
  * Points/wins first; ties are then broken by head-to-head results among just the tied
  * group (standard round-robin procedure) instead of falling back to arbitrary insertion order.
@@ -556,7 +564,7 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
   const map: Record<string, RoundRobinStanding> = {};
   matches.forEach((m) => {
     [m.player1, m.player2].forEach((p) => {
-      if (!map[p]) map[p] = { name: p, played: 0, won: 0, lost: 0, points: 0 };
+      if (!map[p]) map[p] = { name: p, played: 0, won: 0, lost: 0, points: 0, legsFor: 0, legsAgainst: 0 };
     });
     if (m.played && m.winner) {
       map[m.player1].played++;
@@ -565,6 +573,12 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
       map[m.winner].points += 2;
       const loser = m.winner === m.player1 ? m.player2 : m.player1;
       map[loser].lost++;
+      if (m.score1 !== undefined && m.score2 !== undefined) {
+        map[m.player1].legsFor += m.score1;
+        map[m.player1].legsAgainst += m.score2;
+        map[m.player2].legsFor += m.score2;
+        map[m.player2].legsAgainst += m.score1;
+      }
     }
   });
 
@@ -584,7 +598,8 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
         h2hPoints[m.winner] += 2;
       }
     });
-    return [...group].sort((a, b) => h2hPoints[b.name] - h2hPoints[a.name]);
+    return [...group].sort((a, b) =>
+      h2hPoints[b.name] - h2hPoints[a.name] || (b.legsFor - b.legsAgainst) - (a.legsFor - a.legsAgainst));
   };
 
   const groupOrder = [...groups.keys()].sort((ka, kb) => {

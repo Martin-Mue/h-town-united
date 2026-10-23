@@ -56,6 +56,7 @@ const ALL_VIEW_KEYS: ViewKey[] = ["tree", "list", "boards", "participants", "hig
 const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
   const { t } = useLanguage();
   const standings = calcStandings(matches);
+  const hasLegData = standings.some((s) => s.legsFor + s.legsAgainst > 0);
   const unplayed = matches.filter((m) => !m.played);
   const played = matches.filter((m) => m.played);
 
@@ -63,12 +64,13 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
     <div className="space-y-4">
       <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_repeat(4,32px)] gap-x-2 gap-y-1 text-xs">
+        <div className={`grid ${hasLegData ? "grid-cols-[auto_minmax(0,1fr)_repeat(5,32px)]" : "grid-cols-[auto_minmax(0,1fr)_repeat(4,32px)]"} gap-x-2 gap-y-1 text-xs`}>
           <span className="text-muted-foreground">#</span>
           <span className="text-muted-foreground">{t("stats.player")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.playedAbbrev")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.wonAbbrev")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.lostAbbrev")}</span>
+          {hasLegData && <span className="text-muted-foreground text-center">{t("tournament.legDiffAbbrev")}</span>}
           <span className="text-muted-foreground text-center">{t("tournament.pointsAbbrev")}</span>
           {standings.map((s, i) => (
             <div className="contents" key={s.name}>
@@ -79,6 +81,11 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
               <span className="text-center">{s.played}</span>
               <span className="text-center text-secondary">{s.won}</span>
               <span className="text-center text-destructive">{s.lost}</span>
+              {hasLegData && (
+                <span className={`text-center tabular-nums ${s.legsFor - s.legsAgainst > 0 ? "text-secondary" : s.legsFor - s.legsAgainst < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  {s.legsFor - s.legsAgainst > 0 ? "+" : ""}{s.legsFor - s.legsAgainst}
+                </span>
+              )}
               <span className="text-center font-display text-primary">{s.points}</span>
             </div>
           ))}
@@ -1242,33 +1249,33 @@ const PublicTournamentPage = () => {
            *  buttons badly overflowed a single scrollable row: only the first 3 stayed visible,
            *  requiring the operator to scroll blind to reach the rest. Wrapping shows every
            *  button always, at any width, instead of hiding most of them off-screen. */}
-          <div className="inline-flex flex-wrap rounded-lg border border-border max-w-full">
-            <button onClick={() => selectView("boards")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+          <div className="flex flex-wrap gap-1.5 max-w-full">
+            <button onClick={() => selectView("boards")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
               <Monitor className="w-3.5 h-3.5" /> {tr("pt.boardOverview")} {isLocked("boards") && <Lock className="w-3 h-3" />}
             </button>
             {isKo && (
               <>
-                <button onClick={() => selectView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <button onClick={() => selectView("tree")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
                   <Network className="w-3.5 h-3.5" /> {tr("tournament.bracketTreeTab")} {isLocked("tree") && <Lock className="w-3 h-3" />}
                 </button>
-                <button onClick={() => selectView("list")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+                <button onClick={() => selectView("list")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
                   <Rows3 className="w-3.5 h-3.5" /> {tr("pt.roundList")} {isLocked("list") && <Lock className="w-3 h-3" />}
                 </button>
               </>
             )}
-            <button onClick={() => selectView("participants")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "participants" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+            <button onClick={() => selectView("participants")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "participants" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
               <Users className="w-3.5 h-3.5" /> {tr("pt.participantsView")} {isLocked("participants") && <Lock className="w-3 h-3" />}
             </button>
-            <button onClick={() => selectView("highlights")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "highlights" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+            <button onClick={() => selectView("highlights")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "highlights" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
               <Target className="w-3.5 h-3.5" /> {tr("pt.highlightsLabel")} {isLocked("highlights") && <Lock className="w-3 h-3" />}
             </button>
-            <button onClick={() => selectView("waiting")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "waiting" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+            <button onClick={() => selectView("waiting")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "waiting" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
               <Hourglass className="w-3.5 h-3.5" /> {tr("pt.waitingTab")} {isLocked("waiting") && <Lock className="w-3 h-3" />}
             </button>
-            <button onClick={() => selectView("format")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "format" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+            <button onClick={() => selectView("format")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "format" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
               <ListOrdered className="w-3.5 h-3.5" /> {tr("pt.formatTab")} {isLocked("format") && <Lock className="w-3 h-3" />}
             </button>
-            <button onClick={() => selectView("qr")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap border-l border-border ${view === "qr" && !autoRotate ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>
+            <button onClick={() => selectView("qr")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "qr" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
               <QrCode className="w-3.5 h-3.5" /> {tr("pt.qrTab")} {isLocked("qr") && <Lock className="w-3 h-3" />}
             </button>
           </div>

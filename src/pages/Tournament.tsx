@@ -3361,12 +3361,13 @@ const TournamentPage = () => {
       {/* Standings table */}
       <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 mb-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
-        <div className="grid grid-cols-[auto_1fr_repeat(4,40px)] gap-x-2 gap-y-1 text-xs">
+        <div className={`grid ${standings.some((s) => s.legsFor + s.legsAgainst > 0) ? "grid-cols-[auto_1fr_repeat(5,38px)]" : "grid-cols-[auto_1fr_repeat(4,40px)]"} gap-x-2 gap-y-1 text-xs`}>
           <span className="text-muted-foreground">#</span>
           <span className="text-muted-foreground">{t("stats.player")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.playedAbbrev")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.wonAbbrev")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.lostAbbrev")}</span>
+          {standings.some((s) => s.legsFor + s.legsAgainst > 0) && <span className="text-muted-foreground text-center">{t("tournament.legDiffAbbrev")}</span>}
           <span className="text-muted-foreground text-center">{t("tournament.pointsAbbrev")}</span>
           {pagedRrStandings.visible.map((s) => {
             // True rank in the full table, not the index within this page/slice.
@@ -3380,6 +3381,11 @@ const TournamentPage = () => {
                 <span className="text-center">{s.played}</span>
                 <span className="text-center text-secondary">{s.won}</span>
                 <span className="text-center text-destructive">{s.lost}</span>
+                {standings.some((x) => x.legsFor + x.legsAgainst > 0) && (
+                  <span className={`text-center tabular-nums ${s.legsFor - s.legsAgainst > 0 ? "text-secondary" : s.legsFor - s.legsAgainst < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                    {s.legsFor - s.legsAgainst > 0 ? "+" : ""}{s.legsFor - s.legsAgainst}
+                  </span>
+                )}
                 <span className="text-center font-display text-primary">{s.points}</span>
               </Fragment>
             );

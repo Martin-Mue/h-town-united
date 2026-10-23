@@ -969,6 +969,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "tournament.playedAbbrev": { de: "Sp", en: "Pl", fr: "J", pl: "Roz", nl: "Gsp", tr: "Oy" },
   "tournament.wonAbbrev": { de: "S", en: "W", fr: "V", pl: "Z", nl: "W", tr: "G" },
   "tournament.lostAbbrev": { de: "N", en: "L", fr: "D", pl: "P", nl: "V", tr: "M" },
+  "tournament.legDiffAbbrev": { de: "Diff", en: "Diff", fr: "Diff", pl: "Różn.", nl: "Verschil", tr: "Av." },
   "tournament.pointsAbbrev": { de: "Pkt", en: "Pts", fr: "Pts", pl: "Pkt", nl: "Pt", tr: "Pu" },
   "tournament.upcomingMatches": { de: "Ausstehende Spiele", en: "Upcoming matches", fr: "Matchs à venir", pl: "Nadchodzące mecze", nl: "Aankomende wedstrijden", tr: "Yaklaşan maçlar" },
   "tournament.playedMatches": { de: "Gespielte Partien", en: "Played matches", fr: "Matchs joués", pl: "Rozegrane mecze", nl: "Gespeelde wedstrijden", tr: "Oynanan maçlar" },

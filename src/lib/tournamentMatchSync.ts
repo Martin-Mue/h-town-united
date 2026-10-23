@@ -142,7 +142,7 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
       // saved regardless (see the caller), only this specific bracket write-back is a no-op.
       if (rrBracket.find((m) => m.id === matchId)?.played) return;
       const raw = rrBracket.map((m) =>
-        m.id === matchId ? { ...m, winner: result.winnerName, played: true, live: undefined } : m
+        m.id === matchId ? { ...m, winner: result.winnerName, score1: result.score1, score2: result.score2, played: true, live: undefined } : m
       );
       // Board/scorekeeper toolkit (Round 3, Rang 1): a finished match frees up its board and its
       // scorekeeper slot, same as recomputeBracket+assignScorekeepers does for KO just below --
@@ -246,7 +246,7 @@ function applyActionToRrBracket(bracket: RoundRobinMatch[], action: BracketActio
       return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: action.winner, played: true } : x));
     }
     case "resetRrMatch":
-      return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: undefined, played: false } : x));
+      return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: undefined, score1: undefined, score2: undefined, played: false } : x));
     default:
       return null;
   }

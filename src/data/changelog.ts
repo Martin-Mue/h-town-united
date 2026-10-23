@@ -914,4 +914,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Oyuncu sayısını artık tek satırda seçiyorsun, ısınma sayacı daha büyük ve net, turnuva canlı görünümünün sekmeleri yuvarlak haplar halinde.",
     },
   },
+  {
+    id: "2026-10-23-roundrobin-leg-difference",
+    date: "2026-10-23",
+    title: {
+      de: "Round Robin: Leg-Differenz in der Tabelle",
+      en: "Round robin: leg difference in the table",
+      fr: "Round robin : différence de legs dans le classement",
+      pl: "Round robin: różnica legów w tabeli",
+      nl: "Round robin: legverschil in de tabel",
+      tr: "Round robin: tabloda leg farkı",
+    },
+    description: {
+      de: "Die Round-Robin-Tabelle zeigt jetzt die Leg-Differenz (in der App und in der Live-Ansicht) und nutzt sie nach dem direkten Vergleich als Tie-Break. Sie erscheint, sobald Partien live gewertet wurden; von Hand eingetragene Sieger haben keinen Spielstand.",
+      en: "The round-robin table now shows the leg difference (in the app and in the live view) and uses it as a tie-break after head-to-head. It appears once matches were scored live; winners entered by hand have no score.",
+      fr: "Le classement round robin affiche désormais la différence de legs (dans l'app et en vue live) et l'utilise comme départage après la confrontation directe. Elle apparaît dès que des matchs ont été comptés en direct ; un vainqueur saisi à la main n'a pas de score.",
+      pl: "Tabela round robin pokazuje teraz różnicę legów (w aplikacji i w widoku na żywo) i używa jej jako rozstrzygnięcia po bezpośrednim pojedynku. Pojawia się, gdy mecze były liczone na żywo; ręcznie wpisany zwycięzca nie ma wyniku.",
+      nl: "De round-robintabel toont nu het legverschil (in de app en in de live-weergave) en gebruikt het als tie-break na het onderlinge duel. Het verschijnt zodra wedstrijden live zijn geteld; handmatig ingevoerde winnaars hebben geen score.",
+      tr: "Round robin tablosu artık leg farkını gösteriyor (uygulamada ve canlı görünümde) ve doğrudan karşılaşmadan sonra eşitlik bozucu olarak kullanıyor. Maçlar canlı sayıldığında görünür; elle girilen kazananların skoru olmaz.",
+    },
+  },
 ];

@@ -180,6 +180,27 @@ describe("calcStandings", () => {
     expect(names[0]).toBe("C");
     expect(names[names.length - 1]).toBe("D");
   });
+
+  it("accumulates legs for/against from scored matches and ranks equal head-to-head by leg difference", () => {
+    // A, B and C form a cycle (each beats one), so points, wins and head-to-head are all level.
+    const matches: RoundRobinMatch[] = [
+      { id: "m1", player1: "A", player2: "B", winner: "A", played: true, score1: 2, score2: 1 },
+      { id: "m2", player1: "B", player2: "C", winner: "B", played: true, score1: 2, score2: 0 },
+      { id: "m3", player1: "C", player2: "A", winner: "C", played: true, score1: 2, score2: 1 },
+    ];
+    const standings = calcStandings(matches);
+    const byName = Object.fromEntries(standings.map((s) => [s.name, s]));
+    expect(byName.A.legsFor).toBe(3);
+    expect(byName.A.legsAgainst).toBe(3);
+    expect(byName.B.legsFor - byName.B.legsAgainst).toBe(1);
+    expect(byName.C.legsFor - byName.C.legsAgainst).toBe(-1);
+    expect(standings.map((s) => s.name)).toEqual(["B", "A", "C"]);
+  });
+
+  it("leaves legs at 0 for matches decided without a score", () => {
+    const standings = calcStandings([{ id: "m1", player1: "A", player2: "B", winner: "A", played: true }]);
+    expect(standings.every((s) => s.legsFor === 0 && s.legsAgainst === 0)).toBe(true);
+  });
 });
 
 describe("assignRrBoards", () => {
