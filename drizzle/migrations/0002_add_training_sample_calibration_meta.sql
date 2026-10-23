@@ -1,0 +1,1 @@
+ALTER TABLE public.training_samples ADD COLUMN calibration_meta JSONB;

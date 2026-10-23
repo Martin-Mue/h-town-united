@@ -15,6 +15,13 @@
       "when": 1792661515868,
       "tag": "0001_add_training_sample_review_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792748816405,
+      "tag": "0002_add_training_sample_calibration_meta",
+      "breakpoints": true
     }
   ]
 }
