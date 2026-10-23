@@ -30,6 +30,7 @@ import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
 import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, RECT_BOARD_RADIUS } from "@/utils/boardRectify";
 import { applyHomography, computeHomography } from "@/utils/homography";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
+import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
 import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
   boardTransformFromTaps,
@@ -191,6 +192,10 @@ const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
 /** The camera picture is downscaled to at most this long side before being straightened — plenty for
  *  the 800px output (the board covers only part of the picture) and keeps the pixel read cheap. */
 const MAX_RECTIFY_SOURCE_SIDE = 1920;
+/** A new-dart candidate needs at least this share of changed cells around its tip (utils/changeMask). */
+const CHANGE_SUPPORT_MIN = 0.12;
+/** Above this share of changed cells the whole picture moved (exposure, bump) — no comparison possible. */
+const GLOBAL_CHANGE_SHARE_MAX = 0.5;
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
 // remembers which physical board it's pointed at, and calibration + camera-device choice are
 // namespaced per board so the same tablet can be reassigned between boards over an evening
@@ -422,6 +427,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const pendingTrainingCaptureRef = useRef<{ before: ImageData; after: ImageData; modelAfter: ImageData | null; frame: "rectified" | "crop" } | null>(null);
   // Which kind of frame preRemovalModelFrameRef holds (set together with it).
   const preRemovalFrameKindRef = useRef<"rectified" | "crop">("crop");
+  // The model frame as of the last stable moment (empty board, or the previous dart's landing) and the
+  // pair of frames around the dart that just landed — comparing them shows where THAT dart is, even
+  // when it sits right next to the earlier ones (see utils/changeMask.ts).
+  const lastStableModelFrameRef = useRef<ImageData | null>(null);
+  const landingDiffRef = useRef<{ before: ImageData; after: ImageData } | null>(null);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -545,6 +555,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     scanLockRef.current = false;
     preRemovalImageDataRef.current = null;
     preRemovalModelFrameRef.current = null;
+    lastStableModelFrameRef.current = null;
+    landingDiffRef.current = null;
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
@@ -1405,9 +1417,24 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const newOnes = diffNewDarts(already, scored);
     if (newOnes.length === 0) return; // nothing distinguishable as new yet — try again next tick
 
-    // Exactly one new dart is expected; if more came back (e.g. two darts landed the same
-    // tick), take the highest-confidence one and let the next tick pick up the rest.
-    const newDart = newOnes.length > 1 ? [...newOnes].sort((a, b) => b.confidence - a.confidence)[0] : newOnes[0];
+    // Exactly one new dart is expected. Where the picture before and after this landing is known,
+    // only a candidate standing on freshly changed pixels qualifies — that is what keeps a cluster
+    // apart: a re-detected old dart or a phantom box has no change under it. The candidate with the
+    // strongest change (weighted by confidence) wins; without a comparison, the most confident one.
+    let candidates = newOnes;
+    const landing = landingDiffRef.current;
+    const changeMap = landing ? buildChangeMap(landing.before, landing.after) : null;
+    if (changeMap && changeMap.share < GLOBAL_CHANGE_SHARE_MAX) {
+      const supported = newOnes
+        .map((d) => ({ d, support: changedShareNear(changeMap, d.x ?? 0, d.y ?? 0) }))
+        .filter((e) => e.support >= CHANGE_SUPPORT_MIN)
+        .sort((a, b) => b.support * b.d.confidence - a.support * a.d.confidence);
+      if (supported.length === 0) return; // nothing new under any candidate — try again next tick
+      candidates = supported.map((e) => e.d);
+    } else {
+      candidates = [...newOnes].sort((a, b) => b.confidence - a.confidence);
+    }
+    const newDart = candidates[0];
 
     setLastDetectionSource("model");
     let appendedAt = -1;
@@ -1453,6 +1480,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           setStatus(t("camera.readyThrowAllThenPull"));
           emptyBoardSigRef.current = sig;
           emptyImageDataRef.current = grabImageData();
+          lastStableModelFrameRef.current = modelReadyRef.current || rectMapping() ? grabModelFrame() : null;
         } else {
           setStatus(t("camera.stabilizing"));
         }
@@ -1529,10 +1557,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           // Refresh the local baseline too — lighting can drift over a session, and this is
           // the moment we're most sure the board is genuinely empty.
           emptyImageDataRef.current = grabImageData();
+          lastStableModelFrameRef.current = modelReadyRef.current || rectMapping() ? grabModelFrame() : null;
           setStatus(t("camera.boardEmptyThrowFirst"));
         } else {
           preRemovalImageDataRef.current = grabImageData();
+          const stableBefore = lastStableModelFrameRef.current;
           captureModelFrame();
+          const stableAfter = preRemovalModelFrameRef.current;
+          landingDiffRef.current = stableBefore && stableAfter ? { before: stableBefore, after: stableAfter } : null;
+          lastStableModelFrameRef.current = stableAfter;
           throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
           setThrowsSeen(throwsSeenRef.current);
           setStatus(

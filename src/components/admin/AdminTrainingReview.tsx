@@ -13,6 +13,8 @@ interface SampleLabel {
   y: number;
   baseValue: number;
   multiplier: number;
+  /** Score picked from the correction chips: the position is a field centre, not a measured tip. */
+  snapped?: boolean;
 }
 
 interface TrainingSample {
@@ -192,7 +194,7 @@ const AdminTrainingReview = () => {
           camera_zoom: row.camera_zoom,
           image_size: row.image_size,
           calibration_meta: row.calibration_meta,
-          darts: darts.map((d) => ({ x: d.x, y: d.y })),
+          darts: darts.map((d) => ({ x: d.x, y: d.y, snapped: d.snapped === true })),
           image: await blobToDataUrl(after.data),
         });
       }

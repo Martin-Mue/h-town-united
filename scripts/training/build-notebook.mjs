@@ -39,8 +39,8 @@ for name in os.listdir("/content/ds"):
 DS = "/content/ds" if os.path.exists("/content/ds/data.yaml") else "/content/ds/training-set-yolo"
 print("Datensatz:", DS, os.listdir(DS))`),
 
-  md(String.raw`## 1. Kalibrier-Ecken nachbeschriften
-Dein Datensatz kennt nur die Klasse dart (0). Die Ecken cal_1..cal_4 (1..4) sind im Bild aber sichtbar. Ohne Labels würde YOLO sie als "nichts" lernen. Das alte Modell beschriftet sie deshalb selbst, aber nur, wenn es alle vier sicher findet.`),
+  md(String.raw`## 1. Kalibrier-Ecken
+Neue (entzerrte) Samples bringen die Ecken cal_1..cal_4 als echte Labels mit; die bleiben unverändert. Nur Bilder ganz ohne Ecken-Labels (ältere Samples) beschriftet das alte Modell selbst, und zwar nur, wenn es alle vier sicher findet. Ohne Labels würde YOLO die sichtbaren Ecken sonst als "nichts" lernen.`),
 
   code(String.raw`from ultralytics import YOLO
 import glob
@@ -51,6 +51,9 @@ print(old.names)  # erwartet: {0: dart, 1: cal_1, ... 4: cal_4}
 added = skipped = 0
 for split in ["train", "val"]:
     for img in sorted(glob.glob(f"{DS}/images/{split}/*.jpg")):
+        lbl = img.replace("/images/", "/labels/").rsplit(".", 1)[0] + ".txt"
+        if any(ln.split()[0] in ("1", "2", "3", "4") for ln in open(lbl).read().splitlines() if ln.strip()):
+            continue  # real corner labels already there (rectified samples) - nothing to guess
         res = old.predict(img, imgsz=800, conf=0.5, verbose=False)[0]
         best = {}
         for b in res.boxes:
@@ -58,7 +61,6 @@ for split in ["train", "val"]:
             if c in (1, 2, 3, 4) and (c not in best or float(b.conf) > best[c][0]):
                 best[c] = (float(b.conf), b.xywhn[0].tolist())
         if len(best) == 4:
-            lbl = img.replace("/images/", "/labels/").rsplit(".", 1)[0] + ".txt"
             # keep only the dart lines (class 0) so re-running this cell never duplicates corners
             dart_lines = [ln for ln in open(lbl).read().splitlines() if ln.startswith("0 ")]
             corner_lines = [f"{c} " + " ".join(f"{v:.6f}" for v in xywh) for c, (_, xywh) in sorted(best.items())]
