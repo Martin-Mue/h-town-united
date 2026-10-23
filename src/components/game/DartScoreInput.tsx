@@ -84,50 +84,53 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
   return (
     <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
       {/* Mode switch — always visible, not tucked behind a collapse toggle, since the whole point
-          is being able to change tack at any moment mid-game without hunting for the control. */}
+          is being able to change tack at any moment mid-game without hunting for the control. The
+          voice-scoring trigger sits in the same row (an alternate way to reach the SAME
+          onQuickRound the "Schnell" grid and "Eintippen" field use, so it only shows where a
+          visit-total submission is wired up) instead of owning a full-width row of its own — that
+          row used to be reserved (invisible) mid-visit and left a dead gap above the number grid.
+          Voice always requires an explicit tap to confirm before anything is submitted (see
+          useVoiceScoring's own doc comment): a misheard "80" instead of "180" must never silently
+          corrupt a real leg. While a visit is half-thrown the locked tabs are dimmed (tooltip
+          explains why), which is the whole signal the old always-reserved note line gave. */}
       {onQuickRound && (
-        <div className="grid grid-cols-3 gap-1 mb-2.5 p-0.5 rounded-lg bg-muted/50">
-          {(["single", "quick", "total"] as const).map((m) => {
-            const locked = midVisit && m !== "single";
-            return (
-              <button
-                key={m}
-                onClick={() => !locked && setMode(m)}
-                disabled={locked}
-                title={locked ? t("game.modeLockedTooltip") : undefined}
-                className={`py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
-                  effectiveMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                } ${locked ? "opacity-40 cursor-not-allowed" : ""}`}
-              >
-                {t(MODE_LABEL_KEY[m])}
-              </button>
-            );
-          })}
+        <div className="flex items-stretch gap-1 mb-2.5 p-0.5 rounded-lg bg-muted/50">
+          <div className="grid grid-cols-3 gap-1 flex-1">
+            {(["single", "quick", "total"] as const).map((m) => {
+              const locked = midVisit && m !== "single";
+              return (
+                <button
+                  key={m}
+                  onClick={() => !locked && setMode(m)}
+                  disabled={locked}
+                  title={locked ? `${t("game.modeLockedTooltip")} ${t("game.modeLockedNote")}` : undefined}
+                  className={`py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
+                    effectiveMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  } ${locked ? "opacity-40 cursor-not-allowed" : ""}`}
+                >
+                  {t(MODE_LABEL_KEY[m])}
+                </button>
+              );
+            })}
+          </div>
+          {voice.supported && (
+            <button
+              onClick={voice.start}
+              disabled={isDisabled || midVisit || voice.listening}
+              title={voice.listening ? t("game.voiceListening") : t("game.voiceScoreHint")}
+              aria-label={voice.listening ? t("game.voiceListening") : t("game.voiceScoreHint")}
+              className={`flex w-10 shrink-0 items-center justify-center rounded-md transition-all disabled:opacity-40 ${voice.listening ? "animate-pulse-glow bg-accent/20 text-accent" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+            >
+              {voice.listening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+            </button>
+          )}
         </div>
       )}
-      {/* invisible rather than conditionally rendered — this line mounting/unmounting between the
-          first and later darts of a round shifted the mode-tab row's height under the player's
-          thumb mid-round, one of the "bars jump on phone" reports. Reserving it (blank until
-          midVisit) keeps the pad's height constant across the whole round. */}
-      {onQuickRound && (
-        <p className={`text-[10px] text-muted-foreground text-center -mt-1.5 mb-2 ${midVisit ? "" : "invisible"}`}>
-          {t("game.modeLockedNote")}
-        </p>
-      )}
 
-      {/* Hands-free voice scoring — an alternate way to reach the SAME onQuickRound the "Schnell"
-          grid and "Eintippen" field already use, so it only ever shows up where a visit-total
-          submission is actually wired up. Deliberately requires an explicit tap to confirm before
-          anything is submitted (see useVoiceScoring's own doc comment) — a misheard "80" instead
-          of "180" must never silently corrupt a real leg the way a mistapped button already can't.
-          Stays mounted (invisible, not removed) across midVisit instead of unmounting — same
-          "reserve the space" fix as the mode-lock hint just above: this whole block disappearing
-          the instant the first dart of a round landed, then popping back after the round, was the
-          other half of the "scoreboard jumps" report (voice.supported/isDisabled aren't affected
-          by hiding it this way — useVoiceScoring's own recognition session lives in the hook,
-          called unconditionally above, not tied to whether this JSX is visible). */}
-      {onQuickRound && voice.supported && (
-        <div className={`mb-2.5 ${midVisit ? "invisible" : ""}`}>
+      {/* Voice result — only mounted while there is something to confirm or retry, so the idle pad
+          has no spare row at all. */}
+      {onQuickRound && voice.supported && !midVisit && (voice.candidate !== null || voice.error) && (
+        <div className="mb-2.5">
           {voice.candidate !== null ? (
             <div className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm border ${voiceCandidateValid ? "bg-primary/10 border-primary/30" : "bg-destructive/10 border-destructive/30"}`}>
               <span className="font-display text-base">
@@ -144,23 +147,13 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
                 </Button>
               </div>
             </div>
-          ) : voice.error ? (
+          ) : (
             <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground bg-muted/30 border border-border">
               <span>{t("game.voiceNotUnderstood")}</span>
               <Button size="sm" variant="outline" onClick={voice.start} className="h-7 px-2 gap-1">
                 <Mic className="w-3.5 h-3.5" /> {t("game.voiceRetry")}
               </Button>
             </div>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={voice.start}
-              disabled={isDisabled || voice.listening}
-              className={`w-full gap-1.5 ${voice.listening ? "animate-pulse-glow border-accent text-accent" : "text-muted-foreground"}`}
-            >
-              {voice.listening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-              {voice.listening ? t("game.voiceListening") : t("game.voiceScoreHint")}
-            </Button>
           )}
         </div>
       )}

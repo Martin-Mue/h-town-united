@@ -61,15 +61,15 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, perso
   const rateTooltip = showDoubleSpecific ? t("game.checkoutRateTooltipDouble") : t("game.checkoutRateTooltip");
 
   return (
-    <div className={`overflow-hidden transition-[max-height,opacity,margin] duration-200 ease-out ${route ? "max-h-32 opacity-100 mt-3 mb-3" : "max-h-0 opacity-0 mt-0 mb-0"}`}>
+    <div className={`overflow-hidden transition-[max-height,opacity,margin] duration-200 ease-out ${route ? "max-h-24 opacity-100 mt-2 mb-2 landscape:mt-1 landscape:mb-1" : "max-h-0 opacity-0 mt-0 mb-0"}`}>
       {route && (
-        <div className="bg-muted/50 rounded-lg px-4 py-3 border border-primary/20">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+        <div className="rounded-xl bg-gradient-to-r from-primary/10 to-transparent px-3 py-2 landscape:py-1 border border-primary/20">
+          <div className="flex items-center justify-between mb-1 landscape:hidden">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">
               Checkout · {playerName}
             </p>
             {displayRate != null && (
-              <p className="text-xs text-muted-foreground" title={rateTooltip}>
+              <p className="shrink-0 text-[10px] text-muted-foreground" title={rateTooltip}>
                 {showDoubleSpecific ? doubleLabel : t("game.rateLabel")} <span className="text-foreground font-semibold">{displayRate.toFixed(0)}%</span>
               </p>
             )}
@@ -77,21 +77,21 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, perso
           {/* The route itself is the whole point of this card — sized to read from throwing
               distance, not just from up close, same as the scoreboard's own remaining-score
               number. */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {route.map((dart, i) => (
-              <span key={i} className="flex items-center gap-2">
-                <span className={`text-2xl font-bold ${
-                  dart.startsWith("D") ? "text-secondary" :
-                  dart.startsWith("T") ? "text-primary" :
-                  dart === "Bull" ? "text-accent" :
-                  "text-foreground"
+              <span key={i} className="flex items-center gap-1.5">
+                <span className={`rounded-lg px-2.5 py-0.5 text-xl font-bold leading-tight ${
+                  dart.startsWith("D") ? "bg-secondary/15 text-secondary" :
+                  dart.startsWith("T") ? "bg-primary/15 text-primary" :
+                  dart === "Bull" ? "bg-accent/15 text-accent" :
+                  "bg-foreground/10 text-foreground"
                 }`}>
                   {dart}
                 </span>
                 {i < route.length - 1 && <span className="text-lg text-muted-foreground">→</span>}
               </span>
             ))}
-            <span className="text-sm text-muted-foreground ml-auto">{remaining}</span>
+            <span className="text-sm text-muted-foreground ml-auto tabular-nums">{remaining}</span>
           </div>
         </div>
       )}

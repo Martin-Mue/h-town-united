@@ -2667,16 +2667,25 @@ const GamePage = () => {
                   {activeRound.length > 0 && <span className="ml-1 text-sm landscape:text-xs font-display text-accent">+{currentRoundTotal}</span>}
                 </div>
               )}
-              <div className="flex justify-center flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
-                <span>Ø <span className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 85%)" }}>{card.avg.toFixed(1)}</span></span>
+              <div className="flex justify-center items-center flex-wrap gap-1.5 mt-1.5 text-xs text-muted-foreground">
+                <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5">Ø <span className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 90%)" }}>{card.avg.toFixed(1)}</span></span>
+                {/* Dart counter lives in the same pill strip as the stats (one footer row instead of
+                    a stats line plus a separate dots line underneath it). */}
+                {isActive && (
+                  <span className="flex items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-1.5" aria-label={`${dartsThisRound}/3`}>
+                    {[0, 1, 2].map((i) => (
+                      <span key={i} className={`block w-1.5 h-1.5 rounded-full transition-all ${i < dartsThisRound ? "bg-primary" : "bg-muted-foreground/30"}`} />
+                    ))}
+                  </span>
+                )}
                 {/* Sets-Modus: the match-level score (sets) leads, the current set's leg race
                     (which resets to 0 every new set — see applyLegWin) follows right after it —
                     "2 Sätze · 1 Leg" reads as "leading 2 sets, and 1 leg up in the current one",
                     not as two competing/contradicting numbers. */}
                 {legStreak?.slot === card.key && (
-                  <span className="text-orange-400 font-bold animate-pulse-glow">🔥 {legStreak.count} {t("game.legsInARow")}</span>
+                  <span className="rounded-full bg-orange-400/15 px-2.5 py-0.5 text-orange-400 font-bold animate-pulse-glow">🔥 {legStreak.count} {t("game.legsInARow")}</span>
                 )}
-                {card.p180 > 0 && <span className="text-accent font-bold">🎯{card.p180}</span>}
+                {card.p180 > 0 && <span className="rounded-full bg-accent/15 px-2.5 py-0.5 text-accent font-bold">🎯{card.p180}</span>}
               </div>
               {/* Active-player extras folded into the card itself (single-out note, dart counter,
                   ghost pace) instead of a second section repeating the same turn info below the
@@ -2689,11 +2698,6 @@ const GamePage = () => {
                   {!isCricket && !(currentPlayer?.doubleOut ?? true) && (
                     <p className="text-[10px] text-muted-foreground mt-1">({t("game.singleOut")})</p>
                   )}
-                  <div className="flex justify-center gap-1 mt-1.5">
-                    {[0, 1, 2].map((i) => (
-                      <div key={i} className={`w-2 h-2 rounded-full transition-all ${i < dartsThisRound ? "bg-primary" : "bg-muted"}`} />
-                    ))}
-                  </div>
                   {game && !currentPlayer?.isBot && ghostSequences[currentIdx] && (() => {
                     const teamIdx = teamIndexFor(game.teams, currentIdx);
                     const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);

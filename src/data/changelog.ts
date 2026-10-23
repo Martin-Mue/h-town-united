@@ -834,4 +834,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Maç istatistikleri artık checkout henüz mümkün değilken (kalan 170'in üstünde) ortalamayı gösteriyor – leg başına ve toplam, maç detayında ve oyundan hemen sonra.",
     },
   },
+  {
+    id: "2026-10-23-play-screen-polish",
+    date: "2026-10-23",
+    title: {
+      de: "Spielscreen aufgeräumter",
+      en: "Tidier play screen",
+      fr: "Écran de jeu plus épuré",
+      pl: "Bardziej przejrzysty ekran gry",
+      nl: "Overzichtelijker speelscherm",
+      tr: "Daha sade oyun ekranı",
+    },
+    description: {
+      de: "Ø, Dart-Zähler und 180er sitzen als kompakte Chips in den Spielerkarten, der Checkout-Weg zeigt die Darts als farbige Felder, und das Zahlenfeld rückt ohne leere Lücke nach oben – das Mikrofon steckt jetzt neben den Eingabe-Tabs.",
+      en: "Average, dart counter and 180s now sit as compact chips in the player cards, the checkout route shows its darts as coloured tiles, and the number pad moves up without a blank gap – the microphone now lives next to the input tabs.",
+      fr: "Moyenne, compteur de fléchettes et 180 apparaissent en pastilles compactes dans les cartes joueur, le checkout affiche ses fléchettes en tuiles colorées, et le pavé numérique remonte sans espace vide – le micro se trouve désormais à côté des onglets de saisie.",
+      pl: "Średnia, licznik lotek i 180 są teraz kompaktowymi plakietkami na kartach graczy, droga checkoutu pokazuje lotki jako kolorowe pola, a klawiatura liczb wędruje wyżej bez pustej przerwy – mikrofon jest teraz obok zakładek wprowadzania.",
+      nl: "Gemiddelde, dartteller en 180's staan nu als compacte chips in de spelerkaarten, de checkoutroute toont de darts als gekleurde vlakjes en het cijferpaneel schuift omhoog zonder lege ruimte – de microfoon zit nu naast de invoertabs.",
+      tr: "Ortalama, dart sayacı ve 180'ler artık oyuncu kartlarında kompakt etiketler olarak duruyor, checkout yolu dartları renkli kutular olarak gösteriyor ve sayı tuşları boş bir boşluk olmadan yukarı çıkıyor – mikrofon artık giriş sekmelerinin yanında.",
+    },
+  },
 ];
