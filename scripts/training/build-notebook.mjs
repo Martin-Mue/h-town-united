@@ -11,7 +11,7 @@ const cells = [
 
 Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**. Danach **Laufzeit → Alle ausführen** – ein Durchlauf, keine Zwischenschritte.
 
-Dein altes Modell wird aus Google Drive geladen (DeepDarts-Dataset/training_runs/dart_yolov8n/weights/best.pt). Hochladen musst du nur das Datenset (training-set-rectified-v3.zip).
+Dein altes Modell wird aus Google Drive geladen (DeepDarts-Dataset/training_runs/dart_yolov8n/weights/best.pt). Hochladen musst du nur das Datenset (training-set-rectified-v4.zip).
 
 Was anders ist als beim ersten Versuch:
 - Die Bilder sind genau das, was die App dem Modell zeigt: das Board von oben entzerrt (20 oben), die vier Ecken sind echte Labels.
@@ -29,7 +29,7 @@ OLD_PT = "/content/drive/MyDrive/DeepDarts-Dataset/training_runs/dart_yolov8n/we
 assert os.path.exists(OLD_PT), "best.pt nicht gefunden - Pfad in OLD_PT anpassen"
 shutil.copy(OLD_PT, "/content/best.pt")  # Original in Drive bleibt unberührt
 
-print("Lade training-set-rectified-v3.zip hoch:")
+print("Lade training-set-rectified-v4.zip hoch:")
 uploaded = files.upload()
 zip_names = [n for n in uploaded if n.lower().endswith(".zip")]
 assert zip_names, "Keine .zip hochgeladen"

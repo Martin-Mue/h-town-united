@@ -1,0 +1,11 @@
+{
+  "note": "Review of the 26 samples in the second export of 2026-10-23 (training-batch-2026-10-23 (1).json). Same format as reviewed-labels-2026-10-23.json.",
+  "samples": {
+    "003": { "removeLabels": [1] },
+    "012": { "add": [[0.261, 0.733]] },
+    "014": { "add": [[0.6255, 0.1972]] },
+    "024": { "add": [[0.211, 0.71]] },
+    "025": { "removeLabels": [1], "add": [[0.2955, 0.7166], [0.25, 0.7544]] },
+    "026": { "removeLabels": [1] }
+  }
+}
