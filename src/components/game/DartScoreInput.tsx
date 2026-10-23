@@ -167,14 +167,14 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
               see Game.tsx's playing-phase layout), and 2 rows is what actually leaves enough of
               that height for the mode tabs, special-targets row, and undo/cam/sound to all stay
               on screen without scrolling, not just a cosmetic rearrangement. */}
-          <div className="grid grid-cols-4 landscape:grid-cols-10 gap-1.5 landscape:gap-1.5 mb-2">
+          <div className="grid grid-cols-5 landscape:grid-cols-10 gap-1 landscape:gap-1.5 mb-2">
             {BOARD_NUMBERS.map((v) => (
               <div key={v} className="rounded-xl overflow-hidden border border-border/60">
                 <button
                   onClick={() => onThrow(v, 1)}
                   disabled={isDisabled}
                   title={`${t("game.simple")} ${v}`}
-                  className="w-full py-2 landscape:py-3 text-lg landscape:text-xl font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+                  className="w-full py-1.5 landscape:py-3 text-base landscape:text-xl font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
                 >
                   {v}
                 </button>
@@ -183,7 +183,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
                     onClick={() => onThrow(v, 3)}
                     disabled={isDisabled}
                     title={`${t("game.triple")} ${v}`}
-                    className="py-1.5 landscape:py-2 text-xs landscape:text-sm font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+                    className="py-2 landscape:py-2 text-xs landscape:text-sm font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
                   >
                     T
                   </button>
@@ -191,7 +191,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
                     onClick={() => onThrow(v, 2)}
                     disabled={isDisabled}
                     title={`${t("game.double")} ${v}`}
-                    className="py-1.5 landscape:py-2 text-xs landscape:text-sm font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
+                    className="py-2 landscape:py-2 text-xs landscape:text-sm font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
                   >
                     D
                   </button>

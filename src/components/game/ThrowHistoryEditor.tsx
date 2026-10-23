@@ -69,7 +69,7 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
   if (throws.length === 0) return null;
 
   return (
-    <div className="mt-3 gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
+    <div className="mt-3 gradient-card rounded-2xl border border-border shadow-elevation-sm p-3">
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs text-muted-foreground uppercase font-display">{t("game.throwsHeading")} · {playerName}</p>
         {!readOnly && (
@@ -78,7 +78,7 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
           </button>
         )}
         {readOnly && onOpenCorrector && (
-          <button onClick={onOpenCorrector} className="text-xs text-primary flex items-center gap-1">
+          <button onClick={onOpenCorrector} className="text-xs text-primary flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 hover:bg-primary/20 transition-colors">
             <Pencil className="w-3 h-3" /> {t("game.correctThrows")}
           </button>
         )}
@@ -100,13 +100,13 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
           const remainingAfterRound = startingScore === undefined || !roundComplete ? undefined
             : startingScore - throws.slice(0, roundIdx * 3 + roundThrows.length).reduce((s, dart) => s + dart.points, 0);
           return (
-            <div key={roundIdx} className={`flex items-center gap-2.5 px-2 py-1 rounded ${is180 ? "bg-accent/10 border border-accent/30" : ""}`}>
+            <div key={roundIdx} className={`flex items-center gap-2.5 px-2 py-1 rounded-xl ${is180 ? "bg-accent/10 border border-accent/30" : "bg-muted/25"}`}>
               <span className="text-[10px] text-muted-foreground w-4">{roundIdx + 1}.</span>
               {roundThrows.map((dart, i) => {
                 const globalIdx = roundIdx * 3 + i;
                 const isHole = isHoleThrow(dart);
                 const chip = isHole ? null : (
-                  <span className={`inline-block px-2.5 py-1 rounded text-sm font-mono ${
+                  <span className={`inline-block px-2.5 py-1 rounded-lg text-sm font-mono font-semibold ${
                     dart.multiplier === 3 ? "bg-primary/20 text-primary" :
                     dart.multiplier === 2 ? "bg-secondary/20 text-secondary" : "bg-muted text-foreground"
                   } ${dart.corrected ? "ring-2 ring-amber-500/70" : ""}`}

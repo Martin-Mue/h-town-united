@@ -2678,15 +2678,15 @@ const GamePage = () => {
                 </div>
               )}
               {/* Leg average = this leg only; match average = every leg of the match so far. */}
-              <div className="grid grid-cols-2 gap-1 mt-1.5">
+              <div className={`grid ${isActive ? "grid-cols-2" : "grid-cols-1"} gap-1 mt-1.5`}>
                 {([
                   [t("game.legAvgShort"), card.avg.toFixed(1)],
                   [t("game.matchAvgShort"), card.matchAvg.toFixed(1)],
                   ...(!isCricket ? [[t("game.dartsThrownShort"), String(card.dartsInLeg)], [t("game.lastVisitShort"), card.lastVisit === null ? "–" : String(card.lastVisit)]] : []),
                 ] as [string, string][]).map(([label, value]) => (
-                  <div key={label} className="rounded-lg bg-white/[0.06] px-2 py-1 leading-tight">
-                    <p className="text-[10px] text-muted-foreground truncate">{label}</p>
-                    <p className="text-sm font-semibold tabular-nums" style={{ color: "hsl(210 15% 92%)" }}>{value}</p>
+                  <div key={label} className="flex items-baseline justify-between gap-0.5 rounded-lg bg-white/[0.06] px-1.5 py-1">
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">{label}</span>
+                    <span className="text-xs font-semibold tabular-nums" style={{ color: "hsl(210 15% 92%)" }}>{value}</span>
                   </div>
                 ))}
               </div>
