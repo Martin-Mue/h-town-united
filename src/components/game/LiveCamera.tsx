@@ -496,18 +496,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // answer instead of a silent fallback.
   const [autoCalibFoundCount, setAutoCalibFoundCount] = useState<number | null>(null);
 
-  // The review picture is shown while there is something to review: darts already detected in this
-  // visit, or a finished visit waiting for confirmation. It goes away with the last of them.
-  const showReview = !!reviewFrame && (needsReview || accumulated.length > 0);
+  // The frozen review picture is shown only for a finished visit waiting for confirmation — not after
+  // every single throw, which would cover the live view while the player is still throwing.
+  const showReview = !!reviewFrame && needsReview;
   const reviewAnchorRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (needsReview || accumulated.length > 0) return;
+    if (needsReview) return;
     setSelectedReviewIndex(null);
     setReviewFrame((prev) => {
       if (prev) URL.revokeObjectURL(prev.url);
       return null;
     });
-  }, [needsReview, accumulated.length]);
+  }, [needsReview]);
   // A new review picture must not appear out of sight (the page may be scrolled down to the buttons).
   useEffect(() => {
     if (reviewFrame) reviewAnchorRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -1556,7 +1556,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           captureModelFrame();
           const stableAfter = preRemovalModelFrameRef.current;
           lastStableModelFrameRef.current = stableAfter;
-          showReviewPicture(stableAfter ?? preRemovalImageDataRef.current);
           throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
           setThrowsSeen(throwsSeenRef.current);
           setStatus(
