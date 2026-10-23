@@ -714,4 +714,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Ok tanıma yapay zekâ modeli, bir dosya eksik olduğu için telefonlarda hiç düzgün yüklenmedi. Artık yükleniyor, tahtanın dört köşesini kendisi buluyor ve sadece sarı noktaların doğru olup olmadığını soruyor.",
     },
   },
+  {
+    id: "2026-10-23-camera-rework",
+    date: "2026-10-23",
+    title: {
+      de: "Kamera neu gedacht: Kalibrieren, entzerren, korrigieren",
+      en: "Camera rethought: calibrate, straighten, correct",
+      fr: "Caméra repensée : étalonner, redresser, corriger",
+      pl: "Kamera od nowa: kalibracja, prostowanie, poprawki",
+      nl: "Camera opnieuw bedacht: kalibreren, rechtzetten, corrigeren",
+      tr: "Kamera yeniden tasarlandı: kalibre et, düzelt, onar",
+    },
+    description: {
+      de: "Du siehst jetzt das ganze Kamerabild. Beim Kalibrieren liegen die Ringe und Felder sichtbar über dem Board – du ziehst vier Punkte, bis sie auf den Drähten liegen (mit Lupe). Die KI sieht das Board danach gerade von oben, egal wie schräg die Kamera steht. Die Korrektur läuft auf dem eingefrorenen Bild mit den Darts: Dart antippen, richtigen Wert aus den Feldern daneben wählen oder die Spitze mit Lupe ziehen. Beim Hochformat und Querformat.",
+      en: "You now see the whole camera picture. When calibrating, the rings and fields are drawn over the board – you drag four points until they sit on the wires (with a loupe). The AI then sees the board straight from above, however angled the camera is. Corrections happen on the frozen picture with the darts in it: tap a dart, pick the right score from the neighbouring fields or drag the tip with a loupe. In portrait and landscape.",
+      fr: "Tu vois maintenant toute l'image de la caméra. À l'étalonnage, les anneaux et les champs sont dessinés sur la cible : tu fais glisser quatre points jusqu'aux fils (avec loupe). L'IA voit ensuite la cible bien droite, quel que soit l'angle. La correction se fait sur l'image figée avec les fléchettes : touche une fléchette, choisis la bonne valeur parmi les champs voisins ou fais glisser la pointe avec la loupe. En portrait comme en paysage.",
+      pl: "Widzisz teraz cały obraz z kamery. Przy kalibracji pierścienie i pola są narysowane na tarczy – przeciągasz cztery punkty, aż leżą na drutach (z lupą). AI widzi potem tarczę prosto z góry, niezależnie od kąta kamery. Poprawki robisz na zamrożonym obrazie z lotkami: dotknij lotki, wybierz właściwą wartość z sąsiednich pól albo przeciągnij końcówkę z lupą. W pionie i w poziomie.",
+      nl: "Je ziet nu het hele camerabeeld. Bij het kalibreren staan de ringen en vlakken getekend over het bord – je sleept vier punten tot ze op de draden liggen (met loep). De AI ziet het bord daarna recht van boven, hoe schuin de camera ook staat. Corrigeren gebeurt op het bevroren beeld met de darts erin: tik een dart aan, kies de juiste waarde uit de naastliggende vlakken of sleep de punt met loep. In staand en liggend.",
+      tr: "Artık kamera görüntüsünün tamamını görüyorsun. Kalibrasyonda halkalar ve alanlar tahtanın üzerine çizilir – dört noktayı tellerin üzerine gelene kadar sürüklersin (büyüteçle). Yapay zekâ tahtayı kamera ne kadar eğik olursa olsun tam yukarıdan görür. Düzeltme, okların olduğu dondurulmuş görüntüde yapılır: oka dokun, komşu alanlardan doğru değeri seç ya da ucu büyüteçle sürükle. Dikey ve yatay.",
+    },
+  },
 ];
