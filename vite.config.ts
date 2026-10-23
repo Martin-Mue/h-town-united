@@ -1,4 +1,5 @@
-import { defineConfig, type ViteDevServer } from "vite";
+import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+import fs from "fs";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { execSync } from "child_process";
@@ -76,6 +77,34 @@ function i18nGeneratedLocales() {
   };
 }
 
+// The on-device dart model (src/utils/dartModel.ts) runs on onnxruntime-web and loads its runtime
+// from /ort/ — BOTH ort-wasm-simd-threaded.wasm and the ort-wasm-simd-threaded.mjs loader next to
+// it. Only the .wasm used to be checked in (public/ort), so the loader request 404'd and the model
+// silently never loaded ("no available backend found: Failed to fetch dynamically imported module
+// /ort/ort-wasm-simd-threaded.mjs"): auto-scoring fell back to the pixel-diff heuristic. Copying
+// the pair out of node_modules at build time (and serving it in dev) also guarantees they always
+// match the installed onnxruntime-web version, which a hand-copied binary in /public never did.
+function onnxRuntimeFiles(): Plugin {
+  const distDir = path.resolve(__dirname, "node_modules/onnxruntime-web/dist");
+  const files = ["ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm"];
+  return {
+    name: "onnx-runtime-files",
+    configureServer(server) {
+      server.middlewares.use("/ort", (req, res, next) => {
+        const name = path.basename((req.url ?? "").split("?")[0]);
+        if (!files.includes(name)) return next();
+        res.setHeader("Content-Type", name.endsWith(".wasm") ? "application/wasm" : "text/javascript");
+        fs.createReadStream(path.join(distDir, name)).pipe(res);
+      });
+    },
+    generateBundle() {
+      for (const name of files) {
+        this.emitFile({ type: "asset", fileName: `ort/${name}`, source: fs.readFileSync(path.join(distDir, name)) });
+      }
+    },
+  };
+}
+
 // Round 4 Rang 3: index.html's <title>/description/author/OG/favicon were hardcoded to one
 // specific club's real name and logo ("H-Town United e.V.") even though this is a shared,
 // multi-club deployment -- see ClubBrandingContext.tsx's own doc comment, which already made
@@ -127,6 +156,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     i18nGeneratedLocales(),
     htmlIdentityPlugin(),
+    onnxRuntimeFiles(),
     react(),
     mode === "development" && componentTagger(),
     VitePWA({

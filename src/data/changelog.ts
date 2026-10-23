@@ -694,4 +694,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Yanlış algılanan oka, sonra görüntüde doğru uca dokun – skor anında yeniden hesaplanır. Kamera görüntüsü artık üstte, \"Onayla\" altta hep görünür ve otomatik kalibrasyondan sonra \"Doğru\"ya tek dokunuş yeter.",
     },
   },
+  {
+    id: "2026-10-23-auto-calibration",
+    date: "2026-10-23",
+    title: {
+      de: "Automatische Kalibrierung der Kamera repariert",
+      en: "Automatic camera calibration fixed",
+      fr: "Étalonnage automatique de la caméra réparé",
+      pl: "Naprawiona automatyczna kalibracja kamery",
+      nl: "Automatische cameracalibratie gerepareerd",
+      tr: "Otomatik kamera kalibrasyonu düzeltildi",
+    },
+    description: {
+      de: "Das KI-Modell für die Dart-Erkennung wurde auf dem Handy nie richtig geladen, weil eine Datei fehlte. Jetzt lädt es, erkennt die vier Ecken des Boards selbst und fragt nur noch kurz nach, ob die gelben Punkte passen.",
+      en: "The AI model for dart detection never loaded properly on phones because a file was missing. It now loads, finds the board's four corners by itself and only asks you to confirm that the yellow dots look right.",
+      fr: "Le modèle d'IA de détection n'a jamais chargé correctement sur mobile car un fichier manquait. Il se charge maintenant, trouve seul les quatre coins de la cible et demande seulement de confirmer que les points jaunes sont bien placés.",
+      pl: "Model AI do rozpoznawania lotek nigdy nie ładował się poprawnie na telefonach, bo brakowało pliku. Teraz się ładuje, sam znajduje cztery rogi tarczy i prosi tylko o potwierdzenie, że żółte punkty pasują.",
+      nl: "Het AI-model voor dartherkenning laadde op telefoons nooit goed omdat een bestand ontbrak. Nu laadt het, vindt het zelf de vier hoeken van het bord en vraagt alleen of de gele stippen kloppen.",
+      tr: "Ok tanıma yapay zekâ modeli, bir dosya eksik olduğu için telefonlarda hiç düzgün yüklenmedi. Artık yükleniyor, tahtanın dört köşesini kendisi buluyor ve sadece sarı noktaların doğru olup olmadığını soruyor.",
+    },
+  },
 ];

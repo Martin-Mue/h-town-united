@@ -36,6 +36,7 @@ import {
   cropToVideoFraction,
   videoFractionToCrop,
   computeCropScreenRect,
+  tapsFromModelCorners,
   CANON_BOARD_POINTS,
 } from "@/utils/cameraGeometry";
 import {
@@ -1167,65 +1168,43 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   /**
    * One-shot calibration via the trained model's cal_1..cal_4 classes (see dartModel.ts).
    *
-   * Uses class IDENTITY (which numeric cal_x is which physical corner), NOT geometric position
-   * (topmost/bottommost/etc.) — a real field test showed the camera can be mounted at a genuine
-   * IN-FRAME ROTATION relative to the board (D20 wasn't at the top of the frame at all), which
-   * breaks any "topmost point = D20" assumption. Only class identity is rotation-invariant.
-   *
-   * The exact cal_1..cal_4 -> physical-corner mapping isn't documented anywhere available here;
-   * this uses the DeepDarts-style convention referenced while designing this model ("upper-left
-   * corner of the double-ring segments for 20, 6, 3, and 11" — see the dart-sense research notes)
-   * as the best available guess: cal_1=D20, cal_2=D6, cal_3=D3, cal_4=D11. NOT verified against
-   * this specific training run's actual label order. If a future test scores every dart at a
-   * CONSISTENT wrong segment (not scattered) — e.g. everything comes out looking rotated by a
-   * fixed amount — that means this mapping is off by a fixed permutation, not that detection
-   * itself is broken; check the console's role-assignment log and reorder CAL_ROLE_MAP below.
+   * What those classes mean was measured, not guessed (see MODEL_CORNER_ANGLES_DEG in
+   * cameraGeometry.ts): cal_1 top, cal_2 bottom, cal_3 left, cal_4 right, each on the wire crossing
+   * 9° beside D20/D3/D11/D6, not in the middle of the double. tapsFromModelCorners turns the four
+   * found points into the equivalent D20/D3/D11/D6 taps, after which automatic and manual
+   * calibration are the same thing. (The first version assigned the classes to the wrong corners
+   * and ignored the 9° offset — it only never showed because the model could not load at all, see
+   * onnxRuntimeFiles in vite.config.ts.)
    */
-  const CAL_ROLE_MAP = { D20: "cal_1", D3: "cal_3", D11: "cal_4", D6: "cal_2" } as const;
   const tryAutoCalibrate = async (): Promise<boolean> => {
     const frame = grabImageData(MODEL_INPUT_SIZE, false);
     if (!frame) return false;
     const result = await detectCalibrationPointsWithModel(frame);
     // Always log the raw per-class detections — success or fail — this is the one place a bad
-    // calibration actually originates, and without real numbers every mapping/threshold tweak
-    // here is just another guess.
+    // calibration actually originates, and without real numbers every threshold tweak here is
+    // just another guess.
     console.info("[LiveCamera] auto-calibration raw candidates", result.points);
     if (result.unavailable) return false;
-    const byRole = {
-      D20: result.points[CAL_ROLE_MAP.D20],
-      D3: result.points[CAL_ROLE_MAP.D3],
-      D11: result.points[CAL_ROLE_MAP.D11],
-      D6: result.points[CAL_ROLE_MAP.D6],
-    };
-    if (!byRole.D20 || !byRole.D3 || !byRole.D11 || !byRole.D6) return false;
-    const full = {
-      D20: cropXYToFullFrame(byRole.D20.x, byRole.D20.y),
-      D3: cropXYToFullFrame(byRole.D3.x, byRole.D3.y),
-      D11: cropXYToFullFrame(byRole.D11.x, byRole.D11.y),
-      D6: cropXYToFullFrame(byRole.D6.x, byRole.D6.y),
-    };
-    if (!full.D20 || !full.D3 || !full.D11 || !full.D6) return false;
-    console.info("[LiveCamera] auto-calibration role assignment (full-frame coords)", full);
+    const found = [result.points.cal_1, result.points.cal_2, result.points.cal_3, result.points.cal_4];
+    if (found.some((p) => !p)) return false;
+    const fullFrame = found.map((p) => cropXYToFullFrame(p!.x, p!.y));
+    if (fullFrame.some((p) => !p)) return false;
+    const taps = tapsFromModelCorners(fullFrame.map((p) => ({ x: p!.fx, y: p!.fy })));
+    if (!taps) return false;
+    console.info("[LiveCamera] auto-calibration taps (full-frame coords)", taps);
     // Sanity check: cropRect() is centered on calib.x/calib.y at auto-calibration time (no taps
     // yet, so it's still the default 0.5/0.5 center-ish crop) — the board's own center should
     // therefore land reasonably close to frame-center too. A wildly off-center result means the
-    // model mis-detected at least one corner (or the role mapping above is wrong) rather than
-    // genuinely finding a very off-center board, and a bad corner here silently wrecks every
-    // score for the rest of the session — far worse than one bad dart read, which the review UI
-    // can catch. Reject rather than trust it.
-    const centerFx = (full.D11.fx + full.D6.fx) / 2;
-    const centerFy = (full.D20.fy + full.D3.fy) / 2;
+    // model mis-detected at least one corner rather than genuinely finding a very off-center
+    // board, and a bad corner here silently wrecks every score for the rest of the session — far
+    // worse than one bad dart read, which the review UI can catch. Reject rather than trust it.
+    const centerFx = (taps[2].x + taps[3].x) / 2;
+    const centerFy = (taps[0].y + taps[1].y) / 2;
     const MAX_CENTER_OFFSET = 0.3;
     if (Math.abs(centerFx - 0.5) > MAX_CENTER_OFFSET || Math.abs(centerFy - 0.5) > MAX_CENTER_OFFSET) {
-      console.warn("[LiveCamera] auto-calibration rejected: implausible center", { centerFx, centerFy, full });
+      console.warn("[LiveCamera] auto-calibration rejected: implausible center", { centerFx, centerFy, taps });
       return false;
     }
-    const taps = [
-      { x: full.D20.fx, y: full.D20.fy },
-      { x: full.D3.fx, y: full.D3.fy },
-      { x: full.D11.fx, y: full.D11.fy },
-      { x: full.D6.fx, y: full.D6.fy },
-    ];
     const applied = applyCalibrationTaps(taps, "auto");
     console.info("[LiveCamera] auto-calibration", applied ? "applied" : "rejected by applyCalibrationTaps (degenerate spread)", taps);
     return applied;

@@ -9,6 +9,8 @@ import {
   computeCropScreenRect,
   boardTransformFromTaps,
   scoreFromBoardPoint,
+  tapsFromModelCorners,
+  modelCornersFromTaps,
   CANON_BOARD_POINTS,
   MISS_TOLERANCE,
 } from "./cameraGeometry";
@@ -166,6 +168,49 @@ describe("computeCropScreenRect (the live tracking ring)", () => {
   it("returns null without valid video dimensions", () => {
     const win = computeVisibleWindow(1280, 720, 400, 400)!;
     expect(computeCropScreenRect(0, 0, 0.5, 0.5, 0.7, win)).toBeNull();
+  });
+});
+
+describe("tapsFromModelCorners (automatic calibration)", () => {
+  // A made-up camera view: board centre at (0.5, 0.5), radius 0.37, slightly rotated and skewed.
+  const view = (cx: number, cy: number) => {
+    const a = (7 * Math.PI) / 180;
+    const x = cx * 0.37, y = cy * 0.34 + cx * 0.02;
+    return { x: 0.5 + x * Math.cos(a) - y * Math.sin(a), y: 0.5 + x * Math.sin(a) + y * Math.cos(a) };
+  };
+  const pol = (deg: number) => ({ x: Math.sin((deg * Math.PI) / 180), y: -Math.cos((deg * Math.PI) / 180) });
+
+  it("recovers the D20/D3/D11/D6 taps from corners sitting 9° beside the segment centres", () => {
+    const corners = [-9, 171, 261, 81].map((d) => view(pol(d).x, pol(d).y));
+    const taps = tapsFromModelCorners(corners);
+    expect(taps).not.toBeNull();
+    const expected = [view(0, -1), view(0, 1), view(-1, 0), view(1, 0)];
+    taps!.forEach((t, i) => {
+      expect(t.x).toBeCloseTo(expected[i].x, 4);
+      expect(t.y).toBeCloseTo(expected[i].y, 4);
+    });
+  });
+
+  it("scores darts in the right segment with those taps (T20 centre, D3 centre)", () => {
+    const corners = [-9, 171, 261, 81].map((d) => view(pol(d).x, pol(d).y));
+    const H = boardTransformFromTaps(tapsFromModelCorners(corners)!)!;
+    const t20 = view(0, -0.6055);
+    expect(scoreFromBoardPoint(t20.x, t20.y, H)).toMatchObject({ baseValue: 20, multiplier: 3 });
+    const d3 = view(0, 0.98);
+    expect(scoreFromBoardPoint(d3.x, d3.y, H)).toMatchObject({ baseValue: 3, multiplier: 2 });
+  });
+
+  it("modelCornersFromTaps is the exact inverse", () => {
+    const corners = [-9, 171, 261, 81].map((d) => view(pol(d).x, pol(d).y));
+    const back = modelCornersFromTaps(tapsFromModelCorners(corners)!)!;
+    back.forEach((c, i) => {
+      expect(c.x).toBeCloseTo(corners[i].x, 4);
+      expect(c.y).toBeCloseTo(corners[i].y, 4);
+    });
+  });
+
+  it("returns null for degenerate corners", () => {
+    expect(tapsFromModelCorners([{ x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }])).toBeNull();
   });
 });
 

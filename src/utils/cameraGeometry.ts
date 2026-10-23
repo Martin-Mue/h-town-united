@@ -174,6 +174,48 @@ export const boardTransformFromTaps = (taps?: Point[], liveCenter?: Point): Homo
   return computeHomography(src, CANON_BOARD_POINTS);
 };
 
+/**
+ * Where the model's four calibration classes (cal_1..cal_4) really sit, in the same board frame as
+ * CANON_BOARD_POINTS (x right, y down, 0° = top = middle of D20, clockwise). Measured by running the
+ * shipped best.onnx on upright board photos from its own training set: the four points are the wire
+ * crossings on the OUTER edge of the double ring, 9° beside the segment centres —
+ *   cal_1 top, between 5 and 20 (-9°)       cal_2 bottom, between 17 and 3 (171°)
+ *   cal_3 left, between 8 and 11 (261°)     cal_4 right, between 13 and 6 (81°)
+ * Treating them as the centres of D20/D3/D11/D6 (as the app first did, with a different class-to-
+ * corner assignment) rotated every automatically calibrated board by half a segment.
+ */
+const MODEL_CORNER_ANGLES_DEG = [-9, 171, 261, 81] as const; // cal_1, cal_2, cal_3, cal_4
+const MODEL_CORNERS_CANON: Point[] = MODEL_CORNER_ANGLES_DEG.map((deg) => ({
+  x: Math.sin((deg * Math.PI) / 180),
+  y: -Math.cos((deg * Math.PI) / 180),
+}));
+
+/**
+ * Turns the four corner points the model found (cal_1..cal_4, in video-frame fractions) into the
+ * four D20/D3/D11/D6 taps a manual calibration would have produced, so everything downstream (crop,
+ * homography, scoring, training metadata) treats automatic and manual calibration identically.
+ * Returns null for degenerate input.
+ */
+export const tapsFromModelCorners = (modelCorners: Point[]): Point[] | null => {
+  if (modelCorners.length !== 4) return null;
+  const canonToVideo = computeHomography(MODEL_CORNERS_CANON, modelCorners);
+  if (!canonToVideo) return null;
+  return CANON_BOARD_POINTS.map((p) => applyHomography(canonToVideo, p));
+};
+
+/**
+ * The reverse direction, for training data: where the model's four corner classes WOULD sit in this
+ * view given the D20/D3/D11/D6 taps of a calibration (manual or automatic). Use this — not the taps
+ * themselves — as the cal_1..cal_4 labels, so a retrained model keeps marking the same wire crossings
+ * tapsFromModelCorners expects. Returns null for degenerate taps.
+ */
+export const modelCornersFromTaps = (taps: Point[]): Point[] | null => {
+  if (taps.length !== 4) return null;
+  const canonToVideo = computeHomography(CANON_BOARD_POINTS, taps);
+  if (!canonToVideo) return null;
+  return MODEL_CORNERS_CANON.map((p) => applyHomography(canonToVideo, p));
+};
+
 export interface BoardScore { baseValue: number; multiplier: 1 | 2 | 3; points: number; u: number; v: number }
 
 // u/v are the tip position in board-relative unit coordinates (0,0 = bull center, radius
