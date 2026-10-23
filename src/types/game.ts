@@ -21,6 +21,8 @@ export interface DartThrow {
    *  ThrowHistoryEditor mark it visually so a corrected value stays distinguishable from what was
    *  really thrown, instead of looking identical to the rest of the round. */
   corrected?: boolean;
+  /** Part of a busted visit: the darts were thrown but score nothing (points 0) — see utils/bustVisit.ts. */
+  bust?: boolean;
 }
 
 /** A single player slot in the match (human or bot) */

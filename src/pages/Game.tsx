@@ -57,6 +57,7 @@ import { useOnlineMatch } from "@/hooks/useOnlineMatch";
 import { liveAveragesTo170 } from "@/utils/liveAverageTo170";
 import { computePostGameStats } from "@/utils/postGameStats";
 import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
+import { bustVisitThrows } from "@/utils/bustVisit";
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
@@ -1120,7 +1121,10 @@ const GamePage = () => {
         if (!prev) return prev;
         const updatedLeg: LegState = { ...prev.currentLeg, remaining: [...prev.currentLeg.remaining], throws: prev.currentLeg.throws.map(t => [...t]) };
         updatedLeg.remaining[teamIdx] = turnStartRemaining;
-        updatedLeg.throws[idx] = updatedLeg.throws[idx].slice(0, updatedLeg.throws[idx].length - (newDartsThisRound - 1));
+        // The busted visit stays in the history as a visit of 0 points (see bustVisitThrows): its darts were
+        // thrown, so it counts as a round and as three darts in every average.
+        const visitStart = updatedLeg.throws[idx].length - (newDartsThisRound - 1);
+        updatedLeg.throws[idx] = [...updatedLeg.throws[idx].slice(0, visitStart), ...bustVisitThrows([...updatedLeg.throws[idx].slice(visitStart), dart])];
         const nextIdx = (idx + 1) % n;
         return { ...prev, currentLeg: updatedLeg, currentPlayerIndex: nextIdx };
       });
@@ -1507,7 +1511,12 @@ const GamePage = () => {
       const outcome = x01Outcome!;
 
       if (outcome.kind === "bust") {
-        busted = true; // no throws recorded for a busted visit — matches the manual-entry convention
+        busted = true;
+        // Recorded as a visit of 0 points, not dropped — see bustVisitThrows for why.
+        curGame.currentLeg.throws[idx] = [
+          ...curGame.currentLeg.throws[idx],
+          ...bustVisitThrows(dartsToApply.map((d) => ({ baseValue: d.baseValue, multiplier: d.multiplier, boardU: d.boardU, boardV: d.boardV }))),
+        ];
       } else {
         let orderedPairs = dartsToApply.map((d, i) => ({ d, points: x01VisitDarts[i].points }));
         if (outcome.kind === "checkout" && forced?.kind === "checkout") {
@@ -1546,7 +1555,7 @@ const GamePage = () => {
     // Skipped once a real checkout or the match itself already decided things above — the cap is
     // moot once a leg has already ended some other way this same round.
     let capOutcome: RoundCapOutcome = null;
-    if (curGame.mode !== "cricket" && !busted && !checkedOut && !curGame.isFinished) {
+    if (curGame.mode !== "cricket" && !checkedOut && !curGame.isFinished) {
       const roundsPerPlayer = curGame.players.map((_, i) => Math.ceil(curGame.currentLeg.throws[i].length / 3));
       capOutcome = resolveRoundCap(curGame.maxRoundsX01, roundsPerPlayer, curGame.currentLeg.remaining, curGame.teams);
     }
@@ -1765,6 +1774,12 @@ const GamePage = () => {
     if (!game) return;
     const oldDart = game.currentLeg.throws[playerIdx]?.[throwIndex];
     if (!oldDart) return;
+    // A bust visit scores nothing by definition — re-scoring one of its darts would have to re-judge the
+    // whole visit, so the corrector leaves it alone (the player can delete the visit's darts instead).
+    if (oldDart.bust) {
+      toast({ title: t("game.invalidValue"), description: t("game.bustVisitNotEditable"), variant: "destructive" });
+      return;
+    }
     const newPoints = pointsFor(newBase, newMultiplier);
     // See deleteThrow's own comment on botPlanRef — same reasoning applies here.
     botPlanRef.current = null;

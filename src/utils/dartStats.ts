@@ -23,6 +23,8 @@ export interface DartThrow {
   /** Set when this dart's value was set via the throw corrector rather than thrown live — see the
    *  same field on types/game.ts's own DartThrow for why. */
   corrected?: boolean;
+  /** Part of a busted visit: the darts were thrown but score nothing (points 0) — see utils/bustVisit.ts. */
+  bust?: boolean;
 }
 
 /** A placeholder left in place of a dart deleted from a PAST (already-complete) round via the

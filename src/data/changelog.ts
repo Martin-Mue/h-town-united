@@ -974,4 +974,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Kamera artık tüm ekranı kullanıyor: üstte oyuncu ve kalan puan, ortada görüntü, altta toplamla birlikte üç büyük ok karosu. Bir karoya dokunmak düzeltmeyi açar, boş yer tek dokunuşla ıska olur. “Şimdi tara” kalktı, algılananlar kendiliğinden görünür. Ayarlar dişlinin arkasında, “Elle” kamerayı gizler. Otomatik onay artık varsayılan olarak kapalı. Uygulama ayrıca görüntüden tahtada ok kalıp kalmadığını anlar, her oku ayrı değerlendirir ve oyun sırasında kalibrasyonu kendiliğinden tahtaya oturtur.",
     },
   },
+  {
+    id: "2026-10-27-bust-rounds-count",
+    date: "2026-10-27",
+    title: {
+      de: "Überworfene Runden zählen jetzt mit",
+      en: "Busted rounds now count",
+      fr: "Les tours dépassés comptent maintenant",
+      pl: "Przerzucone rundy są teraz liczone",
+      nl: "Overgooide rondes tellen nu mee",
+      tr: "Aşılan turlar artık sayılıyor",
+    },
+    description: {
+      de: "Eine überworfene Aufnahme verschwand bisher aus dem Wurfverlauf: Die Runde fehlte, der Average war zu hoch, und der Gegner hatte scheinbar mehr Runden gespielt. Jetzt steht sie als Runde mit 0 Punkten im Verlauf und zählt als drei Darts im Average und in der Rundenzahl. Außerdem gibt es in der Kamera den Knopf „Alle daneben – Runde ohne Treffer“ für Runden, in denen kein Dart im Board steckt.",
+      en: "A busted visit used to vanish from the throw history: the round was missing, the average too high, and the opponent seemed to have played more rounds. Now it shows as a round of 0 points and counts as three darts in the average and in the round count. The camera also has an “All missed – round without a hit” button for rounds in which no dart stays in the board.",
+      fr: "Une visite dépassée disparaissait de l'historique : le tour manquait, la moyenne était trop haute et l'adversaire semblait avoir joué plus de tours. Elle apparaît maintenant comme un tour à 0 point et compte pour trois fléchettes dans la moyenne et le nombre de tours. La caméra a aussi le bouton « Tout raté – tour sans touche » pour les tours où aucune fléchette ne reste dans la cible.",
+      pl: "Przerzucona seria znikała dotąd z historii rzutów: brakowało rundy, średnia była za wysoka, a przeciwnik zdawał się grać więcej rund. Teraz jest widoczna jako runda z 0 punktów i liczy się jako trzy lotki w średniej i liczbie rund. W kamerze jest też przycisk „Wszystkie obok – runda bez trafienia” dla rund, w których żadna lotka nie zostaje w tarczy.",
+      nl: "Een overgooide beurt verdween tot nu toe uit de worpgeschiedenis: de ronde ontbrak, het gemiddelde was te hoog en de tegenstander leek meer rondes te hebben gespeeld. Nu staat ze als ronde van 0 punten in de geschiedenis en telt ze als drie darts in het gemiddelde en het aantal rondes. De camera heeft ook de knop “Alles mis – ronde zonder treffer” voor rondes waarin geen dart in het bord blijft.",
+      tr: "Aşılan bir atış şimdiye dek atış geçmişinden kayboluyordu: tur eksikti, ortalama fazla yüksekti ve rakip daha çok tur oynamış gibi görünüyordu. Artık 0 puanlık bir tur olarak görünür, ortalamada ve tur sayısında üç ok sayılır. Kamerada ayrıca tahtada hiç ok kalmayan turlar için “Hepsi ıska – isabetsiz tur” düğmesi var.",
+    },
+  },
 ];

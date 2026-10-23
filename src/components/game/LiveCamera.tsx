@@ -2165,6 +2165,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setAccumulated(next);
   };
 
+  /** A visit in which every dart missed the board: the camera has nothing to see, so the player says so. */
+  const commitMissRound = () => {
+    pendingTrainingCaptureRef.current = null; // no board picture worth learning from
+    commitRound(Array.from({ length: dartsRemaining }, () => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: 1 })));
+  };
+
   const removeDart = (i: number) => {
     setAccumulated((prev) => prev.filter((_, k) => k !== i));
     setExpandedReviewIndex(null);
@@ -2765,6 +2771,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
         </div>
       </div>
+
+      {accumulated.length === 0 && phase === "live" && !needsReview && !paused && (
+        <Button variant="outline" className="h-11 w-full gap-2 text-sm" onClick={commitMissRound}>
+          {t("camera.missRound")}
+        </Button>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
