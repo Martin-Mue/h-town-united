@@ -32,6 +32,7 @@ import { applyHomography, computeHomography } from "@/utils/homography";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
 import { selectNewDart } from "@/utils/newDartSelection";
+import { prepareWireFit, refineTapsToWires, findBoardTaps, WIRE_FIT_CONFIDENT } from "@/utils/boardWireFit";
 import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
   boardTransformFromTaps,
@@ -229,6 +230,8 @@ const GRID = 40;
 const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
 const MIN_ANALYSIS_SIZE = 0.55;
+/** Longest side (px) of the picture the wire fit looks at — plenty for millimetre-exact rings. */
+const WIRE_FIT_MAX_SIDE = 960;
 
 // Frame-to-frame diff considered "still" (no motion). Tighter → weniger falsche Trigger.
 const MOTION_STILL = 0.012;
@@ -1202,6 +1205,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (!calib.taps || calib.taps.length !== 4) {
       await runLocalCalibrationFlow();
     } else {
+      // A saved calibration drifts between sessions (tripod nudged, zoom touched): settle it onto the
+      // wires again before the first throw, silently.
+      const settled = snapTapsToWires(calib.taps);
+      if (settled) applyCalibrationTaps(settled, calib.source ?? "manual", calib.confirmed ?? true, false);
       setPhase("live");
       setStatus(t("camera.readyThrowFirst"));
     }
@@ -1211,7 +1218,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    *  manual 4-tap flow and the model-based auto-calibration below, so both go through the exact
    *  same degenerate-calibration rejection and crop-framing math. Returns false (and leaves
    *  `calib` untouched) if the 4 points don't form a usable calibration. */
-  const applyCalibrationTaps = (next: { x: number; y: number }[], source: "auto" | "manual", confirmed = source === "manual"): boolean => {
+  const applyCalibrationTaps = (next: { x: number; y: number }[], source: "auto" | "manual", confirmed = source === "manual", reveal = true): boolean => {
     if (next.length !== 4) return false;
     const cx = (next[2].x + next[3].x) / 2;
     const cy = (next[0].y + next[1].y) / 2;
@@ -1234,7 +1241,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // Show the D20/D3/D11/D6 check by default right after (re)calibrating instead of requiring
     // an extra manual tap to verify — the whole point of that overlay is catching a bad
     // calibration immediately, so it should be the default view of a fresh one, not opt-in.
-    setShowCalibDebug(true);
+    if (reveal) setShowCalibDebug(true);
     return true;
   };
 
@@ -1251,6 +1258,36 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    * only never showed because the model could not load at all, see onnxRuntimeFiles in
    * vite.config.ts.)
    */
+  /** The whole camera picture, prepared for fitting the calibration onto the real wires of the board. */
+  const wireFitCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const prepareFrameForWireFit = () => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth || !v.videoHeight) return null;
+    const scale = Math.min(1, WIRE_FIT_MAX_SIDE / Math.max(v.videoWidth, v.videoHeight));
+    const w = Math.round(v.videoWidth * scale);
+    const h = Math.round(v.videoHeight * scale);
+    const canvas = wireFitCanvasRef.current ?? (wireFitCanvasRef.current = document.createElement("canvas"));
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(v, 0, 0, w, h);
+    return prepareWireFit(ctx.getImageData(0, 0, w, h));
+  };
+
+  /** Moves rough taps onto the real wires of the board (see utils/boardWireFit). Null = the picture shows
+   *  no board where the taps say, or the fit moved them implausibly far — keep what the player had. */
+  const snapTapsToWires = (taps: { x: number; y: number }[], maxMoveShare = 0.3): { x: number; y: number }[] | null => {
+    const v = videoRef.current;
+    const prepared = prepareFrameForWireFit();
+    if (!v || !prepared) return null;
+    const fit = refineTapsToWires(prepared, taps);
+    if (!fit || fit.quality < WIRE_FIT_CONFIDENT) return null;
+    const radiusPx = Math.hypot((taps[3].x - taps[2].x) * v.videoWidth, (taps[3].y - taps[2].y) * v.videoHeight) / 2;
+    const moved = fit.taps.some((p, i) => Math.hypot((p.x - taps[i].x) * v.videoWidth, (p.y - taps[i].y) * v.videoHeight) > maxMoveShare * radiusPx);
+    return moved ? null : fit.taps;
+  };
+
   const tryAutoCalibrate = async (): Promise<{ x: number; y: number }[] | null> => {
     const v = videoRef.current;
     if (!v || !v.videoWidth || !v.videoHeight) return null;
@@ -1307,21 +1344,34 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setAutoCalibFoundCount(null);
     const suggestion = modelOk ? await tryAutoCalibrate() : null;
     resetLoop();
-    if (suggestion && applyCalibrationTaps(suggestion, "auto", false)) {
-      // Found all four corners with confidence: use it right away — no dragging. The rings stay drawn
-      // over the picture so a wrong guess is obvious, and "Kalibrierung anpassen" is one tap away.
+    // The model's corners are only a rough hint; the picture itself decides the exact position. Fit the
+    // rings onto the real double/treble wires — first from the model's hint and the saved calibration,
+    // then by searching the whole picture — and use the result without any dragging.
+    setStatus(t("camera.calibSearching"));
+    await new Promise((resolve) => window.setTimeout(resolve, 30));
+    const prepared = prepareFrameForWireFit();
+    let fitted: { x: number; y: number }[] | null = null;
+    if (prepared) {
+      for (const start of [suggestion, calib.taps?.length === 4 ? calib.taps : null]) {
+        const fit = start ? refineTapsToWires(prepared, start) : null;
+        if (fit && fit.quality >= WIRE_FIT_CONFIDENT) { fitted = fit.taps; break; }
+      }
+      fitted ??= findBoardTaps(prepared)?.taps ?? null;
+    }
+    if (fitted && applyCalibrationTaps(fitted, "auto", false)) {
+      // The rings stay drawn over the picture so a wrong fit is obvious, and "Kalibrierung anpassen" is one tap away.
       setCalibDraft(null);
       setPhase("live");
       setStatus(t("camera.autoCalibratedCheck"));
       return;
     }
-    openCalibrator();
+    openCalibrator(suggestion ?? undefined);
   };
 
   /** Opens the calibration view on the current calibration (or a default one) for adjusting by hand. */
-  const openCalibrator = () => {
+  const openCalibrator = (startTaps?: { x: number; y: number }[]) => {
     const size = videoSize ?? (videoRef.current ? { w: videoRef.current.videoWidth, h: videoRef.current.videoHeight } : { w: 1, h: 1 });
-    setCalibDraft(calib.taps?.length === 4 ? calib.taps : defaultCalibrationTaps(size));
+    setCalibDraft(startTaps ?? (calib.taps?.length === 4 ? calib.taps : defaultCalibrationTaps(size)));
     setCalibDraftSource("manual");
     setPhase("calibrate");
     setStatus(t("camera.calibDragHint"));
@@ -1330,14 +1380,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   /** Commits the calibration shown on screen (handles as the player left them). */
   const confirmCalibration = () => {
     if (!calibDraft) return;
-    if (!applyCalibrationTaps(calibDraft, calibDraftSource, true)) {
+    // A hand-placed handle is a few millimetres off at best — settle it onto the wires it was aimed at.
+    const snapped = snapTapsToWires(calibDraft);
+    if (!applyCalibrationTaps(snapped ?? calibDraft, calibDraftSource, true)) {
       setStatus(t("camera.calibInvalid"));
       return;
     }
     setCalibDraft(null);
     resetLoop();
     setPhase("live");
-    setStatus(t("camera.calibratedReady"));
+    setStatus(t(snapped ? "camera.calibSnapped" : "camera.calibratedReady"));
   };
 
   const cancelCalibration = () => {
@@ -2315,7 +2367,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       {(phase === "live" || phase === "scanning") && (
         <div className="flex gap-1.5">
           <button
-            onClick={openCalibrator}
+            onClick={() => openCalibrator()}
             className="flex-1 rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
           >
             <Target className="h-3.5 w-3.5" /> {t("camera.calibAdjust")}

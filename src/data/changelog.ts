@@ -754,4 +754,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "AI ilk oku hesaplarken 2. ve 3. ok sık sık atlanıyordu – artık hepsi sırayla, yan yana olsalar bile kontrol ediliyor. Her atıştan sonra algılanan oklarla görüntüyü hemen görürsün. Tahta kalibrasyonda otomatik alınır; halkalar yapay zekânın onu nasıl gördüğünü gösterir, gerekirse “Kalibrasyonu ayarla” düzeltir.",
     },
   },
+  {
+    id: "2026-10-24-calibration-snap",
+    date: "2026-10-24",
+    title: {
+      de: "Kalibrierung rastet auf die Drähte ein",
+      en: "Calibration snaps onto the wires",
+      fr: "L'étalonnage s'aligne sur les fils",
+      pl: "Kalibracja dopasowuje się do drutów",
+      nl: "Kalibratie klikt vast op de draden",
+      tr: "Kalibrasyon tellere oturuyor",
+    },
+    description: {
+      de: "Die App sucht das Board jetzt selbst im Kamerabild und legt die Ringe millimetergenau auf die roten und grünen Doppel- und Dreifachringe – ohne Ziehen. Auch deine Handkalibrierung wird beim Bestätigen automatisch auf die Drähte gezogen, und eine gespeicherte Kalibrierung wird beim Start nachjustiert, falls das Stativ gewackelt hat.",
+      en: "The app now finds the board in the camera picture itself and lays the rings onto the red and green double and treble rings to the millimetre – no dragging. Your hand calibration is also pulled onto the wires when you confirm it, and a saved calibration is re-adjusted at start if the tripod has moved.",
+      fr: "L'appli trouve maintenant elle-même la cible dans l'image et place les anneaux au millimètre sur les anneaux rouges et verts (double et triple) – sans glisser. Ton étalonnage manuel est aussi aligné sur les fils à la validation, et un étalonnage enregistré est réajusté au démarrage si le trépied a bougé.",
+      pl: "Aplikacja sama znajduje tarczę na obrazie z kamery i układa pierścienie co do milimetra na czerwonych i zielonych polach double i triple – bez przeciągania. Twoja ręczna kalibracja jest przy zatwierdzeniu dociągana do drutów, a zapisana kalibracja jest korygowana przy starcie, jeśli statyw się poruszył.",
+      nl: "De app vindt het bord nu zelf in het camerabeeld en legt de ringen op de millimeter op de rode en groene dubbel- en driedubbelringen – zonder slepen. Je handmatige kalibratie wordt bij bevestigen ook op de draden getrokken, en een opgeslagen kalibratie wordt bij het starten bijgesteld als het statief bewogen is.",
+      tr: "Uygulama artık tahtayı kamera görüntüsünde kendisi buluyor ve halkaları kırmızı-yeşil double ve treble halkalarının üzerine milimetrik yerleştiriyor – sürüklemeye gerek yok. Elle yaptığın kalibrasyon onaylarken tellere çekiliyor, kayıtlı kalibrasyon da tripod oynadıysa başlangıçta yeniden ayarlanıyor.",
+    },
+  },
 ];
