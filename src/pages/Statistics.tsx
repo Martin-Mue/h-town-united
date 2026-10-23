@@ -2589,30 +2589,32 @@ const StatisticsPage = () => {
                 <button
                   key={g.id}
                   onClick={() => setDetailGame(g)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 text-left hover:bg-muted/50 transition-colors"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/60 bg-muted/20 text-left hover:bg-muted/40 hover:border-primary/30 transition-colors"
                 >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <Badge variant="outline" className="text-xs bg-muted text-foreground px-2 py-0.5 font-mono shrink-0 border-transparent">{g.mode}</Badge>
-                    <div className="min-w-0">
-                      <span className="text-sm flex items-center gap-1 min-w-0">
-                        <span className="truncate flex-1 min-w-0">{g.player1_name}</span>
-                        <span className="text-muted-foreground shrink-0">vs</span>
-                        <span className="truncate flex-1 min-w-0">{g.player2_name}</span>
-                      </span>
-                      <div className="text-[10px] text-muted-foreground">
-                        Ø {Number(g.player1_average).toFixed(1)} - {Number(g.player2_average).toFixed(1)} · {g.player1_legs_won}:{g.player2_legs_won} {t("game.legsSuffix")}
-                      </div>
-                    </div>
+                  <Badge variant="outline" className="text-xs bg-muted text-foreground px-2 py-0.5 font-mono shrink-0 border-transparent">{g.mode}</Badge>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    {[
+                      { name: g.player1_name, avg: g.player1_average },
+                      { name: g.player2_name, avg: g.player2_average },
+                    ].map((side) => {
+                      const isWinner = side.name === g.winner_name;
+                      return (
+                        <div key={side.name} className="flex items-baseline gap-2 min-w-0">
+                          <span className={`text-sm truncate flex-1 min-w-0 ${isWinner ? "font-semibold text-secondary" : "text-muted-foreground"}`}>
+                            {isWinner && "🏆 "}{side.name}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">Ø {Number(side.avg).toFixed(1)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" })}
-                      </span>
-                      <span className="text-xs text-secondary font-medium">{g.winner_name} ✓</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex flex-col items-center shrink-0 px-2 border-l border-border/60">
+                    <span className="font-display text-xl leading-none tabular-nums">{g.player1_legs_won}:{g.player2_legs_won}</span>
+                    <span className="text-[10px] text-muted-foreground mt-1">
+                      {new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" })}
+                    </span>
                   </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 </button>
               ))}
             </div>

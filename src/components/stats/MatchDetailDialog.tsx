@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
 import { averageToCheckoutRange, scoringPhaseTotals, type ScoringPhaseTotals } from "@/utils/averageToCheckoutRange";
+import MatchStatComparison from "@/components/stats/MatchStatComparison";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { average, first9Average, computeCricketStats, type DartThrow, type StatBundle } from "@/utils/dartStats";
@@ -83,6 +84,12 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
         {matchTotals && matchTotals.length > 0 && (
           <SectionCard>
             <Eyebrow icon={Target}>{t("stats.matchTotal")}</Eyebrow>
+            {matchTotals.length === 2 ? (
+              <MatchStatComparison
+                players={[matchTotals[0], matchTotals[1]]}
+                labels={{ averageTo170: t("stats.averageTo170"), highscore: t("game.highscoreLabel") }}
+              />
+            ) : (
             <div className="grid grid-cols-2 gap-3">
               {matchTotals.map((p) => (
                 <div key={p.name} className={`rounded-lg border p-3 ${p.won ? "border-secondary/40 bg-secondary/5" : "border-border"}`}>
@@ -106,6 +113,7 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
                 </div>
               ))}
             </div>
+            )}
           </SectionCard>
         )}
 
