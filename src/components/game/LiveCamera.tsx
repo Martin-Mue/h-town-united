@@ -210,7 +210,10 @@ const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
  *  the 800px output (the board covers only part of the picture) and keeps the pixel read cheap. */
 const MAX_RECTIFY_SOURCE_SIDE = 1920;
 /** Weakest model confidence a new-dart candidate may have — it must additionally stand on changed pixels. */
-const NEW_DART_MIN_SCORE = 0.25;
+const NEW_DART_MIN_SCORE = 0.15;
+/** The board only counts as "not empty" because of detections at least this confident — weaker ones can
+ *  join a round (with fresh change under them, see selectNewDart) but must never keep a round from ending. */
+const BOARD_OCCUPIED_SCORE = 0.25;
 /** Cut-off of the final look at the finished visit; candidates must additionally stand on pixels that
  *  differ from the empty board, which a real dart always does. */
 const FINAL_PASS_MIN_SCORE = 0.25;
@@ -1687,7 +1690,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
       ).filter((d) => !baselineDarts.some((b) => Math.hypot(b.x - (d.x ?? 0), b.y - (d.y ?? 0)) < KNOWN_DART_RADIUS_FOR_BASELINE));
 
-      if (present.length === 0) {
+      if (!present.some((d) => d.confidence >= BOARD_OCCUPIED_SCORE)) {
         onBoardEmptyMoment(sig);
         return;
       }
@@ -2139,6 +2142,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       pinnedClipSeqRef.current = restartClipSegment();
       void runPullScan();
     }
+  };
+
+  /** A dart the camera cannot see (hidden behind another one in a tight group): added with the same score as
+   *  the previous dart — it nearly always sits in the same spot — and opened for adjusting. */
+  const addHiddenDart = () => {
+    const current = accumulatedRef.current;
+    if (current.length >= dartsRemaining || current.length === 0) return;
+    const last = current[current.length - 1];
+    const next = [...current, { ...last, confidence: 1 }];
+    accumulatedRef.current = next;
+    setAccumulated(next);
+    setExpandedReviewIndex(next.length - 1);
   };
 
   /** A dart that missed the board: scored as a miss, so the visit still counts all the darts thrown. */
@@ -2696,17 +2711,24 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               if (!d) {
                 // Once darts were detected, an empty slot is one tap from a miss: a dart that missed the
                 // board (or bounced out) leaves nothing for the camera to see.
-                const canAddMiss = accumulated.length > 0 && i === accumulated.length;
-                return canAddMiss ? (
-                  <button
-                    key={`slot-${i}`}
-                    type="button"
-                    onClick={addMissDart}
-                    className="flex h-[4.5rem] flex-col items-center justify-center rounded-lg border border-dashed border-primary/50 text-[11px] text-primary hover:bg-primary/10"
-                  >
-                    <span className="font-display text-lg leading-none">+</span>
-                    <span className="mt-0.5">{t("camera.addMiss")}</span>
-                  </button>
+                const canAdd = accumulated.length > 0 && i === accumulated.length;
+                return canAdd ? (
+                  <div key={`slot-${i}`} className="grid h-[4.5rem] grid-rows-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={addHiddenDart}
+                      className="rounded-md border border-dashed border-primary/50 text-[11px] text-primary hover:bg-primary/10"
+                    >
+                      + {t("camera.addDart")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addMissDart}
+                      className="rounded-md border border-dashed border-border text-[11px] text-muted-foreground hover:bg-muted"
+                    >
+                      + {t("camera.addMiss")}
+                    </button>
+                  </div>
                 ) : (
                   <div
                     key={`slot-${i}`}

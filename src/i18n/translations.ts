@@ -589,6 +589,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "camera.manualShort": { de: "Manuell", en: "Manual", fr: "Manuel", pl: "Ręcznie", nl: "Handmatig", tr: "Elle" },
   "camera.settingsTitle": { de: "Kamera-Einstellungen", en: "Camera settings", fr: "Réglages de la caméra", pl: "Ustawienia kamery", nl: "Camera-instellingen", tr: "Kamera ayarları" },
   "camera.editDartTitle": { de: "Dart {n} korrigieren", en: "Correct dart {n}", fr: "Corriger la fléchette {n}", pl: "Popraw lotkę {n}", nl: "Dart {n} corrigeren", tr: "{n}. oku düzelt" },
+  "camera.addDart": { de: "Dart", en: "Dart", fr: "Fléchette", pl: "Lotka", nl: "Dart", tr: "Ok" },
   "camera.addMiss": { de: "Fehlwurf", en: "Miss", fr: "Raté", pl: "Pudło", nl: "Misser", tr: "Iska" },
   "camera.autoCommitIn": { de: "Darts gezogen – Runde wird in {n} s übernommen. Zum Korrigieren einen Dart antippen.", en: "Darts pulled – round is taken over in {n} s. Tap a dart to correct it.", fr: "Fléchettes retirées – tour validé dans {n} s. Touche une fléchette pour corriger.", pl: "Lotki wyjęte – runda zostanie zatwierdzona za {n} s. Dotknij lotki, aby poprawić.", nl: "Darts getrokken – ronde wordt over {n} s overgenomen. Tik een dart aan om te corrigeren.", tr: "Oklar çekildi – tur {n} sn içinde onaylanacak. Düzeltmek için bir oka dokun." },
   "camera.autoCommitStop": { de: "Stopp", en: "Stop", fr: "Stop", pl: "Stop", nl: "Stop", tr: "Dur" },

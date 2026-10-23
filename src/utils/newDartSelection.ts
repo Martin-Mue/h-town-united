@@ -24,6 +24,10 @@ export const KNOWN_DART_RADIUS = 0.02;
 export const CHANGE_SUPPORT_MIN = 0.12;
 /** ...and this much when it sits right next to an earlier dart (a tight group). */
 export const CHANGE_SUPPORT_NEAR_KNOWN = 0.3;
+/** Below this score a detection is "weak": real darts in unusual spots (long dart at the board edge, seen
+ *  from a flat angle) often score 0.15-0.25. They count only with clearly fresh change under them. */
+export const WEAK_DART_SCORE = 0.25;
+export const CHANGE_SUPPORT_WEAK = 0.35;
 
 export function selectNewDart<T extends DartCandidate>(
   known: { x?: number; y?: number }[],
@@ -41,7 +45,8 @@ export function selectNewDart<T extends DartCandidate>(
     let rank: number;
     if (changeSupportAt) {
       const support = changeSupportAt(x, y);
-      if (support < (nearKnown ? CHANGE_SUPPORT_NEAR_KNOWN : CHANGE_SUPPORT_MIN)) continue;
+      const needed = Math.max(nearKnown ? CHANGE_SUPPORT_NEAR_KNOWN : CHANGE_SUPPORT_MIN, c.confidence < WEAK_DART_SCORE ? CHANGE_SUPPORT_WEAK : 0);
+      if (support < needed) continue;
       rank = c.confidence; // the changed pixels only gate; the model decides which candidate is the dart
     } else {
       if (nearKnown) continue;

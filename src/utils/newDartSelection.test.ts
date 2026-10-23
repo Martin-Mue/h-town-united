@@ -38,6 +38,16 @@ describe("selectNewDart", () => {
   });
 });
 
+describe("weak detections", () => {
+  const strongSupport = (x: number, y: number) => (Math.hypot(x - 0.6, y - 0.4) < 0.04 ? 0.5 : Math.hypot(x - 0.3, y - 0.7) < 0.04 ? 0.2 : 0);
+
+  it("accepts a weak detection only with clearly fresh change under it", () => {
+    expect(selectNewDart([], [{ x: 0.6, y: 0.4, confidence: 0.18 }], strongSupport)).not.toBeNull();
+    expect(selectNewDart([], [{ x: 0.3, y: 0.7, confidence: 0.18 }], strongSupport)).toBeNull(); // 0.2 support is not enough for a weak one
+    expect(selectNewDart([], [{ x: 0.3, y: 0.7, confidence: 0.4 }], strongSupport)).not.toBeNull(); // ...but is for a normal one
+  });
+});
+
 describe("selectNewDarts", () => {
   const twoSpots = (x: number, y: number) => (Math.hypot(x - 0.6, y - 0.4) < 0.04 || Math.hypot(x - 0.3, y - 0.7) < 0.04 ? 0.6 : 0);
 
