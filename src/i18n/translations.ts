@@ -586,6 +586,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "camera.zoom": { de: "Zoom", en: "Zoom", fr: "Zoom", pl: "Zoom", nl: "Zoom", tr: "Zoom" },
   "camera.cameraLabel": { de: "Kamera", en: "Camera", fr: "Caméra", pl: "Kamera", nl: "Camera", tr: "Kamera" },
   "camera.resetPoint": { de: "Neu setzen", en: "Reset", fr: "Réinitialiser", pl: "Resetuj", nl: "Opnieuw instellen", tr: "Sıfırla" },
+  "camera.addMiss": { de: "Fehlwurf", en: "Miss", fr: "Raté", pl: "Pudło", nl: "Misser", tr: "Iska" },
   "camera.autoCommitIn": { de: "Darts gezogen – Runde wird in {n} s übernommen. Zum Korrigieren einen Dart antippen.", en: "Darts pulled – round is taken over in {n} s. Tap a dart to correct it.", fr: "Fléchettes retirées – tour validé dans {n} s. Touche une fléchette pour corriger.", pl: "Lotki wyjęte – runda zostanie zatwierdzona za {n} s. Dotknij lotki, aby poprawić.", nl: "Darts getrokken – ronde wordt over {n} s overgenomen. Tik een dart aan om te corrigeren.", tr: "Oklar çekildi – tur {n} sn içinde onaylanacak. Düzeltmek için bir oka dokun." },
   "camera.autoCommitStop": { de: "Stopp", en: "Stop", fr: "Stop", pl: "Stop", nl: "Stop", tr: "Dur" },
   "camera.autoCommitSetting": { de: "Runde automatisch übernehmen", en: "Take over round automatically", fr: "Valider le tour automatiquement", pl: "Zatwierdzaj rundę automatycznie", nl: "Ronde automatisch overnemen", tr: "Turu otomatik onayla" },

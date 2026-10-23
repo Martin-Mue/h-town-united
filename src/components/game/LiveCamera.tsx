@@ -186,12 +186,13 @@ const loadTrainingDataEnabled = (): boolean => {
 const TRAINING_CONSENT_ASKED_KEY = "dartcam-training-consent-asked";
 
 /** Hands-free play: once the darts are pulled and the board is empty again, the round is taken over
- *  after a short countdown unless the player touches a dart to correct it. Default on. */
+ *  after a short countdown unless the player touches a dart to correct it. Off by default — detection
+ *  still needs corrections too often for rounds to be taken over unseen. */
 const AUTO_COMMIT_KEY = "dartcam-auto-commit";
 const AUTO_COMMIT_SECONDS = 4;
 const loadAutoCommitEnabled = (): boolean => {
-  if (typeof window === "undefined") return true;
-  return window.localStorage.getItem(AUTO_COMMIT_KEY) !== "off";
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(AUTO_COMMIT_KEY) === "on";
 };
 const loadTrainingConsentAsked = (): boolean => {
   if (typeof window === "undefined") return true;
@@ -208,6 +209,19 @@ const NEW_DART_MIN_SCORE = 0.25;
 /** Cut-off of the final look at the finished visit; candidates must additionally stand on pixels that
  *  differ from the empty board, which a real dart always does. */
 const FINAL_PASS_MIN_SCORE = 0.25;
+/** A detection this confident counts as a dart even where the pictures show no fresh change. */
+const CONFIDENT_DART_SCORE = 0.5;
+/** How often (ms) a calm picture is used to settle the calibration back onto the board's wires. */
+const CALIB_REFINE_MS = 4000;
+/** A refit counts only with at least this colour agreement (a good fit scores ~0.65) ... */
+const CALIB_REFINE_MIN_QUALITY = 0.5;
+/** ... and only for small drift: each point may move at most this share of the board radius (a bigger
+ *  jump means the camera was moved on purpose — that needs the calibration view, not a silent nudge). */
+const CALIB_REFINE_MAX_MOVE = 0.15;
+/** Moves below this share of the radius (<1 mm) are ignored so the calibration does not jitter. */
+const CALIB_REFINE_MIN_MOVE = 0.004;
+/** Within this distance (frame fraction, ~9 mm) a detection is a dart that was already in the board before the round. */
+const KNOWN_DART_RADIUS_FOR_BASELINE = 0.02;
 /** Above this share of changed cells the whole picture moved (exposure, bump) — no comparison possible. */
 const GLOBAL_CHANGE_SHARE_MAX = 0.5;
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
@@ -446,6 +460,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   /** The empty board as the model sees it — what a finished visit is compared with to tell darts from
    *  anything that was already there. */
   const emptyModelFrameRef = useRef<ImageData | null>(null);
+  /** Darts that were already in the board when this round's empty-board baseline was taken (null = not looked yet). */
+  const baselineDartsRef = useRef<{ x: number; y: number }[] | null>(null);
+  /** Most darts seen at once this round — the picture with the most darts is the one kept for review. */
+  const peakPresentRef = useRef(0);
+  const stillMomentBusyRef = useRef(false);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -600,6 +619,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     lastStableModelFrameRef.current = null;
     landingQueueRef.current = [];
     emptyModelFrameRef.current = null;
+    baselineDartsRef.current = null;
+    peakPresentRef.current = 0;
+    stillMomentBusyRef.current = false;
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
@@ -1335,6 +1357,35 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     return moved ? null : fit.taps;
   };
 
+  /**
+   * Keeps the calibration on the board while playing: a tripod or phone that shifts a little (a tap on the
+   * screen is enough) is settled back onto the wires by itself. Only small moves are applied and only when
+   * the picture shows the board clearly — if it is gone or only partly visible the fit is weak and nothing
+   * changes, so the last good calibration stays.
+   */
+  const refineCalibrationQuietly = () => {
+    const taps = calib.taps;
+    const v = videoRef.current;
+    if (!taps || taps.length !== 4 || !v || !v.videoWidth) return;
+    if (scanLockRef.current || stillMomentBusyRef.current || stillFramesRef.current < 3 || boardMissing) return;
+    const prepared = prepareFrameForWireFit();
+    if (!prepared) return;
+    const fit = refineTapsToWires(prepared, taps);
+    if (!fit || fit.quality < CALIB_REFINE_MIN_QUALITY) return;
+    const radiusPx = Math.hypot((taps[3].x - taps[2].x) * v.videoWidth, (taps[3].y - taps[2].y) * v.videoHeight) / 2;
+    const moves = fit.taps.map((p, i) => Math.hypot((p.x - taps[i].x) * v.videoWidth, (p.y - taps[i].y) * v.videoHeight) / radiusPx);
+    const biggest = Math.max(...moves);
+    if (biggest > CALIB_REFINE_MAX_MOVE || biggest < CALIB_REFINE_MIN_MOVE) return;
+    applyCalibrationTaps(fit.taps, calib.source ?? "manual", calib.confirmed ?? true, false);
+  };
+  const refineCalibrationRef = useRef(refineCalibrationQuietly);
+  refineCalibrationRef.current = refineCalibrationQuietly;
+  useEffect(() => {
+    if (!enabled || phase !== "live") return;
+    const id = window.setInterval(() => { if (!paused) refineCalibrationRef.current(); }, CALIB_REFINE_MS);
+    return () => window.clearInterval(id);
+  }, [enabled, phase, paused]);
+
   const tryAutoCalibrate = async (): Promise<{ x: number; y: number }[] | null> => {
     const v = videoRef.current;
     if (!v || !v.videoWidth || !v.videoHeight) return null;
@@ -1587,6 +1638,167 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     }
   };
 
+  /**
+   * What the picture shows every time the board comes to rest after a movement — the heart of the
+   * hands-free flow. The model looks at the board and answers "which darts are in it right now?":
+   *  - none (that were not already there before the round)  -> the board is empty: darts were pulled,
+   *    so a finished round goes to review/commit;
+   *  - some -> every dart not yet known is added (several at once if throws came quickly), each judged
+   *    on its own, earlier darts stay known even when a later one hides them from this angle.
+   * The old signature rule (whole-picture brightness vs the empty board) could not tell one thin dart
+   * from an empty board — it counted a lone dart as "empty" and ended rounds while darts still stuck.
+   */
+  const handleStillMoment = async (sig: number[], signatureSaysEmpty: boolean) => {
+    stillMomentBusyRef.current = true;
+    try {
+      if (!modelReadyRef.current) return legacyStillMoment(sig, signatureSaysEmpty);
+      const frame = grabModelFrame();
+      if (!frame) return legacyStillMoment(sig, signatureSaysEmpty);
+
+      // darts that were already stuck in the board when this round's baseline was taken are not new
+      if (baselineDartsRef.current === null) {
+        const baselineFrame = emptyModelFrameRef.current;
+        const base = baselineFrame ? await detectDartsWithModel(baselineFrame, 8, NEW_DART_MIN_SCORE) : null;
+        baselineDartsRef.current = base && !base.unavailable ? base.darts.map((d) => ({ x: d.x, y: d.y })) : [];
+      }
+      const result = await detectDartsWithModel(frame, 8, NEW_DART_MIN_SCORE);
+      if (result.unavailable) return legacyStillMoment(sig, signatureSaysEmpty);
+      const baselineDarts = baselineDartsRef.current;
+      const present = refineWithCalibration(
+        result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
+      ).filter((d) => !baselineDarts.some((b) => Math.hypot(b.x - (d.x ?? 0), b.y - (d.y ?? 0)) < KNOWN_DART_RADIUS_FOR_BASELINE));
+
+      if (present.length === 0) {
+        onBoardEmptyMoment(sig);
+        return;
+      }
+
+      // darts are on the board: remember this picture as the round's peak (the one the review and the
+      // final look use) — but not while the player is pulling darts one by one (the count only drops)
+      const before = lastStableModelFrameRef.current;
+      if (present.length >= peakPresentRef.current) {
+        peakPresentRef.current = present.length;
+        preRemovalImageDataRef.current = grabImageData();
+        preRemovalModelFrameRef.current = frame;
+        preRemovalFrameKindRef.current = rectMapping() ? "rectified" : "crop";
+      }
+      lastStableModelFrameRef.current = frame;
+
+      const known = accumulatedRef.current;
+      const changeMap = before ? buildChangeMap(before, frame) : null;
+      const usable = changeMap && changeMap.share < GLOBAL_CHANGE_SHARE_MAX ? changeMap : null;
+      // Changed pixels gate weak detections; a confident one needs no confirmation (a dart that an earlier
+      // picture already contained, but the model only recognised now, must not be lost).
+      const support = usable
+        ? (x: number, y: number) => {
+            const hit = present.find((d) => d.x === x && d.y === y);
+            return hit && hit.confidence >= CONFIDENT_DART_SCORE ? 1 : changedShareNear(usable, x, y);
+          }
+        : null;
+      const added = selectNewDarts(known, present, support, dartsRemaining - known.length);
+      if (accumulatedRef.current !== known) return; // the round was committed/discarded meanwhile
+      if (added.length > 0) {
+        const next = [...known, ...added];
+        accumulatedRef.current = next;
+        setAccumulated(next);
+        setLastDetectionSource("model");
+        playDartDetectedSound(known.length);
+        setJustAddedIndex(known.length);
+        window.setTimeout(() => setJustAddedIndex((cur) => (cur === known.length ? null : cur)), 900);
+      }
+      const seen = Math.min(3, accumulatedRef.current.length);
+      throwsSeenRef.current = seen;
+      setThrowsSeen(seen);
+      setStatus(
+        seen >= dartsRemaining
+          ? `${seen} ${t("camera.dartsOnBoardPullNow")}`
+          : `${seen}/${dartsRemaining} ${t("camera.onBoardNextOrPull")}`,
+      );
+    } finally {
+      stillMomentBusyRef.current = false;
+    }
+  };
+
+  /** The model sees no (new) dart: either nothing was thrown yet, or the darts were just pulled. */
+  const onBoardEmptyMoment = (sig: number[]) => {
+    const endedClipSeq = restartClipSegment();
+    const finishedRound = accumulatedRef.current.length > 0 && !!preRemovalImageDataRef.current && !needsReviewRef.current;
+    if (finishedRound && performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
+      scanLockRef.current = true;
+      pinnedClipSeqRef.current = endedClipSeq;
+      void runPullScan();
+      return;
+    }
+    // idle: refresh the empty-board baseline (lighting drifts over a session)
+    emptyBoardSigRef.current = sig;
+    emptyImageDataRef.current = grabImageData();
+    lastStableModelFrameRef.current = grabModelFrame();
+    emptyModelFrameRef.current = lastStableModelFrameRef.current;
+    peakPresentRef.current = 0;
+    setStatus(t("camera.boardEmptyThrowFirst"));
+  };
+
+  /** Signature-based rule from before the model existed — only used while the model is unavailable. */
+  const legacyStillMoment = (sig: number[], boardEmpty: boolean) => {
+    if (boardEmpty) {
+      // The board just went empty — whether that's "a visit just finished and got pulled"
+      // (about to trigger runPullScan below) or "still idle, nothing thrown yet", either way
+      // a new visit starts from here. Cut the clip segment here so its footage lines up with
+      // real throws instead of an arbitrary timer (see restartClipSegment/CLIP_SEGMENT_MS).
+      const endedClipSeq = restartClipSegment();
+      const hasPreRemovalCapture = !!preRemovalImageDataRef.current;
+      // A still-unreviewed round (accumulated darts awaiting Übernehmen/Verwerfen) must not
+      // be silently overwritten by a new scan — if the player throws/pulls a second round
+      // before acting on the first, this used to replace the pending darts with no trace of
+      // the first round ever having been detected. Checking needsReview specifically (not
+      // accumulated.length) is what makes this still correct now that accumulated legitimately
+      // fills up incrementally WHILE a visit is still in progress, before it's actually done —
+      // that in-progress state must still let this fire, only an already-finished, still-
+      // pending-review round should block it.
+      if (throwsSeenRef.current > 0 && hasPreRemovalCapture && !needsReviewRef.current) {
+        if (performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
+          scanLockRef.current = true;
+          // Pin the clip to THIS visit now, at detection time — not whenever the player
+          // eventually taps Übernehmen. Same needsReview guard as above keeps this from
+          // being reassigned to a later, unrelated visit while this one still sits
+          // awaiting review (see getRecentClip's doc comment for the bug this fixes).
+          pinnedClipSeqRef.current = endedClipSeq;
+          void runPullScan();
+          return;
+        }
+      }
+      emptyBoardSigRef.current = sig;
+      // Refresh the local baseline too — lighting can drift over a session, and this is
+      // the moment we're most sure the board is genuinely empty.
+      emptyImageDataRef.current = grabImageData();
+      lastStableModelFrameRef.current = modelReadyRef.current || rectMapping() ? grabModelFrame() : null;
+      emptyModelFrameRef.current = lastStableModelFrameRef.current;
+      setStatus(t("camera.boardEmptyThrowFirst"));
+    } else {
+      preRemovalImageDataRef.current = grabImageData();
+      const stableBefore = lastStableModelFrameRef.current;
+      captureModelFrame();
+      const stableAfter = preRemovalModelFrameRef.current;
+      lastStableModelFrameRef.current = stableAfter;
+      throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
+      setThrowsSeen(throwsSeenRef.current);
+      setStatus(
+        throwsSeenRef.current >= dartsRemaining
+          ? `${throwsSeenRef.current} ${t("camera.dartsOnBoardPullNow")}`
+          : `${throwsSeenRef.current}/${dartsRemaining} ${t("camera.onBoardNextOrPull")}`,
+      );
+      // Try to identify THIS dart right now, in true throw order — see
+      // scoreNewlyLandedDart's doc comment. Best-effort: if it can't, the status text above
+      // still holds and the existing end-of-visit batch scan picks up the slack later.
+      if (stableAfter && modelReadyRef.current) {
+        landingQueueRef.current.push({ before: stableBefore, after: stableAfter });
+        void drainLandingQueue();
+      }
+    }
+  };
+  const stillMomentRef = useRef(handleStillMoment);
+  stillMomentRef.current = handleStillMoment;
+
   // ─── watcher loop ──────────────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -1658,61 +1870,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       ) {
         changeSeenRef.current = false;
         stableSigRef.current = sig;
-        if (boardEmpty) {
-          // The board just went empty — whether that's "a visit just finished and got pulled"
-          // (about to trigger runPullScan below) or "still idle, nothing thrown yet", either way
-          // a new visit starts from here. Cut the clip segment here so its footage lines up with
-          // real throws instead of an arbitrary timer (see restartClipSegment/CLIP_SEGMENT_MS).
-          const endedClipSeq = restartClipSegment();
-          const hasPreRemovalCapture = !!preRemovalImageDataRef.current;
-          // A still-unreviewed round (accumulated darts awaiting Übernehmen/Verwerfen) must not
-          // be silently overwritten by a new scan — if the player throws/pulls a second round
-          // before acting on the first, this used to replace the pending darts with no trace of
-          // the first round ever having been detected. Checking needsReview specifically (not
-          // accumulated.length) is what makes this still correct now that accumulated legitimately
-          // fills up incrementally WHILE a visit is still in progress, before it's actually done —
-          // that in-progress state must still let this fire, only an already-finished, still-
-          // pending-review round should block it.
-          if (throwsSeenRef.current > 0 && hasPreRemovalCapture && !needsReviewRef.current) {
-            if (performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
-              scanLockRef.current = true;
-              // Pin the clip to THIS visit now, at detection time — not whenever the player
-              // eventually taps Übernehmen. Same needsReview guard as above keeps this from
-              // being reassigned to a later, unrelated visit while this one still sits
-              // awaiting review (see getRecentClip's doc comment for the bug this fixes).
-              pinnedClipSeqRef.current = endedClipSeq;
-              void runPullScan();
-              return;
-            }
-          }
-          emptyBoardSigRef.current = sig;
-          // Refresh the local baseline too — lighting can drift over a session, and this is
-          // the moment we're most sure the board is genuinely empty.
-          emptyImageDataRef.current = grabImageData();
-          lastStableModelFrameRef.current = modelReadyRef.current || rectMapping() ? grabModelFrame() : null;
-          emptyModelFrameRef.current = lastStableModelFrameRef.current;
-          setStatus(t("camera.boardEmptyThrowFirst"));
-        } else {
-          preRemovalImageDataRef.current = grabImageData();
-          const stableBefore = lastStableModelFrameRef.current;
-          captureModelFrame();
-          const stableAfter = preRemovalModelFrameRef.current;
-          lastStableModelFrameRef.current = stableAfter;
-          throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
-          setThrowsSeen(throwsSeenRef.current);
-          setStatus(
-            throwsSeenRef.current >= dartsRemaining
-              ? `${throwsSeenRef.current} ${t("camera.dartsOnBoardPullNow")}`
-              : `${throwsSeenRef.current}/${dartsRemaining} ${t("camera.onBoardNextOrPull")}`,
-          );
-          // Try to identify THIS dart right now, in true throw order — see
-          // scoreNewlyLandedDart's doc comment. Best-effort: if it can't, the status text above
-          // still holds and the existing end-of-visit batch scan picks up the slack later.
-          if (stableAfter && modelReadyRef.current) {
-            landingQueueRef.current.push({ before: stableBefore, after: stableAfter });
-            void drainLandingQueue();
-          }
-        }
+        // Read through a ref so the handler always sees the current calibration, even though this
+        // interval closure was created many renders ago.
+        if (!stillMomentBusyRef.current) void stillMomentRef.current(sig, boardEmpty);
         return;
       }
 
@@ -1960,6 +2120,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       pinnedClipSeqRef.current = restartClipSegment();
       void runPullScan();
     }
+  };
+
+  /** A dart that missed the board: scored as a miss, so the visit still counts all the darts thrown. */
+  const addMissDart = () => {
+    const current = accumulatedRef.current;
+    if (current.length >= dartsRemaining) return;
+    const next = [...current, { baseValue: 0, multiplier: 1 as const, points: 0, confidence: 1 }];
+    accumulatedRef.current = next;
+    setAccumulated(next);
   };
 
   const removeDart = (i: number) => {
@@ -2552,7 +2721,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             {Array.from({ length: dartsRemaining }).map((_, i) => {
               const d = accumulated[i];
               if (!d) {
-                return (
+                // Once darts were detected, an empty slot is one tap from a miss: a dart that missed the
+                // board (or bounced out) leaves nothing for the camera to see.
+                const canAddMiss = accumulated.length > 0 && i === accumulated.length;
+                return canAddMiss ? (
+                  <button
+                    key={`slot-${i}`}
+                    type="button"
+                    onClick={addMissDart}
+                    className="flex h-[4.5rem] flex-col items-center justify-center rounded-lg border border-dashed border-primary/50 text-[11px] text-primary hover:bg-primary/10"
+                  >
+                    <span className="font-display text-lg leading-none">+</span>
+                    <span className="mt-0.5">{t("camera.addMiss")}</span>
+                  </button>
+                ) : (
                   <div
                     key={`slot-${i}`}
                     className="flex h-[4.5rem] items-center justify-center rounded-lg border border-dashed border-border/60 text-[11px] text-muted-foreground"
