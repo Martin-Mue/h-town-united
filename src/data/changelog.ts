@@ -674,4 +674,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Oyna artık ortadaki büyük düğme; yanında Ana sayfa, Turnuva, İstatistik ve Daha fazla (Antrenman, Kulüp, Admin).",
     },
   },
+  {
+    id: "2026-10-23-camera-correction",
+    date: "2026-10-23",
+    title: {
+      de: "Kamera: Darts direkt im Bild korrigieren",
+      en: "Camera: correct darts right on the image",
+      fr: "Caméra : corriger les fléchettes directement sur l'image",
+      pl: "Kamera: poprawianie lotek bezpośrednio na obrazie",
+      nl: "Camera: darts direct in het beeld corrigeren",
+      tr: "Kamera: okları doğrudan görüntü üzerinde düzelt",
+    },
+    description: {
+      de: "Falsch erkannten Dart antippen, dann die richtige Spitze im Bild antippen – der Wert wird sofort neu berechnet. Das Kamerabild steht jetzt oben, \"Übernehmen\" bleibt unten immer sichtbar, und nach automatischer Kalibrierung genügt ein Tipp auf \"Passt\".",
+      en: "Tap a wrongly detected dart, then tap the right tip on the image – the score is recalculated instantly. The camera view now sits on top, \"Accept\" always stays visible at the bottom, and after automatic calibration one tap on \"Looks right\" is enough.",
+      fr: "Touche une fléchette mal détectée, puis la bonne pointe sur l'image : le score est recalculé aussitôt. L'image est en haut, « Valider » reste toujours visible en bas, et après l'étalonnage automatique un seul appui sur « C'est bon » suffit.",
+      pl: "Dotknij błędnie rozpoznanej lotki, potem właściwej końcówki na obrazie – wynik przelicza się od razu. Obraz kamery jest teraz na górze, „Zatwierdź” zawsze widać na dole, a po automatycznej kalibracji wystarczy jedno dotknięcie „Pasuje”.",
+      nl: "Tik op een verkeerd herkende dart en daarna op de juiste punt in het beeld – de score wordt direct herberekend. Het camerabeeld staat nu bovenaan, \"Overnemen\" blijft onderaan altijd zichtbaar en na automatische kalibratie volstaat één tik op \"Klopt\".",
+      tr: "Yanlış algılanan oka, sonra görüntüde doğru uca dokun – skor anında yeniden hesaplanır. Kamera görüntüsü artık üstte, \"Onayla\" altta hep görünür ve otomatik kalibrasyondan sonra \"Doğru\"ya tek dokunuş yeter.",
+    },
+  },
 ];

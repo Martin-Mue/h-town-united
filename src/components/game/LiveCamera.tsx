@@ -485,10 +485,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // original (possibly wrong) position paired with the right label, which would teach a future
   // fine-tune the wrong position/label association instead of fixing it.
   const [repositioningIndex, setRepositioningIndex] = useState<number | null>(null);
-  // Pending tap position while repositioning — kept separate from committing immediately so a
-  // mis-tap can just be tapped again (or nudged) without leaving the mode, no scrolling back
-  // down to the review list to re-arm it required.
-  const [repositionDraft, setRepositionDraft] = useState<{ fx: number; fy: number } | null>(null);
   const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
   const [pendingTaps, setPendingTaps] = useState<{ x: number; y: number }[]>([]);
   const [activeTap, setActiveTap] = useState<{ x: number; y: number } | null>(null);
@@ -505,6 +501,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // expands it in place into large tap targets; the other rows stay visible in their compact
   // summary form, matching the chosen mockup. Only one row open at a time.
   const [expandedReviewIndex, setExpandedReviewIndex] = useState<number | null>(null);
+  // True right after the model calibrated by itself, until the player confirms the overlay looks
+  // right (one tap) or asks to redo it — auto-calibration used to just proceed silently.
+  const [autoCalibNeedsCheck, setAutoCalibNeedsCheck] = useState(false);
   const calibOverlayRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -1209,6 +1208,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (autoOk) {
       setPhase("live");
       setStatus(t("camera.autoCalibratedReady"));
+      setAutoCalibNeedsCheck(true);
       // Surface the D20/D3/D11/D6 debug dots immediately so the auto-calibration result is
       // visually checkable against the real board right away, instead of requiring the user to
       // already know the separate toggle exists. Still just sets the same showCalibDebug state
@@ -1716,6 +1716,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    */
   const handleRepositionTap = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     if (repositioningIndex === null) return;
+    // A tap on the image IS the correction: it commits right away (see commitRepositionAt) and the
+    // marker shows the re-scored value immediately, so a wrong tap is fixed by tapping the marker
+    // and the image again — no separate confirm step to scroll to.
     const target = e.currentTarget as HTMLDivElement;
     const rect = target.getBoundingClientRect();
     const point = "touches" in e ? (e.touches[0] || e.changedTouches[0]) : (e as React.MouseEvent<HTMLDivElement>);
@@ -1723,33 +1726,23 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const clientY = (point as { clientY: number }).clientY;
     const fx = clamp((clientX - rect.left) / rect.width, 0, 1);
     const fy = clamp((clientY - rect.top) / rect.height, 0, 1);
-    setRepositionDraft({ fx, fy });
-  };
-
-  /** Nudges the draft marker by a small fraction of the frame — same idea as the calibration
-   *  tap's nudge buttons, for getting the last bit of precision without needing a pixel-perfect tap. */
-  const nudgeRepositionDraft = (dx: number, dy: number) => {
-    setRepositionDraft((prev) => {
-      const base = prev ?? { fx: 0.5, fy: 0.5 };
-      return { fx: clamp(base.fx + dx, 0, 1), fy: clamp(base.fy + dy, 0, 1) };
-    });
+    commitRepositionAt(fx, fy);
   };
 
   /** Commits the draft position, re-scoring through the exact same calibration math live
    *  detections use — so a repositioned dart is indistinguishable from a well-detected one
    *  downstream, both for the player's score and for the training-sample upload. */
-  const confirmReposition = () => {
-    if (repositioningIndex === null || !repositionDraft) return;
+  const commitRepositionAt = (fx: number, fy: number) => {
+    if (repositioningIndex === null) return;
     const idx = repositioningIndex;
     // repositionDraft is on-screen box-fraction (see handleRepositionTap) — convert to
     // native-video-frame fraction before handing it to fullFrameXYToCropXY, which (like
     // boardTransformFromTaps) expects that space. Without this the draft marker could look
     // right on screen right up until confirming, then score against the wrong geometry —
     // the "value resets to something wrong" bug.
-    const videoXY = screenFractionToVideoFraction(repositionDraft.fx, repositionDraft.fy);
+    const videoXY = screenFractionToVideoFraction(fx, fy);
     const cropXY = videoXY ? fullFrameXYToCropXY(videoXY.x, videoXY.y) : null;
     setRepositioningIndex(null);
-    setRepositionDraft(null);
     if (!cropXY) return;
     const transform = boardTransformFromTaps(calib.taps, { x: calib.x, y: calib.y });
     const full = cropXYToFullFrame(cropXY.x, cropXY.y);
@@ -1777,7 +1770,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const cancelReposition = () => {
     setRepositioningIndex(null);
-    setRepositionDraft(null);
   };
 
   const roundTotal = accumulated.reduce((s, d) => s + d.points, 0);
@@ -1846,29 +1838,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         <Button variant="ghost" size="icon" onClick={onClose} className="h-9 w-9" title={t("game.closeCamera")} aria-label={t("game.closeCamera")}>
           <X className="h-4 w-4" />
         </Button>
-      </div>
-
-      {/* Was a hover-only `title` before the local/cloud mode toggle sat here — kept visible
-          (not touch-hidden) now that this is the only mode there is to explain. */}
-      <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
-        {modelReady ? t("camera.localDetectionModel") : t("camera.localDetectionLoading")}
-      </p>
-
-      <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
-        <button
-          onClick={() => setTrainingDataEnabled(!trainingDataEnabled)}
-          className="flex w-full items-center justify-between text-[11px]"
-        >
-          <span className="text-muted-foreground">{t("camera.collectTrainingData")}</span>
-          <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${trainingDataEnabled ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
-            {trainingDataEnabled ? t("common.on") : t("common.off")}
-          </span>
-        </button>
-        {/* Same reasoning as above — this is the privacy-relevant one (uploads a real board
-            photo) and defaults on, so its explanation can't be hover-only. */}
-        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-          {t("camera.trainingDataDesc")}
-        </p>
       </div>
 
       <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-lg border border-border bg-muted">
@@ -2024,11 +1993,22 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               const full = toFullFrameXY(d);
               const screenPos = full ? videoFractionToScreenFraction(full.fx, full.fy) : null;
               if (!screenPos) return null;
+              const selected = repositioningIndex === i;
+              const tone = selected ? "bg-primary" : needsReview ? "bg-accent" : "bg-secondary";
               return (
-                <MapMarker key={i} fx={screenPos.x} fy={screenPos.y} className="animate-scale-in">
-                  <div className={`h-3.5 w-3.5 rounded-full ring-2 ring-background ${needsReview ? "bg-accent" : "bg-secondary"}`} />
-                  <span className={`absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded px-1 py-0.5 text-[9px] font-display text-background ${needsReview ? "bg-accent" : "bg-secondary"}`}>
-                    {dartLabel(d)}
+                <MapMarker key={i} fx={screenPos.x} fy={screenPos.y} className={selected ? "z-30" : "animate-scale-in"}>
+                  {/* Generous invisible hit area around the 14px dot — a fingertip on a phone can
+                      not reliably hit the dot itself. Tapping selects this dart for correction. */}
+                  <button
+                    type="button"
+                    disabled={repositioningIndex !== null && !selected}
+                    onClick={() => (selected ? cancelReposition() : setRepositioningIndex(i))}
+                    className="pointer-events-auto absolute left-1/2 top-1/2 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                    aria-label={`${t("game.dartCounterLabel")} ${i + 1} ${dartLabel(d)} — ${t("camera.correctPositionTitle")}`}
+                  />
+                  <div className={`h-3.5 w-3.5 rounded-full ring-2 ${selected ? "ring-primary animate-pulse-glow" : "ring-background"} ${tone}`} />
+                  <span className={`pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded px-1 py-0.5 text-[9px] font-display ${selected ? "text-primary-foreground" : "text-background"} ${tone}`}>
+                    {i + 1} · {dartLabel(d)}
                   </span>
                 </MapMarker>
               );
@@ -2073,10 +2053,23 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
         {repositioningIndex !== null && accumulated[repositioningIndex] && (
           <div
-            className="absolute inset-0 z-40 cursor-crosshair select-none bg-background/40"
+            className="absolute inset-0 z-20 cursor-crosshair select-none bg-background/30"
             onClick={handleRepositionTap}
           >
-            {repositionDraft && <TapMagnifier fx={repositionDraft.fx} fy={repositionDraft.fy} />}
+            {/* The instruction and the way out live ON the image — nothing to scroll to. */}
+            <div className="absolute inset-x-0 top-2 flex items-center justify-center gap-2 px-2">
+              <span className="rounded-full bg-background/90 px-3 py-1 text-[11px] font-medium text-foreground shadow">
+                {t("game.dartCounterLabel")} {repositioningIndex + 1} — {t("camera.tapDartTipNow")}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); cancelReposition(); }}
+                className="rounded-full bg-background/90 p-1.5 text-foreground shadow"
+                aria-label={t("common.cancel")}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -2087,6 +2080,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           old calibration step pill sat at the top of the frame, exactly where D20 needs
           tapping). Keeping this docked immediately below the video (not down in the review list)
           still means no scrolling to reach it. */}
+      {phase === "live" && autoCalibNeedsCheck && accumulated.length === 0 && (calib.taps?.length ?? 0) === 4 && (
+        <div className="rounded-lg border border-primary/40 bg-primary/10 p-2.5">
+          <p className="mb-2 text-center text-[11px] text-foreground">{t("camera.calibCheckPrompt")}</p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="flex-1" onClick={() => { setAutoCalibNeedsCheck(false); restartCalibration(); }}>
+              {t("camera.calibCheckRedo")}
+            </Button>
+            <Button size="sm" className="flex-1 gap-1 font-display uppercase" onClick={() => setAutoCalibNeedsCheck(false)}>
+              <Check className="h-4 w-4" /> {t("camera.calibCheckYes")}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {phase === "live" && trackingStatus === "warn" && (
         <div className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-center text-[11px] font-medium text-accent">
           {t("camera.boardDrifted")}
@@ -2114,26 +2121,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <Button size="sm" className="mt-2 w-full gap-1 font-display uppercase" onClick={confirmActiveTap}>
             <Check className="h-4 w-4" /> {t("camera.confirmPoint")}
           </Button>
-        </div>
-      )}
-
-      {repositioningIndex !== null && accumulated[repositioningIndex] && (
-        <div className="rounded-lg border border-border bg-card p-2 shadow-sm">
-          <div className="mb-1 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
-            {t("game.dartCounterLabel")} {repositioningIndex + 1} ({dartLabel(accumulated[repositioningIndex])}) — {t("camera.tapInImageThenConfirm")}
-          </div>
-          <div className="flex items-center justify-center gap-1">
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, -0.01)} title={t("camera.nudgeUp")} aria-label={t("camera.nudgeUp")}>▲</Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(-0.01, 0)} title={t("camera.nudgeLeft")} aria-label={t("camera.nudgeLeft")}>◀</Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0.01, 0)} title={t("camera.nudgeRight")} aria-label={t("camera.nudgeRight")}>▶</Button>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => nudgeRepositionDraft(0, 0.01)} title={t("camera.nudgeDown")} aria-label={t("camera.nudgeDown")}>▼</Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={cancelReposition} title={t("common.cancel")}>
-              <X className="h-4 w-4" />
-            </Button>
-            <Button size="sm" className="h-8 flex-1 gap-1 font-display uppercase" onClick={confirmReposition} disabled={!repositionDraft}>
-              <Check className="h-4 w-4" /> {t("camera.accept")}
-            </Button>
-          </div>
         </div>
       )}
 
@@ -2316,9 +2303,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                         return;
                       }
                       setRepositioningIndex(i);
-                      // Pre-seed the draft at the dart's current position so there's already a
-                      // visible marker to nudge/re-tap from, instead of starting from nothing.
-                      setRepositionDraft(hasPosition(dart) ? toFullFrameXY(dart) : null);
                     }}
                     title={t("camera.correctPositionTitle")}
                   >
@@ -2419,15 +2403,21 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </div>
       )}
 
-      <div className="flex gap-2">
+      {/* Sticky: the round's action buttons stay on screen however far the review list or the
+          camera view has been scrolled — correcting happens on the image, accepting right here. */}
+      <div className="sticky bottom-0 z-30 -mx-1 flex gap-2 border-t border-border/40 bg-background px-1 pb-1 pt-2">
         <Button
           onClick={manualScan}
-          className="flex-1 gap-2 font-display uppercase"
+          className={`gap-2 font-display uppercase ${accumulated.length > 0 ? "px-3" : "flex-1"}`}
           size="sm"
           variant="outline"
           disabled={phase !== "live" || paused}
+          title={t("camera.scanNow")}
+          aria-label={t("camera.scanNow")}
         >
-          <ScanLine className="h-4 w-4" /> {t("camera.scanNow")}
+          <ScanLine className="h-4 w-4" />
+          {/* Icon-only once darts are on screen, so "Übernehmen" always fits on a phone. */}
+          {accumulated.length === 0 && t("camera.scanNow")}
         </Button>
         {accumulated.length > 0 && (
           <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
@@ -2438,7 +2428,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 className="gap-1"
                 title={t("camera.discardDetectedTitle")}
               >
-                <RotateCcw className="h-4 w-4" /> {t("camera.discard")}
+                <RotateCcw className="h-4 w-4" /> <span className="hidden sm:inline">{t("camera.discard")}</span>
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -2473,12 +2463,38 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <Button
             size="sm"
             onClick={() => commitRound(accumulated)}
-            className={`gap-1 ${needsReview ? "animate-pulse-glow" : ""}`}
+            className={`flex-1 gap-1 ${needsReview ? "animate-pulse-glow" : ""}`}
             title={t("camera.commitRoundTitle")}
           >
             <Check className="h-4 w-4" /> {t("camera.accept")}
           </Button>
         )}
+      </div>
+
+      {/* Detection-model status and the training-data toggle used to sit above the video and
+          pushed it ~450px down the screen on a phone — the image is what the player works with
+          (tap-to-correct), so it comes first and this reference info lives below it. */}
+      {/* Was a hover-only `title` before the local/cloud mode toggle sat here — kept visible
+          (not touch-hidden) now that this is the only mode there is to explain. */}
+      <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
+        {modelReady ? t("camera.localDetectionModel") : t("camera.localDetectionLoading")}
+      </p>
+
+      <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
+        <button
+          onClick={() => setTrainingDataEnabled(!trainingDataEnabled)}
+          className="flex w-full items-center justify-between text-[11px]"
+        >
+          <span className="text-muted-foreground">{t("camera.collectTrainingData")}</span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${trainingDataEnabled ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
+            {trainingDataEnabled ? t("common.on") : t("common.off")}
+          </span>
+        </button>
+        {/* Same reasoning as above — this is the privacy-relevant one (uploads a real board
+            photo) and defaults on, so its explanation can't be hover-only. */}
+        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
+          {t("camera.trainingDataDesc")}
+        </p>
       </div>
 
       <button
