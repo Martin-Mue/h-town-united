@@ -7,6 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import type { GameState } from "@/types/game";
 import type { computePostGameStats } from "@/utils/postGameStats";
 import { segmentCount, type StatBundle } from "@/utils/dartStats";
+import MatchStatComparison from "@/components/stats/MatchStatComparison";
 import { averageToCheckoutRange } from "@/utils/averageToCheckoutRange";
 import type { TournamentLink } from "@/lib/activeGameSnapshot";
 import type { LeagueLink } from "@/hooks/useLeagueLink";
@@ -102,7 +103,19 @@ const GamePostGame = ({
         </div>
       )}
 
-      {postGameStats && (
+      {postGameStats && postGameStats.length === 2 && game.mode !== "cricket" && (
+        <div className="bg-muted/30 rounded-lg p-3 mb-4 text-left">
+          <MatchStatComparison
+            players={[
+              { name: postGameStats[0].name, won: postGameStats[0].name === game.winnerName, bundle: statFor(postGameStats[0]) },
+              { name: postGameStats[1].name, won: postGameStats[1].name === game.winnerName, bundle: statFor(postGameStats[1]) },
+            ]}
+            labels={{ averageTo170: t("stats.averageTo170"), highscore: t("game.highscoreLabel") }}
+          />
+        </div>
+      )}
+
+      {postGameStats && !(postGameStats.length === 2 && game.mode !== "cricket") && (
         <div className="grid grid-cols-2 gap-3 mb-4 text-left">
           {postGameStats.map((p) => {
             const s = statFor(p);
