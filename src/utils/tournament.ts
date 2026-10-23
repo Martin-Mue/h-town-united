@@ -38,6 +38,9 @@ export interface LiveSnapshot {
   remaining2?: number;
   legs1: number;
   legs2: number;
+  /** Running average-to-170 per player (see averageToCheckoutRange.ts); absent on older snapshots. */
+  averageTo170_1?: number;
+  averageTo170_2?: number;
   updatedAt: string;
 }
 

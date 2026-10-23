@@ -729,6 +729,12 @@ const BoardOverview = ({
                       <AnimatedScore value={c.live!.remaining1 ?? 0} /> : <AnimatedScore value={c.live!.remaining2 ?? 0} />
                     </span>
                   </div>
+                  {(c.live!.averageTo170_1 !== undefined || c.live!.averageTo170_2 !== undefined) && (
+                    <div className="flex items-center justify-between text-[clamp(0.65rem,1vw,0.8rem)] mt-1" style={{ color: "hsl(210 15% 55%)" }}>
+                      <span>{t("stats.averageTo170")}</span>
+                      <span className="font-display tabular-nums">{c.live!.averageTo170_1?.toFixed(1) ?? "–"} : {c.live!.averageTo170_2?.toFixed(1) ?? "–"}</span>
+                    </div>
+                  )}
                   <CheckoutBadges player1={c.player1} player2={c.player2} live={c.live} />
                 </div>
               )}

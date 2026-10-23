@@ -49,6 +49,7 @@ import { usePlayers } from "@/hooks/usePlayers";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Sparkles } from "lucide-react";
 import { Eyebrow, SectionCard, StatTile, TrendBadge, Sparkline, RingStat, RankAvatar, RankBadge, BarRow, TONE_TEXT as TONE_ICON } from "@/components/stats/StatPrimitives";
+import { averageToCheckoutRange, scoringPhaseTotals, combineScoringPhaseTotals, type ScoringPhaseTotals } from "@/utils/averageToCheckoutRange";
 import MatchDetailDialog from "@/components/stats/MatchDetailDialog";
 
 interface GameRecord {
@@ -337,21 +338,22 @@ const StatisticsPage = () => {
     const filteredIds = new Set(filteredGames.map((g) => g.id));
     const modeById = new Map(games.map((g) => [g.id, g.mode]));
     const byPlayer: Record<string, {
-      name: string; checkouts: CheckoutStats[]; first9s: number[];
+      name: string; checkouts: CheckoutStats[]; first9s: number[]; scoringPhases: ScoringPhaseTotals[];
       rangeBreakdowns: CheckoutRangeBreakdown[][]; doubleBreakdowns: CheckoutDoubleBreakdown[][];
     }> = {};
     gameLegs.forEach((leg) => {
       if (!filteredIds.has(leg.game_id)) return;
       if (modeById.get(leg.game_id) === "cricket") return;
       if (!leg.player_id || !Array.isArray(leg.throws) || leg.throws.length === 0) return;
-      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, checkouts: [], first9s: [], rangeBreakdowns: [], doubleBreakdowns: [] });
+      const bucket = byPlayer[leg.player_id] || (byPlayer[leg.player_id] = { name: leg.player_name, checkouts: [], first9s: [], scoringPhases: [], rangeBreakdowns: [], doubleBreakdowns: [] });
       bucket.checkouts.push(computeCheckoutStats(leg.throws, leg.starting_score));
       bucket.first9s.push(first9Average(leg.throws));
+      bucket.scoringPhases.push(scoringPhaseTotals(leg.throws, leg.starting_score));
       bucket.rangeBreakdowns.push(checkoutRangeBreakdown(leg.throws, leg.starting_score));
       bucket.doubleBreakdowns.push(checkoutDoubleBreakdown(leg.throws, leg.starting_score));
     });
     const result: Record<string, {
-      name: string; checkout: CheckoutStats; first9: number;
+      name: string; checkout: CheckoutStats; first9: number; averageTo170: number | null;
       rangeBreakdown: CheckoutRangeBreakdown[]; doubleBreakdown: CheckoutDoubleBreakdown[];
     }> = {};
     Object.entries(byPlayer).forEach(([id, v]) => {
@@ -359,6 +361,7 @@ const StatisticsPage = () => {
         name: v.name,
         checkout: combineCheckoutStats(v.checkouts),
         first9: v.first9s.length ? v.first9s.reduce((a, b) => a + b, 0) / v.first9s.length : 0,
+        averageTo170: averageToCheckoutRange(combineScoringPhaseTotals(v.scoringPhases)),
         rangeBreakdown: combineCheckoutRangeBreakdowns(v.rangeBreakdowns),
         doubleBreakdown: combineCheckoutDoubleBreakdowns(v.doubleBreakdowns),
       };
@@ -2170,13 +2173,14 @@ const StatisticsPage = () => {
               {statsDetailMode === "pro" && advancedByPlayer[playerDetailStats.player.id] && (
                 <SectionCard className="mb-4">
                   <Eyebrow icon={Crosshair}>{t("stats.checkoutAndOpening")}</Eyebrow>
-                  <div className="grid grid-cols-4 gap-2 items-start">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 items-start">
                     <div className="text-center">
                       <RingStat percent={advancedByPlayer[playerDetailStats.player.id].checkout.percentage} tone="secondary" size={44} />
                       <p className="font-display text-sm mt-1">{advancedByPlayer[playerDetailStats.player.id].checkout.percentage.toFixed(0)}%</p>
                       <p className="text-[10px] text-muted-foreground">Checkout %</p>
                     </div>
                     <StatTile label="First 9 Ø" value={advancedByPlayer[playerDetailStats.player.id].first9.toFixed(1)} tone="primary" />
+                    <StatTile label={t("stats.averageTo170")} value={advancedByPlayer[playerDetailStats.player.id].averageTo170?.toFixed(1) ?? "–"} tone="primary" />
                     <StatTile label={t("stats.highestFinish")} value={advancedByPlayer[playerDetailStats.player.id].checkout.highestCheckout} tone="accent" />
                     <StatTile label={t("stats.checkoutAttempts")} value={advancedByPlayer[playerDetailStats.player.id].checkout.attempts} tone="muted" />
                   </div>

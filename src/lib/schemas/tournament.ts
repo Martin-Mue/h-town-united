@@ -31,6 +31,8 @@ const liveSnapshotSchema = z
     remaining2: z.number().optional(),
     legs1: z.number(),
     legs2: z.number(),
+    averageTo170_1: z.number().optional(),
+    averageTo170_2: z.number().optional(),
     updatedAt: z.string(),
   })
   .passthrough();

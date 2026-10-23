@@ -54,6 +54,7 @@ import { loadActiveGameSnapshot, saveActiveGameSnapshot, clearActiveGameSnapshot
 import { useTournamentLink } from "@/hooks/useTournamentLink";
 import { useLeagueLink } from "@/hooks/useLeagueLink";
 import { useOnlineMatch } from "@/hooks/useOnlineMatch";
+import { liveAveragesTo170 } from "@/utils/liveAverageTo170";
 import { computePostGameStats } from "@/utils/postGameStats";
 import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
@@ -703,11 +704,14 @@ const GamePage = () => {
     const link = tournamentLinkRef.current;
     if (!link || phase !== "playing" || !game || game.isFinished || game.mode === "cricket") return;
     const timer = window.setTimeout(() => {
+      const averagesTo170 = liveAveragesTo170(game);
       void pushLiveSnapshot(link.tournamentId, link.matchId, {
         remaining1: game.currentLeg.remaining[0],
         remaining2: game.currentLeg.remaining[1],
         legs1: game.legsWon[0] ?? 0,
         legs2: game.legsWon[1] ?? 0,
+        averageTo170_1: averagesTo170[0] ?? undefined,
+        averageTo170_2: averagesTo170[1] ?? undefined,
         updatedAt: new Date().toISOString(),
       });
     }, 1200);
