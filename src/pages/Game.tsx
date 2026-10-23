@@ -2401,13 +2401,13 @@ const GamePage = () => {
   ) : null;
 
   const cricketBoard = isCricket && game.cricket ? (
-    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 mb-3 overflow-x-auto">
-      <table className="w-full text-center text-xs border-collapse">
+    <div className="gradient-card rounded-2xl border border-border shadow-elevation-sm p-3 mb-3 overflow-x-auto">
+      <table className="w-full text-center text-xs border-separate border-spacing-y-1">
         <thead>
           <tr>
             <th className="text-left font-normal text-muted-foreground pb-1 pr-2">{t("game.target")}</th>
             {scoreLabels.map((name, i) => (
-              <th key={i} className={`font-bold truncate px-1 pb-1 max-w-[4.5rem] ${i === activeTeamIdx ? "text-primary" : ""}`}>{name}</th>
+              <th key={i} className={`font-display font-semibold truncate px-1 pb-1 max-w-[4.5rem] ${i === activeTeamIdx ? "text-primary" : "text-muted-foreground"}`}>{name}</th>
             ))}
           </tr>
           {game.teams && (
@@ -2424,12 +2424,18 @@ const GamePage = () => {
         <tbody>
           {(game.cricketNumbers ?? CRICKET_NUMBERS).map((num) => (
             <tr key={num}>
-              <td className="text-left font-display text-muted-foreground py-0.5 pr-2">{num === 25 ? "Bull" : num}</td>
+              <td className="text-left font-display font-semibold text-foreground/80 py-0.5 pr-2">{num === 25 ? "Bull" : num}</td>
               {game.cricket!.map((c, i) => {
                 const m = c.marks[num] || 0;
-                const renderMarks = (mm: number) => mm >= 3 ? "✕" : mm === 2 ? "╳" : mm === 1 ? "/" : "·";
+                // 0-3 marks: nothing, "/", "✕", then a filled "closed" badge — the closed state reads
+                // at a glance instead of as one more glyph in a column of look-alike symbols.
+                const renderMarks = (mm: number) => mm >= 3
+                  ? <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-secondary/25 text-secondary font-bold ring-1 ring-secondary/50">✕</span>
+                  : mm === 2 ? <span className="text-base font-bold text-primary">✕</span>
+                  : mm === 1 ? <span className="text-base font-bold text-primary/80">/</span>
+                  : <span className="text-muted-foreground/40">·</span>;
                 return (
-                  <td key={i} className={`py-0.5 ${m >= 3 ? "text-secondary font-bold" : "text-muted-foreground"}`}>{renderMarks(m)}</td>
+                  <td key={i} className={`py-0.5 ${i === activeTeamIdx ? "bg-primary/10 rounded-md" : ""}`}>{renderMarks(m)}</td>
                 );
               })}
             </tr>
@@ -2437,7 +2443,7 @@ const GamePage = () => {
           <tr className="border-t border-border/50">
             <td className="text-left text-muted-foreground pt-1 pr-2">{t("game.points")}</td>
             {game.cricket!.map((c, i) => (
-              <td key={i} className={`pt-1 font-display ${i === activeTeamIdx ? "text-primary font-bold" : ""}`}>{c.points}</td>
+              <td key={i} className={`pt-1 font-display text-base tabular-nums ${i === activeTeamIdx ? "text-primary font-bold" : "text-muted-foreground"}`}>{c.points}</td>
             ))}
           </tr>
         </tbody>
@@ -2680,9 +2686,13 @@ const GamePage = () => {
               {/* Leg average = this leg only; match average = every leg of the match so far. */}
               <div className={`grid ${isActive ? "grid-cols-2" : "grid-cols-1"} gap-1 mt-1.5`}>
                 {([
-                  [t("game.legAvgShort"), card.avg.toFixed(1)],
-                  [t("game.matchAvgShort"), card.matchAvg.toFixed(1)],
-                  ...(!isCricket ? [[t("game.dartsThrownShort"), String(card.dartsInLeg)], [t("game.lastVisitShort"), card.lastVisit === null ? "–" : String(card.lastVisit)]] : []),
+                  // Averages, dart count and last visit are X01 notions — Cricket scores marks/points instead.
+                  ...(!isCricket ? [
+                    [t("game.legAvgShort"), card.avg.toFixed(1)],
+                    [t("game.matchAvgShort"), card.matchAvg.toFixed(1)],
+                    [t("game.dartsThrownShort"), String(card.dartsInLeg)],
+                    [t("game.lastVisitShort"), card.lastVisit === null ? "–" : String(card.lastVisit)],
+                  ] : []),
                 ] as [string, string][]).map(([label, value]) => (
                   <div key={label} className="flex items-baseline justify-between gap-0.5 rounded-lg bg-white/[0.06] px-1.5 py-1">
                     <span className="text-[10px] text-muted-foreground whitespace-nowrap">{label}</span>
