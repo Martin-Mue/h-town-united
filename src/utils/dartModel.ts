@@ -57,6 +57,9 @@ const NUM_CLASSES = CLASS_NAMES.length;
 // conservative bar until the model has been fine-tuned on this camera's own conditions (the
 // training-sample pipeline is already collecting exactly that data for a future fine-tune).
 const DART_SCORE_THRESHOLD = 0.4;
+/** Candidates below this are never worth looking at; between this and DART_SCORE_THRESHOLD they are
+ *  only handed out to callers that can verify them some other way (see detectDartsWithModel). */
+const DART_SCORE_FLOOR = 0.1;
 // Calibration is higher-stakes than a single dart — a wrong corner miscalibrates the WHOLE
 // session, not just one throw — so this stays conservative; a low-confidence calibration attempt
 // just falls back to manual tapping instead of committing to a shaky guess. Raised from 0.45
@@ -140,7 +143,7 @@ function decodeOutput(output: ort.Tensor): DecodedOutput {
     const cx = at(0, k), cy = at(1, k), w = at(2, k), h = at(3, k);
     const dartScore = at(4 + DART_CLASS_INDEX, k);
     if (dartScore > maxDartScore) maxDartScore = dartScore;
-    if (dartScore >= DART_SCORE_THRESHOLD) darts.push({ cx, cy, w, h, score: dartScore });
+    if (dartScore >= DART_SCORE_FLOOR) darts.push({ cx, cy, w, h, score: dartScore });
     for (let ci = 0; ci < CAL_LABELS.length; ci++) {
       const score = at(4 + 1 + ci, k);
       if (score < CAL_SCORE_THRESHOLD) continue;
@@ -222,10 +225,16 @@ export interface ModelDetectionResult {
 
 /** Runs the trained model on one MODEL_INPUT_SIZE-square frame and returns up to `maxDarts`
  *  dart-tip detections, highest-confidence first, in the frame's own 0-1 coordinate space. */
-export async function detectDartsWithModel(frame: ImageData, maxDarts: number): Promise<ModelDetectionResult> {
+/**
+ * @param minScore confidence cut-off. The default is the conservative one used when nothing else
+ *  confirms a detection; callers that check candidates against the changed pixels (LiveCamera's
+ *  per-throw detection) pass a lower value, because there a weak but correctly placed detection is
+ *  worth far more than a missed dart.
+ */
+export async function detectDartsWithModel(frame: ImageData, maxDarts: number, minScore = DART_SCORE_THRESHOLD): Promise<ModelDetectionResult> {
   const decoded = await runModel(frame);
   if (!decoded) return { darts: [], unavailable: true };
-  const kept = nms(decoded.darts, NMS_IOU_THRESHOLD, Math.max(1, maxDarts));
+  const kept = nms(decoded.darts.filter((d) => d.score >= minScore), NMS_IOU_THRESHOLD, Math.max(1, maxDarts));
   const darts: LocalDetection[] = kept.map((d) => ({
     x: clamp01(d.cx / frame.width),
     y: clamp01(d.cy / frame.height),

@@ -27,10 +27,11 @@ import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartMode
 import { pointsFor, dartLabel } from "@/utils/x01Rules";
 import BoardCalibrator from "@/components/game/BoardCalibrator";
 import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
-import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, RECT_BOARD_RADIUS } from "@/utils/boardRectify";
+import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, boardOverlayLines, RECT_BOARD_RADIUS } from "@/utils/boardRectify";
 import { applyHomography, computeHomography } from "@/utils/homography";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
+import { selectNewDart } from "@/utils/newDartSelection";
 import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
   boardTransformFromTaps,
@@ -192,8 +193,8 @@ const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
 /** The camera picture is downscaled to at most this long side before being straightened — plenty for
  *  the 800px output (the board covers only part of the picture) and keeps the pixel read cheap. */
 const MAX_RECTIFY_SOURCE_SIDE = 1920;
-/** A new-dart candidate needs at least this share of changed cells around its tip (utils/changeMask). */
-const CHANGE_SUPPORT_MIN = 0.12;
+/** Weakest model confidence a new-dart candidate may have — it must additionally stand on changed pixels. */
+const NEW_DART_MIN_SCORE = 0.12;
 /** Above this share of changed cells the whole picture moved (exposure, bump) — no comparison possible. */
 const GLOBAL_CHANGE_SHARE_MAX = 0.5;
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
@@ -322,25 +323,6 @@ const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
 const hasPosition = (d: DetectedDart) =>
   typeof d.x === "number" && Number.isFinite(d.x) && typeof d.y === "number" && Number.isFinite(d.y);
 
-const dartDistance = (a: DetectedDart, b: DetectedDart) => {
-  if (!hasPosition(a) || !hasPosition(b)) return Number.POSITIVE_INFINITY;
-  return Math.hypot((a.x ?? 0) - (b.x ?? 0), (a.y ?? 0) - (b.y ?? 0));
-};
-
-const samePhysicalDart = (a: DetectedDart, b: DetectedDart) =>
-  dartDistance(a, b) < DART_POSITION_MATCH || (!hasPosition(a) && !hasPosition(b) && dartKey(a) === dartKey(b));
-
-function diffNewDarts(prev: DetectedDart[], ai: DetectedDart[]): DetectedDart[] {
-  if (ai.length <= prev.length) return [];
-  const remaining = ai.slice();
-  for (const p of prev) {
-    let idx = remaining.findIndex((d) => samePhysicalDart(p, d));
-    if (idx < 0) idx = remaining.findIndex((d) => dartKey(d) === dartKey(p));
-    if (idx >= 0) remaining.splice(idx, 1);
-  }
-  return remaining;
-}
-
 const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   onRoundCommit,
   onPendingChange,
@@ -431,7 +413,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // pair of frames around the dart that just landed — comparing them shows where THAT dart is, even
   // when it sits right next to the earlier ones (see utils/changeMask.ts).
   const lastStableModelFrameRef = useRef<ImageData | null>(null);
-  const landingDiffRef = useRef<{ before: ImageData; after: ImageData } | null>(null);
+  // Landings waiting for the model, oldest first. The model needs a few seconds on a phone and darts are
+  // thrown faster than that, so landings are queued and judged one after the other — each against ITS
+  // OWN before/after frames. (A single "busy" flag used to make the second and third dart of a round
+  // simply be skipped whenever the first was still being analysed.)
+  const landingQueueRef = useRef<{ before: ImageData | null; after: ImageData }[]>([]);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -510,15 +496,22 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // answer instead of a silent fallback.
   const [autoCalibFoundCount, setAutoCalibFoundCount] = useState<number | null>(null);
 
-  // The frozen review picture only lives as long as the review it belongs to.
+  // The review picture is shown while there is something to review: darts already detected in this
+  // visit, or a finished visit waiting for confirmation. It goes away with the last of them.
+  const showReview = !!reviewFrame && (needsReview || accumulated.length > 0);
+  const reviewAnchorRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (needsReview) return;
+    if (needsReview || accumulated.length > 0) return;
     setSelectedReviewIndex(null);
     setReviewFrame((prev) => {
       if (prev) URL.revokeObjectURL(prev.url);
       return null;
     });
-  }, [needsReview]);
+  }, [needsReview, accumulated.length]);
+  // A new review picture must not appear out of sight (the page may be scrolled down to the buttons).
+  useEffect(() => {
+    if (reviewFrame) reviewAnchorRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [reviewFrame]);
 
   useEffect(() => {
     accumulatedRef.current = accumulated;
@@ -556,7 +549,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     preRemovalImageDataRef.current = null;
     preRemovalModelFrameRef.current = null;
     lastStableModelFrameRef.current = null;
-    landingDiffRef.current = null;
+    landingQueueRef.current = [];
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
@@ -1314,11 +1307,24 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setAutoCalibFoundCount(null);
     const suggestion = modelOk ? await tryAutoCalibrate() : null;
     resetLoop();
+    if (suggestion && applyCalibrationTaps(suggestion, "auto", false)) {
+      // Found all four corners with confidence: use it right away — no dragging. The rings stay drawn
+      // over the picture so a wrong guess is obvious, and "Kalibrierung anpassen" is one tap away.
+      setCalibDraft(null);
+      setPhase("live");
+      setStatus(t("camera.autoCalibratedCheck"));
+      return;
+    }
+    openCalibrator();
+  };
+
+  /** Opens the calibration view on the current calibration (or a default one) for adjusting by hand. */
+  const openCalibrator = () => {
     const size = videoSize ?? (videoRef.current ? { w: videoRef.current.videoWidth, h: videoRef.current.videoHeight } : { w: 1, h: 1 });
-    setCalibDraft(suggestion ?? (calib.taps?.length === 4 ? calib.taps : defaultCalibrationTaps(size)));
-    setCalibDraftSource(suggestion ? "auto" : "manual");
+    setCalibDraft(calib.taps?.length === 4 ? calib.taps : defaultCalibrationTaps(size));
+    setCalibDraftSource("manual");
     setPhase("calibrate");
-    setStatus(t(suggestion ? "camera.calibAiApplied" : "camera.calibDragHint"));
+    setStatus(t("camera.calibDragHint"));
   };
 
   /** Commits the calibration shown on screen (handles as the player left them). */
@@ -1398,61 +1404,46 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    * which is the ENTIRE existing pipeline, unchanged as a fallback (see runPullScan's own
    * "already identified everything incrementally" fast path for how the two connect).
    */
-  const scoreNewlyLandedDart = async () => {
+  const scoreNewlyLandedDart = async (landing: { before: ImageData | null; after: ImageData }) => {
     if (!modelReadyRef.current) return;
     const already = accumulatedRef.current;
     if (already.length >= dartsRemaining) return;
 
-    const modelFrame = grabModelFrame();
-    if (!modelFrame) return;
-    // Request the full remaining budget (not just already.length + 1) — a tighter budget risks
-    // an already-known dart getting crowded out of the top-N by a coincidental confidence blip,
-    // which would then misread as "new" once diffed below.
-    const result = await detectDartsWithModel(modelFrame, dartsRemaining);
+    // Low cut-off on purpose: a weak detection is fine as long as it stands on freshly changed pixels
+    // (selectNewDart checks that); a high cut-off just loses darts.
+    const result = await detectDartsWithModel(landing.after, dartsRemaining + 3, NEW_DART_MIN_SCORE);
     if (result.unavailable || result.darts.length === 0) return;
 
     const scored = refineWithCalibration(
       result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
     );
-    const newOnes = diffNewDarts(already, scored);
-    if (newOnes.length === 0) return; // nothing distinguishable as new yet — try again next tick
+    const changeMap = landing.before ? buildChangeMap(landing.before, landing.after) : null;
+    const usable = changeMap && changeMap.share < GLOBAL_CHANGE_SHARE_MAX ? changeMap : null;
+    const newDart = selectNewDart(already, scored, usable ? (x, y) => changedShareNear(usable, x, y) : null);
+    if (!newDart) return; // nothing new under any candidate — the end-of-visit scan gets another look
 
-    // Exactly one new dart is expected. Where the picture before and after this landing is known,
-    // only a candidate standing on freshly changed pixels qualifies — that is what keeps a cluster
-    // apart: a re-detected old dart or a phantom box has no change under it. The candidate with the
-    // strongest change (weighted by confidence) wins; without a comparison, the most confident one.
-    let candidates = newOnes;
-    const landing = landingDiffRef.current;
-    const changeMap = landing ? buildChangeMap(landing.before, landing.after) : null;
-    if (changeMap && changeMap.share < GLOBAL_CHANGE_SHARE_MAX) {
-      const supported = newOnes
-        .map((d) => ({ d, support: changedShareNear(changeMap, d.x ?? 0, d.y ?? 0) }))
-        .filter((e) => e.support >= CHANGE_SUPPORT_MIN)
-        .sort((a, b) => b.support * b.d.confidence - a.support * a.d.confidence);
-      if (supported.length === 0) return; // nothing new under any candidate — try again next tick
-      candidates = supported.map((e) => e.d);
-    } else {
-      candidates = [...newOnes].sort((a, b) => b.confidence - a.confidence);
-    }
-    const newDart = candidates[0];
-
+    // A discarded/committed round replaces the array underneath us — then this result is stale.
+    if (accumulatedRef.current !== already) return;
+    const next = [...already, newDart];
+    accumulatedRef.current = next;
+    setAccumulated(next);
     setLastDetectionSource("model");
-    let appendedAt = -1;
-    setAccumulated((prev) => {
-      // Reference-equality check against the snapshot taken before the (async) model call —
-      // catches BOTH "filled up while this was in flight" and "reset out from under this"
-      // (Verwerfen/Übernehmen/another per-throw append all reassign accumulated to a new array).
-      // A plain length check alone would miss the reset case: a discarded round's fresh empty
-      // array also has length 0, well under dartsRemaining, so it would wrongly pass a
-      // `prev.length >= dartsRemaining` guard and get this stale detection appended onto it.
-      if (prev !== already) return prev;
-      appendedAt = prev.length;
-      return [...prev, newDart];
-    });
-    if (appendedAt >= 0) {
-      playDartDetectedSound(appendedAt);
-      setJustAddedIndex(appendedAt);
-      window.setTimeout(() => setJustAddedIndex((cur) => (cur === appendedAt ? null : cur)), 900);
+    playDartDetectedSound(already.length);
+    setJustAddedIndex(already.length);
+    window.setTimeout(() => setJustAddedIndex((cur) => (cur === already.length ? null : cur)), 900);
+  };
+
+  /** Works through the queued landings one after the other (see landingQueueRef). */
+  const drainLandingQueue = async () => {
+    if (perThrowLockRef.current) return;
+    perThrowLockRef.current = true;
+    try {
+      while (landingQueueRef.current.length > 0) {
+        const next = landingQueueRef.current.shift()!;
+        await scoreNewlyLandedDart(next);
+      }
+    } finally {
+      perThrowLockRef.current = false;
     }
   };
 
@@ -1564,8 +1555,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           const stableBefore = lastStableModelFrameRef.current;
           captureModelFrame();
           const stableAfter = preRemovalModelFrameRef.current;
-          landingDiffRef.current = stableBefore && stableAfter ? { before: stableBefore, after: stableAfter } : null;
           lastStableModelFrameRef.current = stableAfter;
+          showReviewPicture(stableAfter ?? preRemovalImageDataRef.current);
           throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
           setThrowsSeen(throwsSeenRef.current);
           setStatus(
@@ -1576,9 +1567,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           // Try to identify THIS dart right now, in true throw order — see
           // scoreNewlyLandedDart's doc comment. Best-effort: if it can't, the status text above
           // still holds and the existing end-of-visit batch scan picks up the slack later.
-          if (!perThrowLockRef.current) {
-            perThrowLockRef.current = true;
-            void scoreNewlyLandedDart().finally(() => { perThrowLockRef.current = false; });
+          if (stableAfter && modelReadyRef.current) {
+            landingQueueRef.current.push({ before: stableBefore, after: stableAfter });
+            void drainLandingQueue();
           }
         }
         return;
@@ -1600,8 +1591,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   // ─── scan: analyze the pre-removal frame after darts are pulled ─────
   /** Keeps the picture of the visit that just ended (darts still stuck in) for the review. */
-  const freezeReviewFrame = () => {
-    const frame = preRemovalModelFrameRef.current ?? preRemovalImageDataRef.current;
+  const freezeReviewFrame = () => showReviewPicture(preRemovalModelFrameRef.current ?? preRemovalImageDataRef.current);
+
+  /** Shows `frame` (the board with the darts in it) as the review picture — after every landing, so the
+   *  player sees what was detected right away instead of only after pulling the darts. */
+  const showReviewPicture = (frame: ImageData | null) => {
     if (!frame) return;
     void imageDataToBlob(frame, 0.9).then((blob) => {
       if (!blob) return;
@@ -2043,7 +2037,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </Button>
       </div>
 
-      {needsReview && reviewFrame && (
+      {showReview && (
+        <div ref={reviewAnchorRef}>
         <DartReviewFrame
           imageUrl={reviewFrame.url}
           darts={accumulated.map((d) => ({ x: d.x ?? 0.5, y: d.y ?? 0.5, baseValue: d.baseValue, multiplier: d.multiplier }))}
@@ -2059,10 +2054,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             bullInner: "Bull",
           }}
         />
+        </div>
       )}
 
       <div
-        className={`relative mx-auto overflow-hidden rounded-lg border border-border bg-muted ${needsReview && reviewFrame ? "hidden" : ""}`}
+        className={`relative mx-auto overflow-hidden rounded-lg border border-border bg-muted ${showReview ? "hidden" : ""}`}
         style={{
           aspectRatio: videoSize ? `${videoSize.w} / ${videoSize.h}` : "1 / 1",
           width: `min(100%, calc(60dvh * ${videoSize ? videoSize.w / videoSize.h : 1}))`,
@@ -2111,6 +2107,31 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             placement the tracking ring already uses for calib.x/y. */}
         {showCalibDebug && (calib.taps?.length ?? 0) === 4 && (phase === "live" || phase === "scanning") && (
           <div className="pointer-events-none absolute inset-0">
+            {(() => {
+              // The scoring rings and segment lines as the app currently understands the board — a bad
+              // calibration is visible at a glance.
+              const mapping = rectMapping();
+              if (!mapping) return null;
+              const lines = boardOverlayLines(mapping.canonToVideo);
+              return (
+                <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1 1" preserveAspectRatio="none">
+                  {lines.rings.map((ring, i) => (
+                    <polyline
+                      key={i}
+                      points={ring.map((p) => `${p.x},${p.y}`).join(" ")}
+                      fill="none"
+                      stroke={i <= 1 ? "hsl(48 100% 60%)" : i <= 3 ? "hsl(150 80% 55%)" : "hsl(185 90% 58%)"}
+                      strokeWidth={i === 5 ? 1.6 : 1}
+                      strokeOpacity={0.85}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                  {lines.spokes.map(([a, b], i) => (
+                    <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(255,255,255,0.35)" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                  ))}
+                </svg>
+              );
+            })()}
             {calib.taps!.map((t, i) => {
               const screenPos = videoFractionToScreenFraction(t.x, t.y) ?? t;
               return (
@@ -2294,6 +2315,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       {(phase === "live" || phase === "scanning") && (
         <div className="flex gap-1.5">
+          <button
+            onClick={openCalibrator}
+            className="flex-1 rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
+          >
+            <Target className="h-3.5 w-3.5" /> {t("camera.calibAdjust")}
+          </button>
           <button
             onClick={restartCalibration}
             className="flex-1 rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"

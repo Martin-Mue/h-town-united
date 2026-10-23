@@ -734,4 +734,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Artık kamera görüntüsünün tamamını görüyorsun. Kalibrasyonda halkalar ve alanlar tahtanın üzerine çizilir – dört noktayı tellerin üzerine gelene kadar sürüklersin (büyüteçle). Yapay zekâ tahtayı kamera ne kadar eğik olursa olsun tam yukarıdan görür. Düzeltme, okların olduğu dondurulmuş görüntüde yapılır: oka dokun, komşu alanlardan doğru değeri seç ya da ucu büyüteçle sürükle. Dikey ve yatay.",
     },
   },
+  {
+    id: "2026-10-24-camera-detection",
+    date: "2026-10-24",
+    title: {
+      de: "Dart-Erkennung: alle drei Darts, Board automatisch erkannt",
+      en: "Dart detection: all three darts, board detected automatically",
+      fr: "Détection : les trois fléchettes, cible détectée automatiquement",
+      pl: "Wykrywanie: wszystkie trzy lotki, tarcza automatycznie",
+      nl: "Dartherkenning: alle drie de darts, bord automatisch herkend",
+      tr: "Ok algılama: üç ok da, tahta otomatik algılanır",
+    },
+    description: {
+      de: "Der 2. und 3. Dart wurden oft übersprungen, wenn die KI noch am ersten rechnete – jetzt werden alle nacheinander geprüft, auch dicht beieinander. Nach jedem Wurf siehst du sofort das Bild mit den erkannten Darts. Das Board wird beim Kalibrieren automatisch übernommen; die Ringe zeigen, wie die KI es sieht, und „Kalibrierung anpassen“ korrigiert es bei Bedarf.",
+      en: "The 2nd and 3rd dart were often skipped while the AI was still busy with the first – now all are checked in turn, even close together. After every throw you immediately see the picture with the detected darts. The board is applied automatically when calibrating; the rings show how the AI sees it and “Adjust calibration” fixes it if needed.",
+      fr: "La 2e et la 3e fléchette étaient souvent ignorées pendant que l'IA analysait la première – elles sont maintenant toutes vérifiées à tour de rôle, même proches. Après chaque lancer, tu vois tout de suite l'image avec les fléchettes détectées. La cible est reprise automatiquement à l'étalonnage ; les anneaux montrent comment l'IA la voit, et « Ajuster l'étalonnage » corrige si besoin.",
+      pl: "Druga i trzecia lotka były często pomijane, gdy AI liczyła jeszcze pierwszą – teraz wszystkie są sprawdzane po kolei, także blisko siebie. Po każdym rzucie od razu widzisz obraz z wykrytymi lotkami. Tarcza jest przejmowana automatycznie przy kalibracji; pierścienie pokazują, jak widzi ją AI, a „Dostosuj kalibrację” poprawia ją w razie potrzeby.",
+      nl: "De 2e en 3e dart werden vaak overgeslagen terwijl de AI nog met de eerste bezig was – nu worden ze allemaal na elkaar gecontroleerd, ook dicht bij elkaar. Na elke worp zie je direct het beeld met de herkende darts. Het bord wordt bij het kalibreren automatisch overgenomen; de ringen tonen hoe de AI het ziet en “Kalibratie aanpassen” corrigeert indien nodig.",
+      tr: "AI ilk oku hesaplarken 2. ve 3. ok sık sık atlanıyordu – artık hepsi sırayla, yan yana olsalar bile kontrol ediliyor. Her atıştan sonra algılanan oklarla görüntüyü hemen görürsün. Tahta kalibrasyonda otomatik alınır; halkalar yapay zekânın onu nasıl gördüğünü gösterir, gerekirse “Kalibrasyonu ayarla” düzeltir.",
+    },
+  },
 ];
