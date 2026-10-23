@@ -217,6 +217,8 @@ const BOARD_OCCUPIED_SCORE = 0.25;
 /** Cut-off of the final look at the finished visit; candidates must additionally stand on pixels that
  *  differ from the empty board, which a real dart always does. */
 const FINAL_PASS_MIN_SCORE = 0.25;
+/** A rest whose picture differs from the last evaluated one in fewer than this share of cells needs no new detection. */
+const UNCHANGED_FRAME_SHARE = 0.0008;
 /** A detection this confident counts as a dart even where the pictures show no fresh change. */
 const CONFIDENT_DART_SCORE = 0.5;
 /** How often (ms) a calm picture is used to settle the calibration back onto the board's wires. */
@@ -230,6 +232,9 @@ const CALIB_REFINE_MAX_MOVE = 0.15;
 const CALIB_REFINE_MIN_MOVE = 0.004;
 /** Within this distance (frame fraction, ~9 mm) a detection is a dart that was already in the board before the round. */
 const KNOWN_DART_RADIUS_FOR_BASELINE = 0.02;
+/** A detection on a spot where the EMPTY board already produced one (a logo, the bull) only counts as a dart when it
+ *  is clearly more confident than that. Otherwise a real dart landing in the bull would be filtered away as scenery. */
+const BASELINE_BEATEN_BY = 0.15;
 /** Above this share of changed cells the whole picture moved (exposure, bump) — no comparison possible. */
 const GLOBAL_CHANGE_SHARE_MAX = 0.5;
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
@@ -264,6 +269,12 @@ const GRID = 40;
 const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
 const MIN_ANALYSIS_SIZE = 0.55;
+/** The one hidden canvas serves the motion signature AND the big analysis snapshots. A canvas that is read back
+ *  often may switch between GPU and CPU rendering mid-session, and the two downscale the picture slightly
+ *  differently — the signature jumped by ~0.1 every time that happened, which read as "movement" and made the
+ *  watcher start a pointless detection cycle every couple of seconds. Reading back always on the CPU path keeps
+ *  every sample comparable. */
+const SHARED_CANVAS_OPTIONS: CanvasRenderingContext2DSettings = { willReadFrequently: true };
 /** Longest side (px) of the picture the wire fit looks at — plenty for millimetre-exact rings. */
 const WIRE_FIT_MAX_SIDE = 960;
 
@@ -470,10 +481,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    *  anything that was already there. */
   const emptyModelFrameRef = useRef<ImageData | null>(null);
   /** Darts that were already in the board when this round's empty-board baseline was taken (null = not looked yet). */
-  const baselineDartsRef = useRef<{ x: number; y: number }[] | null>(null);
+  const baselineDartsRef = useRef<{ x: number; y: number; confidence: number }[] | null>(null);
   /** Most darts seen at once this round — the picture with the most darts is the one kept for review. */
   const peakPresentRef = useRef(0);
   const stillMomentBusyRef = useRef(false);
+  const stillMomentQueuedRef = useRef(false);
+  /** The last picture the model actually looked at (see handleStillMoment). */
+  const lastEvaluatedFrameRef = useRef<ImageData | null>(null);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -644,6 +658,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     baselineDartsRef.current = null;
     peakPresentRef.current = 0;
     stillMomentBusyRef.current = false;
+    stillMomentQueuedRef.current = false;
+    lastEvaluatedFrameRef.current = null;
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
@@ -985,7 +1001,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (!v || !c || !r) return null;
     c.width = target;
     c.height = target;
-    const ctx = c.getContext("2d");
+    const ctx = c.getContext("2d", SHARED_CANVAS_OPTIONS);
     if (!ctx) return null;
     ctx.clearRect(0, 0, target, target);
     if (circular) {
@@ -1022,7 +1038,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const grabImageData = (target: number = VISION_ANALYSIS_SIZE, circular = true): ImageData | null => {
     const c = drawToCanvas(target, circular);
     if (!c) return null;
-    const ctx = c.getContext("2d");
+    const ctx = c.getContext("2d", SHARED_CANVAS_OPTIONS);
     if (!ctx) return null;
     return ctx.getImageData(0, 0, target, target);
   };
@@ -1030,7 +1046,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const buildSignature = (): number[] | null => {
     const c = drawToCanvas(GRID, true);
     if (!c) return null;
-    const ctx = c.getContext("2d");
+    const ctx = c.getContext("2d", SHARED_CANVAS_OPTIONS);
     if (!ctx) return null;
     const { data } = ctx.getImageData(0, 0, GRID, GRID);
     const sig: number[] = [];
@@ -1677,35 +1693,29 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const frame = grabModelFrame();
       if (!frame) return legacyStillMoment(sig, signatureSaysEmpty);
 
+      // A rest with the picture unchanged since the last look (a flicker, a nudge) needs no detection — on a phone
+      // every detection costs seconds of a frozen screen.
+      const lastLook = lastEvaluatedFrameRef.current;
+      if (lastLook) {
+        const sinceLastLook = buildChangeMap(lastLook, frame);
+        if (sinceLastLook && sinceLastLook.share < UNCHANGED_FRAME_SHARE) return;
+      }
+
       // darts that were already stuck in the board when this round's baseline was taken are not new
       if (baselineDartsRef.current === null) {
         const baselineFrame = emptyModelFrameRef.current;
         const base = baselineFrame ? await detectDartsWithModel(baselineFrame, 8, NEW_DART_MIN_SCORE) : null;
-        baselineDartsRef.current = base && !base.unavailable ? base.darts.map((d) => ({ x: d.x, y: d.y })) : [];
+        baselineDartsRef.current = base && !base.unavailable ? base.darts.map((d) => ({ x: d.x, y: d.y, confidence: d.confidence })) : [];
       }
       const result = await detectDartsWithModel(frame, 8, NEW_DART_MIN_SCORE);
       if (result.unavailable) return legacyStillMoment(sig, signatureSaysEmpty);
+      lastEvaluatedFrameRef.current = frame;
       const baselineDarts = baselineDartsRef.current;
       const present = refineWithCalibration(
         result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
-      ).filter((d) => !baselineDarts.some((b) => Math.hypot(b.x - (d.x ?? 0), b.y - (d.y ?? 0)) < KNOWN_DART_RADIUS_FOR_BASELINE));
+      ).filter((d) => !baselineDarts.some((b) => Math.hypot(b.x - (d.x ?? 0), b.y - (d.y ?? 0)) < KNOWN_DART_RADIUS_FOR_BASELINE && d.confidence < b.confidence + BASELINE_BEATEN_BY));
 
-      if (!present.some((d) => d.confidence >= BOARD_OCCUPIED_SCORE)) {
-        onBoardEmptyMoment(sig);
-        return;
-      }
-
-      // darts are on the board: remember this picture as the round's peak (the one the review and the
-      // final look use) — but not while the player is pulling darts one by one (the count only drops)
       const before = lastStableModelFrameRef.current;
-      if (present.length >= peakPresentRef.current) {
-        peakPresentRef.current = present.length;
-        preRemovalImageDataRef.current = grabImageData();
-        preRemovalModelFrameRef.current = frame;
-        preRemovalFrameKindRef.current = rectMapping() ? "rectified" : "crop";
-      }
-      lastStableModelFrameRef.current = frame;
-
       const known = accumulatedRef.current;
       const changeMap = before ? buildChangeMap(before, frame) : null;
       const usable = changeMap && changeMap.share < GLOBAL_CHANGE_SHARE_MAX ? changeMap : null;
@@ -1719,6 +1729,24 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         : null;
       const added = selectNewDarts(known, present, support, dartsRemaining - known.length);
       if (accumulatedRef.current !== known) return; // the round was committed/discarded meanwhile
+
+      // Occupied = a confident detection OR a weaker one that stands on fresh change (it just joined the round).
+      // Weak detections alone never keep a round from ending, but they must not make a real dart invisible either.
+      if (!present.some((d) => d.confidence >= BOARD_OCCUPIED_SCORE) && added.length === 0) {
+        onBoardEmptyMoment(sig);
+        return;
+      }
+
+      // darts are on the board: remember this picture as the round's peak (the one the review and the
+      // final look use) — but not while the player is pulling darts one by one (the count only drops)
+      if (present.length >= peakPresentRef.current) {
+        peakPresentRef.current = present.length;
+        preRemovalImageDataRef.current = grabImageData();
+        preRemovalModelFrameRef.current = frame;
+        preRemovalFrameKindRef.current = rectMapping() ? "rectified" : "crop";
+      }
+      lastStableModelFrameRef.current = frame;
+
       if (added.length > 0) {
         const next = [...known, ...added];
         accumulatedRef.current = next;
@@ -1738,6 +1766,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       );
     } finally {
       stillMomentBusyRef.current = false;
+      if (stillMomentQueuedRef.current) {
+        stillMomentQueuedRef.current = false;
+        const latest = prevSigRef.current;
+        if (latest) void stillMomentRef.current(latest, false);
+      }
     }
   };
 
@@ -1894,7 +1927,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         stableSigRef.current = sig;
         // Read through a ref so the handler always sees the current calibration, even though this
         // interval closure was created many renders ago.
-        if (!stillMomentBusyRef.current) void stillMomentRef.current(sig, boardEmpty);
+        // A phone needs seconds per detection; the next dart often lands meanwhile. That moment must not be lost,
+        // so it is remembered and handled right after the running one.
+        if (stillMomentBusyRef.current) stillMomentQueuedRef.current = true;
+        else void stillMomentRef.current(sig, boardEmpty);
         return;
       }
 
