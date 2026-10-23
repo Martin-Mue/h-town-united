@@ -854,4 +854,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Ortalama, dart sayacı ve 180'ler artık oyuncu kartlarında kompakt etiketler olarak duruyor, checkout yolu dartları renkli kutular olarak gösteriyor ve sayı tuşları boş bir boşluk olmadan yukarı çıkıyor – mikrofon artık giriş sekmelerinin yanında.",
     },
   },
+  {
+    id: "2026-10-23-leg-and-match-average",
+    date: "2026-10-23",
+    title: {
+      de: "Leg- und Match-Average im Spiel",
+      en: "Leg and match average in play",
+      fr: "Moyenne du leg et du match en jeu",
+      pl: "Średnia legu i meczu w grze",
+      nl: "Leg- en matchgemiddelde tijdens het spel",
+      tr: "Oyunda leg ve maç ortalaması",
+    },
+    description: {
+      de: "Jede Spielerkarte zeigt jetzt Leg-Ø und Match-Ø getrennt, dazu die im Leg geworfenen Darts und die Punktzahl der letzten Aufnahme. Der Checkout-Weg lässt sich per Knopf neben der Leg-Zeile bei Bedarf ein- und ausblenden.",
+      en: "Every player card now shows leg average and match average separately, plus the darts thrown in the leg and the score of the last visit. The checkout route can be shown or hidden on demand with the button next to the leg line.",
+      fr: "Chaque carte joueur affiche désormais séparément la moyenne du leg et du match, ainsi que les fléchettes lancées dans le leg et le score de la dernière volée. Le chemin de checkout s'affiche ou se masque à la demande avec le bouton à côté de la ligne du leg.",
+      pl: "Każda karta gracza pokazuje teraz osobno średnią legu i meczu, a także rzucone w legu lotki i wynik ostatniej wizyty. Drogę checkoutu można pokazać lub ukryć na żądanie przyciskiem obok linii legu.",
+      nl: "Elke spelerskaart toont nu het leg- en matchgemiddelde apart, plus de in de leg gegooide darts en de score van de laatste beurt. De checkoutroute is op verzoek te tonen of te verbergen met de knop naast de legregel.",
+      tr: "Her oyuncu kartı artık leg ve maç ortalamasını ayrı gösteriyor; ayrıca legde atılan dartları ve son turun skorunu da. Checkout yolu, leg satırının yanındaki düğmeyle istenirse gösterilip gizlenebilir.",
+    },
+  },
 ];

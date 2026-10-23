@@ -2471,6 +2471,12 @@ const GamePage = () => {
     return count >= 2 ? { slot: lastWinner, count } : null;
   })();
 
+  /** Points of the most recent FULL 3-dart visit (a half-thrown visit isn't "the last score" yet), or null before the first one. */
+  const lastCompletedVisitTotal = (playerThrows: DartThrow[]): number | null => {
+    const fullLen = playerThrows.length - (playerThrows.length % 3);
+    return fullLen >= 3 ? playerThrows.slice(fullLen - 3, fullLen).reduce((sum, d) => sum + d.points, 0) : null;
+  };
+
   const scoreboardBlock = (
     // Round 4: still `sticky top-0` here because the camera-enabled branch further below renders
     // this inside its own single, plain scrolling container — one level of sticky, no CSS grid
@@ -2506,6 +2512,8 @@ const GamePage = () => {
                 subLabel: (() => { const roster = memberIdxs.map((pi) => game.players[pi].name).join(" & "); return roster === t.name ? undefined : roster; })(),
                 isBot: false, remaining: game.currentLeg.remaining[ti], cricketPoints: game.cricket?.[ti]?.points ?? 0,
                 avg: calculateAverage(throws), p180: count180s(throws), legsWon: game.legsWon[ti],
+                matchAvg: calculateAverage([...game.completedLegs.flatMap((leg) => memberIdxs.flatMap((pi) => leg.throws[pi] ?? [])), ...throws]),
+                dartsInLeg: throws.length, lastVisit: null as number | null,
                 setsWon: game.setsWon?.[ti],
                 isActive: activeTeamIdx === ti,
               };
@@ -2514,6 +2522,8 @@ const GamePage = () => {
               key: i, label: p.name, subLabel: undefined as string | undefined,
               isBot: p.isBot, remaining: game.currentLeg.remaining[i], cricketPoints: game.cricket?.[i]?.points ?? 0,
               avg: calculateAverage(game.currentLeg.throws[i]), p180: count180s(game.currentLeg.throws[i]),
+              matchAvg: calculateAverage([...game.completedLegs.flatMap((leg) => leg.throws[i] ?? []), ...game.currentLeg.throws[i]]),
+              dartsInLeg: game.currentLeg.throws[i].length, lastVisit: lastCompletedVisitTotal(game.currentLeg.throws[i]),
               legsWon: game.legsWon[i], setsWon: game.setsWon?.[i], isActive: activeIdx === i,
             }))
         ).map((card) => {
@@ -2667,8 +2677,20 @@ const GamePage = () => {
                   {activeRound.length > 0 && <span className="ml-1 text-sm landscape:text-xs font-display text-accent">+{currentRoundTotal}</span>}
                 </div>
               )}
+              {/* Leg average = this leg only; match average = every leg of the match so far. */}
+              <div className="grid grid-cols-2 gap-1 mt-1.5">
+                {([
+                  [t("game.legAvgShort"), card.avg.toFixed(1)],
+                  [t("game.matchAvgShort"), card.matchAvg.toFixed(1)],
+                  ...(!isCricket ? [[t("game.dartsThrownShort"), String(card.dartsInLeg)], [t("game.lastVisitShort"), card.lastVisit === null ? "–" : String(card.lastVisit)]] : []),
+                ] as [string, string][]).map(([label, value]) => (
+                  <div key={label} className="rounded-lg bg-white/[0.06] px-2 py-1 leading-tight">
+                    <p className="text-[10px] text-muted-foreground truncate">{label}</p>
+                    <p className="text-sm font-semibold tabular-nums" style={{ color: "hsl(210 15% 92%)" }}>{value}</p>
+                  </div>
+                ))}
+              </div>
               <div className="flex justify-center items-center flex-wrap gap-1.5 mt-1.5 text-xs text-muted-foreground">
-                <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5">Ø <span className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 90%)" }}>{card.avg.toFixed(1)}</span></span>
                 {/* Dart counter lives in the same pill strip as the stats (one footer row instead of
                     a stats line plus a separate dots line underneath it). */}
                 {isActive && (
@@ -2727,10 +2749,23 @@ const GamePage = () => {
           Round number is the CURRENT player's own trip count (their throws so far, including this
           round's partial progress, chunked into 3s) — there was previously no indication anywhere
           on screen of which round of the leg was in progress. */}
-      <div className="text-center text-xs landscape:text-[10px] text-muted-foreground mt-2 landscape:mt-1">
+      <div className="flex items-center justify-between gap-2 text-xs landscape:text-[10px] text-muted-foreground mt-2 landscape:mt-1">
+        <span className="min-w-0 truncate">
         {game.setsMode && <>{t("game.set")} {(game.setsWon ?? []).reduce((s, v) => s + v, 0) + 1} · </>}
         {game.bestOfLegs > 1 && <>{t("game.leg")} {game.currentLeg.legNumber} · </>}
         {t("game.roundLabel")} {Math.floor(currentThrows.length / 3) + 1} · {game.players[game.currentLeg.startingPlayerIndex].name} {t("game.startsFirst")}
+        </span>
+        {/* Checkout routes on demand: one tap shows/hides the suggestion card (same setting as the menu sheet's toggle). */}
+        {!isCricket && (
+          <button
+            type="button"
+            onClick={() => setCheckoutSuggestionEnabled(!checkoutSuggestionEnabled)}
+            aria-pressed={checkoutSuggestionEnabled}
+            className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors ${checkoutSuggestionEnabled ? "border-primary/40 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+          >
+            <Target className="w-3 h-3" /> {t("game.checkoutToggle")}
+          </button>
+        )}
       </div>
     </div>
   );
