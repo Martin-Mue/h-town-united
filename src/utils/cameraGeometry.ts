@@ -185,7 +185,7 @@ export const boardTransformFromTaps = (taps?: Point[], liveCenter?: Point): Homo
  * corner assignment) rotated every automatically calibrated board by half a segment.
  */
 const MODEL_CORNER_ANGLES_DEG = [-9, 171, 261, 81] as const; // cal_1, cal_2, cal_3, cal_4
-const MODEL_CORNERS_CANON: Point[] = MODEL_CORNER_ANGLES_DEG.map((deg) => ({
+export const MODEL_CORNERS_CANON: Point[] = MODEL_CORNER_ANGLES_DEG.map((deg) => ({
   x: Math.sin((deg * Math.PI) / 180),
   y: -Math.cos((deg * Math.PI) / 180),
 }));

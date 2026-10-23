@@ -28,6 +28,8 @@ import { computeHomography } from "@/utils/homography";
 import { pointsFor, dartLabel } from "@/utils/x01Rules";
 import BoardCalibrator from "@/components/game/BoardCalibrator";
 import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
+import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, RECT_BOARD_RADIUS } from "@/utils/boardRectify";
+import { applyHomography } from "@/utils/homography";
 import {
   boardTransformFromTaps,
   scoreFromBoardPoint,
@@ -39,6 +41,7 @@ import {
   videoFractionToCrop,
   computeCropScreenRect,
   tapsFromModelCorners,
+  MODEL_CORNERS_CANON,
   CANON_BOARD_POINTS,
 } from "@/utils/cameraGeometry";
 import {
@@ -181,6 +184,9 @@ const loadTrainingConsentAsked = (): boolean => {
 
 const CALIB_KEY = "dartcam-calibration-v5";
 const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
+/** The camera picture is downscaled to at most this long side before being straightened — plenty for
+ *  the 800px output (the board covers only part of the picture) and keeps the pixel read cheap. */
+const MAX_RECTIFY_SOURCE_SIDE = 1920;
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
 // remembers which physical board it's pointed at, and calibration + camera-device choice are
 // namespaced per board so the same tablet can be reassigned between boards over an evening
@@ -409,7 +415,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // the training image, because the 420px circle-clipped analysis frame looks nothing like the input
   // the model sees at inference (black corners, a fraction of the resolution). Same crop, so the
   // dart positions (0-1 fractions) are valid on either image.
-  const pendingTrainingCaptureRef = useRef<{ before: ImageData; after: ImageData; modelAfter: ImageData | null } | null>(null);
+  const pendingTrainingCaptureRef = useRef<{ before: ImageData; after: ImageData; modelAfter: ImageData | null; frame: "rectified" | "crop" } | null>(null);
+  // Which kind of frame preRemovalModelFrameRef holds (set together with it).
+  const preRemovalFrameKindRef = useRef<"rectified" | "crop">("crop");
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -757,7 +765,86 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // video frame (the same space calibration taps and the live overlay both use).
   const toFullFrameXY = (d: DetectedDart): { fx: number; fy: number } | null => {
     if (!hasPosition(d)) return null;
-    return cropXYToFullFrame(d.x ?? 0, d.y ?? 0);
+    return frameXYToFull(d.x ?? 0, d.y ?? 0);
+  };
+
+  // ─── model frame: the board straightened into a flat top-down view ───────────────────
+  // Once the board is calibrated, the model is shown a RECTIFIED frame (see utils/boardRectify.ts):
+  // 20 on top, always the same size, no perspective, plenty of margin for the flights — the picture
+  // the model was trained on, whatever the camera angle or zoom. Dart positions (DetectedDart.x/y)
+  // are then fractions of that frame; before a calibration exists they stay fractions of the plain
+  // analysis crop. These helpers are the only place that knows the difference.
+
+  /** The calibration taps with the board-centre shift applied that boardTransformFromTaps(taps,
+   *  {x: calib.x, y: calib.y}) makes for scoring — rectifying with the same taps keeps both in step. */
+  const effectiveTaps = () => {
+    const taps = calib.taps;
+    if (!taps || taps.length !== 4) return undefined;
+    const dx = calib.x - (taps[2].x + taps[3].x) / 2;
+    const dy = calib.y - (taps[0].y + taps[1].y) / 2;
+    if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return taps;
+    return taps.map((t) => ({ x: t.x + dx, y: t.y + dy }));
+  };
+  const rectMapping = () => rectifyMappingFromTaps(effectiveTaps());
+
+  const fullFrameScratchRef = useRef<HTMLCanvasElement | null>(null);
+  /** The board straightened to RECT_SIZE x RECT_SIZE, or null while uncalibrated / camera not ready. */
+  const grabRectifiedFrame = (): ImageData | null => {
+    const v = videoRef.current;
+    const mapping = rectMapping();
+    if (!v || !v.videoWidth || !mapping) return null;
+    const scale = Math.min(1, MAX_RECTIFY_SOURCE_SIDE / Math.max(v.videoWidth, v.videoHeight));
+    const w = Math.round(v.videoWidth * scale);
+    const h = Math.round(v.videoHeight * scale);
+    const canvas = fullFrameScratchRef.current ?? (fullFrameScratchRef.current = document.createElement("canvas"));
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(v, 0, 0, w, h);
+    const source = ctx.getImageData(0, 0, w, h);
+    const out = warpToRectified({ data: source.data, width: w, height: h }, mapping.rectToVideo);
+    return new ImageData(out.data as Uint8ClampedArray<ArrayBuffer>, out.width, out.height);
+  };
+
+  /** What the model gets to see: the rectified board when calibrated, else the plain crop. */
+  const grabModelFrame = (): ImageData | null => grabRectifiedFrame() ?? grabImageData(MODEL_INPUT_SIZE, false);
+
+  /** Freezes the current model frame as THE picture of this visit (review + training sample). Taken
+   *  whenever it can be used — model loaded, or a calibration exists to straighten the board with. */
+  const captureModelFrame = () => {
+    const rectified = !!rectMapping();
+    if (!modelReadyRef.current && !rectified) return;
+    preRemovalModelFrameRef.current = grabModelFrame();
+    preRemovalFrameKindRef.current = rectified ? "rectified" : "crop";
+  };
+
+  /** A point on the model frame (0-1) -> the camera video (0-1). */
+  const frameXYToFull = (x: number, y: number): { fx: number; fy: number } | null => {
+    const mapping = rectMapping();
+    if (mapping) {
+      const p = applyHomography(mapping.rectToVideo, { x, y });
+      return { fx: p.x, fy: p.y };
+    }
+    return cropXYToFullFrame(x, y);
+  };
+
+  /** Detectors that work on the plain analysis crop (pixel diff, Gemini) report fractions of THAT crop;
+   *  bring them into the model frame so every dart position means the same thing. */
+  const cropPointToFrameXY = (x: number, y: number): { x: number; y: number } => {
+    if (!rectMapping()) return { x, y };
+    const full = cropXYToFullFrame(x, y);
+    return (full && fullToFrameXY(full.fx, full.fy)) ?? { x, y };
+  };
+
+  /** A point on the camera video (0-1) -> the model frame (0-1, clamped to the frame). */
+  const fullToFrameXY = (fx: number, fy: number): { x: number; y: number } | null => {
+    const mapping = rectMapping();
+    if (mapping) {
+      const p = applyHomography(mapping.videoToRect, { x: fx, y: fy });
+      return { x: clamp(p.x, 0, 1), y: clamp(p.y, 0, 1) };
+    }
+    return fullFrameXYToCropXY(fx, fy);
   };
 
   // Recompute each dart's segment/multiplier from its tip pixel via the 4-point
@@ -798,6 +885,23 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   /** Raw pixel snapshot of the current (circular-cropped) board view, for local diff-based
    *  detection — same crop/zoom as drawToCanvas so an "empty" and a "with darts" capture line
    *  up pixel-for-pixel. */
+  /** A square of the camera picture (unclipped, MODEL_INPUT_SIZE) at an arbitrary position and size —
+   *  used to search for the board when no calibration exists yet. */
+  const cropScratchRef = useRef<HTMLCanvasElement | null>(null);
+  const grabCropFrame = (calibX: number, calibY: number, size: number) => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return null;
+    const rect = computeCropRect(v.videoWidth, v.videoHeight, calibX, calibY, size);
+    if (!rect) return null;
+    const canvas = cropScratchRef.current ?? (cropScratchRef.current = document.createElement("canvas"));
+    canvas.width = MODEL_INPUT_SIZE;
+    canvas.height = MODEL_INPUT_SIZE;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(v, rect.sx, rect.sy, rect.side, rect.side, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
+    return { frame: ctx.getImageData(0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE), rect };
+  };
+
   const grabImageData = (target: number = VISION_ANALYSIS_SIZE, circular = true): ImageData | null => {
     const c = drawToCanvas(target, circular);
     if (!c) return null;
@@ -909,8 +1013,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           multiplier: 1 as const,
           points: 0,
           confidence: typeof d.confidence === "number" ? clamp(d.confidence, 0, 1) : 0.5,
-          x: d.x as number,
-          y: d.y as number,
+          ...cropPointToFrameXY(d.x as number, d.y as number),
         }))
         // Keep at most as many darts as this visit could actually hold — Gemini has no notion of
         // throwsSeenRef, so cap+sort-by-confidence guards against an over-eager extra detection.
@@ -957,18 +1060,36 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    *  from the taps alone is guesswork — the video orientation isn't stored anywhere else).
    *  `corners` are the four D20/D3/D11/D6 points as 0-1 fractions of the saved training image
    *  (same crop for the analysis frame and the model frame, so they hold for either). */
-  const buildCalibrationMeta = () => {
+  const buildCalibrationMeta = (frame: "rectified" | "crop") => {
     const v = videoRef.current;
     const rect = cropRect();
     if (!v || !rect || !v.videoWidth || !v.videoHeight) return null;
-    const corners = calib.taps?.length === 4
+    const rectified = frame === "rectified";
+    // Corner positions in the saved image: in the rectified frame they are fixed by construction.
+    const corners = rectified
       ? Object.fromEntries(CALIB_KEYS.map((key, i) => {
-          const t = calib.taps![i];
-          return [key, { x: (t.x * v.videoWidth - rect.sx) / rect.side, y: (t.y * v.videoHeight - rect.sy) / rect.side }];
+          const p = canonicalToRect(CANON_BOARD_POINTS[i].x, CANON_BOARD_POINTS[i].y);
+          return [key, { x: p.x, y: p.y }];
         }))
-      : null;
+      : calib.taps?.length === 4
+        ? Object.fromEntries(CALIB_KEYS.map((key, i) => {
+            const t = calib.taps![i];
+            return [key, { x: (t.x * v.videoWidth - rect.sx) / rect.side, y: (t.y * v.videoHeight - rect.sy) / rect.side }];
+          }))
+        : null;
     return {
-      version: 1,
+      version: 2,
+      // "rectified": the saved image is the board straightened by boardRectify (20 on top, the
+      // double edge at rectBoardRadius of the width). "crop": the plain analysis crop.
+      frame,
+      rectBoardRadius: rectified ? RECT_BOARD_RADIUS : null,
+      // cal_1..cal_4 of the model, i.e. the wire crossings, in the saved image (rectified frames only).
+      modelCorners: rectified
+        ? MODEL_CORNERS_CANON.map((p) => {
+            const c = canonicalToRect(p.x, p.y);
+            return { x: c.x, y: c.y };
+          })
+        : null,
       source: calib.source ?? "unknown",
       confirmed: calib.confirmed ?? null,
       video: { w: v.videoWidth, h: v.videoHeight },
@@ -986,7 +1107,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    *  off of. `darts` is the FINAL, possibly player-corrected list at the moment of commit, which
    *  is exactly the free label this whole feature exists to capture. */
   const uploadTrainingSample = async (
-    capture: { before: ImageData; after: ImageData; modelAfter: ImageData | null },
+    capture: { before: ImageData; after: ImageData; modelAfter: ImageData | null; frame: "rectified" | "crop" },
     darts: DetectedDart[],
   ) => {
     try {
@@ -1007,7 +1128,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         imageDataToBlob(trainingAfter),
       ]);
       if (!beforeBlob || !afterBlob) return;
-      const calibrationMeta = buildCalibrationMeta();
+      const calibrationMeta = buildCalibrationMeta(capture.modelAfter ? capture.frame : "crop");
       const prefix = `${userId}/${crypto.randomUUID()}`;
       const [beforeUp, afterUp] = await Promise.all([
         supabase.storage.from("dart-training").upload(`${prefix}/before.jpg`, beforeBlob, { contentType: "image/jpeg" }),
@@ -1102,41 +1223,49 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    * 9° beside D20/D3/D11/D6, not in the middle of the double. tapsFromModelCorners turns the four
    * found points into the equivalent D20/D3/D11/D6 taps, which become the STARTING POSITION of the
    * handles in the calibration view — the player checks the drawn rings against the real wires and
-   * drags where needed, so a wrong or missing suggestion costs a few seconds, not a bad session. (The first version assigned the classes to the wrong corners
-   * and ignored the 9° offset — it only never showed because the model could not load at all, see
-   * onnxRuntimeFiles in vite.config.ts.)
+   * drags where needed, so a wrong or missing suggestion costs a few seconds, not a bad session.
+   * (The first version assigned the classes to the wrong corners and ignored the 9° offset — it
+   * only never showed because the model could not load at all, see onnxRuntimeFiles in
+   * vite.config.ts.)
    */
   const tryAutoCalibrate = async (): Promise<{ x: number; y: number }[] | null> => {
-    const frame = grabImageData(MODEL_INPUT_SIZE, false);
-    if (!frame) return null;
-    const result = await detectCalibrationPointsWithModel(frame);
-    // Always log the raw per-class detections — success or fail — this is the one place a bad
-    // calibration actually originates, and without real numbers every threshold tweak here is
-    // just another guess.
-    console.info("[LiveCamera] auto-calibration raw candidates", result.points);
-    if (result.unavailable) return null;
-    const found = [result.points.cal_1, result.points.cal_2, result.points.cal_3, result.points.cal_4];
-    setAutoCalibFoundCount(found.filter(Boolean).length);
-    if (found.some((p) => !p)) return null;
-    const fullFrame = found.map((p) => cropXYToFullFrame(p!.x, p!.y));
-    if (fullFrame.some((p) => !p)) return null;
-    const taps = tapsFromModelCorners(fullFrame.map((p) => ({ x: p!.fx, y: p!.fy })));
-    if (!taps) return null;
-    console.info("[LiveCamera] auto-calibration taps (full-frame coords)", taps);
-    // Sanity check: cropRect() is centered on calib.x/calib.y at auto-calibration time (no taps
-    // yet, so it's still the default 0.5/0.5 center-ish crop) — the board's own center should
-    // therefore land reasonably close to frame-center too. A wildly off-center result means the
-    // model mis-detected at least one corner rather than genuinely finding a very off-center
-    // board, and a bad corner here silently wrecks every score for the rest of the session — far
-    // worse than one bad dart read, which the review UI can catch. Reject rather than trust it.
-    const centerFx = (taps[2].x + taps[3].x) / 2;
-    const centerFy = (taps[0].y + taps[1].y) / 2;
-    const MAX_CENTER_OFFSET = 0.3;
-    if (Math.abs(centerFx - 0.5) > MAX_CENTER_OFFSET || Math.abs(centerFy - 0.5) > MAX_CENTER_OFFSET) {
-      console.warn("[LiveCamera] auto-calibration rejected: implausible center", { centerFx, centerFy, taps });
-      return null;
+    const v = videoRef.current;
+    if (!v || !v.videoWidth || !v.videoHeight) return null;
+    const landscape = v.videoWidth >= v.videoHeight;
+    // The board can sit anywhere in the camera picture and at any size, while the model expects it
+    // to fill about two thirds of a square. So look at several squares: first near-full-height ones
+    // at three positions along the long side, then tighter ones for a board that is far away.
+    const attempts = [
+      ...[0.5, 0.3, 0.7].map((at) => ({ at, size: 0.98 })),
+      ...[0.5, 0.3, 0.7, 0.15, 0.85].map((at) => ({ at, size: 0.7 })),
+    ];
+    let bestFound = 0;
+    for (const { at, size } of attempts) {
+      const grabbed = grabCropFrame(landscape ? at : 0.5, landscape ? 0.5 : at, size);
+      if (!grabbed) continue;
+      const result = await detectCalibrationPointsWithModel(grabbed.frame);
+      // Always log the raw per-class detections — this is the one place a bad calibration
+      // originates, and without real numbers every threshold tweak is just another guess.
+      console.info("[LiveCamera] auto-calibration raw candidates", { at, size, points: result.points });
+      if (result.unavailable) return null;
+      const found = [result.points.cal_1, result.points.cal_2, result.points.cal_3, result.points.cal_4];
+      bestFound = Math.max(bestFound, found.filter(Boolean).length);
+      setAutoCalibFoundCount(bestFound);
+      if (found.some((p) => !p)) continue;
+      const corners = found.map((p) => cropToVideoFraction(p!.x, p!.y, v.videoWidth, v.videoHeight, grabbed.rect));
+      if (corners.some((p) => !p)) continue;
+      const taps = tapsFromModelCorners(corners.map((p) => ({ x: p!.x, y: p!.y })));
+      if (!taps) continue;
+      // The board has to be inside the picture, at a believable size — otherwise this is a false
+      // detection and the handles are better off at their default position.
+      const inside = taps.every((t) => t.x > -0.05 && t.x < 1.05 && t.y > -0.05 && t.y < 1.05);
+      const spreadX = Math.abs(taps[3].x - taps[2].x);
+      const spreadY = Math.abs(taps[1].y - taps[0].y);
+      if (!inside || spreadX < 0.2 || spreadY < 0.1) continue;
+      console.info("[LiveCamera] auto-calibration taps (video fractions)", taps);
+      return taps;
     }
-    return taps;
+    return null;
   };
 
   /** Clears any existing calibration and re-runs "try the model first, else manual taps" — used
@@ -1244,7 +1373,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const already = accumulatedRef.current;
     if (already.length >= dartsRemaining) return;
 
-    const modelFrame = grabImageData(MODEL_INPUT_SIZE, false);
+    const modelFrame = grabModelFrame();
     if (!modelFrame) return;
     // Request the full remaining budget (not just already.length + 1) — a tighter budget risks
     // an already-known dart getting crowded out of the top-N by a coincidental confidence blip,
@@ -1385,7 +1514,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           setStatus(t("camera.boardEmptyThrowFirst"));
         } else {
           preRemovalImageDataRef.current = grabImageData();
-          if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
+          captureModelFrame();
           throwsSeenRef.current = Math.min(3, throwsSeenRef.current + 1);
           setThrowsSeen(throwsSeenRef.current);
           setStatus(
@@ -1434,7 +1563,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setGeminiSuggestion(null);
       playScanStartSound();
       if (trainingDataEnabled && emptyImageDataRef.current && preRemovalImageDataRef.current) {
-        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current, after: preRemovalImageDataRef.current, modelAfter: preRemovalModelFrameRef.current };
+        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current, after: preRemovalImageDataRef.current, modelAfter: preRemovalModelFrameRef.current, frame: preRemovalFrameKindRef.current };
       }
       const overallConfidence = alreadyIdentified.reduce((s, d) => s + d.confidence, 0) / alreadyIdentified.length;
       setLastConfidence(overallConfidence);
@@ -1472,7 +1601,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const runDiffFallback = () => {
         const result = detectDartTipsLocally(emptyImageDataRef.current!, preRemovalImageDataRef.current!, throwsSeenRef.current);
         const darts = refineWithCalibration(
-          result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
+          result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, ...cropPointToFrameXY(d.x, d.y) }))
         );
         let confidence = result.darts.length > 0
           ? result.darts.reduce((s, d) => s + d.confidence, 0) / result.darts.length
@@ -1486,7 +1615,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (trainingDataEnabled) {
         // Stash the reference (not a copy) before the finally block below nulls these refs —
         // consumed at commit time with whatever the player ends up confirming/correcting.
-        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current!, after: preRemovalImageDataRef.current!, modelAfter: preRemovalModelFrameRef.current };
+        pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current!, after: preRemovalImageDataRef.current!, modelAfter: preRemovalModelFrameRef.current, frame: preRemovalFrameKindRef.current };
       }
       const modelFrame = preRemovalModelFrameRef.current;
       const modelResult = modelReadyRef.current && modelFrame
@@ -1614,7 +1743,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // sitting there awaiting Übernehmen/Verwerfen) is the actual thing this must not disturb.
     if (!scanLockRef.current && !needsReviewRef.current) {
       preRemovalImageDataRef.current = grabImageData();
-      if (modelReadyRef.current) preRemovalModelFrameRef.current = grabImageData(MODEL_INPUT_SIZE, false);
+      captureModelFrame();
       throwsSeenRef.current = Math.max(throwsSeenRef.current, dartsRemaining);
       scanLockRef.current = true;
       // Root cause of "highlight clips stopped appearing": this manual "Jetzt scannen" button is
@@ -1697,11 +1826,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // right on screen right up until confirming, then score against the wrong geometry —
     // the "value resets to something wrong" bug.
     const videoXY = screenFractionToVideoFraction(fx, fy);
-    const cropXY = videoXY ? fullFrameXYToCropXY(videoXY.x, videoXY.y) : null;
+    const cropXY = videoXY ? fullToFrameXY(videoXY.x, videoXY.y) : null;
     setRepositioningIndex(null);
     if (!cropXY) return;
     const transform = boardTransformFromTaps(calib.taps, { x: calib.x, y: calib.y });
-    const full = cropXYToFullFrame(cropXY.x, cropXY.y);
+    const full = frameXYToFull(cropXY.x, cropXY.y);
     setAccumulated((prev) => {
       const next = [...prev];
       const d = next[idx];
