@@ -926,12 +926,12 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Round robin: tabloda leg farkı",
     },
     description: {
-      de: "Die Round-Robin-Tabelle zeigt jetzt die Leg-Differenz (in der App und in der Live-Ansicht) und nutzt sie nach dem direkten Vergleich als Tie-Break. Sie erscheint, sobald Partien live gewertet wurden; von Hand eingetragene Sieger haben keinen Spielstand.",
-      en: "The round-robin table now shows the leg difference (in the app and in the live view) and uses it as a tie-break after head-to-head. It appears once matches were scored live; winners entered by hand have no score.",
-      fr: "Le classement round robin affiche désormais la différence de legs (dans l'app et en vue live) et l'utilise comme départage après la confrontation directe. Elle apparaît dès que des matchs ont été comptés en direct ; un vainqueur saisi à la main n'a pas de score.",
-      pl: "Tabela round robin pokazuje teraz różnicę legów (w aplikacji i w widoku na żywo) i używa jej jako rozstrzygnięcia po bezpośrednim pojedynku. Pojawia się, gdy mecze były liczone na żywo; ręcznie wpisany zwycięzca nie ma wyniku.",
-      nl: "De round-robintabel toont nu het legverschil (in de app en in de live-weergave) en gebruikt het als tie-break na het onderlinge duel. Het verschijnt zodra wedstrijden live zijn geteld; handmatig ingevoerde winnaars hebben geen score.",
-      tr: "Round robin tablosu artık leg farkını gösteriyor (uygulamada ve canlı görünümde) ve doğrudan karşılaşmadan sonra eşitlik bozucu olarak kullanıyor. Maçlar canlı sayıldığında görünür; elle girilen kazananların skoru olmaz.",
+      de: "Die Round-Robin-Tabelle zeigt jetzt gewonnene:verlorene Legs und die Leg-Differenz (in der App und in der Live-Ansicht) und nutzt die Differenz nach dem direkten Vergleich als Tie-Break. Beim Eintragen von Hand fragt die App nach dem Ergebnis (z. B. 2:1) – oder du speicherst ohne Ergebnis.",
+      en: "The round-robin table now shows legs won:lost and the leg difference (in the app and in the live view) and uses the difference as a tie-break after head-to-head. When entering a result by hand the app asks for the score (e.g. 2:1) – or you can save without one.",
+      fr: "Le classement round robin affiche désormais les legs gagnés:perdus et la différence (dans l'app et en vue live), et utilise la différence comme départage après la confrontation directe. À la saisie manuelle, l'app demande le score (p. ex. 2:1) – ou tu enregistres sans score.",
+      pl: "Tabela round robin pokazuje teraz legi wygrane:przegrane i różnicę (w aplikacji i w widoku na żywo), a różnicy używa jako rozstrzygnięcia po bezpośrednim pojedynku. Przy ręcznym wpisywaniu aplikacja pyta o wynik (np. 2:1) – albo zapisujesz bez wyniku.",
+      nl: "De round-robintabel toont nu gewonnen:verloren legs en het legverschil (in de app en in de live-weergave) en gebruikt het verschil als tie-break na het onderlinge duel. Bij handmatig invoeren vraagt de app om de uitslag (bijv. 2:1) – of je slaat op zonder uitslag.",
+      tr: "Round robin tablosu artık kazanılan:kaybedilen legleri ve leg farkını gösteriyor (uygulamada ve canlı görünümde); farkı doğrudan karşılaşmadan sonra eşitlik bozucu olarak kullanıyor. Elle girerken uygulama sonucu soruyor (örn. 2:1) – ya da skorsuz kaydedebilirsin.",
     },
   },
 ];

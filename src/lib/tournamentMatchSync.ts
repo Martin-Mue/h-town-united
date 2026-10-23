@@ -243,7 +243,7 @@ function applyActionToRrBracket(bracket: RoundRobinMatch[], action: BracketActio
     case "setRrWinner": {
       const m = bracket.find((x) => x.id === action.matchId);
       if (!m || m.played) return null;
-      return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: action.winner, played: true } : x));
+      return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: action.winner, score1: action.score1, score2: action.score2, played: true } : x));
     }
     case "resetRrMatch":
       return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: undefined, score1: undefined, score2: undefined, played: false } : x));

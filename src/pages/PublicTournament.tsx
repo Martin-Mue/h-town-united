@@ -64,13 +64,18 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
     <div className="space-y-4">
       <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
-        <div className={`grid ${hasLegData ? "grid-cols-[auto_minmax(0,1fr)_repeat(5,32px)]" : "grid-cols-[auto_minmax(0,1fr)_repeat(4,32px)]"} gap-x-2 gap-y-1 text-xs`}>
+        <div className={`grid ${hasLegData ? "grid-cols-[auto_minmax(0,1fr)_repeat(3,28px)_46px_34px_30px]" : "grid-cols-[auto_minmax(0,1fr)_repeat(4,32px)]"} gap-x-2 gap-y-1 text-xs`}>
           <span className="text-muted-foreground">#</span>
           <span className="text-muted-foreground">{t("stats.player")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.playedAbbrev")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.wonAbbrev")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.lostAbbrev")}</span>
-          {hasLegData && <span className="text-muted-foreground text-center">{t("tournament.legDiffAbbrev")}</span>}
+          {hasLegData && (
+            <>
+              <span className="text-muted-foreground text-center">{t("tournament.legsAbbrev")}</span>
+              <span className="text-muted-foreground text-center">{t("tournament.legDiffAbbrev")}</span>
+            </>
+          )}
           <span className="text-muted-foreground text-center">{t("tournament.pointsAbbrev")}</span>
           {standings.map((s, i) => (
             <div className="contents" key={s.name}>
@@ -81,6 +86,7 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
               <span className="text-center">{s.played}</span>
               <span className="text-center text-secondary">{s.won}</span>
               <span className="text-center text-destructive">{s.lost}</span>
+              {hasLegData && <span className="text-center tabular-nums text-muted-foreground">{s.legsFor}:{s.legsAgainst}</span>}
               {hasLegData && (
                 <span className={`text-center tabular-nums ${s.legsFor - s.legsAgainst > 0 ? "text-secondary" : s.legsFor - s.legsAgainst < 0 ? "text-destructive" : "text-muted-foreground"}`}>
                   {s.legsFor - s.legsAgainst > 0 ? "+" : ""}{s.legsFor - s.legsAgainst}

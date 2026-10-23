@@ -541,7 +541,7 @@ export type BracketActionPayload =
   | { type: "setKoWinner"; matchId: string; winner: string; score1?: number; score2?: number }
   | { type: "setKoScore"; matchId: string; slot: 1 | 2 }
   | { type: "resetKoMatch"; matchId: string }
-  | { type: "setRrWinner"; matchId: string; winner: string }
+  | { type: "setRrWinner"; matchId: string; winner: string; score1?: number; score2?: number }
   | { type: "resetRrMatch"; matchId: string };
 
 export interface RoundRobinStanding {

@@ -1283,7 +1283,7 @@ const TournamentPage = () => {
     if (!activeTournament) return;
     if (activeTournament.mode === "round-robin") {
       const bracket = (activeTournament.bracket as RoundRobinMatch[]).map((m) => {
-        if (action.type === "setRrWinner" && m.id === action.matchId) return { ...m, winner: action.winner, played: true };
+        if (action.type === "setRrWinner" && m.id === action.matchId) return { ...m, winner: action.winner, score1: action.score1, score2: action.score2, played: true };
         if (action.type === "resetRrMatch" && m.id === action.matchId) return { ...m, winner: undefined, played: false };
         return m;
       });
@@ -1860,8 +1860,32 @@ const TournamentPage = () => {
   // Routes through runBracketAction/applyBracketAction — same CAS-with-retry write and offline
   // queueing as the KO actions above; round-robin ties (both manual taps and live-game
   // auto-finishes) are just as race-prone across multiple boards.
-  const setRrWinner = async (matchId: string, winner: string) => {
-    await runBracketAction({ type: "setRrWinner", matchId, winner });
+  const setRrWinner = async (matchId: string, winner: string, score1?: number, score2?: number) => {
+    await runBracketAction({ type: "setRrWinner", matchId, winner, score1, score2 });
+  };
+
+  /** Manual round-robin result entry: tapping a player's "✓" opens a small dialog for the legs
+   *  (player1 : player2) instead of recording a bare winner — the legs feed the standings'
+   *  leg-difference column. "Ohne Ergebnis" keeps the old winner-only behaviour. */
+  const [rrResultEntry, setRrResultEntry] = useState<{ matchId: string; winner: string; player1: string; player2: string } | null>(null);
+  const [rrLegsText, setRrLegsText] = useState<[string, string]>(["", ""]);
+  const openRrResultEntry = (m: RoundRobinMatch, winner: string) => {
+    setRrLegsText(["", ""]);
+    setRrResultEntry({ matchId: m.id, winner, player1: m.player1, player2: m.player2 });
+  };
+  const rrLegsParsed = (() => {
+    if (!rrResultEntry) return null;
+    const [a, b] = rrLegsText.map((v) => (v.trim() === "" ? NaN : Number(v)));
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return null;
+    const winnerLegs = rrResultEntry.winner === rrResultEntry.player1 ? a : b;
+    const loserLegs = rrResultEntry.winner === rrResultEntry.player1 ? b : a;
+    return winnerLegs > loserLegs ? { score1: a, score2: b } : null;
+  })();
+  const submitRrResultEntry = (withScore: boolean) => {
+    if (!rrResultEntry) return;
+    if (withScore && !rrLegsParsed) return;
+    void setRrWinner(rrResultEntry.matchId, rrResultEntry.winner, withScore ? rrLegsParsed!.score1 : undefined, withScore ? rrLegsParsed!.score2 : undefined);
+    setRrResultEntry(null);
   };
 
   /** Round-robin's equivalent of resetKoMatch — a mis-tapped setRrWinner had no way back at all
@@ -3358,16 +3382,54 @@ const TournamentPage = () => {
       {highlightsSection}
       {forecastSection}
 
+      <AlertDialog open={rrResultEntry !== null} onOpenChange={(open) => { if (!open) setRrResultEntry(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("tournament.enterResultTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {rrResultEntry?.player1} vs. {rrResultEntry?.player2} · {t("tournament.enterResultWinner")}: {rrResultEntry?.winner}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            {([rrResultEntry?.player1, rrResultEntry?.player2] as const).map((name, idx) => (
+              <label key={idx} className="text-xs text-muted-foreground">
+                <span className="mb-1 block truncate">{name}</span>
+                <Input
+                  type="number" inputMode="numeric" min={0}
+                  value={rrLegsText[idx]}
+                  onChange={(e) => setRrLegsText((prev) => (idx === 0 ? [e.target.value, prev[1]] : [prev[0], e.target.value]))}
+                  className="text-center text-lg font-bold"
+                  autoFocus={idx === 0}
+                />
+              </label>
+            ))}
+          </div>
+          {rrLegsText.some((v) => v.trim() !== "") && !rrLegsParsed && (
+            <p className="text-xs text-destructive">{t("tournament.enterResultInvalid")}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <Button variant="outline" onClick={() => submitRrResultEntry(false)}>{t("tournament.enterResultWithoutScore")}</Button>
+            <Button onClick={() => submitRrResultEntry(true)} disabled={!rrLegsParsed}>{t("tournament.enterResultSave")}</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Standings table */}
       <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 mb-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
-        <div className={`grid ${standings.some((s) => s.legsFor + s.legsAgainst > 0) ? "grid-cols-[auto_1fr_repeat(5,38px)]" : "grid-cols-[auto_1fr_repeat(4,40px)]"} gap-x-2 gap-y-1 text-xs`}>
+        <div className={`grid ${standings.some((s) => s.legsFor + s.legsAgainst > 0) ? "grid-cols-[auto_1fr_repeat(3,34px)_50px_38px_34px]" : "grid-cols-[auto_1fr_repeat(4,40px)]"} gap-x-2 gap-y-1 text-xs`}>
           <span className="text-muted-foreground">#</span>
           <span className="text-muted-foreground">{t("stats.player")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.playedAbbrev")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.wonAbbrev")}</span>
           <span className="text-muted-foreground text-center">{t("tournament.lostAbbrev")}</span>
-          {standings.some((s) => s.legsFor + s.legsAgainst > 0) && <span className="text-muted-foreground text-center">{t("tournament.legDiffAbbrev")}</span>}
+          {standings.some((s) => s.legsFor + s.legsAgainst > 0) && (
+            <>
+              <span className="text-muted-foreground text-center">{t("tournament.legsAbbrev")}</span>
+              <span className="text-muted-foreground text-center">{t("tournament.legDiffAbbrev")}</span>
+            </>
+          )}
           <span className="text-muted-foreground text-center">{t("tournament.pointsAbbrev")}</span>
           {pagedRrStandings.visible.map((s) => {
             // True rank in the full table, not the index within this page/slice.
@@ -3381,6 +3443,9 @@ const TournamentPage = () => {
                 <span className="text-center">{s.played}</span>
                 <span className="text-center text-secondary">{s.won}</span>
                 <span className="text-center text-destructive">{s.lost}</span>
+                {standings.some((x) => x.legsFor + x.legsAgainst > 0) && (
+                  <span className="text-center tabular-nums text-muted-foreground">{s.legsFor}:{s.legsAgainst}</span>
+                )}
                 {standings.some((x) => x.legsFor + x.legsAgainst > 0) && (
                   <span className={`text-center tabular-nums ${s.legsFor - s.legsAgainst > 0 ? "text-secondary" : s.legsFor - s.legsAgainst < 0 ? "text-destructive" : "text-muted-foreground"}`}>
                     {s.legsFor - s.legsAgainst > 0 ? "+" : ""}{s.legsFor - s.legsAgainst}
@@ -3470,10 +3535,10 @@ const TournamentPage = () => {
                     )}
                     {canEditResults && (
                       <>
-                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player1)}>
+                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => openRrResultEntry(m, m.player1)}>
                           {m.player1} ✓
                         </Button>
-                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => setRrWinner(m.id, m.player2)}>
+                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => openRrResultEntry(m, m.player2)}>
                           {m.player2} ✓
                         </Button>
                       </>
