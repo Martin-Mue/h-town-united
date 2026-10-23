@@ -224,6 +224,11 @@ export interface BoardScore { baseValue: number; multiplier: 1 | 2 | 3; points: 
 // sessions and devices (see the per-player heatmap in Statistics).
 export const scoreFromBoardPoint = (fx: number, fy: number, H: Homography): BoardScore => {
   const { x: u, y: v } = applyHomography(H, { x: fx, y: fy });
+  return scoreFromCanonicalPoint(u, v);
+};
+
+/** Scores a point that is already in board-canonical coordinates (radius 1 = double-ring edge). */
+export const scoreFromCanonicalPoint = (u: number, v: number): BoardScore => {
   const radius = Math.hypot(u, v);
   let angleDeg = (Math.atan2(v, u) * 180) / Math.PI + 90; // 0° = top (D20), growing clockwise
   angleDeg = ((angleDeg % 360) + 360) % 360;
