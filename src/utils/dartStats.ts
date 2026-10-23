@@ -1,4 +1,7 @@
 import { isCheckoutPossible } from "@/utils/checkoutTable";
+import {
+  EMPTY_SCORING_PHASE, scoringPhaseTotals, combineScoringPhaseTotals, type ScoringPhaseTotals,
+} from "@/utils/averageToCheckoutRange";
 
 /** "Erfahrung" (experience) skill value for a 0-100 radar chart — Players.tsx's own player-
  *  detail radar and Statistics.tsx's H2H comparison radar independently picked different
@@ -394,6 +397,9 @@ export interface StatBundle {
   checkout: CheckoutStats;
   tierBreakdown: ScoreTierCount[];
   segments: SegmentCounts;
+  /** Points/darts thrown while the remaining score was still above 170 — the basis of the
+   *  "Average bis 170" stat (see averageToCheckoutRange.ts). */
+  scoringPhase: ScoringPhaseTotals;
 }
 
 /** Safe to compute directly from one leg's own throws — a single leg is one continuous sequence
@@ -411,6 +417,7 @@ export const computeLegStatBundle = (throws: DartThrow[], startingScore: number,
   checkout: isCricket ? { attempts: 0, hits: 0, percentage: 0, highestCheckout: 0 } : computeCheckoutStats(throws, startingScore),
   tierBreakdown: scoreTierBreakdown(throws),
   segments: segmentBreakdown(throws),
+  scoringPhase: isCricket ? EMPTY_SCORING_PHASE : scoringPhaseTotals(throws, startingScore),
 });
 
 /** Combines per-leg bundles into a match-wide ("Gesamt") view. `average` is safe to recompute
@@ -445,5 +452,6 @@ export const combineStatBundles = (bundles: StatBundle[], overallThrows: DartThr
     checkout: combineCheckoutStats(bundles.map(b => b.checkout)),
     tierBreakdown: combineScoreTiers(bundles.map(b => b.tierBreakdown)),
     segments: combineSegmentCounts(bundles.map(b => b.segments)),
+    scoringPhase: combineScoringPhaseTotals(bundles.map(b => b.scoringPhase)),
   };
 };

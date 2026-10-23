@@ -814,4 +814,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Üç ok at, çek – tahta boşalınca tur 4 saniye sonra onaylanır ve sıra sonraki oyuncuya geçer. Bir oka dokunmak geri sayımı durdurur, rahatça düzeltirsin. Skorlar artık üç büyük karoda görünür. Hızlı atılan oklar ve sıkı gruplar daha güvenilir algılanır, ilk atıştan önceki hayalet ok kaybolur.",
     },
   },
+  {
+    id: "2026-10-23-average-to-170",
+    date: "2026-10-23",
+    title: {
+      de: "Neu: Average bis 170",
+      en: "New: Average to 170",
+      fr: "Nouveau : moyenne jusqu'à 170",
+      pl: "Nowość: średnia do 170",
+      nl: "Nieuw: gemiddelde tot 170",
+      tr: "Yeni: 170'e kadar ortalama",
+    },
+    description: {
+      de: "Die Spielstatistik zeigt jetzt den Average, solange noch kein Checkout möglich war (Rest über 170) – pro Leg und gesamt, im Spieldetail und direkt nach dem Spiel.",
+      en: "Match stats now show your average while no checkout was possible yet (remaining above 170) – per leg and overall, in the match detail and right after the game.",
+      fr: "Les stats du match affichent désormais la moyenne tant qu'aucun checkout n'était possible (reste au-dessus de 170) – par leg et au total, dans le détail du match et juste après la partie.",
+      pl: "Statystyki meczu pokazują teraz średnią, dopóki checkout nie był jeszcze możliwy (reszta powyżej 170) – na leg i łącznie, w szczegółach meczu i zaraz po grze.",
+      nl: "De wedstrijdstatistieken tonen nu het gemiddelde zolang er nog geen checkout mogelijk was (rest boven 170) – per leg en totaal, in het wedstrijddetail en direct na het spel.",
+      tr: "Maç istatistikleri artık checkout henüz mümkün değilken (kalan 170'in üstünde) ortalamayı gösteriyor – leg başına ve toplam, maç detayında ve oyundan hemen sonra.",
+    },
+  },
 ];

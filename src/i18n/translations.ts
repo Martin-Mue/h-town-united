@@ -700,6 +700,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "stats.noCommonGamesFound": { de: "Keine gemeinsamen Spiele gefunden.", en: "No games found between them.", fr: "Aucune partie commune trouvée.", pl: "Nie znaleziono wspólnych gier.", nl: "Geen gezamenlijke potjes gevonden.", tr: "Aralarında oyun bulunamadı." },
   "stats.needTwoPlayersH2H": { de: "Mindestens 2 Spieler nötig für H2H-Vergleich.", en: "At least 2 players needed for a H2H comparison.", fr: "Au moins 2 joueurs nécessaires pour une comparaison H2H.", pl: "Potrzeba co najmniej 2 graczy do porównania H2H.", nl: "Minimaal 2 spelers nodig voor een H2H-vergelijking.", tr: "H2H karşılaştırması için en az 2 oyuncu gerekir." },
   "stats.gameHistory": { de: "Spielverlauf", en: "Game history", fr: "Historique des parties", pl: "Historia gier", nl: "Potjesgeschiedenis", tr: "Oyun geçmişi" },
+  "stats.averageTo170": { de: "Ø bis 170", en: "Avg to 170", fr: "Moy. jusqu'à 170", pl: "Śr. do 170", nl: "Gem. tot 170", tr: "170'e kadar ort." },
   "stats.matchTotal": { de: "Gesamt", en: "Match total", fr: "Total du match", pl: "Suma meczu", nl: "Wedstrijdtotaal", tr: "Maç toplamı" },
   "stats.legByLeg": { de: "Leg für Leg", en: "Leg by leg", fr: "Leg par leg", pl: "Leg po legu", nl: "Leg voor leg", tr: "Leg leg" },
   // Round 3, unscheduled design idea "Match Data Terminal" — MatchDetailDialog.tsx's toggle button.

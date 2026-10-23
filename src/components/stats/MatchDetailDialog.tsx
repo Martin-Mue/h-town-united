@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
+import { averageToCheckoutRange, scoringPhaseTotals, type ScoringPhaseTotals } from "@/utils/averageToCheckoutRange";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { average, first9Average, computeCricketStats, type DartThrow, type StatBundle } from "@/utils/dartStats";
@@ -42,6 +43,8 @@ interface MatchDetailDialogProps {
  *  a full round-by-round replay per leg (via ThrowHistoryEditor in read-only mode) that the old
  *  inline accordion never showed, only leg-level averages. Legs start collapsed; only the summary
  *  line is visible until tapped. */
+const averageTo170Label = (totals: ScoringPhaseTotals) => averageToCheckoutRange(totals)?.toFixed(1) ?? "–";
+
 const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDialogProps) => {
   const { t, language } = useLanguage();
   const [expandedLeg, setExpandedLeg] = useState<number | null>(null);
@@ -53,7 +56,8 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
       const c = computeCricketStats(r.throws);
       return `MPR ${c.mpr.toFixed(2)} · ${c.hitRate.toFixed(0)}% ${t("stats.hitRate")}`;
     }
-    return `Ø ${average(r.throws).toFixed(1)}${r.throws.length > 0 ? ` · F9 ${first9Average(r.throws).toFixed(1)}` : ""}`;
+    const to170 = averageToCheckoutRange(scoringPhaseTotals(r.throws, r.starting_score));
+    return `Ø ${average(r.throws).toFixed(1)}${r.throws.length > 0 ? ` · F9 ${first9Average(r.throws).toFixed(1)}` : ""}${to170 !== null ? ` · ${t("stats.averageTo170")} ${to170.toFixed(1)}` : ""}`;
   };
 
   return (
@@ -90,6 +94,7 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
                     <StatTile label="First 9" value={p.bundle.first9.toFixed(1)} />
                     <StatTile label="CO %" value={`${p.bundle.checkout.percentage.toFixed(0)}%`} tone="secondary" />
                     <StatTile label={t("game.highscoreLabel")} value={p.bundle.highscore} tone="accent" />
+                    <StatTile label={t("stats.averageTo170")} value={averageTo170Label(p.bundle.scoringPhase)} />
                   </div>
                   {(p.bundle.tonPlus > 0 || p.bundle.s180 > 0) && (
                     <p className="text-[10px] text-muted-foreground text-center mt-2">

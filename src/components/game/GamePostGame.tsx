@@ -7,6 +7,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import type { GameState } from "@/types/game";
 import type { computePostGameStats } from "@/utils/postGameStats";
 import { segmentCount, type StatBundle } from "@/utils/dartStats";
+import { averageToCheckoutRange } from "@/utils/averageToCheckoutRange";
 import type { TournamentLink } from "@/lib/activeGameSnapshot";
 import type { LeagueLink } from "@/hooks/useLeagueLink";
 
@@ -111,6 +112,9 @@ const GamePostGame = ({
                 <p className="text-muted-foreground">Ø <span className="text-foreground font-bold">{s.average.toFixed(1)}</span></p>
                 <p className="text-muted-foreground">High <span className="text-foreground font-bold">{s.highscore}</span></p>
                 <p className="text-muted-foreground">First 9 <span className="text-foreground font-bold">{s.first9.toFixed(1)}</span></p>
+                {averageToCheckoutRange(s.scoringPhase) !== null && (
+                  <p className="text-muted-foreground">{t("stats.averageTo170")} <span className="text-foreground font-bold">{averageToCheckoutRange(s.scoringPhase)!.toFixed(1)}</span></p>
+                )}
                 {s.s180 > 0 && <p className="text-accent font-bold">🎯 {s.s180}× 180!</p>}
               </div>
             );
