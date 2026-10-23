@@ -934,4 +934,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Round robin tablosu artık kazanılan:kaybedilen legleri ve leg farkını gösteriyor (uygulamada ve canlı görünümde); farkı doğrudan karşılaşmadan sonra eşitlik bozucu olarak kullanıyor. Elle girerken uygulama sonucu soruyor (örn. 2:1) – ya da skorsuz kaydedebilirsin.",
     },
   },
+  {
+    id: "2026-10-23-settings-and-guides",
+    date: "2026-10-23",
+    title: {
+      de: "Einstellungen und Anleitungen überarbeitet",
+      en: "Settings and guides reworked",
+      fr: "Paramètres et guides remaniés",
+      pl: "Przebudowane ustawienia i poradniki",
+      nl: "Instellingen en handleidingen vernieuwd",
+      tr: "Ayarlar ve rehberler yenilendi",
+    },
+    description: {
+      de: "Die Einstellungen sind in Darstellung, Spiel-Standards und Konto gegliedert – neu: Standard-Eingabeart, Ton, Sprachansage und Walk-on schon vorab festlegen. Die Anleitungen haben eine Suche und drei neue Kapitel: Der Spielscreen, Kamera-Erkennung und Einstellungen.",
+      en: "Settings are grouped into appearance, game defaults and account – new: set the default input mode, sound, caller voice and walk-on up front. The guides got a search and three new chapters: the play screen, camera detection and settings.",
+      fr: "Les paramètres sont regroupés en apparence, réglages de jeu et compte – nouveau : définir à l'avance le mode de saisie, le son, la voix d'annonce et le walk-on. Les guides ont une recherche et trois nouveaux chapitres : l'écran de jeu, la détection par caméra et les paramètres.",
+      pl: "Ustawienia są podzielone na wygląd, ustawienia gry i konto – nowość: z góry ustawisz tryb wprowadzania, dźwięk, głos zapowiadacza i walk-on. Poradniki mają wyszukiwarkę i trzy nowe rozdziały: ekran gry, rozpoznawanie kamerą i ustawienia.",
+      nl: "De instellingen zijn ingedeeld in weergave, spelstandaarden en account – nieuw: vooraf invoermethode, geluid, aankondigerstem en walk-on instellen. De handleidingen hebben een zoekfunctie en drie nieuwe hoofdstukken: het speelscherm, camerabepaling en instellingen.",
+      tr: "Ayarlar görünüm, oyun varsayılanları ve hesap olarak gruplandı – yeni: giriş şekli, ses, anons sesi ve walk-on önceden belirlenebiliyor. Rehberlerde arama ve üç yeni bölüm var: oyun ekranı, kamera tanıma ve ayarlar.",
+    },
+  },
 ];

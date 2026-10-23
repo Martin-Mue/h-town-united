@@ -14,6 +14,8 @@ export interface GuideSection {
    *  undefined if this section has no screenshot yet. Independent of the Guide-level `image`. */
   image?: string;
   imageAlt?: string;
+  /** Short scannable points rendered as a list under `body` — preferred over long paragraphs. */
+  bullets?: string[];
 }
 
 export interface Guide {
@@ -68,6 +70,127 @@ export const GUIDES: Guide[] = [
     ],
   },
   {
+    id: "spielscreen",
+    title: "Der Spielscreen",
+    teaser: "Was die Karten zeigen, wie du eingibst, korrigierst und Checkouts einblendest.",
+    sections: [
+      {
+        body: ["Während eines Spiels siehst du oben die Spielerkarten, darunter Checkout-Hilfe und Zahlenfeld. Der Spieler am Zug hat die große, leuchtende Karte."],
+      },
+      {
+        heading: "Die Spielerkarten",
+        body: ["Jede Karte zeigt auf einen Blick:"],
+        bullets: [
+          "Restpunkte – die große Zahl (bei Cricket die Punkte).",
+          "Leg Ø – dein Schnitt im aktuellen Leg. Match Ø – dein Schnitt über alle Legs des Matches (erscheint ab dem zweiten Leg).",
+          "Darts – wie viele Darts du in diesem Leg geworfen hast. Letzte – die Punktzahl deiner letzten vollen Aufnahme.",
+          "Die drei Punkte unter den Zahlen zeigen, den wievielten Dart der Aufnahme du gerade wirfst. Dazu 🔥 für Legs in Folge und 🎯 für 180er.",
+        ],
+      },
+      {
+        heading: "Punkte eingeben",
+        body: ["Im Zahlenfeld stehen drei Eingabearten zur Wahl:"],
+        bullets: [
+          "Einzeln – jeder Dart für sich: Zahl antippen, T = Triple, D = Double. Darunter Miss, Bull und Bullseye.",
+          "Schnell – die ganze Aufnahme mit einem Tipp (z. B. 60, 100, 180).",
+          "Eintippen – die Summe der Aufnahme als Zahl eingeben.",
+          "Das Mikrofon rechts neben den Reitern nimmt die Aufnahme per Sprache auf – du bestätigst vor dem Speichern immer noch einmal.",
+          "Mitten in einer Aufnahme ist nur „Einzeln“ möglich. Welche Eingabeart ein neues Spiel startet, stellst du unter Einstellungen → Spiel-Standards ein.",
+        ],
+      },
+      {
+        heading: "Checkout-Hilfe bei Bedarf",
+        body: ["Rechts neben der Zeile „Leg 2 · Runde 3 …“ blendet der Knopf „Checkout“ den Checkout-Weg für den aktuellen Spieler ein und aus (bei Double-Out, ab 170 Rest und darunter). In Turnier-Spielen ist er zunächst aus, damit niemand ungewollt Hinweise bekommt."],
+      },
+      {
+        heading: "Fehler korrigieren",
+        body: ["Mit „Rückgängig“ oben nimmst du den letzten Dart zurück. Für ältere Würfe öffnet „Korrigieren“ unter den Zahlen einen Dialog: Du kannst einen Dart ändern, löschen oder einen fehlenden nachtragen. Korrigierte Darts sind markiert. Bei Online-Matches ist beides gesperrt."],
+      },
+      {
+        heading: "Cricket",
+        body: ["Die Cricket-Tafel zeigt je Zahl einen Strich (/), zwei Striche (✕) und – grün hinterlegt – eine geschlossene Zahl. Die Spalte des Spielers am Zug ist hervorgehoben."],
+      },
+      {
+        heading: "Leg gewonnen",
+        body: ["Nach jedem Leg erscheint kurz ein Hinweis, wer es gewonnen hat. Am Ende des Matches siehst du die Auswertung mit direktem Vergleich beider Seiten."],
+      },
+    ],
+  },
+  {
+    id: "kamera-erkennung",
+    title: "Kamera-Erkennung",
+    teaser: "Handy aufstellen, Board kalibrieren, Würfe automatisch erkennen lassen.",
+    sections: [
+      {
+        body: ["Mit der Kamera erkennt die App deine Darts direkt am Board – du tippst nichts ein. Umschalten kannst du jederzeit oben im Spiel zwischen Tastatur- und Kamera-Symbol."],
+      },
+      {
+        heading: "Aufbau",
+        body: [],
+        bullets: [
+          "Handy fest und gerade vor dem Board aufstellen, sodass das ganze Board im Bild ist.",
+          "Gutes, gleichmäßiges Licht ohne Schatten auf dem Board hilft mehr als alles andere.",
+          "Beim ersten Mal kalibrierst du das Board: Die App legt sich dabei auf die echten Doppel- und Triple-Drähte. Danach merkt sie sich das für das Gerät.",
+        ],
+      },
+      {
+        heading: "Beim Werfen",
+        body: [],
+        bullets: [
+          "Jeder gelandete Dart wird erkannt und oben in der Karte angezeigt.",
+          "Nach der Aufnahme (Darts ziehen) schließt die App die Runde nach einem kurzen Countdown selbst ab.",
+          "Stimmt ein Dart nicht, korrigierst du ihn wie gewohnt über „Korrigieren“ – oder tippst die Aufnahme über „Manuelle Eingabe“ ein.",
+          "Bei einem möglichen Finish fragt die App nach, mit welchem Dart du ausgecheckt hast, falls das nicht eindeutig ist.",
+        ],
+      },
+      {
+        heading: "Wenn es hakt",
+        body: ["Kamera aus, Board neu ausrichten, Kalibrierung wiederholen oder mit „Manuelle Eingabe“ weiterspielen – das Spiel geht immer weiter. Kamera-Erkennung ist ein Vereins-Feature; ist sie bei euch nicht freigeschaltet, erscheint beim Antippen ein Hinweis."],
+      },
+    ],
+  },
+  {
+    id: "einstellungen",
+    title: "Einstellungen",
+    teaser: "Sprache, Design, Spiel-Standards, Benachrichtigungen und PIN.",
+    sections: [
+      {
+        body: ["Alle Einstellungen gelten nur für dich und dieses Gerät – außer dem Impressum, das ein Admin für den ganzen Verein pflegt."],
+      },
+      {
+        heading: "Darstellung",
+        body: [],
+        bullets: [
+          "Sprache – die App gibt es auf Deutsch, Englisch, Französisch, Polnisch, Niederländisch und Türkisch (die Anleitungen sind nur auf Deutsch).",
+          "Dunkelmodus – schaltet zwischen hell und dunkel um.",
+          "Meine Farbe – eigene Akzentfarben, ohne dass sich etwas bei anderen ändert. „Vereinsfarbe“ stellt das Vereinsdesign wieder her.",
+        ],
+      },
+      {
+        heading: "Spiel-Standards",
+        body: ["Womit jedes neue Spiel startet – im Spiel selbst bleibt alles umschaltbar:"],
+        bullets: [
+          "Standard-Eingabeart: Einzeln, Schnell oder Eintippen.",
+          "Ton & Haptik an oder aus.",
+          "Sprachansage: männliche, weibliche, Yoda- oder keine Stimme.",
+          "Walk-on-Intro (Einlaufsequenz) an oder aus.",
+        ],
+      },
+      {
+        heading: "Mitteilungen & Konto",
+        body: [],
+        bullets: [
+          "Benachrichtigungen – Push für Herausforderungen und anstehende Turnierpartien (nicht in jedem Browser verfügbar).",
+          "PIN pro Spieler – eine vierstellige PIN schützt dein Profil, wenn mehrere Leute ein Gerät benutzen. Setzen, ändern oder entfernen geht hier.",
+        ],
+      },
+      {
+        heading: "Impressum",
+        body: ["Pflichtangaben des Vereins. Nur Admins können sie bearbeiten; fehlen Angaben, weist die App darauf hin."],
+      },
+    ],
+  },
+  {
     id: "funktionsuebersicht",
     title: "Alle Funktionen im Überblick",
     teaser: "Ein kompletter Rundgang durch jeden Bereich der App.",
@@ -79,8 +202,14 @@ export const GUIDES: Guide[] = [
       },
       {
         heading: "Spielen",
-        body: [
-          "501, 301 (und weitere X01-Varianten, inklusive frei wählbarem Custom-Startscore) sowie Cricket (auch mit eigenen Zielzahlen), wahlweise mit Kamera-Erkennung (die App zählt eure Würfe automatisch vom Board ab) oder manueller Eingabe über ein großes Zahlenfeld. Dazu jede Menge Optionen: Team-Modus (2v2 bis 4v4), Bot-Gegner in fünf Schwierigkeitsstufen, ein „Geist-Modus\" gegen die eigene Bestleistung, Handicap-Vorsprung, ein voller Sets-Modus (Best of Sätze, je Satz Best of Legs), ein optionales Aufwärm-Timer vor dem Match und eine cinematische Einlaufsequenz mit Stats-Vergleich und Gewinnwahrscheinlichkeit. Außerdem: optionale Checkout-Vorschläge, ein Münzwurf-Ersatz vor dem Spiel („Bull-off\") inklusive Stechen bei Gleichstand, Undo für den letzten Wurf, automatische Wiederherstellung falls die App mal abstürzt oder geschlossen wird, eine Sprachansage der Punkte (mehrere Stimmen wählbar, auch abschaltbar) und bei Kamera-Scoring ein optionaler KI-Kommentator, der live auf besondere Momente reagiert. Nach dem Spiel lässt sich auf Wunsch ein von KI geschriebener kurzer Spielbericht erstellen. Alle Details dazu in der eigenen Anleitung „Spielmodi & Optionen\" weiter unten.",
+        body: ["Alles rund ums Spiel – Details in den Anleitungen „Der Spielscreen“, „Kamera-Erkennung“ und „Spielmodi & Optionen“:"],
+        bullets: [
+          "Modi: 501, 301 und weitere X01-Varianten mit frei wählbarem Startscore sowie Cricket (auch mit eigenen Zielzahlen).",
+          "Eingabe: Zahlenfeld (einzeln, schnell, eintippen), Sprache oder automatische Kamera-Erkennung.",
+          "Anzeige: Leg- und Match-Schnitt, Darts, letzte Aufnahme und auf Wunsch der Checkout-Weg.",
+          "Optionen: Teams (2v2 bis 4v4), Bots in fünf Stufen, Geist-Modus, Handicap, Sets-Modus, Bull-off, Aufwärm-Timer und Einlaufsequenz.",
+          "Komfort: Rückgängig, Korrigieren, Sprachansage, automatische Wiederherstellung nach einem Absturz.",
+          "Nach dem Spiel: Auswertung mit direktem Vergleich, optional ein von KI geschriebener Spielbericht.",
         ],
       },
       {
@@ -231,6 +360,13 @@ export const GUIDES: Guide[] = [
         heading: "Turnier starten",
         body: [
           "Ganz unten „Turnier starten\" legt den Turnierbaum an. Danach lässt sich jederzeit direkt aus dem Baum heraus ein Spiel für die anstehende Partie starten. Ein „Scorekeeper\" für den Abend wird dabei automatisch zugelost — bei Bedarf lässt sich neu auslosen.",
+        ],
+      },
+      {
+        heading: "Round-Robin: Ergebnisse & Tabelle",
+        body: [
+          "Bei Round-Robin trägst du Ergebnisse über „Spieler ✓“ ein: Es öffnet sich ein Dialog für die Legs beider Spieler (z. B. 2 : 1) – oder du speicherst „Ohne Ergebnis“, dann zählt nur der Sieg. Live gespielte Partien übernehmen den Spielstand automatisch.",
+          "Die Tabelle zeigt Spiele, Siege, Niederlagen, gewonnene:verlorene Legs, die Leg-Differenz und Punkte (2 pro Sieg). Bei Punkt- und Siegegleichstand entscheidet zuerst der direkte Vergleich, dann die Leg-Differenz.",
         ],
       },
       {
@@ -442,7 +578,7 @@ export const GUIDES: Guide[] = [
       {
         heading: "Während des Spiels",
         body: [
-          "Eine Sprachansage der Punkte (mehrere Stimmen zur Auswahl, darunter auch Yoda), ein „X Legs in Folge\"-Momentum-Hinweis, Undo für den letzten Wurf, und bei X01 ein optionales Rundenlimit pro Leg. Bei Kamera-Scoring lässt sich zusätzlich ein KI-Kommentator zuschalten, der auf besondere Momente (180er, Finish, Legsieg, überworfen) mit einer kurzen, von KI generierten Zuruf-Zeile reagiert — ein Paid-Feature, das du in der Kamera-Ansicht ein- und ausschalten kannst.",
+          "Eine Sprachansage der Punkte (mehrere Stimmen zur Auswahl, darunter auch Yoda), ein „X Legs in Folge\"-Momentum-Hinweis, Rückgängig und Korrigieren (siehe „Der Spielscreen“), und bei X01 ein optionales Rundenlimit pro Leg. Bei Kamera-Scoring lässt sich zusätzlich ein KI-Kommentator zuschalten, der auf besondere Momente (180er, Finish, Legsieg, überworfen) mit einer kurzen, von KI generierten Zuruf-Zeile reagiert — ein Paid-Feature, das du in der Kamera-Ansicht ein- und ausschalten kannst.",
         ],
       },
       {

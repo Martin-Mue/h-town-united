@@ -18,7 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LANGUAGES, type Language } from "@/i18n/translations";
 import { CLUB_THEME_PRESETS, resolveClubTheme, DEFAULT_CLUB_THEME_PRESET_ID } from "@/lib/clubThemePresets";
-import { SectionCard } from "@/components/stats/StatPrimitives";
+import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
+import GameDefaultsSection from "@/components/settings/GameDefaultsSection";
 import GuidesTab from "@/components/settings/GuidesTab";
 import { generatePinSalt, hashPin, isValidPinFormat } from "@/lib/playerPin";
 
@@ -167,6 +168,7 @@ const SettingsPage = () => {
       {activeTab === "settings" && (
       <>
       <div className="space-y-3 mb-6">
+        <Eyebrow icon={Palette}>{t("settings.groupAppearance")}</Eyebrow>
         <SectionCard className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Languages className="w-5 h-5 text-muted-foreground shrink-0" />
@@ -199,19 +201,6 @@ const SettingsPage = () => {
             aria-label={t("settings.darkMode")}
           />
         </SectionCard>
-
-        {push.supported && (
-          <SectionCard className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Bell className="w-5 h-5 text-muted-foreground shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{t("settings.notifications")}</p>
-                <p className="text-xs text-muted-foreground">{t("settings.notificationsDesc")}</p>
-              </div>
-            </div>
-            <Switch checked={push.enabled} onCheckedChange={push.toggle} disabled={push.busy} aria-label={t("settings.notifications")} />
-          </SectionCard>
-        )}
 
         {/* Personal color override — local to this device only (localStorage, see
             ClubBrandingContext), never written anywhere shared. Everyone gets this, not just
@@ -267,6 +256,27 @@ const SettingsPage = () => {
             })}
           </div>
         </SectionCard>
+
+        <div className="pt-3">
+          <Eyebrow icon={SlidersHorizontal}>{t("settings.groupGame")}</Eyebrow>
+          <GameDefaultsSection />
+        </div>
+
+        <div className="pt-3">
+          <Eyebrow icon={KeyRound}>{t("settings.groupAccount")}</Eyebrow>
+        </div>
+        {push.supported && (
+          <SectionCard className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Bell className="w-5 h-5 text-muted-foreground shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{t("settings.notifications")}</p>
+                <p className="text-xs text-muted-foreground">{t("settings.notificationsDesc")}</p>
+              </div>
+            </div>
+            <Switch checked={push.enabled} onCheckedChange={push.toggle} disabled={push.busy} aria-label={t("settings.notifications")} />
+          </SectionCard>
+        )}
 
         {/* "PIN pro Spieler": only meaningful once you have a linked profile at all — a bare
             account with no players row (not yet created one, see Players.tsx) has nothing to
