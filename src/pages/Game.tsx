@@ -2958,6 +2958,7 @@ const GamePage = () => {
                     onPendingChange={setPendingLiveDarts}
                     dartsRemaining={Math.max(1, 3 - dartsThisRound)}
                     playerName={currentPlayerName}
+                    remainingScore={game.mode !== "cricket" ? currentRemaining : undefined}
                     onRequestManualEntry={() => setShowManualInput(true)}
                   />
                 </Suspense>

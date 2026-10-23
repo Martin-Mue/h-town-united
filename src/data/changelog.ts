@@ -954,4 +954,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Ayarlar görünüm, oyun varsayılanları ve hesap olarak gruplandı – yeni: giriş şekli, ses, anons sesi ve walk-on önceden belirlenebiliyor. Rehberlerde arama ve üç yeni bölüm var: oyun ekranı, kamera tanıma ve ayarlar.",
     },
   },
+  {
+    id: "2026-10-26-fullscreen-camera",
+    date: "2026-10-26",
+    title: {
+      de: "Kamera im Vollbild – ohne Scrollen",
+      en: "Full-screen camera – no scrolling",
+      fr: "Caméra en plein écran – sans défiler",
+      pl: "Kamera na pełnym ekranie – bez przewijania",
+      nl: "Camera op volledig scherm – zonder scrollen",
+      tr: "Tam ekran kamera – kaydırmadan",
+    },
+    description: {
+      de: "Die Kamera nutzt jetzt den ganzen Bildschirm: oben Spieler und Restpunktzahl, in der Mitte das Bild, unten drei große Dart-Kacheln mit der Summe. Ein Tipp auf eine Kachel öffnet die Korrektur, ein leerer Platz ist mit einem Tipp ein Fehlwurf. „Jetzt scannen“ entfällt, das Erkannte erscheint von selbst. Einstellungen stecken hinter dem Zahnrad, „Manuell“ blendet die Kamera aus. Die automatische Übernahme ist jetzt standardmäßig aus. Außerdem erkennt die App am Bild selbst, ob noch Darts stecken, beurteilt jeden Dart einzeln und rückt die Kalibrierung während des Spiels von allein wieder auf das Board.",
+      en: "The camera now uses the whole screen: player and remaining score on top, the picture in the middle, three big dart tiles with the total below. Tapping a tile opens the correction, an empty slot is a miss with one tap. “Scan now” is gone, what is detected simply appears. Settings sit behind the gear, “Manual” tucks the camera away. Automatic take-over is now off by default. The app also tells from the picture whether darts are still in the board, judges every dart on its own, and settles the calibration back onto the board by itself while you play.",
+      fr: "La caméra utilise maintenant tout l'écran : joueur et score restant en haut, l'image au milieu, trois grandes tuiles de fléchettes avec le total en bas. Toucher une tuile ouvre la correction, une place vide devient un raté d'un seul toucher. « Scanner maintenant » disparaît, ce qui est détecté apparaît tout seul. Les réglages sont derrière la roue dentée, « Manuel » masque la caméra. La validation automatique est désormais désactivée par défaut. L'appli voit aussi sur l'image si des fléchettes sont encore plantées, juge chaque fléchette séparément et recale l'étalonnage sur la cible pendant le jeu.",
+      pl: "Kamera zajmuje teraz cały ekran: u góry gracz i pozostałe punkty, pośrodku obraz, na dole trzy duże kafelki lotek z sumą. Dotknięcie kafelka otwiera poprawianie, puste miejsce to pudło jednym dotknięciem. „Skanuj teraz” znika, wykryte pojawia się samo. Ustawienia są pod kołem zębatym, „Ręcznie” chowa kamerę. Automatyczne zatwierdzanie jest teraz domyślnie wyłączone. Aplikacja sama widzi na obrazie, czy lotki jeszcze tkwią w tarczy, ocenia każdą lotkę osobno i w trakcie gry sama dosuwa kalibrację do tarczy.",
+      nl: "De camera gebruikt nu het hele scherm: speler en resterende score bovenaan, het beeld in het midden, onderaan drie grote darttegels met het totaal. Een tegel aantikken opent de correctie, een lege plek is met één tik een misser. “Nu scannen” verdwijnt, wat herkend wordt verschijnt vanzelf. Instellingen zitten achter het tandwiel, “Handmatig” verbergt de camera. Automatisch overnemen staat nu standaard uit. De app ziet ook aan het beeld of er nog darts in het bord zitten, beoordeelt elke dart afzonderlijk en zet de kalibratie tijdens het spelen zelf weer op het bord.",
+      tr: "Kamera artık tüm ekranı kullanıyor: üstte oyuncu ve kalan puan, ortada görüntü, altta toplamla birlikte üç büyük ok karosu. Bir karoya dokunmak düzeltmeyi açar, boş yer tek dokunuşla ıska olur. “Şimdi tara” kalktı, algılananlar kendiliğinden görünür. Ayarlar dişlinin arkasında, “Elle” kamerayı gizler. Otomatik onay artık varsayılan olarak kapalı. Uygulama ayrıca görüntüden tahtada ok kalıp kalmadığını anlar, her oku ayrı değerlendirir ve oyun sırasında kalibrasyonu kendiliğinden tahtaya oturtur.",
+    },
+  },
 ];

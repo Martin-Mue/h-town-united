@@ -19,6 +19,8 @@ interface DartReviewFrameProps {
   onMove: (index: number, x: number, y: number) => void;
   /** The player picked a different score for the selected dart from the chips. */
   onChoose: (index: number, choice: ScoreChoice) => void;
+  /** CSS length capping the picture's width (and so its height); defaults to 62 % of the viewport height. */
+  maxSide?: string;
   /** Texts, so this stays free of translation plumbing. */
   labels: { hintPick: string; hintMove: string; miss: string; bullOuter: string; bullInner: string };
 }
@@ -37,7 +39,7 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
  * pick the right score from the chips (neighbouring segments, single/double/treble, bull, miss — one
  * tap, no precision needed) or drag/tap its tip to the exact spot, with a loupe beside the finger.
  */
-const DartReviewFrame = ({ imageUrl, darts, selectedIndex, onSelect, onMove, onChoose, labels }: DartReviewFrameProps) => {
+const DartReviewFrame = ({ imageUrl, darts, selectedIndex, onSelect, onMove, onChoose, labels, maxSide }: DartReviewFrameProps) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const loupeRef = useRef<HTMLCanvasElement>(null);
@@ -128,7 +130,7 @@ const DartReviewFrame = ({ imageUrl, darts, selectedIndex, onSelect, onMove, onC
       <div
         ref={wrapRef}
         className="relative mx-auto aspect-square select-none touch-none overflow-hidden rounded-lg border border-border bg-black"
-        style={{ width: "min(100%, 62dvh)" }}
+        style={{ width: `min(100%, ${maxSide ?? "62dvh"})` }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={endDrag}

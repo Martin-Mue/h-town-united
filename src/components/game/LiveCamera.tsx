@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertCircle,
   Camera,
   Check,
   ChevronDown,
   ChevronUp,
+  Keyboard,
   RotateCcw,
-  ScanLine,
+  Settings,
   Target,
   Trash2,
   X,
@@ -15,6 +17,7 @@ import {
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -101,6 +104,8 @@ interface LiveCameraProps {
   onClose: () => void;
   dartsRemaining?: number;
   playerName?: string;
+  /** The player's remaining score, shown in the header so the full-screen camera still tells the state of the leg. */
+  remainingScore?: number;
   /** Called when the player wants to give up on auto-scoring and switch to manual entry after a failed/empty scan. */
   onRequestManualEntry?: () => void;
   /** Freezes the watcher loop (no new scans start) without tearing down the camera stream — for
@@ -359,6 +364,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   onClose,
   dartsRemaining = 3,
   playerName,
+  remainingScore,
   onRequestManualEntry,
   paused = false,
 }, ref) => {
@@ -497,6 +503,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(() => loadDeviceId(loadActiveBoard()));
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // Full-screen camera: the panel can be tucked away (to type a score by hand) and brought back by a pill.
+  const [overlayHidden, setOverlayHidden] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(() => typeof window !== "undefined" && window.innerWidth > window.innerHeight);
+  useEffect(() => {
+    const onResize = () => setIsLandscape(window.innerWidth > window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   // On-device visual check for the calibration, no browser devtools needed — many testers only
   // have the phone itself in hand. Shows exactly where the app thinks D20/D3/D11/D6 are, right
   // on top of the live feed, so a wrong calibration is visible at a glance instead of requiring
@@ -543,6 +558,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // answer instead of a silent fallback.
   const [autoCalibFoundCount, setAutoCalibFoundCount] = useState<number | null>(null);
 
+  // A finished round must never wait unseen behind the hidden panel.
+  useEffect(() => {
+    if (needsReview) setOverlayHidden(false);
+  }, [needsReview]);
   // The frozen review picture is shown only for a finished visit waiting for confirmation — not after
   // every single throw, which would cover the live view while the player is still throwing.
   const showReview = !!reviewFrame && needsReview;
@@ -2302,8 +2321,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // silently drifting off it whenever the video's native aspect ratio isn't square.
   const ringRect = cropScreenRect();
 
-  return (
-    <div className="mb-3 space-y-2 rounded-xl border border-border gradient-card shadow-elevation-sm p-3">
+  const panel = (
+    <div
+      className={`fixed inset-0 z-[70] flex flex-col bg-background ${overlayHidden ? "invisible pointer-events-none" : ""}`}
+      style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       {/* UX-Audit Befund #2, Option A (Vollbild-Gate, einmalig): blocks the whole panel until
           answered once; camera preview may already be initializing underneath (a separate OS
           permission, not this consent), but nothing here is interactive and no round can be
@@ -2336,21 +2358,44 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Camera className="h-4 w-4 text-primary" />
-          <span className="font-display text-sm uppercase tracking-wider">
-            Auto-Scoring
-          </span>
+      <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
+        <span
+          className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+            boardMissing
+              ? "bg-destructive animate-pulse"
+              : phase === "live"
+                ? "bg-secondary animate-pulse-glow"
+                : phase === "scanning"
+                  ? "bg-primary animate-pulse"
+                  : phase === "error"
+                    ? "bg-destructive"
+                    : "bg-muted-foreground"
+          }`}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-display text-sm leading-tight text-foreground">
+            {playerName ?? "Auto-Scoring"}
+            {remainingScore !== undefined && <span className="ml-2 text-primary">{remainingScore}</span>}
+          </p>
+          <p className="truncate text-[11px] leading-tight text-muted-foreground">{status}</p>
         </div>
+        <Button variant="outline" size="sm" className="h-9 gap-1 px-2.5 text-xs" onClick={() => setOverlayHidden(true)} title={t("camera.manualShort")}>
+          <Keyboard className="h-4 w-4" /> <span className="hidden min-[400px]:inline">{t("camera.manualShort")}</span>
+        </Button>
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSettingsOpen(true)} title={t("camera.settingsTitle")} aria-label={t("camera.settingsTitle")}>
+          <Settings className="h-4 w-4" />
+        </Button>
         <Button variant="ghost" size="icon" onClick={onClose} className="h-9 w-9" title={t("game.closeCamera")} aria-label={t("game.closeCamera")}>
           <X className="h-4 w-4" />
         </Button>
       </div>
 
+      <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
+        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto p-2">
       {showReview && (
         <div ref={reviewAnchorRef}>
         <DartReviewFrame
+          maxSide={`calc(100dvh - ${isLandscape ? "7rem" : "24rem"})`}
           imageUrl={reviewFrame.url}
           darts={accumulated.map((d) => ({ x: d.x ?? 0.5, y: d.y ?? 0.5, baseValue: d.baseValue, multiplier: d.multiplier }))}
           selectedIndex={selectedReviewIndex}
@@ -2368,11 +2413,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </div>
       )}
 
+
       <div
-        className={`relative mx-auto overflow-hidden rounded-lg border border-border bg-muted ${showReview ? "hidden" : ""}`}
+        className={`relative mx-auto shrink-0 overflow-hidden rounded-lg border border-border bg-muted ${showReview ? "hidden" : ""}`}
         style={{
           aspectRatio: videoSize ? `${videoSize.w} / ${videoSize.h}` : "1 / 1",
-          width: `min(100%, calc(60dvh * ${videoSize ? videoSize.w / videoSize.h : 1}))`,
+          width: `min(100%, calc((100dvh - ${isLandscape ? "5.5rem" : "19rem"}) * ${videoSize ? videoSize.w / videoSize.h : 1}))`,
         }}
       >
         <video
@@ -2545,6 +2591,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         )}
       </div>
 
+
+        </div>
+        <div className="shrink-0 space-y-2 border-t border-border bg-background/95 p-2 landscape:w-[24rem] landscape:overflow-y-auto landscape:border-l landscape:border-t-0">
       {/* Board drifted warning, calibration fine-tune controls, and the reposition confirm bar
           all render here, below the video, instead of overlaid on it — depending on zoom/crop
           they could otherwise land right on top of the exact spot the player needs to see (the
@@ -2586,68 +2635,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               {t("common.cancel")}
             </button>
           )}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
-              boardMissing
-                ? "bg-destructive animate-pulse"
-                : phase === "live"
-                  ? "bg-secondary animate-pulse-glow"
-                  : phase === "scanning"
-                    ? "bg-primary animate-pulse"
-                    : phase === "error"
-                      ? "bg-destructive"
-                      : "bg-muted-foreground"
-            }`}
-          />
-          <div className="min-w-0">
-            <p className="truncate font-medium text-foreground">
-              {playerName ?? "Auto-Scoring"}
-              {accumulated.length < dartsRemaining && !needsReview && (
-                <span className="ml-1 text-muted-foreground">
-                  · {dartsRemaining - accumulated.length} {t("game.dartsSuffix")} {t("camera.dartsRemainingSuffix")}
-                </span>
-              )}
-            </p>
-            <p className="truncate text-muted-foreground">{status}</p>
-          </div>
-        </div>
-        {showAdvanced && (
-          <div className="ml-3 shrink-0 space-y-0.5 text-right text-[10px] uppercase tracking-wider text-muted-foreground" title={t("camera.motionDiffTooltip")}>
-            <div>{t("camera.motionAbbrev")} {(motion * 100).toFixed(0)}%</div>
-            <div>Δ {(changeDelta * 100).toFixed(0)}%</div>
-          </div>
-        )}
-      </div>
-
-      {(phase === "live" || phase === "scanning") && (
-        <div className="flex gap-1.5">
-          <button
-            onClick={() => openCalibrator()}
-            className="flex-1 rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
-          >
-            <Target className="h-3.5 w-3.5" /> {t("camera.calibAdjust")}
-          </button>
-          <button
-            onClick={restartCalibration}
-            className="flex-1 rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
-            title={t("camera.restartCalibTooltip")}
-          >
-            <Target className="h-3.5 w-3.5" /> {t("camera.restartCalibButton")}
-          </button>
-          <button
-            onClick={() => setShowCalibDebug((v) => !v)}
-            className={`shrink-0 rounded-md border px-3 py-1.5 text-[11px] flex items-center justify-center gap-1.5 ${
-              showCalibDebug ? "border-accent bg-accent/15 text-accent" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-            title={t("camera.showCalibPointsTooltip")}
-          >
-            {showCalibDebug ? t("camera.hidePoints") : t("camera.showCalibPoints")}
-          </button>
         </div>
       )}
 
@@ -2700,21 +2687,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       {/* live accumulated darts */}
       <div className={`rounded-xl border p-3 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent ${needsReview ? "border-accent/50" : "border-primary/30"}`}>
-        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Zap className="h-3 w-3 text-accent" /> {t("camera.currentRound")}
-          </span>
-          <span>
-            {accumulated.length}/{dartsRemaining}
-            {lastConfidence > 0 && (
-              <span className="ml-2">
-                {lastDetectionSource === "model" ? t("camera.sourceModel") : lastDetectionSource === "gemini" ? t("camera.sourceGemini") : t("camera.sourceMotion")}{" "}
-                {(lastConfidence * 100).toFixed(0)}%
-              </span>
-            )}
-          </span>
-        </div>
-        <div className="mt-2 flex items-stretch gap-3">
+        <div className="flex items-stretch gap-3">
           {/* One big tile per dart — readable at arm's length; tapping one selects it on the picture
               (or opens its editor), which is also what stops the hands-free countdown. */}
           <div className="grid flex-1 grid-cols-3 gap-2">
@@ -2771,128 +2744,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </div>
       </div>
 
-      {accumulated.length > 0 && (
-        <div className="space-y-1.5">
-          {accumulated.map((dart, i) => {
-            const isOpen = expandedReviewIndex === i;
-            return (
-              <div key={i} className={`rounded-lg bg-muted overflow-hidden ${isOpen ? "ring-1 ring-primary/40" : ""}`}>
-                <div className="flex items-center gap-2 p-2">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedReviewIndex(isOpen ? null : i)}
-                    className="flex flex-1 items-center gap-2 text-left min-w-0"
-                  >
-                    <span className="w-10 shrink-0 text-[10px] text-muted-foreground">{t("game.dartCounterLabel")} {i + 1}</span>
-                    <span className="flex-1 truncate font-display text-sm text-foreground">
-                      {dart.baseValue === 0 ? t("game.miss") : dartLabel(dart)}
-                    </span>
-                    <span className="shrink-0 font-display text-primary">{dart.points}</span>
-                    <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                  </button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-9 w-9 shrink-0 ${repositioningIndex === i ? "text-accent" : ""}`}
-                    onClick={() => {
-                      if (repositioningIndex === i) {
-                        cancelReposition();
-                        return;
-                      }
-                      setRepositioningIndex(i);
-                    }}
-                    title={t("camera.correctPositionTitle")}
-                  >
-                    <Target className="h-3.5 w-3.5" />
-                  </Button>
-                  <AlertDialog open={confirmRemoveIndex === i} onOpenChange={(open) => setConfirmRemoveIndex(open ? i : null)}>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 shrink-0"
-                        title={t("camera.removeDartTitle")}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{t("camera.removeDartConfirmTitle")}</AlertDialogTitle>
-                        <AlertDialogDescription>{t("camera.removeDartConfirmDesc")}</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => {
-                            removeDart(i);
-                            setConfirmRemoveIndex(null);
-                          }}
-                        >
-                          {t("camera.removeDartConfirm")}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-
-                {isOpen && (
-                  <div className="space-y-1.5 border-t border-border/60 bg-background/40 p-2.5">
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {([[1, "S"], [2, "D"], [3, "T"]] as const).map(([m, label]) => (
-                        <button
-                          key={m}
-                          type="button"
-                          disabled={dart.baseValue === 0 || (dart.baseValue === 25 && m === 3)}
-                          onClick={() => adjustDart(i, "multiplier", m)}
-                          className={`rounded-lg py-2.5 text-sm font-display font-medium transition-colors disabled:opacity-40 ${
-                            dart.multiplier === m ? "bg-primary text-primary-foreground" : "bg-muted-foreground/10 text-foreground/80"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-5 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => adjustDart(i, "baseValue", 0)}
-                        className={`col-span-5 rounded-lg py-2 text-xs font-medium transition-colors ${
-                          dart.baseValue === 0 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/10 text-foreground/80"
-                        }`}
-                      >
-                        {t("game.miss")}
-                      </button>
-                      {Array.from({ length: 20 }, (_, k) => k + 1).map((v) => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => adjustDart(i, "baseValue", v)}
-                          className={`rounded-lg py-2 text-xs font-display transition-colors ${
-                            dart.baseValue === v ? "bg-secondary text-secondary-foreground font-bold" : "bg-muted-foreground/10 text-foreground/80"
-                          }`}
-                        >
-                          {v}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => adjustDart(i, "baseValue", 25)}
-                        className={`col-span-5 rounded-lg py-2 text-xs font-medium transition-colors ${
-                          dart.baseValue === 25 ? "bg-secondary text-secondary-foreground font-bold" : "bg-muted-foreground/10 text-foreground/80"
-                        }`}
-                      >
-                        {t("camera.bullOption")}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {error && (
         <div className="flex items-start gap-2 rounded bg-destructive/10 p-2 text-xs text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -2902,27 +2753,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       {/* Sticky: the round's action buttons stay on screen however far the review list or the
           camera view has been scrolled — correcting happens on the image, accepting right here. */}
-      <div className="sticky bottom-0 z-30 -mx-1 flex gap-2 border-t border-border/40 bg-background px-1 pb-1 pt-2">
-        <Button
-          onClick={manualScan}
-          className={`gap-2 font-display uppercase ${accumulated.length > 0 ? "px-3" : "flex-1"}`}
-          size="sm"
-          variant="outline"
-          disabled={phase !== "live" || paused}
-          title={t("camera.scanNow")}
-          aria-label={t("camera.scanNow")}
-        >
-          <ScanLine className="h-4 w-4" />
-          {/* Icon-only once darts are on screen, so "Übernehmen" always fits on a phone. */}
-          {accumulated.length === 0 && t("camera.scanNow")}
-        </Button>
+      <div className="flex gap-2">
         {accumulated.length > 0 && (
           <AlertDialog open={confirmDiscardOpen} onOpenChange={setConfirmDiscardOpen}>
             <AlertDialogTrigger asChild>
               <Button
                 variant="outline"
-                size="sm"
-                className="gap-1"
+                size="lg"
+                className="h-12 gap-1 px-4"
                 title={t("camera.discardDetectedTitle")}
               >
                 <RotateCcw className="h-4 w-4" /> <span className="hidden sm:inline">{t("camera.discard")}</span>
@@ -2958,9 +2796,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             permanently hidden — detected correctly, nothing to tap to confirm it. */}
         {(accumulated.length >= dartsRemaining || needsReview) && (
           <Button
-            size="sm"
+            size="lg"
             onClick={() => commitRound(accumulated)}
-            className={`flex-1 gap-1 ${needsReview ? "animate-pulse-glow" : ""}`}
+            className={`h-12 flex-1 gap-1.5 text-base font-display uppercase ${needsReview ? "animate-pulse-glow" : ""}`}
             title={t("camera.commitRoundTitle")}
           >
             <Check className="h-4 w-4" /> {t("camera.accept")}
@@ -2968,6 +2806,148 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </Button>
         )}
       </div>
+
+
+        </div>
+      </div>
+
+      {/* One dart's editor: a bottom sheet instead of a list that pushes everything down. */}
+      <Drawer open={expandedReviewIndex !== null && !!accumulated[expandedReviewIndex ?? -1]} onOpenChange={(open) => { if (!open) setExpandedReviewIndex(null); }} shouldScaleBackground={false}>
+        <DrawerContent className="max-h-[85dvh]">
+          {expandedReviewIndex !== null && accumulated[expandedReviewIndex] && (() => {
+            const i = expandedReviewIndex;
+            const dart = accumulated[i];
+            return (
+              <div className="space-y-2 overflow-y-auto p-3 pb-5">
+                <DrawerHeader className="p-0 text-left">
+                  <DrawerTitle className="font-display text-base">
+                    {t("camera.editDartTitle").replace("{n}", String(i + 1))} · {dart.baseValue === 0 ? t("game.miss") : dartLabel(dart)} · {dart.points}
+                  </DrawerTitle>
+                </DrawerHeader>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {([[1, "S"], [2, "D"], [3, "T"]] as const).map(([m, label]) => (
+                    <button
+                      key={m}
+                      type="button"
+                      disabled={dart.baseValue === 0 || (dart.baseValue === 25 && m === 3)}
+                      onClick={() => adjustDart(i, "multiplier", m)}
+                      className={`rounded-lg py-3 text-base font-display font-medium transition-colors disabled:opacity-40 ${
+                        dart.multiplier === m ? "bg-primary text-primary-foreground" : "bg-muted-foreground/10 text-foreground/80"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {Array.from({ length: 20 }, (_, k) => k + 1).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => adjustDart(i, "baseValue", v)}
+                      className={`rounded-lg py-2.5 text-sm font-display transition-colors ${
+                        dart.baseValue === v ? "bg-secondary text-secondary-foreground font-bold" : "bg-muted-foreground/10 text-foreground/80"
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => adjustDart(i, "baseValue", 25)}
+                    className={`rounded-lg py-2.5 text-sm font-medium transition-colors ${
+                      dart.baseValue === 25 ? "bg-secondary text-secondary-foreground font-bold" : "bg-muted-foreground/10 text-foreground/80"
+                    }`}
+                  >
+                    {t("camera.bullOption")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => adjustDart(i, "baseValue", 0)}
+                    className={`rounded-lg py-2.5 text-sm font-medium transition-colors ${
+                      dart.baseValue === 0 ? "bg-primary text-primary-foreground" : "bg-muted-foreground/10 text-foreground/80"
+                    }`}
+                  >
+                    {t("game.miss")}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <Button
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => { setExpandedReviewIndex(null); setRepositioningIndex(i); }}
+                  >
+                    <Target className="h-4 w-4" /> {t("camera.correctPositionTitle")}
+                  </Button>
+                  <Button variant="outline" className="gap-1.5 text-destructive" onClick={() => setConfirmRemoveIndex(i)}>
+                    <Trash2 className="h-4 w-4" /> {t("camera.removeDartTitle")}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DrawerContent>
+      </Drawer>
+      <AlertDialog open={confirmRemoveIndex !== null} onOpenChange={(open) => { if (!open) setConfirmRemoveIndex(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("camera.removeDartConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("camera.removeDartConfirmDesc")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmRemoveIndex !== null) removeDart(confirmRemoveIndex);
+                setConfirmRemoveIndex(null);
+                setExpandedReviewIndex(null);
+              }}
+            >
+              {t("camera.removeDartConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Drawer open={settingsOpen} onOpenChange={setSettingsOpen} shouldScaleBackground={false}>
+        <DrawerContent className="max-h-[88dvh]">
+          <div className="space-y-2 overflow-y-auto p-3 pb-6">
+            <DrawerHeader className="p-0 text-left">
+              <DrawerTitle className="font-display text-base">{t("camera.settingsTitle")}</DrawerTitle>
+            </DrawerHeader>
+        {showAdvanced && (
+          <div className="rounded-md border border-border bg-muted/40 px-2 py-1 text-right text-[10px] uppercase tracking-wider text-muted-foreground" title={t("camera.motionDiffTooltip")}>
+            {t("camera.motionAbbrev")} {(motion * 100).toFixed(0)}% · Δ {(changeDelta * 100).toFixed(0)}%
+          </div>
+        )}
+      {(phase === "live" || phase === "scanning") && (
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => openCalibrator()}
+            className="flex-1 rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
+          >
+            <Target className="h-3.5 w-3.5" /> {t("camera.calibAdjust")}
+          </button>
+          <button
+            onClick={restartCalibration}
+            className="flex-1 rounded-md border border-border px-3 py-1.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center gap-1.5"
+            title={t("camera.restartCalibTooltip")}
+          >
+            <Target className="h-3.5 w-3.5" /> {t("camera.restartCalibButton")}
+          </button>
+          <button
+            onClick={() => setShowCalibDebug((v) => !v)}
+            className={`shrink-0 rounded-md border px-3 py-1.5 text-[11px] flex items-center justify-center gap-1.5 ${
+              showCalibDebug ? "border-accent bg-accent/15 text-accent" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+            title={t("camera.showCalibPointsTooltip")}
+          >
+            {showCalibDebug ? t("camera.hidePoints") : t("camera.showCalibPoints")}
+          </button>
+        </div>
+      )}
 
       {/* Detection-model status and the training-data toggle used to sit above the video and
           pushed it ~450px down the screen on a phone — the image is what the player works with
@@ -3141,8 +3121,24 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
         </div>
       )}
+
+          </div>
+        </DrawerContent>
+      </Drawer>
+
+      {overlayHidden && (
+        <button
+          type="button"
+          onClick={() => setOverlayHidden(false)}
+          className={`fixed bottom-20 right-3 z-[70] flex items-center gap-2 rounded-full border border-primary/50 bg-card px-4 py-2.5 text-sm font-display text-primary shadow-elevation-lg ${needsReview ? "animate-pulse-glow" : ""}`}
+          style={{ visibility: "visible", pointerEvents: "auto" }}
+        >
+          <Camera className="h-4 w-4" /> {accumulated.length}/{dartsRemaining} · {roundTotal}
+        </button>
+      )}
     </div>
   );
+  return createPortal(panel, document.body);
 });
 
 LiveCamera.displayName = "LiveCamera";
