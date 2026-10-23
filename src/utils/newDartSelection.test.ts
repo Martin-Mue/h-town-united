@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { selectNewDart } from "./newDartSelection";
+import { selectNewDart, selectNewDarts, keepSupportedDarts } from "./newDartSelection";
 
 // A change map stand-in: changed pixels exist only around (0.6, 0.4).
 const support = (x: number, y: number) => (Math.hypot(x - 0.6, y - 0.4) < 0.04 ? 0.6 : 0);
@@ -35,5 +35,31 @@ describe("selectNewDart", () => {
 
   it("skips candidates without a position", () => {
     expect(selectNewDart([], [{ confidence: 0.9 }], null)).toBeNull();
+  });
+});
+
+describe("selectNewDarts", () => {
+  const twoSpots = (x: number, y: number) => (Math.hypot(x - 0.6, y - 0.4) < 0.04 || Math.hypot(x - 0.3, y - 0.7) < 0.04 ? 0.6 : 0);
+
+  it("takes every new dart of one picture (quick throws)", () => {
+    const found = selectNewDarts([], [{ x: 0.6, y: 0.4, confidence: 0.5 }, { x: 0.3, y: 0.7, confidence: 0.4 }, { x: 0.8, y: 0.1, confidence: 0.9 }], twoSpots, 3);
+    expect(found.map((d) => d.x)).toEqual([0.6, 0.3]);
+  });
+
+  it("never takes more than the room left in the round", () => {
+    const found = selectNewDarts([], [{ x: 0.6, y: 0.4, confidence: 0.5 }, { x: 0.3, y: 0.7, confidence: 0.4 }], twoSpots, 1);
+    expect(found).toHaveLength(1);
+  });
+});
+
+describe("keepSupportedDarts", () => {
+  it("drops a weak dart the next picture no longer shows, keeps strong ones and re-seen ones", () => {
+    const known = [
+      { x: 0.2, y: 0.2, confidence: 0.3 }, // phantom: gone
+      { x: 0.5, y: 0.5, confidence: 0.3 }, // still there
+      { x: 0.7, y: 0.7, confidence: 0.6 }, // strong: stays even if hidden
+    ];
+    const kept = keepSupportedDarts(known, [{ x: 0.51, y: 0.5 }]);
+    expect(kept.map((d) => d.x)).toEqual([0.5, 0.7]);
   });
 });

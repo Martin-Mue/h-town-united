@@ -31,7 +31,7 @@ import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, boardOverlayL
 import { applyHomography, computeHomography } from "@/utils/homography";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
-import { selectNewDart } from "@/utils/newDartSelection";
+import { selectNewDarts, keepSupportedDarts } from "@/utils/newDartSelection";
 import { prepareWireFit, refineTapsToWires, findBoardTaps, WIRE_FIT_CONFIDENT } from "@/utils/boardWireFit";
 import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
@@ -184,6 +184,15 @@ const loadTrainingDataEnabled = (): boolean => {
  * accordingly and stays changeable any time via the toggle further down (same key, same effect).
  */
 const TRAINING_CONSENT_ASKED_KEY = "dartcam-training-consent-asked";
+
+/** Hands-free play: once the darts are pulled and the board is empty again, the round is taken over
+ *  after a short countdown unless the player touches a dart to correct it. Default on. */
+const AUTO_COMMIT_KEY = "dartcam-auto-commit";
+const AUTO_COMMIT_SECONDS = 4;
+const loadAutoCommitEnabled = (): boolean => {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(AUTO_COMMIT_KEY) !== "off";
+};
 const loadTrainingConsentAsked = (): boolean => {
   if (typeof window === "undefined") return true;
   return window.localStorage.getItem(TRAINING_CONSENT_ASKED_KEY) === "yes";
@@ -195,7 +204,10 @@ const CALIB_KEYS = ["D20", "D3", "D11", "D6"] as const;
  *  the 800px output (the board covers only part of the picture) and keeps the pixel read cheap. */
 const MAX_RECTIFY_SOURCE_SIDE = 1920;
 /** Weakest model confidence a new-dart candidate may have — it must additionally stand on changed pixels. */
-const NEW_DART_MIN_SCORE = 0.12;
+const NEW_DART_MIN_SCORE = 0.25;
+/** Cut-off of the final look at the finished visit; candidates must additionally stand on pixels that
+ *  differ from the empty board, which a real dart always does. */
+const FINAL_PASS_MIN_SCORE = 0.25;
 /** Above this share of changed cells the whole picture moved (exposure, bump) — no comparison possible. */
 const GLOBAL_CHANGE_SHARE_MAX = 0.5;
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
@@ -391,6 +403,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // differently?" cross-check. Never blocks or replaces anything on its own — see
   // checkGeminiSecondOpinion's own doc comment for why it only ever offers a suggestion.
   const [geminiSuggestion, setGeminiSuggestion] = useState<DetectedDart[] | null>(null);
+  const [autoCommitEnabled, setAutoCommitEnabledState] = useState<boolean>(() => loadAutoCommitEnabled());
+  const setAutoCommitEnabled = (enabled: boolean) => {
+    if (typeof window !== "undefined") window.localStorage.setItem(AUTO_COMMIT_KEY, enabled ? "on" : "off");
+    setAutoCommitEnabledState(enabled);
+  };
+  /** Seconds left until the finished round is taken over by itself (null = not counting). */
+  const [autoCommitLeft, setAutoCommitLeft] = useState<number | null>(null);
+  /** Set as soon as the player touches a dart of the finished round — from then on only "Übernehmen" commits. */
+  const [autoCommitHeld, setAutoCommitHeld] = useState(false);
+  const autoCommitSnapshotRef = useRef<DetectedDart[] | null>(null);
   const [trainingDataEnabled, setTrainingDataEnabledState] = useState<boolean>(() => loadTrainingDataEnabled());
   const setTrainingDataEnabled = (enabled: boolean) => {
     if (typeof window !== "undefined") window.localStorage.setItem(TRAINING_DATA_KEY, enabled ? "on" : "off");
@@ -421,6 +443,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // OWN before/after frames. (A single "busy" flag used to make the second and third dart of a round
   // simply be skipped whenever the first was still being analysed.)
   const landingQueueRef = useRef<{ before: ImageData | null; after: ImageData }[]>([]);
+  /** The empty board as the model sees it — what a finished visit is compared with to tell darts from
+   *  anything that was already there. */
+  const emptyModelFrameRef = useRef<ImageData | null>(null);
 
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
@@ -511,6 +536,27 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       return null;
     });
   }, [needsReview]);
+  // Hands-free hand-over: a finished round (board empty again) counts down and commits itself; touching a
+  // dart (select, edit, remove) stops the countdown so a correction never races the clock.
+  const autoCommitActive = needsReview && autoCommitEnabled && !autoCommitHeld && accumulated.length > 0 && !scanFailed;
+  useEffect(() => {
+    if (!autoCommitActive) { setAutoCommitLeft(null); return; }
+    autoCommitSnapshotRef.current = accumulatedRef.current;
+    setAutoCommitLeft(AUTO_COMMIT_SECONDS);
+    const id = window.setInterval(() => setAutoCommitLeft((prev) => (prev === null ? null : prev - 1)), 1000);
+    return () => window.clearInterval(id);
+  }, [autoCommitActive]);
+  useEffect(() => {
+    if (autoCommitLeft !== null && autoCommitLeft <= 0) commitRound(accumulatedRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoCommitLeft]);
+  useEffect(() => {
+    if (!needsReview) { setAutoCommitHeld(false); return; }
+    if (selectedReviewIndex !== null || expandedReviewIndex !== null) setAutoCommitHeld(true);
+  }, [needsReview, selectedReviewIndex, expandedReviewIndex]);
+  useEffect(() => {
+    if (autoCommitActive && autoCommitSnapshotRef.current && accumulated !== autoCommitSnapshotRef.current) setAutoCommitHeld(true);
+  }, [accumulated, autoCommitActive]);
   // A new review picture must not appear out of sight (the page may be scrolled down to the buttons).
   useEffect(() => {
     if (reviewFrame) reviewAnchorRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -553,6 +599,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     preRemovalModelFrameRef.current = null;
     lastStableModelFrameRef.current = null;
     landingQueueRef.current = [];
+    emptyModelFrameRef.current = null;
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
@@ -1459,7 +1506,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const scoreNewlyLandedDart = async (landing: { before: ImageData | null; after: ImageData }) => {
     if (!modelReadyRef.current) return;
     const already = accumulatedRef.current;
-    if (already.length >= dartsRemaining) return;
 
     // Low cut-off on purpose: a weak detection is fine as long as it stands on freshly changed pixels
     // (selectNewDart checks that); a high cut-off just loses darts.
@@ -1471,18 +1517,60 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     );
     const changeMap = landing.before ? buildChangeMap(landing.before, landing.after) : null;
     const usable = changeMap && changeMap.share < GLOBAL_CHANGE_SHARE_MAX ? changeMap : null;
-    const newDart = selectNewDart(already, scored, usable ? (x, y) => changedShareNear(usable, x, y) : null);
-    if (!newDart) return; // nothing new under any candidate — the end-of-visit scan gets another look
+    // A weak earlier dart that this picture no longer shows was a phantom (hand, shadow, exposure jump):
+    // dropping it frees its slot instead of leaving the round one real dart short.
+    const kept = keepSupportedDarts(already, scored);
+    // Several darts can land between two looks (quick throws), so take every new one, not just the best.
+    const newDarts = selectNewDarts(kept, scored, usable ? (x, y) => changedShareNear(usable, x, y) : null, dartsRemaining - kept.length);
+    if (newDarts.length === 0 && kept.length === already.length) return; // nothing new — the end-of-visit pass gets another look
 
     // A discarded/committed round replaces the array underneath us — then this result is stale.
     if (accumulatedRef.current !== already) return;
-    const next = [...already, newDart];
+    const next = [...kept, ...newDarts];
     accumulatedRef.current = next;
     setAccumulated(next);
+    if (newDarts.length === 0) return;
     setLastDetectionSource("model");
-    playDartDetectedSound(already.length);
-    setJustAddedIndex(already.length);
-    window.setTimeout(() => setJustAddedIndex((cur) => (cur === already.length ? null : cur)), 900);
+    playDartDetectedSound(kept.length);
+    setJustAddedIndex(kept.length);
+    window.setTimeout(() => setJustAddedIndex((cur) => (cur === kept.length ? null : cur)), 900);
+  };
+
+  /**
+   * The last word on a finished visit: one more look at the picture with all darts still in the board,
+   * compared with the empty board. It (1) drops weak darts it cannot see (phantoms), and (2) adds the
+   * darts the throw-by-throw detection missed — quick throws merged into one landing, a dart in a tight
+   * group, one the model scored low at first. Only candidates standing on pixels that differ from the
+   * empty board count, so nothing that was always there can turn into a dart.
+   */
+  const reconcileWithFinalFrame = async () => {
+    // let the throw-by-throw queue finish first, so this works on the up-to-date list
+    for (let waited = 0; perThrowLockRef.current && waited < 60; waited++) await new Promise((r) => window.setTimeout(r, 100));
+    const frame = preRemovalModelFrameRef.current;
+    if (!frame || !modelReadyRef.current) return;
+    const result = await detectDartsWithModel(frame, dartsRemaining + 3, FINAL_PASS_MIN_SCORE);
+    if (result.unavailable) return;
+    const found = refineWithCalibration(
+      result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
+    );
+    const before = accumulatedRef.current;
+    const kept = keepSupportedDarts(before, found);
+    const baseline = emptyModelFrameRef.current;
+    const map = baseline ? buildChangeMap(baseline, frame) : null;
+    const usable = map && map.share < GLOBAL_CHANGE_SHARE_MAX ? map : null;
+    // Without a usable comparison picture only confident detections may add anything.
+    const eligible = usable ? found : found.filter((d) => d.confidence >= 0.4);
+    const added = selectNewDarts(kept, eligible, usable ? (x, y) => changedShareNear(usable, x, y) : null, dartsRemaining - kept.length);
+    if (added.length === 0 && kept.length === before.length) return;
+    if (accumulatedRef.current !== before) return;
+    const next = [...kept, ...added];
+    accumulatedRef.current = next;
+    setAccumulated(next);
+    // the visit's dart count is whatever the picture shows — a phantom landing must not inflate it
+    if (next.length > 0) {
+      throwsSeenRef.current = next.length;
+      setThrowsSeen(next.length);
+    }
   };
 
   /** Works through the queued landings one after the other (see landingQueueRef). */
@@ -1524,6 +1612,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           emptyBoardSigRef.current = sig;
           emptyImageDataRef.current = grabImageData();
           lastStableModelFrameRef.current = modelReadyRef.current || rectMapping() ? grabModelFrame() : null;
+          emptyModelFrameRef.current = lastStableModelFrameRef.current;
         } else {
           setStatus(t("camera.stabilizing"));
         }
@@ -1601,6 +1690,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           // the moment we're most sure the board is genuinely empty.
           emptyImageDataRef.current = grabImageData();
           lastStableModelFrameRef.current = modelReadyRef.current || rectMapping() ? grabModelFrame() : null;
+          emptyModelFrameRef.current = lastStableModelFrameRef.current;
           setStatus(t("camera.boardEmptyThrowFirst"));
         } else {
           preRemovalImageDataRef.current = grabImageData();
@@ -1661,6 +1751,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const runPullScan = async () => {
     freezeReviewFrame();
+    await reconcileWithFinalFrame();
     // Every dart in this visit was already identified incrementally, in true chronological
     // order, as it landed (see scoreNewlyLandedDart) — nothing left to batch-detect, and
     // re-running detection now would only risk REPLACING a correctly-ordered result with a
@@ -2406,8 +2497,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       )}
 
       {needsReview && (
-        <div className="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-[11px] text-accent">
-          {t("camera.notQuiteSureDetected")}
+        <div className="flex items-center justify-between gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-[11px] text-accent">
+          <span>
+            {autoCommitLeft !== null
+              ? t("camera.autoCommitIn").replace("{n}", String(Math.max(0, autoCommitLeft)))
+              : t("camera.notQuiteSureDetected")}
+          </span>
+          {autoCommitLeft !== null && (
+            <Button size="sm" variant="outline" className="h-8 shrink-0 px-3 text-[11px]" onClick={() => setAutoCommitHeld(true)}>
+              {t("camera.autoCommitStop")}
+            </Button>
+          )}
         </div>
       )}
 
@@ -2445,40 +2545,44 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             )}
           </span>
         </div>
-        <div className="mt-1 flex items-end justify-between">
-          <div className="flex flex-wrap gap-1.5">
+        <div className="mt-2 flex items-stretch gap-3">
+          {/* One big tile per dart — readable at arm's length; tapping one selects it on the picture
+              (or opens its editor), which is also what stops the hands-free countdown. */}
+          <div className="grid flex-1 grid-cols-3 gap-2">
             {Array.from({ length: dartsRemaining }).map((_, i) => {
               const d = accumulated[i];
               if (!d) {
                 return (
-                  <span
+                  <div
                     key={`slot-${i}`}
-                    className="inline-flex h-7 w-14 items-center justify-center rounded-md border border-dashed border-border/60 text-[10px] text-muted-foreground"
+                    className="flex h-[4.5rem] items-center justify-center rounded-lg border border-dashed border-border/60 text-[11px] text-muted-foreground"
                   >
                     {t("game.dartCounterLabel")} {i + 1}
-                  </span>
+                  </div>
                 );
               }
+              const miss = d.baseValue === 0;
+              const selected = selectedReviewIndex === i || expandedReviewIndex === i;
               return (
-                <span
+                <button
                   key={`dart-${i}`}
-                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-display ${
-                    d.points === 0
-                      ? "border-muted bg-muted/40 text-muted-foreground"
-                      : "border-primary/60 bg-primary/20 text-primary"
-                  } ${justAddedIndex === i ? "animate-scale-in ring-2 ring-accent" : ""}`}
+                  type="button"
+                  onClick={() => (showReview ? setSelectedReviewIndex(selectedReviewIndex === i ? null : i) : setExpandedReviewIndex(expandedReviewIndex === i ? null : i))}
+                  className={`flex h-[4.5rem] flex-col items-center justify-center rounded-lg border-2 transition-colors ${
+                    miss ? "border-muted bg-muted/40 text-muted-foreground" : "border-primary/60 bg-primary/15 text-primary"
+                  } ${justAddedIndex === i ? "animate-scale-in ring-2 ring-accent" : ""} ${selected ? "ring-2 ring-accent" : ""}`}
                 >
-                  <Target className="h-3 w-3 opacity-70" />
-                  {dartLabel(d)} <span className="text-foreground/90">· {d.points}</span>
-                </span>
+                  <span className="font-display text-3xl leading-none">{miss ? t("game.miss") : dartLabel(d)}</span>
+                  <span className="mt-1 text-xs text-muted-foreground">{d.points}</span>
+                </button>
               );
             })}
           </div>
-          <div className="ml-3 shrink-0 text-right">
+          <div className="flex shrink-0 flex-col items-end justify-center text-right">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               {t("camera.sum")}
             </div>
-            <div className="font-display text-3xl leading-none text-primary">
+            <div className="font-display text-5xl leading-none text-primary">
               {roundTotal}
             </div>
           </div>
@@ -2678,6 +2782,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             title={t("camera.commitRoundTitle")}
           >
             <Check className="h-4 w-4" /> {t("camera.accept")}
+            {autoCommitLeft !== null && <span className="tabular-nums">({Math.max(0, autoCommitLeft)})</span>}
           </Button>
         )}
       </div>
@@ -2690,6 +2795,19 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
         {modelReady ? t("camera.localDetectionModel") : t("camera.localDetectionLoading")}
       </p>
+
+      <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
+        <button
+          onClick={() => setAutoCommitEnabled(!autoCommitEnabled)}
+          className="flex w-full items-center justify-between text-[11px]"
+        >
+          <span className="text-muted-foreground">{t("camera.autoCommitSetting")}</span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 font-medium ${autoCommitEnabled ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
+            {autoCommitEnabled ? t("common.on") : t("common.off")}
+          </span>
+        </button>
+        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{t("camera.autoCommitDesc")}</p>
+      </div>
 
       <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
         <button

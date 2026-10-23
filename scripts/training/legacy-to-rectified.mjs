@@ -31,6 +31,9 @@ const option = (name, fallback) => {
   return hit ? Number(hit.split("=")[1]) : fallback;
 };
 const [tapsFile, outDir, ...sampleDirs] = args.filter((a) => !a.startsWith("--"));
+// --with-before also writes the straightened picture from BEFORE the darts (images_before/), for testing
+// how the app compares a finished visit with the empty board
+const withBefore = args.includes("--with-before");
 if (!tapsFile || !outDir || sampleDirs.length === 0) {
   console.error("Usage: node scripts/training/legacy-to-rectified.mjs <taps.json> <output-dir> <samples-dir> [<samples-dir> ...] [--dart-box=0.06] [--corner-box=0.05]");
   process.exit(1);
@@ -127,16 +130,25 @@ for (const folder of sampleFolders) {
   if (darts.length === 0) { counts.noDarts++; continue; }
   counts.keptDarts += darts.length;
 
-  const rgb = Buffer.alloc(SIZE * SIZE * 3);
-  const [h0, h1, h2, h3, h4, h5, h6, h7, h8] = mapping.rectToVideo;
-  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
-    const fx = (x + 0.5) / SIZE, fy = (y + 0.5) / SIZE, w = h6 * fx + h7 * fy + h8;
-    const vx = (h0 * fx + h1 * fy + h2) / w, vy = (h3 * fx + h4 * fy + h5) / w;
-    bilinear(crop, CROP_PX, CROP_PX, ((vx * VW - rect.sx) / rect.side) * CROP_PX - 0.5, ((vy * VH - rect.sy) / rect.side) * CROP_PX - 0.5, rgb, (y * SIZE + x) * 3);
-  }
+  const straighten = (source) => {
+    const rgb = Buffer.alloc(SIZE * SIZE * 3);
+    const [h0, h1, h2, h3, h4, h5, h6, h7, h8] = mapping.rectToVideo;
+    for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+      const fx = (x + 0.5) / SIZE, fy = (y + 0.5) / SIZE, w = h6 * fx + h7 * fy + h8;
+      const vx = (h0 * fx + h1 * fy + h2) / w, vy = (h3 * fx + h4 * fy + h5) / w;
+      bilinear(source, CROP_PX, CROP_PX, ((vx * VW - rect.sx) / rect.side) * CROP_PX - 0.5, ((vy * VH - rect.sy) / rect.side) * CROP_PX - 0.5, rgb, (y * SIZE + x) * 3);
+    }
+    return rgb;
+  };
+  const rgb = straighten(crop);
 
   const split = isValidation(meta.id) ? "val" : "train";
   await sharp(rgb, { raw: { width: SIZE, height: SIZE, channels: 3 } }).jpeg({ quality: 93 }).toFile(path.join(outDir, "images", split, `${meta.id}.jpg`));
+  if (withBefore) {
+    const beforeCrop = await sharp(path.join(folder, "before.jpg")).resize(CROP_PX, CROP_PX, { fit: "fill" }).removeAlpha().raw().toBuffer();
+    fs.mkdirSync(path.join(outDir, "images_before", split), { recursive: true });
+    await sharp(straighten(beforeCrop), { raw: { width: SIZE, height: SIZE, channels: 3 } }).jpeg({ quality: 93 }).toFile(path.join(outDir, "images_before", split, `${meta.id}.jpg`));
+  }
   const lines = darts.map((p) => `0 ${clamp01(p.x).toFixed(6)} ${clamp01(p.y).toFixed(6)} ${DART_BOX} ${DART_BOX}`);
   geo.MODEL_CORNERS_CANON.forEach((c, i) => {
     const p = geo.canonicalToRect(c.x, c.y);

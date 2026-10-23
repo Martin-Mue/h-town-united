@@ -794,4 +794,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Uygulama artık tahtayı kamera görüntüsünde kendisi buluyor ve halkaları kırmızı-yeşil double ve treble halkalarının üzerine milimetrik yerleştiriyor – sürüklemeye gerek yok. Elle yaptığın kalibrasyon onaylarken tellere çekiliyor, kayıtlı kalibrasyon da tripod oynadıysa başlangıçta yeniden ayarlanıyor.",
     },
   },
+  {
+    id: "2026-10-25-hands-free",
+    date: "2026-10-25",
+    title: {
+      de: "Freihändig spielen: Runde übernimmt sich selbst",
+      en: "Hands-free play: the round takes itself over",
+      fr: "Jeu mains libres : le tour se valide tout seul",
+      pl: "Gra bez dotykania: runda zatwierdza się sama",
+      nl: "Handsfree spelen: de ronde neemt zichzelf over",
+      tr: "Eller serbest oyun: tur kendiliğinden onaylanır",
+    },
+    description: {
+      de: "Drei Darts werfen, ziehen – sobald das Board leer ist, wird die Runde nach 4 Sekunden übernommen und der nächste Spieler ist dran. Ein Antippen eines Darts hält die Uhr an, dann korrigierst du in Ruhe. Die getroffenen Zahlen stehen jetzt groß auf drei Kacheln. Außerdem werden schnell nacheinander geworfene Darts und Darts in dichten Gruppen zuverlässiger erkannt, und ein Phantom-Dart vor dem ersten Wurf verschwindet wieder.",
+      en: "Throw three darts, pull them – once the board is empty the round is taken over after 4 seconds and the next player is up. Tapping a dart stops the clock so you can correct in peace. The scores now show big on three tiles. Quickly thrown darts and tight groups are also detected more reliably, and a phantom dart before the first throw disappears again.",
+      fr: "Lance trois fléchettes, retire-les – dès que la cible est vide, le tour est validé après 4 secondes et c'est au joueur suivant. Toucher une fléchette arrête le compte à rebours pour corriger tranquillement. Les scores s'affichent en grand sur trois tuiles. Les fléchettes lancées vite et les groupes serrés sont mieux détectés, et une fausse fléchette avant le premier lancer disparaît.",
+      pl: "Rzuć trzy lotki, wyjmij je – gdy tarcza jest pusta, runda zostaje zatwierdzona po 4 sekundach i gra następny gracz. Dotknięcie lotki zatrzymuje odliczanie, więc poprawiasz w spokoju. Wyniki widać teraz dużymi kafelkami. Szybko rzucone lotki i ciasne grupy są wykrywane pewniej, a fałszywa lotka przed pierwszym rzutem znika.",
+      nl: "Gooi drie darts, trek ze – zodra het bord leeg is, wordt de ronde na 4 seconden overgenomen en is de volgende speler aan de beurt. Een dart aantikken stopt de klok, zodat je rustig kunt corrigeren. De scores staan nu groot op drie tegels. Snel achter elkaar gegooide darts en dichte groepen worden betrouwbaarder herkend, en een spook-dart vóór de eerste worp verdwijnt weer.",
+      tr: "Üç ok at, çek – tahta boşalınca tur 4 saniye sonra onaylanır ve sıra sonraki oyuncuya geçer. Bir oka dokunmak geri sayımı durdurur, rahatça düzeltirsin. Skorlar artık üç büyük karoda görünür. Hızlı atılan oklar ve sıkı gruplar daha güvenilir algılanır, ilk atıştan önceki hayalet ok kaybolur.",
+    },
+  },
 ];
