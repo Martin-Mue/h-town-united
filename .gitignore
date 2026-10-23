@@ -35,3 +35,5 @@ training-dataset*.json
 verdicts-batch*.json
 training-set-yolo/
 training-set-yolo.zip
+training-set-rectified/
+training-set-rectified.zip

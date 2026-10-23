@@ -7,13 +7,17 @@ const md = (text) => ({ cell_type: "markdown", metadata: {}, source: toSource(te
 const code = (text) => ({ cell_type: "code", metadata: {}, execution_count: null, outputs: [], source: toSource(text) });
 
 const cells = [
-  md(String.raw`# DartSpot: Fine-Tuning des Dart-Erkennungsmodells
+  md(String.raw`# DartSpot: Fine-Tuning des Dart-Erkennungsmodells (v2 – Dartspitze)
 
-Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**.
+Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**. Danach **Laufzeit → Alle ausführen** – ein Durchlauf, keine Zwischenschritte.
 
-Dein altes Modell wird direkt aus Google Drive geladen (DeepDarts-Dataset/training_runs/dart_yolov8n/weights/best.pt). Hochladen musst du nur training-set-yolo.zip (vom Skript build-yolo-dataset.mjs).
+Dein altes Modell wird aus Google Drive geladen (DeepDarts-Dataset/training_runs/dart_yolov8n/weights/best.pt). Hochladen musst du nur das Datenset (training-set-rectified.zip).
 
-Das Notebook (1) beschriftet die vier Kalibrier-Ecken mit dem alten Modell nach, damit sie nicht verlernt werden, (2) misst das alte Modell auf deinen Prüfbildern, (3) trainiert kurz mit niedriger Lernrate, (4) misst erneut und (5) exportiert best.onnx (800x800).`),
+Was anders ist als beim ersten Versuch:
+- Die Bilder sind genau das, was die App dem Modell zeigt: das Board von oben entzerrt (20 oben), die vier Ecken sind echte Labels.
+- Die Dart-Labels liegen auf der **Dartspitze** (nicht auf dem Flight), mit einer größeren Box (6 % der Bildbreite), damit die Messlatte nicht an winzigen Boxen scheitert.
+- Gemessen wird **der Abstand zur echten Spitze in Millimetern** (nicht AP50): wie viele Darts liegen innerhalb von 8,5 / 17 / 34 mm?
+- Zwei Trainingsvarianten laufen nacheinander, das beste Modell (nach Spitzenfehler) wird automatisch exportiert.`),
 
   code(String.raw`!pip -q install ultralytics
 from google.colab import drive, files
@@ -24,7 +28,7 @@ OLD_PT = "/content/drive/MyDrive/DeepDarts-Dataset/training_runs/dart_yolov8n/we
 assert os.path.exists(OLD_PT), "best.pt nicht gefunden - Pfad in OLD_PT anpassen"
 shutil.copy(OLD_PT, "/content/best.pt")  # Original in Drive bleibt unberührt
 
-print("Lade training-set-yolo.zip hoch:")
+print("Lade training-set-rectified.zip hoch:")
 uploaded = files.upload()
 zip_names = [n for n in uploaded if n.lower().endswith(".zip")]
 assert zip_names, "Keine .zip hochgeladen"
@@ -36,93 +40,117 @@ for name in os.listdir("/content/ds"):
         target = os.path.join("/content/ds", name.replace("\\", "/"))
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.move(os.path.join("/content/ds", name), target)
-DS = "/content/ds" if os.path.exists("/content/ds/data.yaml") else "/content/ds/training-set-yolo"
+DS = "/content/ds" if os.path.exists("/content/ds/data.yaml") else "/content/ds/training-set-rectified"
+with open(f"{DS}/data.yaml", "w") as f:
+    f.write("\n".join([f"path: {DS}", "train: images/train", "val: images/val", "names:",
+                       "  0: dart", "  1: cal_1", "  2: cal_2", "  3: cal_3", "  4: cal_4", ""]))
 print("Datensatz:", DS, os.listdir(DS))`),
 
-  md(String.raw`## 1. Kalibrier-Ecken
-Neue (entzerrte) Samples bringen die Ecken cal_1..cal_4 als echte Labels mit; die bleiben unverändert. Nur Bilder ganz ohne Ecken-Labels (ältere Samples) beschriftet das alte Modell selbst, und zwar nur, wenn es alle vier sicher findet. Ohne Labels würde YOLO die sichtbaren Ecken sonst als "nichts" lernen.`),
+  md(String.raw`## Messung: Abstand zur echten Dartspitze
+Das Board hat im entzerrten Bild einen Radius von 0,377 der Bildbreite = 170 mm. Daraus rechnen wir Pixelabstände in Millimeter um. Verglichen wird die Mitte der gefundenen Box mit dem Spitzen-Label (jeder echte Dart wird dem nächstgelegenen Fund zugeordnet).`),
 
-  code(String.raw`from ultralytics import YOLO
-import glob
+  code(String.raw`import glob, math
+from ultralytics import YOLO
 
-old = YOLO("/content/best.pt")
-print(old.names)  # erwartet: {0: dart, 1: cal_1, ... 4: cal_4}
+MM_PER_UNIT = 170 / 0.377   # Millimeter je Bildbreite im entzerrten Bild
 
-added = skipped = 0
-for split in ["train", "val"]:
+def read_darts(label_file):
+    out = []
+    for ln in open(label_file).read().splitlines():
+        p = ln.split()
+        if p and p[0] == "0":
+            out.append((float(p[1]), float(p[2])))
+    return out
+
+def tip_metrics(model, split="val", conf=0.12):
+    # conf=0.12 wie in der App: dort zaehlt auch ein schwacher Fund, wenn er auf veraenderten Pixeln liegt
+    errors, n_pred, n_gt = [], 0, 0
     for img in sorted(glob.glob(f"{DS}/images/{split}/*.jpg")):
-        lbl = img.replace("/images/", "/labels/").rsplit(".", 1)[0] + ".txt"
-        if any(ln.split()[0] in ("1", "2", "3", "4") for ln in open(lbl).read().splitlines() if ln.strip()):
-            continue  # real corner labels already there (rectified samples) - nothing to guess
-        res = old.predict(img, imgsz=800, conf=0.5, verbose=False)[0]
-        best = {}
-        for b in res.boxes:
-            c = int(b.cls)
-            if c in (1, 2, 3, 4) and (c not in best or float(b.conf) > best[c][0]):
-                best[c] = (float(b.conf), b.xywhn[0].tolist())
-        if len(best) == 4:
-            # keep only the dart lines (class 0) so re-running this cell never duplicates corners
-            dart_lines = [ln for ln in open(lbl).read().splitlines() if ln.startswith("0 ")]
-            corner_lines = [f"{c} " + " ".join(f"{v:.6f}" for v in xywh) for c, (_, xywh) in sorted(best.items())]
-            with open(lbl, "w") as f:
-                f.write("\n".join(dart_lines + corner_lines) + "\n")
-            added += 1
-        else:
-            skipped += 1
-print(f"Ecken ergänzt bei {added} Bildern, übersprungen (nicht alle 4 sicher): {skipped}")
+        gt = read_darts(img.replace("/images/", "/labels/").rsplit(".", 1)[0] + ".txt")
+        res = model.predict(img, imgsz=800, conf=conf, verbose=False)[0]
+        preds = [(float(b.xywhn[0][0]), float(b.xywhn[0][1])) for b in res.boxes if int(b.cls) == 0]
+        n_pred += len(preds); n_gt += len(gt)
+        free = preds[:]
+        for g in gt:
+            if not free:
+                errors.append(float("inf")); continue
+            j = min(range(len(free)), key=lambda k: math.hypot(free[k][0] - g[0], free[k][1] - g[1]))
+            errors.append(math.hypot(free[j][0] - g[0], free[j][1] - g[1]) * MM_PER_UNIT)
+            free.pop(j)
+    finite = sorted(e for e in errors if e != float("inf"))
+    within = lambda mm: sum(1 for e in errors if e <= mm) / max(1, len(errors))
+    return {
+        "darts": n_gt, "found": len(finite), "extra_detections": max(0, n_pred - len(finite)),
+        "median_mm": finite[len(finite) // 2] if finite else None,
+        "r8": within(8.5), "r17": within(17), "r34": within(34),
+    }
 
-yaml_lines = [f"path: {DS}", "train: images/train", "val: images/val", "names:",
-              "  0: dart", "  1: cal_1", "  2: cal_2", "  3: cal_3", "  4: cal_4", ""]
-with open(f"{DS}/data.yaml", "w") as f:
-    f.write("\n".join(yaml_lines))`),
-
-  md(String.raw`## 2. Vorher-Messung
-Die Werte merken: Wichtig ist dart (Zeile mit mAP50) und dass cal_* nicht einbrechen.`),
-
-  code(String.raw`def ap50_by_class(metrics):
-    # ap50 only lists classes that occur in the validation set, so map it by class id
+def ap50_by_class(metrics):
     return {int(c): float(a) for c, a in zip(metrics.box.ap_class_index, metrics.box.ap50)}
 
-before = old.val(data=f"{DS}/data.yaml", imgsz=800, plots=False)
-before_ap = ap50_by_class(before)
-print("VORHER  AP50 je Klasse:", {old.names[c]: round(a, 3) for c, a in before_ap.items()})
-print("VORHER  mAP50 gesamt:", round(float(before.box.map50), 3))`),
+def show(name, m):
+    med = "-" if m["median_mm"] is None else f"{m['median_mm']:.1f} mm"
+    print(f"{name:14s} gefunden {m['found']}/{m['darts']}  Median {med:>9s}  "
+          f"<=8.5mm {m['r8']*100:4.0f}%  <=17mm {m['r17']*100:4.0f}%  <=34mm {m['r34']*100:4.0f}%  zusaetzliche Funde {m['extra_detections']}")`),
 
-  md(String.raw`## 3. Nachtrainieren
-Niedrige Lernrate, Backbone (erste 10 Schichten) eingefroren, kein Spiegeln (das würde die Ecken vertauschen). patience stoppt früh, wenn es nicht besser wird.`),
+  md(String.raw`## Vorher-Messung (altes Modell)`),
 
-  code(String.raw`model = YOLO("/content/best.pt")
-model.train(
-    data=f"{DS}/data.yaml", imgsz=800, epochs=40, batch=16,
-    lr0=0.002, lrf=0.1, optimizer="AdamW", freeze=10, patience=12,
-    fliplr=0.0, flipud=0.0, degrees=5, scale=0.25, mosaic=0.5, close_mosaic=8,
-    project="/content/runs", name="dartspot_ft", exist_ok=True,
-)
-BEST_NEW = str(model.trainer.best)
-print("Neues Modell:", BEST_NEW)`),
+  code(String.raw`old = YOLO("/content/best.pt")
+old_tip = tip_metrics(old)
+old_ap = ap50_by_class(old.val(data=f"{DS}/data.yaml", imgsz=800, plots=False))
+show("ALT", old_tip)
+print("ALT AP50 je Klasse:", {old.names[c]: round(a, 3) for c, a in old_ap.items()})`),
 
-  md(String.raw`## 4. Nachher-Messung und Entscheidung`),
+  md(String.raw`## Training – zwei Varianten
+**A** friert den Backbone ein (sanft, behält viel vom alten Wissen), **B** trainiert alles mit kleiner Lernrate (kann die neue Ansicht – entzerrt von oben – besser lernen). Kein Spiegeln und Drehen: die 20 ist im entzerrten Bild immer oben, die Ecken haben feste Plätze.`),
 
-  code(String.raw`new = YOLO(BEST_NEW)
-after = new.val(data=f"{DS}/data.yaml", imgsz=800, plots=False)
-after_ap = ap50_by_class(after)
-print("Klasse   vorher  nachher")
-for i, n in new.names.items():
-    b, a = before_ap.get(i), after_ap.get(i)
-    print(f"{n:7s}  {b if b is None else round(b, 3)}   {a if a is None else round(a, 3)}")
-print("mAP50 gesamt: vorher", round(float(before.box.map50), 3), "nachher", round(float(after.box.map50), 3))
+  code(String.raw`CONFIGS = {
+    "A_frozen": dict(freeze=10, lr0=0.002, epochs=60),
+    "B_full":   dict(freeze=0,  lr0=0.001, epochs=80),
+}
+results = {}
+for name, cfg in CONFIGS.items():
+    m = YOLO("/content/best.pt")
+    m.train(
+        data=f"{DS}/data.yaml", imgsz=800, batch=16, lrf=0.1, optimizer="AdamW", patience=20,
+        fliplr=0.0, flipud=0.0, degrees=0.0, translate=0.05, scale=0.15, shear=0.0, perspective=0.0,
+        mosaic=0.0, mixup=0.0, hsv_h=0.01, hsv_s=0.5, hsv_v=0.35,
+        project="/content/runs", name=name, exist_ok=True, plots=False, **cfg,
+    )
+    best_path = str(m.trainer.best)
+    trained = YOLO(best_path)
+    results[name] = {"path": best_path, "tip": tip_metrics(trained),
+                     "ap": ap50_by_class(trained.val(data=f"{DS}/data.yaml", imgsz=800, plots=False))}
+    show(name, results[name]["tip"])`),
+
+  md(String.raw`## Ergebnis und Auswahl
+Gewinner = höchste Trefferquote innerhalb 17 mm, aber nur, wenn die vier Ecken (cal_1..cal_4) nicht schlechter geworden sind als beim alten Modell.`),
+
+  code(String.raw`show("ALT", old_tip)
+for name, r in results.items():
+    show(name, r["tip"])
+    print("   AP50 je Klasse:", {YOLO(r["path"]).names[c]: round(a, 3) for c, a in r["ap"].items()})
+
+def corners_ok(r):
+    return all(r["ap"].get(c, 0) >= old_ap.get(c, 0) - 0.05 for c in (1, 2, 3, 4))
+
+candidates = [(n, r) for n, r in results.items() if corners_ok(r)] or list(results.items())
+WINNER, win = max(candidates, key=lambda kv: (kv[1]["tip"]["r17"], kv[1]["tip"]["r34"]))
 print()
-print("Nur übernehmen, wenn dart deutlich besser ist UND cal_1..cal_4 nicht schlechter werden.")`),
+print("Gewinner:", WINNER)
+better = win["tip"]["r17"] > old_tip["r17"] + 0.05
+print("Deutlich besser als das alte Modell (>= +5 Prozentpunkte innerhalb 17 mm):", "JA" if better else "NEIN - altes Modell behalten und mir die Zahlen schicken")`),
 
-  md(String.raw`## 5. Export für die App
-Erzeugt best.onnx (800x800). In der App ersetzt du public/models/best.onnx damit; das alte Modell vorher aufheben.`),
+  md(String.raw`## Export für die App
+Erzeugt best.onnx (800x800) des Gewinners. Nur ersetzen, wenn oben "JA" steht – und das alte Modell vorher aufheben. Die Zahlen oben bitte kopieren und mir schicken.`),
 
-  code(String.raw`# Gleiche Export-Einstellungen wie beim ersten Training (das lief in der App einwandfrei)
-onnx_path = new.export(format="onnx", imgsz=800)
+  code(String.raw`final = YOLO(win["path"])
+onnx_path = final.export(format="onnx", imgsz=800)
 print("ONNX:", onnx_path)
+shutil.copy(win["path"], "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_tip_best.pt")  # Sicherung in Drive
 from google.colab import files
 files.download(onnx_path)
-files.download(BEST_NEW)  # neues .pt für das nächste Mal aufheben`),
+files.download(win["path"])`),
 ];
 
 const notebook = {
