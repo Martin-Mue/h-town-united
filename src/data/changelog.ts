@@ -755,6 +755,26 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
   },
   {
+    id: "2026-10-23-tip-model",
+    date: "2026-10-23",
+    title: {
+      de: "Neues KI-Modell: Treffer auf der Dartspitze",
+      en: "New AI model: hits on the dart tip",
+      fr: "Nouveau modèle IA : impacts sur la pointe",
+      pl: "Nowy model AI: trafienia na końcówce lotki",
+      nl: "Nieuw AI-model: treffers op de dartpunt",
+      tr: "Yeni yapay zekâ modeli: okun ucunda isabet",
+    },
+    description: {
+      de: "Die Erkennung wurde mit deinen eigenen, geprüften Kamerabildern nachtrainiert und sitzt jetzt auf der Dartspitze statt auf dem Flight. Auf Testbildern lag sie im Median 4 mm neben der echten Spitze (vorher fast 27 mm).",
+      en: "Detection was retrained on your own verified camera pictures and now sits on the dart tip instead of the flight. On test pictures it was 4 mm off the real tip in the median (before: almost 27 mm).",
+      fr: "La détection a été réentraînée avec tes propres images vérifiées et se place maintenant sur la pointe plutôt que sur l'empennage. Sur les images de test, l'écart médian à la vraie pointe est de 4 mm (avant : presque 27 mm).",
+      pl: "Wykrywanie zostało douczone na Twoich własnych, sprawdzonych obrazach z kamery i teraz trafia w końcówkę zamiast w lotkę. Na obrazach testowych mediana odchylenia od prawdziwej końcówki wynosi 4 mm (wcześniej prawie 27 mm).",
+      nl: "De herkenning is bijgetraind met je eigen, gecontroleerde camerabeelden en zit nu op de dartpunt in plaats van op de flight. Op testbeelden zat ze mediaan 4 mm naast de echte punt (eerder bijna 27 mm).",
+      tr: "Algılama, kendi doğrulanmış kamera görüntülerinle yeniden eğitildi ve artık kanat yerine okun ucunda duruyor. Test görüntülerinde gerçek uca medyan 4 mm uzaklıktaydı (önceden neredeyse 27 mm).",
+    },
+  },
+  {
     id: "2026-10-24-calibration-snap",
     date: "2026-10-24",
     title: {

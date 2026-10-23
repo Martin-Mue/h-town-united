@@ -35,7 +35,8 @@ ort.env.wasm.numThreads = 1;
 /** Model was trained/exported at this fixed square input size — see the embedded metadata. */
 export const MODEL_INPUT_SIZE = 800;
 
-const MODEL_URL = "/models/best.onnx";
+// The query string changes with every retrained model so browsers never keep serving the previous one.
+const MODEL_URL = "/models/best.onnx?v=2026-10-23-tip";
 // Order matches the model's embedded `names` metadata exactly — index IS the class id.
 const CLASS_NAMES = ["dart", "cal_1", "cal_2", "cal_3", "cal_4"] as const;
 type CalLabel = Exclude<(typeof CLASS_NAMES)[number], "dart">;
