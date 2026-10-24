@@ -48,6 +48,7 @@ const counts = { train: 0, val: 0, noDarts: 0, noFit: 0, darts: 0, shifts: [] };
 for (const [index, sample] of samples.entries()) {
   const number = String(index + 1).padStart(3, "0");
   const decision = review[number] ?? {};
+  if (decision.exclude) { console.log(`  sample ${number}: excluded (${decision.exclude})`); counts.noDarts++; continue; }
   const remove = new Set(decision.removeLabels ?? []);
   const darts = (sample.labels ?? [])
     .filter((l, i) => typeof l.x === "number" && typeof l.y === "number" && l.baseValue >= 0 && !l.snapped && !remove.has(i + 1))
