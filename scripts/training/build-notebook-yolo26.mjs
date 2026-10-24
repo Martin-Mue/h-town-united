@@ -11,20 +11,20 @@ const code = (text) => ({ cell_type: "code", metadata: {}, execution_count: null
 
 // cells of the first notebook: 1 = install + Drive + upload, 3 = metrics (4 = its markdown header is cell 2)
 const setupCell = JSON.parse(JSON.stringify(base.cells[1]));
-setupCell.source = setupCell.source.map((line) => line.replace("training-set-rectified-v6.zip", "training-set-rectified-v7.zip"));
+setupCell.source = setupCell.source.map((line) => line.replace("training-set-rectified-v6.zip", "training-set-rectified-v8.zip"));
 // The zip is big (157 MB): use a copy in Drive when there is one, upload only otherwise.
 {
   const text = setupCell.source.join("");
-  const from = text.indexOf('print("Lade training-set-rectified-v7.zip hoch:")');
+  const from = text.indexOf('print("Lade training-set-rectified-v8.zip hoch:")');
   const to = text.indexOf('assert zip_names, "Keine .zip hochgeladen"');
   if (from < 0 || to < 0) throw new Error("upload block not found in the setup cell");
   const replacement = [
-    'DRIVE_ZIP = DRIVE + "training-set-rectified-v7.zip"',
+    'DRIVE_ZIP = DRIVE + "training-set-rectified-v8.zip"',
     'if os.path.exists(DRIVE_ZIP):',
     '    zip_names = [DRIVE_ZIP]   # Kopie liegt schon in Drive: kein Upload noetig',
     '    print("Datenset aus Drive:", DRIVE_ZIP)',
     'else:',
-    '    print("Lade training-set-rectified-v7.zip hoch (Tipp: einmal in den Drive-Ordner DeepDarts-Dataset legen, dann entfaellt der Upload):")',
+    '    print("Lade training-set-rectified-v8.zip hoch (Tipp: einmal in den Drive-Ordner DeepDarts-Dataset legen, dann entfaellt der Upload):")',
     '    uploaded = files.upload()',
     '    zip_names = [n for n in uploaded if n.lower().endswith(".zip")]',
     '',
@@ -39,7 +39,7 @@ const cells = [
 
 Die Läufe v5 und v6 haben das laufende Modell (v4, YOLOv8n) nicht verbessert, weil v4 auf den ~16 000 Bildern des **DeepDarts-Datensatzes** (McNally et al. 2021) aufbaut und unsere ~1100 Bilder allein dagegen nichts Neues beibringen. Dieses Notebook probiert deshalb das, was bisher fehlt: **ein neueres Modell von Grund auf trainieren** (YOLO26, vortrainiert auf COCO) – und zwar auf **DeepDarts (3500 zufällige Bilder daraus) plus unseren Bildern** – und prüft, ob es die schwachen Fälle (Double-Ring, Rand) besser trifft. Zwei Größen laufen nacheinander: **yolo26n** (so klein wie v4, aber neuer) und **yolo26s** (3-4x so rechenintensiv).
 
-Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**, danach **Alle ausführen** und die Zip \`training-set-rectified-v7.zip\` hochladen. Ein Durchlauf dauert etwa 30-60 Minuten.
+Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**, danach **Alle ausführen** und die Zip \`training-set-rectified-v8.zip\` hochladen. Ein Durchlauf dauert etwa 30-60 Minuten.
 
 Was am Ende zählt, wie bisher: Abstand zur echten Spitze in Millimetern, getrennt nach Double, Treble/Rand, links unten. Neu: **Rechenzeit auf einem CPU-Kern** (die App rechnet im Browser auf dem Handy) und die **Form der ONNX-Ausgabe** (die App versteht das klassische Format \`[1, 9, N]\` und das neue NMS-freie \`[1, K, 6]\`).`),
   setupCell,

@@ -11,7 +11,7 @@ const cells = [
 
 Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**. Danach **Laufzeit → Alle ausführen** – ein Durchlauf, keine Zwischenschritte.
 
-Gestartet wird vom **aktuellen Modell** (das in der App läuft): das Notebook sucht es in Google Drive unter DeepDarts-Dataset/dartspot_v4_best.pt (das hat der letzte Lauf dort gesichert), sonst dartspot_tip_best.pt. Fehlt die Datei, bittet das Notebook um den Upload der best.pt vom letzten Training (Downloads). Das Original-Modell dient nur als Notnagel. "ALT" in den Messungen heißt: das aktuell laufende Modell. Hochladen musst du das Datenset (training-set-rectified-v6.zip).
+Gestartet wird vom **aktuellen Modell** (das in der App läuft): das Notebook sucht es in Google Drive unter DeepDarts-Dataset/dartspot_v4_best.pt (das hat der letzte Lauf dort gesichert), sonst dartspot_tip_best.pt. Fehlt die Datei, bittet das Notebook um den Upload der best.pt vom letzten Training (Downloads). Das Original-Modell dient nur als Notnagel. "ALT" in den Messungen heißt: das aktuell laufende Modell. Hochladen musst du das Datenset (training-set-rectified-v8.zip).
 
 Was anders ist als beim ersten Versuch:
 - Die Bilder sind genau das, was die App dem Modell zeigt: das Board von oben entzerrt (20 oben), die vier Ecken sind echte Labels.
@@ -29,7 +29,7 @@ DRIVE = "/content/drive/MyDrive/DeepDarts-Dataset/"
 # Neuestes Modell zuerst: v4 ist das, was gerade in der App läuft; tip ist der Stand davor.
 # Der Lauf, der das heutige Modell (v4) erzeugt hat, hat es unter dem alten Namen dartspot_tip_best.pt gesichert - die Datei
 # heisst also "tip", enthaelt aber v4 (das, was in der App laeuft). v5 war ein Lauf ohne Verbesserung, wird NICHT genommen.
-# Neuere Laeufe sichern unter dartspot_v6_best.pt usw. und werden nur dann hier eingetragen, wenn sie in die App gehen.
+# Neuere Laeufe sichern unter dartspot_v8_best.pt usw. und werden nur dann hier eingetragen, wenn sie in die App gehen.
 CANDIDATES = [DRIVE + "dartspot_tip_best.pt", DRIVE + "dartspot_v4_best.pt"]
 ORIGINAL_PT = DRIVE + "training_runs/dart_yolov8n/weights/best.pt"
 START_PT = next((p for p in CANDIDATES if os.path.exists(p)), None)
@@ -48,7 +48,7 @@ else:
         shutil.copy(ORIGINAL_PT, "/content/best.pt")
         print("ACHTUNG: Start vom ORIGINAL-Modell (nicht vom aktuellen Spitzen-Modell).")
 
-print("Lade training-set-rectified-v6.zip hoch:")
+print("Lade training-set-rectified-v8.zip hoch:")
 uploaded = files.upload()
 zip_names = [n for n in uploaded if n.lower().endswith(".zip")]
 assert zip_names, "Keine .zip hochgeladen"
@@ -204,7 +204,7 @@ Erzeugt best.onnx (800x800) des Gewinners. Nur ersetzen, wenn oben "JA" steht �
   code(String.raw`final = YOLO(win["path"])
 onnx_path = final.export(format="onnx", imgsz=800)
 print("ONNX:", onnx_path)
-shutil.copy(win["path"], "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_v6_best.pt")  # Sicherung in Drive (die Vorgänger bleiben bewusst unberührt)
+shutil.copy(win["path"], "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_v8_best.pt")  # Sicherung in Drive (die Vorgänger bleiben bewusst unberührt)
 from google.colab import files
 files.download(onnx_path)
 files.download(win["path"])`),
