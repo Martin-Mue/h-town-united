@@ -26,7 +26,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
-import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, MODEL_INPUT_SIZE } from "@/utils/dartModel";
+import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, modelDiagnostics, MODEL_INPUT_SIZE } from "@/utils/dartModel";
 import { pointsFor, dartLabel } from "@/utils/x01Rules";
 import BoardCalibrator from "@/components/game/BoardCalibrator";
 import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
@@ -430,6 +430,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const throwsSeenRef = useRef(0);
   const [throwsSeen, setThrowsSeen] = useState(0);
   const [modelReady, setModelReady] = useState(false);
+  /** Set while the model cannot be used (not loaded / failed to run): the fallback detection runs, and the player is told. */
+  const [modelProblem, setModelProblem] = useState<string | null>(null);
   const [lastDetectionSource, setLastDetectionSource] = useState<"model" | "diff" | "gemini" | null>(null);
   // Background Gemini second opinion (2026-09-10) — unlike lastDetectionSource="gemini" above
   // (Gemini as the ONLY source, when the local pipeline found nothing at all), this is Gemini
@@ -1689,16 +1691,32 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const handleStillMoment = async (sig: number[], signatureSaysEmpty: boolean) => {
     stillMomentBusyRef.current = true;
     try {
-      if (!modelReadyRef.current) return legacyStillMoment(sig, signatureSaysEmpty);
+      if (!modelReadyRef.current) {
+        setModelProblem(modelDiagnostics.loadError ?? "lädt noch");
+        return legacyStillMoment(sig, signatureSaysEmpty);
+      }
       const frame = grabModelFrame();
-      if (!frame) return legacyStillMoment(sig, signatureSaysEmpty);
+      if (!frame) {
+        setModelProblem("Kamerabild nicht lesbar");
+        return legacyStillMoment(sig, signatureSaysEmpty);
+      }
 
       // A rest with the picture unchanged since the last look (a flicker, a nudge) needs no detection — on a phone
       // every detection costs seconds of a frozen screen.
       const lastLook = lastEvaluatedFrameRef.current;
       if (lastLook) {
         const sinceLastLook = buildChangeMap(lastLook, frame);
-        if (sinceLastLook && sinceLastLook.share < UNCHANGED_FRAME_SHARE) return;
+        if (sinceLastLook && sinceLastLook.share < UNCHANGED_FRAME_SHARE) {
+          const seenNow = Math.min(3, accumulatedRef.current.length);
+          setStatus(
+            seenNow === 0
+              ? t("camera.readyThrowFirst")
+              : seenNow >= dartsRemaining
+                ? `${seenNow} ${t("camera.dartsOnBoardPullNow")}`
+                : `${seenNow}/${dartsRemaining} ${t("camera.onBoardNextOrPull")}`,
+          );
+          return;
+        }
       }
 
       // darts that were already stuck in the board when this round's baseline was taken are not new
@@ -1708,7 +1726,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         baselineDartsRef.current = base && !base.unavailable ? base.darts.map((d) => ({ x: d.x, y: d.y, confidence: d.confidence })) : [];
       }
       const result = await detectDartsWithModel(frame, 8, NEW_DART_MIN_SCORE);
-      if (result.unavailable) return legacyStillMoment(sig, signatureSaysEmpty);
+      if (result.unavailable) {
+        setModelProblem(modelDiagnostics.inferenceError ?? "Auswertung fehlgeschlagen");
+        return legacyStillMoment(sig, signatureSaysEmpty);
+      }
+      setModelProblem(null);
       lastEvaluatedFrameRef.current = frame;
       const baselineDarts = baselineDartsRef.current;
       const present = refineWithCalibration(
@@ -2808,6 +2830,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </div>
       </div>
 
+      {modelProblem && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{t("camera.modelProblem").replace("{reason}", modelProblem)}</span>
+        </div>
+      )}
+
       {accumulated.length === 0 && phase === "live" && !needsReview && !paused && (
         <Button variant="outline" className="h-11 w-full gap-2 text-sm" onClick={commitMissRound}>
           {t("camera.missRound")}
@@ -3026,6 +3055,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           (not touch-hidden) now that this is the only mode there is to explain. */}
       <p className="px-0.5 text-[10px] leading-snug text-muted-foreground">
         {modelReady ? t("camera.localDetectionModel") : t("camera.localDetectionLoading")}
+      </p>
+      <p className="px-0.5 font-mono text-[10px] leading-snug text-muted-foreground">
+        KI: {modelReady ? "geladen" : "nicht geladen"} · Läufe {modelDiagnostics.runs} · zuletzt {modelDiagnostics.lastRunMs} ms
+        {modelDiagnostics.loadError ? ` · Ladefehler: ${modelDiagnostics.loadError}` : ""}
+        {modelDiagnostics.inferenceError ? ` · Fehler: ${modelDiagnostics.inferenceError}` : ""}
       </p>
 
       <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">

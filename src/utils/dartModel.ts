@@ -69,6 +69,16 @@ const DART_SCORE_FLOOR = 0.1;
 const CAL_SCORE_THRESHOLD = 0.6;
 const NMS_IOU_THRESHOLD = 0.5;
 
+/** What the model last did — shown in the camera panel, so a model that cannot load or run is visible instead of
+ *  silently switching the app to its fallback. */
+export const modelDiagnostics: { loadError: string | null; inferenceError: string | null; lastRunMs: number; runs: number } = {
+  loadError: null,
+  inferenceError: null,
+  lastRunMs: 0,
+  runs: 0,
+};
+const describeError = (err: unknown): string => (err instanceof Error ? err.message : String(err)).slice(0, 160);
+
 let sessionPromise: Promise<ort.InferenceSession> | null = null;
 
 function getSession(): Promise<ort.InferenceSession> {
@@ -86,9 +96,11 @@ function getSession(): Promise<ort.InferenceSession> {
 export async function preloadDartModel(): Promise<boolean> {
   try {
     await getSession();
+    modelDiagnostics.loadError = null;
     return true;
   } catch (err) {
     console.warn("[dartModel] failed to load", err);
+    modelDiagnostics.loadError = describeError(err);
     sessionPromise = null; // allow a later retry instead of permanently caching the failure
     return false;
   }
@@ -134,6 +146,7 @@ function decodeOutput(output: ort.Tensor): DecodedOutput {
     channelsFirst = false;
   } else {
     console.warn("[dartModel] unexpected output shape", dims);
+    modelDiagnostics.inferenceError = `unerwartete Modell-Ausgabe ${JSON.stringify(dims)}`;
     return empty;
   }
   const at = (c: number, k: number) => (channelsFirst ? data[c * numAnchors + k] : data[k * channels + c]);
@@ -205,12 +218,18 @@ async function runModel(frame: ImageData): Promise<DecodedOutput | null> {
     return null;
   }
   try {
+    const startedAt = performance.now();
     const input = toTensor(frame);
     const results = await session.run({ [session.inputNames[0]]: input });
     const output = results[session.outputNames[0]];
-    return decodeOutput(output);
+    const decoded = decodeOutput(output);
+    modelDiagnostics.lastRunMs = Math.round(performance.now() - startedAt);
+    modelDiagnostics.runs += 1;
+    modelDiagnostics.inferenceError = null;
+    return decoded;
   } catch (err) {
     console.warn("[dartModel] inference failed", err);
+    modelDiagnostics.inferenceError = describeError(err);
     return null;
   }
 }
