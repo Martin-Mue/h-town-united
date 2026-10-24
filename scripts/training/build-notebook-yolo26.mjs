@@ -12,6 +12,25 @@ const code = (text) => ({ cell_type: "code", metadata: {}, execution_count: null
 // cells of the first notebook: 1 = install + Drive + upload, 3 = metrics (4 = its markdown header is cell 2)
 const setupCell = JSON.parse(JSON.stringify(base.cells[1]));
 setupCell.source = setupCell.source.map((line) => line.replace("training-set-rectified-v6.zip", "training-set-rectified-v7.zip"));
+// The zip is big (157 MB): use a copy in Drive when there is one, upload only otherwise.
+{
+  const text = setupCell.source.join("");
+  const from = text.indexOf('print("Lade training-set-rectified-v7.zip hoch:")');
+  const to = text.indexOf('assert zip_names, "Keine .zip hochgeladen"');
+  if (from < 0 || to < 0) throw new Error("upload block not found in the setup cell");
+  const replacement = [
+    'DRIVE_ZIP = DRIVE + "training-set-rectified-v7.zip"',
+    'if os.path.exists(DRIVE_ZIP):',
+    '    zip_names = [DRIVE_ZIP]   # Kopie liegt schon in Drive: kein Upload noetig',
+    '    print("Datenset aus Drive:", DRIVE_ZIP)',
+    'else:',
+    '    print("Lade training-set-rectified-v7.zip hoch (Tipp: einmal in den Drive-Ordner DeepDarts-Dataset legen, dann entfaellt der Upload):")',
+    '    uploaded = files.upload()',
+    '    zip_names = [n for n in uploaded if n.lower().endswith(".zip")]',
+    '',
+  ].join("\n");
+  setupCell.source = (text.slice(0, from) + replacement + text.slice(to)).split("\n").map((l, i, all) => (i < all.length - 1 ? l + "\n" : l));
+}
 const metricsMarkdown = base.cells[2];
 const metricsCell = base.cells[3];
 
