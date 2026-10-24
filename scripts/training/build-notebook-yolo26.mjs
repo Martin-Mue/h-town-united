@@ -16,9 +16,9 @@ const metricsMarkdown = base.cells[2];
 const metricsCell = base.cells[3];
 
 const cells = [
-  md(String.raw`# DartSpot: YOLO26 statt Nachtraining
+  md(String.raw`# DartSpot: YOLO26 mit dem Original-Datensatz
 
-Die Läufe v5 und v6 haben das laufende Modell (v4, YOLOv8n) nicht verbessert. Dieses Notebook probiert das, was bisher fehlt: **ein neueres Modell von Grund auf trainieren** (YOLO26, vortrainiert auf COCO) und prüfen, ob es die schwachen Fälle (Double-Ring, Rand) besser trifft. Zwei Größen laufen nacheinander: **yolo26n** (so klein wie v4, aber neuer) und **yolo26s** (3-4x so rechenintensiv).
+Die Läufe v5 und v6 haben das laufende Modell (v4, YOLOv8n) nicht verbessert, weil v4 auf den ~16 000 Bildern des **DeepDarts-Datensatzes** (McNally et al. 2021) aufbaut und unsere ~1100 Bilder allein dagegen nichts Neues beibringen. Dieses Notebook probiert deshalb das, was bisher fehlt: **ein neueres Modell von Grund auf trainieren** (YOLO26, vortrainiert auf COCO) – und zwar auf **DeepDarts (3500 zufällige Bilder daraus) plus unseren Bildern** – und prüft, ob es die schwachen Fälle (Double-Ring, Rand) besser trifft. Zwei Größen laufen nacheinander: **yolo26n** (so klein wie v4, aber neuer) und **yolo26s** (3-4x so rechenintensiv).
 
 Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**, danach **Alle ausführen** und die Zip \`training-set-rectified-v7.zip\` hochladen. Ein Durchlauf dauert etwa 30-60 Minuten.
 
@@ -55,17 +55,103 @@ show("ALT", old_tip); show("ALT dicht", old_dense)
 for k in KINDS: show("ALT " + k, old_hard[k])
 print(f"ALT Rechenzeit {old_ms:.0f} ms (1 CPU-Kern), {old_mb:.1f} MB, Ausgabe {old_shape}")`),
 
+  md(String.raw`## Original-Datensatz einmischen (DeepDarts)
+Die Bilder liegen in deinem Drive-Ordner (cropped_images.zip + labels_pkl.zip, ~16 000 Bilder, 800 px). Das Notebook zieht 3500 zufällige Bilder heraus und schreibt die Labels im selben Format wie unsere (Klasse 0 = Dart, 1-4 = die vier Ecken). **Sicherheitsnetz:** welcher der vier Eck-Punkte im Original zu welcher Klasse gehört, prüft das Notebook selbst, indem es die Zuordnung wählt, bei der das laufende Modell (v4) auf den Bildern am besten übereinstimmt. Bewertet wird weiterhin NUR auf unseren 72 echten Bewertungsbildern.`),
+  code(String.raw`import itertools, random, pandas as pd
+
+DD_SAMPLE = 3500
+BOX_DART, BOX_CORNER = 0.04, 0.05
+dd_zips = sorted(glob.glob(DRIVE + "cropped_images*.zip"))
+dd_pkls = sorted(glob.glob(DRIVE + "labels_pkl*.zip")) + sorted(glob.glob(DRIVE + "labels.pkl"))
+MIX = DS
+if not dd_zips or not dd_pkls:
+    print("ACHTUNG: DeepDarts-Dateien (cropped_images.zip / labels_pkl.zip) nicht in", DRIVE, "- es wird nur mit unseren Bildern trainiert.")
+else:
+    t0 = time.time()
+    pkl_path = dd_pkls[0]
+    if pkl_path.endswith(".zip"):
+        zipfile.ZipFile(pkl_path).extractall("/content/ddlabels"); pkl_path = "/content/ddlabels/labels.pkl"
+    df = pd.read_pickle(pkl_path)
+    print("Spalten:", list(df.columns), "| Zeilen:", len(df))
+    shutil.copy(dd_zips[0], "/content/cropped_images.zip")   # schneller Zugriff als direkt vom Drive
+    zf = zipfile.ZipFile("/content/cropped_images.zip")
+    members = {n.split("/", 2)[-1] if n.startswith("cropped_images/800/") else n: n for n in zf.namelist() if n.lower().endswith(".jpg")}
+    def find_member(folder, name):
+        for key in (f"{folder}/{name}", f"{folder}/{name}".replace("\\", "/")):
+            if key in members: return members[key]
+        return None
+    rows = df.sample(n=min(DD_SAMPLE, len(df)), random_state=0)
+    items = []
+    for _, row in rows.iterrows():
+        member = find_member(str(row["img_folder"]), str(row["img_name"]))
+        try:
+            arr = np.array([np.asarray(p, dtype=float).ravel()[:2] for p in row["xy"]])
+        except Exception:
+            continue
+        pts = arr if arr.ndim == 2 and arr.shape[1] == 2 else np.zeros((0, 2))
+        if member is None or len(pts) < 4 or not np.isfinite(pts[:4]).all():
+            continue
+        items.append((member, pts))
+    print("Bilder mit Labels gefunden:", len(items), "von", len(rows))
+
+    # 1. Zuordnung der vier Eck-Punkte zu den Klassen cal_1..cal_4 vom laufenden Modell lernen lassen
+    probe = items[:40]
+    for member, _ in probe:
+        zf.extract(member, "/content/ddprobe")
+    cost = np.zeros((4, 4))   # cost[i, j]: Abstand des Original-Punkts i zur Vorhersage der Klasse j+1
+    for member, pts in probe:
+        res = old.predict(f"/content/ddprobe/{member}", imgsz=800, conf=0.3, verbose=False)[0]
+        best = {}
+        for b in res.boxes:
+            c = int(b.cls)
+            if 1 <= c <= 4 and (c not in best or float(b.conf) > best[c][0]):
+                best[c] = (float(b.conf), float(b.xywhn[0][0]), float(b.xywhn[0][1]))
+        for i in range(4):
+            for j in range(4):
+                if (j + 1) in best:
+                    cost[i, j] += math.hypot(pts[i][0] - best[j + 1][1], pts[i][1] - best[j + 1][2])
+                else:
+                    cost[i, j] += 0.5
+    perm = min(itertools.permutations(range(4)), key=lambda p: sum(cost[i, p[i]] for i in range(4)))
+    mean_err = sum(cost[i, perm[i]] for i in range(4)) / (4 * len(probe))
+    print("Zuordnung Original-Punkt -> Klasse:", {i: perm[i] + 1 for i in range(4)}, f"| mittlere Abweichung {mean_err:.3f} (Bildbreite)")
+    assert mean_err < 0.08, f"Eck-Zuordnung passt nicht zum laufenden Modell (Abweichung {mean_err:.3f}); Beispielzeile: {df.iloc[0].to_dict()} - bitte an Claude schicken"
+
+    # 2. Bilder und Labels schreiben
+    os.makedirs("/content/dd/images/train", exist_ok=True); os.makedirs("/content/dd/labels/train", exist_ok=True)
+    written = 0
+    for k, (member, pts) in enumerate(items):
+        zf.extract(member, "/content/ddraw")
+        name = f"dd{k:05d}"
+        shutil.move(f"/content/ddraw/{member}", f"/content/dd/images/train/{name}.jpg")
+        lines = [f"{perm[i] + 1} {pts[i][0]:.6f} {pts[i][1]:.6f} {BOX_CORNER} {BOX_CORNER}" for i in range(4)]
+        for x, y in pts[4:]:
+            if 0 < x < 1 and 0 < y < 1:
+                lines.append(f"0 {x:.6f} {y:.6f} {BOX_DART} {BOX_DART}")
+        open(f"/content/dd/labels/train/{name}.txt", "w").write("
+".join(lines) + "
+")
+        written += 1
+    shutil.rmtree("/content/ddraw", ignore_errors=True); shutil.rmtree("/content/ddprobe", ignore_errors=True)
+    os.makedirs("/content/mix", exist_ok=True)
+    MIX = "/content/mix"
+    with open(f"{MIX}/data.yaml", "w") as f:
+        f.write("
+".join([f"path: /content", f"train: [{DS}/images/train, /content/dd/images/train]", f"val: {DS}/images/val", "names:",
+                           "  0: dart", "  1: cal_1", "  2: cal_2", "  3: cal_3", "  4: cal_4", ""]))
+    print(f"DeepDarts-Bilder eingemischt: {written} | Trainingsbilder insgesamt: {len(glob.glob(DS + '/images/train/*.jpg')) + written} | {time.time() - t0:.0f} s")`),
+
   md(String.raw`## Training: YOLO26 n und s
-Kein Spiegeln/Drehen (die 20 ist im entzerrten Bild immer oben, die Ecken haben feste Plätze), kein Mosaic (es würde das Board zerstückeln und die Ecken-Klassen zerstören). Geringe Farb- und Verschiebungs-Augmentierung wie bisher. Frühes Stoppen nach 40 Epochen ohne Besserung.`),
+Kein Spiegeln/Drehen (die 20 ist im entzerrten Bild immer oben, die Ecken haben feste Plätze), kein Mosaic (es würde das Board zerstückeln und die Ecken-Klassen zerstören). Geringe Farb- und Verschiebungs-Augmentierung wie bisher. Frühes Stoppen nach 15 Epochen ohne Besserung. Mit dem Original-Datensatz dauert eine Epoche etwa eine Minute (n) bzw. zwei (s): rechne mit 1-2 Stunden insgesamt.`),
   code(String.raw`VARIANTS = {
-    "yolo26n": dict(weights="yolo26n.pt", epochs=160, batch=16),
-    "yolo26s": dict(weights="yolo26s.pt", epochs=160, batch=16),
+    "yolo26n": dict(weights="yolo26n.pt", epochs=45, batch=16),
+    "yolo26s": dict(weights="yolo26s.pt", epochs=35, batch=16),
 }
 results = {}
 for name, cfg in VARIANTS.items():
     m = YOLO(cfg["weights"])
     m.train(
-        data=f"{DS}/data.yaml", imgsz=800, epochs=cfg["epochs"], batch=cfg["batch"], patience=40, optimizer="AdamW", lr0=0.002, lrf=0.05,
+        data=f"{MIX}/data.yaml", imgsz=800, epochs=cfg["epochs"], batch=cfg["batch"], patience=15, optimizer="AdamW", lr0=0.001, lrf=0.05,
         fliplr=0.0, flipud=0.0, degrees=0.0, translate=0.05, scale=0.15, shear=0.0, perspective=0.0,
         mosaic=0.0, mixup=0.0, hsv_h=0.01, hsv_s=0.5, hsv_v=0.35,
         project="/content/runs", name=name, exist_ok=True, plots=False,
