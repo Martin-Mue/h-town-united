@@ -11,7 +11,7 @@ const cells = [
 
 Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**. Danach **Laufzeit → Alle ausführen** – ein Durchlauf, keine Zwischenschritte.
 
-Gestartet wird vom **aktuellen Spitzen-Modell** (das in der App läuft): das Notebook sucht es in Google Drive unter DeepDarts-Dataset/dartspot_tip_best.pt (das hat der letzte Lauf dort gesichert). Fehlt die Datei, bittet das Notebook um den Upload der best.pt vom letzten Training (Downloads). Das Original-Modell dient nur als Notnagel. "ALT" in den Messungen heißt: das aktuell laufende Modell. Hochladen musst du das Datenset (training-set-rectified-v5.zip).
+Gestartet wird vom **aktuellen Modell** (das in der App läuft): das Notebook sucht es in Google Drive unter DeepDarts-Dataset/dartspot_v4_best.pt (das hat der letzte Lauf dort gesichert), sonst dartspot_tip_best.pt. Fehlt die Datei, bittet das Notebook um den Upload der best.pt vom letzten Training (Downloads). Das Original-Modell dient nur als Notnagel. "ALT" in den Messungen heißt: das aktuell laufende Modell. Hochladen musst du das Datenset (training-set-rectified-v5.zip).
 
 Was anders ist als beim ersten Versuch:
 - Die Bilder sind genau das, was die App dem Modell zeigt: das Board von oben entzerrt (20 oben), die vier Ecken sind echte Labels.
@@ -25,13 +25,16 @@ from google.colab import drive, files
 import os, shutil, zipfile
 
 drive.mount("/content/drive")
-TIP_PT = "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_tip_best.pt"
-ORIGINAL_PT = "/content/drive/MyDrive/DeepDarts-Dataset/training_runs/dart_yolov8n/weights/best.pt"
-if os.path.exists(TIP_PT):
-    shutil.copy(TIP_PT, "/content/best.pt")  # Drive-Datei bleibt unberührt
-    print("Start vom aktuellen Spitzen-Modell aus Drive.")
+DRIVE = "/content/drive/MyDrive/DeepDarts-Dataset/"
+# Neuestes Modell zuerst: v4 ist das, was gerade in der App läuft; tip ist der Stand davor.
+CANDIDATES = [DRIVE + "dartspot_v4_best.pt", DRIVE + "dartspot_tip_best.pt"]
+ORIGINAL_PT = DRIVE + "training_runs/dart_yolov8n/weights/best.pt"
+START_PT = next((p for p in CANDIDATES if os.path.exists(p)), None)
+if START_PT:
+    shutil.copy(START_PT, "/content/best.pt")  # Drive-Datei bleibt unberührt
+    print("Start vom aktuellen Modell aus Drive:", os.path.basename(START_PT))
 else:
-    print("dartspot_tip_best.pt nicht in Drive. Bitte die best.pt vom letzten Training hochladen (Downloads, die .pt, nicht die .onnx):")
+    print("Kein gesichertes Modell in Drive gefunden. Bitte die best.pt des aktuell laufenden Modells hochladen (Downloads, die .pt, nicht die .onnx):")
     up = files.upload()
     pts = [n for n in up if n.lower().endswith(".pt")]
     if pts:
@@ -170,7 +173,7 @@ Erzeugt best.onnx (800x800) des Gewinners. Nur ersetzen, wenn oben "JA" steht �
   code(String.raw`final = YOLO(win["path"])
 onnx_path = final.export(format="onnx", imgsz=800)
 print("ONNX:", onnx_path)
-shutil.copy(win["path"], "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_v4_best.pt")  # Sicherung in Drive (überschreibt dartspot_tip_best.pt bewusst nicht)
+shutil.copy(win["path"], "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_v5_best.pt")  # Sicherung in Drive (die Vorgänger bleiben bewusst unberührt)
 from google.colab import files
 files.download(onnx_path)
 files.download(win["path"])`),
