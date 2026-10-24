@@ -520,6 +520,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   /** Fine luminance picture of the latest tick, and the one at the last evaluation (see FINE_CHANGE_MIN_CELLS). */
   const latestFineRef = useRef<Float32Array | null>(null);
   const evaluatedFineRef = useRef<Float32Array | null>(null);
+  /** The fine picture of the look in progress; it becomes the new reference once that look explained the change. */
+  const pendingFineRef = useRef<Float32Array | null>(null);
+  /** Looks in a row that found nothing new although the picture had changed (a dart the model missed once). */
+  const emptyLooksRef = useRef(0);
   const stillThresholdRef = useRef(MOTION_STILL);
   const stillMomentQueuedRef = useRef(false);
   /** How many calibration refits in a row found no board near the current calibration. */
@@ -716,6 +720,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     stillMomentQueuedRef.current = false;
     lastEvaluatedFrameRef.current = null;
     evaluatedFineRef.current = null;
+    pendingFineRef.current = null;
+    emptyLooksRef.current = 0;
     dismissedRef.current = [];
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
@@ -1824,7 +1830,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const lastLook = lastEvaluatedFrameRef.current;
       if (lastLook) {
         const sinceLastLook = buildChangeMap(lastLook, frame);
-        if (sinceLastLook && sinceLastLook.share < UNCHANGED_FRAME_SHARE) {
+        if (sinceLastLook && sinceLastLook.share < UNCHANGED_FRAME_SHARE && emptyLooksRef.current === 0) {
           const seenNow = Math.min(3, accumulatedRef.current.length);
           setStatus(
             seenNow === 0
@@ -1870,6 +1876,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // Occupied = a confident detection OR a weaker one that stands on fresh change (it just joined the round).
       // Weak detections alone never keep a round from ending, but they must not make a real dart invisible either.
       if (!present.some((d) => d.confidence >= BOARD_OCCUPIED_SCORE) && added.length === 0) {
+        evaluatedFineRef.current = pendingFineRef.current; // an empty board is a fully explained picture
+        emptyLooksRef.current = 0;
         onBoardEmptyMoment(sig);
         return;
       }
@@ -1884,6 +1892,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       }
       lastStableModelFrameRef.current = frame;
 
+      // A look that finds nothing new although the picture changed (a dart the model overlooked once, a hand) is repeated at the
+      // next rest — the same picture with fresh sensor noise often gives the model a second chance — up to twice; only then
+      // the change is accepted as explained. (Before, the first miss was final until the phone was moved.)
+      if (added.length > 0 || emptyLooksRef.current >= 2) {
+        evaluatedFineRef.current = pendingFineRef.current;
+        emptyLooksRef.current = 0;
+      } else {
+        emptyLooksRef.current += 1;
+      }
       if (added.length > 0) {
         const next = [...known, ...markDetected(added)];
         accumulatedRef.current = next;
@@ -2078,7 +2095,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       ) {
         changeSeenRef.current = false;
         stableSigRef.current = sig;
-        evaluatedFineRef.current = latestFineRef.current;
+        pendingFineRef.current = latestFineRef.current;
         // Read through a ref so the handler always sees the current calibration, even though this
         // interval closure was created many renders ago.
         // A phone needs seconds per detection; the next dart often lands meanwhile. That moment must not be lost,
