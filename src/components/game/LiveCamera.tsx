@@ -225,6 +225,10 @@ const BOARD_OCCUPIED_SCORE = 0.25;
 /** Cut-off of the final look at the finished visit; candidates must additionally stand on pixels that
  *  differ from the empty board, which a real dart always does. */
 const FINAL_PASS_MIN_SCORE = 0.25;
+/** In the final look, a detection within this distance (frame fraction, ~36 mm) of a known dart is taken as that dart's
+ *  barrel/flight unless it scores at least FINAL_PASS_NEAR_KNOWN_SCORE. */
+const FINAL_PASS_NEAR_KNOWN_DISTANCE = 0.08;
+const FINAL_PASS_NEAR_KNOWN_SCORE = 0.45;
 /** A rest whose picture differs from the last evaluated one in fewer than this share of cells needs no new detection. */
 const UNCHANGED_FRAME_SHARE = 0.0008;
 /** A detection this confident counts as a dart even where the pictures show no fresh change. */
@@ -1761,7 +1765,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const map = baseline ? buildChangeMap(baseline, frame) : null;
     const usable = map && map.share < GLOBAL_CHANGE_SHARE_MAX ? map : null;
     // Without a usable comparison picture only confident detections may add anything.
-    const eligible = usable ? found : found.filter((d) => d.confidence >= 0.4);
+    // Compared with the EMPTY board every pixel of a dart is "fresh", so the change check cannot tell the barrel or flight
+    // of a dart that is already known from a new dart. Anything close to a known dart therefore needs a confident hit.
+    const eligible = (usable ? found : found.filter((d) => d.confidence >= 0.4)).filter(
+      (d) => d.confidence >= FINAL_PASS_NEAR_KNOWN_SCORE || !kept.some((k) => Math.hypot((k.x ?? 0) - (d.x ?? 0), (k.y ?? 0) - (d.y ?? 0)) < FINAL_PASS_NEAR_KNOWN_DISTANCE),
+    );
     const added = selectNewDarts(kept, eligible, usable ? (x, y) => changedShareNear(usable, x, y) : null, dartsRemaining - kept.length);
     if (added.length === 0 && kept.length === before.length) return;
     if (accumulatedRef.current !== before) return;
