@@ -230,12 +230,12 @@ const UNCHANGED_FRAME_SHARE = 0.0008;
 /** A detection this confident counts as a dart even where the pictures show no fresh change. */
 const CONFIDENT_DART_SCORE = 0.5;
 /** How often (ms) a calm picture is used to settle the calibration back onto the board's wires. */
-const CALIB_REFINE_MS = 4000;
-/** A refit counts only with at least this colour agreement (a good fit scores ~0.65) ... */
+const CALIB_REFINE_MS = 2000;
+/** A refit counts only with at least this colour agreement (a good fit scores ~0.65). */
 const CALIB_REFINE_MIN_QUALITY = 0.5;
-/** ... and only for small drift: each point may move at most this share of the board radius (a bigger
- *  jump means the camera was moved on purpose — that needs the calibration view, not a silent nudge). */
-const CALIB_REFINE_MAX_MOVE = 0.15;
+/** With darts in the board the fit must be surer, and only a real displacement (>= 5 % of the radius) counts. */
+const CALIB_REFINE_MIN_QUALITY_WITH_DARTS = 0.6;
+const CALIB_REFINE_MIN_MOVE_WITH_DARTS = 0.05;
 /** Moves below this share of the radius (<1 mm) are ignored so the calibration does not jitter. */
 const CALIB_REFINE_MIN_MOVE = 0.004;
 /** Within this distance (frame fraction, ~9 mm) a detection is a dart that was already in the board before the round. */
@@ -519,6 +519,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const evaluatedFineRef = useRef<Float32Array | null>(null);
   const stillThresholdRef = useRef(MOTION_STILL);
   const stillMomentQueuedRef = useRef(false);
+  /** How many calibration refits in a row found no board near the current calibration. */
+  const refitMissesRef = useRef(0);
   /** Spots of darts the player removed by hand this round — detections there are ignored from then on. */
   const dismissedRef = useRef<{ x: number; y: number }[]>([]);
   /** Detector readings of darts the player deleted during the current round, for the detection record. */
@@ -1475,27 +1477,54 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const taps = calib.taps;
     const v = videoRef.current;
     if (!taps || taps.length !== 4 || !v || !v.videoWidth) return;
-    if (scanLockRef.current || stillMomentBusyRef.current || stillFramesRef.current < 3 || boardMissing) return;
-    // Never while darts are in the board: their flights colour the rings and pull the fit, and every dart already
-    // found sits in the OLD picture's coordinates — a shifted calibration made the same dart show up again as a new one.
-    if (accumulatedRef.current.length > 0 || peakPresentRef.current > 0 || needsReviewRef.current) return;
+    if (scanLockRef.current || stillMomentBusyRef.current || stillFramesRef.current < 2 || needsReviewRef.current) return;
+    const dartsOnBoard = accumulatedRef.current.length > 0 || peakPresentRef.current > 0;
     const prepared = prepareFrameForWireFit();
     if (!prepared) return;
-    const fit = refineTapsToWires(prepared, taps);
-    if (!fit || fit.quality < CALIB_REFINE_MIN_QUALITY) return;
     const radiusPx = Math.hypot((taps[3].x - taps[2].x) * v.videoWidth, (taps[3].y - taps[2].y) * v.videoHeight) / 2;
-    const moves = fit.taps.map((p, i) => Math.hypot((p.x - taps[i].x) * v.videoWidth, (p.y - taps[i].y) * v.videoHeight) / radiusPx);
-    const biggest = Math.max(...moves);
-    if (biggest > CALIB_REFINE_MAX_MOVE || biggest < CALIB_REFINE_MIN_MOVE) return;
-    applyCalibrationTaps(fit.taps, calib.source ?? "manual", calib.confirmed ?? true, false);
+    const moveOf = (next: { x: number; y: number }[]) =>
+      Math.max(...next.map((p, i) => Math.hypot((p.x - taps[i].x) * v.videoWidth, (p.y - taps[i].y) * v.videoHeight) / radiusPx));
+
+    let fitted: { x: number; y: number }[] | null = null;
+    const near = refineTapsToWires(prepared, taps);
+    if (near && near.quality >= (dartsOnBoard ? CALIB_REFINE_MIN_QUALITY_WITH_DARTS : CALIB_REFINE_MIN_QUALITY)) {
+      fitted = near.taps;
+    } else {
+      // The board is no longer where the calibration says (the phone was knocked or moved far). A near fit can fail for
+      // one tick (a hand in the picture), so only after two failures in a row is the whole picture searched.
+      refitMissesRef.current += 1;
+      if (boardMissing || refitMissesRef.current >= 2) {
+        const found = findBoardTaps(prepared, 1200);
+        if (found && found.quality >= (dartsOnBoard ? CALIB_REFINE_MIN_QUALITY_WITH_DARTS : CALIB_REFINE_MIN_QUALITY)) fitted = found.taps;
+      }
+    }
+    if (!fitted) return;
+    refitMissesRef.current = 0;
+    const moved = moveOf(fitted);
+    // Darts in the board colour the rings a little, so then only a real displacement is worth acting on; an empty
+    // board gets every small correction. (Dart positions are board-relative in the straightened picture, so a
+    // correct refit does not move them.)
+    if (moved < (dartsOnBoard ? CALIB_REFINE_MIN_MOVE_WITH_DARTS : CALIB_REFINE_MIN_MOVE)) return;
+    applyCalibrationTaps(fitted, calib.source ?? "manual", calib.confirmed ?? true, false);
+
     // The reference pictures of this round were straightened with the old calibration; take them again with the new one
-    // (the board is empty, see above) so later comparisons are made in one and the same picture.
-    const fresh = grabRectifiedFrame(rectifyMappingFromTaps(fit.taps));
+    // so later comparisons are made in one and the same picture.
+    const fresh = grabRectifiedFrame(rectifyMappingFromTaps(fitted));
     if (fresh) {
       lastStableModelFrameRef.current = fresh;
-      emptyModelFrameRef.current = fresh;
       lastEvaluatedFrameRef.current = fresh;
-      baselineDartsRef.current = null;
+      // an empty board is a valid baseline; with darts in it the "empty" picture can no longer be remade
+      emptyModelFrameRef.current = dartsOnBoard ? null : fresh;
+      baselineDartsRef.current = dartsOnBoard ? [] : null;
+      if (dartsOnBoard) preRemovalModelFrameRef.current = fresh;
+    }
+    if (boardMissing || moved > 0.2) {
+      // the picture moved so much that the motion reference is meaningless: start the motion tracking afresh
+      boardMissingStreakRef.current = 0;
+      setBoardMissing(false);
+      stableSigRef.current = null;
+      prevSigRef.current = null;
+      changeSeenRef.current = false;
     }
   };
   const refineCalibrationRef = useRef(refineCalibrationQuietly);

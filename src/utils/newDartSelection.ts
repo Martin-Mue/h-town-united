@@ -27,6 +27,8 @@ export const CHANGE_SUPPORT_NEAR_KNOWN = 0.3;
 /** Below this score a detection is "weak": real darts in unusual spots (long dart at the board edge, seen
  *  from a flat angle) often score 0.15-0.25. They count only with clearly fresh change under them. */
 export const WEAK_DART_SCORE = 0.25;
+/** Two new darts found in the SAME look must be at least this far apart (frame fraction, ~27 mm) — otherwise they are one dart. */
+export const NEW_DART_SEPARATION = 0.06;
 export const CHANGE_SUPPORT_WEAK = 0.35;
 
 export function selectNewDart<T extends DartCandidate>(
@@ -75,10 +77,16 @@ export function selectNewDarts<T extends DartCandidate>(
   const picked: T[] = [];
   let remaining = candidates;
   while (picked.length < capacity) {
-    const next = selectNewDart([...known, ...picked], remaining, changeSupportAt);
+    const next = selectNewDart(known, remaining, changeSupportAt);
     if (!next) break;
     picked.push(next);
-    remaining = remaining.filter((c) => c !== next);
+    // One dart gives the model several hits (tip, barrel, flight). All of them stand on the same fresh pixels, so
+    // the change check cannot tell them from further darts — but they are within a few centimetres of the one just
+    // taken, which two darts landing in one look practically never are. Throws that land in one spot arrive one by
+    // one anyway, each at its own rest.
+    remaining = remaining.filter(
+      (c) => c !== next && !(typeof c.x === "number" && typeof c.y === "number" && typeof next.x === "number" && typeof next.y === "number" && Math.hypot(c.x - next.x, c.y - next.y) < NEW_DART_SEPARATION),
+    );
   }
   return picked;
 }

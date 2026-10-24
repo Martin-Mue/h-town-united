@@ -62,6 +62,21 @@ describe("selectNewDarts", () => {
   });
 });
 
+describe("one landing, one dart", () => {
+  const everywhere = () => 0.8;
+  it("keeps only the best of several hits on the same dart (tip, barrel, flight)", () => {
+    const hits = [{ x: 0.2, y: 0.6, confidence: 0.54 }, { x: 0.215, y: 0.62, confidence: 0.4 }, { x: 0.23, y: 0.58, confidence: 0.3 }];
+    const picked = selectNewDarts([], hits, everywhere, 3);
+    expect(picked).toHaveLength(1);
+    expect(picked[0].confidence).toBe(0.54);
+  });
+
+  it("still takes two darts that landed in one look at different places", () => {
+    const hits = [{ x: 0.2, y: 0.6, confidence: 0.54 }, { x: 0.7, y: 0.3, confidence: 0.5 }];
+    expect(selectNewDarts([], hits, everywhere, 3)).toHaveLength(2);
+  });
+});
+
 describe("keepSupportedDarts", () => {
   it("drops a weak dart the next picture no longer shows, keeps strong ones and re-seen ones", () => {
     const known = [
