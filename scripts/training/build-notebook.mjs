@@ -11,7 +11,7 @@ const cells = [
 
 Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**. Danach **Laufzeit → Alle ausführen** – ein Durchlauf, keine Zwischenschritte.
 
-Gestartet wird vom **aktuellen Modell** (das in der App läuft): das Notebook sucht es in Google Drive unter DeepDarts-Dataset/dartspot_v4_best.pt (das hat der letzte Lauf dort gesichert), sonst dartspot_tip_best.pt. Fehlt die Datei, bittet das Notebook um den Upload der best.pt vom letzten Training (Downloads). Das Original-Modell dient nur als Notnagel. "ALT" in den Messungen heißt: das aktuell laufende Modell. Hochladen musst du das Datenset (training-set-rectified-v5.zip).
+Gestartet wird vom **aktuellen Modell** (das in der App läuft): das Notebook sucht es in Google Drive unter DeepDarts-Dataset/dartspot_v4_best.pt (das hat der letzte Lauf dort gesichert), sonst dartspot_tip_best.pt. Fehlt die Datei, bittet das Notebook um den Upload der best.pt vom letzten Training (Downloads). Das Original-Modell dient nur als Notnagel. "ALT" in den Messungen heißt: das aktuell laufende Modell. Hochladen musst du das Datenset (training-set-rectified-v6.zip).
 
 Was anders ist als beim ersten Versuch:
 - Die Bilder sind genau das, was die App dem Modell zeigt: das Board von oben entzerrt (20 oben), die vier Ecken sind echte Labels.
@@ -27,6 +27,7 @@ import os, shutil, zipfile
 drive.mount("/content/drive")
 DRIVE = "/content/drive/MyDrive/DeepDarts-Dataset/"
 # Neuestes Modell zuerst: v4 ist das, was gerade in der App läuft; tip ist der Stand davor.
+# v4 ist das, was in der App läuft; v5 war ein Trainingslauf ohne Verbesserung und wird bewusst NICHT genommen.
 CANDIDATES = [DRIVE + "dartspot_v4_best.pt", DRIVE + "dartspot_tip_best.pt"]
 ORIGINAL_PT = DRIVE + "training_runs/dart_yolov8n/weights/best.pt"
 START_PT = next((p for p in CANDIDATES if os.path.exists(p)), None)
@@ -45,7 +46,7 @@ else:
         shutil.copy(ORIGINAL_PT, "/content/best.pt")
         print("ACHTUNG: Start vom ORIGINAL-Modell (nicht vom aktuellen Spitzen-Modell).")
 
-print("Lade training-set-rectified-v5.zip hoch:")
+print("Lade training-set-rectified-v6.zip hoch:")
 uploaded = files.upload()
 zip_names = [n for n in uploaded if n.lower().endswith(".zip")]
 assert zip_names, "Keine .zip hochgeladen"
@@ -79,11 +80,29 @@ def read_darts(label_file):
             out.append((float(p[1]), float(p[2])))
     return out
 
-def tip_metrics(model, split="val", conf=0.12, dense_only=False):
+RADIUS = 0.377  # Boardradius im entzerrten Bild (Anteil der Bildbreite)
+
+def hard_kind(g):
+    """Schwierige Darts, gemessen an Martins Runden: Double/Rand, Treble, links unten."""
+    dx, dy = g[0] - 0.5, g[1] - 0.5
+    r = math.hypot(dx, dy) / RADIUS
+    if r > 0.93:
+        return "double"
+    if (0.57 < r < 0.66) or r > 0.88:
+        return "treble/rand"
+    if dx < 0 and dy > 0 and r > 0.6:
+        return "links unten"
+    return None
+
+def tip_metrics(model, split="val", conf=0.12, dense_only=False, kind=None):
     # conf=0.12 wie in der App: dort zaehlt auch ein schwacher Fund, wenn er auf veraenderten Pixeln liegt
     errors, n_pred, n_gt = [], 0, 0
     for img in sorted(glob.glob(f"{DS}/images/{split}/*.jpg")):
         gt = read_darts(img.replace("/images/", "/labels/").rsplit(".", 1)[0] + ".txt")
+        if kind:
+            gt = [g for g in gt if hard_kind(g) == kind]
+            if not gt:
+                continue
         if dense_only:  # only darts that have another dart within 25 mm next to them (tight groups)
             gt = [g for g in gt if any(o is not g and math.hypot(o[0] - g[0], o[1] - g[1]) * MM_PER_UNIT < 25 for o in gt)]
             if not gt:
@@ -119,9 +138,13 @@ def show(name, m):
   code(String.raw`old = YOLO("/content/best.pt")
 old_tip = tip_metrics(old)
 old_dense = tip_metrics(old, dense_only=True)
+KINDS = ["double", "treble/rand", "links unten"]
+old_hard = {k: tip_metrics(old, kind=k) for k in KINDS}
 old_ap = ap50_by_class(old.val(data=f"{DS}/data.yaml", imgsz=800, plots=False))
 show("ALT", old_tip)
 show("ALT dicht", old_dense)
+for k in KINDS:
+    show("ALT " + k, old_hard[k])
 print("ALT AP50 je Klasse:", {old.names[c]: round(a, 3) for c, a in old_ap.items()})`),
 
   md(String.raw`## Training – zwei Varianten
@@ -142,19 +165,25 @@ for name, cfg in CONFIGS.items():
     )
     best_path = str(m.trainer.best)
     trained = YOLO(best_path)
-    results[name] = {"path": best_path, "tip": tip_metrics(trained), "dense": tip_metrics(trained, dense_only=True),
+    results[name] = {"path": best_path, "tip": tip_metrics(trained), "dense": tip_metrics(trained, dense_only=True), "hard": {k: tip_metrics(trained, kind=k) for k in KINDS},
                      "ap": ap50_by_class(trained.val(data=f"{DS}/data.yaml", imgsz=800, plots=False))}
     show(name, results[name]["tip"])
-    show(name + " dicht", results[name]["dense"])`),
+    show(name + " dicht", results[name]["dense"])
+    for k in KINDS:
+        show(name + " " + k, results[name]["hard"][k])`),
 
   md(String.raw`## Ergebnis und Auswahl
 Gewinner = höchste Trefferquote innerhalb 17 mm, aber nur, wenn die vier Ecken (cal_1..cal_4) nicht schlechter geworden sind als beim alten Modell.`),
 
   code(String.raw`show("ALT", old_tip)
 show("ALT dicht", old_dense)
+for k in KINDS:
+    show("ALT " + k, old_hard[k])
 for name, r in results.items():
     show(name, r["tip"])
     show(name + " dicht", r["dense"])
+    for k in KINDS:
+        show(name + " " + k, r["hard"][k])
     print("   AP50 je Klasse:", {YOLO(r["path"]).names[c]: round(a, 3) for c, a in r["ap"].items()})
 
 def corners_ok(r):
@@ -173,7 +202,7 @@ Erzeugt best.onnx (800x800) des Gewinners. Nur ersetzen, wenn oben "JA" steht �
   code(String.raw`final = YOLO(win["path"])
 onnx_path = final.export(format="onnx", imgsz=800)
 print("ONNX:", onnx_path)
-shutil.copy(win["path"], "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_v5_best.pt")  # Sicherung in Drive (die Vorgänger bleiben bewusst unberührt)
+shutil.copy(win["path"], "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_v6_best.pt")  # Sicherung in Drive (die Vorgänger bleiben bewusst unberührt)
 from google.colab import files
 files.download(onnx_path)
 files.download(win["path"])`),
