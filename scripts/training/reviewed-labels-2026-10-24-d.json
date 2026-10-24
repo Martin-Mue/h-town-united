@@ -1,5 +1,5 @@
 {
- "note": "Review of training-batch-2026-10-24 (5).json (33 samples, yellow darts, 2 legs vs bot). Tips snapped to model detections; 4 samples excluded because visible darts have no label (the model missed them) — they would teach the model that a dart is background. Those 4 are exactly the 'dart not recognised' cases.",
+ "note": "Review of training-batch-2026-10-24 (5).json (33 samples). Tips snapped to model detections; the four samples where visible darts had no label (013, 016, 028, 031) were completed by zooming into the frames.",
  "samples": {
   "001": {
    "labels": [
@@ -202,7 +202,21 @@
    "note": "exported 3 -> 3"
   },
   "013": {
-   "exclude": "incomplete labels: top dart's tip not found by the model"
+   "labels": [
+    [
+     0.3866,
+     0.1813
+    ],
+    [
+     0.612,
+     0.309
+    ],
+    [
+     0.36,
+     0.141
+    ]
+   ],
+   "note": "missing top-left dart added by zoom"
   },
   "014": {
    "labels": [
@@ -239,7 +253,21 @@
    "note": "exported 3 -> 3"
   },
   "016": {
-   "exclude": "incomplete labels: third dart of a tight group not found"
+   "labels": [
+    [
+     0.33,
+     0.7305
+    ],
+    [
+     0.3927,
+     0.6943
+    ],
+    [
+     0.3525,
+     0.7075
+    ]
+   ],
+   "note": "third dart of the group added by zoom"
   },
   "017": {
    "labels": [
@@ -421,7 +449,21 @@
    "note": "exported 3 -> 3"
   },
   "028": {
-   "exclude": "incomplete labels: only one of three tips found"
+   "labels": [
+    [
+     0.4885,
+     0.2551
+    ],
+    [
+     0.513,
+     0.228
+    ],
+    [
+     0.533,
+     0.231
+    ]
+   ],
+   "note": "three converging tips: two added by zoom"
   },
   "029": {
    "labels": [
@@ -458,7 +500,21 @@
    "note": "exported 3 -> 3"
   },
   "031": {
-   "exclude": "incomplete labels: one dart of the top group not found"
+   "labels": [
+    [
+     0.4266,
+     0.6642
+    ],
+    [
+     0.531,
+     0.282
+    ],
+    [
+     0.542,
+     0.27
+    ]
+   ],
+   "note": "two barrels end side by side; label moved onto the tips"
   },
   "032": {
    "labels": [
