@@ -833,11 +833,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             ...(selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : { facingMode: { ideal: "environment" } }),
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            // Full HD: the board fills only part of the picture, and the straightened view is resampled from
+            // these pixels (up to MAX_RECTIFY_SOURCE_SIDE) — at 1280x720 one camera pixel was about a millimetre
+            // on the board, the size of the tip errors measured at the doubles. A camera that cannot deliver it
+            // simply hands over the closest size it has.
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
           },
           audio: false,
         });
+        console.info("[LiveCamera] camera delivers", stream.getVideoTracks()[0]?.getSettings());
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
