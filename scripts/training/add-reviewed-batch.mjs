@@ -50,7 +50,10 @@ for (const [index, sample] of samples.entries()) {
   const decision = review[number] ?? {};
   if (decision.exclude) { console.log(`  sample ${number}: excluded (${decision.exclude})`); counts.noDarts++; continue; }
   const remove = new Set(decision.removeLabels ?? []);
-  const darts = (sample.labels ?? [])
+  // "labels" in the review file replaces the exported labels completely (used when every tip was re-placed)
+  const darts = decision.labels
+    ? decision.labels.map(([x, y]) => ({ x, y }))
+    : (sample.labels ?? [])
     .filter((l, i) => typeof l.x === "number" && typeof l.y === "number" && l.baseValue >= 0 && !l.snapped && !remove.has(i + 1))
     .map((l) => ({ x: l.x, y: l.y }))
     .concat((decision.add ?? []).map(([x, y]) => ({ x, y })));
