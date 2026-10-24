@@ -23,8 +23,8 @@ describe("selectNewDart", () => {
     expect(selectNewDart(known, [{ x: 0.6, y: 0.4, confidence: 0.2 }], support)?.y).toBe(0.4);
   });
 
-  it("rejects a phantom detection with no change under it", () => {
-    expect(selectNewDart([], [{ x: 0.2, y: 0.8, confidence: 0.95 }], support)).toBeNull();
+  it("rejects a weak phantom detection with no change under it", () => {
+    expect(selectNewDart([], [{ x: 0.2, y: 0.8, confidence: 0.45 }], support)).toBeNull();
   });
 
   it("without a comparison frame it falls back to the position check", () => {
@@ -52,7 +52,7 @@ describe("selectNewDarts", () => {
   const twoSpots = (x: number, y: number) => (Math.hypot(x - 0.6, y - 0.4) < 0.04 || Math.hypot(x - 0.3, y - 0.7) < 0.04 ? 0.6 : 0);
 
   it("takes every new dart of one picture (quick throws)", () => {
-    const found = selectNewDarts([], [{ x: 0.6, y: 0.4, confidence: 0.5 }, { x: 0.3, y: 0.7, confidence: 0.4 }, { x: 0.8, y: 0.1, confidence: 0.9 }], twoSpots, 3);
+    const found = selectNewDarts([], [{ x: 0.6, y: 0.4, confidence: 0.5 }, { x: 0.3, y: 0.7, confidence: 0.4 }, { x: 0.8, y: 0.1, confidence: 0.45 }], twoSpots, 3);
     expect(found.map((d) => d.x)).toEqual([0.6, 0.3]);
   });
 
@@ -74,6 +74,37 @@ describe("one landing, one dart", () => {
   it("still takes two darts that landed in one look at different places", () => {
     const hits = [{ x: 0.2, y: 0.6, confidence: 0.54 }, { x: 0.7, y: 0.3, confidence: 0.5 }];
     expect(selectNewDarts([], hits, everywhere, 3)).toHaveLength(2);
+  });
+});
+
+describe("barrel and flight hits are not darts", () => {
+  const everywhere = () => 0.9;
+  it("drops a weak hit along the barrel of a stronger one (measured: tip 0.73, barrel 63 mm away at 0.26)", () => {
+    const hits = [{ x: 0.497, y: 0.695, confidence: 0.73 }, { x: 0.471, y: 0.552, confidence: 0.26 }];
+    expect(selectNewDarts([], hits, everywhere, 3)).toEqual([hits[0]]);
+  });
+
+  it("keeps a weak hit that is far from every stronger one", () => {
+    const hits = [{ x: 0.2, y: 0.2, confidence: 0.73 }, { x: 0.8, y: 0.8, confidence: 0.26 }];
+    expect(selectNewDarts([], hits, everywhere, 3)).toHaveLength(2);
+  });
+
+  it("keeps a second confident dart right next to the first (a real tight group)", () => {
+    const hits = [{ x: 0.5, y: 0.5, confidence: 0.7 }, { x: 0.5, y: 0.585, confidence: 0.6 }];
+    expect(selectNewDarts([], hits, everywhere, 3)).toHaveLength(2);
+  });
+
+  it("a shifted second hit on a known dart is no new dart, even when confident", () => {
+    const known = [{ x: 0.5, y: 0.5 }];
+    const reHit = [{ x: 0.5, y: 0.55, confidence: 0.7 }]; // 22 mm away, same dart
+    const noFreshChange = () => 0.02;
+    expect(selectNewDarts(known, reHit, noFreshChange, 3)).toHaveLength(0);
+  });
+
+  it("a confident dart far from every known one needs no fresh change", () => {
+    const known = [{ x: 0.2, y: 0.2 }];
+    const far = [{ x: 0.7, y: 0.7, confidence: 0.7 }];
+    expect(selectNewDarts(known, far, () => 0, 3)).toHaveLength(1);
   });
 });
 

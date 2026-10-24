@@ -30,6 +30,21 @@ export const WEAK_DART_SCORE = 0.25;
 /** Two new darts found in the SAME look must be at least this far apart (frame fraction, ~27 mm) — otherwise they are one dart. */
 export const NEW_DART_SEPARATION = 0.06;
 export const CHANGE_SUPPORT_WEAK = 0.35;
+/**
+ * A dart is ~90 mm long and the model sometimes also reports its barrel or flight as a dart — a weak hit up to a dart's
+ * length from a stronger one is that, not another dart. (Measured: after the first dart of a round the model gave
+ * tip 0.73 and, 63 mm further along the barrel, "dart" 0.26; both stood on fresh pixels and the second one became a phantom.)
+ */
+export const GHOST_RADIUS = 0.2;
+export const GHOST_MAX_SCORE = 0.4;
+/** A weak hit must be this much weaker than the dart it shadows. */
+export const GHOST_MARGIN = 0.2;
+/** Next to an earlier dart the barrel/flight is old pixels, so a weak hit there needs a lot of fresh change to be a new dart. */
+export const CHANGE_SUPPORT_NEAR_KNOWN_WEAK = 0.5;
+/** Hits this confident count without fresh change — unless they sit this close to a known dart (frame fraction, ~40 mm),
+ *  where a slightly shifted second hit on the same dart must not turn into a new one. */
+export const CONFIDENT_DART_SCORE = 0.5;
+export const CONFIDENT_BYPASS_MIN_DISTANCE = 0.09;
 
 export function selectNewDart<T extends DartCandidate>(
   known: { x?: number; y?: number }[],
@@ -44,10 +59,20 @@ export function selectNewDart<T extends DartCandidate>(
     const nearKnown = known.some(
       (k) => typeof k.x === "number" && typeof k.y === "number" && Math.hypot(k.x - x, k.y - y) < KNOWN_DART_RADIUS,
     );
+    const nearestKnown = Math.min(
+      Infinity,
+      ...known.map((k) => (typeof k.x === "number" && typeof k.y === "number" ? Math.hypot(k.x - x, k.y - y) : Infinity)),
+    );
     let rank: number;
     if (changeSupportAt) {
-      const support = changeSupportAt(x, y);
-      const needed = Math.max(nearKnown ? CHANGE_SUPPORT_NEAR_KNOWN : CHANGE_SUPPORT_MIN, c.confidence < WEAK_DART_SCORE ? CHANGE_SUPPORT_WEAK : 0);
+      const confidentFar = c.confidence >= CONFIDENT_DART_SCORE && nearestKnown >= CONFIDENT_BYPASS_MIN_DISTANCE;
+      const support = confidentFar ? 1 : changeSupportAt(x, y);
+      const weakNearKnown = c.confidence < GHOST_MAX_SCORE && nearestKnown < GHOST_RADIUS;
+      const needed = Math.max(
+        nearKnown ? CHANGE_SUPPORT_NEAR_KNOWN : CHANGE_SUPPORT_MIN,
+        c.confidence < WEAK_DART_SCORE ? CHANGE_SUPPORT_WEAK : 0,
+        weakNearKnown ? CHANGE_SUPPORT_NEAR_KNOWN_WEAK : 0,
+      );
       if (support < needed) continue;
       rank = c.confidence; // the changed pixels only gate; the model decides which candidate is the dart
     } else {
@@ -75,7 +100,18 @@ export function selectNewDarts<T extends DartCandidate>(
   capacity: number,
 ): T[] {
   const picked: T[] = [];
-  let remaining = candidates;
+  // Weak hits next to a clearly stronger hit of the same look are that dart's barrel or flight, not darts of their own.
+  let remaining = candidates.filter(
+    (c) =>
+      !(
+        typeof c.x === "number" &&
+        typeof c.y === "number" &&
+        c.confidence < GHOST_MAX_SCORE &&
+        candidates.some(
+          (o) => o !== c && typeof o.x === "number" && typeof o.y === "number" && o.confidence >= c.confidence + GHOST_MARGIN && Math.hypot(o.x - (c.x as number), o.y - (c.y as number)) < GHOST_RADIUS,
+        )
+      ),
+  );
   while (picked.length < capacity) {
     const next = selectNewDart(known, remaining, changeSupportAt);
     if (!next) break;

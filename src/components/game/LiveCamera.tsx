@@ -232,7 +232,6 @@ const FINAL_PASS_NEAR_KNOWN_SCORE = 0.45;
 /** A rest whose picture differs from the last evaluated one in fewer than this share of cells needs no new detection. */
 const UNCHANGED_FRAME_SHARE = 0.0008;
 /** A detection this confident counts as a dart even where the pictures show no fresh change. */
-const CONFIDENT_DART_SCORE = 0.5;
 /** How often (ms) a calm picture is used to settle the calibration back onto the board's wires. */
 const CALIB_REFINE_MS = 2000;
 /** A refit counts only with at least this colour agreement (a good fit scores ~0.65). */
@@ -1864,12 +1863,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const usable = changeMap && changeMap.share < GLOBAL_CHANGE_SHARE_MAX ? changeMap : null;
       // Changed pixels gate weak detections; a confident one needs no confirmation (a dart that an earlier
       // picture already contained, but the model only recognised now, must not be lost).
-      const support = usable
-        ? (x: number, y: number) => {
-            const hit = present.find((d) => d.x === x && d.y === y);
-            return hit && hit.confidence >= CONFIDENT_DART_SCORE ? 1 : changedShareNear(usable, x, y);
-          }
-        : null;
+      const support = usable ? (x: number, y: number) => changedShareNear(usable, x, y) : null;
       const added = selectNewDarts(known, present, support, dartsRemaining - known.length);
       if (accumulatedRef.current !== known) return; // the round was committed/discarded meanwhile
 
