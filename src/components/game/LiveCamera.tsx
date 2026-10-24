@@ -287,7 +287,11 @@ const MOTION_STILL_MAX = 0.035;
 // Diff between current and last *stable* frame → physical change occurred. Höher → weniger Reaktion auf Licht/Hand.
 const CHANGE_DELTA = 0.075;
 // Frames of stillness required after a change before scanning. ~1.6s bei 400ms Tick.
-const STILL_AFTER_CHANGE = 4;
+const STILL_AFTER_CHANGE = 3;
+/** The fine picture (see buildSignature) is compared cell by cell; a cell counts as changed above this luminance step (0-1)... */
+const FINE_CELL_DELTA = 0.1;
+/** ...and this many changed cells (of ~20,000 inside the circle) mean something new is in the picture — a dart is ~100. */
+const FINE_CHANGE_MIN_CELLS = 25;
 // Tick interval of the watcher loop.
 const TICK_MS = 400;
 const SCAN_COOLDOWN_MS = 3200;
@@ -492,6 +496,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const peakPresentRef = useRef(0);
   const stillMomentBusyRef = useRef(false);
   const noiseFloorRef = useRef(0);
+  /** Fine luminance picture of the latest tick, and the one at the last evaluation (see FINE_CHANGE_MIN_CELLS). */
+  const latestFineRef = useRef<Float32Array | null>(null);
+  const evaluatedFineRef = useRef<Float32Array | null>(null);
   const stillThresholdRef = useRef(MOTION_STILL);
   const stillMomentQueuedRef = useRef(false);
   /** The last picture the model actually looked at (see handleStillMoment). */
@@ -670,6 +677,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     stillMomentBusyRef.current = false;
     stillMomentQueuedRef.current = false;
     lastEvaluatedFrameRef.current = null;
+    evaluatedFineRef.current = null;
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
@@ -1065,6 +1073,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const ctx = c.getContext("2d", SHARED_CANVAS_OPTIONS);
     if (!ctx) return null;
     const { data } = ctx.getImageData(0, 0, source, source);
+    // The same read-out as a fine luminance picture: a dart landing changes the 40x40 signature by far less than
+    // any threshold that hand movement needs, but it is plain to see cell by cell on this one.
+    const fine = new Float32Array(source * source);
+    for (let p = 0, i = 0; p < fine.length; p++, i += 4) fine[p] = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) / 255;
+    latestFineRef.current = fine;
     const sig: number[] = [];
     const r = GRID / 2;
     const cell = SIGNATURE_OVERSAMPLE * SIGNATURE_OVERSAMPLE;
@@ -1922,6 +1935,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (!stableSigRef.current) {
         if (stillFramesRef.current >= 2) {
           stableSigRef.current = sig;
+          evaluatedFineRef.current = latestFineRef.current;
           setStatus(t("camera.readyThrowAllThenPull"));
           emptyBoardSigRef.current = sig;
           emptyImageDataRef.current = grabImageData();
@@ -1964,6 +1978,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (!scanLockRef.current && delta > CHANGE_DELTA) {
         changeSeenRef.current = true;
       }
+      // Something new in a quiet picture (a dart that landed with nobody reaching in) is no big movement, so the
+      // coarse signature never notices it: compare the fine picture with the one at the last evaluation.
+      if (!scanLockRef.current && !changeSeenRef.current && stillFramesRef.current >= 2 && latestFineRef.current && evaluatedFineRef.current) {
+        const a = latestFineRef.current;
+        const b = evaluatedFineRef.current;
+        let changedCells = 0;
+        if (a.length === b.length) for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > FINE_CELL_DELTA) changedCells++;
+        if (changedCells >= FINE_CHANGE_MIN_CELLS) changeSeenRef.current = true;
+      }
 
       if (
         !scanLockRef.current &&
@@ -1972,6 +1995,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       ) {
         changeSeenRef.current = false;
         stableSigRef.current = sig;
+        evaluatedFineRef.current = latestFineRef.current;
         // Read through a ref so the handler always sees the current calibration, even though this
         // interval closure was created many renders ago.
         // A phone needs seconds per detection; the next dart often lands meanwhile. That moment must not be lost,
@@ -2654,7 +2678,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                   <button
                     type="button"
                     disabled={repositioningIndex !== null && !selected}
-                    onClick={() => (selected ? cancelReposition() : setRepositioningIndex(i))}
+                    onClick={() => openReviewFor(i)}
                     className="pointer-events-auto absolute left-1/2 top-1/2 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full"
                     aria-label={`${t("game.dartCounterLabel")} ${i + 1} ${dartLabel(d)} — ${t("camera.correctPositionTitle")}`}
                   />
@@ -3032,7 +3056,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                   <Button
                     variant="outline"
                     className="gap-1.5"
-                    onClick={() => { setExpandedReviewIndex(null); setRepositioningIndex(i); }}
+                    onClick={() => { setExpandedReviewIndex(null); openReviewFor(i); }}
                   >
                     <Target className="h-4 w-4" /> {t("camera.correctPositionTitle")}
                   </Button>
