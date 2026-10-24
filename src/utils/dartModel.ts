@@ -132,11 +132,30 @@ interface DecodedOutput {
  * runtime and handles the transposed [1, numAnchors, 4+nc] layout too, rather than assuming one —
  * a wrong assumption here would silently decode garbage boxes instead of erroring.
  */
-function decodeOutput(output: ort.Tensor): DecodedOutput {
+export function decodeOutput(output: { dims: readonly number[]; data: ArrayLike<number> }): DecodedOutput {
   const empty: DecodedOutput = { darts: [], calPoints: {}, maxDartScore: 0 };
   const dims = output.dims;
-  const data = output.data as Float32Array;
+  const data = output.data;
   const channels = 4 + NUM_CLASSES;
+  // NMS-free ("end-to-end") export of newer YOLO generations: [1, K, 6] = one row per kept detection with
+  // x1, y1, x2, y2, score, class (pixels of the input picture). The network already removed duplicates.
+  if (dims.length === 3 && dims[2] === 6 && dims[1] !== channels) {
+    const darts: RawDet[] = [];
+    const calPoints: Partial<Record<CalLabel, RawDet>> = {};
+    let maxDartScore = 0;
+    for (let k = 0; k < dims[1]; k++) {
+      const x1 = data[k * 6], y1 = data[k * 6 + 1], x2 = data[k * 6 + 2], y2 = data[k * 6 + 3], score = data[k * 6 + 4], cls = Math.round(data[k * 6 + 5]);
+      const det: RawDet = { cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, w: x2 - x1, h: y2 - y1, score };
+      if (cls === DART_CLASS_INDEX) {
+        if (score > maxDartScore) maxDartScore = score;
+        if (score >= DART_SCORE_FLOOR) darts.push(det);
+      } else if (cls >= 1 && cls <= CAL_LABELS.length && score >= CAL_SCORE_THRESHOLD) {
+        const label = CAL_LABELS[cls - 1];
+        if (!calPoints[label] || score > calPoints[label]!.score) calPoints[label] = det;
+      }
+    }
+    return { darts, calPoints, maxDartScore };
+  }
   let numAnchors: number;
   let channelsFirst: boolean;
   if (dims.length === 3 && dims[1] === channels) {
@@ -223,7 +242,7 @@ async function runModel(frame: ImageData): Promise<DecodedOutput | null> {
     const input = toTensor(frame);
     const results = await session.run({ [session.inputNames[0]]: input });
     const output = results[session.outputNames[0]];
-    const decoded = decodeOutput(output);
+    const decoded = decodeOutput({ dims: output.dims, data: output.data as Float32Array });
     modelDiagnostics.lastRunMs = Math.round(performance.now() - startedAt);
     modelDiagnostics.runs += 1;
     modelDiagnostics.inferenceError = null;
