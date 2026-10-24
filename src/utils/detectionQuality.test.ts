@@ -67,11 +67,16 @@ describe("evaluateRecorded", () => {
 describe("evaluateLegacy", () => {
   it("reads snapped and confidence-1 labels as corrections", () => {
     const f = evaluateLegacy([
-      { createdAt: "x", detection: null, labels: [{ confidence: 0.7 }, { confidence: 0.6 }] },
-      { createdAt: "x", detection: null, labels: [{ confidence: 0.7 }, { confidence: 1 }, { snapped: true, confidence: 1 }] },
+      { createdAt: "2026-10-20", detection: null, labels: [{ confidence: 0.7 }, { confidence: 0.6 }] },
+      { createdAt: "2026-10-20", detection: null, labels: [{ confidence: 0.7 }, { confidence: 1 }, { snapped: true, confidence: 1 }] },
     ]);
-    expect(f).toMatchObject({ rounds: 2, darts: 5, valueCorrected: 1, handPlaced: 1, detectorOnly: 3, untouchedRounds: 1 });
+    expect(f).toMatchObject({ unusableRounds: 0, rounds: 2, darts: 5, valueCorrected: 1, handPlaced: 1, detectorOnly: 3, untouchedRounds: 1 });
   });
+});
+
+it("sets aside samples from before confidence was meaningful", () => {
+  const f = evaluateLegacy([{ createdAt: "2026-08-20", detection: null, labels: [{ confidence: 1 }] }]);
+  expect(f).toMatchObject({ unusableRounds: 1, rounds: 0, darts: 0 });
 });
 
 describe("grouping", () => {

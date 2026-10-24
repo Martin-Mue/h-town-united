@@ -33,22 +33,22 @@ export interface FinalDart {
   detected?: DetectedSnapshot;
 }
 
-export interface DartRecord {
+export type DartRecord = {
   outcome: DartOutcome;
   /** Distance between detected and final tip; null when either position is unknown. */
   distanceMm: number | null;
   /** Detector confidence for this dart; null for darts the player added. */
   confidence: number | null;
-}
+};
 
-export interface DetectionRecord {
+export type DetectionRecord = {
   version: 1;
   /** Model file version the detections came from (see DART_MODEL_VERSION). */
   model: string;
   darts: DartRecord[];
   /** Darts the detector reported that the player deleted. */
   removed: number;
-}
+};
 
 const tipDistanceMm = (a?: DetectedSnapshot, b?: FinalDart): number | null => {
   if (!a || !b) return null;
@@ -134,7 +134,15 @@ export const evaluateRecorded = (samples: QualitySample[]): QualityFigures => {
 /** Detector confidence is exactly 1 only for darts a person pointed at or added by hand. */
 const isHumanConfidence = (c: number | undefined) => typeof c === "number" && c >= 0.999;
 
+/**
+ * Before this date the stored confidence is 1 for almost every dart (older code wrote the confirmed value),
+ * so it says nothing about whether a person touched the dart.
+ */
+export const CONFIDENCE_MEANINGFUL_FROM = "2026-10-19";
+
 export interface LegacyFigures {
+  /** Older samples whose confidence is not meaningful: counted, but not evaluated. */
+  unusableRounds: number;
   rounds: number;
   darts: number;
   /** Darts whose score was picked from the correction chips. */
@@ -149,9 +157,13 @@ export interface LegacyFigures {
 
 /** Figures over older samples without a record: only what the final labels still hint at. */
 export const evaluateLegacy = (samples: QualitySample[]): LegacyFigures => {
-  const f: LegacyFigures = { rounds: 0, darts: 0, valueCorrected: 0, handPlaced: 0, detectorOnly: 0, untouchedRounds: 0 };
+  const f: LegacyFigures = { unusableRounds: 0, rounds: 0, darts: 0, valueCorrected: 0, handPlaced: 0, detectorOnly: 0, untouchedRounds: 0 };
   for (const s of samples) {
     if (s.detection) continue;
+    if (s.createdAt < CONFIDENCE_MEANINGFUL_FROM) {
+      f.unusableRounds += 1;
+      continue;
+    }
     f.rounds += 1;
     let touched = false;
     for (const l of s.labels) {

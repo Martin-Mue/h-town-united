@@ -1034,4 +1034,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Tahta bulunup kalibre edilir edilmez kısa bir onay sesi çalar. Kamera görüntüsündeki yeşil halka artık eğik kamerada bile double halkasının dış kenarını tam olarak izliyor; her zaman biraz fazla büyük olan yuvarlak daire yerine.",
     },
   },
+  {
+    id: "2026-10-28-detection-quality",
+    date: "2026-10-28",
+    title: {
+      de: "Admin: Erkennungsqualität der Kamera und übersichtliche Tab-Leiste",
+      en: "Admin: camera detection quality and a tidier tab bar",
+      fr: "Admin : qualité de la détection caméra et barre d'onglets plus claire",
+      pl: "Admin: jakość wykrywania kamery i przejrzystszy pasek kart",
+      nl: "Admin: kwaliteit van de camerawaarneming en een overzichtelijkere tabbalk",
+      tr: "Yönetici: kamera algılama kalitesi ve daha düzenli sekme çubuğu",
+    },
+    description: {
+      de: "Im Admin zeigt der KI-Trainer jetzt, wie oft die Kamera-Erkennung korrigiert werden musste und wie nah sie an der echten Spitze lag. Die Tab-Leiste bricht um, statt seitlich wegzuscrollen, und merkt sich den letzten Tab.",
+      en: "In the admin area the AI trainer now shows how often the camera detection had to be corrected and how close it was to the real tip. The tab bar wraps instead of scrolling sideways and remembers the last tab.",
+      fr: "Dans l'espace admin, l'entraîneur IA montre maintenant à quelle fréquence la détection caméra a dû être corrigée et sa précision par rapport à la vraie pointe. La barre d'onglets passe à la ligne au lieu de défiler et retient le dernier onglet.",
+      pl: "W panelu admina trener AI pokazuje teraz, jak często trzeba było poprawiać wykrywanie kamery i jak blisko była prawdziwego grotu. Pasek kart zawija się zamiast przewijać na boki i pamięta ostatnią kartę.",
+      nl: "In het adminpaneel toont de AI-trainer nu hoe vaak de camerawaarneming gecorrigeerd moest worden en hoe dicht die bij de echte punt zat. De tabbalk loopt door op een nieuwe regel in plaats van zijwaarts te scrollen en onthoudt de laatste tab.",
+      tr: "Yönetici alanında yapay zekâ eğitmeni artık kamera algılamasının ne sıklıkla düzeltilmesi gerektiğini ve gerçek uca ne kadar yakın olduğunu gösteriyor. Sekme çubuğu yana kaymak yerine alt satıra geçiyor ve son sekmeyi hatırlıyor.",
+    },
+  },
 ];

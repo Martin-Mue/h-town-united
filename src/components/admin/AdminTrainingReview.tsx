@@ -5,6 +5,7 @@ import { Check, X, Download, Upload } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import AdminDetectionQuality from "@/components/admin/AdminDetectionQuality";
 
 type ReviewStatus = "pending" | "confirmed" | "needs_review" | "rejected";
 
@@ -254,6 +255,7 @@ const AdminTrainingReview = () => {
 
   return (
     <div className="space-y-4">
+      <AdminDetectionQuality />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {(Object.keys(STATUS_LABELS) as ReviewStatus[]).map((status) => (
           <button
