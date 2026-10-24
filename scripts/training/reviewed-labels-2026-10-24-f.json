@@ -151,7 +151,21 @@
    "note": "exported 3 -> 3"
   },
   "010": {
-   "exclude": "duplicate label on one dart's barrel, tip positions unclear"
+   "labels": [
+    [
+     0.457,
+     0.111
+    ],
+    [
+     0.493,
+     0.429
+    ],
+    [
+     0.271,
+     0.64
+    ]
+   ],
+   "note": "relabelled by zoom: three tips"
   },
   "011": {
    "labels": [
@@ -503,7 +517,21 @@
    "note": "exported 3 -> 3"
   },
   "032": {
-   "exclude": "three darts converge on the bull, tips cannot be told apart"
+   "labels": [
+    [
+     0.547,
+     0.467
+    ],
+    [
+     0.575,
+     0.567
+    ],
+    [
+     0.481,
+     0.336
+    ]
+   ],
+   "note": "relabelled by zoom: three red darts converging on the bull"
   },
   "033": {
    "labels": [
@@ -523,7 +551,17 @@
    "note": "exported 3 -> 3"
   },
   "034": {
-   "exclude": "visible dart without a label"
+   "labels": [
+    [
+     0.611,
+     0.729
+    ],
+    [
+     0.486,
+     0.297
+    ]
+   ],
+   "note": "relabelled by zoom: two darts, double-ring dart bottom right"
   },
   "035": {
    "labels": [
@@ -560,10 +598,38 @@
    "note": "exported 3 -> 3"
   },
   "037": {
-   "exclude": "label sits on a barrel, real tip further along"
+   "labels": [
+    [
+     0.511,
+     0.247
+    ],
+    [
+     0.754,
+     0.667
+    ],
+    [
+     0.307,
+     0.814
+    ]
+   ],
+   "note": "relabelled by zoom: tips instead of barrel positions"
   },
   "038": {
-   "exclude": "two of three darts have no label"
+   "labels": [
+    [
+     0.55,
+     0.424
+    ],
+    [
+     0.449,
+     0.546
+    ],
+    [
+     0.857,
+     0.597
+    ]
+   ],
+   "note": "relabelled by zoom: three tips"
   },
   "039": {
    "labels": [

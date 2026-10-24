@@ -569,7 +569,21 @@
    "note": "third dart added: middle-left tip (model score 0.15)"
   },
   "036": {
-   "exclude": "three barrels converge in one spot, tips cannot be told apart"
+   "labels": [
+    [
+     0.529,
+     0.302
+    ],
+    [
+     0.541,
+     0.292
+    ],
+    [
+     0.534,
+     0.322
+    ]
+   ],
+   "note": "relabelled by zoom: three converging tips (about 5 mm uncertain)"
   },
   "037": {
    "labels": [

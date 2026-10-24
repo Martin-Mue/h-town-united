@@ -230,7 +230,8 @@ const AdminTrainingReview = () => {
             reviewed_by: "ai",
           })
           .eq("id", v.id)
-          .eq("review_status", "pending");
+          // pending rows, and rows an earlier import left on "needs review" (so they can be corrected and confirmed later)
+          .in("review_status", ["pending", "needs_review"]);
         if (!error) applied += 1;
       }
       toast({ title: `${applied} von ${verdicts.length} Ergebnissen übernommen` });
