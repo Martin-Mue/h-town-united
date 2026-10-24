@@ -266,6 +266,7 @@ const saveDeviceId = (board: string, deviceId: string | null) => {
   else window.localStorage.removeItem(deviceKeyFor(board));
 };
 const GRID = 40;
+const SIGNATURE_OVERSAMPLE = 4;
 const TARGET_BOARD_RATIO = 0.82;
 const DEFAULT_ZOOM = 1;
 const MIN_ANALYSIS_SIZE = 0.55;
@@ -280,6 +281,9 @@ const WIRE_FIT_MAX_SIDE = 960;
 
 // Frame-to-frame diff considered "still" (no motion). Tighter → weniger falsche Trigger.
 const MOTION_STILL = 0.012;
+/** Quiet-time motion samples (below this) feed the noise floor; the "still" threshold may rise up to MOTION_STILL_MAX. */
+const MOTION_NOISE_SAMPLE_MAX = 0.05;
+const MOTION_STILL_MAX = 0.035;
 // Diff between current and last *stable* frame → physical change occurred. Höher → weniger Reaktion auf Licht/Hand.
 const CHANGE_DELTA = 0.075;
 // Frames of stillness required after a change before scanning. ~1.6s bei 400ms Tick.
@@ -487,6 +491,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   /** Most darts seen at once this round — the picture with the most darts is the one kept for review. */
   const peakPresentRef = useRef(0);
   const stillMomentBusyRef = useRef(false);
+  const noiseFloorRef = useRef(0);
+  const stillThresholdRef = useRef(MOTION_STILL);
   const stillMomentQueuedRef = useRef(false);
   /** The last picture the model actually looked at (see handleStillMoment). */
   const lastEvaluatedFrameRef = useRef<ImageData | null>(null);
@@ -583,16 +589,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   }, [needsReview]);
   // The frozen review picture is shown only for a finished visit waiting for confirmation — not after
   // every single throw, which would cover the live view while the player is still throwing.
-  const showReview = !!reviewFrame && needsReview;
+  // The player can also open the frozen picture on purpose (tap a dart tile) to place a tip precisely with the loupe.
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const showReview = !!reviewFrame && (needsReview || reviewOpen);
   const reviewAnchorRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (needsReview) return;
+    if (needsReview || reviewOpen) return;
     setSelectedReviewIndex(null);
     setReviewFrame((prev) => {
       if (prev) URL.revokeObjectURL(prev.url);
       return null;
     });
-  }, [needsReview]);
+  }, [needsReview, reviewOpen]);
   // Hands-free hand-over: a finished round (board empty again) counts down and commits itself; touching a
   // dart (select, edit, remove) stops the countdown so a correction never races the clock.
   const autoCommitActive = needsReview && autoCommitEnabled && !autoCommitHeld && accumulated.length > 0 && !scanFailed;
@@ -1006,6 +1014,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const ctx = c.getContext("2d", SHARED_CANVAS_OPTIONS);
     if (!ctx) return null;
     ctx.clearRect(0, 0, target, target);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     if (circular) {
       ctx.save();
       ctx.beginPath();
@@ -1046,22 +1056,31 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   };
 
   const buildSignature = (): number[] | null => {
-    const c = drawToCanvas(GRID, true);
+    // Drawn 4x larger than the grid and averaged block by block: shrinking a 1080p camera picture straight to
+    // 40 px samples only a few pixels per cell, so the sensor noise alone moved the signature past the "still"
+    // threshold and the watcher never saw a quiet moment (it sat on "movement detected" with darts in the board).
+    const source = GRID * SIGNATURE_OVERSAMPLE;
+    const c = drawToCanvas(source, true);
     if (!c) return null;
     const ctx = c.getContext("2d", SHARED_CANVAS_OPTIONS);
     if (!ctx) return null;
-    const { data } = ctx.getImageData(0, 0, GRID, GRID);
+    const { data } = ctx.getImageData(0, 0, source, source);
     const sig: number[] = [];
     const r = GRID / 2;
+    const cell = SIGNATURE_OVERSAMPLE * SIGNATURE_OVERSAMPLE;
     for (let y = 0; y < GRID; y++) {
       for (let x = 0; x < GRID; x++) {
         const dx = x + 0.5 - r;
         const dy = y + 0.5 - r;
         if (dx * dx + dy * dy > (r - 1) ** 2) continue;
-        const i = (y * GRID + x) * 4;
-        sig.push(
-          (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114) / 255,
-        );
+        let sum = 0;
+        for (let by = 0; by < SIGNATURE_OVERSAMPLE; by++) {
+          for (let bx = 0; bx < SIGNATURE_OVERSAMPLE; bx++) {
+            const i = ((y * SIGNATURE_OVERSAMPLE + by) * source + x * SIGNATURE_OVERSAMPLE + bx) * 4;
+            sum += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+          }
+        }
+        sig.push(sum / cell / 255);
       }
     }
     return sig;
@@ -1890,7 +1909,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       prevSigRef.current = sig;
       setMotion(m);
 
-      const still = m < MOTION_STILL;
+      // Every camera has its own noise floor (sensor noise, auto exposure, compression). A fixed "still" threshold
+      // that is below it means the picture never counts as still and nothing is ever evaluated, so the threshold
+      // follows the typical quiet-time motion (capped, so a real movement still never counts as still).
+      if (m < MOTION_NOISE_SAMPLE_MAX) noiseFloorRef.current = noiseFloorRef.current * 0.9 + m * 0.1;
+      const stillBelow = Math.min(MOTION_STILL_MAX, Math.max(MOTION_STILL, noiseFloorRef.current * 2.5 + 0.004));
+      stillThresholdRef.current = stillBelow;
+      const still = m < stillBelow;
       stillFramesRef.current = still ? stillFramesRef.current + 1 : 0;
 
       // First frame ever → just snapshot the reference and wait
@@ -1976,7 +2001,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   /** Shows `frame` (the board with the darts in it) as the review picture — after every landing, so the
    *  player sees what was detected right away instead of only after pulling the darts. */
-  const showReviewPicture = (frame: ImageData | null) => {
+  const showReviewPicture = (frame: ImageData | null, selectIndex: number | null = null) => {
     if (!frame) return;
     void imageDataToBlob(frame, 0.9).then((blob) => {
       if (!blob) return;
@@ -1985,8 +2010,25 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         if (prev) URL.revokeObjectURL(prev.url);
         return { url };
       });
-      setSelectedReviewIndex(null);
+      setSelectedReviewIndex(selectIndex);
     });
+  };
+
+  /** Opens the frozen picture of the round with dart `index` selected: drag its tip with the loupe, or pick the
+   *  neighbouring field from the chips. Works mid-round too, not only after the darts are pulled. */
+  const openReviewFor = (index: number) => {
+    const frame = preRemovalModelFrameRef.current ?? lastStableModelFrameRef.current ?? grabModelFrame();
+    if (!frame) {
+      setExpandedReviewIndex(index); // no picture to show: fall back to picking the value from a list
+      return;
+    }
+    setReviewOpen(true);
+    showReviewPicture(frame, index);
+  };
+
+  const closeReview = () => {
+    setReviewOpen(false);
+    setSelectedReviewIndex(null);
   };
 
   const runPullScan = async () => {
@@ -2147,6 +2189,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   };
 
   const commitRound = (darts: DetectedDart[]) => {
+    setReviewOpen(false);
     if (pendingTrainingCaptureRef.current) {
       void uploadTrainingSample(pendingTrainingCaptureRef.current, darts);
     }
@@ -2167,6 +2210,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   };
 
   const discardRound = () => {
+    setReviewOpen(false);
     setScanFailed(false);
     setNeedsReview(false);
     setAccumulated([]);
@@ -2211,7 +2255,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const next = [...current, { ...last, confidence: 1 }];
     accumulatedRef.current = next;
     setAccumulated(next);
-    setExpandedReviewIndex(next.length - 1);
+    openReviewFor(next.length - 1);
   };
 
   /** A dart that missed the board: scored as a miss, so the visit still counts all the darts thrown. */
@@ -2489,6 +2533,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             bullInner: "Bull",
           }}
         />
+        <div className="mt-2 flex gap-2">
+          {selectedReviewIndex !== null && (
+            <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => setExpandedReviewIndex(selectedReviewIndex)}>
+              {t("camera.pickValueInstead")}
+            </Button>
+          )}
+          {reviewOpen && !needsReview && (
+            <Button size="sm" className="flex-1 gap-1.5" onClick={closeReview}>
+              <Check className="h-4 w-4" /> {t("camera.reviewDone")}
+            </Button>
+          )}
+        </div>
         </div>
       )}
 
@@ -2808,7 +2864,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 <button
                   key={`dart-${i}`}
                   type="button"
-                  onClick={() => (showReview ? setSelectedReviewIndex(selectedReviewIndex === i ? null : i) : setExpandedReviewIndex(expandedReviewIndex === i ? null : i))}
+                  onClick={() => (showReview ? setSelectedReviewIndex(selectedReviewIndex === i ? null : i) : openReviewFor(i))}
                   className={`flex h-[4.5rem] flex-col items-center justify-center rounded-lg border-2 transition-colors ${
                     miss ? "border-muted bg-muted/40 text-muted-foreground" : "border-primary/60 bg-primary/15 text-primary"
                   } ${justAddedIndex === i ? "animate-scale-in ring-2 ring-accent" : ""} ${selected ? "ring-2 ring-accent" : ""}`}
@@ -3057,7 +3113,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         {modelReady ? t("camera.localDetectionModel") : t("camera.localDetectionLoading")}
       </p>
       <p className="px-0.5 font-mono text-[10px] leading-snug text-muted-foreground">
-        KI: {modelReady ? "geladen" : "nicht geladen"} · Läufe {modelDiagnostics.runs} · zuletzt {modelDiagnostics.lastRunMs} ms
+        KI: {modelReady ? "geladen" : "nicht geladen"} · Läufe {modelDiagnostics.runs} · zuletzt {modelDiagnostics.lastRunMs} ms · Bewegung {(motion * 100).toFixed(1)} % (ruhig unter {(stillThresholdRef.current * 100).toFixed(1)} %)
         {modelDiagnostics.loadError ? ` · Ladefehler: ${modelDiagnostics.loadError}` : ""}
         {modelDiagnostics.inferenceError ? ` · Fehler: ${modelDiagnostics.inferenceError}` : ""}
       </p>
