@@ -148,16 +148,13 @@ else:
         for x, y in pts[4:]:
             if 0 < x < 1 and 0 < y < 1:
                 lines.append(f"0 {x:.6f} {y:.6f} {BOX_DART} {BOX_DART}")
-        open(f"/content/dd/labels/train/{name}.txt", "w").write("
-".join(lines) + "
-")
+        open(f"/content/dd/labels/train/{name}.txt", "w").write("\n".join(lines) + "\n")
         written += 1
     shutil.rmtree("/content/ddraw", ignore_errors=True); shutil.rmtree("/content/ddprobe", ignore_errors=True)
     os.makedirs("/content/mix", exist_ok=True)
     MIX = "/content/mix"
     with open(f"{MIX}/data.yaml", "w") as f:
-        f.write("
-".join([f"path: /content", f"train: [{DS}/images/train, /content/dd/images/train]", f"val: {DS}/images/val", "names:",
+        f.write("\n".join([f"path: /content", f"train: [{DS}/images/train, /content/dd/images/train]", f"val: {DS}/images/val", "names:",
                            "  0: dart", "  1: cal_1", "  2: cal_2", "  3: cal_3", "  4: cal_4", ""]))
     print(f"DeepDarts-Bilder eingemischt: {written} | Trainingsbilder insgesamt: {len(glob.glob(DS + '/images/train/*.jpg')) + written} | {time.time() - t0:.0f} s")`),
 
