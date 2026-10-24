@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertCircle,
@@ -29,8 +29,9 @@ import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision"
 import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, modelDiagnostics, MODEL_INPUT_SIZE } from "@/utils/dartModel";
 import { pointsFor, dartLabel } from "@/utils/x01Rules";
 import BoardCalibrator from "@/components/game/BoardCalibrator";
+import CameraScoreStrip from "@/components/game/CameraScoreStrip";
 import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
-import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, boardOverlayLines, RECT_BOARD_RADIUS } from "@/utils/boardRectify";
+import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, boardOverlayLines, RECT_BOARD_RADIUS, type RectifyMapping } from "@/utils/boardRectify";
 import { applyHomography, computeHomography } from "@/utils/homography";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
@@ -106,6 +107,8 @@ interface LiveCameraProps {
   playerName?: string;
   /** The player's remaining score, shown in the header so the full-screen camera still tells the state of the leg. */
   remainingScore?: number;
+  /** Compact scoreboard shown on top of the camera picture (who throws, scores, leg starter, averages). */
+  scoreStrip?: ComponentProps<typeof CameraScoreStrip>;
   /** Called when the player wants to give up on auto-scoring and switch to manual entry after a failed/empty scan. */
   onRequestManualEntry?: () => void;
   /** Freezes the watcher loop (no new scans start) without tearing down the camera stream — for
@@ -194,7 +197,7 @@ const TRAINING_CONSENT_ASKED_KEY = "dartcam-training-consent-asked";
  *  after a short countdown unless the player touches a dart to correct it. Off by default — detection
  *  still needs corrections too often for rounds to be taken over unseen. */
 const AUTO_COMMIT_KEY = "dartcam-auto-commit";
-const AUTO_COMMIT_SECONDS = 4;
+const AUTO_COMMIT_SECONDS = 2;
 const loadAutoCommitEnabled = (): boolean => {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(AUTO_COMMIT_KEY) === "on";
@@ -232,6 +235,8 @@ const CALIB_REFINE_MAX_MOVE = 0.15;
 const CALIB_REFINE_MIN_MOVE = 0.004;
 /** Within this distance (frame fraction, ~9 mm) a detection is a dart that was already in the board before the round. */
 const KNOWN_DART_RADIUS_FOR_BASELINE = 0.02;
+/** Detections this close (frame fraction, ~18 mm) to a dart the player removed by hand are not the same dart coming back. */
+const DISMISSED_DART_RADIUS = 0.04;
 /** A detection on a spot where the EMPTY board already produced one (a logo, the bull) only counts as a dart when it
  *  is clearly more confident than that. Otherwise a real dart landing in the bull would be filtered away as scenery. */
 const BASELINE_BEATEN_BY = 0.15;
@@ -387,6 +392,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   dartsRemaining = 3,
   playerName,
   remainingScore,
+  scoreStrip,
   onRequestManualEntry,
   paused = false,
 }, ref) => {
@@ -501,6 +507,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const evaluatedFineRef = useRef<Float32Array | null>(null);
   const stillThresholdRef = useRef(MOTION_STILL);
   const stillMomentQueuedRef = useRef(false);
+  /** Spots of darts the player removed by hand this round — detections there are ignored from then on. */
+  const dismissedRef = useRef<{ x: number; y: number }[]>([]);
   /** The last picture the model actually looked at (see handleStillMoment). */
   const lastEvaluatedFrameRef = useRef<ImageData | null>(null);
 
@@ -538,6 +546,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // Full-screen camera: the panel can be tucked away (to type a score by hand) and brought back by a pill.
   const [overlayHidden, setOverlayHidden] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The room the picture can really use (what is left between header, scoreboard and the buttons below).
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [stageHeight, setStageHeight] = useState(0);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setStageHeight(Math.round(el.clientHeight)));
+    observer.observe(el);
+    setStageHeight(Math.round(el.clientHeight));
+    return () => observer.disconnect();
+  }, []);
   const [isLandscape, setIsLandscape] = useState(() => typeof window !== "undefined" && window.innerWidth > window.innerHeight);
   useEffect(() => {
     const onResize = () => setIsLandscape(window.innerWidth > window.innerHeight);
@@ -678,6 +697,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     stillMomentQueuedRef.current = false;
     lastEvaluatedFrameRef.current = null;
     evaluatedFineRef.current = null;
+    dismissedRef.current = [];
     pendingTrainingCaptureRef.current = null;
     throwsSeenRef.current = 0;
     setThrowsSeen(0);
@@ -940,9 +960,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const fullFrameScratchRef = useRef<HTMLCanvasElement | null>(null);
   /** The board straightened to RECT_SIZE x RECT_SIZE, or null while uncalibrated / camera not ready. */
-  const grabRectifiedFrame = (): ImageData | null => {
+  const grabRectifiedFrame = (mappingOverride?: RectifyMapping | null): ImageData | null => {
     const v = videoRef.current;
-    const mapping = rectMapping();
+    const mapping = mappingOverride ?? rectMapping();
     if (!v || !v.videoWidth || !mapping) return null;
     const scale = Math.min(1, MAX_RECTIFY_SOURCE_SIDE / Math.max(v.videoWidth, v.videoHeight));
     const w = Math.round(v.videoWidth * scale);
@@ -1440,6 +1460,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const v = videoRef.current;
     if (!taps || taps.length !== 4 || !v || !v.videoWidth) return;
     if (scanLockRef.current || stillMomentBusyRef.current || stillFramesRef.current < 3 || boardMissing) return;
+    // Never while darts are in the board: their flights colour the rings and pull the fit, and every dart already
+    // found sits in the OLD picture's coordinates — a shifted calibration made the same dart show up again as a new one.
+    if (accumulatedRef.current.length > 0 || peakPresentRef.current > 0 || needsReviewRef.current) return;
     const prepared = prepareFrameForWireFit();
     if (!prepared) return;
     const fit = refineTapsToWires(prepared, taps);
@@ -1449,6 +1472,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const biggest = Math.max(...moves);
     if (biggest > CALIB_REFINE_MAX_MOVE || biggest < CALIB_REFINE_MIN_MOVE) return;
     applyCalibrationTaps(fit.taps, calib.source ?? "manual", calib.confirmed ?? true, false);
+    // The reference pictures of this round were straightened with the old calibration; take them again with the new one
+    // (the board is empty, see above) so later comparisons are made in one and the same picture.
+    const fresh = grabRectifiedFrame(rectifyMappingFromTaps(fit.taps));
+    if (fresh) {
+      lastStableModelFrameRef.current = fresh;
+      emptyModelFrameRef.current = fresh;
+      lastEvaluatedFrameRef.current = fresh;
+      baselineDartsRef.current = null;
+    }
   };
   const refineCalibrationRef = useRef(refineCalibrationQuietly);
   refineCalibrationRef.current = refineCalibrationQuietly;
@@ -1675,7 +1707,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (result.unavailable) return;
     const found = refineWithCalibration(
       result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
-    );
+    ).filter((d) => !dismissedRef.current.some((g) => Math.hypot(g.x - (d.x ?? 0), g.y - (d.y ?? 0)) < DISMISSED_DART_RADIUS));
     const before = accumulatedRef.current;
     const kept = keepSupportedDarts(before, found);
     const baseline = emptyModelFrameRef.current;
@@ -1767,7 +1799,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const baselineDarts = baselineDartsRef.current;
       const present = refineWithCalibration(
         result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
-      ).filter((d) => !baselineDarts.some((b) => Math.hypot(b.x - (d.x ?? 0), b.y - (d.y ?? 0)) < KNOWN_DART_RADIUS_FOR_BASELINE && d.confidence < b.confidence + BASELINE_BEATEN_BY));
+      )
+        .filter((d) => !baselineDarts.some((b) => Math.hypot(b.x - (d.x ?? 0), b.y - (d.y ?? 0)) < KNOWN_DART_RADIUS_FOR_BASELINE && d.confidence < b.confidence + BASELINE_BEATEN_BY))
+        .filter((d) => !dismissedRef.current.some((g) => Math.hypot(g.x - (d.x ?? 0), g.y - (d.y ?? 0)) < DISMISSED_DART_RADIUS));
 
       const before = lastStableModelFrameRef.current;
       const known = accumulatedRef.current;
@@ -2298,8 +2332,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   };
 
   const removeDart = (i: number) => {
-    setAccumulated((prev) => prev.filter((_, k) => k !== i));
+    // Remember where the removed dart was seen: the model will keep seeing it (or its shaft) there, and a dart the
+    // player has just thrown out must not come back with the next detection.
+    const gone = accumulatedRef.current[i];
+    if (gone && typeof gone.x === "number" && typeof gone.y === "number") dismissedRef.current.push({ x: gone.x, y: gone.y });
+    const next = accumulatedRef.current.filter((_, k) => k !== i);
+    accumulatedRef.current = next;
+    setAccumulated(next);
     setExpandedReviewIndex(null);
+    setSelectedReviewIndex(null);
   };
 
   const adjustDart = (
@@ -2537,12 +2578,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </Button>
       </div>
 
+      {scoreStrip && !isLandscape && <CameraScoreStrip {...scoreStrip} />}
+
       <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
-        <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto p-2">
+        <div ref={stageRef} className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto p-2">
       {showReview && (
         <div ref={reviewAnchorRef}>
         <DartReviewFrame
-          maxSide={`calc(100dvh - ${isLandscape ? "7rem" : "24rem"})`}
+          maxSide={stageHeight > 0 ? `${Math.max(170, stageHeight - 200)}px` : `calc(100dvh - ${isLandscape ? "7rem" : "24rem"})`}
           imageUrl={reviewFrame.url}
           darts={accumulated.map((d) => ({ x: d.x ?? 0.5, y: d.y ?? 0.5, baseValue: d.baseValue, multiplier: d.multiplier }))}
           selectedIndex={selectedReviewIndex}
@@ -2563,6 +2606,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               {t("camera.pickValueInstead")}
             </Button>
           )}
+          {selectedReviewIndex !== null && (
+            <Button variant="outline" size="sm" className="gap-1.5 text-destructive" onClick={() => setConfirmRemoveIndex(selectedReviewIndex)}>
+              <Trash2 className="h-4 w-4" /> {t("camera.removeDartTitle")}
+            </Button>
+          )}
           {reviewOpen && !needsReview && (
             <Button size="sm" className="flex-1 gap-1.5" onClick={closeReview}>
               <Check className="h-4 w-4" /> {t("camera.reviewDone")}
@@ -2577,7 +2625,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         className={`relative mx-auto shrink-0 overflow-hidden rounded-lg border border-border bg-muted ${showReview ? "hidden" : ""}`}
         style={{
           aspectRatio: videoSize ? `${videoSize.w} / ${videoSize.h}` : "1 / 1",
-          width: `min(100%, calc((100dvh - ${isLandscape ? "5.5rem" : "19rem"}) * ${videoSize ? videoSize.w / videoSize.h : 1}))`,
+          width: stageHeight > 0
+            ? `min(100%, ${Math.max(120, stageHeight - 16) * (videoSize ? videoSize.w / videoSize.h : 1)}px)`
+            : `min(100%, calc((100dvh - ${isLandscape ? "5.5rem" : "19rem"}) * ${videoSize ? videoSize.w / videoSize.h : 1}))`,
         }}
       >
         <video
@@ -2753,6 +2803,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
         </div>
         <div className="shrink-0 space-y-2 border-t border-border bg-background/95 p-2 landscape:w-[24rem] landscape:overflow-y-auto landscape:border-l landscape:border-t-0">
+      {scoreStrip && isLandscape && <CameraScoreStrip {...scoreStrip} />}
       {/* Board drifted warning, calibration fine-tune controls, and the reposition confirm bar
           all render here, below the video, instead of overlaid on it — depending on zoom/crop
           they could otherwise land right on top of the exact spot the player needs to see (the
@@ -3082,6 +3133,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 if (confirmRemoveIndex !== null) removeDart(confirmRemoveIndex);
                 setConfirmRemoveIndex(null);
                 setExpandedReviewIndex(null);
+                setSelectedReviewIndex(null);
               }}
             >
               {t("camera.removeDartConfirm")}

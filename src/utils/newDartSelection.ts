@@ -18,8 +18,8 @@ export interface DartCandidate {
   confidence: number;
 }
 
-/** Closer than this (fraction of the frame, about 9 mm on the board) to a known dart = probably that dart. */
-export const KNOWN_DART_RADIUS = 0.02;
+/** Closer than this (fraction of the frame, about 16 mm on the board) to a known dart = probably that dart. */
+export const KNOWN_DART_RADIUS = 0.035;
 /** A candidate needs at least this share of changed cells around its tip... */
 export const CHANGE_SUPPORT_MIN = 0.12;
 /** ...and this much when it sits right next to an earlier dart (a tight group). */

@@ -994,4 +994,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Aşılan bir atış şimdiye dek atış geçmişinden kayboluyordu: tur eksikti, ortalama fazla yüksekti ve rakip daha çok tur oynamış gibi görünüyordu. Artık 0 puanlık bir tur olarak görünür, ortalamada ve tur sayısında üç ok sayılır. Kamerada ayrıca tahtada hiç ok kalmayan turlar için “Hepsi ıska – isabetsiz tur” düğmesi var.",
     },
   },
+  {
+    id: "2026-10-28-camera-scoreboard",
+    date: "2026-10-28",
+    title: {
+      de: "Spielstand direkt im Kamerabild",
+      en: "Scoreboard right in the camera view",
+      fr: "Le score directement dans la vue caméra",
+      pl: "Wynik bezpośrednio w widoku kamery",
+      nl: "Tussenstand direct in het camerabeeld",
+      tr: "Skor doğrudan kamera görünümünde",
+    },
+    description: {
+      de: "Über dem Kamerabild stehen jetzt die Punkte beider Spieler groß, wer wirft, wer das Leg begonnen hat, wer führt, die Legs und die Durchschnitte. Dazu: Phantom-Darts nach dem ersten Wurf sind behoben (die Kalibrierung verschob sich während der Runde), ein erkannter Dart lässt sich im Bild mit „Dart entfernen“ löschen, und die Runde wird nach dem Ziehen schon nach 2 Sekunden übernommen.",
+      en: "Above the camera picture you now see both players' scores big, who is throwing, who started the leg, who is ahead, the legs and the averages. Also: phantom darts after the first throw are fixed (the calibration shifted during the round), a detected dart can be deleted in the picture with “Remove dart”, and the round is taken over 2 seconds after the darts are pulled.",
+      fr: "Au-dessus de l'image caméra, tu vois maintenant les scores des deux joueurs en grand, qui lance, qui a commencé le leg, qui mène, les legs et les moyennes. De plus : les fléchettes fantômes après le premier lancer sont corrigées (l'étalonnage bougeait pendant le tour), une fléchette détectée peut être supprimée dans l'image avec « Supprimer la fléchette », et le tour est validé 2 secondes après le retrait des fléchettes.",
+      pl: "Nad obrazem z kamery widać teraz duże wyniki obu graczy, kto rzuca, kto zaczął lega, kto prowadzi, legi i średnie. Ponadto: fałszywe lotki po pierwszym rzucie zostały naprawione (kalibracja przesuwała się w trakcie rundy), wykrytą lotkę można usunąć na obrazie przyciskiem „Usuń lotkę”, a runda jest zatwierdzana 2 sekundy po wyjęciu lotek.",
+      nl: "Boven het camerabeeld zie je nu de scores van beide spelers groot, wie gooit, wie het leg begon, wie voorstaat, de legs en de gemiddelden. Verder: spook-darts na de eerste worp zijn opgelost (de kalibratie verschoof tijdens de ronde), een herkende dart kan in het beeld met “Dart verwijderen” worden gewist, en de ronde wordt 2 seconden na het trekken van de darts overgenomen.",
+      tr: "Kamera görüntüsünün üstünde artık iki oyuncunun puanı büyük, kimin attığı, legi kimin başlattığı, kimin önde olduğu, legler ve ortalamalar görünüyor. Ayrıca: ilk atıştan sonraki hayalet oklar giderildi (kalibrasyon tur sırasında kayıyordu), algılanan bir ok görüntüde “Oku kaldır” ile silinebilir ve tur oklar çekildikten 2 saniye sonra onaylanır.",
+    },
+  },
 ];

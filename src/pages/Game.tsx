@@ -25,6 +25,7 @@ import { GameWalkonIntro, GameWalkonStats } from "@/components/game/GameWalkon";
 import GamePostGame from "@/components/game/GamePostGame";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import GameControlBar from "@/components/game/GameControlBar";
+import type { CameraScoreCard } from "@/components/game/CameraScoreStrip";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 // Loaded lazily — LiveCamera pulls in onnxruntime-web + vision utilities (~112KB) that a keyboard-
 // only match (or any bot game, which never renders this at all — see the !currentPlayer?.isBot
@@ -2517,6 +2518,47 @@ const GamePage = () => {
     return fullLen >= 3 ? playerThrows.slice(fullLen - 3, fullLen).reduce((sum, d) => sum + d.points, 0) : null;
   };
 
+  // The compact scoreboard the full-screen camera shows on top of its picture — the play screen's own scoreboard is
+  // hidden behind that camera, and a player must not have to close the camera to see their score.
+  const cameraScoreSource = game.teams
+    ? game.teams.map((team, ti) => {
+        const memberIdxs = game.players.map((_, pi) => pi).filter((pi) => teamIndexFor(game.teams, pi) === ti);
+        const throws = memberIdxs.flatMap((pi) => game.currentLeg.throws[pi]);
+        return {
+          key: ti, name: team.name, remaining: game.currentLeg.remaining[ti], cricketPoints: game.cricket?.[ti]?.points ?? 0,
+          throws, matchThrows: [...game.completedLegs.flatMap((leg) => memberIdxs.flatMap((pi) => leg.throws[pi] ?? [])), ...throws],
+          legsWon: game.legsWon[ti], setsWon: game.setsWon?.[ti], isActive: activeTeamIdx === ti,
+        };
+      })
+    : game.players.map((p, i) => ({
+        key: i, name: p.name, remaining: game.currentLeg.remaining[i], cricketPoints: game.cricket?.[i]?.points ?? 0,
+        throws: game.currentLeg.throws[i],
+        matchThrows: [...game.completedLegs.flatMap((leg) => leg.throws[i] ?? []), ...game.currentLeg.throws[i]],
+        legsWon: game.legsWon[i], setsWon: game.setsWon?.[i], isActive: activeIdx === i,
+      }));
+  const cameraLivePoints = cameraEnabled ? pendingLiveDarts.reduce((s, d) => s + d.points, 0) : 0;
+  const cameraStartSlot = teamIndexFor(game.teams, game.currentLeg.startingPlayerIndex);
+  const cameraBestScore = isCricket
+    ? Math.max(...cameraScoreSource.map((c) => c.cricketPoints))
+    : Math.min(...cameraScoreSource.map((c) => c.remaining));
+  const cameraScoreCards: CameraScoreCard[] = cameraScoreSource.map((c) => {
+    const score = isCricket ? c.cricketPoints : c.isActive ? Math.max(0, c.remaining - cameraLivePoints) : c.remaining;
+    const ahead = isCricket ? c.cricketPoints === cameraBestScore : c.remaining === cameraBestScore;
+    const tied = cameraScoreSource.filter((o) => (isCricket ? o.cricketPoints === cameraBestScore : o.remaining === cameraBestScore)).length > 1;
+    return {
+      key: c.key, name: c.name, score, isActive: c.isActive, startedLeg: c.key === cameraStartSlot,
+      isLeading: ahead && !tied && cameraScoreSource.length > 1,
+      legsWon: c.legsWon, setsWon: c.setsWon,
+      legAvg: isCricket ? "–" : calculateAverage(c.throws).toFixed(1), matchAvg: isCricket ? "–" : calculateAverage(c.matchThrows).toFixed(1),
+    };
+  });
+  const cameraScoreInfo = [
+    game.setsMode ? `${t("game.set")} ${(game.setsWon ?? []).reduce((s, v) => s + v, 0) + 1}` : null,
+    game.bestOfLegs > 1 ? `${t("game.leg")} ${game.currentLeg.legNumber}` : null,
+    `${t("game.roundLabel")} ${Math.floor(currentThrows.length / 3) + 1}`,
+    `${game.players[game.currentLeg.startingPlayerIndex].name} ${t("game.startsFirst")}`,
+  ].filter(Boolean).join(" · ");
+
   const scoreboardBlock = (
     // Round 4: still `sticky top-0` here because the camera-enabled branch further below renders
     // this inside its own single, plain scrolling container — one level of sticky, no CSS grid
@@ -2974,6 +3016,13 @@ const GamePage = () => {
                     dartsRemaining={Math.max(1, 3 - dartsThisRound)}
                     playerName={currentPlayerName}
                     remainingScore={game.mode !== "cricket" ? currentRemaining : undefined}
+                    scoreStrip={{
+                      cards: cameraScoreCards,
+                      info: cameraScoreInfo,
+                      showLegs: game.bestOfLegs > 1,
+                      showSets: !!game.setsMode,
+                      labels: { legAvg: t("game.legAvgShort"), matchAvg: t("game.matchAvgShort"), leading: t("game.leadingShort"), starts: t("game.startsFirst"), legs: t("game.legsSuffix"), sets: t("game.setsSuffix") },
+                    }}
                     onRequestManualEntry={() => setShowManualInput(true)}
                   />
                 </Suspense>
