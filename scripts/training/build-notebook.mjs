@@ -48,9 +48,14 @@ else:
         shutil.copy(ORIGINAL_PT, "/content/best.pt")
         print("ACHTUNG: Start vom ORIGINAL-Modell (nicht vom aktuellen Spitzen-Modell).")
 
-print("Lade training-set-rectified-v8.zip hoch:")
-uploaded = files.upload()
-zip_names = [n for n in uploaded if n.lower().endswith(".zip")]
+DRIVE_ZIP = DRIVE + "training-set-rectified-v8.zip"
+if os.path.exists(DRIVE_ZIP):
+    zip_names = [DRIVE_ZIP]   # Kopie liegt schon in Drive: kein Upload noetig
+    print("Datenset aus Drive:", DRIVE_ZIP)
+else:
+    print("Lade training-set-rectified-v8.zip hoch (Tipp: einmal in den Drive-Ordner DeepDarts-Dataset legen, dann entfaellt der Upload):")
+    uploaded = files.upload()
+    zip_names = [n for n in uploaded if n.lower().endswith(".zip")]
 assert zip_names, "Keine .zip hochgeladen"
 shutil.rmtree("/content/ds", ignore_errors=True)  # frisch entpacken, auch bei erneutem Ausführen
 zipfile.ZipFile(zip_names[0]).extractall("/content/ds")

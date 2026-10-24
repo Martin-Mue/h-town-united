@@ -12,8 +12,8 @@ const code = (text) => ({ cell_type: "code", metadata: {}, execution_count: null
 // cells of the first notebook: 1 = install + Drive + upload, 3 = metrics (4 = its markdown header is cell 2)
 const setupCell = JSON.parse(JSON.stringify(base.cells[1]));
 setupCell.source = setupCell.source.map((line) => line.replace("training-set-rectified-v6.zip", "training-set-rectified-v8.zip"));
-// The zip is big (157 MB): use a copy in Drive when there is one, upload only otherwise.
-{
+// The zip is big: use a copy in Drive when there is one, upload only otherwise (the base notebook does this already).
+if (!setupCell.source.join("").includes("DRIVE_ZIP")) {
   const text = setupCell.source.join("");
   const from = text.indexOf('print("Lade training-set-rectified-v8.zip hoch:")');
   const to = text.indexOf('assert zip_names, "Keine .zip hochgeladen"');
