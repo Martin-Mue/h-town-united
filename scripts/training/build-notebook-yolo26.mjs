@@ -47,7 +47,8 @@ Was am Ende zählt, wie bisher: Abstand zur echten Spitze in Millimetern, getren
   metricsCell,
 
   md(String.raw`## Vorher-Messung: das laufende Modell (ALT) – Genauigkeit und Rechenzeit`),
-  code(String.raw`import time, numpy as np, onnxruntime as ort, os
+  code(String.raw`!pip -q install onnxruntime onnx onnxslim
+import time, numpy as np, onnxruntime as ort, os
 
 def time_onnx(path, runs=7):
     """Median-Rechenzeit einer Auswertung auf EINEM CPU-Kern (grobe Vergleichszahl, kein Handy-Wert)."""
