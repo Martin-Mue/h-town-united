@@ -87,6 +87,14 @@ export function playDartDetectedSound(index = 0) {
   vibrate(35);
 }
 
+/** Board found and calibrated — a short rising chime so the player knows it is ready without looking. */
+export function playCalibrationSuccessSound() {
+  [523, 659, 784].forEach((freq, i) => {
+    setTimeout(() => playTone(freq, i === 2 ? 0.28 : 0.12, "sine", 0.13), i * 110);
+  });
+  vibrate([60, 40, 60]);
+}
+
 /** AI scan is starting */
 export function playScanStartSound() {
   playTone(520, 0.07, "triangle", 0.07);

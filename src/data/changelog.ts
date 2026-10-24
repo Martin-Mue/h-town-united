@@ -1014,4 +1014,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Kamera görüntüsünün üstünde artık iki oyuncunun puanı büyük, kimin attığı, legi kimin başlattığı, kimin önde olduğu, legler ve ortalamalar görünüyor. Ayrıca: ilk atıştan sonraki hayalet oklar giderildi (kalibrasyon tur sırasında kayıyordu), algılanan bir ok görüntüde “Oku kaldır” ile silinebilir ve tur oklar çekildikten 2 saniye sonra onaylanır.",
     },
   },
+  {
+    id: "2026-10-28-calibration-chime",
+    date: "2026-10-28",
+    title: {
+      de: "Kalibrierung: Bestätigungston und Ring genau auf der Scheibe",
+      en: "Calibration: confirmation chime and ring exactly on the board",
+      fr: "Étalonnage : signal sonore et anneau exactement sur la cible",
+      pl: "Kalibracja: dźwięk potwierdzenia i pierścień dokładnie na tarczy",
+      nl: "Kalibratie: bevestigingstoon en ring precies op het bord",
+      tr: "Kalibrasyon: onay sesi ve halka tam tahtanın üzerinde",
+    },
+    description: {
+      de: "Sobald das Board gefunden und kalibriert ist, ertönt ein kurzer Bestätigungston. Der grüne Ring im Kamerabild folgt jetzt genau dem äußeren Rand des Double-Rings, auch bei schräger Kamera, statt eines runden Kreises, der immer etwas zu groß war.",
+      en: "As soon as the board is found and calibrated, a short confirmation chime plays. The green ring in the camera picture now follows the outer edge of the double ring exactly, even with an angled camera, instead of a round circle that was always a bit too big.",
+      fr: "Dès que la cible est trouvée et étalonnée, un court signal retentit. L'anneau vert dans l'image suit maintenant exactement le bord extérieur du double, même avec une caméra inclinée, au lieu d'un cercle rond toujours un peu trop grand.",
+      pl: "Gdy tarcza zostanie znaleziona i skalibrowana, rozlega się krótki dźwięk potwierdzenia. Zielony pierścień w obrazie z kamery dokładnie podąża teraz za zewnętrznym brzegiem double, także przy skośnej kamerze, zamiast okrągłego koła, które było zawsze trochę za duże.",
+      nl: "Zodra het bord gevonden en gekalibreerd is, klinkt een korte bevestigingstoon. De groene ring in het camerabeeld volgt nu precies de buitenrand van de dubbelring, ook bij een scheve camera, in plaats van een ronde cirkel die altijd iets te groot was.",
+      tr: "Tahta bulunup kalibre edilir edilmez kısa bir onay sesi çalar. Kamera görüntüsündeki yeşil halka artık eğik kamerada bile double halkasının dış kenarını tam olarak izliyor; her zaman biraz fazla büyük olan yuvarlak daire yerine.",
+    },
+  },
 ];

@@ -37,6 +37,16 @@ interface AdminUser {
   roles: ("admin" | "member" | "editor")[];
 }
 
+const ACTIVE_TAB_STORAGE_KEY = "admin-active-tab";
+
+const readRememberedTab = (): string => {
+  try {
+    return sessionStorage.getItem(ACTIVE_TAB_STORAGE_KEY) || "members";
+  } catch {
+    return "members";
+  }
+};
+
 /** Admin-only page: manage member roles and accounts. */
 const AdminPage = () => {
   const { user } = useAuth();
@@ -48,6 +58,15 @@ const AdminPage = () => {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState(readRememberedTab);
+  const changeTab = (tab: string) => {
+    setActiveTab(tab);
+    try {
+      sessionStorage.setItem(ACTIVE_TAB_STORAGE_KEY, tab);
+    } catch {
+      // storage unavailable (private mode) -- the tab just isn't remembered
+    }
+  };
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -130,8 +149,10 @@ const AdminPage = () => {
         <h1 className="text-2xl font-display uppercase">{t("admin.title")}</h1>
       </div>
 
-      <Tabs defaultValue="members">
-        <TabsList className="mb-4">
+      <Tabs value={activeTab} onValueChange={changeTab}>
+        {/* Wraps onto several rows instead of one long inline strip: the strip used to be wider than
+            the screen, so the whole page scrolled sideways and the active tab could be out of sight. */}
+        <TabsList className="mb-4 h-auto w-full flex-wrap justify-start gap-1">
           <TabsTrigger value="members">{t("admin.tabMembers")}</TabsTrigger>
           <TabsTrigger value="invites">{t("admin.tabInvites")}</TabsTrigger>
           <TabsTrigger value="branding">{t("admin.tabBranding")}</TabsTrigger>

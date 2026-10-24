@@ -26,7 +26,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
-import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, modelDiagnostics, MODEL_INPUT_SIZE } from "@/utils/dartModel";
+import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, modelDiagnostics, MODEL_INPUT_SIZE, DART_MODEL_VERSION } from "@/utils/dartModel";
+import { buildDetectionRecord, type DetectedSnapshot } from "@/utils/detectionQuality";
 import { pointsFor, dartLabel } from "@/utils/x01Rules";
 import BoardCalibrator from "@/components/game/BoardCalibrator";
 import CameraScoreStrip from "@/components/game/CameraScoreStrip";
@@ -53,6 +54,7 @@ import {
   CANON_BOARD_POINTS,
 } from "@/utils/cameraGeometry";
 import {
+  playCalibrationSuccessSound,
   playDartDetectedSound,
   playRoundCommittedSound,
   playScanStartSound,
@@ -96,6 +98,9 @@ export interface DetectedDart {
   /** The player picked this score from the correction chips: the position is the middle of that
    *  field, not a measured tip — fine for the score, not to be trained on as a tip position. */
   snapped?: boolean;
+  /** What the detector reported for this dart when it was found; stays unchanged through the player's corrections
+   *  so the finished round can be compared with it (see detectionQuality). Absent on darts the player added. */
+  detected?: DetectedSnapshot;
 }
 
 interface LiveCameraProps {
@@ -381,6 +386,13 @@ const MapMarker = ({ fx, fy, className, children }: { fx: number; fy: number; cl
 
 const dartKey = (d: DetectedDart) => `${d.baseValue}x${d.multiplier}`;
 
+/** Freezes the detector's reading of freshly found darts so later corrections can be measured against it. */
+const markDetected = (darts: DetectedDart[]): DetectedDart[] =>
+  darts.map((d) => ({
+    ...d,
+    detected: { baseValue: d.baseValue, multiplier: d.multiplier, confidence: d.confidence, boardU: d.boardU, boardV: d.boardV },
+  }));
+
 const hasPosition = (d: DetectedDart) =>
   typeof d.x === "number" && Number.isFinite(d.x) && typeof d.y === "number" && Number.isFinite(d.y);
 
@@ -509,6 +521,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const stillMomentQueuedRef = useRef(false);
   /** Spots of darts the player removed by hand this round — detections there are ignored from then on. */
   const dismissedRef = useRef<{ x: number; y: number }[]>([]);
+  /** Detector readings of darts the player deleted during the current round, for the detection record. */
+  const removedDetectionsRef = useRef<DetectedSnapshot[]>([]);
   /** The last picture the model actually looked at (see handleStillMoment). */
   const lastEvaluatedFrameRef = useRef<ImageData | null>(null);
 
@@ -1296,6 +1310,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const uploadTrainingSample = async (
     capture: { before: ImageData; after: ImageData; modelAfter: ImageData | null; frame: "rectified" | "crop" },
     darts: DetectedDart[],
+    detection: ReturnType<typeof buildDetectionRecord>,
   ) => {
     try {
       // confidence is the ORIGINAL detector's score for the position, kept even though baseValue
@@ -1315,7 +1330,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         imageDataToBlob(trainingAfter),
       ]);
       if (!beforeBlob || !afterBlob) return;
-      const calibrationMeta = buildCalibrationMeta(capture.modelAfter ? capture.frame : "crop");
+      // What the detector first said versus what the player confirmed (admin quality view reads this).
+      const calibrationMeta = { ...(buildCalibrationMeta(capture.modelAfter ? capture.frame : "crop") ?? {}), detection };
       const prefix = `${userId}/${crypto.randomUUID()}`;
       const [beforeUp, afterUp] = await Promise.all([
         supabase.storage.from("dart-training").upload(`${prefix}/before.jpg`, beforeBlob, { contentType: "image/jpeg" }),
@@ -1565,6 +1581,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setCalibDraft(null);
       setPhase("live");
       setStatus(t("camera.autoCalibratedCheck"));
+      playCalibrationSuccessSound();
       return;
     }
     openCalibrator(suggestion ?? undefined);
@@ -1592,6 +1609,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     resetLoop();
     setPhase("live");
     setStatus(t(snapped ? "camera.calibSnapped" : "camera.calibratedReady"));
+    playCalibrationSuccessSound();
   };
 
   const cancelCalibration = () => {
@@ -1681,7 +1699,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
     // A discarded/committed round replaces the array underneath us — then this result is stale.
     if (accumulatedRef.current !== already) return;
-    const next = [...kept, ...newDarts];
+    const next = [...kept, ...markDetected(newDarts)];
     accumulatedRef.current = next;
     setAccumulated(next);
     if (newDarts.length === 0) return;
@@ -1718,7 +1736,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const added = selectNewDarts(kept, eligible, usable ? (x, y) => changedShareNear(usable, x, y) : null, dartsRemaining - kept.length);
     if (added.length === 0 && kept.length === before.length) return;
     if (accumulatedRef.current !== before) return;
-    const next = [...kept, ...added];
+    const next = [...kept, ...markDetected(added)];
     accumulatedRef.current = next;
     setAccumulated(next);
     // the visit's dart count is whatever the picture shows — a phantom landing must not inflate it
@@ -1836,7 +1854,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       lastStableModelFrameRef.current = frame;
 
       if (added.length > 0) {
-        const next = [...known, ...added];
+        const next = [...known, ...markDetected(added)];
         accumulatedRef.current = next;
         setAccumulated(next);
         setLastDetectionSource("model");
@@ -2220,7 +2238,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           setScanFailed(true);
         }
       } else {
-        setAccumulated(candidateDarts);
+        setAccumulated(markDetected(candidateDarts));
         candidateDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
         // No real-world track record yet — never auto-commit on the detector's say-so alone,
         // always make the player confirm/correct first. Prevents a bad reading from silently
@@ -2249,8 +2267,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const commitRound = (darts: DetectedDart[]) => {
     setReviewOpen(false);
     if (pendingTrainingCaptureRef.current) {
-      void uploadTrainingSample(pendingTrainingCaptureRef.current, darts);
+      void uploadTrainingSample(pendingTrainingCaptureRef.current, darts, buildDetectionRecord(darts, removedDetectionsRef.current, DART_MODEL_VERSION));
     }
+    removedDetectionsRef.current = [];
     onRoundCommit(darts.slice(0, dartsRemaining));
     playRoundCommittedSound();
     setAccumulated([]);
@@ -2273,6 +2292,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setNeedsReview(false);
     setAccumulated([]);
     accumulatedRef.current = [];
+    removedDetectionsRef.current = [];
     setExpandedReviewIndex(null);
     setError(null);
     setGeminiSuggestion(null);
@@ -2310,7 +2330,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const current = accumulatedRef.current;
     if (current.length >= dartsRemaining || current.length === 0) return;
     const last = current[current.length - 1];
-    const next = [...current, { ...last, confidence: 1 }];
+    const next = [...current, { ...last, confidence: 1, detected: undefined }];
     accumulatedRef.current = next;
     setAccumulated(next);
     openReviewFor(next.length - 1);
@@ -2335,6 +2355,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // Remember where the removed dart was seen: the model will keep seeing it (or its shaft) there, and a dart the
     // player has just thrown out must not come back with the next detection.
     const gone = accumulatedRef.current[i];
+    if (gone?.detected) removedDetectionsRef.current.push(gone.detected);
     if (gone && typeof gone.x === "number" && typeof gone.y === "number") dismissedRef.current.push({ x: gone.x, y: gone.y });
     const next = accumulatedRef.current.filter((_, k) => k !== i);
     accumulatedRef.current = next;
@@ -2648,7 +2669,32 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           />
         )}
 
-        {(phase === "live" || phase === "scanning" || phase === "detecting") && ringRect && (
+        {(phase === "live" || phase === "scanning" || phase === "detecting") && (() => {
+          // The outline of the board itself — the outer edge of the double ring as the calibration sees it, perspective
+          // included. (It used to be the round analysis-crop circle, which is a fixed share larger than the board
+          // and cannot follow a board seen at an angle.)
+          const mapping = rectMapping();
+          if (!mapping) return null;
+          const outline = boardOverlayLines(mapping.canonToVideo, 4).rings[5];
+          const tone = phase === "scanning" ? "text-accent animate-pulse-glow" : trackingStatus === "ok" ? "text-secondary" : trackingStatus === "warn" ? "text-accent" : "text-primary";
+          return (
+            <div className="pointer-events-none absolute inset-0">
+              <svg className={`absolute inset-0 h-full w-full transition-colors duration-500 ${tone}`} viewBox="0 0 1 1" preserveAspectRatio="none">
+                <polyline
+                  points={outline.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeOpacity={0.9}
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            </div>
+          );
+        })()}
+
+        {(phase === "live" || phase === "scanning" || phase === "detecting") && !rectMapping() && ringRect && (
           <div className="pointer-events-none absolute inset-0">
             <div
               className={`absolute rounded-full border-2 transition-colors duration-500 ${
