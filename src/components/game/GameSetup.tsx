@@ -129,6 +129,7 @@ interface GameSetupProps {
  * OnlineChallengeSetup, and the full local setup form (with its PIN-confirmation dialog).
  */
 const GameSetup = (props: GameSetupProps) => {
+  const { session } = useAuth();
   const {
     tournamentLinkRef, tournamentLinkName, leagueLinkRef, autoStartCanceled, setAutoStartCanceled,
     boardStartGate, autoStartSecondsLeft, startGame,
@@ -208,7 +209,6 @@ const GameSetup = (props: GameSetupProps) => {
     );
   }
 
-  const { session } = useAuth();
   const currentPreset: GamePresetConfig = {
     mode, customStartScore, teamMode, numPlayers, bestOfLegs, setsEnabled, bestOfSets, checkoutSuggestionEnabled,
     maxRoundsX01, customCricket, warmupEnabled, walkonEnabled,

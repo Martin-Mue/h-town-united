@@ -1154,4 +1154,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "“Yeni oyun” ekranında mevcut ayarları (mod, leg, oyuncular, botlar, ekstralar) bir adla kaydedebilirsin. Ön ayara tek dokunuş her şeyi doldurur, sonra sadece “Oyunu başlat”. Ön ayarlar hesabına bağlıdır, telefon ve tablette aynıdır.",
     },
   },
+  {
+    id: "2026-10-31-names-templates-calm",
+    date: "2026-10-31",
+    title: {
+      de: "Umbenennen mit Verlauf, Spieler zusammenführen, Vorlagen und Ruhe-Ansicht",
+      en: "Renaming keeps history, merge players, templates and calm view",
+      fr: "Renommer garde l'historique, fusion de joueurs, modèles et vue calme",
+      pl: "Zmiana nazwy zachowuje historię, łączenie graczy, szablony i widok spokojny",
+      nl: "Hernoemen behoudt de geschiedenis, spelers samenvoegen, sjablonen en rustige weergave",
+      tr: "Yeniden adlandırma geçmişi korur, oyuncu birleştirme, şablonlar ve sakin görünüm",
+    },
+    description: {
+      de: "Wird ein Profil umbenannt, ziehen Turniere, Spiele und Highlights mit. Admins können doppelt angelegte Profile unter Admin → Mitglieder zusammenführen. Neues Spiel merkt sich das letzte Spiel, Turniere haben Vorlagen für das Format. Beim Doppelturnier kannst du bei ungerader Zahl einen Gast ergänzen. Leere Listen bieten gleich den Knopf zum Anlegen. Die Live-Ansicht hat eine Textgröße (A−/A+) und eine Ruhe-Ansicht ohne Schaltflächen für Beamer.",
+      en: "Renaming a profile now carries tournaments, games and highlights along. Admins can merge duplicate profiles under Admin → Members. New game remembers the last game, tournaments have templates for the format. In a doubles tournament you can add a guest when the number is odd. Empty lists offer the button to create the first entry. The live view has a text size (A−/A+) and a calm view without buttons for projectors.",
+      fr: "Renommer un profil emporte désormais tournois, parties et highlights. Les admins peuvent fusionner des profils en double sous Admin → Membres. Nouvelle partie mémorise la dernière partie, les tournois ont des modèles de format. En double, on peut ajouter un invité si le nombre est impair. Les listes vides proposent le bouton de création. La vue en direct a une taille de texte (A−/A+) et une vue calme sans boutons pour les projecteurs.",
+      pl: "Zmiana nazwy profilu przenosi teraz turnieje, gry i highlighty. Administratorzy mogą łączyć zduplikowane profile w Admin → Członkowie. Nowa gra pamięta ostatnią grę, turnieje mają szablony formatu. W turnieju deblowym przy nieparzystej liczbie można dodać gościa. Puste listy od razu oferują przycisk tworzenia. Widok na żywo ma rozmiar tekstu (A−/A+) i widok spokojny bez przycisków dla projektorów.",
+      nl: "Een profiel hernoemen neemt nu toernooien, spellen en highlights mee. Admins kunnen dubbele profielen samenvoegen onder Admin → Leden. Nieuw spel onthoudt het laatste spel, toernooien hebben sjablonen voor het formaat. Bij een dubbeltoernooi kun je bij een oneven aantal een gast toevoegen. Lege lijsten bieden meteen de knop om aan te maken. De live-weergave heeft een tekstgrootte (A−/A+) en een rustige weergave zonder knoppen voor beamers.",
+      tr: "Bir profil yeniden adlandırıldığında turnuvalar, oyunlar ve öne çıkanlar da taşınır. Yöneticiler çift oluşturulmuş profilleri Admin → Üyeler altında birleştirebilir. Yeni oyun son oyunu hatırlar, turnuvaların format şablonları vardır. Çiftler turnuvasında sayı tekse misafir eklenebilir. Boş listeler hemen oluşturma düğmesi sunar. Canlı görünümde metin boyutu (A−/A+) ve projektörler için düğmesiz sakin görünüm var.",
+    },
+  },
 ];

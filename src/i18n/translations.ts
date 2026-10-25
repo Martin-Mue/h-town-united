@@ -1090,6 +1090,12 @@ export const translations: Record<string, Record<Language, string>> = {
 
   // PublicTournament.tsx (spectator/beamer live view).
   "pt.boardOverview": { de: "Board-Übersicht", en: "Board overview", fr: "Aperçu des cibles", pl: "Przegląd tarcz", nl: "Bordoverzicht", tr: "Tahta genel görünümü" },
+  "pt.textSize": { de: "Textgröße", en: "Text size", fr: "Taille du texte", pl: "Rozmiar tekstu", nl: "Tekstgrootte", tr: "Yazı boyutu" },
+  "pt.textSmaller": { de: "Text kleiner", en: "Smaller text", fr: "Texte plus petit", pl: "Mniejszy tekst", nl: "Kleinere tekst", tr: "Yazıyı küçült" },
+  "pt.textLarger": { de: "Text größer", en: "Larger text", fr: "Texte plus grand", pl: "Większy tekst", nl: "Grotere tekst", tr: "Yazıyı büyüt" },
+  "pt.calm": { de: "Ruhe", en: "Calm", fr: "Calme", pl: "Spokój", nl: "Rustig", tr: "Sakin" },
+  "pt.calmTooltip": { de: "Ruhe-Ansicht: ohne Schaltflächen, die Seiten wechseln von selbst (für Beamer und Dauerbetrieb).", en: "Calm view: no buttons, the pages switch by themselves (for projectors and unattended screens).", fr: "Vue calme : sans boutons, les pages changent seules (pour projecteurs et écrans sans surveillance).", pl: "Widok spokojny: bez przycisków, strony zmieniają się same (dla projektorów i ekranów bez nadzoru).", nl: "Rustige weergave: zonder knoppen, de pagina's wisselen vanzelf (voor beamers en onbeheerde schermen).", tr: "Sakin görünüm: düğmesiz, sayfalar kendiliğinden değişir (projektörler ve başında kimse olmayan ekranlar için)." },
+  "pt.calmExit": { de: "Ruhe beenden", en: "Exit calm view", fr: "Quitter la vue calme", pl: "Zakończ widok spokojny", nl: "Rustige weergave sluiten", tr: "Sakin görünümden çık" },
   "pt.whoAmI": { de: "Wer bist du?", en: "Who are you?", fr: "Qui êtes-vous ?", pl: "Kim jesteś?", nl: "Wie ben jij?", tr: "Sen kimsin?" },
   "pt.whoAmIPick": { de: "Name wählen", en: "Pick your name", fr: "Choisir son nom", pl: "Wybierz imię", nl: "Kies je naam", tr: "Adını seç" },
   "pt.you": { de: "Du", en: "You", fr: "Vous", pl: "Ty", nl: "Jij", tr: "Sen" },

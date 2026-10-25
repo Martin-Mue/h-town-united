@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check, QrCode, Hourglass, Lock, UserRound } from "lucide-react";
+import { Trophy, Users, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check, QrCode, Hourglass, Lock, UserRound, EyeOff } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
@@ -684,6 +684,11 @@ const entryIsMe = (entry: string | undefined, me: string): boolean =>
   !!me && !!entry && (entry === me || splitTeamName(entry).includes(me));
 
 const MY_NAME_PREF_KEY = "dart-live-my-name";
+/** Text size of the whole page for a beamer/TV: stepped, kept per device. */
+const UI_SCALE_PREF_KEY = "dart-live-ui-scale";
+const UI_SCALES = [1, 1.15, 1.3, 1.5, 1.75] as const;
+/** "Ruhe" view: no buttons at all, the pages rotate on their own — for a screen nobody touches. */
+const CALM_PREF_KEY = "dart-live-calm";
 
 /**
  * "Wer bin ich?": a spectator who is also a player picks their name once and gets told, on any view, which board
@@ -880,6 +885,21 @@ const PublicTournamentPage = () => {
     } catch { /* storage blocked (private mode) — the choice just doesn't persist */ }
   };
   const activeTabRef = useRef<HTMLButtonElement | null>(null);
+  const [scaleIndex, setScaleIndexRaw] = useState<number>(() => {
+    try { const n = Number(window.localStorage.getItem(UI_SCALE_PREF_KEY)); return Number.isInteger(n) && n >= 0 && n < UI_SCALES.length ? n : 0; } catch { return 0; }
+  });
+  const stepScale = (delta: number) => {
+    const next = Math.min(UI_SCALES.length - 1, Math.max(0, scaleIndex + delta));
+    setScaleIndexRaw(next);
+    try { window.localStorage.setItem(UI_SCALE_PREF_KEY, String(next)); } catch { /* storage blocked: size just does not persist */ }
+  };
+  const [calm, setCalmRaw] = useState<boolean>(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get("calm");
+      if (fromUrl !== null) return fromUrl === "1";
+      return window.localStorage.getItem(CALM_PREF_KEY) === "1";
+    } catch { return false; }
+  });
   const { slug } = useParams<{ slug: string }>();
   // Aliased to `tr` (not the usual `t`) — this component already uses `t` for the tournament
   // record itself (a name from long before this page had any translations, too widely
@@ -967,6 +987,16 @@ const PublicTournamentPage = () => {
   useEffect(() => {
     activeTabRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [view, autoRotate]);
+
+  const setCalm = (next: boolean) => {
+    setCalmRaw(next);
+    try { window.localStorage.setItem(CALM_PREF_KEY, next ? "1" : "0"); } catch { /* storage blocked */ }
+    if (next) {
+      // a calm screen has no buttons to switch pages with, so the pages rotate by themselves
+      setAutoRotateRaw(true);
+      try { window.localStorage.setItem(AUTO_ROTATE_PREF_KEY, "1"); } catch { /* storage blocked */ }
+    }
+  };
 
   const selectView = (next: ViewKey) => {
     if (next === "tree" || next === "list") bracketViewRef.current = next;
@@ -1338,8 +1368,16 @@ const PublicTournamentPage = () => {
           way back to the bracket at all. Also the shared fullscreen target — wrapping the
           toolbar in it too (not just the content below) means switching views, adjusting
           rotation, or exiting fullscreen never requires leaving fullscreen first. */}
-      <div ref={viewWrapRef} className="px-4 pt-4 bg-background">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
+      <div ref={viewWrapRef} className="px-4 pt-4 bg-background" style={UI_SCALES[scaleIndex] === 1 ? undefined : { zoom: UI_SCALES[scaleIndex] }}>
+        {calm && (
+          <button
+            onClick={() => setCalm(false)}
+            className="fixed right-2 top-2 z-40 rounded-lg border border-border bg-background/80 px-2.5 py-1.5 text-xs text-muted-foreground opacity-25 transition-opacity hover:opacity-100 focus:opacity-100"
+          >
+            {tr("pt.calmExit")}
+          </button>
+        )}
+        <div className={`mb-2 ${calm ? "hidden" : "flex"} flex-wrap items-center gap-2`}>
           <div className="-mx-4 w-[calc(100%+2rem)] overflow-x-auto px-4 py-1 no-scrollbar sm:mx-0 sm:w-auto sm:overflow-visible sm:p-0">
           {/* flex-wrap (not overflow-x-auto scroll) — at a phone-width viewport (the actual
            *  real-world source for a beamer/TV mirror, not just a spectator's own screen) 8
@@ -1377,9 +1415,20 @@ const PublicTournamentPage = () => {
           >
             <Settings2 className="w-3.5 h-3.5" />
           </button>
+          <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-border" role="group" aria-label={tr("pt.textSize")}>
+            <button onClick={() => stepScale(-1)} disabled={scaleIndex === 0} className="px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40" aria-label={tr("pt.textSmaller")}>A−</button>
+            <button onClick={() => stepScale(1)} disabled={scaleIndex === UI_SCALES.length - 1} className="border-l border-border px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted disabled:opacity-40" aria-label={tr("pt.textLarger")}>A+</button>
+          </div>
+          <button
+            onClick={() => setCalm(true)}
+            className="px-2.5 py-1.5 rounded-lg border border-border text-xs flex items-center gap-1.5 hover:bg-muted text-muted-foreground"
+            title={tr("pt.calmTooltip")}
+          >
+            <EyeOff className="w-3.5 h-3.5" /> {tr("pt.calm")}
+          </button>
           <button
             onClick={toggleFullscreen}
-            className="px-2.5 py-1.5 rounded-lg border border-border text-xs flex items-center gap-1.5 hover:bg-muted text-muted-foreground ml-auto"
+            className="px-2.5 py-1.5 rounded-lg border border-border text-xs flex items-center gap-1.5 hover:bg-muted text-muted-foreground"
             title={isFullscreen ? tr("pt.exitFullscreen") : tr("pt.enterFullscreenTv")}
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
@@ -1405,7 +1454,7 @@ const PublicTournamentPage = () => {
             </button>
           </div>
         </div>
-        {showRotationSettings && (
+        {showRotationSettings && !calm && (
           <div className="mb-2 rounded-xl border border-border gradient-card shadow-elevation-sm p-3 max-w-xl">
             <p className="text-[11px] text-muted-foreground mb-2">{tr("pt.rotationSettingsDesc")}</p>
             <div className="flex flex-wrap gap-2">
@@ -1433,7 +1482,7 @@ const PublicTournamentPage = () => {
           </div>
         )}
 
-      {started && !t.champion && (
+      {started && !t.champion && !calm && (
         <MyMatchBar names={spectatorNames} myName={myName} onChange={setMyName} now={boardCardsNow} onDeck={boardCardsOnDeck} />
       )}
 
