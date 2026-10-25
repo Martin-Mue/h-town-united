@@ -132,7 +132,7 @@ const TournamentSeriesPage = () => {
   // ─── SINGLE SERIES DETAIL ────────────────────────
   if (id && activeSeries) {
     return (
-      <div className="container py-6 animate-slide-up max-w-4xl mx-auto">
+      <div className="container py-6 animate-slide-up max-w-4xl lg:max-w-6xl mx-auto">
         <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground">
           <ArrowLeft className="w-4 h-4" /> {t("series.allSeries")}
         </Link>
@@ -145,7 +145,8 @@ const TournamentSeriesPage = () => {
           {activeSeries.description && <p className="text-sm text-muted-foreground">{activeSeries.description}</p>}
         </div>
 
-        <SectionCard className="mb-4">
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <SectionCard>
           <Eyebrow icon={Trophy}>{t("series.overallStandings")}</Eyebrow>
           {standings.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("series.noTournamentsFinishedYet")}</p>
@@ -197,13 +198,14 @@ const TournamentSeriesPage = () => {
             </div>
           )}
         </SectionCard>
+        </div>
       </div>
     );
   }
 
   // ─── LIST + CREATE ───────────────────────────────
   return (
-    <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
+    <div className="container py-6 animate-slide-up max-w-3xl lg:max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Layers className="w-6 h-6 text-accent" />
@@ -267,7 +269,7 @@ const TournamentSeriesPage = () => {
           <p className="text-sm">{t("series.noSeriesYet")}</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
           {pagedSeries.visible.map((s) => {
             const count = tournaments.filter((tourn) => tourn.series_id === s.id).length;
             return (
@@ -314,7 +316,7 @@ const TournamentSeriesPage = () => {
               </div>
             );
           })}
-          <ListPaginationFooter list={pagedSeries} />
+          <div className="md:col-span-2"><ListPaginationFooter list={pagedSeries} /></div>
         </div>
       )}
     </div>

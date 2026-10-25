@@ -584,7 +584,7 @@ const LeaguePage = () => {
     const hasDivisionBelow = myDivisionIdx >= 0 && myDivisionIdx < seasonSiblings.length - 1;
     const unfinishedFixtureCount = fixtures.filter((f) => f.status !== "finished").length;
     return (
-      <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
+      <div className="container py-6 animate-slide-up max-w-3xl lg:max-w-6xl mx-auto">
         <Link to="/leagues" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground">
           <ArrowLeft className="w-4 h-4" /> {t("league.allLeaguesLink")}
         </Link>
@@ -712,7 +712,8 @@ const LeaguePage = () => {
           </div>
         )}
 
-        <SectionCard className="mb-4">
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <SectionCard className="mb-4 lg:mb-0">
           <Eyebrow icon={Trophy}>{t("league.standingsTitle")}</Eyebrow>
           {standings.length === 0 ? (
             // Round 3 Rang 7: the one remaining "pure text" empty state in the app — every other
@@ -867,6 +868,7 @@ const LeaguePage = () => {
             </div>
           )}
         </SectionCard>
+        </div>
 
         <Dialog open={!!manualEntryFixture} onOpenChange={(open) => !open && setManualEntryFixture(null)}>
           <DialogContent className="bg-card border-border">
@@ -909,7 +911,7 @@ const LeaguePage = () => {
 
   // ─── LIST + CREATE ───────────────────────────────
   return (
-    <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
+    <div className="container py-6 animate-slide-up max-w-3xl lg:max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Swords className="w-6 h-6 text-accent" />
@@ -1082,7 +1084,7 @@ const LeaguePage = () => {
           <p className="text-sm">{t("league.noLeaguesYet")}</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
           {pagedLeagues.visible.map((l) => (
             <div key={l.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
               <Link to={`/leagues/${l.id}`} className="flex items-center gap-3 flex-1 min-w-0">
@@ -1130,7 +1132,7 @@ const LeaguePage = () => {
               )}
             </div>
           ))}
-          <ListPaginationFooter list={pagedLeagues} />
+          <div className="md:col-span-2"><ListPaginationFooter list={pagedLeagues} /></div>
         </div>
       )}
     </div>
