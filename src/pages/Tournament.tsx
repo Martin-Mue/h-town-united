@@ -27,6 +27,8 @@ import { useHasRole } from "@/hooks/useHasRole";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import TournamentSetupWizard from "@/components/tournament/setup/TournamentSetupWizard";
+import TournamentTemplates from "@/components/tournament/setup/TournamentTemplates";
+import type { TournamentTemplate } from "@/utils/tournamentTemplate";
 import ManageTabs, { type ManageTab } from "@/components/tournament/manage/ManageTabs";
 import { setupStepIssues, allSetupIssues, firstStepWithIssue, SETUP_STEP_ORDER, type SetupState, type SetupStepKey } from "@/utils/tournamentSetupSteps";
 import { clubHasFeature } from "@/lib/planFeatures";
@@ -2164,8 +2166,16 @@ const TournamentPage = () => {
     ]);
     const activeAddTab = addTabs.some((x) => x.key === addTab) ? addTab : addTabs[0].key;
 
+    const currentTemplate: TournamentTemplate = { tournamentMode, gameMode, bestOfLegs, setsEnabled, bestOfSets, targetSize, boards, drawMode, livePlayEnabled, doublesEnabled };
+    const applyTemplate = (tpl: TournamentTemplate) => {
+      setTournamentMode(tpl.tournamentMode); setGameMode(tpl.gameMode); setBestOfLegs(tpl.bestOfLegs);
+      setSetsEnabled(tpl.setsEnabled); setBestOfSets(tpl.bestOfSets); setTargetSize(tpl.targetSize); setBoards(tpl.boards);
+      setDrawMode(tpl.drawMode); setLivePlayEnabled(tpl.livePlayEnabled);
+      if (tpl.doublesEnabled !== doublesEnabled) { setDoublesEnabled(tpl.doublesEnabled); if (!tpl.doublesEnabled) dissolveAllTeams(); }
+    };
     const stepBasics = (
       <>
+        {!editingId && <TournamentTemplates current={currentTemplate} onApply={applyTemplate} />}
         <SectionCard className="space-y-4">
             <Eyebrow icon={Trophy}>{t("tournament.tournamentName")}</Eyebrow>
             <div className="-mt-2">

@@ -259,6 +259,7 @@ export type Database = {
           config: Json
           created_at: string
           id: string
+          kind: string
           name: string
           user_id: string
         }
@@ -266,6 +267,7 @@ export type Database = {
           config: Json
           created_at?: string
           id?: string
+          kind?: string
           name: string
           user_id: string
         }
@@ -273,6 +275,7 @@ export type Database = {
           config?: Json
           created_at?: string
           id?: string
+          kind?: string
           name?: string
           user_id?: string
         }
