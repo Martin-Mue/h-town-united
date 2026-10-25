@@ -148,7 +148,9 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
       // leaves status at "error" (treated identically to "loading" by every consumer) rather
       // than needing its own recovery logic; refetch() (called on window focus, see below)
       // naturally retries on the next opportunity.
-      const { data: roleRow, error: roleError } = await supabase.from("user_roles").select("club_id").eq("user_id", user.id).maybeSingle();
+      // limit(1): a member can hold several role rows (admin AND editor, editor AND member, ...), and maybeSingle()
+      // on more than one row is an error -- which left status at "error" and the loading arrow spinning forever.
+      const { data: roleRow, error: roleError } = await supabase.from("user_roles").select("club_id").eq("user_id", user.id).limit(1).maybeSingle();
       if (requestId !== requestIdRef.current) return;
       if (roleError) {
         setStatus("error");
