@@ -1094,4 +1094,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Yeni bir turnuvayı artık dört adımda oluşturuyorsunuz: temel, format, katılımcılar, kontrol ve başlat. Nadir ayarlar “Gelişmiş” altında kapalı. Süren bir turnuvada program, katılımcılar, ekran ve paylaşım (canlı bağlantı, QR kodları, tahta modu), istatistik ve ayarlar sekmeleri var.",
     },
   },
+  {
+    id: "2026-10-30-start-and-live-view",
+    date: "2026-10-30",
+    title: {
+      de: "Startseite „Für dich“ und neue Live-Ansicht",
+      en: "Home “For you” and a new live view",
+      fr: "Accueil « Pour vous » et nouvelle vue en direct",
+      pl: "Strona główna „Dla ciebie” i nowy widok na żywo",
+      nl: "Startpagina “Voor jou” en nieuwe live-weergave",
+      tr: "Ana sayfa “Senin için” ve yeni canlı görünüm",
+    },
+    description: {
+      de: "Die Startseite zeigt jetzt Kacheln für ein angefangenes Spiel, laufende Turniere, dein nächstes Turnierspiel und deine Zahlen. In der Live-Ansicht wechselst du am Handy per Reiterleiste zwischen den Seiten, und über „Wer bist du?“ siehst du sofort, an welchem Board du gerade oder als Nächstes spielst.",
+      en: "The home page now shows tiles for a game in progress, running tournaments, your next tournament match and your numbers. In the live view you switch pages with a tab bar on phones, and “Who are you?” tells you at once which board you are on now or next.",
+      fr: "L'accueil affiche des tuiles pour une partie en cours, les tournois en cours, votre prochain match et vos chiffres. Dans la vue en direct, une barre d'onglets permet de changer de page sur mobile, et « Qui êtes-vous ? » indique votre cible actuelle ou suivante.",
+      pl: "Strona główna pokazuje kafelki: rozpoczęta gra, trwające turnieje, twój następny mecz i twoje liczby. W widoku na żywo na telefonie przełączasz strony zakładkami, a „Kim jesteś?” od razu pokazuje, na której tarczy grasz teraz lub następnie.",
+      nl: "De startpagina toont nu tegels voor een lopend spel, lopende toernooien, je volgende toernooipartij en je cijfers. In de live-weergave wissel je op de telefoon met een tabbalk, en “Wie ben jij?” laat meteen zien aan welk bord je nu of daarna speelt.",
+      tr: "Ana sayfada artık yarım kalan oyun, süren turnuvalar, sıradaki turnuva maçın ve rakamların için kutucuklar var. Canlı görünümde telefonda sekme çubuğuyla sayfalar arasında geçiş yapıyor, “Sen kimsin?” ile şu an ya da sonraki tahtanı hemen görüyorsun.",
+    },
+  },
 ];

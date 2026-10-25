@@ -1062,6 +1062,12 @@ export const translations: Record<string, Record<Language, string>> = {
 
   // PublicTournament.tsx (spectator/beamer live view).
   "pt.boardOverview": { de: "Board-Übersicht", en: "Board overview", fr: "Aperçu des cibles", pl: "Przegląd tarcz", nl: "Bordoverzicht", tr: "Tahta genel görünümü" },
+  "pt.whoAmI": { de: "Wer bist du?", en: "Who are you?", fr: "Qui êtes-vous ?", pl: "Kim jesteś?", nl: "Wie ben jij?", tr: "Sen kimsin?" },
+  "pt.whoAmIPick": { de: "Name wählen", en: "Pick your name", fr: "Choisir son nom", pl: "Wybierz imię", nl: "Kies je naam", tr: "Adını seç" },
+  "pt.you": { de: "Du", en: "You", fr: "Vous", pl: "Ty", nl: "Jij", tr: "Sen" },
+  "pt.youPlayNow": { de: "Du spielst jetzt an Board {board} gegen {name}", en: "You are playing on board {board} against {name}", fr: "Vous jouez maintenant sur la cible {board} contre {name}", pl: "Grasz teraz na tarczy {board} z {name}", nl: "Je speelt nu aan bord {board} tegen {name}", tr: "Şimdi {board}. tahtada {name} ile oynuyorsun" },
+  "pt.youAreNext": { de: "Du bist als Nächstes dran – Board {board} gegen {name}", en: "You are up next – board {board} against {name}", fr: "Vous êtes le prochain – cible {board} contre {name}", pl: "Jesteś następny – tarcza {board} z {name}", nl: "Jij bent als volgende – bord {board} tegen {name}", tr: "Sıradaki sensin – {board}. tahta, rakip {name}" },
+  "pt.youNotScheduled": { de: "Aktuell bist du nicht angesetzt", en: "You are not scheduled right now", fr: "Vous n'êtes pas programmé pour l'instant", pl: "Teraz nie masz meczu", nl: "Je staat nu niet gepland", tr: "Şu anda maçın yok" },
   "pt.exitFullscreen": { de: "Vollbild verlassen", en: "Exit fullscreen", fr: "Quitter le plein écran", pl: "Zamknij pełny ekran", nl: "Volledig scherm verlaten", tr: "Tam ekrandan çık" },
   "pt.enterFullscreenTv": { de: "Vollbild (für TV/Beamer)", en: "Fullscreen (for TV/projector)", fr: "Plein écran (pour TV/projecteur)", pl: "Pełny ekran (dla TV/projektora)", nl: "Volledig scherm (voor tv/beamer)", tr: "Tam ekran (TV/projeksiyon için)" },
   "pt.fullscreenShort": { de: "Vollbild", en: "Fullscreen", fr: "Plein écran", pl: "Pełny ekran", nl: "Volledig scherm", tr: "Tam ekran" },

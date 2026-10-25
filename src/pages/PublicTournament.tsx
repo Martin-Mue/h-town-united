@@ -1,13 +1,14 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Trophy, Users, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check, QrCode, Hourglass, Lock } from "lucide-react";
+import { Trophy, Users, Radio, Zap, ListOrdered, Monitor, ZoomIn, ZoomOut, Maximize2, Minimize2, Network, Rows3, PenLine, RefreshCcw, Target, Settings2, Check, QrCode, Hourglass, Lock, UserRound } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { computeTournamentHighlights, computeTournamentAverages, computeLegAveragesByGame, sortParticipants, type TournamentHighlights, type TournamentAverages, type TournamentStatsLegRow, type TournamentStatsGameRow, type ParticipantSortMode } from "@/utils/tournamentStats";
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import MatchPredictionsPanel from "@/components/tournament/MatchPredictionsPanel";
 import MobileBracket from "@/components/tournament/MobileBracket";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { splitTeamName } from "@/utils/tournamentTeams";
 import { useMatchPredictions } from "@/hooks/useMatchPredictions";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -678,6 +679,59 @@ const QrInvitePage = ({ url, name }: { url: string; name: string }) => {
   );
 };
 
+/** Whether a bracket entry (a player or a doubles team "Anna & Ben") is the chosen spectator. */
+const entryIsMe = (entry: string | undefined, me: string): boolean =>
+  !!me && !!entry && (entry === me || splitTeamName(entry).includes(me));
+
+const MY_NAME_PREF_KEY = "dart-live-my-name";
+
+/**
+ * "Wer bin ich?": a spectator who is also a player picks their name once and gets told, on any view, which board
+ * they play on now or next — so nobody has to scan the board grid for their own name.
+ */
+const MyMatchBar = ({ names, myName, onChange, now, onDeck }: {
+  names: string[];
+  myName: string;
+  onChange: (name: string) => void;
+  now: BoardCard[];
+  onDeck: BoardCard[];
+}) => {
+  const { t } = useLanguage();
+  const opponentIn = (c: BoardCard) => (entryIsMe(c.player1, myName) ? c.player2 : c.player1);
+  const playingNow = now.find((c) => entryIsMe(c.player1, myName) || entryIsMe(c.player2, myName));
+  const upNext = !playingNow ? onDeck.find((c) => entryIsMe(c.player1, myName) || entryIsMe(c.player2, myName)) : undefined;
+  const hit = playingNow ?? upNext;
+  return (
+    <div
+      className={`mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3 py-2 text-sm ${hit ? "border-accent/60 bg-accent/10" : "border-border bg-muted/20"}`}
+      data-testid="my-match-bar"
+    >
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <UserRound className="h-4 w-4 shrink-0" />
+        <span className="whitespace-nowrap">{t("pt.whoAmI")}</span>
+        <select
+          value={myName}
+          onChange={(e) => onChange(e.target.value)}
+          className="min-w-0 max-w-[11rem] rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+          aria-label={t("pt.whoAmI")}
+        >
+          <option value="">{t("pt.whoAmIPick")}</option>
+          {names.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+      </label>
+      {myName && (
+        <p className={`min-w-0 flex-1 font-display ${hit ? "text-accent" : "text-muted-foreground"}`}>
+          {playingNow
+            ? t("pt.youPlayNow").replace("{board}", String(playingNow.board)).replace("{name}", opponentIn(playingNow))
+            : upNext
+              ? t("pt.youAreNext").replace("{board}", String(upNext.board)).replace("{name}", opponentIn(upNext))
+              : t("pt.youNotScheduled")}
+        </p>
+      )}
+    </div>
+  );
+};
+
 /**
  * Full-bleed, large-type board grid for TV/projector mirroring at club nights — shows
  * every board's current pairing + last known leg score at a glance from across the room,
@@ -685,12 +739,13 @@ const QrInvitePage = ({ url, name }: { url: string; name: string }) => {
  * of fixed breakpoints so it stays legible whether mirrored to a 10" tablet or a 65" TV.
  */
 const BoardOverview = ({
-  now, onDeck, queuedCount, totalRounds,
+  now, onDeck, queuedCount, totalRounds, myName = "",
 }: {
   now: BoardCard[];
   onDeck: BoardCard[];
   queuedCount: number;
   totalRounds: number;
+  myName?: string;
 }) => {
   const { t } = useLanguage();
 
@@ -709,11 +764,16 @@ const BoardOverview = ({
         </div>
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 320px), 1fr))` }}>
-          {now.map((c) => (
-            <div key={c.id} className="broadcast-panel border-2 border-primary/60 p-4 sm:p-6 pl-6 sm:pl-8 glow-cyan">
+          {now.map((c) => {
+            const mine = entryIsMe(c.player1, myName) || entryIsMe(c.player2, myName);
+            return (
+            <div key={c.id} className={`broadcast-panel border-2 p-4 sm:p-6 pl-6 sm:pl-8 ${mine ? "border-accent glow-cyan" : "border-primary/60 glow-cyan"}`}>
               <div className="flex items-center justify-between mb-3">
+                <span className="flex items-center gap-2">
                 <span className="broadcast-tag inline-flex px-3 py-1 rounded-[2px]">
                   <span className="font-display font-semibold text-[clamp(0.8rem,1.4vw,1rem)] uppercase tracking-wide">{t("camera.board")} {c.board}</span>
+                </span>
+                {mine && <span className="rounded-[2px] bg-accent px-2 py-1 font-display text-[clamp(0.7rem,1.1vw,0.85rem)] uppercase tracking-wide text-accent-foreground">{t("pt.you")}</span>}
                 </span>
                 {c.round !== undefined && <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest" style={{ color: "hsl(210 15% 55%)" }}>{roundLabelFor(c.round, totalRounds, t)}</span>}
               </div>
@@ -752,7 +812,8 @@ const BoardOverview = ({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -761,7 +822,7 @@ const BoardOverview = ({
           <p className="text-[clamp(0.7rem,1.1vw,0.85rem)] uppercase tracking-widest mb-2" style={{ color: "hsl(210 15% 55%)" }}>{t("pt.upNext")}</p>
           <div className="flex flex-wrap gap-2">
             {onDeck.map((c) => (
-              <div key={c.id} className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "hsl(222 25% 11%)", border: "1px solid hsl(222 18% 18%)" }}>
+              <div key={c.id} className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "hsl(222 25% 11%)", border: entryIsMe(c.player1, myName) || entryIsMe(c.player2, myName) ? "2px solid hsl(var(--accent))" : "1px solid hsl(222 18% 18%)" }}>
                 <Badge variant="outline" className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] px-1.5 py-0.5 shrink-0 border-transparent" style={{ background: "hsl(185 85% 48% / 0.15)", color: "hsl(185 85% 48%)" }}>{t("camera.board")} {c.board}</Badge>
                 <span className="text-[clamp(0.85rem,1.4vw,1.05rem)] uppercase tracking-wide">
                   {c.player1} <span className="normal-case" style={{ color: "hsl(210 15% 55%)" }}>{t("common.vs")}</span> {c.player2}
@@ -808,6 +869,17 @@ const DEFAULT_ROTATION_SLOTS: Record<RotationSlot, boolean> = {
 
 const PublicTournamentPage = () => {
   const isMobile = useIsMobile();
+  const [myName, setMyNameRaw] = useState<string>(() => {
+    try { return window.localStorage.getItem(MY_NAME_PREF_KEY) ?? ""; } catch { return ""; }
+  });
+  const setMyName = (name: string) => {
+    setMyNameRaw(name);
+    try {
+      if (name) window.localStorage.setItem(MY_NAME_PREF_KEY, name);
+      else window.localStorage.removeItem(MY_NAME_PREF_KEY);
+    } catch { /* storage blocked (private mode) — the choice just doesn't persist */ }
+  };
+  const activeTabRef = useRef<HTMLButtonElement | null>(null);
   const { slug } = useParams<{ slug: string }>();
   // Aliased to `tr` (not the usual `t`) — this component already uses `t` for the tournament
   // record itself (a name from long before this page had any translations, too widely
@@ -892,6 +964,10 @@ const PublicTournamentPage = () => {
 
   /** User-driven view change — persists the pick and turns off auto-rotate (picking a
    *  view by hand means "show me this now", not "keep rotating"). */
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [view, autoRotate]);
+
   const selectView = (next: ViewKey) => {
     if (next === "tree" || next === "list") bracketViewRef.current = next;
     setViewRaw(next);
@@ -1208,6 +1284,20 @@ const PublicTournamentPage = () => {
   const boardCardsOnDeck = isKo ? koToBoardCards(onDeck, matches) : rrBoards!.onDeck;
   const boardCardsQueued = isKo ? queuedCount : rrBoards!.queuedCount;
 
+  const viewTabs: { key: ViewKey; icon: JSX.Element; label: string }[] = [
+    { key: "boards", icon: <Monitor className="w-3.5 h-3.5" />, label: tr("pt.boardOverview") },
+    ...(isKo ? [
+      { key: "tree" as ViewKey, icon: <Network className="w-3.5 h-3.5" />, label: tr("tournament.bracketTreeTab") },
+      { key: "list" as ViewKey, icon: <Rows3 className="w-3.5 h-3.5" />, label: tr("pt.roundList") },
+    ] : []),
+    { key: "participants", icon: <Users className="w-3.5 h-3.5" />, label: tr("pt.participantsView") },
+    { key: "highlights", icon: <Target className="w-3.5 h-3.5" />, label: tr("pt.highlightsLabel") },
+    { key: "waiting", icon: <Hourglass className="w-3.5 h-3.5" />, label: tr("pt.waitingTab") },
+    { key: "format", icon: <ListOrdered className="w-3.5 h-3.5" />, label: tr("pt.formatTab") },
+    { key: "qr", icon: <QrCode className="w-3.5 h-3.5" />, label: tr("pt.qrTab") },
+  ];
+  const spectatorNames = [...new Set(t.players.flatMap((p) => splitTeamName(p)))].sort((a, b) => a.localeCompare(b));
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-primary/10 via-transparent to-accent/10">
@@ -1250,40 +1340,27 @@ const PublicTournamentPage = () => {
           rotation, or exiting fullscreen never requires leaving fullscreen first. */}
       <div ref={viewWrapRef} className="px-4 pt-4 bg-background">
         <div className="mb-2 flex flex-wrap items-center gap-2">
+          <div className="-mx-4 w-[calc(100%+2rem)] overflow-x-auto px-4 py-1 no-scrollbar sm:mx-0 sm:w-auto sm:overflow-visible sm:p-0">
           {/* flex-wrap (not overflow-x-auto scroll) — at a phone-width viewport (the actual
            *  real-world source for a beamer/TV mirror, not just a spectator's own screen) 8
            *  buttons badly overflowed a single scrollable row: only the first 3 stayed visible,
            *  requiring the operator to scroll blind to reach the rest. Wrapping shows every
            *  button always, at any width, instead of hiding most of them off-screen. */}
-          <div className="flex flex-wrap gap-1.5 max-w-full">
-            <button onClick={() => selectView("boards")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "boards" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
-              <Monitor className="w-3.5 h-3.5" /> {tr("pt.boardOverview")} {isLocked("boards") && <Lock className="w-3 h-3" />}
-            </button>
-            {isKo && (
-              <>
-                <button onClick={() => selectView("tree")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "tree" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
-                  <Network className="w-3.5 h-3.5" /> {tr("tournament.bracketTreeTab")} {isLocked("tree") && <Lock className="w-3 h-3" />}
+          <div className="flex w-max gap-1.5 sm:w-auto sm:max-w-full sm:flex-wrap">
+            {viewTabs.map((tab) => {
+              const active = view === tab.key && !autoRotate;
+              return (
+                <button
+                  key={tab.key}
+                  ref={active ? activeTabRef : undefined}
+                  onClick={() => selectView(tab.key)}
+                  className={`px-3 py-2 sm:py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${active ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}
+                >
+                  {tab.icon} {tab.label} {isLocked(tab.key) && <Lock className="w-3 h-3" />}
                 </button>
-                <button onClick={() => selectView("list")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "list" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
-                  <Rows3 className="w-3.5 h-3.5" /> {tr("pt.roundList")} {isLocked("list") && <Lock className="w-3 h-3" />}
-                </button>
-              </>
-            )}
-            <button onClick={() => selectView("participants")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "participants" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
-              <Users className="w-3.5 h-3.5" /> {tr("pt.participantsView")} {isLocked("participants") && <Lock className="w-3 h-3" />}
-            </button>
-            <button onClick={() => selectView("highlights")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "highlights" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
-              <Target className="w-3.5 h-3.5" /> {tr("pt.highlightsLabel")} {isLocked("highlights") && <Lock className="w-3 h-3" />}
-            </button>
-            <button onClick={() => selectView("waiting")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "waiting" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
-              <Hourglass className="w-3.5 h-3.5" /> {tr("pt.waitingTab")} {isLocked("waiting") && <Lock className="w-3 h-3" />}
-            </button>
-            <button onClick={() => selectView("format")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "format" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
-              <ListOrdered className="w-3.5 h-3.5" /> {tr("pt.formatTab")} {isLocked("format") && <Lock className="w-3 h-3" />}
-            </button>
-            <button onClick={() => selectView("qr")} className={`px-3 py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${view === "qr" && !autoRotate ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}>
-              <QrCode className="w-3.5 h-3.5" /> {tr("pt.qrTab")} {isLocked("qr") && <Lock className="w-3 h-3" />}
-            </button>
+              );
+            })}
+          </div>
           </div>
           <button
             onClick={toggleAutoRotate}
@@ -1356,6 +1433,10 @@ const PublicTournamentPage = () => {
           </div>
         )}
 
+      {started && !t.champion && (
+        <MyMatchBar names={spectatorNames} myName={myName} onChange={setMyName} now={boardCardsNow} onDeck={boardCardsOnDeck} />
+      )}
+
       {isLocked(view) ? (
         <div className="flex flex-col items-center justify-center text-center py-16 px-4 min-h-[40vh]">
           <Lock className="w-8 h-8 text-muted-foreground mb-3" />
@@ -1427,7 +1508,7 @@ const PublicTournamentPage = () => {
           </div>
         </div>
       ) : view === "boards" ? (
-        <BoardOverview now={boardCardsNow} onDeck={boardCardsOnDeck} queuedCount={boardCardsQueued} totalRounds={totalRounds} />
+        <BoardOverview myName={myName} now={boardCardsNow} onDeck={boardCardsOnDeck} queuedCount={boardCardsQueued} totalRounds={totalRounds} />
       ) : view === "waiting" ? (
         <WaitingSplash name={t.name} />
       ) : view === "format" ? (
