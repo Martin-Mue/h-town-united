@@ -26,6 +26,8 @@ import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useHasRole } from "@/hooks/useHasRole";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import TournamentSetupWizard from "@/components/tournament/setup/TournamentSetupWizard";
+import { setupStepIssues, allSetupIssues, firstStepWithIssue, SETUP_STEP_ORDER, type SetupState, type SetupStepKey } from "@/utils/tournamentSetupSteps";
 import { clubHasFeature } from "@/lib/planFeatures";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
@@ -669,6 +671,9 @@ const TournamentPage = () => {
   const [players, setPlayers] = useState<string[]>([]);
   /** Doppelturnier: participants are two-person teams ("Anna & Ben"), see utils/tournamentTeams.ts. */
   const [doublesEnabled, setDoublesEnabled] = useState(false);
+  /** Which of the setup steps (Grundlagen / Format / Teilnehmer / Prüfen) is open, and which way of adding players is shown. */
+  const [wizardStep, setWizardStep] = useState(0);
+  const [addTab, setAddTab] = useState<"members" | "type" | "guests" | "previous">("members");
   const [savingTournament, setSavingTournament] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   /** Snapshot of the tournament being edited, taken the moment "Bearbeiten" is opened — lets
@@ -2005,6 +2010,7 @@ const TournamentPage = () => {
     setDoublesEnabled((t.players || []).some(isTeamName));
     setDrawMode("random");
     setDrawSeed(Math.floor(Math.random() * 1e9));
+    setWizardStep(0);
     setPhase("setup");
   };
 
@@ -2033,7 +2039,7 @@ const TournamentPage = () => {
                 <Swords className="w-3.5 h-3.5" /> {t("tournament.leagueMode")}
               </Link>
             </Button>
-            <Button size="sm" onClick={() => { setEditingId(null); setEditingSource(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setPhase("setup"); }} className="gap-1">
+            <Button size="sm" onClick={() => { setEditingId(null); setEditingSource(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setWizardStep(0); setPhase("setup"); }} className="gap-1">
               <Plus className="w-4 h-4" /> {t("tournament.newTournament")}
             </Button>
           </div>
@@ -2133,16 +2139,20 @@ const TournamentPage = () => {
 
   // ─── SETUP PHASE ────────────────────────────────
   if (phase === "setup") {
-    return (
-      <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
-        <Button variant="ghost" onClick={() => { setEditingId(null); setEditingSource(null); setPhase("list"); }} className="mb-4 text-muted-foreground text-sm"><ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}</Button>
-        <div className="relative overflow-hidden mb-6 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-4 shadow-[0_0_30px_hsl(var(--primary)/0.12)]">
-          <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> {t("tournament.bigEventMode")}</div>
-          <h2 className="text-2xl font-display uppercase">{editingId ? t("tournament.editTournamentHeading") : t("tournament.createTournamentHeading")}</h2>
-          <p className="text-sm text-muted-foreground">{t("tournament.upTo64Participants")}</p>
-        </div>
-        <div className="space-y-4">
-          <SectionCard className="space-y-4">
+    const setupState: SetupState = { mode: tournamentMode, playerCount: players.length, doublesEnabled, unpairedSingles: singlesInList.length, maxParticipants };
+    const issuesFor = (step: SetupStepKey) => setupStepIssues(step, setupState).map((key) => t(key));
+    const leaveSetup = () => { setEditingId(null); setEditingSource(null); setWizardStep(0); setPhase("list"); };
+    const addTabs = ([
+      ...(dbPlayers.length > 0 ? [{ key: "members" as const, label: t("tournament.addTabMembers") }] : []),
+      { key: "type" as const, label: t("tournament.addTabType") },
+      { key: "guests" as const, label: t("tournament.addTabGuests") },
+      ...(tournaments.length > 0 ? [{ key: "previous" as const, label: t("tournament.addTabPrevious") }] : []),
+    ]);
+    const activeAddTab = addTabs.some((x) => x.key === addTab) ? addTab : addTabs[0].key;
+
+    const stepBasics = (
+      <>
+        <SectionCard className="space-y-4">
             <Eyebrow icon={Trophy}>{t("tournament.tournamentName")}</Eyebrow>
             <div className="-mt-2">
               <Input value={tournamentName} onChange={(e) => setTournamentName(e.target.value)} placeholder={t("tournament.tournamentNamePlaceholder")} className="bg-muted border-border" />
@@ -2169,10 +2179,37 @@ const TournamentPage = () => {
                 </SelectContent>
               </Select>
             </div>
-          </SectionCard>
+          {/* Doppelturnier */}
+          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="doubles-enabled" className="text-sm">{t("tournament.doubles")}</Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{t("tournament.doublesDesc")}</p>
+              </div>
+              <Switch id="doubles-enabled" checked={doublesEnabled} onCheckedChange={(v) => { setDoublesEnabled(v); if (!v) dissolveAllTeams(); }} />
+            </div>
+            {doublesEnabled && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  {t("tournament.doublesHint")} ({players.filter(isTeamName).length} {t("tournament.doublesTeams")}, {singlesInList.length} {t("tournament.doublesSingles")})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("random")}><Shuffle className="w-3.5 h-3.5 mr-1" />{t("tournament.pairRandom")}</Button>
+                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("balanced")}>{t("tournament.pairBalanced")}</Button>
+                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("order")}>{t("tournament.pairInOrder")}</Button>
+                  {players.some(isTeamName) && <Button size="sm" variant="ghost" className="text-destructive" onClick={dissolveAllTeams}>{t("tournament.dissolveTeams")}</Button>}
+                </div>
+              </div>
+            )}
+          </div>
+        </SectionCard>
+      </>
+    );
 
-          <SectionCard className="space-y-4">
-            <Eyebrow icon={Target}>{t("game.gameMode")}</Eyebrow>
+    const stepFormat = (
+      <>
+        <SectionCard className="space-y-4">
+          <Eyebrow icon={Target}>{t("game.gameMode")}</Eyebrow>
             <div className="grid grid-cols-2 gap-3 -mt-2">
               <div>
                 <label className="text-sm text-muted-foreground mb-1 block">{t("game.gameMode")}</label>
@@ -2196,7 +2233,6 @@ const TournamentPage = () => {
                 </Select>
               </div>
             </div>
-
             {/* Sets-Modus, tournament-wide (see TournamentRecord.best_of_sets's own doc comment)
                 — same "Best of X Sätze, je Satz Best of Y Legs" structure as the casual-game
                 setup screen, applied to every match in the tournament at once. Off by default and
@@ -2223,7 +2259,6 @@ const TournamentPage = () => {
                 </Select>
               </div>
             )}
-
             {tournamentMode !== "round-robin" && (
               <div>
                 <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.bracketSize")}</label>
@@ -2242,7 +2277,36 @@ const TournamentPage = () => {
                 </p>
               </div>
             )}
-
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> {t("tournament.availableBoards")}</label>
+              <Select value={String(boards)} onValueChange={(v) => setBoards(Number(v))}>
+                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <SelectItem key={n} value={String(n)}>{n} {t("camera.board")}{n > 1 ? "s" : ""}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground mt-1">{t("tournament.determinesScheduleOrder")}</p>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <div className="min-w-0">
+                <Label htmlFor="live-play-enabled" className="text-sm flex items-center gap-1"><Play className="w-3.5 h-3.5" /> {t("tournament.livePlayFromBracket")}</Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {t("tournament.livePlayDesc")}
+                </p>
+              </div>
+              <Switch id="live-play-enabled" checked={livePlayEnabled} onCheckedChange={setLivePlayEnabled} />
+            </div>
+        </SectionCard>
+        {tournamentMode !== "round-robin" && (
+          <Collapsible className="rounded-xl border border-border bg-card/40">
+            <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left">
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-sm font-display uppercase text-muted-foreground"><Settings2 className="h-3.5 w-3.5" /> {t("tournament.wizardAdvanced")}</span>
+                <span className="mt-0.5 block text-[11px] text-muted-foreground">{t("tournament.wizardAdvancedHint")}</span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 px-4 pb-4">
             {tournamentMode !== "round-robin" && targetSize === "auto" && (() => {
             // Only a real choice once the player count actually sits between two bracket
             // sizes — below/at a clean power of two (or once 64 is already the ceiling with
@@ -2269,28 +2333,6 @@ const TournamentPage = () => {
               </div>
             );
           })()}
-
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block flex items-center gap-1"><Monitor className="w-3.5 h-3.5" /> {t("tournament.availableBoards")}</label>
-              <Select value={String(boards)} onValueChange={(v) => setBoards(Number(v))}>
-                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <SelectItem key={n} value={String(n)}>{n} {t("camera.board")}{n > 1 ? "s" : ""}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-muted-foreground mt-1">{t("tournament.determinesScheduleOrder")}</p>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
-              <div className="min-w-0">
-                <Label htmlFor="live-play-enabled" className="text-sm flex items-center gap-1"><Play className="w-3.5 h-3.5" /> {t("tournament.livePlayFromBracket")}</Label>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {t("tournament.livePlayDesc")}
-                </p>
-              </div>
-              <Switch id="live-play-enabled" checked={livePlayEnabled} onCheckedChange={setLivePlayEnabled} />
-            </div>
-
             {tournamentMode !== "round-robin" && (
               <Collapsible className="bg-muted/30 border border-border rounded-xl">
                 <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
@@ -2316,7 +2358,6 @@ const TournamentPage = () => {
                 </CollapsibleContent>
               </Collapsible>
             )}
-
             {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
               <Collapsible className="bg-muted/30 border border-border rounded-xl">
                 <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
@@ -2358,35 +2399,31 @@ const TournamentPage = () => {
               </CollapsibleContent>
             </Collapsible>
           )}
-          </SectionCard>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+      </>
+    );
 
-          <SectionCard className="space-y-4">
-            <Eyebrow icon={Users}>{t("tournament.participants")}</Eyebrow>
-
-          {/* Doppelturnier */}
-          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <Label htmlFor="doubles-enabled" className="text-sm">{t("tournament.doubles")}</Label>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{t("tournament.doublesDesc")}</p>
-              </div>
-              <Switch id="doubles-enabled" checked={doublesEnabled} onCheckedChange={(v) => { setDoublesEnabled(v); if (!v) dissolveAllTeams(); }} />
-            </div>
-            {doublesEnabled && (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  {t("tournament.doublesHint")} ({players.filter(isTeamName).length} {t("tournament.doublesTeams")}, {singlesInList.length} {t("tournament.doublesSingles")})
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("random")}><Shuffle className="w-3.5 h-3.5 mr-1" />{t("tournament.pairRandom")}</Button>
-                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("balanced")}>{t("tournament.pairBalanced")}</Button>
-                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("order")}>{t("tournament.pairInOrder")}</Button>
-                  {players.some(isTeamName) && <Button size="sm" variant="ghost" className="text-destructive" onClick={dissolveAllTeams}>{t("tournament.dissolveTeams")}</Button>}
-                </div>
-              </div>
-            )}
-          </div>
-
+    const stepPlayers = (
+      <SectionCard className="space-y-4">
+        <Eyebrow icon={Users}>{t("tournament.participants")}</Eyebrow>
+        <div className="flex gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1" role="tablist">
+          {addTabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={activeAddTab === tab.key}
+              onClick={() => setAddTab(tab.key)}
+              className={`shrink-0 flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-display transition-colors ${activeAddTab === tab.key ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {activeAddTab === "members" && (
+          <>
           {/* Add from club members */}
           {dbPlayers.length > 0 && (
             <div>
@@ -2409,7 +2446,9 @@ const TournamentPage = () => {
               </div>
             </div>
           )}
-
+          </>
+        )}
+        {activeAddTab === "type" && (
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.quickEntry")}</label>
             <div className="flex gap-2">
@@ -2421,24 +2460,8 @@ const TournamentPage = () => {
               {t("tournament.sameNamesHint")}
             </p>
           </div>
-
-          {tournaments.length > 0 && (
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.copyFromPreviousTournament")}</label>
-              <Select value="none" onValueChange={(v) => { const found = tournaments.find(x => x.id === v); if (found) addPlayers(found.players); }}>
-                <SelectTrigger className="bg-card border-border"><SelectValue placeholder={t("tournament.chooseTournament")} /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="none">{t("tournament.chooseTournament")} …</SelectItem>
-                  {/* A dropdown's own content already scrolls for overflow — no "mehr anzeigen"/
-                      pagination control makes sense inside a <Select>, just a generous cap. */}
-                  {tournaments.slice(0, 100).map(tourn => (
-                    <SelectItem key={tourn.id} value={tourn.id}>{tourn.name} ({tourn.players.length})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
+        )}
+        {activeAddTab === "guests" && (
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.guestList")}</label>
             <Textarea value={bulkInput} onChange={(e) => setBulkInput(e.target.value)} placeholder={t("tournament.guestListPlaceholder")} />
@@ -2457,7 +2480,27 @@ const TournamentPage = () => {
               {players.length > 1 && <MatchmakingDialog players={matchmakingPool} />}
             </div>
           </div>
-
+        )}
+        {activeAddTab === "previous" && (
+          <>
+          {tournaments.length > 0 && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.copyFromPreviousTournament")}</label>
+              <Select value="none" onValueChange={(v) => { const found = tournaments.find(x => x.id === v); if (found) addPlayers(found.players); }}>
+                <SelectTrigger className="bg-card border-border"><SelectValue placeholder={t("tournament.chooseTournament")} /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="none">{t("tournament.chooseTournament")} …</SelectItem>
+                  {/* A dropdown's own content already scrolls for overflow — no "mehr anzeigen"/
+                      pagination control makes sense inside a <Select>, just a generous cap. */}
+                  {tournaments.slice(0, 100).map(tourn => (
+                    <SelectItem key={tourn.id} value={tourn.id}>{tourn.name} ({tourn.players.length})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          </>
+        )}
           {players.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -2495,8 +2538,43 @@ const TournamentPage = () => {
               )}
             </div>
           )}
-          </SectionCard>
+      </SectionCard>
+    );
 
+    const koLabel = tournamentMode === "round-robin" ? t("tournament.roundRobin") : t("tournament.koSystem");
+    const formatLabel = setsEnabled && gameMode !== "Cricket" && gameMode !== "Extern"
+      ? `${t("stats.firstTo")} ${Math.ceil(bestOfSets / 2)} ${t("game.setsSuffix")} (${t("stats.firstTo")} ${Math.ceil(bestOfLegs / 2)} ${t("game.legsPerSet")})`
+      : `${t("stats.firstTo")} ${Math.ceil(bestOfLegs / 2)}`;
+    const summaryRows: [string, string][] = [
+      [t("tournament.tournamentName"), tournamentName.trim() || t("tournament.bigEvent")],
+      [t("tournament.structureMode"), koLabel],
+      [t("game.gameMode"), gameMode === "Extern" ? t("tournament.playedExternally") : gameMode],
+      [t("tournament.firstToLegsLabel"), formatLabel],
+      [t("tournament.participants"), `${players.length}${doublesEnabled ? ` · ${players.filter(isTeamName).length} ${t("tournament.doublesTeams")}` : ""}`],
+      [t("tournament.availableBoards"), String(boards)],
+      ...(tournamentMode !== "round-robin" ? [[t("tournament.draw"), drawMode === "random" ? t("tournament.random") : drawMode === "fair" ? t("tournament.fair") : t("tournament.manual")] as [string, string]] : []),
+    ];
+    const allIssues = allSetupIssues(setupState).map((key) => t(key));
+    const stepReview = (
+      <>
+        <SectionCard className="space-y-3">
+          <Eyebrow icon={ClipboardCheck}>{t("tournament.summaryTitle")}</Eyebrow>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+            {summaryRows.map(([label, value]) => (
+              <div key={label} className="flex items-baseline justify-between gap-3 border-b border-border/40 py-1.5 text-sm">
+                <dt className="shrink-0 text-muted-foreground">{label}</dt>
+                <dd className="min-w-0 truncate text-right font-medium">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {allIssues.length > 0 ? (
+            <ul className="space-y-0.5 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
+              {allIssues.map((issue) => <li key={issue}>• {issue}</li>)}
+            </ul>
+          ) : (
+            <p className="rounded-lg border border-secondary/40 bg-secondary/10 px-3 py-2 text-xs text-secondary">{t("tournament.summaryReady")}</p>
+          )}
+        </SectionCard>
           {tournamentMode !== "round-robin" && players.length >= 2 && (() => {
             const size = effectiveSize;
             const rounds = Math.log2(size);
@@ -2588,14 +2666,46 @@ const TournamentPage = () => {
               </div>
             );
           })()}
+      </>
+    );
 
-          <Button onClick={startTournament} className="w-full mt-4 font-display uppercase text-lg py-6" disabled={players.length < 2 || savingTournament}>
-            <Play className="w-5 h-5 mr-2" /> {savingTournament ? t("tournament.saving") : editingId ? t("tournament.saveChanges") : t("tournament.startTournament")}
-          </Button>
-        </div>
-      </div>
+    const startButton = (
+      <Button
+        onClick={() => {
+          const stuck = firstStepWithIssue(setupState);
+          if (stuck) { setWizardStep(SETUP_STEP_ORDER.indexOf(stuck)); return; }
+          startTournament();
+        }}
+        className="h-12 w-full font-display text-base uppercase tracking-wide"
+        disabled={players.length < 2 || savingTournament}
+      >
+        <Play className="mr-2 h-5 w-5" /> {savingTournament ? t("tournament.saving") : editingId ? t("tournament.saveChanges") : t("tournament.startTournament")}
+      </Button>
+    );
+
+    return (
+      <TournamentSetupWizard
+        heading={(
+          <div className="relative overflow-hidden mb-5 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-4 shadow-[0_0_30px_hsl(var(--primary)/0.12)]">
+            <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> {t("tournament.bigEventMode")}</div>
+            <h2 className="text-2xl font-display uppercase">{editingId ? t("tournament.editTournamentHeading") : t("tournament.createTournamentHeading")}</h2>
+            <p className="text-sm text-muted-foreground">{t("tournament.upTo64Participants")}</p>
+          </div>
+        )}
+        steps={[
+          { key: "basics", title: t("tournament.wizardBasics"), icon: Trophy, content: stepBasics, issues: issuesFor("basics") },
+          { key: "format", title: t("tournament.wizardFormat"), icon: Target, content: stepFormat, issues: issuesFor("format") },
+          { key: "players", title: t("tournament.wizardPlayers"), icon: Users, content: stepPlayers, issues: issuesFor("players") },
+          { key: "review", title: t("tournament.wizardReview"), icon: ClipboardCheck, content: stepReview, issues: [] },
+        ]}
+        current={wizardStep}
+        onChange={setWizardStep}
+        onExit={leaveSetup}
+        finalAction={startButton}
+      />
     );
   }
+
 
   // ─── BRACKET PHASE ──────────────────────────────
   if (!activeTournament) return null;
