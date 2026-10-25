@@ -21,6 +21,8 @@ import { type Match, type RoundRobinMatch, isRealPlayer, totalRoundsOf, calcStan
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
+import TournamentSetupWizard, { type WizardStep } from "@/components/tournament/setup/TournamentSetupWizard";
+import ManageTabs, { type ManageTab } from "@/components/tournament/manage/ManageTabs";
 import { SectionCard, Eyebrow, RankBadge, RankAvatar } from "@/components/stats/StatPrimitives";
 
 interface Scoring {
@@ -67,6 +69,8 @@ const TournamentSeriesPage = () => {
   const [tournaments, setTournaments] = useState<TournamentLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [detailTab, setDetailTab] = useState("standings");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [savingSeries, setSavingSeries] = useState(false);
   const [name, setName] = useState("");
@@ -86,7 +90,7 @@ const TournamentSeriesPage = () => {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const resetForm = () => {
-    setName(""); setDesc(""); setScoring(DEFAULT_SCORING); setCreating(false); setEditingId(null);
+    setName(""); setDesc(""); setScoring(DEFAULT_SCORING); setCreating(false); setEditingId(null); setWizardStep(0);
   };
 
   const startEdit = (s: Series) => {
@@ -131,6 +135,66 @@ const TournamentSeriesPage = () => {
 
   // ─── SINGLE SERIES DETAIL ────────────────────────
   if (id && activeSeries) {
+    const standingsPanel = (
+      <SectionCard>
+        <Eyebrow icon={Trophy}>{t("series.overallStandings")}</Eyebrow>
+        {standings.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("series.noTournamentsFinishedYet")}</p>
+        ) : (
+          <div className="space-y-1">
+            {pagedStandings.visible.map((s) => {
+              // True rank in the full standings, not the index within this page/slice.
+              const i = standings.indexOf(s);
+              return (
+                <div key={s.name} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${i < 3 ? "bg-muted/50" : "bg-muted/30"}`}>
+                  <RankBadge rank={i + 1} />
+                  <RankAvatar emoji="🎯" rank={i + 1} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate">{s.name}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {s.champions > 0 && `${s.champions}× 🏆 · `}{s.tournaments} {t("series.tournamentsSuffix")}
+                    </p>
+                  </div>
+                  <span className="font-display text-primary text-lg shrink-0">{s.points} {t("tournament.pointsAbbrev")}</span>
+                </div>
+              );
+            })}
+            <ListPaginationFooter list={pagedStandings} />
+          </div>
+        )}
+      </SectionCard>
+
+    );
+    const tournamentsPanel = (
+      <SectionCard>
+        <Eyebrow icon={Layers}>{t("series.tournamentsSuffix")} ({seriesTourneys.length})</Eyebrow>
+        {seriesTourneys.length === 0 ? (
+          <div className="text-center py-4">
+            <p className="text-sm text-muted-foreground mb-3">{t("series.noTournamentsAssigned")}</p>
+            <Button asChild size="sm">
+              <Link to="/tournament">{t("tournament.createTournamentHeading")}</Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {pagedSeriesTourneys.visible.map((t) => (
+              <Link key={t.id} to={`/tournament/${t.id}`} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted transition-colors">
+                <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                  <Trophy className="w-4 h-4" />
+                </div>
+                <span className="text-sm font-medium flex-1 min-w-0 truncate">{t.name}</span>
+                {t.champion && <span className="text-xs text-accent shrink-0">🏆 {t.champion}</span>}
+              </Link>
+            ))}
+            <ListPaginationFooter list={pagedSeriesTourneys} />
+          </div>
+        )}
+      </SectionCard>
+    );
+    const detailTabs: ManageTab[] = [
+      { key: "standings", label: t("series.overallStandings"), icon: Trophy, content: standingsPanel },
+      { key: "tournaments", label: t("series.tournamentsSuffix"), icon: Layers, content: tournamentsPanel },
+    ];
     return (
       <div className="container py-6 animate-slide-up max-w-4xl lg:max-w-6xl mx-auto">
         <Link to="/tournaments/series" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground">
@@ -145,82 +209,19 @@ const TournamentSeriesPage = () => {
           {activeSeries.description && <p className="text-sm text-muted-foreground">{activeSeries.description}</p>}
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <SectionCard>
-          <Eyebrow icon={Trophy}>{t("series.overallStandings")}</Eyebrow>
-          {standings.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("series.noTournamentsFinishedYet")}</p>
-          ) : (
-            <div className="space-y-1">
-              {pagedStandings.visible.map((s) => {
-                // True rank in the full standings, not the index within this page/slice.
-                const i = standings.indexOf(s);
-                return (
-                  <div key={s.name} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${i < 3 ? "bg-muted/50" : "bg-muted/30"}`}>
-                    <RankBadge rank={i + 1} />
-                    <RankAvatar emoji="🎯" rank={i + 1} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate">{s.name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {s.champions > 0 && `${s.champions}× 🏆 · `}{s.tournaments} {t("series.tournamentsSuffix")}
-                      </p>
-                    </div>
-                    <span className="font-display text-primary text-lg shrink-0">{s.points} {t("tournament.pointsAbbrev")}</span>
-                  </div>
-                );
-              })}
-              <ListPaginationFooter list={pagedStandings} />
-            </div>
-          )}
-        </SectionCard>
-
-        <SectionCard>
-          <Eyebrow icon={Layers}>{t("series.tournamentsSuffix")} ({seriesTourneys.length})</Eyebrow>
-          {seriesTourneys.length === 0 ? (
-            <div className="text-center py-4">
-              <p className="text-sm text-muted-foreground mb-3">{t("series.noTournamentsAssigned")}</p>
-              <Button asChild size="sm">
-                <Link to="/tournament">{t("tournament.createTournamentHeading")}</Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {pagedSeriesTourneys.visible.map((t) => (
-                <Link key={t.id} to={`/tournament/${t.id}`} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted transition-colors">
-                  <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
-                    <Trophy className="w-4 h-4" />
-                  </div>
-                  <span className="text-sm font-medium flex-1 min-w-0 truncate">{t.name}</span>
-                  {t.champion && <span className="text-xs text-accent shrink-0">🏆 {t.champion}</span>}
-                </Link>
-              ))}
-              <ListPaginationFooter list={pagedSeriesTourneys} />
-            </div>
-          )}
-        </SectionCard>
-        </div>
+        <ManageTabs tabs={detailTabs} active={detailTab} onChange={setDetailTab} />
       </div>
     );
   }
 
-  // ─── LIST + CREATE ───────────────────────────────
-  return (
-    <div className="container py-6 animate-slide-up max-w-3xl lg:max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Layers className="w-6 h-6 text-accent" />
-          <h2 className="text-2xl font-display uppercase">{t("series.pageTitle")}</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link to="/tournament" className="text-xs text-muted-foreground hover:text-foreground">← {t("tournament.tournaments")}</Link>
-          <Button size="sm" onClick={() => (creating ? resetForm() : setCreating(true))} className="gap-1">
-            <Plus className="w-4 h-4" /> {creating ? t("common.cancel") : t("series.newSeries")}
-          </Button>
-        </div>
-      </div>
-
-      {creating && (
-        <SectionCard glow="primary" className="mb-4 space-y-3">
+  // ─── CREATE / EDIT (steps) ────────────────────────
+  if (creating) {
+    const steps: WizardStep[] = [
+      {
+        key: "basics", title: t("tournament.wizardBasics"), icon: Layers,
+        issues: name.trim() ? [] : [t("series.issueName")],
+        content: (
+          <SectionCard className="space-y-3">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{t("common.name")}</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Winter Series 2026" />
@@ -229,6 +230,13 @@ const TournamentSeriesPage = () => {
             <label className="text-sm text-muted-foreground mb-1 block">{t("common.description")}</label>
             <Textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t("common.optional")} rows={2} />
           </div>
+          </SectionCard>
+        ),
+      },
+      {
+        key: "points", title: t("series.pointDistribution"), icon: Trophy, issues: [],
+        content: (
+          <SectionCard className="space-y-3">
           <div>
             <label className="text-sm text-muted-foreground mb-1 block">{t("series.pointDistribution")}</label>
             {/* Round 3 Rang 15: explanation + live preview — these five numbers are each the FULL
@@ -255,11 +263,42 @@ const TournamentSeriesPage = () => {
               <span>{t("series.participationAbbrev")} {scoring.participation} {t("tournament.pointsAbbrev")}</span>
             </div>
           </div>
-          <Button onClick={saveSeries} className="w-full" disabled={!name.trim() || savingSeries}>
+          </SectionCard>
+        ),
+      },
+    ];
+    return (
+      <TournamentSetupWizard
+        heading={<div className="mb-4 flex items-center gap-3"><Layers className="h-6 w-6 text-accent" /><h2 className="text-2xl font-display uppercase">{editingId ? t("series.editSeries") : t("series.newSeries")}</h2></div>}
+        steps={steps}
+        current={wizardStep}
+        onChange={setWizardStep}
+        onExit={resetForm}
+        finalAction={
+          <Button onClick={saveSeries} className="h-12 w-full font-display text-base uppercase tracking-wide" disabled={!name.trim() || savingSeries}>
             {savingSeries ? t("tournament.saving") : editingId ? t("tournament.saveChanges") : t("series.createSeries")}
           </Button>
-        </SectionCard>
-      )}
+        }
+      />
+    );
+  }
+
+  // ─── LIST ─────────────────────────────────────────
+  return (
+    <div className="container py-6 animate-slide-up max-w-3xl lg:max-w-5xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Layers className="w-6 h-6 text-accent" />
+          <h2 className="text-2xl font-display uppercase">{t("series.pageTitle")}</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link to="/tournament" className="text-xs text-muted-foreground hover:text-foreground">← {t("tournament.tournaments")}</Link>
+          <Button size="sm" onClick={() => { setWizardStep(0); setCreating(true); }} className="gap-1">
+            <Plus className="w-4 h-4" /> {t("series.newSeries")}
+          </Button>
+        </div>
+      </div>
+
 
       {loading ? (
         <div role="status" aria-label={t("common.loading")} className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
