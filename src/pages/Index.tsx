@@ -14,6 +14,10 @@ import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Badge } from "@/components/ui/badge";
 import htuEmblem from "@/assets/club-emblem-color.png";
 import PendingOnlineChallenges from "@/components/home/PendingOnlineChallenges";
+import HomeHighlights, { type LiveTournamentInfo, type MyForm } from "@/components/home/HomeHighlights";
+import { useAuth } from "@/contexts/AuthContext";
+import { loadActiveGameSnapshot } from "@/lib/activeGameSnapshot";
+import { describeResumableGame, findNextTournamentMatch, type TournamentLite } from "@/utils/homeHighlights";
 
 // Icon type shared by lucide's components and DartSpot's own hand-drawn set (DartIcons.tsx) —
 // both accept plain SVGProps and get called the same way (<Icon className="..." />), so this
@@ -78,6 +82,23 @@ const DashboardPage = () => {
   // pure derivation of the roster (no separate loading/async step needed), recomputed whenever the
   // cached roster changes.
   const { data: roster = [] } = usePlayers();
+  const { user } = useAuth();
+  const myPlayer = roster.find((p) => p.user_id === user?.id);
+  // "Für dich": a saved unfinished game, running tournaments and the player's own next match / numbers.
+  const resume = useMemo(() => describeResumableGame(loadActiveGameSnapshot()?.game), []);
+  const [runningTournaments, setRunningTournaments] = useState<TournamentLite[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    supabase.from("tournaments").select("id, name, mode, status, bracket, public_view, public_slug").eq("status", "active").then(({ data }) => {
+      if (!cancelled && data) setRunningTournaments(data as TournamentLite[]);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  const liveTournaments: LiveTournamentInfo[] = runningTournaments.slice(0, 2).map((x) => ({ id: x.id, name: x.name }));
+  const nextMatch = useMemo(() => findNextTournamentMatch(runningTournaments, myPlayer?.name ?? ""), [runningTournaments, myPlayer?.name]);
+  const myForm: MyForm | null = myPlayer && myPlayer.games_played > 0
+    ? { name: myPlayer.name, average: myPlayer.average, elo: myPlayer.elo_rating, wins: myPlayer.games_won, played: myPlayer.games_played, highScore: myPlayer.high_score }
+    : null;
   // Membership anniversaries: joined_year is a manually-entered YEAR only (no day/month), so this
   // can only ever say "N years with the club this year", never pinpoint the exact day — every full
   // year counts (not just round 5/10-year milestones), matching how the feature was requested.
@@ -201,16 +222,16 @@ const DashboardPage = () => {
           size instead of just cropping it. */}
       <div className="gradient-hero rounded-2xl p-4 sm:p-6 pt-5 sm:pt-8 mb-3 sm:mb-4 border border-border relative overflow-hidden text-center">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.1),transparent_65%)]" />
-        <div className="relative flex flex-col items-center">
-          <div className="relative mb-1 sm:mb-2 h-[130px] sm:h-[220px] w-full">
+        <div className="relative flex flex-col items-center lg:flex-row lg:justify-center lg:gap-14">
+          <div className="relative mb-1 sm:mb-2 h-[130px] sm:h-[220px] w-full lg:mb-0 lg:h-[190px] lg:w-[240px] lg:shrink-0">
             <img
               src={watermarkSrc}
               alt={t("players.clubEmblemAlt")}
-              className="absolute top-0 left-1/2 -translate-x-1/2 w-[120px] h-[120px] sm:w-[200px] sm:h-[200px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
+              className="absolute top-0 left-1/2 -translate-x-1/2 w-[120px] h-[120px] sm:w-[200px] sm:h-[200px] lg:h-[170px] lg:w-[170px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
             />
-            <div className="absolute left-1/2 -translate-x-1/2 top-[68px] sm:top-[115px] group">
+            <div className="absolute left-1/2 -translate-x-1/2 top-[68px] sm:top-[115px] lg:top-[100px] group">
               <div className="absolute inset-0 rounded-full bg-primary/25 blur-xl scale-125" />
-              <div className="relative w-[60px] h-[60px] sm:w-[102px] sm:h-[102px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-700 group-hover:-rotate-[6deg]">
+              <div className="relative w-[60px] h-[60px] sm:w-[102px] sm:h-[102px] lg:h-[88px] lg:w-[88px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-700 group-hover:-rotate-[6deg]">
                 <img
                   src={logoUrl}
                   alt={clubName}
@@ -222,6 +243,7 @@ const DashboardPage = () => {
           {/* Optional per-club tagline (DB column, nullable) — this club's is a wordplay on its
               town name (Heiligenhaus), deliberately not translated since an English rendering
               would just lose the point of it. Rendered only when a club has set one. */}
+          <div className="lg:text-left">
           {tagline && (
             <p className="font-graffiti text-lg sm:text-2xl leading-tight -rotate-1 select-none text-primary drop-shadow-[0_0_14px_hsl(var(--primary)/0.45)]">
               {tagline}
@@ -230,10 +252,13 @@ const DashboardPage = () => {
           <p className="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-muted-foreground font-display mt-1 sm:mt-2">
             {t("home.tagline")}
           </p>
+          </div>
         </div>
       </div>
 
       <PendingOnlineChallenges />
+
+      <HomeHighlights resume={resume} live={liveTournaments} next={nextMatch} form={myForm} />
 
       {/* Quick action cards — reverted from the "An der Oché" Broadcast-Arena look (Design-Sprint
           Runde 3 Punkt 2, Richtung A) back to this screen's own normal card language. That look —
