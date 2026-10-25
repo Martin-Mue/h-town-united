@@ -868,6 +868,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "tournament.wizardProgress": { de: "Fortschritt beim Erstellen", en: "Setup progress", fr: "Progression de la création", pl: "Postęp tworzenia", nl: "Voortgang bij het aanmaken", tr: "Oluşturma ilerlemesi" },
   "tournament.wizardStepOf": { de: "Schritt {n} von {m}", en: "Step {n} of {m}", fr: "Étape {n} sur {m}", pl: "Krok {n} z {m}", nl: "Stap {n} van {m}", tr: "Adım {n} / {m}" },
   "tournament.wizardNext": { de: "Weiter", en: "Next", fr: "Suivant", pl: "Dalej", nl: "Volgende", tr: "İleri" },
+  "tournament.doublesPairLater": { de: "Die Teams bildest du im Schritt „Teilnehmer“, sobald die Spieler eingetragen sind.", en: "You form the teams in the “Players” step once the players are added.", fr: "Vous formez les équipes à l'étape « Participants » une fois les joueurs ajoutés.", pl: "Drużyny utworzysz w kroku „Uczestnicy”, gdy gracze są dodani.", nl: "De teams maak je in de stap “Deelnemers” zodra de spelers zijn toegevoegd.", tr: "Takımları oyuncular eklendikten sonra “Katılımcılar” adımında oluşturursun." },
   "tournament.wizardBasics": { de: "Grundlagen", en: "Basics", fr: "Bases", pl: "Podstawy", nl: "Basis", tr: "Temel" },
   "tournament.wizardFormat": { de: "Format", en: "Format", fr: "Format", pl: "Format", nl: "Formaat", tr: "Format" },
   "tournament.wizardPlayers": { de: "Teilnehmer", en: "Players", fr: "Participants", pl: "Uczestnicy", nl: "Deelnemers", tr: "Katılımcılar" },

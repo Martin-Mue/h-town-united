@@ -2202,19 +2202,7 @@ const TournamentPage = () => {
               </div>
               <Switch id="doubles-enabled" checked={doublesEnabled} onCheckedChange={(v) => { setDoublesEnabled(v); if (!v) dissolveAllTeams(); }} />
             </div>
-            {doublesEnabled && (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  {t("tournament.doublesHint")} ({players.filter(isTeamName).length} {t("tournament.doublesTeams")}, {singlesInList.length} {t("tournament.doublesSingles")})
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("random")}><Shuffle className="w-3.5 h-3.5 mr-1" />{t("tournament.pairRandom")}</Button>
-                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("balanced")}>{t("tournament.pairBalanced")}</Button>
-                  <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("order")}>{t("tournament.pairInOrder")}</Button>
-                  {players.some(isTeamName) && <Button size="sm" variant="ghost" className="text-destructive" onClick={dissolveAllTeams}>{t("tournament.dissolveTeams")}</Button>}
-                </div>
-              </div>
-            )}
+            {doublesEnabled && <p className="text-xs text-muted-foreground">{t("tournament.doublesPairLater")}</p>}
           </div>
         </SectionCard>
       </>
@@ -2429,7 +2417,26 @@ const TournamentPage = () => {
       </>
     );
 
+    const doublesPairingPanel = doublesEnabled && (
+      <SectionCard className="space-y-2" glow="primary">
+        <Eyebrow icon={Users}>{t("tournament.doubles")}</Eyebrow>
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            {t("tournament.doublesHint")} ({players.filter(isTeamName).length} {t("tournament.doublesTeams")}, {singlesInList.length} {t("tournament.doublesSingles")})
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("random")}><Shuffle className="w-3.5 h-3.5 mr-1" />{t("tournament.pairRandom")}</Button>
+            <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("balanced")}>{t("tournament.pairBalanced")}</Button>
+            <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("order")}>{t("tournament.pairInOrder")}</Button>
+            {players.some(isTeamName) && <Button size="sm" variant="ghost" className="text-destructive" onClick={dissolveAllTeams}>{t("tournament.dissolveTeams")}</Button>}
+          </div>
+        </div>
+        </SectionCard>
+    );
+
     const stepPlayers = (
+      <>
+      {doublesPairingPanel}
       <SectionCard className="space-y-4">
         <Eyebrow icon={Users}>{t("tournament.participants")}</Eyebrow>
         <div className="flex gap-1 overflow-x-auto rounded-xl bg-muted/50 p-1" role="tablist">
@@ -2563,6 +2570,7 @@ const TournamentPage = () => {
             </div>
           )}
       </SectionCard>
+      </>
     );
 
     const koLabel = tournamentMode === "round-robin" ? t("tournament.roundRobin") : t("tournament.koSystem");
