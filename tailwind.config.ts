@@ -14,6 +14,14 @@ export default {
       },
     },
     extend: {
+      // Low phone screens (Safari with its toolbars, small Androids): the play screen tightens up on these, see `portrait:short:` / `portrait:tiny:`.
+      screens: {
+        short: { raw: "(max-height: 700px)" },
+        tiny: { raw: "(max-height: 600px)" },
+        // a phone held sideways (little height) vs. a tablet (roomy in both directions): the pad and boards lay out differently
+        compactland: { raw: "(orientation: landscape) and (max-height: 699px)" },
+        tablet: { raw: "(min-width: 700px) and (min-height: 700px)" },
+      },
       fontFamily: {
         display: ["Oswald", "sans-serif"],
         body: ["Inter", "sans-serif"],

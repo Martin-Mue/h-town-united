@@ -36,8 +36,8 @@ const DartGlyph = () => (
  */
 const ArenaDartSlots = ({ darts, total, roundLabel, checkout, onTapSlot }: ArenaDartSlotsProps) => (
   <div className="flex items-stretch gap-2">
-    <div className="flex w-16 shrink-0 flex-col items-center justify-center rounded-xl border border-border/60 bg-card/60 py-1.5">
-      <span className="font-display text-2xl leading-none tabular-nums text-foreground">{total}</span>
+    <div className="flex w-16 tablet:w-24 shrink-0 flex-col items-center justify-center rounded-xl border border-border/60 bg-card/60 py-1.5 portrait:short:py-0.5">
+      <span className="font-display text-2xl tablet:text-4xl leading-none tabular-nums text-foreground">{total}</span>
       <span className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{roundLabel}</span>
     </div>
     <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
@@ -49,7 +49,7 @@ const ArenaDartSlots = ({ darts, total, roundLabel, checkout, onTapSlot }: Arena
           <Tag
             key={i}
             {...(Tag === "button" ? { type: "button" as const, onClick: onTapSlot } : {})}
-            className={`relative flex h-14 min-w-0 flex-col items-center justify-center rounded-xl border text-center transition-all ${
+            className={`relative flex h-14 portrait:short:h-10 tablet:h-20 min-w-0 flex-col items-center justify-center rounded-xl border text-center transition-all ${
               dart
                 ? dart.live
                   ? "border-accent/50 bg-accent/10"
@@ -61,7 +61,7 @@ const ArenaDartSlots = ({ darts, total, roundLabel, checkout, onTapSlot }: Arena
           >
             {dart ? (
               <>
-                <span className={`font-display text-xl leading-none ${dart.live ? "text-accent" : "text-foreground"}`}>{dart.label}</span>
+                <span className={`font-display text-xl tablet:text-3xl leading-none ${dart.live ? "text-accent" : "text-foreground"}`}>{dart.label}</span>
                 {dart.label !== String(dart.points) && <span className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">{dart.points}</span>}
               </>
             ) : (
@@ -78,7 +78,7 @@ const ArenaDartSlots = ({ darts, total, roundLabel, checkout, onTapSlot }: Arena
         aria-pressed={checkout.active}
         aria-label={checkout.label}
         title={checkout.label}
-        className={`flex w-11 shrink-0 items-center justify-center rounded-xl border transition-colors ${checkout.active ? "border-primary/50 bg-primary/15 text-primary" : "border-border/60 bg-card/30 text-muted-foreground"}`}
+        className={`flex w-11 tablet:w-16 shrink-0 items-center justify-center rounded-xl border transition-colors ${checkout.active ? "border-primary/50 bg-primary/15 text-primary" : "border-border/60 bg-card/30 text-muted-foreground"}`}
       >
         <Target className="h-5 w-5" />
       </button>

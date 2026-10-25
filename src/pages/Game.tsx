@@ -2728,7 +2728,7 @@ const GamePage = () => {
         onOpenCorrector={arenaCorrect}
       />
       <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
-        <div className="shrink-0 space-y-2 px-3 pb-2 pt-3 landscape:w-[46%] landscape:overflow-y-auto landscape:overscroll-y-contain landscape:pt-2">
+        <div className="shrink-0 space-y-2 px-3 pb-2 pt-3 portrait:short:space-y-1.5 portrait:short:pt-2 tablet:space-y-3 tablet:px-6 tablet:pt-5 landscape:w-[46%] landscape:overflow-y-auto landscape:overscroll-y-contain landscape:pt-2">
           {arenaTop}
           <CheckoutSuggestion
             active={checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
@@ -2765,7 +2765,7 @@ const GamePage = () => {
             </ErrorBoundary>
           )}
         </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-3 pb-2 pt-1 landscape:pt-2">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-3 pb-2 pt-1 portrait:short:pb-1 tablet:px-6 tablet:pt-2 landscape:pt-2">
           {botBoardShown ? (
             <div className="flex min-h-0 flex-1 flex-col items-center gap-1">
               <p className="shrink-0 font-display text-xs uppercase tracking-wide text-muted-foreground">{t("game.botBoardLabel")} {currentPlayer?.isBot ? currentPlayerName : botHold?.name}</p>

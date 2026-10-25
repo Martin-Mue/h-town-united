@@ -20,17 +20,17 @@ interface ArenaActionBarProps {
  * oche over without having to tap a miss for every dart that was not thrown.
  */
 const ArenaActionBar = ({ onUndo, undoDisabled, undoTitle, undoLabel, onCorrect, correctLabel, onNextPlayer, nextPlayerDisabled, nextPlayerLabel }: ArenaActionBarProps) => (
-  <div className="flex shrink-0 items-center gap-2 border-t border-border/40 bg-background px-3 pt-2 landscape:pt-1" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
-    <Button variant="outline" onClick={onUndo} disabled={undoDisabled} title={undoTitle} aria-label={undoLabel} className="h-12 w-12 shrink-0 p-0 landscape:h-10 landscape:w-10">
+  <div className="flex shrink-0 items-center gap-2 border-t border-border/40 bg-background px-3 pt-2 portrait:short:pt-1 compactland:pt-1" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
+    <Button variant="outline" onClick={onUndo} disabled={undoDisabled} title={undoTitle} aria-label={undoLabel} className="h-12 w-12 shrink-0 p-0 portrait:short:h-11 portrait:short:w-11 tablet:h-14 tablet:w-14 compactland:h-10 compactland:w-10">
       <Undo2 className="h-5 w-5" />
     </Button>
     {onCorrect && (
-      <Button variant="outline" onClick={onCorrect} aria-label={correctLabel} title={correctLabel} className="h-12 w-12 shrink-0 p-0 landscape:h-10 landscape:w-10">
+      <Button variant="outline" onClick={onCorrect} aria-label={correctLabel} title={correctLabel} className="h-12 w-12 shrink-0 p-0 portrait:short:h-11 portrait:short:w-11 tablet:h-14 tablet:w-14 compactland:h-10 compactland:w-10">
         <Edit2 className="h-5 w-5" />
       </Button>
     )}
     {onNextPlayer ? (
-      <Button onClick={onNextPlayer} disabled={nextPlayerDisabled} className="h-12 flex-1 gap-2 font-display text-base uppercase tracking-wide landscape:h-10">
+      <Button onClick={onNextPlayer} disabled={nextPlayerDisabled} className="h-12 flex-1 gap-2 font-display text-base uppercase tracking-wide portrait:short:h-11 tablet:h-14 tablet:text-lg compactland:h-10">
         <SkipForward className="h-5 w-5" /> {nextPlayerLabel}
       </Button>
     ) : (

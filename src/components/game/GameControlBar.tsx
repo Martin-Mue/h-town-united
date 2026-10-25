@@ -37,7 +37,7 @@ const GameControlBar = ({ title, scoring, soundEnabled, onToggleSound, onCancelG
   const rowClass = "w-full flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 text-left text-sm hover:bg-muted transition-colors";
 
   return (
-    <div className="shrink-0 bg-background px-3 pt-2 pb-2 landscape:py-1 flex items-center gap-2 border-b border-border/40">
+    <div className="shrink-0 bg-background px-3 pt-2 pb-2 portrait:short:py-1 compactland:py-1 flex items-center gap-2 border-b border-border/40">
       <Button variant="ghost" onClick={onCancelGame} className="h-10 w-10 shrink-0 p-0" aria-label={t("game.cancelGame")}>
         <ChevronLeft className="w-6 h-6" />
       </Button>

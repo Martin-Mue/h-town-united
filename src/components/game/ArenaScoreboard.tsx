@@ -93,7 +93,7 @@ const NameLine = ({ card, labels, big }: { card: ArenaScoreCard; labels: ArenaSc
   <span className="flex min-w-0 items-center gap-1.5">
     {card.isActive && <span className="inline-block h-2 w-2 shrink-0 animate-pulse-glow rounded-full" style={{ background: ACTIVE_HSL }} />}
     {card.isBot && <Bot className="h-3.5 w-3.5 shrink-0" style={{ color: "hsl(155 65% 58%)" }} />}
-    <span className={`truncate font-display font-semibold ${big ? "text-base" : "text-sm"}`} style={{ color: card.isActive ? "hsl(210 15% 97%)" : "hsl(210 15% 72%)" }}>
+    <span className={`truncate font-display font-semibold ${big ? "text-base tablet:text-2xl" : "text-sm tablet:text-lg"}`} style={{ color: card.isActive ? "hsl(210 15% 97%)" : "hsl(210 15% 72%)" }}>
       {card.name}
     </span>
     {card.leading && <span title={labels.leading} aria-label={labels.leading} className="shrink-0 text-[10px]" style={{ color: "hsl(155 65% 58%)" }}>▲</span>}
@@ -107,7 +107,7 @@ const NameLine = ({ card, labels, big }: { card: ArenaScoreCard; labels: ArenaSc
 
 const ActiveBlock = ({ card, side, showLegs, showSets, isCricket, compact, labels, activeExtra }: { card: ArenaScoreCard; side: "left" | "none" } & Omit<ArenaScoreboardProps, "cards">) => (
   <div
-    className={`relative min-w-0 text-left ${compact ? "px-2.5 pb-1 pt-2" : "px-3 pb-2 pt-2.5"}`}
+    className={`relative min-w-0 text-left ${compact ? "px-2.5 pb-1 pt-2" : "px-3 pb-2 pt-2.5 portrait:short:pb-1 portrait:short:pt-1.5 tablet:px-5 tablet:pb-3 tablet:pt-4"}`}
     style={{
       ...clipFor(side),
       color: "hsl(210 15% 92%)",
@@ -127,10 +127,10 @@ const ActiveBlock = ({ card, side, showLegs, showSets, isCricket, compact, label
       </p>
     ) : (
       <div className="mt-1 flex items-end justify-between gap-2">
-        <div className="flex min-w-0 flex-col gap-0.5 pb-1 text-[11px] leading-tight" style={{ color: "hsl(210 15% 68%)" }}>
+        <div className="flex shrink-0 flex-col gap-0.5 pb-1 text-[11px] tablet:text-sm tablet:gap-1 leading-tight" style={{ color: "hsl(210 15% 68%)" }}>
           {!isCricket && !compact && (
             <>
-              <span className="whitespace-nowrap">{labels.lastVisit} <b className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 94%)" }}>{card.lastVisit}</b></span>
+              <span className="whitespace-nowrap portrait:tiny:hidden">{labels.lastVisit} <b className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 94%)" }}>{card.lastVisit}</b></span>
               <span className="whitespace-nowrap">{labels.legAvg} <b className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 94%)" }}>{card.legAvg}</b></span>
               <span className="whitespace-nowrap">{labels.matchAvg} <b className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 94%)" }}>{card.matchAvg}</b></span>
             </>
@@ -145,28 +145,28 @@ const ActiveBlock = ({ card, side, showLegs, showSets, isCricket, compact, label
           {card.streak ? <span className="font-bold" style={{ color: "hsl(25 95% 62%)" }}>🔥 {card.streak} {labels.inARow}</span> : null}
         </div>
         <p
-          className={`font-display leading-[0.95] tabular-nums transition-colors ${compact ? "text-[3.1rem]" : "text-[4.25rem]"} ${card.flashing ? "animate-pulse-glow" : ""}`}
+          className={`font-display leading-[0.95] tabular-nums transition-colors ${compact ? "text-[3.1rem]" : "text-[4.25rem] portrait:short:text-[3rem] portrait:tablet:!text-[5.5rem]"} ${card.flashing ? "animate-pulse-glow" : ""}`}
           style={{ color: scoreColor(card), textShadow: `0 0 24px ${scoreColor(card)}66` }}
         >
           <AnimatedScore value={card.score} />
         </p>
       </div>
     )}
-    {(!compact || card.scoreNote) && <p className="min-h-[14px] text-right text-[10px]" style={{ color: "hsl(210 15% 55%)" }}>{card.scoreNote}</p>}
+    {(!compact || card.scoreNote) && <p className="min-h-[14px] portrait:short:min-h-[2px] text-right text-[10px]" style={{ color: "hsl(210 15% 55%)" }}>{card.scoreNote}</p>}
     {activeExtra}
   </div>
 );
 
 const WaitingBlock = ({ card, side, showLegs, showSets, isCricket, compact, labels }: { card: ArenaScoreCard; side: "right" | "none" } & Omit<ArenaScoreboardProps, "cards" | "activeExtra">) => (
   <div
-    className={`relative min-w-0 text-left ${compact ? "px-2.5 pb-1 pt-2" : "px-3 pb-2 pt-2.5"}`}
+    className={`relative min-w-0 text-left ${compact ? "px-2.5 pb-1 pt-2" : "px-3 pb-2 pt-2.5 portrait:short:pb-1 portrait:short:pt-1.5 tablet:px-5 tablet:pb-3 tablet:pt-4"}`}
     style={{ ...clipFor(side), color: "hsl(210 15% 70%)", background: "hsl(222 28% 8.5%)", paddingLeft: side === "right" ? `${SLANT + 8}px` : undefined }}
   >
     <div className="flex items-center justify-between gap-1.5">
       <NameLine card={card} labels={labels} big={false} />
     </div>
     <div className="mt-0.5 flex justify-end"><Chips card={card} showLegs={showLegs} showSets={showSets} labels={labels} /></div>
-    <p className={`mt-1 text-right font-display leading-none tabular-nums ${compact ? "text-3xl" : "text-4xl"}`} style={{ color: scoreColor(card) }}>
+    <p className={`mt-1 text-right font-display leading-none tabular-nums ${compact ? "text-3xl" : "text-4xl portrait:short:text-3xl tablet:text-6xl"}`} style={{ color: scoreColor(card) }}>
       <AnimatedScore value={card.score} />
     </p>
     {!isCricket && !compact && <p className="mt-1 text-right text-[10px]" style={{ color: "hsl(210 15% 52%)" }}>{labels.legAvg} {card.legAvg}</p>}

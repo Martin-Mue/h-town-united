@@ -82,7 +82,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
   };
 
   return (
-    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
+    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 portrait:short:p-2 tablet:p-4 compactland:p-2">
       {/* Mode switch — always visible, not tucked behind a collapse toggle, since the whole point
           is being able to change tack at any moment mid-game without hunting for the control. The
           voice-scoring trigger sits in the same row (an alternate way to reach the SAME
@@ -94,7 +94,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
           corrupt a real leg. While a visit is half-thrown the locked tabs are dimmed (tooltip
           explains why), which is the whole signal the old always-reserved note line gave. */}
       {onQuickRound && (
-        <div className="flex items-stretch gap-1 mb-2.5 p-0.5 rounded-lg bg-muted/50">
+        <div className="flex items-stretch gap-1 mb-2.5 portrait:short:mb-1.5 compactland:mb-1.5 p-0.5 rounded-lg bg-muted/50">
           <div className="grid grid-cols-3 gap-1 flex-1">
             {(["single", "quick", "total"] as const).map((m) => {
               const locked = midVisit && m !== "single";
@@ -104,7 +104,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
                   onClick={() => !locked && setMode(m)}
                   disabled={locked}
                   title={locked ? `${t("game.modeLockedTooltip")} ${t("game.modeLockedNote")}` : undefined}
-                  className={`py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
+                  className={`py-2 portrait:short:py-1.5 tablet:py-3 tablet:text-sm rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
                     effectiveMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                   } ${locked ? "opacity-40 cursor-not-allowed" : ""}`}
                 >
@@ -162,19 +162,19 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
         <>
           {/* Number grid — 4 wide so each card has real room; Single dominates, Double/Triple sit
               below as their own full-width-of-card buttons. One tap anywhere submits immediately.
-              landscape:grid-cols-10 lays the 20 numbers out as 2 wide rows instead of 5 tall
+              compactland:grid-cols-10 lays the 20 numbers out as 2 wide rows instead of 5 tall
               ones — landscape has width to spare but not much height (its own dedicated column,
               see Game.tsx's playing-phase layout), and 2 rows is what actually leaves enough of
               that height for the mode tabs, special-targets row, and undo/cam/sound to all stay
               on screen without scrolling, not just a cosmetic rearrangement. */}
-          <div className="grid grid-cols-5 landscape:grid-cols-10 gap-1 landscape:gap-1.5 mb-2">
+          <div className="grid grid-cols-5 compactland:grid-cols-10 gap-1 tablet:gap-2 compactland:gap-1.5 mb-2 tablet:mb-3 portrait:short:mb-1.5">
             {BOARD_NUMBERS.map((v) => (
               <div key={v} className="rounded-xl overflow-hidden border border-border/60">
                 <button
                   onClick={() => onThrow(v, 1)}
                   disabled={isDisabled}
                   title={`${t("game.simple")} ${v}`}
-                  className="w-full py-1.5 landscape:py-3 text-base landscape:text-xl font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+                  className="w-full py-1.5 portrait:short:py-1 tablet:py-2.5 compactland:py-2 text-base tablet:text-2xl compactland:text-xl font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
                 >
                   {v}
                 </button>
@@ -183,7 +183,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
                     onClick={() => onThrow(v, 3)}
                     disabled={isDisabled}
                     title={`${t("game.triple")} ${v}`}
-                    className="py-2 landscape:py-2 text-xs landscape:text-sm font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+                    className="py-2 portrait:short:py-1.5 tablet:py-2.5 compactland:py-2 text-xs tablet:text-base compactland:text-sm font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
                   >
                     T
                   </button>
@@ -191,7 +191,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
                     onClick={() => onThrow(v, 2)}
                     disabled={isDisabled}
                     title={`${t("game.double")} ${v}`}
-                    className="py-2 landscape:py-2 text-xs landscape:text-sm font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
+                    className="py-2 portrait:short:py-1.5 tablet:py-2.5 compactland:py-2 text-xs tablet:text-base compactland:text-sm font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
                   >
                     D
                   </button>
@@ -208,7 +208,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
               already uses, and cricket's own targetNumber/hitsToAdd math already special-cased
               baseValue===50 to behave identically to 25×2 — so this doesn't change cricket scoring,
               it just makes that special-case dead code (points: 25*2=50, targetNumber: 25 either way). */}
-          <div className="flex gap-1.5 landscape:gap-2">
+          <div className="flex gap-1.5 compactland:gap-2">
             {[
               { value: 0, mul: 1 as const, label: t("game.miss") },
               { value: 25, mul: 1 as const, label: `${t("game.bull")} (25)` },
@@ -218,7 +218,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
                 key={target.label}
                 onClick={() => onThrow(target.value, target.mul)}
                 disabled={isDisabled}
-                className="flex-1 px-2 py-2 landscape:py-3 rounded-lg text-sm landscape:text-base font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40"
+                className="flex-1 px-2 py-2 portrait:short:px-1 portrait:short:py-1 portrait:short:text-xs tablet:py-3 tablet:text-lg compactland:py-2 rounded-lg text-sm compactland:text-base whitespace-nowrap font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40"
               >
                 {target.label}
               </button>
@@ -228,15 +228,15 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
       )}
 
       {effectiveMode === "quick" && onQuickRound && (
-        // landscape:grid-cols-11 — same "wide, not tall" reasoning as the single-dart grid above:
+        // compactland:grid-cols-11 — same "wide, not tall" reasoning as the single-dart grid above:
         // 22 values fit exactly 2 rows at 11 columns instead of ~4 rows at 6.
-        <div className="grid grid-cols-5 landscape:grid-cols-11 gap-1.5">
+        <div className="grid grid-cols-5 compactland:grid-cols-11 gap-1.5">
           {QUICK_ROUNDS.map((v) => (
             <button
               key={v}
               onClick={() => onQuickRound(v)}
               disabled={isDisabled}
-              className="py-3 landscape:py-4 rounded-lg text-sm landscape:text-base font-bold bg-secondary/20 text-foreground hover:bg-secondary/40 active:scale-95 transition-all disabled:opacity-40"
+              className="py-3 compactland:py-4 rounded-lg text-sm compactland:text-base font-bold bg-secondary/20 text-foreground hover:bg-secondary/40 active:scale-95 transition-all disabled:opacity-40"
             >
               {v}
             </button>
