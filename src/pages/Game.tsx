@@ -25,6 +25,11 @@ import { GameWalkonIntro, GameWalkonStats } from "@/components/game/GameWalkon";
 import GamePostGame from "@/components/game/GamePostGame";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import GameControlBar from "@/components/game/GameControlBar";
+import ArenaScoreboard, { type ArenaScoreCard } from "@/components/game/ArenaScoreboard";
+import ArenaDartSlots, { type ArenaSlotDart } from "@/components/game/ArenaDartSlots";
+import ArenaActionBar from "@/components/game/ArenaActionBar";
+import SimulatedBoard, { type SimulatedDart } from "@/components/game/SimulatedBoard";
+import { markerPositionFor } from "@/utils/dartMarkerPosition";
 import type { CameraScoreCard } from "@/components/game/CameraScoreStrip";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 // Loaded lazily — LiveCamera pulls in onnxruntime-web + vision utilities (~112KB) that a keyboard-
@@ -121,6 +126,7 @@ import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 const WALKON_PREF_KEY = "dart-walkon-enabled";
 const INPUT_MODE_PREF_KEY = "dart-input-mode";
 const SOUND_PREF_KEY = "dart-sound-enabled";
+const PLAY_LAYOUT_PREF_KEY = "dart-play-layout";
 /** Progressive disclosure (Design Rangliste #16): a brand-new member and a club veteran saw the
  *  exact same fully-expanded setup form — round-limit, custom-Cricket, and per-player
  *  double-in/double-out/handicap are real options but not ones a first-time player needs to think
@@ -209,6 +215,16 @@ const GamePage = () => {
     if (typeof window === "undefined") return true;
     const raw = window.localStorage.getItem(SOUND_PREF_KEY);
     return raw ? raw !== "false" : true;
+  });
+  // "arena" = the newer play screen (diagonal scoreboard, dart slots, bottom action bar, drawn board for bots); "classic" = the original.
+  const [playLayout, setPlayLayout] = useState<"classic" | "arena">(() => {
+    if (typeof window === "undefined") return "classic";
+    try { return window.localStorage.getItem(PLAY_LAYOUT_PREF_KEY) === "arena" ? "arena" : "classic"; } catch { return "classic"; }
+  });
+  const togglePlayLayout = () => setPlayLayout((prev) => {
+    const next = prev === "arena" ? "classic" : "arena";
+    try { window.localStorage.setItem(PLAY_LAYOUT_PREF_KEY, next); } catch { /* storage blocked: the choice is just not remembered */ }
+    return next;
   });
   const [callerVoice, setCallerVoiceState] = useState<CallerVoice>(() => getCallerVoice());
   // Derived, not its own state — "off" is now just the caller-voice picker's 4th option instead
@@ -798,6 +814,34 @@ const GamePage = () => {
   const isCricket = game?.mode === "cricket";
   const currentIdx = game?.currentPlayerIndex ?? 0;
   const currentPlayer: PlayerSlot | undefined = game?.players[currentIdx];
+
+  // Latest round progress, for the arena layout's "next player" button: it throws the missing misses one after the other
+  // and has to stop as soon as the visit is over.
+  const roundProgressRef = useRef({ darts: 0, player: -1, finished: false });
+  roundProgressRef.current = { darts: dartsThisRound, player: game?.currentPlayerIndex ?? -1, finished: !!game?.isFinished };
+
+  // The darts of a bot's last visit stay on the drawn board for a moment after the turn has passed on — otherwise the
+  // third dart would be gone the instant it lands.
+  const [botHold, setBotHold] = useState<{ name: string; darts: DartThrow[] } | null>(null);
+  const prevTurnRef = useRef<{ idx: number; isBot: boolean; name: string } | null>(null);
+  useEffect(() => {
+    if (!game) return;
+    const now = { idx: game.currentPlayerIndex, isBot: !!game.players[game.currentPlayerIndex]?.isBot, name: game.players[game.currentPlayerIndex]?.name ?? "" };
+    const prev = prevTurnRef.current;
+    prevTurnRef.current = now;
+    if (prev && prev.isBot && prev.idx !== now.idx) {
+      const throws = game.currentLeg.throws[prev.idx] ?? [];
+      if (throws.length > 0) setBotHold({ name: prev.name, darts: throws.slice(-(throws.length % 3 === 0 ? 3 : throws.length % 3)) });
+    } else if (now.isBot) {
+      setBotHold(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.currentPlayerIndex, game?.currentLeg.legNumber]);
+  useEffect(() => {
+    if (!botHold) return;
+    const id = window.setTimeout(() => setBotHold(null), 2400);
+    return () => window.clearTimeout(id);
+  }, [botHold]);
 
   /** 3-dart round scores for display during game */
   const currentRoundScores = useMemo(() => {
@@ -2559,6 +2603,223 @@ const GamePage = () => {
     `${game.players[game.currentLeg.startingPlayerIndex].name} ${t("game.startsFirst")}`,
   ].filter(Boolean).join(" · ");
 
+  /** One entry per scoreboard side (a team in team mode, else a player) — both the classic and the arena scoreboard read this. */
+  const scoreboardCardList = (game.teams
+          ? game.teams.map((t, ti) => {
+              const memberIdxs = game.players.map((_, pi) => pi).filter((pi) => teamIndexFor(game.teams, pi) === ti);
+              const throws = memberIdxs.flatMap((pi) => game.currentLeg.throws[pi]);
+              return {
+                key: ti, label: t.name,
+                // Doubles-tournament teams are already named "Anna & Ben" — repeating the roster under it is noise.
+                subLabel: (() => { const roster = memberIdxs.map((pi) => game.players[pi].name).join(" & "); return roster === t.name ? undefined : roster; })(),
+                isBot: false, remaining: game.currentLeg.remaining[ti], cricketPoints: game.cricket?.[ti]?.points ?? 0,
+                avg: calculateAverage(throws), p180: count180s(throws), legsWon: game.legsWon[ti],
+                matchAvg: calculateAverage([...game.completedLegs.flatMap((leg) => memberIdxs.flatMap((pi) => leg.throws[pi] ?? [])), ...throws]),
+                dartsInLeg: throws.length, lastVisit: null as number | null,
+                setsWon: game.setsWon?.[ti],
+                isActive: activeTeamIdx === ti,
+              };
+            })
+          : game.players.map((p, i) => ({
+              key: i, label: p.name, subLabel: undefined as string | undefined,
+              isBot: p.isBot, remaining: game.currentLeg.remaining[i], cricketPoints: game.cricket?.[i]?.points ?? 0,
+              avg: calculateAverage(game.currentLeg.throws[i]), p180: count180s(game.currentLeg.throws[i]),
+              matchAvg: calculateAverage([...game.completedLegs.flatMap((leg) => leg.throws[i] ?? []), ...game.currentLeg.throws[i]]),
+              dartsInLeg: game.currentLeg.throws[i].length, lastVisit: lastCompletedVisitTotal(game.currentLeg.throws[i]),
+              legsWon: game.legsWon[i], setsWon: game.setsWon?.[i], isActive: activeIdx === i,
+            }))
+        );
+
+  // ─── ARENA LAYOUT ──────────────────────────────────
+  // The newer play screen: diagonal scoreboard, dart slots, bottom action bar, a drawn board while a bot throws.
+  // Everything here only re-arranges what the classic screen already computes — no scoring logic of its own.
+  const arenaLayout = playLayout === "arena";
+  const layoutToggle = { arena: arenaLayout, onToggle: togglePlayLayout };
+  const arenaLivePoints = cameraEnabled || autodartsEnabled ? pendingLiveDarts.reduce((s, d) => s + d.points, 0) : 0;
+  const arenaCards: ArenaScoreCard[] = scoreboardCardList.map((card) => {
+    const showPreview = card.isActive && arenaLivePoints > 0 && !isCricket;
+    return {
+      key: card.key, name: card.label, subLabel: card.subLabel, isBot: card.isBot, isActive: card.isActive,
+      startedLeg: card.key === cameraStartSlot,
+      score: isCricket ? card.cricketPoints : showPreview ? Math.max(0, card.remaining - arenaLivePoints) : card.remaining,
+      scoreNote: showPreview ? `(${card.remaining} − ${arenaLivePoints} live)` : undefined,
+      legsWon: card.legsWon, setsWon: card.setsWon,
+      legAvg: card.avg.toFixed(1), matchAvg: card.matchAvg.toFixed(1), lastVisit: card.lastVisit === null ? "–" : String(card.lastVisit),
+      p180: card.p180, streak: legStreak?.slot === card.key ? legStreak.count : undefined,
+      throwing: card.isActive && card.isBot && botThinking, flashing: scoreFlash?.slot === card.key, preview: showPreview,
+    };
+  });
+  const arenaLabels = {
+    leg: t("game.legsSuffix"), set: t("game.setsSuffix"), lastVisit: t("game.lastVisitShort"), legAvg: t("game.legAvgShort"),
+    matchAvg: t("game.matchAvgShort"), starts: t("game.startsFirst"), throwing: t("game.isThrowing"), inARow: t("game.legsInARow"),
+  };
+  // "501 | DO | S1 · L2 · FT3" — what is being played, at a glance, in the slim header.
+  const arenaTitle = [
+    isCricket ? "Cricket" : String(game.startScore),
+    isCricket ? null : (currentPlayer?.doubleOut ?? true) ? "DO" : "SO",
+    [
+      game.setsMode ? `S${(game.setsWon ?? []).reduce((s, v) => s + v, 0) + 1}` : null,
+      game.bestOfLegs > 1 ? `L${game.currentLeg.legNumber}` : null,
+      game.bestOfLegs > 1 ? `FT${Math.ceil(game.bestOfLegs / 2)}` : null,
+    ].filter(Boolean).join(" · ") || null,
+  ].filter(Boolean).join(" | ");
+  const arenaSlotDarts: ArenaSlotDart[] = [
+    ...currentRoundScores.map((d) => ({ label: dartLabel(d), points: d.points })),
+    ...(cameraEnabled || autodartsEnabled ? pendingLiveDarts.map((d) => ({ label: dartLabel(d), points: d.points, live: true })) : []),
+  ].slice(0, 3);
+  const arenaActiveExtra = (
+    <>
+      {!isCricket && !(currentPlayer?.doubleOut ?? true) && <p className="text-[10px] text-muted-foreground">({t("game.singleOut")})</p>}
+      {game && !currentPlayer?.isBot && ghostSequences[currentIdx] && (() => {
+        const teamIdx = teamIndexFor(game.teams, currentIdx);
+        const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);
+        if (!cmp) return null;
+        const targetLabel = t("game.yourRecordPace");
+        return (
+          <p className={`text-[10px] font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
+            👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} ${t("game.pointsAhead")} ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} ${t("game.pointsBehind")} ${targetLabel} — ${t("game.stillTimeToCatchUp")}` : `${t("game.exactlyOnPace")} ${targetLabel}`}
+          </p>
+        );
+      })()}
+    </>
+  );
+  const arenaOnlineBanner = onlineMatchId && onlineMatch.connectionStatus !== "connected" ? (
+    <div className="mx-auto flex w-fit items-center justify-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold text-accent">
+      {onlineMatch.connectionStatus === "reconnecting" ? (
+        <><Loader2 className="w-3 h-3 animate-spin" /> {t("game.onlineReconnecting")}</>
+      ) : (
+        <><WifiOff className="w-3 h-3" /> {t("game.onlineDisconnected")}</>
+      )}
+    </div>
+  ) : null;
+  const arenaTop = (
+    <div className="space-y-2">
+      {arenaOnlineBanner}
+      <ArenaScoreboard cards={arenaCards} showLegs={game.bestOfLegs > 1} showSets={!!game.setsMode} isCricket={isCricket} labels={arenaLabels} activeExtra={arenaActiveExtra} />
+      {doubleInBanner}
+      <ArenaDartSlots
+        darts={arenaSlotDarts}
+        total={currentRoundTotal + arenaLivePoints}
+        roundLabel={`${t("game.roundLabel")} ${Math.floor(currentThrows.length / 3) + 1}`}
+        checkout={isCricket ? undefined : { active: checkoutSuggestionEnabled, label: t("game.checkoutToggle"), onToggle: () => setCheckoutSuggestionEnabled(!checkoutSuggestionEnabled) }}
+        onTapSlot={currentPlayer?.isBot || onlineMatchId ? undefined : () => setCorrectorOpen(true)}
+      />
+    </div>
+  );
+  const arenaUndoDisabled = undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId;
+  const arenaCorrect = currentPlayer?.isBot || onlineMatchId ? undefined : () => setCorrectorOpen(true);
+  /** Hands the oche over: every dart still to throw in this round counts as a miss, one after the other so each runs through the normal throw logic. */
+  const skipRestOfRound = () => {
+    const toThrow = 3 - dartsThisRound;
+    const startPlayer = roundProgressRef.current.player;
+    let done = 0;
+    const step = () => {
+      const p = roundProgressRef.current;
+      if (done >= toThrow || p.finished || p.player !== startPlayer || (done > 0 && p.darts === 0)) return;
+      done += 1;
+      stableThrowDart(0, 1);
+      window.setTimeout(step, 90);
+    };
+    step();
+  };
+  const arenaPadDisabled = game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice || (!!onlineMatchId && !onlineMatch.isMyTurn);
+  const arenaActionBarCamera = (
+    <ArenaActionBar
+      onUndo={undoLastDart} undoDisabled={arenaUndoDisabled} undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined} undoLabel={t("game.undo")}
+      onCorrect={arenaCorrect} correctLabel={t("game.correctThrowsTitle")} nextPlayerLabel={t("game.nextPlayer")}
+    />
+  );
+  // The bot's darts have no picture, only a field — each is drawn somewhere inside it. They stay on the board
+  // for a moment after the turn has passed on (botHold), otherwise the last dart would never be seen.
+  const botDartsOnBoard = currentPlayer?.isBot ? currentRoundScores : (botHold?.darts ?? []);
+  const simulatedDarts: SimulatedDart[] = botDartsOnBoard.map((d, i, all) => ({
+    ...(d.boardU !== undefined && d.boardV !== undefined ? { u: d.boardU, v: d.boardV } : markerPositionFor(d.baseValue, d.multiplier, game.currentLeg.legNumber * 101 + i * 31 + d.baseValue * 7 + d.multiplier)),
+    fresh: i === all.length - 1,
+  }));
+  const botBoardShown = !!currentPlayer?.isBot || !!botHold;
+  const arenaManualScreen = (
+    <>
+      <GameControlBar
+        variant="arena" title={arenaTitle} layout={layoutToggle}
+        onUndo={undoLastDart} undoDisabled={arenaUndoDisabled}
+        scoring={autodartsEnabled ? undefined : {
+          cameraEnabled: false,
+          cameraDisabled: !!currentPlayer?.isBot,
+          onSelectManual: () => {},
+          onSelectCamera: () => {
+            if (!clubHasFeature(club?.plan_tier, "camera")) {
+              toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
+              return;
+            }
+            cameraWantedRef.current = true; setCameraEnabled(true);
+          },
+        }}
+        soundEnabled={soundEnabled}
+        onToggleSound={() => setSoundEnabled(!soundEnabled)}
+        onCancelGame={() => setConfirmCancelGame(true)}
+        onOpenCorrector={arenaCorrect}
+      />
+      <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
+        <div className="shrink-0 space-y-2 px-3 pb-2 pt-3 landscape:w-[46%] landscape:overflow-y-auto landscape:overscroll-y-contain landscape:pt-2">
+          {arenaTop}
+          <CheckoutSuggestion
+            active={checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
+            remaining={currentRemaining} playerName={currentPlayerName}
+            personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
+            personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
+          />
+          {cricketBoard}
+          {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
+            <ErrorBoundary label="Autodarts">
+              <Suspense fallback={<div className="flex justify-center py-2"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
+                <AutodartsLiveScore
+                  ref={autodartsLiveScoreRef}
+                  enabled={phase === "playing"}
+                  paused={!!pendingCheckoutChoice || !!pendingTiebreak}
+                  onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsMatchId(null); setAutodartsLastCommittedTurnId(null); }}
+                  onRoundCommit={submitDetectedRound}
+                  onPendingChange={setPendingLiveDarts}
+                  dartsRemaining={Math.max(1, 3 - dartsThisRound)}
+                  playerName={currentPlayerName}
+                  onRequestManualEntry={() => setShowManualInput(true)}
+                  boardNumber={autodartsBoardNumber}
+                  initialMatchId={autodartsMatchId}
+                  initialLastCommittedTurnId={autodartsLastCommittedTurnId}
+                  onMatchIdChange={setAutodartsMatchId}
+                  onTurnCommitted={setAutodartsLastCommittedTurnId}
+                  gameConfig={{
+                    baseScore: game.startScore === 301 ? 301 : 501,
+                    doubleOut: game.players[0]?.doubleOut ?? true,
+                    legs: game.bestOfLegs,
+                  }}
+                />
+              </Suspense>
+            </ErrorBoundary>
+          )}
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-3 pb-2 pt-1 landscape:pt-2">
+          {botBoardShown ? (
+            <div className="flex min-h-0 flex-1 flex-col items-center gap-1">
+              <p className="shrink-0 font-display text-xs uppercase tracking-wide text-muted-foreground">{t("game.botBoardLabel")} {currentPlayer?.isBot ? currentPlayerName : botHold?.name}</p>
+              <SimulatedBoard darts={simulatedDarts} className="min-h-0 w-full flex-1" />
+            </div>
+          ) : (
+            <DartScoreInput isDisabled={arenaPadDisabled}
+              onThrow={stableThrowDart}
+              onQuickRound={!isCricket && !currentPlayer?.isBot ? stableHandleQuickRound : undefined}
+              inputMode={dartInputMode} onInputModeChange={setDartInputMode}
+              dartsThisRound={dartsThisRound} />
+          )}
+        </div>
+      </div>
+      <ArenaActionBar
+        onUndo={undoLastDart} undoDisabled={arenaUndoDisabled} undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined} undoLabel={t("game.undo")}
+        onCorrect={arenaCorrect} correctLabel={t("game.correctThrowsTitle")}
+        onNextPlayer={autodartsEnabled ? undefined : skipRestOfRound} nextPlayerDisabled={arenaPadDisabled} nextPlayerLabel={t("game.nextPlayer")}
+      />
+    </>
+  );
+
   const scoreboardBlock = (
     // Round 4: still `sticky top-0` here because the camera-enabled branch further below renders
     // this inside its own single, plain scrolling container — one level of sticky, no CSS grid
@@ -2584,31 +2845,7 @@ const GamePage = () => {
         </div>
       )}
       <div className={`grid ${numCols} gap-3 landscape:gap-1.5`}>
-        {(game.teams
-          ? game.teams.map((t, ti) => {
-              const memberIdxs = game.players.map((_, pi) => pi).filter((pi) => teamIndexFor(game.teams, pi) === ti);
-              const throws = memberIdxs.flatMap((pi) => game.currentLeg.throws[pi]);
-              return {
-                key: ti, label: t.name,
-                // Doubles-tournament teams are already named "Anna & Ben" — repeating the roster under it is noise.
-                subLabel: (() => { const roster = memberIdxs.map((pi) => game.players[pi].name).join(" & "); return roster === t.name ? undefined : roster; })(),
-                isBot: false, remaining: game.currentLeg.remaining[ti], cricketPoints: game.cricket?.[ti]?.points ?? 0,
-                avg: calculateAverage(throws), p180: count180s(throws), legsWon: game.legsWon[ti],
-                matchAvg: calculateAverage([...game.completedLegs.flatMap((leg) => memberIdxs.flatMap((pi) => leg.throws[pi] ?? [])), ...throws]),
-                dartsInLeg: throws.length, lastVisit: null as number | null,
-                setsWon: game.setsWon?.[ti],
-                isActive: activeTeamIdx === ti,
-              };
-            })
-          : game.players.map((p, i) => ({
-              key: i, label: p.name, subLabel: undefined as string | undefined,
-              isBot: p.isBot, remaining: game.currentLeg.remaining[i], cricketPoints: game.cricket?.[i]?.points ?? 0,
-              avg: calculateAverage(game.currentLeg.throws[i]), p180: count180s(game.currentLeg.throws[i]),
-              matchAvg: calculateAverage([...game.completedLegs.flatMap((leg) => leg.throws[i] ?? []), ...game.currentLeg.throws[i]]),
-              dartsInLeg: game.currentLeg.throws[i].length, lastVisit: lastCompletedVisitTotal(game.currentLeg.throws[i]),
-              legsWon: game.legsWon[i], setsWon: game.setsWon?.[i], isActive: activeIdx === i,
-            }))
-        ).map((card) => {
+        {scoreboardCardList.map((card) => {
           const isActive = card.isActive;
           const activeRound = isActive ? currentRoundScores : [];
           const pendingTotal = isActive && (cameraEnabled || autodartsEnabled)
@@ -2937,6 +3174,7 @@ const GamePage = () => {
       {cameraEnabled ? (
         <>
           <GameControlBar
+            variant={arenaLayout ? "arena" : "classic"} title={arenaTitle} layout={layoutToggle}
             onUndo={undoLastDart}
             undoDisabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId}
             undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined}
@@ -2957,8 +3195,7 @@ const GamePage = () => {
               not fixed above it) — the outer window (and the page behind it) still never scrolls
               while the camera is open, only this one region does. */}
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 pb-3" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
-            {scoreboardBlock}
-            {doubleInBanner}
+            {arenaLayout ? <div className="pt-3 pb-2">{arenaTop}</div> : <>{scoreboardBlock}{doubleInBanner}</>}
             {pendingCheckoutChoice && (
               <div className="mb-3 rounded-2xl border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
                 <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.possibleFinishDetected")}</p>
@@ -3103,8 +3340,9 @@ const GamePage = () => {
               onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
             />
           </div>
+          {arenaLayout && arenaActionBarCamera}
         </>
-      ) : (
+      ) : arenaLayout ? arenaManualScreen : (
         // Manual entry, Round 4 rewrite: the header used to be `sticky top-0` nested one level
         // INSIDE a second, also-`sticky top-0` wrapper div that was itself a CSS Grid track —
         // reported back from real Android devices, twice now (first with backdrop-filter on the
@@ -3121,6 +3359,7 @@ const GamePage = () => {
         // bug. Only the pad + throw history scroll now, in the middle.
         <>
           <GameControlBar
+            layout={layoutToggle}
             onUndo={undoLastDart}
             undoDisabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId}
             undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined}

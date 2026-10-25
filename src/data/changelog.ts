@@ -1054,4 +1054,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Yönetici alanında yapay zekâ eğitmeni artık kamera algılamasının ne sıklıkla düzeltilmesi gerektiğini ve gerçek uca ne kadar yakın olduğunu gösteriyor. Sekme çubuğu yana kaymak yerine alt satıra geçiyor ve son sekmeyi hatırlıyor.",
     },
   },
+  {
+    id: "2026-10-29-arena-layout",
+    date: "2026-10-29",
+    title: {
+      de: "Neues Spiel-Layout zum Ausprobieren",
+      en: "A new play layout to try",
+      fr: "Une nouvelle mise en page de jeu à essayer",
+      pl: "Nowy układ gry do wypróbowania",
+      nl: "Een nieuwe speelindeling om uit te proberen",
+      tr: "Denemeniz için yeni oyun düzeni",
+    },
+    description: {
+      de: "Schräg geschnittene Anzeige mit großer Punktzahl, drei Dart-Felder mit Rundensumme, eine Leiste unten mit Rückgängig, Korrigieren und Nächster Spieler und eine gezeichnete Scheibe, auf der man die Darts des Bots sieht. Einschalten im Spiel unter ⋯ → Neues Spiel-Layout.",
+      en: "A diagonally cut scoreboard with a big score, three dart slots with the round total, a bottom bar with Undo, Correct and Next player, and a drawn board showing the bot's darts. Turn it on in a game under ⋯ → New play layout.",
+      fr: "Un tableau de score à coupe diagonale avec un grand score, trois emplacements de fléchettes avec le total de la volée, une barre en bas avec Annuler, Corriger et Joueur suivant, et une cible dessinée qui montre les fléchettes du bot. À activer en jeu via ⋯ → Nouvelle mise en page.",
+      pl: "Skośnie cięta tablica wyników z dużym wynikiem, trzy pola na lotki z sumą rundy, dolny pasek z Cofnij, Popraw i Następny gracz oraz narysowana tarcza z lotkami bota. Włączysz w grze: ⋯ → Nowy układ gry.",
+      nl: "Een diagonaal gesneden scorebord met grote score, drie dartvakken met de rondesom, een balk onderaan met Ongedaan maken, Corrigeren en Volgende speler en een getekend bord met de darts van de bot. Aanzetten in een spel via ⋯ → Nieuwe speelindeling.",
+      tr: "Büyük skorlu çapraz kesimli skor tablosu, tur toplamlı üç dart alanı, altta Geri al, Düzelt ve Sıradaki oyuncu çubuğu ve botun oklarını gösteren çizilmiş bir tahta. Oyunda ⋯ → Yeni oyun düzeni ile açın.",
+    },
+  },
 ];

@@ -115,6 +115,12 @@ export default {
           "0%": { transform: "translateY(-20vh) rotate(0deg)", opacity: "1" },
           "100%": { transform: "translateY(120vh) rotate(720deg)", opacity: "0" },
         },
+        // a dart sticking into the simulated board: a little overshoot, then it settles
+        "dart-pop": {
+          "0%": { opacity: "0", transform: "scale(1.9)" },
+          "60%": { opacity: "1", transform: "scale(0.92)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -126,6 +132,7 @@ export default {
         "trophy-shine": "trophy-shine 2.4s ease-in-out 0.8s infinite",
         "engrave-in": "engrave-in 1.2s ease-out 1s both",
         "confetti-fall": "confetti-fall linear forwards",
+        "dart-pop": "dart-pop 0.35s ease-out both",
       },
     },
   },
