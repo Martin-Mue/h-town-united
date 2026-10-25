@@ -183,8 +183,10 @@ const DashboardPage = () => {
     return d.toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" });
   };
 
+  const hasFeed = activity.length > 0 || anniversaries.length > 0;
+
   return (
-    <div className="container py-4 animate-slide-up">
+    <div className="container max-w-6xl py-4 animate-slide-up">
       {/* Hero, v6 — "grown from the root": the club tree emblem sits large and muted up top
           with its full canopy visible (that's the recognizable shape — a smaller/blurrier tree
           read as unrecognizable in earlier passes), and the Darts badge — sharp, saturated —
@@ -244,7 +246,7 @@ const DashboardPage = () => {
           instead of a three-way cycle, and theme-aware Tailwind classes instead of hardcoded hsl()
           so this still works correctly if the app ever gets a light-mode toggle. */}
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("home.quickAccess")}</h2>
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {QUICK_ACTIONS.map((action) => (
           <Link key={action.to} to={action.to}
             className="gradient-card border border-border rounded-xl p-4 shadow-elevation-sm hover:border-primary/40 active:scale-95 transition-all group"
@@ -260,6 +262,9 @@ const DashboardPage = () => {
           14 days, derived from data that already exists (see clubActivity.ts). Only shown once
           there's something to show — an empty feed would just be noise between the quick
           actions and the always-present recent-games list below. */}
+      {/* Wide screens: feed + anniversaries on the left, recent games on the right (or, with no feed, the games in two columns). */}
+      <div className={hasFeed ? "lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-8 lg:items-start" : ""}>
+      {hasFeed && <div className="min-w-0">
       {activity.length > 0 && (
         <>
           <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
@@ -308,7 +313,9 @@ const DashboardPage = () => {
           </div>
         </>
       )}
+      </div>}
 
+      <div className="min-w-0">
       {/* Recent games feed */}
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("home.recentGames")}</h2>
       {loadingGames ? (
@@ -323,7 +330,7 @@ const DashboardPage = () => {
           {t("home.noGamesYet")} <span className="text-primary font-medium">{t("home.startFirstGame")}</span>
         </Link>
       ) : (
-        <div className="space-y-2">
+        <div className={hasFeed ? "space-y-2" : "space-y-2 md:grid md:grid-cols-2 md:gap-2 md:space-y-0"}>
           {pagedRecentGames.visible.map((game) => {
             const extra = game.participantNames && game.participantNames.length > 2 ? game.participantNames : null;
             const isExpanded = extra ? expandedGames.has(game.id) : false;
@@ -364,6 +371,8 @@ const DashboardPage = () => {
           <ListPaginationFooter list={pagedRecentGames} />
         </div>
       )}
+      </div>
+      </div>
 
       {/* Lets a returning visitor check what's actually installed on their device against the
           repo — the service worker (see main.tsx) already force-checks for updates every time

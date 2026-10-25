@@ -213,7 +213,7 @@ const GameSetup = (props: GameSetupProps) => {
   }
 
   return (
-    <div className="container py-6 animate-slide-up max-w-lg mx-auto">
+    <div className="container py-6 animate-slide-up max-w-lg md:max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto">
       <h2 className="text-2xl font-display uppercase mb-1 text-center">{t("home.newGame")}</h2>
       {!tournamentLinkName && !leagueLinkRef.current && (
         <div className="flex rounded-lg border border-border bg-muted/30 p-1 mb-4 max-w-xs mx-auto">
@@ -236,7 +236,10 @@ const GameSetup = (props: GameSetupProps) => {
         </div>
       )}
       {!tournamentLinkName && <div className="mb-6" />}
-      <div className="space-y-4">
+      {/* Phone: one column in reading order. From tablet width up: mode/format on the left, players/extras on the right,
+          start button across both — instead of a 512 px strip in the middle of a wide screen. */}
+      <div className="grid gap-4 md:grid-cols-2 md:items-start">
+        <div className="space-y-4">
         <SectionCard className="space-y-4">
         <Eyebrow icon={Target}>{t("game.setupModeSection")}</Eyebrow>
         <div>
@@ -450,6 +453,9 @@ const GameSetup = (props: GameSetupProps) => {
           </SectionCard>
         )}
 
+        </div>
+
+        <div className="space-y-4">
         <SectionCard className="space-y-3">
         <Eyebrow icon={Users}>{t("game.setupPlayersSection")}</Eyebrow>
 
@@ -692,8 +698,9 @@ const GameSetup = (props: GameSetupProps) => {
           <Switch id="walkon-mode" checked={walkonEnabled} onCheckedChange={setWalkonEnabled} />
         </div>
         </SectionCard>
+        </div>
 
-        <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6">
+        <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6 md:col-span-2 md:mx-auto md:max-w-md">
           <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? t("game.startWarmup") : t("game.startGame")}
         </Button>
       </div>
