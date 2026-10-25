@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { manualResultsFor, manualTournamentResults, type TournamentForStats } from "@/utils/tournamentResults";
 import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, ChevronRight, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2, Dumbbell } from "lucide-react";
 import { TRAINING_DRILLS, loadAllRecords, loadStreak, DIFFICULTY_COLORS, DIFFICULTY_LABEL_KEY, type StoredRecordEntry, type StreakState } from "@/lib/trainingRecords";
 import { DartGameIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
@@ -58,6 +59,8 @@ interface GameRecord {
   player1_legs_won: number; player2_legs_won: number; player1_double_rate: number; player2_double_rate: number;
   player1_total_throws: number; player2_total_throws: number; winner_name: string; winner_id: string | null; played_at: string;
   player1_id: string | null; player2_id: string | null; start_score: number; best_of_legs: number; played_online: boolean;
+  /** Set for games played as a tournament match (gameSync.ts) — links the game to its bracket match. */
+  tournament_id?: string | null; match_id?: string | null;
   detail_stats?: {
     players?: DetailStat[];
     /** Legacy shape from before detail_stats covered every player, not just the top 2. */
@@ -123,10 +126,28 @@ const STATS_GAME_LEGS_QUERY_KEY = ["stats-game-legs"] as const;
 const STATS_HIGHLIGHT_CLIPS_QUERY_KEY = ["stats-highlight-clips"] as const;
 const STATS_MANUAL_180_QUERY_KEY = ["stats-manual-180"] as const;
 const STATS_LEAGUE_FIXTURES_QUERY_KEY = ["stats-league-fixtures"] as const;
+const STATS_TOURNAMENTS_QUERY_KEY = ["stats-tournaments"] as const;
+
+/** Tournaments only for their bracket results: a match whose winner was tapped by hand has no saved game. */
+async function fetchStatsTournaments(): Promise<TournamentForStats[]> {
+  const { data, error } = await supabase.from("tournaments").select("id, name, mode, created_at, bracket").order("created_at", { ascending: false }).limit(300);
+  if (error) throw error;
+  return (data ?? []) as unknown as TournamentForStats[];
+}
+
+/** Start of the time window of a "today / week / month / year" filter (0 = no limit). */
+function timeFilterCutoff(filterTime: string): number {
+  const dayMs = 86_400_000;
+  if (filterTime === "today") return new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+  if (filterTime === "week") return Date.now() - 7 * dayMs;
+  if (filterTime === "month") return Date.now() - 30 * dayMs;
+  if (filterTime === "year") return Date.now() - 365 * dayMs;
+  return 0;
+}
 
 async function fetchStatsGames(): Promise<GameRecord[]> {
   const { data, error } = await supabase.from("games")
-    .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats, played_online")
+    .select("id, mode, player1_name, player2_name, player1_average, player2_average, player1_highscore, player2_highscore, player1_legs_won, player2_legs_won, player1_double_rate, player2_double_rate, player1_total_throws, player2_total_throws, winner_name, winner_id, played_at, player1_id, player2_id, start_score, best_of_legs, detail_stats, played_online, tournament_id, match_id")
     .order("played_at", { ascending: false }).limit(500);
   if (error) throw error;
   return (data ?? []) as GameRecord[];
@@ -173,6 +194,7 @@ const StatisticsPage = () => {
   const { data: highlightClips = [], isPending: highlightClipsLoading } = useQuery({ queryKey: STATS_HIGHLIGHT_CLIPS_QUERY_KEY, queryFn: fetchStatsHighlightClips });
   const { data: manual180Entries = [], isPending: manual180Loading } = useQuery({ queryKey: STATS_MANUAL_180_QUERY_KEY, queryFn: fetchStatsManual180Entries });
   const { data: leagueFixtures = [], isPending: leagueFixturesLoading } = useQuery({ queryKey: STATS_LEAGUE_FIXTURES_QUERY_KEY, queryFn: fetchStatsLeagueFixtures });
+  const { data: statsTournaments = [] } = useQuery({ queryKey: STATS_TOURNAMENTS_QUERY_KEY, queryFn: fetchStatsTournaments });
   // storage_path -> short-lived signed URL. The dart-clips bucket is private (see migration
   // 20260816090000_security_advisor_fixes), so plain getPublicUrl() no longer resolves to
   // anything playable — every clip needs a signed URL fetched under the viewer's own auth.
@@ -252,6 +274,13 @@ const StatisticsPage = () => {
       return true;
     });
   }, [games, filterTime, filterYear, filterMode, filterPlayerId, filterBestOf]);
+
+  // Tournament matches decided by hand in the bracket (no saved game) — they count for records and opponents all the same.
+  const manualResults = useMemo(() => {
+    const saved = new Set<string>();
+    games.forEach((g) => { if (g.tournament_id && g.match_id) saved.add(`${g.tournament_id}:${g.match_id}`); });
+    return manualTournamentResults(statsTournaments, saved);
+  }, [games, statsTournaments]);
 
   const availableModes = useMemo(() => {
     const s = new Set<string>();
@@ -939,8 +968,18 @@ const StatisticsPage = () => {
     const avgOf = (list: OwnGame[]) => list.length > 0 ? list.reduce((s, o) => s + o.average, 0) / list.length : 0;
     const overallAverage = avgOf(ownGames);
     const highScore = ownGames.length > 0 ? Math.max(...ownGames.map(o => o.highScore)) : 0;
-    const wins = ownGames.filter(o => o.won).length;
-    const winRate = ownGames.length > 0 ? Math.round((wins / ownGames.length) * 100) : 0;
+    // Tournament matches decided by hand count for the record (not for averages — there are no darts behind them).
+    // Mode / best-of / player filters cannot be applied to them, so those filters leave them out.
+    const cutoff = timeFilterCutoff(filterTime);
+    const manualOwn = filterMode === "all" && filterBestOf === "all" && filterPlayerId === "all"
+      ? manualResultsFor(manualResults, player.name).filter((r) => {
+          const time = new Date(r.date).getTime();
+          return (cutoff === 0 || time >= cutoff) && (filterYear === "all" || new Date(r.date).getFullYear() === Number(filterYear));
+        })
+      : [];
+    const wins = ownGames.filter(o => o.won).length + manualOwn.filter(r => r.won).length;
+    const totalGames = ownGames.length + manualOwn.length;
+    const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
 
     // Average trend (oldest first)
     let runningAvg = 0;
@@ -997,6 +1036,11 @@ const StatisticsPage = () => {
       if (!opponents[o.opponent]) opponents[o.opponent] = { wins: 0, losses: 0 };
       if (o.won) opponents[o.opponent].wins++;
       else opponents[o.opponent].losses++;
+    });
+    manualOwn.forEach(r => {
+      if (!opponents[r.opponent]) opponents[r.opponent] = { wins: 0, losses: 0 };
+      if (r.won) opponents[r.opponent].wins++;
+      else opponents[r.opponent].losses++;
     });
 
     // Nemesis / favorite opponent — needs at least 2 games against them so a single fluke
@@ -1057,8 +1101,8 @@ const StatisticsPage = () => {
     legAverages.sort((a, b) => b.avg - a.avg);
     const top20LegAverages = legAverages.slice(0, 20);
 
-    return { player, average: overallAverage, highScore, winRate, wins, averageTrend, currentStreak, bestStreak, recentForm, recentFormDelta, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames: ownGames.length, top20LegAverages };
-  }, [selectedPlayerId, filteredGames, gameLegs, players, language]);
+    return { player, average: overallAverage, highScore, winRate, wins, averageTrend, currentStreak, bestStreak, recentForm, recentFormDelta, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames, top20LegAverages };
+  }, [selectedPlayerId, filteredGames, gameLegs, players, language, manualResults, filterTime, filterYear, filterMode, filterBestOf, filterPlayerId]);
 
   const pagedRecentForm = usePagedList(playerDetailStats?.recentForm ?? []);
   const pagedTop20LegAverages = usePagedList(playerDetailStats?.top20LegAverages ?? []);
@@ -1308,6 +1352,16 @@ const StatisticsPage = () => {
       const p1Won = isTeam ? g.winner_name === (p1Side === 0 ? g.player1_name : g.player2_name) : g.winner_id === compareP1;
       if (p1Won) p1Wins++; else p2Wins++;
     });
+    // Direct duels decided by hand in a tournament bracket (no saved game, so no darts and no average): they still count
+    // for the score between the two. Mode / best-of / player filters cannot be applied to them and leave them out.
+    const h2hCutoff = timeFilterCutoff(filterTime);
+    const manualDuels = filterMode === "all" && filterBestOf === "all" && filterPlayerId === "all"
+      ? manualResultsFor(manualResults, p1.name).filter((r) => r.opponent === p2.name).filter((r) => {
+          const time = new Date(r.date).getTime();
+          return (h2hCutoff === 0 || time >= h2hCutoff) && (filterYear === "all" || new Date(r.date).getFullYear() === Number(filterYear));
+        })
+      : [];
+    manualDuels.forEach((r) => { if (r.won) p1Wins++; else p2Wins++; });
     // "Beste Game-Ø" is each player's own best single-game average across ALL their games (same
     // definition as the per-player tab's bestGameAvg, and now the same shared source), not scoped
     // to just this pairing — unlike "Ø im Duell" right next to it, which IS deliberately h2h-only.
@@ -1316,7 +1370,7 @@ const StatisticsPage = () => {
     const p2BestGameAvg = playerBestGameAvgById[compareP2] ?? 0;
     const winRate = (p: PlayerStats) => p.games_played > 0 ? Math.round((p.games_won / p.games_played) * 100) : 0;
     return {
-      p1, p2, h2hGames: h2hCount, p1Wins, p2Wins,
+      p1, p2, h2hGames: h2hCount + manualDuels.length, p1Wins, p2Wins,
       // "–" (not "0"/"0.0") when there are no head-to-head games yet — "Ø im Duell" is scoped to
       // just this matchup, unlike Ø Gesamt/Highscore/Beste Game-Ø in the same table (career-wide),
       // so a bare 0 here read as a real (very low) stat instead of "no data for this pairing".
@@ -1332,7 +1386,7 @@ const StatisticsPage = () => {
         { skill: "Checkout %", p1: Number(p1.double_rate), p2: Number(p2.double_rate) },
       ],
     };
-  }, [compareP1, compareP2, players, filteredGames, gameLegs, playerBestGameAvgById]);
+  }, [compareP1, compareP2, players, filteredGames, gameLegs, playerBestGameAvgById, manualResults, filterTime, filterYear, filterMode, filterBestOf, filterPlayerId]);
 
   // The player profile linked to the logged-in account (see Players.tsx's own user_id linkage) —
   // drives the entire "Ich" (personal) scope below. A member can play without ever linking a

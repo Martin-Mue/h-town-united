@@ -1174,4 +1174,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Bir profil yeniden adlandırıldığında turnuvalar, oyunlar ve öne çıkanlar da taşınır. Yöneticiler çift oluşturulmuş profilleri Admin → Üyeler altında birleştirebilir. Yeni oyun son oyunu hatırlar, turnuvaların format şablonları vardır. Çiftler turnuvasında sayı tekse misafir eklenebilir. Boş listeler hemen oluşturma düğmesi sunar. Canlı görünümde metin boyutu (A−/A+) ve projektörler için düğmesiz sakin görünüm var.",
     },
   },
+  {
+    id: "2026-10-31-manual-tournament-results",
+    date: "2026-10-31",
+    title: {
+      de: "Turnier-Ergebnisse von Hand zählen jetzt in der Bilanz",
+      en: "Tournament results entered by hand now count in your record",
+      fr: "Les résultats de tournoi saisis à la main comptent dans le bilan",
+      pl: "Wyniki turniejowe wpisane ręcznie liczą się w bilansie",
+      nl: "Met de hand ingevoerde toernooiresultaten tellen nu mee in je balans",
+      tr: "Elle girilen turnuva sonuçları artık bilançoya dahil",
+    },
+    description: {
+      de: "Wurde der Sieger im Turnierbaum von Hand bestimmt, floss das Spiel bisher nicht in die Statistik ein. Solche Ergebnisse zählen jetzt für Siege, Siegquote, Lieblings- und Angstgegner und den direkten Vergleich. Durchschnitte bleiben unverändert, dafür fehlen die Darts.",
+      en: "If the winner was set by hand in the bracket, that match used to be missing from the statistics. Such results now count for wins, win rate, favourite and nemesis opponents and the head-to-head. Averages stay as they were, since there are no darts behind them.",
+      fr: "Quand le vainqueur était fixé à la main dans le tableau, ce match manquait dans les statistiques. Ces résultats comptent désormais pour les victoires, le taux de victoire, l'adversaire favori et la bête noire ainsi que le face-à-face. Les moyennes restent inchangées, faute de fléchettes.",
+      pl: "Gdy zwycięzcę wskazano ręcznie w drabince, mecz nie trafiał do statystyk. Takie wyniki liczą się teraz do zwycięstw, współczynnika wygranych, ulubionego i znienawidzonego rywala oraz pojedynków bezpośrednich. Średnie bez zmian, bo brak rzutów.",
+      nl: "Als de winnaar met de hand in het schema was bepaald, ontbrak die partij in de statistieken. Zulke resultaten tellen nu mee voor overwinningen, winstpercentage, lievelings- en angsttegenstander en het onderlinge duel. Gemiddelden blijven gelijk, want er zijn geen darts.",
+      tr: "Kazanan şemada elle belirlendiyse bu maç istatistiklerde yoktu. Bu sonuçlar artık galibiyet, galibiyet oranı, favori ve kabus rakip ile karşılaşma bilançosunda sayılır. Ortalamalar aynı kalır, çünkü atış verisi yok.",
+    },
+  },
 ];
