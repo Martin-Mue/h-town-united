@@ -1,5 +1,6 @@
 import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
+import plugin from "tailwindcss/plugin";
 
 export default {
   darkMode: ["class"],
@@ -14,14 +15,6 @@ export default {
       },
     },
     extend: {
-      // Low phone screens (Safari with its toolbars, small Androids): the play screen tightens up on these, see `portrait:short:` / `portrait:tiny:`.
-      screens: {
-        short: { raw: "(max-height: 700px)" },
-        tiny: { raw: "(max-height: 600px)" },
-        // a phone held sideways (little height) vs. a tablet (roomy in both directions): the pad and boards lay out differently
-        compactland: { raw: "(orientation: landscape) and (max-height: 699px)" },
-        tablet: { raw: "(min-width: 700px) and (min-height: 700px)" },
-      },
       fontFamily: {
         display: ["Oswald", "sans-serif"],
         body: ["Inter", "sans-serif"],
@@ -144,5 +137,18 @@ export default {
       },
     },
   },
-  plugins: [tailwindcssAnimate],
+  plugins: [
+    tailwindcssAnimate,
+    // Height- and device-based variants for the play screen. Added as plain variants (not as `screens`): object-valued
+    // screens switch off Tailwind's `min-[...]` / `max-[...]` variants, which other components use.
+    //   short / tiny  = low screens (a phone in Safari with toolbars, a small Android)
+    //   compactland   = a phone held sideways (little height)
+    //   tablet        = roomy in both directions
+    plugin(({ addVariant }) => {
+      addVariant("short", "@media (max-height: 700px)");
+      addVariant("tiny", "@media (max-height: 600px)");
+      addVariant("compactland", "@media (orientation: landscape) and (max-height: 699px)");
+      addVariant("tablet", "@media (min-width: 700px) and (min-height: 700px)");
+    }),
+  ],
 } satisfies Config;
