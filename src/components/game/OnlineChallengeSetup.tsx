@@ -111,7 +111,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
   };
 
   return (
-    <div className="container py-6 animate-slide-up max-w-lg mx-auto">
+    <div className="container py-6 animate-slide-up max-w-lg md:max-w-2xl mx-auto">
       <Button variant="ghost" onClick={onBack} className="mb-4 text-muted-foreground -ml-2">
         <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
       </Button>

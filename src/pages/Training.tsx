@@ -1085,7 +1085,7 @@ const TrainingPage = () => {
     const isCheckoutDrill = CHECKOUT_DRILL_IDS.includes(selectedDrill.id);
 
     return (
-      <div className="container py-6 animate-slide-up max-w-lg mx-auto">
+      <div className="container py-6 animate-slide-up max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto">
         <Button variant="ghost" onClick={exitDrill} className="mb-4 text-muted-foreground">
           <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
         </Button>
@@ -1585,7 +1585,7 @@ const TrainingPage = () => {
     const isComboRisk = selectedDrill.id === "combo-risk";
     const bcNames = drillConfig.bcPlayerNames ?? [`${t("stats.player")} 1`, `${t("stats.player")} 2`];
     return (
-      <div className="container py-6 animate-slide-up max-w-lg mx-auto">
+      <div className="container py-6 animate-slide-up max-w-lg md:max-w-2xl mx-auto">
         <Button variant="ghost" onClick={() => { setSelectedDrill(null); setDrillConfig({}); }} className="mb-4 text-muted-foreground">
           <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
         </Button>

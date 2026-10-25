@@ -25,7 +25,7 @@ const GameWarmup = ({ warmupRemaining, warmupDarts, warmupTotal, setWarmupRemain
   const mm = Math.floor(warmupRemaining / 60);
   const ss = warmupRemaining % 60;
   return (
-    <div className="container py-6 animate-slide-up max-w-lg mx-auto">
+    <div className="container py-6 animate-slide-up max-w-lg md:max-w-2xl mx-auto">
       <div className="text-center mb-4">
         <h2 className="text-2xl font-display uppercase text-primary">{t("game.warmup")}</h2>
         <p className="text-xs text-muted-foreground mt-1">{t("game.warmupDesc")}</p>
