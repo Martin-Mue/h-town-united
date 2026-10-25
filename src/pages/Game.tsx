@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense, type CSSProperties } from "react";
-import { RotateCcw, Trophy, Target, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, WifiOff, Sparkles, Lock } from "lucide-react";
+import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react";
+import { RotateCcw, Trophy, Edit2, X, Users, Undo2, Volume2, VolumeX, Camera, Mic, MicOff, Bot, Plus, Minus, Keyboard, ChevronUp, ChevronDown, Share2, Settings2, WifiOff, Sparkles, Lock } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +45,6 @@ import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowCli
 import OnlineChallengeSetup from "@/components/game/OnlineChallengeSetup";
 import ConfettiBurst from "@/components/ConfettiBurst";
 import AiMatchReport from "@/components/game/AiMatchReport";
-import AnimatedScore from "@/components/AnimatedScore";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, TeamSlot, BotLevel } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
@@ -126,7 +125,6 @@ import { buildRivalryStoryline } from "@/utils/rivalryStoryline";
 const WALKON_PREF_KEY = "dart-walkon-enabled";
 const INPUT_MODE_PREF_KEY = "dart-input-mode";
 const SOUND_PREF_KEY = "dart-sound-enabled";
-const PLAY_LAYOUT_PREF_KEY = "dart-play-layout";
 /** Progressive disclosure (Design Rangliste #16): a brand-new member and a club veteran saw the
  *  exact same fully-expanded setup form — round-limit, custom-Cricket, and per-player
  *  double-in/double-out/handicap are real options but not ones a first-time player needs to think
@@ -215,16 +213,6 @@ const GamePage = () => {
     if (typeof window === "undefined") return true;
     const raw = window.localStorage.getItem(SOUND_PREF_KEY);
     return raw ? raw !== "false" : true;
-  });
-  // "arena" = the newer play screen (diagonal scoreboard, dart slots, bottom action bar, drawn board for bots); "classic" = the original.
-  const [playLayout, setPlayLayout] = useState<"classic" | "arena">(() => {
-    if (typeof window === "undefined") return "classic";
-    try { return window.localStorage.getItem(PLAY_LAYOUT_PREF_KEY) === "arena" ? "arena" : "classic"; } catch { return "classic"; }
-  });
-  const togglePlayLayout = () => setPlayLayout((prev) => {
-    const next = prev === "arena" ? "classic" : "arena";
-    try { window.localStorage.setItem(PLAY_LAYOUT_PREF_KEY, next); } catch { /* storage blocked: the choice is just not remembered */ }
-    return next;
   });
   const [callerVoice, setCallerVoiceState] = useState<CallerVoice>(() => getCallerVoice());
   // Derived, not its own state — "off" is now just the caller-voice picker's 4th option instead
@@ -2464,13 +2452,6 @@ const GamePage = () => {
   const currentRemaining = game.currentLeg.remaining[activeTeamIdx];
   const currentThrows = game.currentLeg.throws[activeIdx];
   const scoreLabels = game.teams ? game.teams.map((tm) => tm.name) : game.players.map((p) => p.name);
-  // 4 stays a plain 2x2 on mobile (already balanced); 5+ gets 3 columns instead of 2 even
-  // below md — otherwise a 6/7/8-player game stacks 3-4 rows tall on a phone, pushing the dart
-  // pad below the thumb-reachable zone before a single dart's been thrown.
-  const focusedSlot = game.teams ? activeTeamIdx : activeIdx;
-  // Two-sided matches: the side on the oche gets the larger column so the number being played
-  // for dominates, the waiting side shrinks to a glanceable summary.
-  const numCols = scoreLabels.length === 2 ? (focusedSlot === 0 ? "grid-cols-[3fr_2fr]" : "grid-cols-[2fr_3fr]") : scoreLabels.length <= 2 ? "grid-cols-2" : scoreLabels.length === 3 ? "grid-cols-3" : scoreLabels.length === 4 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3 md:grid-cols-4";
   const awaitingDoubleIn = !isCricket && (currentPlayer?.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[activeTeamIdx] ?? true);
 
   const doubleInBanner = awaitingDoubleIn ? (
@@ -2530,16 +2511,6 @@ const GamePage = () => {
     </div>
   ) : null;
 
-  // Scoreboard — extracted so it can render in two different DOM positions depending on mode
-  // (see the PLAYING PHASE return below) while staying `shrink-0` pinned above whichever region
-  // actually scrolls in that mode (the info column's throw-history tail in manual mode, or the
-  // camera window's own scrollable content area in camera mode). The sticky/will-change classes
-  // below are harmless when it isn't inside a scrolling ancestor (manual mode's own wrapper is
-  // `shrink-0`, not scrolling) — kept anyway since this same block is shared with camera mode,
-  // where it still matters: it used to sit OUTSIDE that scrollable area entirely there (a
-  // `shrink-0` flex sibling above it, not sticky within it) — visually indistinguishable from
-  // "sticky", but reported as the numbers scrolling separately from the rest of the page, since
-  // the camera window itself is a fixed, non-page-scrolling overlay.
   // Momentum indicator: how many legs in a row the CURRENTLY-LEADING-on-recent-form score slot has
   // just won, walking backward from the most recently completed leg. Deliberately reads
   // game.completedLegs (the whole match's history) rather than anything set-scoped — a streak that
@@ -2633,8 +2604,6 @@ const GamePage = () => {
   // ─── ARENA LAYOUT ──────────────────────────────────
   // The newer play screen: diagonal scoreboard, dart slots, bottom action bar, a drawn board while a bot throws.
   // Everything here only re-arranges what the classic screen already computes — no scoring logic of its own.
-  const arenaLayout = playLayout === "arena";
-  const layoutToggle = { arena: arenaLayout, onToggle: togglePlayLayout };
   const arenaLivePoints = cameraEnabled || autodartsEnabled ? pendingLiveDarts.reduce((s, d) => s + d.points, 0) : 0;
   const arenaCards: ArenaScoreCard[] = scoreboardCardList.map((card) => {
     const showPreview = card.isActive && arenaLivePoints > 0 && !isCricket;
@@ -2740,8 +2709,7 @@ const GamePage = () => {
   const arenaManualScreen = (
     <>
       <GameControlBar
-        variant="arena" title={arenaTitle} layout={layoutToggle}
-        onUndo={undoLastDart} undoDisabled={arenaUndoDisabled}
+        title={arenaTitle}
         scoring={autodartsEnabled ? undefined : {
           cameraEnabled: false,
           cameraDisabled: !!currentPlayer?.isBot,
@@ -2818,279 +2786,6 @@ const GamePage = () => {
         onNextPlayer={autodartsEnabled ? undefined : skipRestOfRound} nextPlayerDisabled={arenaPadDisabled} nextPlayerLabel={t("game.nextPlayer")}
       />
     </>
-  );
-
-  const scoreboardBlock = (
-    // Round 4: still `sticky top-0` here because the camera-enabled branch further below renders
-    // this inside its own single, plain scrolling container — one level of sticky, no CSS grid
-    // underneath it — and that combination was never what real-device reports flagged. The bug
-    // (toolbar missing until the first throw, header losing its sticky tracking right after) kept
-    // reproducing even after removing backdrop-filter, which turned out not to be the actual
-    // cause — the real culprit was the manual-entry branch nesting THIS already-sticky element
-    // inside a second, grid-track-nested sticky wrapper of its own. That branch no longer does
-    // that at all now — see its own comment below for the actual fix. bg-background (no /95, no
-    // blur) is kept here regardless, since a fully opaque header is simply more legible.
-    <div className="sticky top-0 z-30 -mx-4 px-4 pt-3 pb-2 landscape:pt-1.5 landscape:pb-1 bg-background border-b border-border/40 will-change-transform">
-      {/* Online-match connection health — a dropped/backgrounded realtime channel used to fail
-          silently (see useOnlineMatch's connectionStatus doc comment): a player could keep tapping
-          on a board that was quietly no longer live. Shown right at the top of the always-visible
-          sticky scoreboard, not buried in a toast that could be missed. */}
-      {onlineMatchId && onlineMatch.connectionStatus !== "connected" && (
-        <div className="flex items-center justify-center gap-1.5 mb-2 mx-auto w-fit px-3 py-1 rounded-full border border-accent/30 bg-accent/10 text-accent text-[11px] font-semibold">
-          {onlineMatch.connectionStatus === "reconnecting" ? (
-            <><Loader2 className="w-3 h-3 animate-spin" /> {t("game.onlineReconnecting")}</>
-          ) : (
-            <><WifiOff className="w-3 h-3" /> {t("game.onlineDisconnected")}</>
-          )}
-        </div>
-      )}
-      <div className={`grid ${numCols} gap-3 landscape:gap-1.5`}>
-        {scoreboardCardList.map((card) => {
-          const isActive = card.isActive;
-          const activeRound = isActive ? currentRoundScores : [];
-          const pendingTotal = isActive && (cameraEnabled || autodartsEnabled)
-            ? pendingLiveDarts.reduce((s, d) => s + d.points, 0)
-            : 0;
-          const previewRemaining = !isCricket && pendingTotal > 0
-            ? Math.max(0, card.remaining - pendingTotal)
-            : card.remaining;
-          const showPreview = pendingTotal > 0 && !isCricket;
-          // Used to hold at turnStartRemaining (the pre-round value) for manual entry until all
-          // 3 darts landed, only jumping at round-end. That masked any change to `remaining` made
-          // mid-round — including a scorekeeper correcting an earlier throw via ThrowHistoryEditor,
-          // whose effect then silently didn't show until the in-progress round happened to finish.
-          // Always showing the true live value trades away the end-of-round "reveal" but means the
-          // number on screen is never stale.
-          const displayRemaining = previewRemaining;
-          const isFlashing = scoreFlash?.slot === card.key;
-          // "An der Oché" Broadcast-Arena (Design-Sprint Runde 3 Punkt 2, Richtung A): both
-          // player cards now sit on the same fixed-dark broadcast surface used everywhere else
-          // this look was rolled out (see index.css's .broadcast-panel comment) — the active
-          // player's name gets the solid cyan broadcast-tag, the waiting player's the same
-          // angled tag shape recolored neutral, exactly mirroring PublicTournament.tsx's
-          // Board-Übersicht card. Score-state colors (accent on preview/flash, muted while
-          // waiting) stay hardcoded hsl() rather than the usual text-accent/text-muted-foreground
-          // classes for the same reason as everywhere else on this panel: those Tailwind tokens
-          // are tuned per light/dark theme, but this panel's background never follows the theme.
-          const activeHsl = "hsl(185 85% 48%)";
-          const scoreColor = isFlashing || showPreview ? "hsl(45 100% 58%)" : isActive ? "hsl(210 15% 94%)" : "hsl(210 15% 55%)";
-          // Everything below this point still leans on ordinary Tailwind semantic classes
-          // (text-muted-foreground, text-primary, bg-accent/20, …) for the footer badges, dart
-          // pills and active-player extras — instead of hand-converting every one of those to a
-          // hardcoded color, the card overrides the underlying CSS variables themselves to their
-          // *dark*-theme values, the same way the top-level `.dark` block in index.css defines
-          // them. Every semantic class nested inside then resolves correctly no matter the
-          // viewer's own light/dark setting, without needing to touch each usage individually.
-          const darkVarOverrides = {
-            "--background": "222 30% 5%", "--foreground": "210 15% 92%",
-            "--card": "222 25% 9%", "--card-foreground": "210 15% 92%",
-            "--primary": "185 85% 48%", "--primary-foreground": "222 30% 5%",
-            "--secondary": "155 65% 42%", "--secondary-foreground": "0 0% 100%",
-            "--muted": "222 20% 14%", "--muted-foreground": "222 12% 50%",
-            "--accent": "45 100% 58%", "--accent-foreground": "222 30% 5%",
-            "--destructive": "0 72% 51%", "--destructive-foreground": "0 0% 100%",
-            "--border": "222 18% 14%",
-          } as CSSProperties;
-          return (
-            <div key={card.key}
-              className={`relative overflow-hidden rounded-2xl border p-3 landscape:p-2.5 transition-all text-center ${isActive ? "shadow-[0_8px_28px_-10px_hsl(185_85%_48%/0.55)]" : "opacity-70"}`}
-              style={{
-                ...darkVarOverrides,
-                color: "hsl(210 15% 92%)",
-                background: isActive ? "linear-gradient(165deg, hsl(222 28% 13%), hsl(222 30% 7%))" : "hsl(222 28% 8%)",
-                borderColor: isActive ? "hsl(185 85% 48% / 0.7)" : "hsl(222 18% 16%)",
-              }}>
-              {isActive && <span aria-hidden className="absolute inset-x-0 top-0 h-[3px]" style={{ background: activeHsl }} />}
-              <div className="flex items-center justify-between gap-2 text-left">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  {isActive && <span className="inline-block h-2 w-2 shrink-0 rounded-full animate-pulse-glow" style={{ background: activeHsl }} />}
-                  {card.isBot && <Bot className="w-3 h-3 shrink-0" style={{ color: "hsl(155 65% 55%)" }} />}
-                  <span
-                    className="text-sm font-display font-semibold truncate"
-                    style={{ color: isActive ? "hsl(210 15% 96%)" : "hsl(210 15% 70%)" }}
-                  >
-                    {card.label}
-                  </span>
-                </div>
-                {/* Match score as chips next to the name (Sets-Modus: sets lead, the current set's
-                    leg race follows — "2 Sätze · 1 Leg" reads as leading 2 sets and 1 leg up in the
-                    current one, not as two competing numbers). */}
-                {(game.setsMode || game.bestOfLegs > 1) && (
-                  <div className="flex items-center gap-1 shrink-0 text-xs font-display font-bold tabular-nums">
-                    {game.setsMode && (
-                      <span className="rounded-md px-1.5 py-0.5" style={{ background: "hsl(155 65% 42% / 0.2)", color: "hsl(155 65% 60%)" }}>
-                        {card.setsWon ?? 0} {t("game.setsSuffix")}
-                      </span>
-                    )}
-                    {game.bestOfLegs > 1 && (
-                      <span className="rounded-md px-1.5 py-0.5" style={{ background: "hsl(185 85% 48% / 0.18)", color: "hsl(185 85% 62%)" }}>
-                        {card.legsWon} {t("game.legsSuffix")}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-              {card.subLabel && (
-                <p className="text-[10px] truncate mt-0.5" style={{ color: isActive ? "hsl(185 60% 65%)" : "hsl(210 15% 50%)" }}>
-                  {card.subLabel}
-                </p>
-              )}
-              {/* Whose turn within the team — used to be appended to the tiny roster line above
-                  as one long "PlayerA & PlayerB · Am Zug: PlayerA" string, which was both too
-                  small and, once combined with a real roster, too long to read at a glance. Its
-                  own bigger, bolder, highlighted line instead. */}
-              {isActive && game.teams && (
-                <p className="text-sm font-display font-bold truncate mt-0.5" style={{ color: activeHsl }}>
-                  {t("game.turnLabel")}: {currentPlayerName}
-                </p>
-              )}
-              {isActive && card.isBot && botThinking ? (
-                <p className="mx-auto mt-3 mb-2 flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-sm font-display animate-pulse" style={{ color: "hsl(155 65% 60%)", background: "hsl(155 65% 42% / 0.15)", boxShadow: "inset 0 0 0 1px hsl(155 65% 42% / 0.4)" }}><Bot className="w-4 h-4" /> {t("game.isThrowing")}…</p>
-              ) : (
-                // Deliberately the SAME size in both orientations (no landscape: shrink) — this is
-                // the number a player reads from throwing distance, not from right up close, and
-                // landscape has its own dedicated column now (see the playing-phase layout below)
-                // with room to spare, so there's no longer a reason to make it smaller there.
-                <p
-                  className={`${isActive ? "text-7xl" : "text-4xl"} leading-none font-display mt-2 mb-1 transition-all tabular-nums ${isFlashing ? "animate-pulse-glow" : ""}`}
-                  style={{ color: scoreColor, textShadow: isActive ? `0 0 22px ${scoreColor}80` : undefined }}
-                >
-                  <AnimatedScore value={isCricket ? card.cricketPoints : displayRemaining} />
-                </p>
-              )}
-              {/* min-h reserves this line even while showPreview is false, same reasoning as the
-                  pendingLiveDarts/activeRound block below — without it, this line popping in and
-                  out exactly as a checkout comes into range (pendingTotal only goes positive once a
-                  camera/Autodarts dart lands) shifted the sticky scoreboard's own height on every
-                  such dart, the most visible moment for it to happen. */}
-              <p className="text-[10px] text-muted-foreground -mt-1 min-h-[14px]">
-                {showPreview && `(${card.remaining} − ${pendingTotal} live)`}
-              </p>
-              {/* min-h reserves this row's space even before the first dart of the round lands —
-                  it used to only exist once pendingLiveDarts/activeRound had content, so the
-                  card grew taller the instant the first dart registered, shoving everything below
-                  (the number pad, mid-tap) down and forcing a scroll. Reserving the space up
-                  front keeps the layout stable across the whole round instead of just after it starts. */}
-              {/* Landscape: these badges used to be full portrait size (px-2 py-1 text-sm) inside
-                  an already-narrower card (landscape:p-3 above), which routinely wrapped to 2 rows
-                  and pushed the whole sticky header taller than it needed to be, eating into the
-                  pad/history space below. Smaller padding/font + a lower reserved min-height in
-                  landscape keeps the same information at a size actually proportioned to that
-                  layout instead of just reusing portrait's. */}
-              {isActive && (cameraEnabled || autodartsEnabled) && (
-                <div className="mt-1 flex min-h-8 landscape:min-h-6 items-center justify-center gap-1.5 landscape:gap-1 flex-wrap">
-                  {pendingLiveDarts.map((t, idx) => (
-                    <span key={idx} className="rounded bg-accent/20 px-2 py-1 landscape:px-1.5 landscape:py-0.5 text-sm landscape:text-xs font-display text-accent ring-1 ring-accent/40">
-                      {dartLabel(t)}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {isActive && (
-                <div className="mt-1 flex min-h-8 landscape:min-h-6 items-center justify-center gap-1.5 landscape:gap-1 flex-wrap">
-                  {activeRound.map((t, idx) => (
-                    <span key={idx} className="rounded bg-primary/15 px-2 py-1 landscape:px-1.5 landscape:py-0.5 text-sm landscape:text-xs font-display text-primary">
-                      {dartLabel(t)}
-                    </span>
-                  ))}
-                  {activeRound.length > 0 && <span className="ml-1 text-sm landscape:text-xs font-display text-accent">+{currentRoundTotal}</span>}
-                </div>
-              )}
-              {/* Leg average = this leg only; match average = every leg of the match so far. */}
-              <div className={`grid ${isActive ? "grid-cols-2" : "grid-cols-1"} gap-1 mt-1.5`}>
-                {([
-                  // Averages, dart count and last visit are X01 notions — Cricket scores marks/points instead.
-                  ...(!isCricket ? [
-                    [t("game.legAvgShort"), card.avg.toFixed(1)],
-                    [t("game.matchAvgShort"), card.matchAvg.toFixed(1)],
-                    [t("game.dartsThrownShort"), String(card.dartsInLeg)],
-                    [t("game.lastVisitShort"), card.lastVisit === null ? "–" : String(card.lastVisit)],
-                  ] : []),
-                ] as [string, string][]).map(([label, value]) => (
-                  <div key={label} className="flex items-baseline justify-between gap-0.5 rounded-lg bg-white/[0.06] px-1.5 py-1">
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">{label}</span>
-                    <span className="text-xs font-semibold tabular-nums" style={{ color: "hsl(210 15% 92%)" }}>{value}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-center items-center flex-wrap gap-1.5 mt-1.5 text-xs text-muted-foreground">
-                {/* Dart counter lives in the same pill strip as the stats (one footer row instead of
-                    a stats line plus a separate dots line underneath it). */}
-                {isActive && (
-                  <span className="flex items-center gap-1 rounded-full bg-white/[0.06] px-2.5 py-1.5" aria-label={`${dartsThisRound}/3`}>
-                    {[0, 1, 2].map((i) => (
-                      <span key={i} className={`block w-1.5 h-1.5 rounded-full transition-all ${i < dartsThisRound ? "bg-primary" : "bg-muted-foreground/30"}`} />
-                    ))}
-                  </span>
-                )}
-                {/* Sets-Modus: the match-level score (sets) leads, the current set's leg race
-                    (which resets to 0 every new set — see applyLegWin) follows right after it —
-                    "2 Sätze · 1 Leg" reads as "leading 2 sets, and 1 leg up in the current one",
-                    not as two competing/contradicting numbers. */}
-                {legStreak?.slot === card.key && (
-                  <span className="rounded-full bg-orange-400/15 px-2.5 py-0.5 text-orange-400 font-bold animate-pulse-glow">🔥 {legStreak.count} {t("game.legsInARow")}</span>
-                )}
-                {card.p180 > 0 && <span className="rounded-full bg-accent/15 px-2.5 py-0.5 text-accent font-bold">🎯{card.p180}</span>}
-              </div>
-              {/* Active-player extras folded into the card itself (single-out note, dart counter,
-                  ghost pace) instead of a second section repeating the same turn info below the
-                  whole grid — that duplicate section was the main reason the playing screen still
-                  needed to scroll on short phones, and the active card already carries enough
-                  visual weight (border glow, pulse dot, highlighted name) that restating "X is
-                  throwing" next to it added no information, only height. */}
-              {isActive && (
-                <>
-                  {!isCricket && !(currentPlayer?.doubleOut ?? true) && (
-                    <p className="text-[10px] text-muted-foreground mt-1">({t("game.singleOut")})</p>
-                  )}
-                  {game && !currentPlayer?.isBot && ghostSequences[currentIdx] && (() => {
-                    const teamIdx = teamIndexFor(game.teams, currentIdx);
-                    const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);
-                    if (!cmp) return null;
-                    const targetLabel = t("game.yourRecordPace");
-                    return (
-                      <p className={`text-[10px] mt-1 font-medium ${cmp.aheadBy > 0 ? "text-secondary" : cmp.aheadBy < 0 ? "text-muted-foreground" : "text-accent"}`}>
-                        {/* "Behind" used to be the only flat, silent case here (no "!" the way "ahead"
-                            gets one) — a bare live deficit with no balancing thought, dart after dart,
-                            all leg long. Gets its own closing note now instead of staying silent. */}
-                        👻 {cmp.aheadBy > 0 ? `${cmp.aheadBy} ${t("game.pointsAhead")} ${targetLabel}!` : cmp.aheadBy < 0 ? `${Math.abs(cmp.aheadBy)} ${t("game.pointsBehind")} ${targetLabel} — ${t("game.stillTimeToCatchUp")}` : `${t("game.exactlyOnPace")} ${targetLabel}`}
-                      </p>
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Leg/round info bar — always shown now (used to be gated on bestOfLegs > 1, so a single-leg
-          match never showed who started at all). With Sets-Modus active this also names which set
-          is currently being played, since `game.currentLeg.legNumber` is a running count across
-          the WHOLE match (never reset at a set boundary, see applyLegWin) and would otherwise read
-          like "Leg 7" deep into a sets match with no indication that's actually early in set 3.
-          Round number is the CURRENT player's own trip count (their throws so far, including this
-          round's partial progress, chunked into 3s) — there was previously no indication anywhere
-          on screen of which round of the leg was in progress. */}
-      <div className="flex items-center justify-between gap-2 text-xs landscape:text-[10px] text-muted-foreground mt-2 landscape:mt-1">
-        <span className="min-w-0 truncate">
-        {game.setsMode && <>{t("game.set")} {(game.setsWon ?? []).reduce((s, v) => s + v, 0) + 1} · </>}
-        {game.bestOfLegs > 1 && <>{t("game.leg")} {game.currentLeg.legNumber} · </>}
-        {t("game.roundLabel")} {Math.floor(currentThrows.length / 3) + 1} · {game.players[game.currentLeg.startingPlayerIndex].name} {t("game.startsFirst")}
-        </span>
-        {/* Checkout routes on demand: one tap shows/hides the suggestion card (same setting as the menu sheet's toggle). */}
-        {!isCricket && (
-          <button
-            type="button"
-            onClick={() => setCheckoutSuggestionEnabled(!checkoutSuggestionEnabled)}
-            aria-pressed={checkoutSuggestionEnabled}
-            className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors ${checkoutSuggestionEnabled ? "border-primary/40 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
-          >
-            <Target className="w-3 h-3" /> {t("game.checkoutToggle")}
-          </button>
-        )}
-      </div>
-    </div>
   );
 
   // ─── PLAYING PHASE ─────────────────────────────────
@@ -3174,10 +2869,7 @@ const GamePage = () => {
       {cameraEnabled ? (
         <>
           <GameControlBar
-            variant={arenaLayout ? "arena" : "classic"} title={arenaTitle} layout={layoutToggle}
-            onUndo={undoLastDart}
-            undoDisabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId}
-            undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined}
+            title={arenaTitle}
             scoring={{
               cameraEnabled: true,
               cameraDisabled: false,
@@ -3195,7 +2887,7 @@ const GamePage = () => {
               not fixed above it) — the outer window (and the page behind it) still never scrolls
               while the camera is open, only this one region does. */}
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 pb-3" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
-            {arenaLayout ? <div className="pt-3 pb-2">{arenaTop}</div> : <>{scoreboardBlock}{doubleInBanner}</>}
+            <div className="pt-3 pb-2">{arenaTop}</div>
             {pendingCheckoutChoice && (
               <div className="mb-3 rounded-2xl border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
                 <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.possibleFinishDetected")}</p>
@@ -3340,133 +3032,9 @@ const GamePage = () => {
               onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
             />
           </div>
-          {arenaLayout && arenaActionBarCamera}
+          {arenaActionBarCamera}
         </>
-      ) : arenaLayout ? arenaManualScreen : (
-        // Manual entry, Round 4 rewrite: the header used to be `sticky top-0` nested one level
-        // INSIDE a second, also-`sticky top-0` wrapper div that was itself a CSS Grid track —
-        // reported back from real Android devices, twice now (first with backdrop-filter on the
-        // inner sticky element, then without it — see scoreboardBlock's own comment above), as:
-        // the whole Undo/Cam/Sound/Cancel bar missing completely before the first throw, only
-        // snapping into place once a dart is entered, and the header losing its sticky tracking
-        // (becoming scrollable again) right after. Neither backdrop-filter removal nor
-        // will-change-transform fixed it, because neither was the actual cause — nested sticky
-        // positioning inside a CSS Grid track is itself a known compositing trouble spot on some
-        // Android WebView/Chrome builds. This drops position:sticky from this branch entirely:
-        // header and toolbar are now plain `shrink-0` flex siblings that never scroll and never
-        // need to "stick" to anything — exactly the same pattern the camera-enabled branch's own
-        // bottom bar already uses (a few hundred lines up), which was never reported to have this
-        // bug. Only the pad + throw history scroll now, in the middle.
-        <>
-          <GameControlBar
-            layout={layoutToggle}
-            onUndo={undoLastDart}
-            undoDisabled={undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId}
-            undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined}
-            scoring={autodartsEnabled ? undefined : {
-              cameraEnabled: false,
-              cameraDisabled: !!currentPlayer?.isBot,
-              onSelectManual: () => {},
-              onSelectCamera: () => {
-                if (!clubHasFeature(club?.plan_tier, "camera")) {
-                  toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
-                  return;
-                }
-                cameraWantedRef.current = true; setCameraEnabled(true);
-              },
-            }}
-            soundEnabled={soundEnabled}
-            onToggleSound={() => setSoundEnabled(!soundEnabled)}
-            onCancelGame={() => setConfirmCancelGame(true)}
-            onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
-          />
-
-          <div className="shrink-0 bg-background px-4">
-            {scoreboardBlock}
-            {doubleInBanner}
-            {/* Screen-Audit Richtung 1 — same always-mounted fix as the camera branch above. */}
-            <CheckoutSuggestion
-              active={checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
-              remaining={currentRemaining} playerName={currentPlayerName}
-              personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
-              personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
-            />
-            {cricketBoard}
-
-            {/* ROOT CAUSE of "Autodarts never shows anything, ever" (found 2026-09-16 via a local
-                auth-bypassed render test, not live device access): this AutodartsLiveScore block
-                previously existed ONLY in the `cameraEnabled` branch above (copied next to
-                LiveCamera when Autodarts was first added). Camera and Autodarts are mutually
-                exclusive scoring sources -- cameraEnabled is never true while playing an
-                Autodarts-scored game -- so this branch (the actual "manual entry" layout, which is
-                what always renders whenever Autodarts is active) never had it at all. Every
-                backend fix made today (device assignment, crash-recovery persistence, ...) was
-                real and worth keeping, but none of it could ever have been exercised live: the
-                component never mounted, so createFreeGameLobby/autodarts_start_match was never
-                even called. */}
-            {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
-              <ErrorBoundary label="Autodarts">
-                <Suspense fallback={<div className="flex justify-center py-2"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
-                  <AutodartsLiveScore
-                    ref={autodartsLiveScoreRef}
-                    enabled={phase === "playing"}
-                    paused={!!pendingCheckoutChoice || !!pendingTiebreak}
-                    onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsMatchId(null); setAutodartsLastCommittedTurnId(null); }}
-                    onRoundCommit={submitDetectedRound}
-                    onPendingChange={setPendingLiveDarts}
-                    dartsRemaining={Math.max(1, 3 - dartsThisRound)}
-                    playerName={currentPlayerName}
-                    onRequestManualEntry={() => setShowManualInput(true)}
-                    boardNumber={autodartsBoardNumber}
-                    initialMatchId={autodartsMatchId}
-                    initialLastCommittedTurnId={autodartsLastCommittedTurnId}
-                    onMatchIdChange={setAutodartsMatchId}
-                    onTurnCommitted={setAutodartsLastCommittedTurnId}
-                    gameConfig={{
-                      baseScore: game.startScore === 301 ? 301 : 501,
-                      doubleOut: game.players[0]?.doubleOut ?? true,
-                      legs: game.bestOfLegs,
-                    }}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
-
-          {/* Pad + history — the only part of this layout that scrolls now. Portrait stacks
-              pad-then-history (the pad is the primary, most-frequently-tapped control, so it comes
-              first); landscape splits them into two columns side by side (1fr history : 2fr pad,
-              same ratio as before), so reaching history no longer means scrolling past the pad in
-              that orientation either. */}
-          <div className="flex-1 min-h-0 grid grid-cols-1 landscape:grid-cols-[1fr_2fr] overflow-y-auto overscroll-y-contain landscape:overflow-hidden px-4">
-            <div className="pt-3 pb-3 landscape:col-start-2 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
-              <DartScoreInput isDisabled={game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice}
-                onThrow={stableThrowDart}
-                onQuickRound={!isCricket && !currentPlayer?.isBot ? stableHandleQuickRound : undefined}
-                inputMode={dartInputMode} onInputModeChange={setDartInputMode}
-                dartsThisRound={dartsThisRound} />
-            </div>
-
-            {/* Correcting a mis-tap now scrolls independently of the pad instead of always sitting
-                below its full height — a short scroll away in portrait, or right alongside the pad
-                with no scrolling at all in landscape. */}
-            <div className="pb-3 landscape:col-start-1 landscape:row-start-1 landscape:min-h-0 landscape:overflow-y-auto landscape:overscroll-y-contain" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
-              <ThrowHistoryEditor
-                throws={currentThrows}
-                playerName={currentPlayerName}
-                editModeOn={false}
-                onToggleEditMode={() => {}}
-                openChipIdx={null}
-                onOpenChipChange={() => {}}
-                onEditThrow={() => {}}
-                onDeleteThrow={() => {}}
-                readOnly
-                onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
-              />
-            </div>
-          </div>
-        </>
-      )}
+      ) : arenaManualScreen}
 
       {/* "Wurf korrigieren" — replaces the old inline always-mounted edit toggle. Dialog-local
           state (editingChipIdx is the only piece carried over, and it's harmless on its own)
