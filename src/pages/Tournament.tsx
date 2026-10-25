@@ -883,6 +883,17 @@ const TournamentPage = () => {
     return Math.min(64, Math.max(floor, Number(targetSize)));
   }, [targetSize, autoSizePreference, players.length]);
 
+  // Changing the tournament-wide mode or first-to carries over to every round that still has the old default, so a
+  // round the organiser set to something else on purpose keeps its own value (before, rounds stayed at whatever the
+  // setup started with: pick 301 and every round still played 501).
+  const previousDefaultsRef = useRef({ mode: gameMode, bestOf: bestOfLegs });
+  useEffect(() => {
+    const before = previousDefaultsRef.current;
+    previousDefaultsRef.current = { mode: gameMode, bestOf: bestOfLegs };
+    if (before.mode === gameMode && before.bestOf === bestOfLegs) return;
+    setRoundConfigs((prev) => prev.map((c) => ({ mode: c.mode === before.mode ? gameMode : c.mode, bestOf: c.bestOf === before.bestOf ? bestOfLegs : c.bestOf })));
+  }, [gameMode, bestOfLegs]);
+
   // Auto-generate round configs when target size or defaults change. Reads effectiveSize
   // directly (rather than re-deriving a size from targetSize/autoSizePreference independently,
   // as this used to) so this array's length always actually matches the bracket that gets
@@ -2000,6 +2011,7 @@ const TournamentPage = () => {
     setEditingSource(t);
     setTournamentName(t.name);
     setTournamentMode(t.mode);
+    previousDefaultsRef.current = { mode: t.game_mode || "501", bestOf: t.best_of_legs || 3 };
     setGameMode(t.game_mode || "501");
     setBestOfLegs(t.best_of_legs || 3);
     setSetsEnabled(!!t.best_of_sets);
@@ -2299,6 +2311,57 @@ const TournamentPage = () => {
               <Switch id="live-play-enabled" checked={livePlayEnabled} onCheckedChange={setLivePlayEnabled} />
             </div>
         </SectionCard>
+        {/* Rounds can differ (a longer final, Cricket in the semi-finals …), so this stays a visible card of its own, not an advanced setting. */}
+        {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (() => {
+          const differs = roundConfigs.some((c) => c.mode !== gameMode || c.bestOf !== bestOfLegs);
+          return (
+            <Collapsible defaultOpen={differs} className="rounded-xl border border-border bg-card/40">
+              <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left">
+                <span className="min-w-0">
+                  <span className="flex flex-wrap items-center gap-2 text-sm font-display uppercase text-muted-foreground">
+                    <Sparkles className="h-3.5 w-3.5" /> {t("tournament.modePerRound")}
+                    {differs && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] normal-case text-accent">{t("tournament.roundsModeCustom")}</span>}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-muted-foreground">{t("tournament.roundsModeHint")}</span>
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="px-4 pb-4">
+                <div className="space-y-2">
+                  {roundConfigs.map((cfg, idx) => {
+                  // A trailing slot past the last real round is round 0 (preliminary round) — see
+                  // the round-configs generation effect's comment for why it's appended there
+                  // instead of taking index 0.
+                  const hasPrelimSlot = players.length > effectiveSize;
+                  const total = hasPrelimSlot ? roundConfigs.length - 1 : roundConfigs.length;
+                  const isPrelimSlot = hasPrelimSlot && idx === total;
+                  const label = roundLabelFor(isPrelimSlot ? 0 : idx + 1, total, t);
+                  return (
+                    <div key={idx} className="grid grid-cols-[80px_1fr_1fr] gap-2 items-center">
+                      <span className="text-xs font-display uppercase text-muted-foreground">{label}</span>
+                      <Select value={cfg.mode} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, mode: v } : c))}>
+                        <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          <SelectItem value="501">501</SelectItem>
+                          <SelectItem value="301">301</SelectItem>
+                          <SelectItem value="Cricket">Cricket</SelectItem>
+                          <SelectItem value="Extern">{t("tournament.external")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={String(cfg.bestOf)} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, bestOf: Number(v) } : c))}>
+                        <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })()}
         {tournamentMode !== "round-robin" && (
           <Collapsible className="rounded-xl border border-border bg-card/40">
             <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left">
@@ -2360,47 +2423,6 @@ const TournamentPage = () => {
                 </CollapsibleContent>
               </Collapsible>
             )}
-            {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (
-              <Collapsible className="bg-muted/30 border border-border rounded-xl">
-                <CollapsibleTrigger className="group w-full flex items-center justify-between gap-2 px-3 py-3 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> {t("tournament.modePerRound")}</span>
-                  <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
-                </CollapsibleTrigger>
-                <CollapsibleContent className="px-3 pb-3">
-                <div className="space-y-2">
-                  {roundConfigs.map((cfg, idx) => {
-                  // A trailing slot past the last real round is round 0 (preliminary round) — see
-                  // the round-configs generation effect's comment for why it's appended there
-                  // instead of taking index 0.
-                  const hasPrelimSlot = players.length > effectiveSize;
-                  const total = hasPrelimSlot ? roundConfigs.length - 1 : roundConfigs.length;
-                  const isPrelimSlot = hasPrelimSlot && idx === total;
-                  const label = roundLabelFor(isPrelimSlot ? 0 : idx + 1, total, t);
-                  return (
-                    <div key={idx} className="grid grid-cols-[80px_1fr_1fr] gap-2 items-center">
-                      <span className="text-xs font-display uppercase text-muted-foreground">{label}</span>
-                      <Select value={cfg.mode} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, mode: v } : c))}>
-                        <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-card border-border">
-                          <SelectItem value="501">501</SelectItem>
-                          <SelectItem value="301">301</SelectItem>
-                          <SelectItem value="Cricket">Cricket</SelectItem>
-                          <SelectItem value="Extern">{t("tournament.external")}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={String(cfg.bestOf)} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, bestOf: Number(v) } : c))}>
-                        <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-card border-border">
-                          {BEST_OF_OPTIONS.map(n => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  );
-                })}
-              </div>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
             </CollapsibleContent>
           </Collapsible>
         )}
