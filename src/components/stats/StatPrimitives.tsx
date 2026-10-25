@@ -9,11 +9,10 @@ import type { LucideIcon } from "lucide-react";
  *  their own data logic, they only lay out values already computed elsewhere. */
 
 /** Small uppercase section label, optionally with a leading icon — the one recurring heading
- *  style across every card (mirrors the app's existing `font-display text-sm uppercase
- *  text-muted-foreground` convention, just centralized). */
+ *  style across every card (light text with a cyan icon so it stands out from the card content, tinted variants for hero cards). */
 export const Eyebrow = ({ icon: Icon, children, tone = "muted" }: { icon?: LucideIcon; children: ReactNode; tone?: "muted" | "primary" | "accent" }) => (
-  <h3 className={`font-display text-sm uppercase mb-3 flex items-center gap-2 ${tone === "primary" ? "text-primary" : tone === "accent" ? "text-accent" : "text-muted-foreground"}`}>
-    {Icon && <Icon className="w-4 h-4" />}
+  <h3 className={`font-display text-[0.95rem] uppercase tracking-wide mb-3 flex items-center gap-2 ${tone === "primary" ? "text-primary" : tone === "accent" ? "text-accent" : "text-foreground"}`}>
+    {Icon && <Icon className={`w-4 h-4 shrink-0 ${tone === "muted" ? "text-primary" : ""}`} />}
     {children}
   </h3>
 );
