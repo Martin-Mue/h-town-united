@@ -1671,6 +1671,10 @@ export type Database = {
       }
     }
     Functions: {
+      merge_players: {
+        Args: { p_keep: string; p_remove: string }
+        Returns: Json
+      }
       _autodarts_cached_token: {
         Args: { p_board_id: string; p_club_id: string }
         Returns: string

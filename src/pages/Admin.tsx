@@ -23,6 +23,7 @@ import AdminStats from "@/components/admin/AdminStats";
 import AdminTrainingReview from "@/components/admin/AdminTrainingReview";
 import AdminTournamentForecast from "@/components/admin/AdminTournamentForecast";
 import AdminInvites from "@/components/admin/AdminInvites";
+import AdminMergePlayers from "@/components/admin/AdminMergePlayers";
 import AdminClubBranding from "@/components/admin/AdminClubBranding";
 import AdminBilling from "@/components/admin/AdminBilling";
 import AdminAutodarts from "@/components/admin/AdminAutodarts";
@@ -296,6 +297,7 @@ const AdminPage = () => {
         })}
       </div>
       <ListPaginationFooter list={pagedUsers} />
+      <AdminMergePlayers />
         </TabsContent>
 
         <TabsContent value="invites">
