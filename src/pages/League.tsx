@@ -1152,6 +1152,7 @@ const LeaguePage = () => {
         <div className="text-center py-12 text-muted-foreground">
           <Swords className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="text-sm">{t("league.noLeaguesYet")}</p>
+          <Button className="mt-4 gap-1.5" onClick={() => { setWizardStep(0); setCreating(true); }}><Plus className="h-4 w-4" /> {t("league.createFirstLeague")}</Button>
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">

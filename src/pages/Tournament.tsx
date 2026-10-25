@@ -2030,6 +2030,8 @@ const TournamentPage = () => {
     setPhase("setup");
   };
 
+  const startNewTournament = () => { setEditingId(null); setEditingSource(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setWizardStep(0); setPhase("setup"); };
+
   // ─── LIST PHASE ─────────────────────────────────
   if (phase === "list") {
     return (
@@ -2055,7 +2057,7 @@ const TournamentPage = () => {
                 <Swords className="w-3.5 h-3.5" /> {t("tournament.leagueMode")}
               </Link>
             </Button>
-            <Button size="sm" onClick={() => { setEditingId(null); setEditingSource(null); setPlayers([]); setTournamentName(""); setLivePlayEnabled(true); setDrawMode("random"); setDrawSeed(Math.floor(Math.random() * 1e9)); setWizardStep(0); setPhase("setup"); }} className="gap-1">
+            <Button size="sm" onClick={startNewTournament} className="gap-1">
               <Plus className="w-4 h-4" /> {t("tournament.newTournament")}
             </Button>
           </div>
@@ -2084,6 +2086,7 @@ const TournamentPage = () => {
           <div className="text-center py-12 text-muted-foreground">
             <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
             <p className="text-sm">{t("tournament.noTournamentsYet")}</p>
+            <Button className="mt-4 gap-1.5" onClick={startNewTournament}><Plus className="h-4 w-4" /> {t("tournament.createFirstTournament")}</Button>
           </div>
         ) : (tournamentListTab === "active" ? activeTournamentsList : finishedTournamentsList).length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
