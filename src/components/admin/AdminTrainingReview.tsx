@@ -118,15 +118,18 @@ const AdminTrainingReview = () => {
   const exportBatch = async () => {
     setExporting(true);
     try {
-      const { data, error } = await supabase
+      // Unreviewed samples first; once none are left, the ones still waiting on "Zu prüfen" go out the same way.
+      const fetchBatch = (status: ReviewStatus) => supabase
         .from("training_samples")
         .select("id, before_path, after_path, labels, camera_zoom, image_size")
-        .eq("review_status", "pending")
+        .eq("review_status", status)
         .order("created_at", { ascending: true })
         .limit(EXPORT_BATCH_SIZE);
+      let { data, error } = await fetchBatch("pending");
+      if (!error && (!data || data.length === 0)) ({ data, error } = await fetchBatch("needs_review"));
       if (error) throw error;
       if (!data || data.length === 0) {
-        toast({ title: "Nichts zu exportieren", description: "Es gibt keine ungeprüften Samples." });
+        toast({ title: "Nichts zu exportieren", description: "Es gibt keine ungeprüften oder zu prüfenden Samples." });
         return;
       }
       const samples = [];
