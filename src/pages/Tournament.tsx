@@ -2427,6 +2427,12 @@ const TournamentPage = () => {
               <Button size="sm" variant="outline" disabled={singlesInList.length < 2} onClick={() => pairUpPlayers("order")}>{t("tournament.pairInOrder")}</Button>
               {players.some(isTeamName) && <Button size="sm" variant="ghost" className="text-destructive" onClick={dissolveAllTeams}>{t("tournament.dissolveTeams")}</Button>}
             </div>
+            {singlesInList.length % 2 === 1 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2">
+                <p className="min-w-0 flex-1 text-xs text-accent">{t("tournament.doublesOddHint")}</p>
+                <Button size="sm" variant="outline" onClick={() => addPlayers([`Gast ${String(players.length + 1).padStart(2, "0")}`])}>{t("tournament.doublesAddGuest")}</Button>
+              </div>
+            )}
           </div>
         )}
       </SectionCard>
