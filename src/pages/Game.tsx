@@ -66,6 +66,7 @@ import { bustVisitThrows } from "@/utils/bustVisit";
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
 import {
   average as calculateAverage,
+  highestVisit as highestVisitOf,
   count180s,
   computeCheckoutStats,
   combineCheckoutStats,
@@ -468,7 +469,14 @@ const GamePage = () => {
   };
   /** Short "X wins leg N" banner shown when a leg (not the whole match — that has its own overlay)
    *  just ended. Driven by completedLegs growing, so an undo (which shrinks it) never triggers it. */
-  const [legWonBanner, setLegWonBanner] = useState<{ winner: string; legNumber: number } | null>(null);
+  const [legWonBanner, setLegWonBanner] = useState<{ winner: string; legNumber: number; stats: { average: number; darts: number; highestVisit: number } | null } | null>(null);
+  /** The visit that just busted: its darts and the score the player stays at — a toast alone vanished before anyone could read it. */
+  const [bustCard, setBustCard] = useState<{ name: string; darts: { baseValue: number; multiplier: number }[]; staysAt: number } | null>(null);
+  useEffect(() => {
+    if (!bustCard) return;
+    const timer = window.setTimeout(() => setBustCard(null), 4500);
+    return () => window.clearTimeout(timer);
+  }, [bustCard]);
   const completedLegCount = game?.completedLegs.length ?? 0;
   const previousCompletedLegCount = useRef(completedLegCount);
   useEffect(() => {
@@ -480,8 +488,11 @@ const GamePage = () => {
     if (winnerSlot === undefined) return;
     const winner = game.teams ? game.teams[winnerSlot]?.name : game.players[winnerSlot]?.name;
     if (!winner) return;
-    setLegWonBanner({ winner, legNumber: lastLeg.legNumber });
-    const timer = window.setTimeout(() => setLegWonBanner(null), 2600);
+    // The winner's numbers for the leg — only where throws are per person and score points (not cricket, not teams).
+    const winnerThrows = !game.teams && game.mode !== "cricket" ? lastLeg.throws[winnerSlot] ?? [] : [];
+    const stats = winnerThrows.length > 0 ? { average: calculateAverage(winnerThrows), darts: winnerThrows.length, highestVisit: highestVisitOf(winnerThrows) } : null;
+    setLegWonBanner({ winner, legNumber: lastLeg.legNumber, stats });
+    const timer = window.setTimeout(() => setLegWonBanner(null), 4200);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [completedLegCount]);
@@ -1148,7 +1159,7 @@ const GamePage = () => {
       // The only feedback a bust used to get was this sound (plus optional TTS) — with sound
       // off, or in a loud room, a player just sees their score silently hold and has no idea
       // why, which is exactly the kind of thing that causes a mid-match dispute later.
-      toast({ title: t("game.bustTitle"), description: `${game.players[idx].name} — ${t("game.remainingStaysAt")} ${turnStartRemaining}.`, variant: "destructive" });
+      setBustCard({ name: game.players[idx].name, darts: [...currentRoundScores, dart], staysAt: turnStartRemaining });
       remainingRef.current[teamIdx] = turnStartRemaining;
       setGame((prev) => {
         if (!prev) return prev;
@@ -1635,7 +1646,7 @@ const GamePage = () => {
     // Same "give the player something to actually see" fix as the manual-entry bust path —
     // the camera flow used to rely on playBustSound()/TTS alone too.
     if (busted) {
-      toast({ title: t("game.bustTitle"), description: `${game.players[startIdx].name} — ${t("game.remainingStaysAt")} ${curStart}.`, variant: "destructive" });
+      setBustCard({ name: game.players[startIdx].name, darts: dartsToApply.map((d) => ({ baseValue: d.baseValue, multiplier: d.multiplier })), staysAt: curStart });
     }
 
     if (speechEnabled) {
@@ -2706,6 +2717,12 @@ const GamePage = () => {
     fresh: i === all.length - 1,
   }));
   const botBoardShown = !!currentPlayer?.isBot || !!botHold;
+  // On tablets the number pad is not all there is to look at: the human's own darts of this round on a board, at their
+  // real position for camera darts (boardU/boardV) and at a plausible one inside the field for typed ones.
+  const ownDartsOnBoard: SimulatedDart[] = currentPlayer?.isBot ? [] : currentRoundScores.map((d, i, all) => ({
+    ...(d.boardU !== undefined && d.boardV !== undefined ? { u: d.boardU, v: d.boardV } : markerPositionFor(d.baseValue, d.multiplier, game.currentLeg.legNumber * 101 + i * 31 + d.baseValue * 7 + d.multiplier)),
+    fresh: i === all.length - 1,
+  }));
   const arenaManualScreen = (
     <>
       <GameControlBar
@@ -2737,6 +2754,9 @@ const GamePage = () => {
             personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
           />
           {cricketBoard}
+          {!isCricket && !botBoardShown && (
+            <SimulatedBoard darts={ownDartsOnBoard} className="mx-auto hidden aspect-square w-full max-w-[17rem] landscape:tablet:block" />
+          )}
           {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
             <ErrorBoundary label="Autodarts">
               <Suspense fallback={<div className="flex justify-center py-2"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
@@ -2809,9 +2829,40 @@ const GamePage = () => {
       {confettiKey !== null && <ConfettiBurst triggerKey={confettiKey} />}
       {legWonBanner && (
         <div className="pointer-events-none fixed inset-x-0 top-16 z-[65] flex justify-center px-4" role="status">
-          <div className="animate-slide-up flex items-center gap-2 rounded-full border border-primary/50 bg-background/95 px-4 py-2 shadow-[0_8px_28px_-8px_hsl(185_85%_48%/0.6)]">
-            <Trophy className="h-4 w-4 text-accent" />
-            <span className="font-display text-sm font-semibold">{legWonBanner.winner} · {t("game.leg")} {legWonBanner.legNumber} {t("game.legWonSuffix")}</span>
+          <div className="animate-slide-up w-full max-w-sm overflow-hidden rounded-2xl border border-primary/50 bg-background/95 shadow-[0_8px_28px_-8px_hsl(185_85%_48%/0.6)]">
+            <div className="flex items-center justify-center gap-2 px-4 py-3">
+              <Trophy className="h-5 w-5 shrink-0 text-accent" />
+              <span className="truncate font-display text-base font-semibold">{legWonBanner.winner} · {t("game.leg")} {legWonBanner.legNumber} {t("game.legWonSuffix")}</span>
+            </div>
+            {legWonBanner.stats && (
+              <div className="grid grid-cols-3 divide-x divide-border/60 border-t border-border/60 text-center">
+                {[
+                  ["Ø", legWonBanner.stats.average.toFixed(1)],
+                  [t("game.dartsSuffix"), String(legWonBanner.stats.darts)],
+                  [t("game.legHighestVisit"), String(legWonBanner.stats.highestVisit)],
+                ].map(([label, value]) => (
+                  <div key={label} className="px-2 py-2">
+                    <p className="font-display text-xl leading-none tabular-nums text-primary">{value}</p>
+                    <p className="mt-1 truncate text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {bustCard && (
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-[65] flex justify-center px-4" role="alert">
+          <div className="animate-slide-up w-full max-w-sm overflow-hidden rounded-2xl border border-destructive/60 bg-background/95 shadow-[0_8px_28px_-8px_hsl(0_70%_46%/0.6)]">
+            <div className="px-4 pt-3 text-center">
+              <p className="font-display text-lg font-semibold uppercase tracking-wide text-destructive">{t("game.bustTitle")}</p>
+              <p className="truncate text-xs text-muted-foreground">{bustCard.name} — {t("game.remainingStaysAt")} {bustCard.staysAt}</p>
+            </div>
+            <div className="flex justify-center gap-2 px-4 py-3">
+              {bustCard.darts.map((d, i) => (
+                <span key={i} className="min-w-[3.25rem] rounded-lg border border-border bg-muted/40 px-2 py-1.5 text-center font-display text-base tabular-nums">{dartLabel(d)}</span>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -1114,4 +1114,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Ana sayfada artık yarım kalan oyun, süren turnuvalar, sıradaki turnuva maçın ve rakamların için kutucuklar var. Canlı görünümde telefonda sekme çubuğuyla sayfalar arasında geçiş yapıyor, “Sen kimsin?” ile şu an ya da sonraki tahtanı hemen görüyorsun.",
     },
   },
+  {
+    id: "2026-10-30-game-cards-and-wide-screens",
+    date: "2026-10-30",
+    title: {
+      de: "Spiel: Bust- und Leg-Karten, Einstellungen in Reitern, mehr Platz auf großen Bildschirmen",
+      en: "Game: bust and leg cards, settings in tabs, more room on large screens",
+      fr: "Partie : cartes bust et leg, réglages en onglets, plus de place sur grands écrans",
+      pl: "Gra: karty bustu i lega, ustawienia w zakładkach, więcej miejsca na dużych ekranach",
+      nl: "Spel: bust- en leg-kaarten, instellingen in tabs, meer ruimte op grote schermen",
+      tr: "Oyun: bust ve leg kartları, sekmeli ayarlar, büyük ekranlarda daha fazla alan",
+    },
+    description: {
+      de: "Bei einem Bust siehst du jetzt die drei Darts und deinen Reststand auf einer Karte statt nur kurz in einer Meldung. Nach jedem Leg zeigt die Karte Ø, Darts und höchste Aufnahme des Siegers. Auf dem Tablet im Querformat steht deine Scheibe mit den Darts der Aufnahme neben dem Zahlenfeld. Die Einstellungen sind in Reiter geteilt; Training, Liga und Turnierreihen nutzen breite Bildschirme besser.",
+      en: "On a bust you now see your three darts and your remaining score on a card instead of a short message. After each leg a card shows the winner's average, darts and best visit. On a tablet in landscape your board with the darts of the round sits beside the number pad. Settings are split into tabs; training, league and series use wide screens better.",
+      fr: "Lors d'un bust, vous voyez vos trois fléchettes et votre score restant sur une carte au lieu d'un bref message. Après chaque leg, une carte affiche moyenne, fléchettes et meilleure volée du vainqueur. Sur tablette en paysage, votre cible avec les fléchettes de la volée est à côté du pavé. Les réglages sont répartis en onglets ; entraînement, ligue et séries exploitent mieux les grands écrans.",
+      pl: "Przy bust widzisz teraz trzy lotki i pozostały wynik na karcie zamiast krótkiego komunikatu. Po każdym legu karta pokazuje średnią, lotki i najlepszą serię zwycięzcy. Na tablecie poziomo twoja tarcza z lotkami serii jest obok klawiatury. Ustawienia są w zakładkach; trening, liga i serie lepiej wykorzystują duże ekrany.",
+      nl: "Bij een bust zie je nu je drie darts en je resterende score op een kaart in plaats van een korte melding. Na elk leg toont een kaart gemiddelde, darts en hoogste beurt van de winnaar. Op een tablet in landschap staat je bord met de darts van de beurt naast het cijferveld. Instellingen zijn in tabs verdeeld; training, competitie en reeksen benutten brede schermen beter.",
+      tr: "Bust olduğunda üç okunu ve kalan skorunu kısa bir mesaj yerine bir kartta görürsün. Her legden sonra bir kart kazananın ortalamasını, oklarını ve en yüksek turunu gösterir. Yatay tablette turun oklarıyla tahtan sayı tuşlarının yanında durur. Ayarlar sekmelere bölündü; antrenman, lig ve seriler geniş ekranları daha iyi kullanır.",
+    },
+  },
 ];
