@@ -18,7 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LANGUAGES, type Language } from "@/i18n/translations";
 import { CLUB_THEME_PRESETS, resolveClubTheme, DEFAULT_CLUB_THEME_PRESET_ID } from "@/lib/clubThemePresets";
-import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
+import { SectionCard } from "@/components/stats/StatPrimitives";
+import ManageTabs, { type ManageTab } from "@/components/tournament/manage/ManageTabs";
 import GameDefaultsSection from "@/components/settings/GameDefaultsSection";
 import GuidesTab from "@/components/settings/GuidesTab";
 import { generatePinSalt, hashPin, isValidPinFormat } from "@/lib/playerPin";
@@ -27,6 +28,8 @@ const LANGUAGE_LABEL_KEY: Record<Language, string> = {
   de: "settings.german", en: "settings.english", fr: "settings.french",
   pl: "settings.polish", nl: "settings.dutch", tr: "settings.turkish",
 };
+
+type SettingsTab = "appearance" | "game" | "account" | "guides";
 
 interface ImpressumRow {
   id: string;
@@ -108,7 +111,7 @@ const SettingsPage = () => {
     toast({ title: t("players.pinRemoved") });
   };
 
-  const [activeTab, setActiveTab] = useState<"settings" | "guides">("settings");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("appearance");
 
   useEffect(() => {
     supabase.from("impressum").select("*").limit(1).maybeSingle().then(({ data }) => {
@@ -145,30 +148,9 @@ const SettingsPage = () => {
   // there (register entry only applies to a formally registered e.V. in the first place).
   const isComplete = !!impressum && [impressum.club_name, impressum.address, impressum.city, impressum.represented_by, impressum.email].every((f) => f.trim() !== "");
 
-  return (
-    <div className="container py-6 animate-slide-up max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <SettingsIcon className="w-6 h-6 text-accent" />
-        <h2 className="text-2xl font-display uppercase">{t("settings.title")}</h2>
-      </div>
-
-      <div className="flex gap-2 mb-6">
-        <button onClick={() => setActiveTab("settings")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full text-xs font-medium transition-all ${activeTab === "settings" ? "bg-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.35)]" : "border border-border text-muted-foreground hover:text-foreground"}`}>
-          <SlidersHorizontal className="w-3.5 h-3.5" /> {t("settings.tabSettings")}
-        </button>
-        <button onClick={() => setActiveTab("guides")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full text-xs font-medium transition-all ${activeTab === "guides" ? "bg-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.35)]" : "border border-border text-muted-foreground hover:text-foreground"}`}>
-          <BookOpen className="w-3.5 h-3.5" /> {t("settings.tabGuides")}
-        </button>
-      </div>
-
-      {activeTab === "guides" && <GuidesTab />}
-
-      {activeTab === "settings" && (
-      <>
-      <div className="space-y-3 mb-6">
-        <Eyebrow icon={Palette}>{t("settings.groupAppearance")}</Eyebrow>
+  const appearancePanel = (
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-2">
         <SectionCard className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Languages className="w-5 h-5 text-muted-foreground shrink-0" />
@@ -201,70 +183,68 @@ const SettingsPage = () => {
             aria-label={t("settings.darkMode")}
           />
         </SectionCard>
+      </div>
 
-        {/* Personal color override — local to this device only (localStorage, see
-            ClubBrandingContext), never written anywhere shared. Everyone gets this, not just
-            admins: only the 3 accent hues are personal, name/logo/tagline stay admin-only below. */}
-        <SectionCard>
-          <div className="flex items-center gap-3 mb-3">
-            <Palette className="w-5 h-5 text-muted-foreground shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{t("settings.myColor")}</p>
-              <p className="text-xs text-muted-foreground">{t("settings.myColorDesc")}</p>
-            </div>
+      {/* Personal color override — local to this device only (localStorage, see
+          ClubBrandingContext), never written anywhere shared. Everyone gets this, not just
+          admins: only the 3 accent hues are personal, name/logo/tagline stay admin-only below. */}
+      <SectionCard>
+        <div className="flex items-center gap-3 mb-3">
+          <Palette className="w-5 h-5 text-muted-foreground shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{t("settings.myColor")}</p>
+            <p className="text-xs text-muted-foreground">{t("settings.myColorDesc")}</p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setPersonalThemePreset(null)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs text-left transition-colors ${
-                !personalThemePreset ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border hover:border-primary/50"
-              }`}
-            >
-              <span className="flex gap-1 shrink-0">
-                {(["--primary", "--secondary", "--accent"] as const).map((key) => {
-                  const vars = resolveClubTheme(club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID, resolvedTheme === "light" ? "light" : "dark");
-                  return <span key={key} className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars[key]})` }} />;
-                })}
-              </span>
-              <span className="truncate">{t("settings.myColorClubDefault")}</span>
-            </button>
-            {/* The preset matching the club's own current theme is skipped here — selecting it
-                explicitly would look and behave identically to "Vereinsfarbe" above, since that
-                option already resolves to exactly this preset. Showing both was a literal
-                duplicate, not just a stylistic one. */}
-            {CLUB_THEME_PRESETS.filter((preset) => preset.id !== (club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID)).map((preset) => {
-              const vars = resolveClubTheme(preset.id, resolvedTheme === "light" ? "light" : "dark");
-              const selected = personalThemePreset === preset.id;
-              return (
-                <button
-                  type="button"
-                  key={preset.id}
-                  onClick={() => setPersonalThemePreset(preset.id)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs text-left transition-colors ${
-                    selected ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border hover:border-primary/50"
-                  }`}
-                >
-                  <span className="flex gap-1 shrink-0">
-                    <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--primary"]})` }} />
-                    <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--secondary"]})` }} />
-                    <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--accent"]})` }} />
-                  </span>
-                  <span className="truncate">{preset.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </SectionCard>
-
-        <div className="pt-3">
-          <Eyebrow icon={SlidersHorizontal}>{t("settings.groupGame")}</Eyebrow>
-          <GameDefaultsSection />
         </div>
-
-        <div className="pt-3">
-          <Eyebrow icon={KeyRound}>{t("settings.groupAccount")}</Eyebrow>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setPersonalThemePreset(null)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs text-left transition-colors ${
+              !personalThemePreset ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border hover:border-primary/50"
+            }`}
+          >
+            <span className="flex gap-1 shrink-0">
+              {(["--primary", "--secondary", "--accent"] as const).map((key) => {
+                const vars = resolveClubTheme(club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID, resolvedTheme === "light" ? "light" : "dark");
+                return <span key={key} className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars[key]})` }} />;
+              })}
+            </span>
+            <span className="truncate">{t("settings.myColorClubDefault")}</span>
+          </button>
+          {/* The preset matching the club's own current theme is skipped here — selecting it
+              explicitly would look and behave identically to "Vereinsfarbe" above, since that
+              option already resolves to exactly this preset. Showing both was a literal
+              duplicate, not just a stylistic one. */}
+          {CLUB_THEME_PRESETS.filter((preset) => preset.id !== (club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID)).map((preset) => {
+            const vars = resolveClubTheme(preset.id, resolvedTheme === "light" ? "light" : "dark");
+            const selected = personalThemePreset === preset.id;
+            return (
+              <button
+                type="button"
+                key={preset.id}
+                onClick={() => setPersonalThemePreset(preset.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs text-left transition-colors ${
+                  selected ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border hover:border-primary/50"
+                }`}
+              >
+                <span className="flex gap-1 shrink-0">
+                  <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--primary"]})` }} />
+                  <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--secondary"]})` }} />
+                  <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--accent"]})` }} />
+                </span>
+                <span className="truncate">{preset.label}</span>
+              </button>
+            );
+          })}
         </div>
+      </SectionCard>
+    </div>
+  );
+
+  const accountPanel = (
+    <div className="space-y-3">
+      <div className="grid gap-3 md:grid-cols-2 md:items-start">
         {push.supported && (
           <SectionCard className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -373,8 +353,24 @@ const SettingsPage = () => {
           </div>
         )}
       </SectionCard>
-      </>
-      )}
+    </div>
+  );
+
+  const tabs: ManageTab[] = [
+    { key: "appearance", label: t("settings.groupAppearance"), icon: Palette, content: appearancePanel },
+    { key: "game", label: t("settings.groupGame"), icon: SlidersHorizontal, content: <GameDefaultsSection /> },
+    { key: "account", label: t("settings.groupAccount"), icon: KeyRound, content: accountPanel },
+    { key: "guides", label: t("settings.tabGuides"), icon: BookOpen, content: <GuidesTab /> },
+  ];
+
+  return (
+    <div className="container py-6 animate-slide-up max-w-2xl lg:max-w-4xl mx-auto">
+      <div className="flex items-center gap-3 mb-4">
+        <SettingsIcon className="w-6 h-6 text-accent" />
+        <h2 className="text-2xl font-display uppercase">{t("settings.title")}</h2>
+      </div>
+
+      <ManageTabs tabs={tabs} active={activeTab} onChange={(key) => setActiveTab(key as SettingsTab)} />
     </div>
   );
 };
