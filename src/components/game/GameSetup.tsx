@@ -17,7 +17,8 @@ import type { TournamentLink } from "@/lib/activeGameSnapshot";
 import type { LeagueLink } from "@/hooks/useLeagueLink";
 import { useLanguage } from "@/contexts/LanguageContext";
 import GamePresets from "@/components/game/GamePresets";
-import { overlaySlots, type GamePresetConfig } from "@/utils/gamePreset";
+import { overlaySlots, saveLastGameSetup, type GamePresetConfig } from "@/utils/gamePreset";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface GameSetupProps {
   // Tournament/league linkage + board-mode auto-start (state/effects stay in Game.tsx — see
@@ -207,6 +208,7 @@ const GameSetup = (props: GameSetupProps) => {
     );
   }
 
+  const { session } = useAuth();
   const currentPreset: GamePresetConfig = {
     mode, customStartScore, teamMode, numPlayers, bestOfLegs, setsEnabled, bestOfSets, checkoutSuggestionEnabled,
     maxRoundsX01, customCricket, warmupEnabled, walkonEnabled,
@@ -723,7 +725,7 @@ const GameSetup = (props: GameSetupProps) => {
         </SectionCard>
         </div>
 
-        <Button onClick={startGame} className="w-full mt-4 font-display uppercase text-lg py-6 md:col-span-2 md:mx-auto md:max-w-md">
+        <Button onClick={() => { if (!tournamentLinkName && !leagueLinkRef.current) saveLastGameSetup(session?.user?.id, currentPreset); startGame(); }} className="w-full mt-4 font-display uppercase text-lg py-6 md:col-span-2 md:mx-auto md:max-w-md">
           <Target className="w-5 h-5 mr-2" /> {warmupEnabled ? t("game.startWarmup") : t("game.startGame")}
         </Button>
       </div>

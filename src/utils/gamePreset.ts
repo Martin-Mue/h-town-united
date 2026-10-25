@@ -68,3 +68,25 @@ export function describePreset(config: GamePresetConfig, firstToLabel: string, p
   const mode = config.mode === "custom" ? String(config.customStartScore) : config.mode === "cricket" ? "Cricket" : config.mode;
   return `${mode} · ${firstToLabel} ${Math.ceil(config.bestOfLegs / 2)} · ${config.numPlayers} ${playersLabel}`;
 }
+
+const LAST_GAME_KEY = "dart-last-game-setup";
+
+/** The setup of the last casual game started on this device, per account — the "Letztes Spiel wiederholen" chip. */
+export function loadLastGameSetup(userId: string | undefined): GamePresetConfig | null {
+  if (!userId) return null;
+  try {
+    const raw = window.localStorage.getItem(`${LAST_GAME_KEY}:${userId}`);
+    return raw ? normalizePresetConfig(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastGameSetup(userId: string | undefined, config: GamePresetConfig): void {
+  if (!userId) return;
+  try {
+    window.localStorage.setItem(`${LAST_GAME_KEY}:${userId}`, JSON.stringify(config));
+  } catch {
+    /* storage blocked (private mode): the chip just does not appear next time */
+  }
+}

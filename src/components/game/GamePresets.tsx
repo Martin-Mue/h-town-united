@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Bookmark, Check, X, Zap } from "lucide-react";
+import { Bookmark, Check, History, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionCard, Eyebrow } from "@/components/stats/StatPrimitives";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { useGamePresets } from "@/hooks/useGamePresets";
-import { describePreset, type GamePresetConfig } from "@/utils/gamePreset";
+import { useAuth } from "@/contexts/AuthContext";
+import { describePreset, loadLastGameSetup, type GamePresetConfig } from "@/utils/gamePreset";
 
 interface GamePresetsProps {
   /** The setup as it is on screen right now — what "save" stores. */
@@ -22,6 +23,8 @@ const GamePresets = ({ current, onApply }: GamePresetsProps) => {
   const { t } = useLanguage();
   const { toast } = useToast();
   const { presets, signedIn, savePreset, deletePreset } = useGamePresets();
+  const { session } = useAuth();
+  const last = loadLastGameSetup(session?.user?.id);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,10 +53,16 @@ const GamePresets = ({ current, onApply }: GamePresetsProps) => {
   return (
     <SectionCard className="mb-4 space-y-3">
       <Eyebrow icon={Zap}>{t("game.presetsTitle")}</Eyebrow>
-      {presets.length === 0 ? (
+      {presets.length === 0 && !last ? (
         <p className="text-xs text-muted-foreground">{t("game.presetsEmpty")}</p>
       ) : (
         <div className="flex flex-wrap gap-2">
+          {last && (
+            <button type="button" onClick={() => onApply(last)} className="min-w-0 rounded-xl border border-accent/50 bg-accent/10 px-3 py-2 text-left transition-colors hover:bg-accent/20">
+              <span className="flex items-center gap-1.5 truncate font-display text-sm uppercase tracking-wide"><History className="h-3.5 w-3.5 shrink-0" /> {t("game.presetLast")}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{describePreset(last, t("stats.firstTo"), t("game.playersSuffix"))}{last.playerNames.length > 0 ? ` · ${last.playerNames.join(", ")}` : ""}</span>
+            </button>
+          )}
           {presets.map((preset) => (
             <div key={preset.id} className="flex items-stretch overflow-hidden rounded-xl border border-primary/40 bg-primary/10">
               <button type="button" onClick={() => onApply(preset.config)} className="min-w-0 px-3 py-2 text-left transition-colors hover:bg-primary/20">
