@@ -29,6 +29,8 @@ export interface ArenaScoreCard {
   flashing?: boolean;
   /** The score is a live preview from the camera/Autodarts, not yet committed. */
   preview?: boolean;
+  /** Fewest points left in a multi-sided match: shown as a small ▲ next to the name. */
+  leading?: boolean;
 }
 
 interface ArenaScoreboardProps {
@@ -36,7 +38,9 @@ interface ArenaScoreboardProps {
   showLegs: boolean;
   showSets: boolean;
   isCricket: boolean;
-  labels: { leg: string; set: string; lastVisit: string; legAvg: string; matchAvg: string; starts: string; throwing: string; inARow: string };
+  /** Smaller cards (the camera view, where the picture needs the height). */
+  compact?: boolean;
+  labels: { leg: string; set: string; lastVisit: string; legAvg: string; matchAvg: string; starts: string; throwing: string; inARow: string; leading?: string };
   /** Extra lines for the active card (single-out note, ghost pace). */
   activeExtra?: ReactNode;
 }
@@ -92,6 +96,7 @@ const NameLine = ({ card, labels, big }: { card: ArenaScoreCard; labels: ArenaSc
     <span className={`truncate font-display font-semibold ${big ? "text-base" : "text-sm"}`} style={{ color: card.isActive ? "hsl(210 15% 97%)" : "hsl(210 15% 72%)" }}>
       {card.name}
     </span>
+    {card.leading && <span title={labels.leading} aria-label={labels.leading} className="shrink-0 text-[10px]" style={{ color: "hsl(155 65% 58%)" }}>▲</span>}
     {card.startedLeg && (
       <span title={labels.starts} aria-label={labels.starts} className="shrink-0" style={{ color: "hsl(45 100% 58%)" }}>
         <Crosshair className="h-3 w-3" />
@@ -100,9 +105,9 @@ const NameLine = ({ card, labels, big }: { card: ArenaScoreCard; labels: ArenaSc
   </span>
 );
 
-const ActiveBlock = ({ card, side, showLegs, showSets, isCricket, labels, activeExtra }: { card: ArenaScoreCard; side: "left" | "none" } & Omit<ArenaScoreboardProps, "cards">) => (
+const ActiveBlock = ({ card, side, showLegs, showSets, isCricket, compact, labels, activeExtra }: { card: ArenaScoreCard; side: "left" | "none" } & Omit<ArenaScoreboardProps, "cards">) => (
   <div
-    className="relative min-w-0 px-3 pb-2 pt-2.5 text-left"
+    className={`relative min-w-0 text-left ${compact ? "px-2.5 pb-1 pt-2" : "px-3 pb-2 pt-2.5"}`}
     style={{
       ...clipFor(side),
       color: "hsl(210 15% 92%)",
@@ -123,9 +128,15 @@ const ActiveBlock = ({ card, side, showLegs, showSets, isCricket, labels, active
     ) : (
       <div className="mt-1 flex items-end justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-0.5 pb-1 text-[11px] leading-tight" style={{ color: "hsl(210 15% 68%)" }}>
-          {!isCricket && (
+          {!isCricket && !compact && (
             <>
               <span className="whitespace-nowrap">{labels.lastVisit} <b className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 94%)" }}>{card.lastVisit}</b></span>
+              <span className="whitespace-nowrap">{labels.legAvg} <b className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 94%)" }}>{card.legAvg}</b></span>
+              <span className="whitespace-nowrap">{labels.matchAvg} <b className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 94%)" }}>{card.matchAvg}</b></span>
+            </>
+          )}
+          {compact && (
+            <>
               <span className="whitespace-nowrap">{labels.legAvg} <b className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 94%)" }}>{card.legAvg}</b></span>
               <span className="whitespace-nowrap">{labels.matchAvg} <b className="font-semibold tabular-nums" style={{ color: "hsl(210 15% 94%)" }}>{card.matchAvg}</b></span>
             </>
@@ -134,31 +145,31 @@ const ActiveBlock = ({ card, side, showLegs, showSets, isCricket, labels, active
           {card.streak ? <span className="font-bold" style={{ color: "hsl(25 95% 62%)" }}>🔥 {card.streak} {labels.inARow}</span> : null}
         </div>
         <p
-          className={`font-display text-[4.25rem] leading-[0.95] tabular-nums transition-colors ${card.flashing ? "animate-pulse-glow" : ""}`}
+          className={`font-display leading-[0.95] tabular-nums transition-colors ${compact ? "text-[3.1rem]" : "text-[4.25rem]"} ${card.flashing ? "animate-pulse-glow" : ""}`}
           style={{ color: scoreColor(card), textShadow: `0 0 24px ${scoreColor(card)}66` }}
         >
           <AnimatedScore value={card.score} />
         </p>
       </div>
     )}
-    <p className="min-h-[14px] text-right text-[10px]" style={{ color: "hsl(210 15% 55%)" }}>{card.scoreNote}</p>
+    {(!compact || card.scoreNote) && <p className="min-h-[14px] text-right text-[10px]" style={{ color: "hsl(210 15% 55%)" }}>{card.scoreNote}</p>}
     {activeExtra}
   </div>
 );
 
-const WaitingBlock = ({ card, side, showLegs, showSets, isCricket, labels }: { card: ArenaScoreCard; side: "right" | "none" } & Omit<ArenaScoreboardProps, "cards" | "activeExtra">) => (
+const WaitingBlock = ({ card, side, showLegs, showSets, isCricket, compact, labels }: { card: ArenaScoreCard; side: "right" | "none" } & Omit<ArenaScoreboardProps, "cards" | "activeExtra">) => (
   <div
-    className="relative min-w-0 px-3 pb-2 pt-2.5 text-left"
+    className={`relative min-w-0 text-left ${compact ? "px-2.5 pb-1 pt-2" : "px-3 pb-2 pt-2.5"}`}
     style={{ ...clipFor(side), color: "hsl(210 15% 70%)", background: "hsl(222 28% 8.5%)", paddingLeft: side === "right" ? `${SLANT + 8}px` : undefined }}
   >
     <div className="flex items-center justify-between gap-1.5">
       <NameLine card={card} labels={labels} big={false} />
     </div>
     <div className="mt-0.5 flex justify-end"><Chips card={card} showLegs={showLegs} showSets={showSets} labels={labels} /></div>
-    <p className="mt-1 text-right font-display text-4xl leading-none tabular-nums" style={{ color: scoreColor(card) }}>
+    <p className={`mt-1 text-right font-display leading-none tabular-nums ${compact ? "text-3xl" : "text-4xl"}`} style={{ color: scoreColor(card) }}>
       <AnimatedScore value={card.score} />
     </p>
-    {!isCricket && <p className="mt-1 text-right text-[10px]" style={{ color: "hsl(210 15% 52%)" }}>{labels.legAvg} {card.legAvg}</p>}
+    {!isCricket && !compact && <p className="mt-1 text-right text-[10px]" style={{ color: "hsl(210 15% 52%)" }}>{labels.legAvg} {card.legAvg}</p>}
   </div>
 );
 
@@ -167,8 +178,30 @@ const WaitingBlock = ({ card, side, showLegs, showSets, isCricket, labels }: { c
  * the big number, the other side sits next to it as a darker, smaller one. Two sides share a row and swap their
  * widths when the turn changes; three or more get the active card on top and the rest as a row of small cards.
  */
-const ArenaScoreboard = ({ cards, showLegs, showSets, isCricket, labels, activeExtra }: ArenaScoreboardProps) => {
-  const shared = { showLegs, showSets, isCricket, labels };
+const ArenaScoreboard = ({ cards, showLegs, showSets, isCricket, compact, labels, activeExtra }: ArenaScoreboardProps) => {
+  const shared = { showLegs, showSets, isCricket, compact, labels };
+  if (compact && cards.length > 2) {
+    // three or more sides in the camera view: one row of small cards, the one on the oche lit up
+    return (
+      <div className="overflow-hidden rounded-xl border" style={{ ...DARK_VARS, borderColor: "hsl(222 18% 16%)", background: "hsl(222 18% 16%)" }}>
+        <div className="grid gap-px" style={{ gridTemplateColumns: `repeat(${Math.min(cards.length, 4)}, minmax(0, 1fr))` }}>
+          {cards.map((card) => (
+            <div key={card.key} className="relative min-w-0 px-2 pb-1 pt-1.5 text-left" style={{ background: card.isActive ? "linear-gradient(120deg, hsl(185 70% 26% / 0.85), hsl(222 30% 9%) 85%)" : "hsl(222 28% 8.5%)" }}>
+              {card.isActive && <span aria-hidden className="absolute inset-x-0 top-0 h-[3px]" style={{ background: ACTIVE_HSL }} />}
+              <NameLine card={card} labels={labels} big={false} />
+              <p className={`mt-0.5 font-display leading-none tabular-nums ${card.isActive ? "text-4xl" : "text-3xl"}`} style={{ color: scoreColor(card) }}>
+                <AnimatedScore value={card.score} />
+              </p>
+              <p className="mt-0.5 flex items-center justify-between text-[10px]" style={{ color: "hsl(210 15% 58%)" }}>
+                <span>{card.legAvg}</span>
+                {(showLegs || showSets) && <span className="font-bold" style={{ color: "hsl(185 85% 64%)" }}>{showSets ? `${card.setsWon ?? 0}S ` : ""}{showLegs ? `${card.legsWon}L` : ""}</span>}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (cards.length === 2) {
     const activeFirst = cards[0].isActive;
     return (

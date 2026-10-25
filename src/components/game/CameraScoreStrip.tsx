@@ -1,4 +1,4 @@
-import { Crosshair } from "lucide-react";
+import ArenaScoreboard, { type ArenaScoreCard } from "@/components/game/ArenaScoreboard";
 
 export interface CameraScoreCard {
   key: number;
@@ -27,52 +27,28 @@ interface CameraScoreStripProps {
 }
 
 /**
- * The scoreboard inside the full-screen camera: who is throwing, how many points everybody has left, who is ahead,
- * who started the leg, the match score and the averages. The full scoreboard of the play screen is too tall to sit
- * above a camera picture, but without it the player cannot see their own score while throwing.
+ * The scoreboard inside the full-screen camera: the play screen's own scoreboard (diagonal cards, big number for
+ * whoever is on the oche) in its compact size, so the picture keeps its height. The full play screen is hidden
+ * behind the camera, and a player must not have to close it to see their own score while throwing.
  */
-const CameraScoreStrip = ({ cards, info, showLegs, showSets, labels }: CameraScoreStripProps) => (
-  <div className="shrink-0 border-b border-border/60 bg-background px-2 pb-1.5 pt-2">
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(cards.length, 4)}, minmax(0, 1fr))` }}>
-      {cards.map((card) => (
-        <div
-          key={card.key}
-          className={`relative min-w-0 rounded-xl border px-2.5 py-1.5 text-left ${
-            card.isActive ? "border-primary/70 bg-primary/10 shadow-[0_0_18px_-8px_hsl(var(--primary))]" : "border-border/60 bg-card/50 opacity-80"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-1">
-            <span className={`flex min-w-0 items-center gap-1 text-xs font-semibold ${card.isActive ? "text-foreground" : "text-muted-foreground"}`}>
-              {card.isActive && <span className="inline-block h-2 w-2 shrink-0 animate-pulse-glow rounded-full bg-primary" />}
-              <span className="truncate">{card.name}</span>
-              {card.startedLeg && (
-                <span title={labels.starts} aria-label={labels.starts} className="shrink-0 text-accent">
-                  <Crosshair className="h-3 w-3" />
-                </span>
-              )}
-            </span>
-            {(showLegs || showSets) && (
-              <span className="flex shrink-0 gap-1 text-[11px] font-display font-bold tabular-nums text-primary">
-                {showSets && <span title={labels.sets}>{card.setsWon ?? 0}S</span>}
-                {showLegs && <span title={labels.legs}>{card.legsWon}L</span>}
-              </span>
-            )}
-          </div>
-          <div className="flex items-end justify-between gap-1">
-            <span className={`font-display leading-none tabular-nums ${card.isActive ? "text-5xl text-foreground" : "text-3xl text-muted-foreground"}`}>
-              {card.score}
-            </span>
-            <span className="flex flex-col items-end pb-0.5 text-[10px] leading-tight text-muted-foreground">
-              {card.isLeading && <span className="font-semibold text-secondary">▲ {labels.leading}</span>}
-              <span>{labels.legAvg} {card.legAvg}</span>
-              <span>{labels.matchAvg} {card.matchAvg}</span>
-            </span>
-          </div>
-        </div>
-      ))}
+const CameraScoreStrip = ({ cards, info, showLegs, showSets, labels }: CameraScoreStripProps) => {
+  const arenaCards: ArenaScoreCard[] = cards.map((c) => ({
+    key: c.key, name: c.name, isBot: false, isActive: c.isActive, startedLeg: c.startedLeg, score: c.score,
+    legsWon: c.legsWon, setsWon: c.setsWon, legAvg: c.legAvg, matchAvg: c.matchAvg, lastVisit: "–", p180: 0, leading: c.isLeading,
+  }));
+  return (
+    <div className="shrink-0 border-b border-border/60 bg-background px-2 pb-1.5 pt-2">
+      <ArenaScoreboard
+        compact
+        cards={arenaCards}
+        showLegs={showLegs}
+        showSets={showSets}
+        isCricket={false}
+        labels={{ leg: labels.legs, set: labels.sets, lastVisit: "", legAvg: labels.legAvg, matchAvg: labels.matchAvg, starts: labels.starts, throwing: "", inARow: "", leading: labels.leading }}
+      />
+      <p className="mt-1 truncate text-center text-[10px] text-muted-foreground">{info}</p>
     </div>
-    <p className="mt-1 truncate text-center text-[10px] text-muted-foreground">{info}</p>
-  </div>
-);
+  );
+};
 
 export default CameraScoreStrip;
