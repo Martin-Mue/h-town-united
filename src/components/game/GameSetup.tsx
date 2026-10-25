@@ -16,6 +16,8 @@ import type { ClubPlayer } from "@/lib/repositories/players";
 import type { TournamentLink } from "@/lib/activeGameSnapshot";
 import type { LeagueLink } from "@/hooks/useLeagueLink";
 import { useLanguage } from "@/contexts/LanguageContext";
+import GamePresets from "@/components/game/GamePresets";
+import { overlaySlots, type GamePresetConfig } from "@/utils/gamePreset";
 
 interface GameSetupProps {
   // Tournament/league linkage + board-mode auto-start (state/effects stay in Game.tsx — see
@@ -205,6 +207,26 @@ const GameSetup = (props: GameSetupProps) => {
     );
   }
 
+  const currentPreset: GamePresetConfig = {
+    mode, customStartScore, teamMode, numPlayers, bestOfLegs, setsEnabled, bestOfSets, checkoutSuggestionEnabled,
+    maxRoundsX01, customCricket, warmupEnabled, walkonEnabled,
+    playerNames: playerNames.slice(0, numPlayers), playerIsBot: playerIsBot.slice(0, numPlayers),
+    playerBotLevel: playerBotLevel.slice(0, numPlayers), playerDoubleIn: playerDoubleIn.slice(0, numPlayers),
+    playerDoubleOut: playerDoubleOut.slice(0, numPlayers), playerHandicap: playerHandicap.slice(0, numPlayers),
+  };
+  const applyPreset = (p: GamePresetConfig) => {
+    setMode(p.mode); setCustomStartScore(p.customStartScore); setTeamMode(p.teamMode); setNumPlayers(p.numPlayers);
+    setBestOfLegs(p.bestOfLegs); setSetsEnabled(p.setsEnabled); setBestOfSets(p.bestOfSets);
+    setCheckoutSuggestionEnabled(p.checkoutSuggestionEnabled); setMaxRoundsX01(p.maxRoundsX01); setCustomCricket(p.customCricket);
+    setWarmupEnabled(p.warmupEnabled); setWalkonEnabled(p.walkonEnabled);
+    setPlayerNames((prev) => overlaySlots(prev, p.playerNames));
+    setPlayerIsBot((prev) => overlaySlots(prev, p.playerIsBot));
+    setPlayerBotLevel((prev) => overlaySlots(prev, p.playerBotLevel));
+    setPlayerDoubleIn((prev) => overlaySlots(prev, p.playerDoubleIn));
+    setPlayerDoubleOut((prev) => overlaySlots(prev, p.playerDoubleOut));
+    setPlayerHandicap((prev) => overlaySlots(prev, p.playerHandicap));
+  };
+
   // "Online spielen" replaces this whole local-setup form with a challenge-a-member screen —
   // only offered for a genuinely casual game; a tournament/league match's opponent and mode are
   // already fixed by the bracket/fixture, so there's nothing left to challenge someone into.
@@ -236,6 +258,7 @@ const GameSetup = (props: GameSetupProps) => {
         </div>
       )}
       {!tournamentLinkName && <div className="mb-6" />}
+      {!tournamentLinkName && !leagueLinkRef.current && <GamePresets current={currentPreset} onApply={applyPreset} />}
       {/* Phone: one column in reading order. From tablet width up: mode/format on the left, players/extras on the right,
           start button across both — instead of a 512 px strip in the middle of a wide screen. */}
       <div className="grid gap-4 md:grid-cols-2 md:items-start">

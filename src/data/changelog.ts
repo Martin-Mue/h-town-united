@@ -1134,4 +1134,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Bust olduğunda üç okunu ve kalan skorunu kısa bir mesaj yerine bir kartta görürsün. Her legden sonra bir kart kazananın ortalamasını, oklarını ve en yüksek turunu gösterir. Yatay tablette turun oklarıyla tahtan sayı tuşlarının yanında durur. Ayarlar sekmelere bölündü; antrenman, lig ve seriler geniş ekranları daha iyi kullanır.",
     },
   },
+  {
+    id: "2026-10-30-game-presets",
+    date: "2026-10-30",
+    title: {
+      de: "Schnellstart mit gespeicherten Voreinstellungen",
+      en: "Quick start with saved presets",
+      fr: "Démarrage rapide avec préréglages enregistrés",
+      pl: "Szybki start z zapisanymi presetami",
+      nl: "Snelstart met opgeslagen voorinstellingen",
+      tr: "Kayıtlı ön ayarlarla hızlı başlat",
+    },
+    description: {
+      de: "Auf „Neues Spiel“ kannst du die aktuellen Einstellungen (Modus, Legs, Spieler, Bots, Extras) unter einem Namen speichern. Ein Tipp auf die Voreinstellung füllt alles aus, danach nur noch „Spiel starten“. Die Voreinstellungen hängen an deinem Konto und sind auf Handy und Tablet gleich.",
+      en: "On “New game” you can save the current settings (mode, legs, players, bots, extras) under a name. One tap on a preset fills everything in, then just “Start game”. Presets belong to your account and are the same on phone and tablet.",
+      fr: "Sur « Nouvelle partie », enregistrez les réglages actuels (mode, legs, joueurs, bots, extras) sous un nom. Un appui sur le préréglage remplit tout, puis « Démarrer ». Les préréglages sont liés à votre compte et identiques sur téléphone et tablette.",
+      pl: "W „Nowa gra” możesz zapisać bieżące ustawienia (tryb, lega, gracze, boty, dodatki) pod nazwą. Jedno dotknięcie presetu wypełnia wszystko, potem tylko „Start”. Presety są przypisane do konta i takie same na telefonie i tablecie.",
+      nl: "Bij “Nieuw spel” sla je de huidige instellingen (modus, legs, spelers, bots, extra's) op onder een naam. Eén tik op een voorinstelling vult alles in, daarna alleen “Spel starten”. Voorinstellingen horen bij je account en zijn gelijk op telefoon en tablet.",
+      tr: "“Yeni oyun” ekranında mevcut ayarları (mod, leg, oyuncular, botlar, ekstralar) bir adla kaydedebilirsin. Ön ayara tek dokunuş her şeyi doldurur, sonra sadece “Oyunu başlat”. Ön ayarlar hesabına bağlıdır, telefon ve tablette aynıdır.",
+    },
+  },
 ];
