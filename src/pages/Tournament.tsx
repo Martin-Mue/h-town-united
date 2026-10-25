@@ -27,6 +27,7 @@ import { useHasRole } from "@/hooks/useHasRole";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import TournamentSetupWizard from "@/components/tournament/setup/TournamentSetupWizard";
+import ManageTabs, { type ManageTab } from "@/components/tournament/manage/ManageTabs";
 import { setupStepIssues, allSetupIssues, firstStepWithIssue, SETUP_STEP_ORDER, type SetupState, type SetupStepKey } from "@/utils/tournamentSetupSteps";
 import { clubHasFeature } from "@/lib/planFeatures";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
@@ -138,6 +139,7 @@ interface TournamentRecord {
 }
 
 const BRACKET_SIZES = [4, 8, 16, 32, 64];
+const MANAGE_TAB_KEYS = ["plan", "players", "share", "stats", "settings"] as const;
 const BEST_OF_OPTIONS = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21];
 
 // Round 4 Rang 5: nextPowerOfTwo/lowerPowerOfTwo/chooseAutoMainSize/defaultBracketView/shuffle/
@@ -2714,7 +2716,7 @@ const TournamentPage = () => {
   // Shared by both the K.O. and round-robin returns below — one computed block instead of
   // duplicating the collapsible markup in each branch.
   const highlightsSection = (
-    <div className="container mb-4">
+    <div className="mb-4">
       <div className="gradient-card rounded-xl border border-border shadow-elevation-sm overflow-hidden">
         <button onClick={toggleHighlights} className="w-full flex items-center justify-between px-4 py-3 text-left">
           <span className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground">
@@ -2738,7 +2740,7 @@ const TournamentPage = () => {
   // Admin-only ETA forecast for THIS tournament (Round 3 Rang 2) — same collapsible pattern as
   // highlightsSection above, shared by both the K.O. and round-robin returns.
   const forecastSection = isAdmin ? (
-    <div className="container mb-4">
+    <div className="mb-4">
       <div className="gradient-card rounded-xl border border-border shadow-elevation-sm overflow-hidden">
         <button onClick={() => setShowForecast((v) => !v)} className="w-full flex items-center justify-between px-4 py-3 text-left">
           <span className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground">
@@ -2762,6 +2764,50 @@ const TournamentPage = () => {
 
   if (isKo) {
     const matches = activeTournament.bracket as Match[];
+    const manageTabParam = searchParams.get("tab");
+    const manageTab = MANAGE_TAB_KEYS.find((k) => k === manageTabParam) ?? "plan";
+    const selectManageTab = (key: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (key === "plan") next.delete("tab"); else next.set("tab", key);
+        return next;
+      }, { replace: true });
+      if (key === "stats") {
+        if (!showHighlights) toggleHighlights();
+        if (isAdmin) setShowForecast(true);
+      }
+    };
+    const underway = isTournamentUnderway(activeTournament);
+    const editCard = !underway && isOwner ? (
+      <SectionCard className="space-y-3">
+        <Eyebrow icon={PencilLine}>{t("common.edit")}</Eyebrow>
+        <p className="text-xs text-muted-foreground">{t("tournament.settingsEditHint")}</p>
+        <Button variant="outline" onClick={() => editTournament(activeTournament)} className="gap-1.5"><PencilLine className="h-4 w-4" /> {t("common.edit")}</Button>
+      </SectionCard>
+    ) : null;
+    const deleteCard = canDelete(activeTournament) ? (
+      <SectionCard className="space-y-3">
+        <Eyebrow icon={Trash2}>{t("tournament.deleteTournament")}</Eyebrow>
+        <p className="text-xs text-muted-foreground">{t("tournament.settingsDangerHint")}</p>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /> {t("tournament.deleteTournament")}</Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("tournament.deleteTournamentConfirm")}</AlertDialogTitle>
+              <AlertDialogDescription>„{activeTournament.name}" {t("tournament.deleteTournamentWarning")}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+              <AlertDialogAction onClick={() => deleteTournament(activeTournament.id)}>{t("stats.delete")}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </SectionCard>
+    ) : null;
+    const statsPanel = <div className="container">{highlightsSection}{forecastSection}</div>;
+
     const totalRounds = totalRoundsOf(matches);
 
     // ─── BOARD MODE ────────────────────────────────
@@ -2917,23 +2963,8 @@ const TournamentPage = () => {
       );
     }
 
-    return (
-      <div className="py-2 animate-slide-up">
-        <div className="container flex items-center justify-between mb-2">
-          <div>
-            <h2 className="text-lg font-display uppercase leading-tight">{activeTournament.name}</h2>
-            <p className="text-xs text-muted-foreground">
-              {t("tournament.koSystem")} · {activeTournament.players.length} {t("game.playersSuffix")} · {activeTournament.game_mode} ·{" "}
-              {activeTournament.best_of_sets
-                ? `${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_sets / 2)} ${t("game.setsSuffix")} (${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_legs / 2)} ${t("game.legsPerSet")})`
-                : `${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_legs / 2)}`}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Live-Spiel an/aus lives in the tournament edit form only now — a per-tournament
-                setting, not something toggled casually from the bracket toolbar. Both this and
-                Bearbeiten change tournament settings, which only the creator may (DB-enforced). */}
-            {isOwner && (activeTournament.public_view ? (
+
+    const liveToggle = isOwner && (activeTournament.public_view ? (
               // Turning OFF goes through a confirm dialog (the app's usual pattern for anything
               // impactful, see the reset-match/delete-tournament/withdraw dialogs below) — this
               // used to fire straight off one click, with any beamer/tablet currently showing the
@@ -2961,129 +2992,9 @@ const TournamentPage = () => {
                 <Radio className="w-3.5 h-3.5" />
                 {t("tournament.liveView")}
               </Button>
-            ))}
-            {/* Link/QR live here only, in the "Beamer-Link" banner below — having them here
-                too duplicated the exact same link/QR right on top of each other. */}
-            {!isTournamentUnderway(activeTournament) && isOwner && (
-              <Button variant="outline" size="sm" onClick={() => editTournament(activeTournament)}>
-                {t("common.edit")}
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={() => { closeTournament(); }}>
-              ← {t("tournament.overview")}
-            </Button>
-          </div>
-        </div>
-
-        {activeTournament.public_view && activeTournament.public_slug && (
-          <div className="container mb-2">
-            <div className="bg-gradient-to-r from-secondary/10 via-primary/10 to-accent/10 border border-secondary/30 rounded-xl px-4 py-1.5 text-xs flex items-center gap-2">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-secondary animate-pulse shrink-0" />
-              <span className="text-muted-foreground shrink-0 hidden sm:inline">{t("tournament.projectorLink")}</span>
-              <code className="font-mono text-secondary truncate">{window.location.origin}/live/{activeTournament.public_slug}</code>
-              <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" onClick={copyPublicLink}>
-                  <Copy className="w-3 h-3" /> {t("common.copy")}
-                </Button>
-                <QrCodeDialog
-                  url={`${window.location.origin}/live/${activeTournament.public_slug}`}
-                  title={t("tournament.liveView")}
-                  description={t("tournament.scanForPublicLiveView")}
-                  downloadName={`live-${activeTournament.public_slug}`}
-                  trigger={
-                    <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1">
-                      <QrCode className="w-3 h-3" /> QR
-                    </Button>
-                  }
-                />
-                <QrCodeDialog
-                  url={`${window.location.origin}/live/${activeTournament.public_slug}?view=auto`}
-                  title={t("tournament.screenMode")}
-                  description={t("tournament.screenModeDesc")}
-                  downloadName={`live-auto-${activeTournament.public_slug}`}
-                  trigger={
-                    <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" title={t("tournament.unattendedScreenTooltip")}>
-                      <RefreshCcw className="w-3 h-3" /> Auto
-                    </Button>
-                  }
-                />
-                {/* A dedicated deep link straight to the board overview, pinned (no rotation) —
-                    the "which match is on which board, what's next" screen the roadmap actually
-                    asks for as its own one-scan setup, distinct from "Auto" (rotates through
-                    bracket/participants/etc. too) and the plain live link (opens wherever this
-                    device last was, or the bracket by default). ?view=boards already works via
-                    PublicTournament.tsx's own deep-link handling — this just surfaces it here. */}
-                <QrCodeDialog
-                  url={`${window.location.origin}/live/${activeTournament.public_slug}?view=boards`}
-                  title={t("pt.boardOverview")}
-                  description={t("tournament.boardScreenModeDesc")}
-                  downloadName={`live-boards-${activeTournament.public_slug}`}
-                  trigger={
-                    <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" title={t("tournament.boardScreenTooltip")}>
-                      <Monitor className="w-3 h-3" /> {t("camera.board")}
-                    </Button>
-                  }
-                />
-              </div>
-            </div>
-            {!hasStarted(activeTournament) && (
-              <div className="rounded-xl border border-border bg-card/60 px-4 py-2.5 mt-1.5 space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <Label htmlFor="manual-release" className="text-xs">{t("tournament.manualReleaseLabel")}</Label>
-                    <p className="text-[11px] text-muted-foreground">{t("tournament.manualReleaseDesc")}</p>
-                  </div>
-                  <Switch id="manual-release" checked={!!activeTournament.manual_release} onCheckedChange={setManualRelease} />
-                </div>
-                <div>
-                <p className="text-[11px] text-muted-foreground mb-2">{t("tournament.prestartViewsLabel")}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {([
-                    { slot: "waiting" as const, label: t("pt.waitingTab") },
-                    { slot: "format" as const, label: t("pt.formatTab") },
-                    { slot: "qr" as const, label: t("pt.qrTab") },
-                    { slot: "boards" as const, label: t("pt.boardOverview") },
-                    { slot: "bracket" as const, label: t("tournament.bracketTreeTab") },
-                    { slot: "participants" as const, label: t("pt.participantsView") },
-                    { slot: "highlights" as const, label: t("pt.highlightsLabel") },
-                  ]).map((opt) => {
-                    const active = (activeTournament.prestart_views?.length ? activeTournament.prestart_views : DEFAULT_PRESTART_VIEWS).includes(opt.slot);
-                    return (
-                      <button
-                        key={opt.slot}
-                        onClick={() => togglePrestartView(opt.slot)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs ${active ? "border-secondary bg-secondary/15 text-secondary" : "border-border text-muted-foreground"}`}
-                      >
-                        <span className={`w-4 h-4 rounded border flex items-center justify-center ${active ? "bg-secondary border-secondary" : "border-muted-foreground/40"}`}>
-                          {active && <Check className="w-3 h-3 text-secondary-foreground" />}
-                        </span>
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTournament.champion && (
-          <div className="container mb-2">
-            <div className="bg-card border-2 border-accent rounded-xl px-4 py-2 text-center glow-gold flex items-center justify-center gap-2 flex-wrap">
-              <Trophy className="w-5 h-5 text-accent shrink-0" />
-              <p className="font-display uppercase text-sm">{activeTournament.champion} <span className="text-accent">· {t("tournament.championSuffix")}</span></p>
-              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setCeremonyChampion(activeTournament.champion)}>
-                🏆 {t("tournament.ceremony")}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {highlightsSection}
-        {forecastSection}
-
-        {/* View switcher + tournament management */}
+            ));
+    const planPanel = (
+      <>
         <div className="container mb-2 flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border overflow-x-auto max-w-full">
             <button onClick={() => setBracketView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${bracketView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
@@ -3098,19 +3009,6 @@ const TournamentPage = () => {
               <Shuffle className="w-3.5 h-3.5" /> {t("tournament.redrawScorekeepers")}
             </Button>
           )}
-          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-            <Monitor className="w-3.5 h-3.5" /> {activeTournament.boards || 2} {t("camera.board")}s
-          </span>
-          <Button
-            size="sm" variant="outline" className="h-8 text-xs gap-1 ml-auto"
-            title={t("tournament.boardModeDesc")}
-            onClick={() => {
-              const saved = window.localStorage.getItem(`dart-tournament-board-${activeTournament.id}`);
-              setSearchParams({ board: saved || "pick" });
-            }}
-          >
-            <Smartphone className="w-3.5 h-3.5" /> {t("tournament.boardMode")}
-          </Button>
         </div>
 
         {/* Always-visible board-occupancy strip, regardless of which sub-tab (tree/schedule) is
@@ -3269,6 +3167,39 @@ const TournamentPage = () => {
               ));
             })()}
 
+          </div>
+        )}
+
+        {/* Live-Ticker */}
+        {(() => {
+          const done = (matches as Match[]).filter(m => m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE").slice(-10).reverse();
+          if (done.length === 0) return null;
+          return (
+            <div className="container mb-6">
+              <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="w-4 h-4 text-accent" />
+                  <h3 className="font-display uppercase text-sm">{t("tournament.liveTickerHeading")}</h3>
+                </div>
+                <ol className="grid md:grid-cols-2 gap-2 text-xs">
+                  {done.map(m => (
+                    <li key={m.id} className="border-l-2 border-primary/40 pl-2">
+                      <p className="font-display text-sm">
+                        <span className="text-secondary">{m.winner}</span>
+                        <span className="text-muted-foreground"> {t("tournament.beats")} </span>
+                        {m.winner === m.player1 ? m.player2 : m.player1}
+                      </p>
+                      <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          );
+        })()}
+      </>
+    );
+    const playersPanel = <div className="container">
             {isOwner && (
               <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
                 <div className="flex items-center justify-between gap-2 mb-2">
@@ -3357,8 +3288,199 @@ const TournamentPage = () => {
                 </div>
               </div>
             )}
+    </div>;
+    const hasLiveLink = !!activeTournament.public_view && !!activeTournament.public_slug;
+    const sharePanel = (
+      <div className="container grid gap-3 md:grid-cols-2 md:items-start">
+        <SectionCard className="space-y-3">
+          <Eyebrow icon={Radio}>{t("tournament.shareViewersTitle")}</Eyebrow>
+          <p className="text-xs text-muted-foreground">{t("tournament.shareViewersHint")}</p>
+          {isOwner && <div>{liveToggle}</div>}
+          {hasLiveLink ? (
+            <div className="space-y-2 rounded-xl border border-secondary/30 bg-secondary/5 p-3">
+              <code className="block truncate font-mono text-xs text-secondary">{window.location.origin}/live/{activeTournament.public_slug}</code>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" className="h-10 gap-1.5" onClick={copyPublicLink}>
+                  <Copy className="h-3.5 w-3.5" /> {t("common.copy")}
+                </Button>
+                <QrCodeDialog
+                  url={`${window.location.origin}/live/${activeTournament.public_slug}`}
+                  title={t("tournament.liveView")}
+                  description={t("tournament.scanForPublicLiveView")}
+                  downloadName={`live-${activeTournament.public_slug}`}
+                  trigger={
+                    <Button variant="outline" size="sm" className="h-10 gap-1.5">
+                      <QrCode className="w-3 h-3" /> QR
+                    </Button>
+                  }
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">{t("tournament.shareLiveOff")}</p>
+          )}
+        </SectionCard>
+        {hasLiveLink && (
+          <SectionCard className="space-y-3">
+            <Eyebrow icon={Monitor}>{t("tournament.shareScreensTitle")}</Eyebrow>
+            <p className="text-xs text-muted-foreground">{t("tournament.shareScreensHint")}</p>
+            <div className="flex flex-wrap gap-2">
+                <QrCodeDialog
+                  url={`${window.location.origin}/live/${activeTournament.public_slug}?view=auto`}
+                  title={t("tournament.screenMode")}
+                  description={t("tournament.screenModeDesc")}
+                  downloadName={`live-auto-${activeTournament.public_slug}`}
+                  trigger={
+                    <Button variant="outline" size="sm" className="h-10 gap-1.5" title={t("tournament.unattendedScreenTooltip")}>
+                      <RefreshCcw className="w-3 h-3" /> Auto
+                    </Button>
+                  }
+                />
+                <QrCodeDialog
+                  url={`${window.location.origin}/live/${activeTournament.public_slug}?view=boards`}
+                  title={t("pt.boardOverview")}
+                  description={t("tournament.boardScreenModeDesc")}
+                  downloadName={`live-boards-${activeTournament.public_slug}`}
+                  trigger={
+                    <Button variant="outline" size="sm" className="h-10 gap-1.5" title={t("tournament.boardScreenTooltip")}>
+                      <Monitor className="w-3 h-3" /> {t("camera.board")}
+                    </Button>
+                  }
+                />
+            </div>
+          </SectionCard>
+        )}
+        <SectionCard className="space-y-3">
+          <Eyebrow icon={Smartphone}>{t("tournament.shareBoardsTitle")}</Eyebrow>
+          <p className="text-xs text-muted-foreground">{t("tournament.shareBoardsHint")}</p>
+          <p className="flex items-center gap-1.5 text-sm"><Monitor className="h-4 w-4 text-muted-foreground" /> {activeTournament.boards || 2} {t("camera.board")}s</p>
+          <Button
+            variant="outline" className="h-10 gap-1.5"
+            title={t("tournament.boardModeDesc")}
+            onClick={() => {
+              const saved = window.localStorage.getItem("dart-tournament-board-" + activeTournament.id);
+              setSearchParams({ board: saved || "pick" });
+            }}
+          >
+            <Smartphone className="h-4 w-4" /> {t("tournament.boardMode")}
+          </Button>
+        </SectionCard>
+        {!hasStarted(activeTournament) && hasLiveLink && (
+          <div className="md:col-span-2">
+            <Eyebrow icon={Settings2}>{t("tournament.sharePrestartTitle")}</Eyebrow>
+            {!hasStarted(activeTournament) && (
+              <div className="mt-2 space-y-3 rounded-xl border border-border bg-card/60 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label htmlFor="manual-release" className="text-xs">{t("tournament.manualReleaseLabel")}</Label>
+                    <p className="text-[11px] text-muted-foreground">{t("tournament.manualReleaseDesc")}</p>
+                  </div>
+                  <Switch id="manual-release" checked={!!activeTournament.manual_release} onCheckedChange={setManualRelease} />
+                </div>
+                <div>
+                <p className="text-[11px] text-muted-foreground mb-2">{t("tournament.prestartViewsLabel")}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { slot: "waiting" as const, label: t("pt.waitingTab") },
+                    { slot: "format" as const, label: t("pt.formatTab") },
+                    { slot: "qr" as const, label: t("pt.qrTab") },
+                    { slot: "boards" as const, label: t("pt.boardOverview") },
+                    { slot: "bracket" as const, label: t("tournament.bracketTreeTab") },
+                    { slot: "participants" as const, label: t("pt.participantsView") },
+                    { slot: "highlights" as const, label: t("pt.highlightsLabel") },
+                  ]).map((opt) => {
+                    const active = (activeTournament.prestart_views?.length ? activeTournament.prestart_views : DEFAULT_PRESTART_VIEWS).includes(opt.slot);
+                    return (
+                      <button
+                        key={opt.slot}
+                        onClick={() => togglePrestartView(opt.slot)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs ${active ? "border-secondary bg-secondary/15 text-secondary" : "border-border text-muted-foreground"}`}
+                      >
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center ${active ? "bg-secondary border-secondary" : "border-muted-foreground/40"}`}>
+                          {active && <Check className="w-3 h-3 text-secondary-foreground" />}
+                        </span>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
+      </div>
+    );
+    const hasPrelim = matches.some((m) => m.round === 0);
+    const roundNumbers = [...(hasPrelim ? [0] : []), ...Array.from({ length: totalRounds }, (_, i) => i + 1)];
+    const settingsPanel = (
+      <div className="container grid gap-3 md:grid-cols-2 md:items-start">
+        {editCard}
+        {isOwner && (
+          <SectionCard className="space-y-3">
+            <Eyebrow icon={Network}>{t("tournament.settingsRoundsTitle")}</Eyebrow>
+            <p className="text-xs text-muted-foreground">{t("tournament.settingsRoundsHint")}</p>
+            <ul className="divide-y divide-border/50">
+              {roundNumbers.map((r) => {
+                // same rule as the round header in the bracket: a round can only be re-moded while nothing in it is decided
+                const undecided = matches.filter((m) => m.round === r).every((m) => !m.winner);
+                return (
+                <li key={r} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{roundLabel(r, totalRounds)}</span>
+                    <span className="block text-xs text-muted-foreground">{resolveRoundMode(r)} · {t("stats.firstTo")} {Math.ceil(resolveRoundBestOf(r) / 2)}</span>
+                  </span>
+                  <Button size="sm" variant="outline" className="h-9 shrink-0" disabled={!undecided} onClick={() => openRoundModeEditor(r)}>{t("tournament.settingsRoundChange")}</Button>
+                </li>
+                );
+              })}
+            </ul>
+          </SectionCard>
+        )}
+        {deleteCard}
+      </div>
+    );
+    const manageTabs: ManageTab[] = [
+      { key: "plan", label: t("tournament.tabPlan"), icon: Network, content: planPanel },
+      { key: "players", label: t("tournament.tabPlayers"), icon: Users, content: playersPanel, hidden: !isOwner },
+      { key: "share", label: t("tournament.tabShare"), icon: Radio, content: sharePanel },
+      { key: "stats", label: t("tournament.tabStats"), icon: Target, content: statsPanel },
+      { key: "settings", label: t("tournament.tabSettings"), icon: Settings2, content: settingsPanel, hidden: !editCard && !isOwner && !deleteCard },
+    ];
+
+    return (
+      <div className="py-2 animate-slide-up">
+        <div className="container flex items-center justify-between mb-2">
+          <div>
+            <h2 className="text-lg font-display uppercase leading-tight">{activeTournament.name}</h2>
+            <p className="text-xs text-muted-foreground">
+              {t("tournament.koSystem")} · {activeTournament.players.length} {t("game.playersSuffix")} · {activeTournament.game_mode} ·{" "}
+              {activeTournament.best_of_sets
+                ? `${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_sets / 2)} ${t("game.setsSuffix")} (${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_legs / 2)} ${t("game.legsPerSet")})`
+                : `${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_legs / 2)}`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {liveToggle}
+            <Button variant="ghost" size="sm" onClick={() => { closeTournament(); }}>
+              ← {t("tournament.overview")}
+            </Button>
+          </div>
+        </div>
+
+        {activeTournament.champion && (
+          <div className="container mb-2">
+            <div className="bg-card border-2 border-accent rounded-xl px-4 py-2 text-center glow-gold flex items-center justify-center gap-2 flex-wrap">
+              <Trophy className="w-5 h-5 text-accent shrink-0" />
+              <p className="font-display uppercase text-sm">{activeTournament.champion} <span className="text-accent">· {t("tournament.championSuffix")}</span></p>
+              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setCeremonyChampion(activeTournament.champion)}>
+                🏆 {t("tournament.ceremony")}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <ManageTabs tabs={manageTabs} active={manageTab} onChange={selectManageTab} bleed />
 
         {editMatch && (
           <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditMatch(null)}>
@@ -3423,34 +3545,6 @@ const TournamentPage = () => {
           </div>
         )}
 
-        {/* Live-Ticker */}
-        {(() => {
-          const done = (matches as Match[]).filter(m => m.winner && m.player1 && m.player2 && m.player1 !== "BYE" && m.player2 !== "BYE").slice(-10).reverse();
-          if (done.length === 0) return null;
-          return (
-            <div className="container mb-6">
-              <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="w-4 h-4 text-accent" />
-                  <h3 className="font-display uppercase text-sm">{t("tournament.liveTickerHeading")}</h3>
-                </div>
-                <ol className="grid md:grid-cols-2 gap-2 text-xs">
-                  {done.map(m => (
-                    <li key={m.id} className="border-l-2 border-primary/40 pl-2">
-                      <p className="font-display text-sm">
-                        <span className="text-secondary">{m.winner}</span>
-                        <span className="text-muted-foreground"> {t("tournament.beats")} </span>
-                        {m.winner === m.player1 ? m.player2 : m.player1}
-                      </p>
-                      <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-          );
-        })()}
-
         {ceremonyChampion && (
           <TrophyCeremony champion={ceremonyChampion} tournamentName={activeTournament.name} onClose={() => setCeremonyChampion(null)} />
         )}
@@ -3464,67 +3558,53 @@ const TournamentPage = () => {
   const unplayed = rrUnplayed;
   const played = rrPlayed;
 
-  return (
-    <div className="container py-4 animate-slide-up">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
-          <p className="text-xs text-muted-foreground">{t("tournament.roundRobin")} · {activeTournament.players.length} {t("game.playersSuffix")}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { closeTournament(); }}>
-            ← {t("tournament.overview")}
-          </Button>
-        </div>
-      </div>
 
-      {activeTournament.champion && (
-        <div className="bg-card border-2 border-accent rounded-xl p-4 text-center glow-gold mb-4">
-          <Trophy className="w-8 h-8 text-accent mx-auto mb-1" />
-          <p className="font-display uppercase text-xl">{activeTournament.champion}</p>
-          <p className="text-accent text-sm font-display uppercase">{t("tournament.championSuffix")}</p>
-          <Button size="sm" variant="ghost" className="mt-2 text-xs" onClick={() => setCeremonyChampion(activeTournament.champion)}>
-            🏆 {t("tournament.showTrophyCeremony")}
-          </Button>
-        </div>
-      )}
-
-      {highlightsSection}
-      {forecastSection}
-
-      <AlertDialog open={rrResultEntry !== null} onOpenChange={(open) => { if (!open) setRrResultEntry(null); }}>
+  const rrManageTabParam = searchParams.get("tab");
+  const rrManageTab = MANAGE_TAB_KEYS.find((k) => k === rrManageTabParam) ?? "plan";
+  const selectRrManageTab = (key: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (key === "plan") next.delete("tab"); else next.set("tab", key);
+      return next;
+    }, { replace: true });
+    if (key === "stats") {
+      if (!showHighlights) toggleHighlights();
+      if (isAdmin) setShowForecast(true);
+    }
+  };
+  const rrEditCard = !isTournamentUnderway(activeTournament) && isOwner ? (
+    <SectionCard className="space-y-3">
+      <Eyebrow icon={PencilLine}>{t("common.edit")}</Eyebrow>
+      <p className="text-xs text-muted-foreground">{t("tournament.settingsEditHint")}</p>
+      <Button variant="outline" onClick={() => editTournament(activeTournament)} className="gap-1.5"><PencilLine className="h-4 w-4" /> {t("common.edit")}</Button>
+    </SectionCard>
+  ) : null;
+  const rrDeleteCard = canDelete(activeTournament) ? (
+    <SectionCard className="space-y-3">
+      <Eyebrow icon={Trash2}>{t("tournament.deleteTournament")}</Eyebrow>
+      <p className="text-xs text-muted-foreground">{t("tournament.settingsDangerHint")}</p>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /> {t("tournament.deleteTournament")}</Button>
+        </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("tournament.enterResultTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {rrResultEntry?.player1} vs. {rrResultEntry?.player2} · {t("tournament.enterResultWinner")}: {rrResultEntry?.winner}
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t("tournament.deleteTournamentConfirm")}</AlertDialogTitle>
+            <AlertDialogDescription>„{activeTournament.name}" {t("tournament.deleteTournamentWarning")}</AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="grid grid-cols-2 gap-3">
-            {([rrResultEntry?.player1, rrResultEntry?.player2] as const).map((name, idx) => (
-              <label key={idx} className="text-xs text-muted-foreground">
-                <span className="mb-1 block truncate">{name}</span>
-                <Input
-                  type="number" inputMode="numeric" min={0}
-                  value={rrLegsText[idx]}
-                  onChange={(e) => setRrLegsText((prev) => (idx === 0 ? [e.target.value, prev[1]] : [prev[0], e.target.value]))}
-                  className="text-center text-lg font-bold"
-                  autoFocus={idx === 0}
-                />
-              </label>
-            ))}
-          </div>
-          {rrLegsText.some((v) => v.trim() !== "") && !rrLegsParsed && (
-            <p className="text-xs text-destructive">{t("tournament.enterResultInvalid")}</p>
-          )}
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <Button variant="outline" onClick={() => submitRrResultEntry(false)}>{t("tournament.enterResultWithoutScore")}</Button>
-            <Button onClick={() => submitRrResultEntry(true)} disabled={!rrLegsParsed}>{t("tournament.enterResultSave")}</Button>
+            <AlertDialogAction onClick={() => deleteTournament(activeTournament.id)}>{t("stats.delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
+    </SectionCard>
+  ) : null;
+  const rrManageTabs: ManageTab[] = [
+    {
+      key: "plan", label: t("tournament.tabPlan"), icon: ListOrdered,
+      content: (
+        <>
       {/* Standings table */}
       <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 mb-4">
         <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
@@ -3700,10 +3780,10 @@ const TournamentPage = () => {
           <ListPaginationFooter list={pagedRrPlayed} />
         </div>
       )}
-
-      {/* Manage participants — round-robin equivalent of the K.O. schedule tab's panel (board/
-       *  scorekeeper toolkit, Round 3 Rang 1): check-in, late sign-up, withdrawal. Round-robin has
-       *  no tree/schedule sub-tabs to hide this behind, so it's just always shown here. */}
+        </>
+      ),
+    },
+    { key: "players", label: t("tournament.tabPlayers"), icon: Users, hidden: !isOwner, content: <>
       {isOwner && (
         <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 mt-4">
           <div className="flex items-center justify-between gap-2 mb-2">
@@ -3792,6 +3872,70 @@ const TournamentPage = () => {
           </div>
         </div>
       )}
+    </> },
+    { key: "stats", label: t("tournament.tabStats"), icon: Target, content: <>{highlightsSection}{forecastSection}</> },
+    { key: "settings", label: t("tournament.tabSettings"), icon: Settings2, hidden: !rrEditCard && !rrDeleteCard, content: <div className="grid gap-3 md:grid-cols-2 md:items-start">{rrEditCard}{rrDeleteCard}</div> },
+  ];
+
+  return (
+    <div className="container py-4 animate-slide-up">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
+          <p className="text-xs text-muted-foreground">{t("tournament.roundRobin")} · {activeTournament.players.length} {t("game.playersSuffix")}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => { closeTournament(); }}>
+            ← {t("tournament.overview")}
+          </Button>
+        </div>
+      </div>
+
+      {activeTournament.champion && (
+        <div className="bg-card border-2 border-accent rounded-xl p-4 text-center glow-gold mb-4">
+          <Trophy className="w-8 h-8 text-accent mx-auto mb-1" />
+          <p className="font-display uppercase text-xl">{activeTournament.champion}</p>
+          <p className="text-accent text-sm font-display uppercase">{t("tournament.championSuffix")}</p>
+          <Button size="sm" variant="ghost" className="mt-2 text-xs" onClick={() => setCeremonyChampion(activeTournament.champion)}>
+            🏆 {t("tournament.showTrophyCeremony")}
+          </Button>
+        </div>
+      )}
+
+      <AlertDialog open={rrResultEntry !== null} onOpenChange={(open) => { if (!open) setRrResultEntry(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("tournament.enterResultTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {rrResultEntry?.player1} vs. {rrResultEntry?.player2} · {t("tournament.enterResultWinner")}: {rrResultEntry?.winner}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            {([rrResultEntry?.player1, rrResultEntry?.player2] as const).map((name, idx) => (
+              <label key={idx} className="text-xs text-muted-foreground">
+                <span className="mb-1 block truncate">{name}</span>
+                <Input
+                  type="number" inputMode="numeric" min={0}
+                  value={rrLegsText[idx]}
+                  onChange={(e) => setRrLegsText((prev) => (idx === 0 ? [e.target.value, prev[1]] : [prev[0], e.target.value]))}
+                  className="text-center text-lg font-bold"
+                  autoFocus={idx === 0}
+                />
+              </label>
+            ))}
+          </div>
+          {rrLegsText.some((v) => v.trim() !== "") && !rrLegsParsed && (
+            <p className="text-xs text-destructive">{t("tournament.enterResultInvalid")}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <Button variant="outline" onClick={() => submitRrResultEntry(false)}>{t("tournament.enterResultWithoutScore")}</Button>
+            <Button onClick={() => submitRrResultEntry(true)} disabled={!rrLegsParsed}>{t("tournament.enterResultSave")}</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ManageTabs tabs={rrManageTabs} active={rrManageTab} onChange={selectRrManageTab} />
 
       {ceremonyChampion && (
         <TrophyCeremony champion={ceremonyChampion} tournamentName={activeTournament.name} onClose={() => setCeremonyChampion(null)} />

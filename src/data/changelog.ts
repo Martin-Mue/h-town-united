@@ -1074,4 +1074,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Büyük skorlu çapraz kesimli skor tablosu, tur toplamlı üç dart alanı, altta Geri al, Düzelt ve Sıradaki oyuncu çubuğu ve botun oklarını gösteren çizilmiş bir tahta. Artık her oyunda geçerli.",
     },
   },
+  {
+    id: "2026-10-29-tournament-steps-and-tabs",
+    date: "2026-10-29",
+    title: {
+      de: "Turniere: Erstellen in Schritten, Verwalten mit Reitern",
+      en: "Tournaments: set up in steps, manage with tabs",
+      fr: "Tournois : création par étapes, gestion par onglets",
+      pl: "Turnieje: tworzenie krok po kroku, zarządzanie w zakładkach",
+      nl: "Toernooien: aanmaken in stappen, beheren met tabs",
+      tr: "Turnuvalar: adım adım oluşturma, sekmelerle yönetme",
+    },
+    description: {
+      de: "Ein neues Turnier legst du jetzt in vier Schritten an: Grundlagen, Format, Teilnehmer, Prüfen & Starten. Seltene Einstellungen sind unter „Erweitert“ eingeklappt. Ein laufendes Turnier hat Reiter für Spielplan, Teilnehmer, Anzeige & Teilen (Live-Link, QR-Codes, Board-Modus), Statistik und Einstellungen.",
+      en: "A new tournament is now created in four steps: basics, format, players, review & start. Rarely used settings are folded under “Advanced”. A running tournament has tabs for schedule, players, display & share (live link, QR codes, board mode), stats and settings.",
+      fr: "Un nouveau tournoi se crée désormais en quatre étapes : bases, format, participants, vérifier et lancer. Les réglages rares sont repliés sous « Avancé ». Un tournoi en cours a des onglets : programme, participants, affichage et partage (lien en direct, codes QR, mode board), statistiques et réglages.",
+      pl: "Nowy turniej tworzysz teraz w czterech krokach: podstawy, format, uczestnicy, sprawdź i zacznij. Rzadkie ustawienia są schowane w „Zaawansowane”. Trwający turniej ma zakładki: harmonogram, uczestnicy, ekran i udostępnianie (link na żywo, kody QR, tryb tarczy), statystyki i ustawienia.",
+      nl: "Een nieuw toernooi maak je nu in vier stappen: basis, formaat, deelnemers, controleren en starten. Zelden gebruikte instellingen zijn ingeklapt onder “Geavanceerd”. Een lopend toernooi heeft tabs voor speelschema, deelnemers, weergave & delen (livelink, QR-codes, boardmodus), statistieken en instellingen.",
+      tr: "Yeni bir turnuvayı artık dört adımda oluşturuyorsunuz: temel, format, katılımcılar, kontrol ve başlat. Nadir ayarlar “Gelişmiş” altında kapalı. Süren bir turnuvada program, katılımcılar, ekran ve paylaşım (canlı bağlantı, QR kodları, tahta modu), istatistik ve ayarlar sekmeleri var.",
+    },
+  },
 ];
