@@ -5,6 +5,7 @@ import { Check, X, Download, Upload } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import type { Json } from "@/integrations/supabase/types";
 import AdminDetectionQuality from "@/components/admin/AdminDetectionQuality";
 
 type ReviewStatus = "pending" | "confirmed" | "needs_review" | "rejected";
@@ -51,6 +52,8 @@ interface AiVerdict {
   status: "confirmed" | "needs_review" | "rejected";
   ai_segments?: { baseValue: number; multiplier: number }[];
   notes?: string;
+  /** Corrected dart tips: replaces the sample's labels (a review that moved, added or removed a tip). */
+  labels?: SampleLabel[];
 }
 
 const dartText = (d: { baseValue: number; multiplier: number }) =>
@@ -216,7 +219,9 @@ const AdminTrainingReview = () => {
   /** Applies a verdict file produced by the AI review (array of AiVerdict) to the matching rows. */
   const importVerdicts = async (file: File) => {
     try {
-      const verdicts = JSON.parse(await file.text()) as AiVerdict[];
+      const parsed = JSON.parse(await file.text()) as AiVerdict[] | { verdicts?: AiVerdict[] };
+      const verdicts = Array.isArray(parsed) ? parsed : parsed.verdicts;
+      if (!Array.isArray(verdicts)) throw new Error("Die Datei enthält keine Liste von Ergebnissen (erwartet: [{ id, status, ... }]).");
       let applied = 0;
       for (const v of verdicts) {
         if (!["confirmed", "needs_review", "rejected"].includes(v.status)) continue;
@@ -226,6 +231,7 @@ const AdminTrainingReview = () => {
             review_status: v.status,
             ai_segments: v.ai_segments ?? null,
             ai_notes: v.notes ?? null,
+            ...(Array.isArray(v.labels) ? { labels: v.labels as unknown as Json } : {}),
             reviewed_at: new Date().toISOString(),
             reviewed_by: "ai",
           })
