@@ -1410,6 +1410,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (settled) applyCalibrationTaps(settled, calib.source ?? "manual", calib.confirmed ?? true, false);
       setPhase("live");
       setStatus(t("camera.readyThrowFirst"));
+      // The saved calibration was found on the wires again (the usual start of a session): same confirmation as a fresh one.
+      if (settled) playCalibrationSuccessSound();
     }
   };
 
