@@ -132,3 +132,16 @@ describe("a hit on a known dart's own tip", () => {
     expect(selectNewDart(known, [{ x: 0.506, y: 0.165, confidence: 0.6 }], () => 1)).not.toBeNull();
   });
 });
+
+describe("weak hits at the board edge", () => {
+  const edgeSupport = () => 0.25; // between the edge bar (0.22) and the general weak bar (0.35)
+  it("count with moderate fresh change in the straightened frame's edge zone", () => {
+    const edge = { x: 0.5, y: 0.5 - 0.377 * 1.02, confidence: 0.2 };
+    expect(selectNewDart([], [edge], edgeSupport, { straightenedFrame: true })).not.toBeNull();
+    expect(selectNewDart([], [edge], edgeSupport)).toBeNull();
+  });
+  it("do not get relief in the inner board", () => {
+    const inner = { x: 0.5, y: 0.5 - 0.377 * 0.5, confidence: 0.2 };
+    expect(selectNewDart([], [inner], edgeSupport, { straightenedFrame: true })).toBeNull();
+  });
+});

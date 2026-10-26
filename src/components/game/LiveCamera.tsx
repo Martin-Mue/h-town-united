@@ -1746,7 +1746,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // dropping it frees its slot instead of leaving the round one real dart short.
     const kept = keepSupportedDarts(already, scored);
     // Several darts can land between two looks (quick throws), so take every new one, not just the best.
-    const newDarts = selectNewDarts(kept, scored, usable ? (x, y) => changedShareNear(usable, x, y) : null, dartsRemaining - kept.length);
+    const newDarts = selectNewDarts(kept, scored, usable ? (x, y) => changedShareNear(usable, x, y) : null, dartsRemaining - kept.length, { straightenedFrame: !!rectMapping() });
     if (newDarts.length === 0 && kept.length === already.length) return; // nothing new — the end-of-visit pass gets another look
 
     // A discarded/committed round replaces the array underneath us — then this result is stale.
@@ -1884,7 +1884,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // Changed pixels gate weak detections; a confident one needs no confirmation (a dart that an earlier
       // picture already contained, but the model only recognised now, must not be lost).
       const support = usable ? (x: number, y: number) => changedShareNear(usable, x, y) : null;
-      const added = selectNewDarts(known, present, support, dartsRemaining - known.length);
+      const added = selectNewDarts(known, present, support, dartsRemaining - known.length, { straightenedFrame: !!rectMapping() });
       if (accumulatedRef.current !== known) return; // the round was committed/discarded meanwhile
       {
         const MM_PER_FRAME = 170 / 0.377;

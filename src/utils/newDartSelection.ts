@@ -31,6 +31,17 @@ export const WEAK_DART_SCORE = 0.25;
 export const NEW_DART_SEPARATION = 0.06;
 export const CHANGE_SUPPORT_WEAK = 0.35;
 /**
+ * Darts in the double ring and beyond (about 40 % of the misses of the model on hand-checked pictures: it finds only about
+ * half of the tips outside the double with the usual cut-off) give weak scores — the tip is dark on dark, the flight leaves
+ * the picture. A weak hit there needs less fresh change under it than anywhere else. Only for the straightened frame, where
+ * the board centre is (0.5, 0.5) and its radius 0.377.
+ */
+export const CHANGE_SUPPORT_WEAK_EDGE = 0.22;
+export const EDGE_ZONE_FROM_RADIUS = 0.9;
+const BOARD_RADIUS_IN_FRAME = 0.377;
+/** Where in the straightened frame a candidate stands: true from 90 % of the board radius outwards. */
+export const inEdgeZone = (x: number, y: number): boolean => Math.hypot(x - 0.5, y - 0.5) / BOARD_RADIUS_IN_FRAME >= EDGE_ZONE_FROM_RADIUS;
+/**
  * A dart is ~90 mm long and the model sometimes also reports its barrel or flight as a dart — a weak hit up to a dart's
  * length from a stronger one is that, not another dart. (Measured: after the first dart of a round the model gave
  * tip 0.73 and, 63 mm further along the barrel, "dart" 0.26; both stood on fresh pixels and the second one became a phantom.)
@@ -52,10 +63,16 @@ export const DUPLICATE_DART_RADIUS = 0.006;
 export const CONFIDENT_DART_SCORE = 0.5;
 export const CONFIDENT_BYPASS_MIN_DISTANCE = 0.09;
 
+export interface SelectOptions {
+  /** The candidates are positions in the straightened model frame (board centre 0.5/0.5), so the edge rule applies. */
+  straightenedFrame?: boolean;
+}
+
 export function selectNewDart<T extends DartCandidate>(
   known: { x?: number; y?: number }[],
   candidates: T[],
   changeSupportAt: ((x: number, y: number) => number) | null,
+  options: SelectOptions = {},
 ): T | null {
   let best: T | null = null;
   let bestScore = -1;
@@ -77,7 +94,7 @@ export function selectNewDart<T extends DartCandidate>(
       const weakNearKnown = c.confidence < GHOST_MAX_SCORE && nearestKnown < GHOST_RADIUS;
       const needed = Math.max(
         nearKnown ? CHANGE_SUPPORT_NEAR_KNOWN : CHANGE_SUPPORT_MIN,
-        c.confidence < WEAK_DART_SCORE ? CHANGE_SUPPORT_WEAK : 0,
+        c.confidence < WEAK_DART_SCORE ? (options.straightenedFrame && inEdgeZone(x, y) ? CHANGE_SUPPORT_WEAK_EDGE : CHANGE_SUPPORT_WEAK) : 0,
         weakNearKnown ? CHANGE_SUPPORT_NEAR_KNOWN_WEAK : 0,
       );
       if (support < needed) continue;
@@ -105,6 +122,7 @@ export function selectNewDarts<T extends DartCandidate>(
   candidates: T[],
   changeSupportAt: ((x: number, y: number) => number) | null,
   capacity: number,
+  options: SelectOptions = {},
 ): T[] {
   const picked: T[] = [];
   // Weak hits next to a clearly stronger hit of the same look are that dart's barrel or flight, not darts of their own.
@@ -120,7 +138,7 @@ export function selectNewDarts<T extends DartCandidate>(
       ),
   );
   while (picked.length < capacity) {
-    const next = selectNewDart(known, remaining, changeSupportAt);
+    const next = selectNewDart(known, remaining, changeSupportAt, options);
     if (!next) break;
     picked.push(next);
     // One dart gives the model several hits (tip, barrel, flight). All of them stand on the same fresh pixels, so
