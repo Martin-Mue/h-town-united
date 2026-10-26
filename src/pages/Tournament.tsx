@@ -2743,8 +2743,8 @@ const TournamentPage = () => {
         )}
         steps={[
           { key: "basics", title: t("tournament.wizardBasics"), icon: Trophy, content: stepBasics, issues: issuesFor("basics") },
-          { key: "format", title: t("tournament.wizardFormat"), icon: Target, content: stepFormat, issues: issuesFor("format") },
           { key: "players", title: t("tournament.wizardPlayers"), icon: Users, content: stepPlayers, issues: issuesFor("players") },
+          { key: "format", title: t("tournament.wizardFormat"), icon: Target, content: stepFormat, issues: issuesFor("format") },
           { key: "review", title: t("tournament.wizardReview"), icon: ClipboardCheck, content: stepReview, issues: [] },
         ]}
         current={wizardStep}

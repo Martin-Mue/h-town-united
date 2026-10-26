@@ -4,7 +4,7 @@
  */
 export type SetupStepKey = "basics" | "format" | "players" | "review";
 
-export const SETUP_STEP_ORDER: readonly SetupStepKey[] = ["basics", "format", "players", "review"];
+export const SETUP_STEP_ORDER: readonly SetupStepKey[] = ["basics", "players", "format", "review"];
 
 export interface SetupState {
   mode: string;
