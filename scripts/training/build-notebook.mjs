@@ -7,11 +7,16 @@ const md = (text) => ({ cell_type: "markdown", metadata: {}, source: toSource(te
 const code = (text) => ({ cell_type: "code", metadata: {}, execution_count: null, outputs: [], source: toSource(text) });
 
 const cells = [
-  md(String.raw`# DartSpot: Fine-Tuning des Dart-Erkennungsmodells (v2 – Dartspitze)
+  md(String.raw`# DartSpot: Fine-Tuning des Dart-Erkennungsmodells (v9 – Training mit allen geprüften Bildern)
 
 Vorher in Colab: **Laufzeit → Laufzeittyp ändern → GPU (T4)**. Danach **Laufzeit → Alle ausführen** – ein Durchlauf, keine Zwischenschritte.
 
-Gestartet wird vom **aktuellen Modell** (das in der App läuft): das Notebook sucht es in Google Drive unter DeepDarts-Dataset/dartspot_v4_best.pt (das hat der letzte Lauf dort gesichert), sonst dartspot_tip_best.pt. Fehlt die Datei, bittet das Notebook um den Upload der best.pt vom letzten Training (Downloads). Das Original-Modell dient nur als Notnagel. "ALT" in den Messungen heißt: das aktuell laufende Modell. Hochladen musst du das Datenset (training-set-rectified-v8.zip).
+Gestartet wird vom **aktuellen Modell** (das in der App läuft): das Notebook sucht es in Google Drive unter DeepDarts-Dataset/dartspot_v4_best.pt (das hat der letzte Lauf dort gesichert), sonst dartspot_tip_best.pt. Fehlt die Datei, bittet das Notebook um den Upload der best.pt vom letzten Training (Downloads). Das Original-Modell dient nur als Notnagel. "ALT" in den Messungen heißt: das aktuell laufende Modell. Hochladen musst du das Datenset (training-set-rectified-v9.zip).
+
+Was in diesem Lauf (v9) anders ist:
+- **Alle Labels sind von Hand geprüft**: jede Dartspitze wurde auf dem Bild kontrolliert (Phantome entfernt, fehlende Darts ergänzt, gestapelte Darts getrennt). Die Prüf-Bilder (val) stammen nur aus diesen geprüften Bildern, die Messung ist also ehrlich und nicht von einem Modell abgeleitet.
+- Mehr Randtreffer und Doubles (auch dichte Gruppen), Zoom 1,3 bis 2,7.
+- Eine dritte Variante (C_long) mit sehr kleiner Lernrate und längerer Laufzeit.
 
 Was anders ist als beim ersten Versuch:
 - Die Bilder sind genau das, was die App dem Modell zeigt: das Board von oben entzerrt (20 oben), die vier Ecken sind echte Labels.
@@ -29,7 +34,7 @@ DRIVE = "/content/drive/MyDrive/DeepDarts-Dataset/"
 # Neuestes Modell zuerst: v4 ist das, was gerade in der App läuft; tip ist der Stand davor.
 # Der Lauf, der das heutige Modell (v4) erzeugt hat, hat es unter dem alten Namen dartspot_tip_best.pt gesichert - die Datei
 # heisst also "tip", enthaelt aber v4 (das, was in der App laeuft). v5 war ein Lauf ohne Verbesserung, wird NICHT genommen.
-# Neuere Laeufe sichern unter dartspot_v8_best.pt usw. und werden nur dann hier eingetragen, wenn sie in die App gehen.
+# Neuere Laeufe sichern unter dartspot_v9_best.pt usw. und werden nur dann hier eingetragen, wenn sie in die App gehen.
 CANDIDATES = [DRIVE + "dartspot_tip_best.pt", DRIVE + "dartspot_v4_best.pt"]
 ORIGINAL_PT = DRIVE + "training_runs/dart_yolov8n/weights/best.pt"
 START_PT = next((p for p in CANDIDATES if os.path.exists(p)), None)
@@ -48,12 +53,12 @@ else:
         shutil.copy(ORIGINAL_PT, "/content/best.pt")
         print("ACHTUNG: Start vom ORIGINAL-Modell (nicht vom aktuellen Spitzen-Modell).")
 
-DRIVE_ZIP = DRIVE + "training-set-rectified-v8.zip"
+DRIVE_ZIP = DRIVE + "training-set-rectified-v9.zip"
 if os.path.exists(DRIVE_ZIP):
     zip_names = [DRIVE_ZIP]   # Kopie liegt schon in Drive: kein Upload noetig
     print("Datenset aus Drive:", DRIVE_ZIP)
 else:
-    print("Lade training-set-rectified-v8.zip hoch (Tipp: einmal in den Drive-Ordner DeepDarts-Dataset legen, dann entfaellt der Upload):")
+    print("Lade training-set-rectified-v9.zip hoch (Tipp: einmal in den Drive-Ordner DeepDarts-Dataset legen, dann entfaellt der Upload):")
     uploaded = files.upload()
     zip_names = [n for n in uploaded if n.lower().endswith(".zip")]
 assert zip_names, "Keine .zip hochgeladen"
@@ -158,14 +163,15 @@ print("ALT AP50 je Klasse:", {old.names[c]: round(a, 3) for c, a in old_ap.items
 **A** friert den Backbone ein (sanft, behält viel vom alten Wissen), **B** trainiert alles mit kleiner Lernrate (kann die neue Ansicht – entzerrt von oben – besser lernen). Kein Spiegeln und Drehen: die 20 ist im entzerrten Bild immer oben, die Ecken haben feste Plätze.`),
 
   code(String.raw`CONFIGS = {
-    "A_frozen": dict(freeze=10, lr0=0.002, epochs=60),
-    "B_full":   dict(freeze=0,  lr0=0.001, epochs=80),
+    "A_frozen": dict(freeze=10, lr0=0.002, epochs=60, patience=20),
+    "B_full":   dict(freeze=0,  lr0=0.001, epochs=80, patience=20),
+    "C_long":   dict(freeze=0,  lr0=0.0004, epochs=120, patience=35),
 }
 results = {}
 for name, cfg in CONFIGS.items():
     m = YOLO("/content/best.pt")
     m.train(
-        data=f"{DS}/data.yaml", imgsz=800, batch=16, lrf=0.1, optimizer="AdamW", patience=20,
+        data=f"{DS}/data.yaml", imgsz=800, batch=16, lrf=0.1, optimizer="AdamW",
         fliplr=0.0, flipud=0.0, degrees=0.0, translate=0.05, scale=0.15, shear=0.0, perspective=0.0,
         mosaic=0.0, mixup=0.0, hsv_h=0.01, hsv_s=0.5, hsv_v=0.35,
         project="/content/runs", name=name, exist_ok=True, plots=False, **cfg,
@@ -209,7 +215,7 @@ Erzeugt best.onnx (800x800) des Gewinners. Nur ersetzen, wenn oben "JA" steht �
   code(String.raw`final = YOLO(win["path"])
 onnx_path = final.export(format="onnx", imgsz=800)
 print("ONNX:", onnx_path)
-shutil.copy(win["path"], "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_v8_best.pt")  # Sicherung in Drive (die Vorgänger bleiben bewusst unberührt)
+shutil.copy(win["path"], "/content/drive/MyDrive/DeepDarts-Dataset/dartspot_v9_best.pt")  # Sicherung in Drive (die Vorgänger bleiben bewusst unberührt)
 from google.colab import files
 files.download(onnx_path)
 files.download(win["path"])`),
