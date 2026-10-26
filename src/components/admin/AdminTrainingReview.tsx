@@ -228,19 +228,22 @@ const AdminTrainingReview = () => {
       let applied = 0;
       for (const v of verdicts) {
         if (!["confirmed", "needs_review", "rejected"].includes(v.status)) continue;
+        // A verdict that carries corrected tips may also fix a sample that is already confirmed (re-check of old labels);
+        // a plain verdict only ever touches samples that are still waiting for a decision.
+        const correcting = Array.isArray(v.labels);
         const { error } = await supabase
           .from("training_samples")
           .update({
             review_status: v.status,
             ai_segments: v.ai_segments ?? null,
             ai_notes: v.notes ?? null,
-            ...(Array.isArray(v.labels) ? { labels: v.labels as unknown as Json } : {}),
+            ...(correcting ? { labels: v.labels as unknown as Json } : {}),
             reviewed_at: new Date().toISOString(),
             reviewed_by: "ai",
           })
           .eq("id", v.id)
           // pending rows, and rows an earlier import left on "needs review" (so they can be corrected and confirmed later)
-          .in("review_status", ["pending", "needs_review"]);
+          .in("review_status", correcting ? ["pending", "needs_review", "confirmed"] : ["pending", "needs_review"]);
         if (!error) applied += 1;
       }
       toast({ title: `${applied} von ${verdicts.length} Ergebnissen übernommen` });
