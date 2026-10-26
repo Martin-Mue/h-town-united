@@ -43,6 +43,12 @@ export const GHOST_MARGIN = 0.2;
 export const CHANGE_SUPPORT_NEAR_KNOWN_WEAK = 0.5;
 /** Hits this confident count without fresh change — unless they sit this close to a known dart (frame fraction, ~40 mm),
  *  where a slightly shifted second hit on the same dart must not turn into a new one. */
+/**
+ * Two darts cannot have their tips within a few millimetres of each other, so a hit this close to a known dart IS that
+ * dart, however much fresh change stands under it (measured on untouched play: the same tip came back two and three times
+ * at coordinates identical to the third decimal, once per rest, because a later dart changed pixels around the earlier one).
+ */
+export const DUPLICATE_DART_RADIUS = 0.006;
 export const CONFIDENT_DART_SCORE = 0.5;
 export const CONFIDENT_BYPASS_MIN_DISTANCE = 0.09;
 
@@ -56,6 +62,7 @@ export function selectNewDart<T extends DartCandidate>(
   for (const c of candidates) {
     const { x, y } = c;
     if (typeof x !== "number" || typeof y !== "number") continue;
+    if (known.some((k) => typeof k.x === "number" && typeof k.y === "number" && Math.hypot(k.x - x, k.y - y) < DUPLICATE_DART_RADIUS)) continue;
     const nearKnown = known.some(
       (k) => typeof k.x === "number" && typeof k.y === "number" && Math.hypot(k.x - x, k.y - y) < KNOWN_DART_RADIUS,
     );

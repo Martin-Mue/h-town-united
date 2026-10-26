@@ -119,3 +119,16 @@ describe("keepSupportedDarts", () => {
     expect(kept.map((d) => d.x)).toEqual([0.5, 0.7]);
   });
 });
+
+describe("a hit on a known dart's own tip", () => {
+  it("is never a new dart, even with strong fresh change under it", () => {
+    const known = [{ x: 0.524, y: 0.303 }];
+    expect(selectNewDart(known, [{ x: 0.5241, y: 0.3021, confidence: 0.72 }], () => 1)).toBeNull();
+    expect(selectNewDarts(known, [{ x: 0.525, y: 0.304, confidence: 0.9 }], () => 1, 3)).toEqual([]);
+  });
+
+  it("still takes a real dart a few centimetres away", () => {
+    const known = [{ x: 0.524, y: 0.303 }];
+    expect(selectNewDart(known, [{ x: 0.506, y: 0.165, confidence: 0.6 }], () => 1)).not.toBeNull();
+  });
+});
