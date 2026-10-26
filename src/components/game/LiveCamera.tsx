@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle, type ComponentProps } from "react";
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle, type ComponentProps, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertCircle,
@@ -114,6 +114,8 @@ interface LiveCameraProps {
   remainingScore?: number;
   /** Compact scoreboard shown on top of the camera picture (who throws, scores, leg starter, averages). */
   scoreStrip?: ComponentProps<typeof CameraScoreStrip>;
+  /** A line of context under the header — in training the current target, which the full-screen camera would otherwise hide. */
+  infoBar?: ReactNode;
   /** Called when the player wants to give up on auto-scoring and switch to manual entry after a failed/empty scan. */
   onRequestManualEntry?: () => void;
   /** Freezes the watcher loop (no new scans start) without tearing down the camera stream — for
@@ -408,6 +410,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   playerName,
   remainingScore,
   scoreStrip,
+  infoBar,
   onRequestManualEntry,
   paused = false,
 }, ref) => {
@@ -2652,6 +2655,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </Button>
       </div>
 
+      {infoBar}
       {scoreStrip && !isLandscape && <CameraScoreStrip {...scoreStrip} />}
 
       <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">

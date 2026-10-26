@@ -121,11 +121,12 @@ const ActiveBlock = ({ card, side, showLegs, showSets, isCricket, compact, label
       <Chips card={card} showLegs={showLegs} showSets={showSets} labels={labels} />
     </div>
     {card.subLabel && <p className="truncate text-[10px]" style={{ color: "hsl(185 60% 72%)" }}>{card.subLabel}</p>}
-    {card.throwing ? (
-      <p className="mt-3 flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-sm font-display animate-pulse" style={{ color: "hsl(155 65% 62%)", background: "hsl(155 65% 42% / 0.16)" }}>
-        <Bot className="h-4 w-4" /> {labels.throwing}…
+    {card.throwing && (
+      <p className="mt-1 flex w-fit items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-display animate-pulse" style={{ color: "hsl(155 65% 62%)", background: "hsl(155 65% 42% / 0.16)" }}>
+        <Bot className="h-3.5 w-3.5" /> {labels.throwing}…
       </p>
-    ) : (
+    )}
+    {(
       <div className="mt-1 flex items-end justify-between gap-2">
         <div className="flex shrink-0 flex-col gap-0.5 pb-1 text-[11px] tablet:text-sm tablet:gap-1 leading-tight" style={{ color: "hsl(210 15% 68%)" }}>
           {!isCricket && !compact && (

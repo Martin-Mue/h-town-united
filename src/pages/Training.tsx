@@ -1083,6 +1083,30 @@ const TrainingPage = () => {
   // ─── ACTIVE DRILL VIEW ────────────────────────────
   if (selectedDrill && drillState) {
     const isCheckoutDrill = CHECKOUT_DRILL_IDS.includes(selectedDrill.id);
+    // The full-screen camera covers the target card below, so the current target rides along on the camera's own header.
+    const multLetter = drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S";
+    const cameraTarget: { main: string; sub?: string } | null = (() => {
+      const id = selectedDrill.id;
+      const step = drillState.targetList.length > 0 ? `${drillState.targetIndex + 1} / ${drillState.targetList.length}` : undefined;
+      if (id === "around-the-clock" || id === "ghost-race") return { main: `${t("training.hitThe")} ${drillState.currentTarget}`, sub: step };
+      if (id === "doubles-only") return { main: `${t("training.hitDouble")} D${drillState.currentTarget}`, sub: step };
+      if (isCheckoutDrill) return { main: `${t("training.checkoutLabel")} ${drillState.remaining}`, sub: id === "pressure-training" ? step : id === "random-finish" ? `${drillState.hits} / 10` : undefined };
+      if (id === "combo-risk" || id === "target-grind" || id === "sudden-death") {
+        const lives = id === "sudden-death" ? `${t("training.livesLabel")}: ${drillState.livesRemaining ?? 0}` : undefined;
+        const bank = id === "combo-risk" ? `${drillState.pendingPoints ?? 0} → ${drillState.bankedPoints ?? 0}` : id === "target-grind" ? `${t("training.hitsLabel")}: ${drillState.hits}` : undefined;
+        return { main: `${t("game.target")} ${multLetter}${drillState.targetBase ?? 20}`, sub: lives ?? bank };
+      }
+      if (id === "big-single-lock") return { main: `S${drillState.currentTarget}`, sub: `${drillState.hitsThisRound}/3` };
+      if (id === "random-score") return { main: drillState.randomLabel ?? "", sub: `${(drillState.roundsPlayed ?? 0) + 1} / ${drillState.maxRounds ?? 10}` };
+      if (id === "shanghai" || id === "shanghai-rtc") return { main: `${t("game.target")} ${drillState.currentTarget}`, sub: step };
+      return drillState.currentTarget > 0 ? { main: `${t("game.target")} ${drillState.currentTarget}`, sub: step } : null;
+    })();
+    const cameraTargetBar = cameraTarget ? (
+      <div className="flex shrink-0 items-baseline justify-center gap-3 border-b border-primary/30 bg-primary/10 px-3 py-1.5" role="status" aria-live="polite">
+        <span className="font-display text-2xl uppercase leading-none tracking-wide text-primary">{cameraTarget.main}</span>
+        {cameraTarget.sub && <span className="text-xs text-muted-foreground">{cameraTarget.sub}</span>}
+      </div>
+    ) : undefined;
 
     return (
       <div className="container py-6 animate-slide-up max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto">
@@ -1523,6 +1547,7 @@ const TrainingPage = () => {
                   onRoundCommit={handleCameraRound}
                   dartsRemaining={Math.max(1, 3 - drillState.dartsThisRound)}
                   playerName={t("training.trainingPlayerName")}
+                  infoBar={cameraTargetBar}
                 />
               </Suspense>
             )}
