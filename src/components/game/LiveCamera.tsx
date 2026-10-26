@@ -35,6 +35,7 @@ import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
 import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, boardOverlayLines, RECT_BOARD_RADIUS, type RectifyMapping } from "@/utils/boardRectify";
 import { applyHomography, computeHomography } from "@/utils/homography";
 import { boardTilt } from "@/utils/boardTilt";
+import { logDetectionLook, detectionLogCount, exportDetectionLog, clearDetectionLog, roundForLog, type LoggedCandidate } from "@/utils/detectionLog";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
 import { selectNewDarts, keepSupportedDarts } from "@/utils/newDartSelection";
@@ -1885,6 +1886,25 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const support = usable ? (x: number, y: number) => changedShareNear(usable, x, y) : null;
       const added = selectNewDarts(known, present, support, dartsRemaining - known.length);
       if (accumulatedRef.current !== known) return; // the round was committed/discarded meanwhile
+      {
+        const MM_PER_FRAME = 170 / 0.377;
+        const candidates: LoggedCandidate[] = present.map((d) => {
+          const nearest = known.reduce((m, k2) => (typeof k2.x === "number" && typeof k2.y === "number" ? Math.min(m, Math.hypot(k2.x - (d.x ?? 0), k2.y - (d.y ?? 0))) : m), Infinity);
+          return {
+            x: roundForLog.pos(d.x ?? 0), y: roundForLog.pos(d.y ?? 0), score: roundForLog.score(d.confidence),
+            support: support ? roundForLog.score(support(d.x ?? 0, d.y ?? 0)) : null,
+            nearestKnownMm: Number.isFinite(nearest) ? roundForLog.mm(nearest * MM_PER_FRAME) : null,
+            picked: added.includes(d),
+          };
+        });
+        logDetectionLook({
+          zoom: calib.zoom, known: known.length, rawCount: result.darts.length,
+          bestRawScore: result.darts.length > 0 ? roundForLog.score(Math.max(...result.darts.map((d) => d.confidence))) : null,
+          changeShare: changeMap ? roundForLog.score(changeMap.share) : null,
+          outcome: added.length > 0 ? "dart-added" : present.some((d) => d.confidence >= BOARD_OCCUPIED_SCORE) ? "nothing-added" : "board-empty",
+          candidates,
+        });
+      }
 
       // Occupied = a confident detection OR a weaker one that stands on fresh change (it just joined the round).
       // Weak detections alone never keep a round from ending, but they must not make a real dart invisible either.
@@ -3322,6 +3342,21 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </span>
         </button>
         <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{t("camera.autoCommitDesc")}</p>
+      </div>
+
+      <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
+        <p className="text-[11px] text-muted-foreground">{t("camera.detectionLogTitle")} ({detectionLogCount()})</p>
+        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{t("camera.detectionLogDesc")}</p>
+        <div className="mt-1.5 flex gap-2">
+          <Button size="sm" variant="outline" className="h-8 flex-1 text-xs" onClick={() => {
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob([exportDetectionLog()], { type: "application/json" }));
+            link.download = `erkennungsprotokoll-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.json`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+          }}>{t("camera.detectionLogExport")}</Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { clearDetectionLog(); setSettingsOpen(false); setTimeout(() => setSettingsOpen(true), 0); }}>{t("camera.detectionLogClear")}</Button>
+        </div>
       </div>
 
       <div className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
