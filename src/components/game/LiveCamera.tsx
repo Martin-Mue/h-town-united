@@ -34,6 +34,7 @@ import CameraScoreStrip from "@/components/game/CameraScoreStrip";
 import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
 import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, boardOverlayLines, RECT_BOARD_RADIUS, type RectifyMapping } from "@/utils/boardRectify";
 import { applyHomography, computeHomography } from "@/utils/homography";
+import { boardTilt } from "@/utils/boardTilt";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
 import { selectNewDarts, keepSupportedDarts } from "@/utils/newDartSelection";
@@ -185,6 +186,8 @@ interface Calibration {
  * that's the whole point, but stays a visible, per-device toggle (see the advanced panel) since
  * the captured frame is a live board photo, not something to upload silently without a way to opt out.
  */
+/** Above this camera angle (degrees off the board's axis) the picture quality drops noticeably, see boardTilt. */
+const TILT_WARN_DEG = 30;
 const TRAINING_DATA_KEY = "dartcam-training-data-enabled";
 const loadTrainingDataEnabled = (): boolean => {
   if (typeof window === "undefined") return true;
@@ -2578,6 +2581,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     ? Math.hypot(calib.x - calibOrigCenter.x, calib.y - calibOrigCenter.y) / calib.size
     : 0;
   const trackingStatus: "uncalibrated" | "ok" | "warn" = !hasCalibration ? "uncalibrated" : driftFraction > 0.15 ? "warn" : "ok";
+  // Seen from the side the darts hide each other and the thin tips vanish against the dark segments (about 13 points
+  // fewer tips found than straight on) — tell the player when the phone is too far off to the side.
+  const boardTiltNow = hasCalibration ? boardTilt(calib.taps!, videoRef.current?.videoWidth || 1080, videoRef.current?.videoHeight || 1920) : null;
+  const tiltWarning = boardTiltNow && boardTiltNow.tiltDeg >= TILT_WARN_DEG ? boardTiltNow : null;
   const ringColorClass = trackingStatus === "ok" ? "border-secondary" : trackingStatus === "warn" ? "border-accent" : "border-primary/80";
 
   // calib.x/y/size and calib.taps live in native-video-frame fraction space (see
@@ -2656,6 +2663,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       </div>
 
       {infoBar}
+      {tiltWarning && (
+        <p className="shrink-0 border-b border-accent/40 bg-accent/10 px-3 py-1 text-center text-[11px] text-accent" role="status">
+          {t("camera.tiltWarning").replace("{deg}", String(Math.round(tiltWarning.tiltDeg)))}
+        </p>
+      )}
       {scoreStrip && !isLandscape && <CameraScoreStrip {...scoreStrip} />}
 
       <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
