@@ -35,6 +35,7 @@ import { defaultCalibrationTaps } from "@/utils/calibrationHandles";
 import { rectifyMappingFromTaps, warpToRectified, canonicalToRect, boardOverlayLines, RECT_BOARD_RADIUS, type RectifyMapping } from "@/utils/boardRectify";
 import { applyHomography, computeHomography } from "@/utils/homography";
 import { boardTilt } from "@/utils/boardTilt";
+import { looksLikeUndetectedDarts, UNEXPLAINED_LOOKS_BEFORE_HINT, UNEXPLAINED_LOOKS_GIVE_UP } from "@/utils/unexplainedChange";
 import { logDetectionLook, detectionLogCount, exportDetectionLog, clearDetectionLog, roundForLog, type LoggedCandidate } from "@/utils/detectionLog";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
@@ -535,6 +536,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const stillMomentQueuedRef = useRef(false);
   /** How many calibration refits in a row found no board near the current calibration. */
   const refitMissesRef = useRef(0);
+  /** Rests in a row at which the board differed from the empty baseline although no dart was recognised (see unexplainedChange.ts). */
+  const unexplainedLooksRef = useRef(0);
   /** Spots of darts the player removed by hand this round — detections there are ignored from then on. */
   const dismissedRef = useRef<{ x: number; y: number }[]>([]);
   /** Detector readings of darts the player deleted during the current round, for the detection record. */
@@ -722,6 +725,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     landingQueueRef.current = [];
     emptyModelFrameRef.current = null;
     baselineDartsRef.current = null;
+    unexplainedLooksRef.current = 0;
     peakPresentRef.current = 0;
     stillMomentBusyRef.current = false;
     stillMomentQueuedRef.current = false;
@@ -1909,6 +1913,26 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // Occupied = a confident detection OR a weaker one that stands on fresh change (it just joined the round).
       // Weak detections alone never keep a round from ending, but they must not make a real dart invisible either.
       if (!present.some((d) => d.confidence >= BOARD_OCCUPIED_SCORE) && added.length === 0) {
+        // The model sees nothing — but is the board really back to the empty baseline? If it still differs (a thin tip, a dart
+        // behind its own flight), it is NOT empty: refreshing the baseline now would swallow those darts and end the round
+        // without any. Tell the player instead, and leave the baseline alone.
+        const empty = emptyModelFrameRef.current;
+        const vsEmpty = empty && known.length === 0 ? buildChangeMap(empty, frame) : null;
+        if (vsEmpty && looksLikeUndetectedDarts(vsEmpty.share) && unexplainedLooksRef.current < UNEXPLAINED_LOOKS_GIVE_UP) {
+          unexplainedLooksRef.current += 1;
+          if (unexplainedLooksRef.current >= UNEXPLAINED_LOOKS_BEFORE_HINT) {
+            setScanFailed(true);
+            setStatus(t("camera.dartsNotRecognized"));
+          }
+          logDetectionLook({
+            zoom: calib.zoom, known: known.length, rawCount: result.darts.length,
+            bestRawScore: result.darts.length > 0 ? roundForLog.score(Math.max(...result.darts.map((d) => d.confidence))) : null,
+            changeShare: roundForLog.score(vsEmpty.share), outcome: "unexplained-change", candidates: [],
+          });
+          return;
+        }
+        unexplainedLooksRef.current = 0;
+        setScanFailed(false);
         evaluatedFineRef.current = pendingFineRef.current; // an empty board is a fully explained picture
         emptyLooksRef.current = 0;
         onBoardEmptyMoment(sig);

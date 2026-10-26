@@ -25,7 +25,7 @@ export interface DetectionLogEntry {
   rawCount: number;
   /** Share of the picture that changed since the last stable picture. */
   changeShare: number | null;
-  outcome: "dart-added" | "nothing-added" | "board-empty";
+  outcome: "dart-added" | "nothing-added" | "board-empty" | "unexplained-change";
   candidates: LoggedCandidate[];
 }
 

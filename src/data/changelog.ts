@@ -1194,4 +1194,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Kazanan şemada elle belirlendiyse bu maç istatistiklerde yoktu. Bu sonuçlar artık galibiyet, galibiyet oranı, favori ve kabus rakip ile karşılaşma bilançosunda sayılır. Ortalamalar aynı kalır, çünkü atış verisi yok.",
     },
   },
+  {
+    id: "2026-10-27-camera-flow",
+    date: "2026-10-27",
+    title: {
+      de: "Kamera: Darts nicht mehr stillschweigend verschluckt",
+      en: "Camera: darts are no longer swallowed silently",
+      fr: "Caméra : les fléchettes ne sont plus avalées en silence",
+      pl: "Kamera: lotki nie są już po cichu pomijane",
+      nl: "Camera: darts worden niet meer stilzwijgend ingeslikt",
+      tr: "Kamera: oklar artık sessizce yutulmuyor",
+    },
+    description: {
+      de: "Sieht die Kamera etwas im Board, erkennt aber keinen Dart (zum Beispiel am Rand), meldet sie das jetzt und bietet die manuelle Eingabe an, statt die Runde ohne Wurf zu beenden. Schwache Randtreffer zählen leichter, Doppelerkennungen desselben Darts gibt es nicht mehr, und ein Erkennungsprotokoll in den Kameraeinstellungen hilft bei der Fehlersuche. Beim Turnier kommen die Teilnehmer jetzt vor dem Format.",
+      en: "If the camera sees something in the board but recognises no dart (for example at the edge), it now says so and offers manual entry instead of ending the round without a throw. Weak edge hits count more easily, double detections of the same dart are gone, and a detection log in the camera settings helps with troubleshooting. In tournaments the participants now come before the format.",
+      fr: "Si la caméra voit quelque chose dans la cible sans reconnaître de fléchette (par exemple au bord), elle le signale et propose la saisie manuelle au lieu de terminer la manche sans lancer. Les touches faibles au bord comptent plus facilement, les doubles détections ont disparu et un journal de détection aide au dépannage. Dans les tournois, les participants viennent avant le format.",
+      pl: "Gdy kamera widzi coś w tarczy, ale nie rozpoznaje lotki (np. na brzegu), teraz to zgłasza i proponuje ręczne wpisanie zamiast kończyć rundę bez rzutu. Słabe trafienia na brzegu liczą się łatwiej, podwójne wykrycia tej samej lotki zniknęły, a dziennik wykrywania w ustawieniach kamery pomaga w diagnozie. W turniejach uczestnicy są teraz przed formatem.",
+      nl: "Ziet de camera iets in het bord maar herkent ze geen dart (bijvoorbeeld aan de rand), dan meldt ze dat nu en biedt handmatige invoer aan in plaats van de ronde zonder worp te beëindigen. Zwakke randtreffers tellen sneller, dubbele herkenning van dezelfde dart is weg en een herkenningslog in de camerainstellingen helpt bij het zoeken naar fouten. Bij toernooien komen de deelnemers nu vóór het formaat.",
+      tr: "Kamera tahtada bir şey görüp ok tanıyamazsa (örneğin kenarda), turu atışsız bitirmek yerine bunu söyler ve elle girişi önerir. Kenardaki zayıf isabetler daha kolay sayılır, aynı okun çift algılanması kalktı ve kamera ayarlarındaki algılama günlüğü hata aramaya yardım eder. Turnuvalarda katılımcılar artık formattan önce geliyor.",
+    },
+  },
 ];
