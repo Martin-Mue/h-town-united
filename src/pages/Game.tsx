@@ -48,6 +48,8 @@ import AiMatchReport from "@/components/game/AiMatchReport";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, TeamSlot, BotLevel } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
+import { loadDoublesSeats } from "@/lib/onlineDoubles";
+import { notifyChallengeCreated, notifyDoublesInvited } from "@/lib/onlineMatchNotify";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -2007,6 +2009,41 @@ const GamePage = () => {
     startGameWithStarter(nextStarter);
   };
 
+  // Rematch for an ONLINE match: a fresh challenge with the same settings and the same four/two
+  // people, the requester becoming the challenger again (a local startRematch would silently drop
+  // everyone into a local game). Starter is re-rolled so the same side doesn't always open.
+  const requestOnlineRematch = async () => {
+    const row = onlineMatch.row;
+    const me = session?.user?.id;
+    if (!row || !me || !clubId) return;
+    const myName = game?.players[onlineMatch.mySlot ?? (row.player1_user_id === me ? 0 : 1)]?.name ?? "Jemand";
+    if (row.is_doubles) {
+      const seats = await loadDoublesSeats(row.id);
+      const mine = seats.find((s) => s.userId === me);
+      if (!mine) return;
+      const partner = seats.find((s) => s.slot !== mine.slot && s.slot % 2 === mine.slot % 2);
+      const opponents = seats.filter((s) => s.slot % 2 !== mine.slot % 2);
+      if (!partner || opponents.length !== 2) return;
+      const { error } = await supabase.rpc("create_online_doubles_match", {
+        _mode: row.mode, _best_of_legs: row.best_of_legs, _double_in: row.double_in ?? false, _double_out: row.double_out ?? true,
+        _custom_start_score: (row.custom_start_score ?? null) as unknown as number, _starter: "random",
+        _partner: partner.userId, _opponent1: opponents[0].userId, _opponent2: opponents[1].userId,
+      });
+      if (error) { toast({ title: t("players.challengeFailed"), description: error.message, variant: "destructive" }); return; }
+      notifyDoublesInvited([partner.userId, opponents[0].userId, opponents[1].userId], myName, row.mode);
+    } else {
+      const opponentId = row.player1_user_id === me ? row.player2_user_id : row.player1_user_id;
+      const { error } = await supabase.from("online_matches").insert({
+        club_id: clubId, created_by: me, player1_user_id: me, player2_user_id: opponentId, mode: row.mode, best_of_legs: row.best_of_legs,
+        double_in: row.double_in ?? false, double_out: row.double_out ?? true, custom_start_score: row.custom_start_score ?? null, starter: "random",
+      });
+      if (error) { toast({ title: t("players.challengeFailed"), description: error.message, variant: "destructive" }); return; }
+      notifyChallengeCreated(opponentId, myName, row.mode);
+    }
+    toast({ title: t("players.challengeSent"), description: t("players.challengeSentDesc") });
+    navigate("/");
+  };
+
   // ─── BOT AUTO-PLAY ─────────────────────────────────
   useEffect(() => {
     if (botTimerRef.current) { clearTimeout(botTimerRef.current); botTimerRef.current = null; }
@@ -2886,7 +2923,7 @@ const GamePage = () => {
             tournamentLinkName={tournamentLinkName}
             tournamentLinkRef={tournamentLinkRef}
             leagueLinkRef={leagueLinkRef}
-            startRematch={startRematch}
+            startRematch={onlineMatchId ? requestOnlineRematch : startRematch}
             resetGame={resetGame}
             navigate={navigate}
           />

@@ -32,6 +32,12 @@ export interface OnlineMatchRow {
   source_id: string | null;
   /** true = 2-gegen-2 with four accounts (see online_match_players); players[i] belongs to slot i. */
   is_doubles?: boolean;
+  created_by?: string;
+  best_of_sets?: number | null;
+  custom_start_score?: number | null;
+  double_in?: boolean;
+  double_out?: boolean;
+  starter?: "challenger" | "opponent" | "random";
 }
 
 /** Drives Game.tsx's online-play branch — loads an `online_matches` row, keeps it live via a

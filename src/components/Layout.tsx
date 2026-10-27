@@ -12,6 +12,7 @@ import { useOfflineMatchResultQueue } from "@/hooks/useOfflineMatchResultQueue";
 import { useOfflineBracketActionQueue } from "@/hooks/useOfflineBracketActionQueue";
 import { useOfflineLeagueFixtureQueue } from "@/hooks/useOfflineLeagueFixtureQueue";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useTrackClubPresence } from "@/lib/clubPresence";
 import WhatsNewBanner from "@/components/WhatsNewBanner";
 import OnboardingTour from "@/components/OnboardingTour";
 import htuEmblem from "@/assets/club-emblem.png";
@@ -34,6 +35,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
   const { signOut, user } = useAuth();
   const isAdmin = useIsAdmin(user?.id);
+  useTrackClubPresence();
   const { club, name: clubName, logoUrl } = useClubBranding();
   // Until a club uploads its own logo, each slot keeps its ORIGINAL bundled artwork (the
   // watermark and the header badge were always two different images) so the app stays

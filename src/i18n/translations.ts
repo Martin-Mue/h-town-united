@@ -127,6 +127,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "home.whatsHappening": { de: "Was war los?", en: "What's been happening?", fr: "Quoi de neuf ?", pl: "Co się działo?", nl: "Wat is er gebeurd?", tr: "Neler oldu?" },
   "home.matchWith": { de: "Match gegen", en: "Match vs", fr: "Match contre", pl: "Mecz z", nl: "Wedstrijd tegen", tr: "Maç:" },
   "home.joinMatch": { de: "Beitreten", en: "Join", fr: "Rejoindre", pl: "Dołącz", nl: "Deelnemen", tr: "Katıl" },
+  "players.onlineNow": { de: "Gerade online", en: "Online now", fr: "En ligne", pl: "Teraz online", nl: "Nu online", tr: "Şu an çevrimiçi" },
   "home.pendingChallenges": { de: "Herausforderungen", en: "Challenges", fr: "Défis", pl: "Wyzwania", nl: "Uitdagingen", tr: "Meydan okumalar" },
   "home.doublesLobbies": { de: "Doppel-Einladungen", en: "Doubles invitations", fr: "Invitations en double", pl: "Zaproszenia do debla", nl: "Dubbel-uitnodigingen", tr: "Çiftler davetleri" },
   "home.versus": { de: "gegen", en: "vs.", fr: "contre", pl: "vs.", nl: "tegen", tr: "karşı" },

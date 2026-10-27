@@ -12,6 +12,7 @@ import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlayers } from "@/hooks/usePlayers";
 import { notifyChallengeCreated, notifyDoublesInvited } from "@/lib/onlineMatchNotify";
+import { useOnlineUserIds } from "@/lib/clubPresence";
 
 const MODES = ["501", "301", "cricket", "custom"] as const;
 const BEST_OF_OPTIONS = [1, 3, 5];
@@ -57,6 +58,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
   const [doubleOut, setDoubleOut] = useState(true);
   const [starter, setStarter] = useState<StarterChoice>("challenger");
   const [sending, setSending] = useState(false);
+  const onlineNow = useOnlineUserIds();
   // 1:1 or 2:2 — in doubles all four players join from their own device (see create_online_doubles_match).
   const [format, setFormat] = useState<"singles" | "doubles">("singles");
   const [partnerId, setPartnerId] = useState<string>("");
@@ -72,7 +74,12 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
     // Closest-Elo opponents first instead of the roster's default (alphabetical) order — the
     // whole point of a challenge list is finding someone worth playing, and burying the one
     // skill-appropriate name among everyone else was exactly as likely as surfacing it.
-    .sort((a, b) => (myElo === undefined ? 0 : Math.abs(a.elo_rating - myElo) - Math.abs(b.elo_rating - myElo)));
+    .sort((a, b) => {
+      // Members who are in the app right now first — a challenge to someone online gets answered.
+      const onlineDiff = Number(onlineNow.has(b.user_id!)) - Number(onlineNow.has(a.user_id!));
+      if (onlineDiff) return onlineDiff;
+      return myElo === undefined ? 0 : Math.abs(a.elo_rating - myElo) - Math.abs(b.elo_rating - myElo);
+    });
 
   const togglePartner = (id: string) => {
     setPartnerId((cur) => (cur === id ? "" : id));
@@ -188,7 +195,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
                   {challengeable.map((p) => (
                     <div key={p.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border ${partnerId === p.id || doublesOpponentIds.includes(p.id) ? "border-primary/50 bg-primary/5" : "border-transparent"}`}>
                       <span className="text-lg shrink-0">{p.emoji}</span>
-                      <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
+                      <span className="flex-1 min-w-0 truncate text-sm">{p.name}{onlineNow.has(p.user_id!) && <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle" title={t("players.onlineNow")} />}</span>
                       <span className="text-[10px] text-muted-foreground shrink-0">{Math.round(p.elo_rating)}</span>
                       <button type="button" onClick={() => togglePartner(p.id)}
                         className={`rounded-md border px-2 py-1 text-[10px] font-display uppercase shrink-0 ${partnerId === p.id ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground"}`}>
@@ -212,7 +219,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
                 <label key={p.id} className={`flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer border ${opponentId === p.id ? "border-primary bg-primary/10" : "border-transparent hover:bg-muted/50"}`}>
                   <input type="radio" name="opponent" className="sr-only" checked={opponentId === p.id} onChange={() => setOpponentId(p.id)} />
                   <span className="text-lg shrink-0">{p.emoji}</span>
-                  <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
+                  <span className="flex-1 min-w-0 truncate text-sm">{p.name}{onlineNow.has(p.user_id!) && <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle" title={t("players.onlineNow")} />}</span>
                   {isCloseMatch(p.elo_rating) && (
                     <span className="text-[9px] uppercase tracking-wide text-primary shrink-0">{t("players.goodMatch")}</span>
                   )}
