@@ -1061,15 +1061,63 @@ export type Database = {
           winner_user_id: string | null
         }
         Insert: {
+          challenger_average?: number | null
+          challenger_darts?: number | null
+          challenger_finished_at?: string | null
           challenger_user_id: string
           club_id: string
+          created_at?: string
+          custom_start_score?: number | null
+          decline_reason?: string | null
+          double_in?: boolean
+          double_out?: boolean
+          expires_at?: string
+          id?: string
           mode: string
+          opponent_average?: number | null
+          opponent_darts?: number | null
+          opponent_finished_at?: string | null
           opponent_user_id: string
+          status?: string
+          winner_user_id?: string | null
         }
         Update: {
+          challenger_average?: number | null
+          challenger_darts?: number | null
+          challenger_finished_at?: string | null
+          challenger_user_id?: string
+          club_id?: string
+          created_at?: string
+          custom_start_score?: number | null
+          decline_reason?: string | null
+          double_in?: boolean
+          double_out?: boolean
+          expires_at?: string
+          id?: string
+          mode?: string
+          opponent_average?: number | null
+          opponent_darts?: number | null
+          opponent_finished_at?: string | null
+          opponent_user_id?: string
           status?: string
+          winner_user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "online_duels_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_duels_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       online_match_players: {
         Row: {
@@ -1096,52 +1144,15 @@ export type Database = {
           status?: string
           user_id?: string
         }
-        Relationships: []
-      }
-      online_open_challenges: {
-        Row: {
-          best_of_legs: number
-          club_id: string
-          created_at: string
-          created_by: string
-          custom_start_score: number | null
-          double_in: boolean
-          double_out: boolean
-          id: string
-          match_id: string | null
-          mode: string
-          status: string
-          taken_by: string | null
-        }
-        Insert: {
-          best_of_legs?: number
-          club_id: string
-          created_at?: string
-          created_by: string
-          custom_start_score?: number | null
-          double_in?: boolean
-          double_out?: boolean
-          id?: string
-          match_id?: string | null
-          mode: string
-          status?: string
-          taken_by?: string | null
-        }
-        Update: {
-          best_of_legs?: number
-          club_id?: string
-          created_at?: string
-          created_by?: string
-          custom_start_score?: number | null
-          double_in?: boolean
-          double_out?: boolean
-          id?: string
-          match_id?: string | null
-          mode?: string
-          status?: string
-          taken_by?: string | null
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "online_match_players_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "online_matches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       online_matches: {
         Row: {
@@ -1226,6 +1237,73 @@ export type Database = {
             columns: ["club_id"]
             isOneToOne: false
             referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      online_open_challenges: {
+        Row: {
+          best_of_legs: number
+          club_id: string
+          created_at: string
+          created_by: string
+          custom_start_score: number | null
+          double_in: boolean
+          double_out: boolean
+          id: string
+          match_id: string | null
+          mode: string
+          status: string
+          taken_by: string | null
+        }
+        Insert: {
+          best_of_legs?: number
+          club_id: string
+          created_at?: string
+          created_by: string
+          custom_start_score?: number | null
+          double_in?: boolean
+          double_out?: boolean
+          id?: string
+          match_id?: string | null
+          mode: string
+          status?: string
+          taken_by?: string | null
+        }
+        Update: {
+          best_of_legs?: number
+          club_id?: string
+          created_at?: string
+          created_by?: string
+          custom_start_score?: number | null
+          double_in?: boolean
+          double_out?: boolean
+          id?: string
+          match_id?: string | null
+          mode?: string
+          status?: string
+          taken_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "online_open_challenges_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_open_challenges_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "online_open_challenges_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "online_matches"
             referencedColumns: ["id"]
           },
         ]
@@ -1811,109 +1889,8 @@ export type Database = {
         Args: { p_claim: string; p_token: string }
         Returns: string
       }
+      abort_idle_online_match: { Args: { _match_id: string }; Returns: boolean }
       accept_club_invite: { Args: { _token: string }; Returns: string }
-      cancel_online_doubles: {
-        Args: { _match_id: string }
-        Returns: undefined
-      }
-      create_online_doubles_match: {
-        Args: {
-          _best_of_legs: number
-          _custom_start_score: number
-          _double_in: boolean
-          _double_out: boolean
-          _mode: string
-          _opponent1: string
-          _opponent2: string
-          _partner: string
-          _starter: string
-          _team_names?: Json
-        }
-        Returns: string
-      }
-      respond_online_doubles: {
-        Args: { _accept: boolean; _initial_game_state?: Json; _match_id: string; _reason?: string }
-        Returns: string
-      }
-      abort_idle_online_match: {
-        Args: { _match_id: string }
-        Returns: boolean
-      }
-      cancel_open_challenge: {
-        Args: { _id: string }
-        Returns: undefined
-      }
-      create_open_challenge: {
-        Args: {
-          _best_of_legs: number
-          _custom_start_score: number
-          _double_in: boolean
-          _double_out: boolean
-          _mode: string
-        }
-        Returns: string
-      }
-      online_leaderboard: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          emoji: string
-          name: string
-          played: number
-          player_id: string
-          win_rate: number
-          wins: number
-        }[]
-      }
-      take_open_challenge: {
-        Args: { _id: string }
-        Returns: string
-      }
-      cancel_online_duel: {
-        Args: { _id: string }
-        Returns: undefined
-      }
-      create_online_duel: {
-        Args: {
-          _custom_start_score: number
-          _double_in: boolean
-          _double_out: boolean
-          _mode: string
-          _opponent: string
-        }
-        Returns: string
-      }
-      my_online_duels: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          challenger_user_id: string
-          created_at: string
-          custom_start_score: number | null
-          decline_reason: string | null
-          double_in: boolean
-          double_out: boolean
-          expired: boolean
-          expires_at: string
-          id: string
-          mode: string
-          my_average: number | null
-          my_darts: number | null
-          my_finished: boolean
-          opponent_user_id: string
-          status: string
-          their_average: number | null
-          their_darts: number | null
-          their_finished: boolean
-          winner_user_id: string | null
-        }[]
-      }
-      respond_online_duel: {
-        Args: { _accept: boolean; _id: string; _reason?: string }
-        Returns: string
-      }
-      submit_online_duel_result: {
-        Args: { _average: number; _darts: number; _id: string }
-        Returns: string
-      }
       accept_online_match: {
         Args: { _initial_game_state: Json; _match_id: string }
         Returns: undefined
@@ -2062,6 +2039,9 @@ export type Database = {
         }
         Returns: Json
       }
+      cancel_online_doubles: { Args: { _match_id: string }; Returns: undefined }
+      cancel_online_duel: { Args: { _id: string }; Returns: undefined }
+      cancel_open_challenge: { Args: { _id: string }; Returns: undefined }
       cast_match_prediction: {
         Args: {
           _match_id: string
@@ -2098,6 +2078,41 @@ export type Database = {
         Args: { _name: string; _tagline?: string }
         Returns: string
       }
+      create_online_doubles_match: {
+        Args: {
+          _best_of_legs: number
+          _custom_start_score: number
+          _double_in: boolean
+          _double_out: boolean
+          _mode: string
+          _opponent1: string
+          _opponent2: string
+          _partner: string
+          _starter: string
+          _team_names?: Json
+        }
+        Returns: string
+      }
+      create_online_duel: {
+        Args: {
+          _custom_start_score: number
+          _double_in: boolean
+          _double_out: boolean
+          _mode: string
+          _opponent: string
+        }
+        Returns: string
+      }
+      create_open_challenge: {
+        Args: {
+          _best_of_legs: number
+          _custom_start_score: number
+          _double_in: boolean
+          _double_out: boolean
+          _mode: string
+        }
+        Returns: string
+      }
       current_club_id: { Args: never; Returns: string }
       dart_stats_leg_summary: {
         Args: { p_starting_score: number; p_throws: Json }
@@ -2132,9 +2147,45 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_online_match_member: { Args: { _match_id: string }; Returns: boolean }
       merge_players: {
         Args: { p_keep: string; p_remove: string }
         Returns: Json
+      }
+      my_online_duels: {
+        Args: never
+        Returns: {
+          challenger_user_id: string
+          created_at: string
+          custom_start_score: number
+          decline_reason: string
+          double_in: boolean
+          double_out: boolean
+          expired: boolean
+          expires_at: string
+          id: string
+          mode: string
+          my_average: number
+          my_darts: number
+          my_finished: boolean
+          opponent_user_id: string
+          status: string
+          their_average: number
+          their_darts: number
+          their_finished: boolean
+          winner_user_id: string
+        }[]
+      }
+      online_leaderboard: {
+        Args: never
+        Returns: {
+          emoji: string
+          name: string
+          played: number
+          player_id: string
+          win_rate: number
+          wins: number
+        }[]
       }
       public_tournament_highlights: {
         Args: { _tournament_id: string }
@@ -2167,6 +2218,19 @@ export type Database = {
         Returns: undefined
       }
       request_to_join_club: { Args: { _club_id: string }; Returns: string }
+      respond_online_doubles: {
+        Args: {
+          _accept: boolean
+          _initial_game_state?: Json
+          _match_id: string
+          _reason?: string
+        }
+        Returns: string
+      }
+      respond_online_duel: {
+        Args: { _accept: boolean; _id: string; _reason?: string }
+        Returns: string
+      }
       respond_to_join_request: {
         Args: { _approve: boolean; _request_id: string }
         Returns: undefined
@@ -2174,6 +2238,10 @@ export type Database = {
       set_player_pin: {
         Args: { p_pin_hash: string; p_pin_salt: string; p_player_id: string }
         Returns: undefined
+      }
+      submit_online_duel_result: {
+        Args: { _average: number; _darts: number; _id: string }
+        Returns: string
       }
       submit_online_throw: {
         Args: {
@@ -2184,6 +2252,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      take_open_challenge: { Args: { _id: string }; Returns: string }
       update_match_live_snapshot: {
         Args: { p_match_id: string; p_snapshot: Json; p_tournament_id: string }
         Returns: undefined
