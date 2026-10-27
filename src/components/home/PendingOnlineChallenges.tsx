@@ -87,7 +87,8 @@ const PendingOnlineChallenges = () => {
           .from("online_matches")
           .select("id, player1_user_id, mode, best_of_legs, best_of_sets, custom_start_score, double_in, double_out, starter")
           .eq("player2_user_id", user.id)
-          .eq("status", "pending");
+          .eq("status", "pending")
+          .eq("is_doubles", false);
         if (!error) {
           pending = (data ?? []) as typeof pending;
         } else {
@@ -95,7 +96,8 @@ const PendingOnlineChallenges = () => {
             .from("online_matches")
             .select("id, player1_user_id, mode, best_of_legs, best_of_sets")
             .eq("player2_user_id", user.id)
-            .eq("status", "pending");
+            .eq("status", "pending")
+            .eq("is_doubles", false);
           pending = (fallback.data ?? []).map((m) => ({
             ...m,
             mode: m.mode as PendingChallenge["mode"],
@@ -115,6 +117,7 @@ const PendingOnlineChallenges = () => {
           .from("online_matches")
           .select("id, mode, player1_user_id, player2_user_id, custom_start_score")
           .eq("status", "active")
+          .eq("is_doubles", false)
           .or(`player1_user_id.eq.${user.id},player2_user_id.eq.${user.id}`);
         if (!error) {
           active = (data ?? []) as typeof active;
@@ -123,6 +126,7 @@ const PendingOnlineChallenges = () => {
             .from("online_matches")
             .select("id, mode, player1_user_id, player2_user_id")
             .eq("status", "active")
+            .eq("is_doubles", false)
             .or(`player1_user_id.eq.${user.id},player2_user_id.eq.${user.id}`);
           active = (fallback.data ?? []).map((m) => ({ ...m, mode: m.mode as ActiveMatch["mode"], custom_start_score: null }));
         }

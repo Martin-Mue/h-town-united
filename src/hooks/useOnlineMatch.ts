@@ -30,6 +30,8 @@ export interface OnlineMatchRow {
   game_state: OnlineGameState | null;
   source_type: "casual" | "league" | "tournament";
   source_id: string | null;
+  /** true = 2-gegen-2 with four accounts (see online_match_players); players[i] belongs to slot i. */
+  is_doubles?: boolean;
 }
 
 /** Drives Game.tsx's online-play branch — loads an `online_matches` row, keeps it live via a
@@ -43,6 +45,8 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<OnlineConnectionStatus>("connected");
   const channelRef = useRef<RealtimeChannel | null>(null);
+  // Seat of this account in a doubles match (== index into GameState.players); null for 1:1.
+  const [mySlot, setMySlot] = useState<number | null>(null);
 
   useEffect(() => {
     if (!matchId) {
@@ -112,11 +116,23 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
     };
   }, [matchId]);
 
-  /** Whose turn it is, mapped from GameState.currentPlayerIndex (0/1, online matches are always
-   *  strict 1v1 — no team/free-for-all mode) to the two real accounts on the row. */
+  const isDoubles = !!row?.is_doubles;
+  useEffect(() => {
+    if (!isDoubles || !matchId || !userId) { setMySlot(null); return; }
+    let cancelled = false;
+    supabase.from("online_match_players").select("slot").eq("match_id", matchId).eq("user_id", userId).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setMySlot(data?.slot ?? null); });
+    return () => { cancelled = true; };
+  }, [isDoubles, matchId, userId]);
+
+  /** Whose turn it is. 1:1: GameState.currentPlayerIndex 0/1 mapped to the two accounts on the row.
+   *  Doubles: currentPlayerIndex IS the seat (players are interleaved [A1, B1, A2, B2]), so it is my
+   *  turn exactly when it equals my own seat. */
   const isMyTurn = !!row?.game_state && !!userId && (
-    (row.game_state.currentPlayerIndex === 0 && row.player1_user_id === userId) ||
-    (row.game_state.currentPlayerIndex === 1 && row.player2_user_id === userId)
+    isDoubles
+      ? mySlot !== null && row.game_state.currentPlayerIndex === mySlot
+      : (row.game_state.currentPlayerIndex === 0 && row.player1_user_id === userId) ||
+        (row.game_state.currentPlayerIndex === 1 && row.player2_user_id === userId)
   );
 
   const sendThrow = useCallback(async (newGameState: GameState, dartsThisRound: number, turnStartRemaining: number) => {
@@ -136,5 +152,5 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
     if (error) throw error;
   }, [matchId]);
 
-  return { row, loading, isMyTurn, sendThrow, connectionStatus };
+  return { row, loading, isMyTurn, mySlot, sendThrow, connectionStatus };
 }

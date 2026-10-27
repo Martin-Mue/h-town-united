@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlayers } from "@/hooks/usePlayers";
-import { notifyChallengeCreated } from "@/lib/onlineMatchNotify";
+import { notifyChallengeCreated, notifyDoublesInvited } from "@/lib/onlineMatchNotify";
 
 const MODES = ["501", "301", "cricket", "custom"] as const;
 const BEST_OF_OPTIONS = [1, 3, 5];
@@ -57,6 +57,10 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
   const [doubleOut, setDoubleOut] = useState(true);
   const [starter, setStarter] = useState<StarterChoice>("challenger");
   const [sending, setSending] = useState(false);
+  // 1:1 or 2:2 — in doubles all four players join from their own device (see create_online_doubles_match).
+  const [format, setFormat] = useState<"singles" | "doubles">("singles");
+  const [partnerId, setPartnerId] = useState<string>("");
+  const [doublesOpponentIds, setDoublesOpponentIds] = useState<string[]>([]);
 
   // Round 3 Rang 9: my own Elo, to sort/flag opponents by skill match below. Undefined if I
   // haven't claimed my own club profile yet (players.user_id) — the sort/badge below just no-ops
@@ -69,6 +73,43 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
     // whole point of a challenge list is finding someone worth playing, and burying the one
     // skill-appropriate name among everyone else was exactly as likely as surfacing it.
     .sort((a, b) => (myElo === undefined ? 0 : Math.abs(a.elo_rating - myElo) - Math.abs(b.elo_rating - myElo)));
+
+  const togglePartner = (id: string) => {
+    setPartnerId((cur) => (cur === id ? "" : id));
+    setDoublesOpponentIds((cur) => cur.filter((x) => x !== id));
+  };
+  const toggleDoublesOpponent = (id: string) => {
+    if (partnerId === id) setPartnerId("");
+    setDoublesOpponentIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 2 ? cur : [...cur, id]));
+  };
+  const doublesReady = !!partnerId && doublesOpponentIds.length === 2;
+
+  const sendDoublesChallenge = async () => {
+    const partner = challengeable.find((p) => p.id === partnerId);
+    const opponents = doublesOpponentIds.map((id) => challengeable.find((p) => p.id === id));
+    if (!partner?.user_id || opponents.length !== 2 || opponents.some((o) => !o?.user_id) || !user?.id || !clubId) return;
+    setSending(true);
+    const { error } = await supabase.rpc("create_online_doubles_match", {
+      _mode: mode,
+      _best_of_legs: bestOf,
+      _double_in: mode === "cricket" ? false : doubleIn,
+      _double_out: mode === "cricket" ? true : doubleOut,
+      _custom_start_score: mode === "custom" ? customStartScore : (null as unknown as number),
+      _starter: starter,
+      _partner: partner.user_id,
+      _opponent1: opponents[0]!.user_id!,
+      _opponent2: opponents[1]!.user_id!,
+    });
+    setSending(false);
+    if (error) {
+      toast({ title: t("players.challengeFailed"), description: error.message, variant: "destructive" });
+      return;
+    }
+    const myName = players.find((p) => p.user_id === user.id)?.name ?? "Jemand";
+    notifyDoublesInvited([partner.user_id, opponents[0]!.user_id!, opponents[1]!.user_id!], myName, mode);
+    toast({ title: t("players.challengeSent"), description: t("players.challengeSentDesc") });
+    navigate("/");
+  };
 
   const sendChallenge = async () => {
     const opponent = challengeable.find((p) => p.id === opponentId);
@@ -124,6 +165,46 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
         <p className="text-sm text-muted-foreground text-center py-6">{t("players.noOnlineOpponents")}</p>
       ) : (
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            {(["singles", "doubles"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFormat(f)}
+                className={`rounded-lg border px-2 py-2 text-xs font-display uppercase transition-colors ${format === f ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/50"}`}
+              >
+                {f === "singles" ? t("players.singlesMode") : t("players.doublesMode")}
+              </button>
+            ))}
+          </div>
+          {format === "doubles" && (
+            challengeable.length < 3 ? (
+              <p className="text-sm text-muted-foreground text-center py-2">{t("players.doublesNeedFour")}</p>
+            ) : (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">{t("players.pickPartnerAndTwo")}</p>
+                <p className="text-[11px] text-muted-foreground/80 mb-1.5">{t("players.doublesHint")}</p>
+                <div className="space-y-1 max-h-[40vh] overflow-y-auto -mx-1 px-1">
+                  {challengeable.map((p) => (
+                    <div key={p.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border ${partnerId === p.id || doublesOpponentIds.includes(p.id) ? "border-primary/50 bg-primary/5" : "border-transparent"}`}>
+                      <span className="text-lg shrink-0">{p.emoji}</span>
+                      <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">{Math.round(p.elo_rating)}</span>
+                      <button type="button" onClick={() => togglePartner(p.id)}
+                        className={`rounded-md border px-2 py-1 text-[10px] font-display uppercase shrink-0 ${partnerId === p.id ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground"}`}>
+                        {t("players.chooseOnlinePartner")}
+                      </button>
+                      <button type="button" onClick={() => toggleDoublesOpponent(p.id)}
+                        className={`rounded-md border px-2 py-1 text-[10px] font-display uppercase shrink-0 ${doublesOpponentIds.includes(p.id) ? "border-accent bg-accent/15 text-accent" : "border-border text-muted-foreground"}`}>
+                        {t("home.versus")}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+          {format === "singles" && (
           <div>
             <p className="text-xs text-muted-foreground mb-1.5">{t("players.chooseOpponent")}</p>
             <div className="space-y-1 max-h-[40vh] overflow-y-auto -mx-1 px-1">
@@ -140,6 +221,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
               ))}
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -204,10 +286,17 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
             </div>
           </div>
 
-          <Button className="w-full gap-1.5 font-display uppercase" disabled={!opponentId || sending} onClick={sendChallenge}>
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
-            {t("players.sendChallenge")}
-          </Button>
+          {format === "doubles" ? (
+            <Button className="w-full gap-1.5 font-display uppercase" disabled={!doublesReady || sending} onClick={sendDoublesChallenge}>
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
+              {t("players.sendDoublesChallenge")}
+            </Button>
+          ) : (
+            <Button className="w-full gap-1.5 font-display uppercase" disabled={!opponentId || sending} onClick={sendChallenge}>
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
+              {t("players.sendChallenge")}
+            </Button>
+          )}
         </div>
       )}
     </div>

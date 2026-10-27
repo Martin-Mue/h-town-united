@@ -1038,6 +1038,33 @@ export type Database = {
           },
         ]
       }
+      online_match_players: {
+        Row: {
+          decline_reason: string | null
+          match_id: string
+          responded_at: string | null
+          slot: number
+          status: string
+          user_id: string
+        }
+        Insert: {
+          decline_reason?: string | null
+          match_id: string
+          responded_at?: string | null
+          slot: number
+          status?: string
+          user_id: string
+        }
+        Update: {
+          decline_reason?: string | null
+          match_id?: string
+          responded_at?: string | null
+          slot?: number
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       online_matches: {
         Row: {
           best_of_legs: number
@@ -1051,6 +1078,7 @@ export type Database = {
           double_out: boolean
           game_state: Json | null
           id: string
+          is_doubles: boolean
           mode: string
           player1_user_id: string
           player2_user_id: string
@@ -1058,6 +1086,7 @@ export type Database = {
           source_type: string
           starter: string
           status: string
+          team_names: Json | null
           updated_at: string
         }
         Insert: {
@@ -1072,6 +1101,7 @@ export type Database = {
           double_out?: boolean
           game_state?: Json | null
           id?: string
+          is_doubles?: boolean
           mode: string
           player1_user_id: string
           player2_user_id: string
@@ -1079,6 +1109,7 @@ export type Database = {
           source_type?: string
           starter?: string
           status?: string
+          team_names?: Json | null
           updated_at?: string
         }
         Update: {
@@ -1093,6 +1124,7 @@ export type Database = {
           double_out?: boolean
           game_state?: Json | null
           id?: string
+          is_doubles?: boolean
           mode?: string
           player1_user_id?: string
           player2_user_id?: string
@@ -1100,6 +1132,7 @@ export type Database = {
           source_type?: string
           starter?: string
           status?: string
+          team_names?: Json | null
           updated_at?: string
         }
         Relationships: [
@@ -1701,6 +1734,29 @@ export type Database = {
         Returns: string
       }
       accept_club_invite: { Args: { _token: string }; Returns: string }
+      cancel_online_doubles: {
+        Args: { _match_id: string }
+        Returns: undefined
+      }
+      create_online_doubles_match: {
+        Args: {
+          _best_of_legs: number
+          _custom_start_score: number
+          _double_in: boolean
+          _double_out: boolean
+          _mode: string
+          _opponent1: string
+          _opponent2: string
+          _partner: string
+          _starter: string
+          _team_names?: Json
+        }
+        Returns: string
+      }
+      respond_online_doubles: {
+        Args: { _accept: boolean; _initial_game_state?: Json; _match_id: string; _reason?: string }
+        Returns: string
+      }
       accept_online_match: {
         Args: { _initial_game_state: Json; _match_id: string }
         Returns: undefined
