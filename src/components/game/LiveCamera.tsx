@@ -39,7 +39,7 @@ import { looksLikeUndetectedDarts, UNEXPLAINED_LOOKS_BEFORE_HINT, UNEXPLAINED_LO
 import { logDetectionLook, detectionLogCount, exportDetectionLog, clearDetectionLog, roundForLog, type LoggedCandidate } from "@/utils/detectionLog";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
-import { selectNewDarts, keepSupportedDarts } from "@/utils/newDartSelection";
+import { selectNewDarts, keepSupportedDarts, visitDartCapacity } from "@/utils/newDartSelection";
 import { prepareWireFit, refineTapsToWires, findBoardTaps, WIRE_FIT_CONFIDENT } from "@/utils/boardWireFit";
 import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
@@ -236,6 +236,10 @@ const FINAL_PASS_MIN_SCORE = 0.25;
  *  barrel/flight unless it scores at least FINAL_PASS_NEAR_KNOWN_SCORE. */
 const FINAL_PASS_NEAR_KNOWN_DISTANCE = 0.08;
 const FINAL_PASS_NEAR_KNOWN_SCORE = 0.45;
+/** Compared with the empty board, a known dart's own tip stands on fresh pixels too — so in the final look a hit this close
+ *  (~16 mm) to a known dart is always that dart, however confident (2026-10-27: a second "T20" on top of the first T20 was
+ *  added at the pull while the real third dart, a D19, stayed unseen). A real tight-group dart was found when it landed. */
+const FINAL_PASS_SAME_DART_DISTANCE = 0.035;
 /** A rest whose picture differs from the last evaluated one in fewer than this share of cells needs no new detection. */
 const UNCHANGED_FRAME_SHARE = 0.0008;
 /** A detection this confident counts as a dart even where the pictures show no fresh change. */
@@ -668,11 +672,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       return null;
     });
   }, [needsReview, reviewOpen]);
+  /** Darts this visit can hold: fewer than dartsRemaining once a dart checked out or busted (see visitDartCapacity). */
+  const visitCapacity = (darts: { points: number }[]) => visitDartCapacity(darts.map((d) => d.points), remainingScore, dartsRemaining);
   // Hands-free hand-over: a finished round (board empty again) counts down and commits itself; touching a
   // dart (select, edit, remove) stops the countdown so a correction never races the clock.
   // Only a complete visit commits itself: with fewer darts than expected one was most likely overlooked (2026-10-27: 3 of 7
   // wrongly scored rounds were one dart short), so the player confirms those by hand.
-  const autoCommitActive = needsReview && autoCommitEnabled && !autoCommitHeld && accumulated.length >= dartsRemaining && !scanFailed;
+  const autoCommitActive = needsReview && autoCommitEnabled && !autoCommitHeld && accumulated.length >= visitCapacity(accumulated) && !scanFailed;
   useEffect(() => {
     if (!autoCommitActive) { setAutoCommitLeft(null); return; }
     autoCommitSnapshotRef.current = accumulatedRef.current;
@@ -1762,7 +1768,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // dropping it frees its slot instead of leaving the round one real dart short.
     const kept = keepSupportedDarts(already, scored);
     // Several darts can land between two looks (quick throws), so take every new one, not just the best.
-    const newDarts = selectNewDarts(kept, scored, usable ? (x, y) => changedShareNear(usable, x, y) : null, dartsRemaining - kept.length, { straightenedFrame: !!rectMapping() });
+    const newDarts = selectNewDarts(kept, scored, usable ? (x, y) => changedShareNear(usable, x, y) : null, visitCapacity(kept) - kept.length, { straightenedFrame: !!rectMapping(), globalChange: changeMap?.share });
     if (newDarts.length === 0 && kept.length === already.length) return; // nothing new — the end-of-visit pass gets another look
 
     // A discarded/committed round replaces the array underneath us — then this result is stale.
@@ -1804,8 +1810,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // of a dart that is already known from a new dart. Anything close to a known dart therefore needs a confident hit.
     const eligible = (usable ? found : found.filter((d) => d.confidence >= 0.4)).filter(
       (d) => d.confidence >= FINAL_PASS_NEAR_KNOWN_SCORE || !kept.some((k) => Math.hypot((k.x ?? 0) - (d.x ?? 0), (k.y ?? 0) - (d.y ?? 0)) < FINAL_PASS_NEAR_KNOWN_DISTANCE),
-    );
-    const added = selectNewDarts(kept, eligible, usable ? (x, y) => changedShareNear(usable, x, y) : null, dartsRemaining - kept.length);
+    ).filter((d) => !kept.some((k) => Math.hypot((k.x ?? 0) - (d.x ?? 0), (k.y ?? 0) - (d.y ?? 0)) < FINAL_PASS_SAME_DART_DISTANCE));
+    const added = selectNewDarts(kept, eligible, usable ? (x, y) => changedShareNear(usable, x, y) : null, visitCapacity(kept) - kept.length);
     if (added.length === 0 && kept.length === before.length) return;
     if (accumulatedRef.current !== before) return;
     const next = [...kept, ...markDetected(added)];
@@ -1900,7 +1906,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // Changed pixels gate weak detections; a confident one needs no confirmation (a dart that an earlier
       // picture already contained, but the model only recognised now, must not be lost).
       const support = usable ? (x: number, y: number) => changedShareNear(usable, x, y) : null;
-      const added = selectNewDarts(known, present, support, dartsRemaining - known.length, { straightenedFrame: !!rectMapping() });
+      const added = selectNewDarts(known, present, support, visitCapacity(known) - known.length, { straightenedFrame: !!rectMapping(), globalChange: changeMap?.share });
       if (accumulatedRef.current !== known) return; // the round was committed/discarded meanwhile
       {
         const MM_PER_FRAME = 170 / 0.377;
