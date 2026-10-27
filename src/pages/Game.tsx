@@ -49,7 +49,8 @@ import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, Play
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
 import { loadDoublesSeats } from "@/lib/onlineDoubles";
-import { notifyChallengeCreated, notifyDoublesInvited } from "@/lib/onlineMatchNotify";
+import { loadMyDuels, duelStartScore, type OnlineDuel } from "@/lib/onlineDuels";
+import { notifyChallengeCreated, notifyDoublesInvited, notifyDuelPlayed } from "@/lib/onlineMatchNotify";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -561,6 +562,69 @@ const GamePage = () => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game, dartsThisRound, turnStartRemaining, phase, onlineMatchId]);
+
+  // --- Fernduell (?duel=<online_duels.id>) -------------------------------------------------------
+  // Asynchronous 1:1: this device plays one solo leg on its own time and only the RESULT (darts
+  // needed, average) goes to the server (submit_online_duel_result) — no games row, no stats
+  // rollup, no Elo. Crash recovery works through the usual snapshot, scoped per duel id (see
+  // activeGameSnapshot.ts's activeGameKey).
+  const duelId = searchParams.get("duel");
+  const [duel, setDuel] = useState<OnlineDuel | null>(null);
+  const [duelLoaded, setDuelLoaded] = useState(false);
+  const [duelResult, setDuelResult] = useState<{ darts: number; average: number; opponentName: string } | null>(null);
+  const duelSubmittedRef = useRef(false);
+
+  useEffect(() => {
+    if (!duelId) return;
+    let cancelled = false;
+    loadMyDuels().then((all) => {
+      if (cancelled) return;
+      setDuel(all.find((d) => d.id === duelId) ?? null);
+      setDuelLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [duelId]);
+
+  const duelPlayable = !!duel && duel.status === "active" && !duel.expired && !duel.my_finished;
+
+  useEffect(() => {
+    if (!duelId || !duel || !duelPlayable || game || duelResult) return;
+    const startScore = duelStartScore(duel);
+    const me = dbPlayers.find((p) => p.user_id === session?.user?.id)?.name ?? "Du";
+    const slots: PlayerSlot[] = [{ name: me, doubleOut: duel.double_out, doubleIn: duel.double_in, isBot: false }];
+    setGame({
+      mode: duel.mode, startScore, bestOfLegs: 1, players: slots, legsWon: [0],
+      currentLeg: createLegState(1, startScore, 0, slots), completedLegs: [],
+      currentPlayerIndex: 0, isFinished: false,
+    });
+    setDartsThisRound(0);
+    setTurnStartRemaining(startScore);
+    pendingGameIdRef.current = duelId;
+    setPhase("playing");
+  }, [duelId, duel, duelPlayable, game, duelResult, dbPlayers, session?.user?.id]);
+
+  useEffect(() => {
+    if (!duelId || !duel || !game?.isFinished || duelSubmittedRef.current) return;
+    duelSubmittedRef.current = true;
+    const allLegs = [...game.completedLegs, game.currentLeg];
+    const throws = allLegs.flatMap((l) => l.throws[0] ?? []);
+    const darts = throws.length;
+    const avg = calculateAverage(throws);
+    void (async () => {
+      const { data, error } = await supabase.rpc("submit_online_duel_result", { _id: duelId, _darts: darts, _average: Math.round(avg * 100) / 100 });
+      if (error) {
+        duelSubmittedRef.current = false;
+        toast({ title: t("game.onlineSyncFailedTitle"), description: error.message, variant: "destructive" });
+        return;
+      }
+      clearActiveGameSnapshot();
+      const otherId = duel.challenger_user_id === session?.user?.id ? duel.opponent_user_id : duel.challenger_user_id;
+      const otherName = dbPlayers.find((p) => p.user_id === otherId)?.name ?? "?";
+      const myName = dbPlayers.find((p) => p.user_id === session?.user?.id)?.name ?? "Jemand";
+      notifyDuelPlayed(otherId, myName, data === "finished");
+      setDuelResult({ darts, average: avg, opponentName: otherName });
+    })();
+  }, [duelId, duel, game, dbPlayers, session?.user?.id, toast, t]);
 
   // A league-fixture-sourced online match (see League.tsx's startFixtureOnline) reaches Game.tsx
   // via ?online=<id> alone, never the lid/fid/p1id/p2id params useLeagueLink reads — the accepting
@@ -2286,8 +2350,8 @@ const GamePage = () => {
   }, [game, gameSaved, session, clubId, toast, t, tournamentLinkRef, leagueLinkRef, onlineMatchId]);
 
   useEffect(() => {
-    if (game?.isFinished && !gameSaved && session?.user?.id) saveGame();
-  }, [game?.isFinished, gameSaved, session?.user?.id, saveGame]);
+    if (game?.isFinished && !gameSaved && session?.user?.id && !duelId) saveGame();
+  }, [game?.isFinished, gameSaved, session?.user?.id, saveGame, duelId]);
 
   // Cricket match-win announcement — X01 already announces its own win inline (checkout +
   // hype happen together there); cricket finishes on a mark, not a "checkout" moment, so it
@@ -2335,6 +2399,24 @@ const GamePage = () => {
   // "playing" (or if the match somehow isn't active — declined/canceled/already finished — in
   // which case this stays showing rather than falling through to the normal local setup form,
   // which would silently let two people configure and play an unrelated LOCAL game instead).
+  if (duelId && phase === "setup") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center p-6">
+        {duelLoaded && !duelPlayable ? (
+          <>
+            <p className="text-sm text-muted-foreground">{t("game.duelNotPlayable")}</p>
+            <Button onClick={() => navigate("/")} className="mt-2">{t("common.backToHome")}</Button>
+          </>
+        ) : (
+          <>
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">{t("game.duelLoading")}</p>
+          </>
+        )}
+      </div>
+    );
+  }
+
   if (onlineMatchId && phase === "setup") {
     const notActive = onlineMatch.row && onlineMatch.row.status !== "active";
     return (
@@ -2941,8 +3023,25 @@ const GamePage = () => {
         </div>
       )}
       {onlineBar}
+      {game.isFinished && duelId && (
+        <div className="fixed inset-0 bg-background/90 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 text-center shadow-elevation-sm">
+            <p className="font-display uppercase text-sm text-muted-foreground mb-2">{t("game.duelResultTitle")}</p>
+            {duelResult ? (
+              <>
+                <p className="font-display text-5xl tabular-nums text-primary">{duelResult.darts}</p>
+                <p className="text-xs text-muted-foreground mb-1">{t("home.duelDarts")} · Ø {duelResult.average.toFixed(1)}</p>
+                <p className="text-sm text-muted-foreground mt-4">{t("game.duelWaiting").replace("{name}", duelResult.opponentName)}</p>
+              </>
+            ) : (
+              <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto my-4" />
+            )}
+            <Button className="mt-5 w-full" onClick={() => navigate("/")}>{t("game.duelBackHome")}</Button>
+          </div>
+        </div>
+      )}
       {/* Winner overlay */}
-      {game.isFinished && (
+      {game.isFinished && !duelId && (
         <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto overscroll-y-contain py-8">
           <GamePostGame
             game={game}

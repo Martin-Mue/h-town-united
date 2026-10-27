@@ -80,6 +80,8 @@ function activeGameKey(): string {
   const params = new URLSearchParams(window.location.search);
   const tid = params.get("tid");
   const mid = params.get("mid");
+  const duel = params.get("duel");
+  if (duel) return `${ACTIVE_GAME_KEY}:duel:${duel}`;
   return tid && mid ? `${ACTIVE_GAME_KEY}:${tid}:${mid}` : ACTIVE_GAME_KEY;
 }
 

@@ -37,3 +37,21 @@ export function notifyDoublesDeclined(userId: string, declinerName: string, reas
 export function notifyDoublesStarted(userIds: string[]): void {
   userIds.forEach((id) => sendPush(id, "Doppel startet", "Alle haben zugesagt – das Doppel läuft jetzt."));
 }
+
+/** Fernduell (asynchronous) - see online_duels. */
+export function notifyDuelChallenge(opponentUserId: string, challengerName: string): void {
+  sendPush(opponentUserId, "Fernduell", `${challengerName} fordert dich zum Fernduell heraus – spiel es, wann du willst (7 Tage Zeit).`);
+}
+
+export function notifyDuelDeclined(challengerUserId: string, declinerName: string, reason?: string): void {
+  sendPush(challengerUserId, "Fernduell abgelehnt", reason ? `${declinerName} hat abgelehnt: „${reason}“` : `${declinerName} hat dein Fernduell abgelehnt.`);
+}
+
+/** Sent when one side has played: the other side is now on the clock (or, if both are done, sees the result). */
+export function notifyDuelPlayed(otherUserId: string, playerName: string, finished: boolean): void {
+  sendPush(
+    otherUserId,
+    finished ? "Fernduell entschieden" : "Fernduell: du bist dran",
+    finished ? `${playerName} und du habt gespielt – das Ergebnis steht in der App.` : `${playerName} hat das Fernduell gespielt. Jetzt bist du dran!`,
+  );
+}

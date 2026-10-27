@@ -16,6 +16,7 @@ import htuEmblem from "@/assets/club-emblem-color.png";
 import PendingOnlineChallenges from "@/components/home/PendingOnlineChallenges";
 import PendingDoublesLobbies from "@/components/home/PendingDoublesLobbies";
 import LiveOnlineMatches from "@/components/home/LiveOnlineMatches";
+import PendingOnlineDuels from "@/components/home/PendingOnlineDuels";
 import HomeHighlights, { type LiveTournamentInfo, type MyForm } from "@/components/home/HomeHighlights";
 import { useAuth } from "@/contexts/AuthContext";
 import { loadActiveGameSnapshot } from "@/lib/activeGameSnapshot";
@@ -260,6 +261,7 @@ const DashboardPage = () => {
 
       <PendingOnlineChallenges />
       <PendingDoublesLobbies />
+      <PendingOnlineDuels />
       <LiveOnlineMatches />
 
       <HomeHighlights resume={resume} live={liveTournaments} next={nextMatch} form={myForm} />

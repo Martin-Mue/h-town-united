@@ -1038,6 +1038,39 @@ export type Database = {
           },
         ]
       }
+      online_duels: {
+        Row: {
+          challenger_average: number | null
+          challenger_darts: number | null
+          challenger_finished_at: string | null
+          challenger_user_id: string
+          club_id: string
+          created_at: string
+          custom_start_score: number | null
+          decline_reason: string | null
+          double_in: boolean
+          double_out: boolean
+          expires_at: string
+          id: string
+          mode: string
+          opponent_average: number | null
+          opponent_darts: number | null
+          opponent_finished_at: string | null
+          opponent_user_id: string
+          status: string
+          winner_user_id: string | null
+        }
+        Insert: {
+          challenger_user_id: string
+          club_id: string
+          mode: string
+          opponent_user_id: string
+        }
+        Update: {
+          status?: string
+        }
+        Relationships: []
+      }
       online_match_players: {
         Row: {
           decline_reason: string | null
@@ -1833,6 +1866,52 @@ export type Database = {
       }
       take_open_challenge: {
         Args: { _id: string }
+        Returns: string
+      }
+      cancel_online_duel: {
+        Args: { _id: string }
+        Returns: undefined
+      }
+      create_online_duel: {
+        Args: {
+          _custom_start_score: number
+          _double_in: boolean
+          _double_out: boolean
+          _mode: string
+          _opponent: string
+        }
+        Returns: string
+      }
+      my_online_duels: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          challenger_user_id: string
+          created_at: string
+          custom_start_score: number | null
+          decline_reason: string | null
+          double_in: boolean
+          double_out: boolean
+          expired: boolean
+          expires_at: string
+          id: string
+          mode: string
+          my_average: number | null
+          my_darts: number | null
+          my_finished: boolean
+          opponent_user_id: string
+          status: string
+          their_average: number | null
+          their_darts: number | null
+          their_finished: boolean
+          winner_user_id: string | null
+        }[]
+      }
+      respond_online_duel: {
+        Args: { _accept: boolean; _id: string; _reason?: string }
+        Returns: string
+      }
+      submit_online_duel_result: {
+        Args: { _average: number; _darts: number; _id: string }
         Returns: string
       }
       accept_online_match: {
