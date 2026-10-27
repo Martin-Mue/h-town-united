@@ -1214,4 +1214,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Kamera tahtada bir şey görüp ok tanıyamazsa (örneğin kenarda), turu atışsız bitirmek yerine bunu söyler ve elle girişi önerir. Kenardaki zayıf isabetler daha kolay sayılır, aynı okun çift algılanması kalktı ve kamera ayarlarındaki algılama günlüğü hata aramaya yardım eder. Turnuvalarda katılımcılar artık formattan önce geliyor.",
     },
   },
+  {
+    id: "2026-10-31-online-doubles",
+    date: "2026-10-31",
+    title: {
+      de: "Online-Doppel und mehr Online-Funktionen",
+      en: "Online doubles and more online features",
+      fr: "Double en ligne et plus de fonctions en ligne",
+      pl: "Debel online i więcej funkcji online",
+      nl: "Online dubbel en meer online functies",
+      tr: "Çevrimiçi çiftler ve daha fazla çevrimiçi özellik",
+    },
+    description: {
+      de: "Spielt 2 gegen 2, jeder von zu Hause: Partner und zwei Gegner einladen, alle sagen zu, dann geht's los. Dazu: wer gerade online ist, offene Herausforderungen („Ich suche einen Gegner“), Revanche-Knopf, Online-Rangliste, Zuschauen bei laufenden Online-Spielen, Reaktionen und ein Videoanruf-Link im Spiel. Ist ein Partner im Doppel 60 Sekunden weg, darf der andere für ihn werfen. In der Liga lassen sich Spieltage wöchentlich terminieren, überfällige Spieltage werden markiert.",
+      en: "Play 2 vs. 2, everyone from home: invite a partner and two opponents, all accept, then it starts. Also: see who is online, open challenges (\"I'm looking for an opponent\"), a rematch button, an online leaderboard, watching running online games, reactions and a video-call link in the game. If a doubles partner is away for 60 seconds, the other may throw for them. In leagues, matchdays can be scheduled weekly and overdue matchdays are flagged.",
+      fr: "Jouez 2 contre 2, chacun chez soi : invitez un partenaire et deux adversaires, tous acceptent, c'est parti. Aussi : voir qui est en ligne, défis ouverts, bouton revanche, classement en ligne, regarder les parties en cours, réactions et lien d'appel vidéo. Si un partenaire est absent 60 secondes, l'autre peut jouer pour lui. En ligue, les journées peuvent être planifiées chaque semaine et les journées en retard sont signalées.",
+      pl: "Grajcie 2 na 2, każdy z domu: zaproś partnera i dwóch przeciwników, wszyscy akceptują i startujecie. Do tego: kto jest online, otwarte wyzwania, przycisk rewanżu, ranking online, oglądanie trwających gier, reakcje i link do wideorozmowy. Gdy partner jest nieobecny 60 sekund, drugi może rzucić za niego. W lidze można planować kolejki co tydzień, a zaległe są oznaczone.",
+      nl: "Speel 2 tegen 2, iedereen vanuit huis: nodig een partner en twee tegenstanders uit, iedereen accepteert en het begint. Verder: zien wie online is, open uitdagingen, een revanche-knop, online ranglijst, meekijken met lopende online potjes, reacties en een videobel-link. Is een partner 60 seconden weg, dan mag de ander voor hem gooien. In de competitie plan je speeldagen wekelijks en achterstallige speeldagen worden gemarkeerd.",
+      tr: "2'ye 2 oynayın, herkes evinden: bir partner ve iki rakip davet edin, herkes kabul edince başlar. Ayrıca: kimin çevrimiçi olduğu, açık meydan okumalar, rövanş düğmesi, çevrimiçi sıralama, süren oyunları izleme, tepkiler ve görüntülü arama bağlantısı. Bir partner 60 saniye yoksa diğeri onun yerine atabilir. Ligde maç günleri haftalık planlanabilir, gecikenler işaretlenir.",
+    },
+  },
 ];

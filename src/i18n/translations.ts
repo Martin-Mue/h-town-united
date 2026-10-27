@@ -145,6 +145,8 @@ export const translations: Record<string, Record<Language, string>> = {
   "home.liveOnlineMatches": { de: "Live: Online-Spiele", en: "Live: online games", fr: "En direct : parties en ligne", pl: "Na żywo: gry online", nl: "Live: online potjes", tr: "Canlı: çevrimiçi oyunlar" },
   "home.watchMatch": { de: "Zuschauen", en: "Watch", fr: "Regarder", pl: "Oglądaj", nl: "Kijken", tr: "İzle" },
   "game.yourTurn": { de: "Du bist dran", en: "Your turn", fr: "À toi de jouer", pl: "Twoja kolej", nl: "Jij bent aan de beurt", tr: "Sıra sende" },
+  "league.scheduleWeekly": { de: "Spieltage wöchentlich terminieren", en: "Schedule matchdays weekly", fr: "Planifier les journées chaque semaine", pl: "Zaplanuj kolejki co tydzień", nl: "Speeldagen wekelijks plannen", tr: "Maç günlerini haftalık planla" },
+  "league.deadlineOverdue": { de: "Frist überschritten", en: "Deadline passed", fr: "Délai dépassé", pl: "Termin minął", nl: "Deadline verstreken", tr: "Süre doldu" },
   "home.pendingChallenges": { de: "Herausforderungen", en: "Challenges", fr: "Défis", pl: "Wyzwania", nl: "Uitdagingen", tr: "Meydan okumalar" },
   "home.doublesLobbies": { de: "Doppel-Einladungen", en: "Doubles invitations", fr: "Invitations en double", pl: "Zaproszenia do debla", nl: "Dubbel-uitnodigingen", tr: "Çiftler davetleri" },
   "home.versus": { de: "gegen", en: "vs.", fr: "contre", pl: "vs.", nl: "tegen", tr: "karşı" },

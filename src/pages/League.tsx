@@ -197,6 +197,23 @@ const LeaguePage = () => {
     await fetchFixtures();
   };
 
+  /** Online league: every matchday gets a deadline one week after the previous one (first one a
+   *  week from today). The organizer can still adjust each date by hand afterwards. */
+  const scheduleRoundsWeekly = async () => {
+    if (!id) return;
+    const rounds = [...new Set(fixtures.map((f) => f.round_number))].sort((a, b) => a - b);
+    setSavingRoundDate(-1);
+    for (const [i, round] of rounds.entries()) {
+      const d = new Date();
+      d.setDate(d.getDate() + 7 * (i + 1));
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const { error } = await supabase.from("league_fixtures").update({ scheduled_date: iso }).eq("league_id", id).eq("round_number", round);
+      if (error) { toast({ title: t("common.error"), description: error.message, variant: "destructive" }); break; }
+    }
+    setSavingRoundDate(null);
+    await fetchFixtures();
+  };
+
   const playerById = useMemo(() => new Map(dbPlayers.map((p) => [p.id, p])), [dbPlayers]);
 
   const standings = useMemo(() => {
@@ -725,19 +742,29 @@ const LeaguePage = () => {
     );
     const fixturesPanel = (
       <SectionCard>
-        <Eyebrow icon={Users}>{t("league.fixturesTitle")}</Eyebrow>
+        <div className="flex items-center justify-between gap-2">
+          <Eyebrow icon={Users}>{t("league.fixturesTitle")}</Eyebrow>
+          {activeLeague.created_by === session?.user?.id && fixturesByRound.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" disabled={savingRoundDate !== null} onClick={scheduleRoundsWeekly}>
+              <CalendarDays className="w-3 h-3" /> {t("league.scheduleWeekly")}
+            </Button>
+          )}
+        </div>
         {fixturesByRound.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("league.noFixturesYet")}</p>
         ) : (
           <div className="space-y-4">
             {fixturesByRound.map(([round, roundFixtures]) => {
               const scheduledDate = roundFixtures[0].scheduled_date;
+              const todayIso = new Date().toISOString().slice(0, 10);
+              const roundOverdue = !!scheduledDate && scheduledDate < todayIso && roundFixtures.some((fx) => fx.status !== "finished");
               const isOrganizer = activeLeague.created_by === session?.user?.id;
               return (
               <div key={round}>
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                     {t("league.roundLabel")} {round}{legLabel(roundFixtures[0].leg) ? ` · ${legLabel(roundFixtures[0].leg)}` : ""}
+                    {roundOverdue && <span className="ml-2 rounded bg-destructive/15 px-1.5 py-0.5 text-destructive normal-case">{t("league.deadlineOverdue")}</span>}
                   </p>
                   {/* Round 3 Rang 10: a Spieltag is scheduled as a whole round, not per fixture —
                       see setRoundScheduledDate's doc comment. Read-only date text for everyone
