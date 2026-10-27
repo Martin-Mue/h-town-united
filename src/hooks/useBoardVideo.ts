@@ -182,6 +182,15 @@ export function useBoardVideo({ matchId, userId, enabled, getExternalStream }: O
     channelRef.current = channel;
     channel
       .on("broadcast", { event: "signal" }, (msg) => { void handleSignal(msg.payload as Signal); })
+      // A (re)joining member (reload, reconnect, app restart) has no memory of any earlier
+      // connection and the old peer connection to them is dead: drop both directions, and if I am
+      // sharing offer my board again. Presence "sync" alone cannot tell this apart from "still there".
+      .on("presence", { event: "join" }, ({ key }) => {
+        if (!key || key === userId) return;
+        closeSender(key);
+        closeViewer(key);
+        if (sharingRef.current) void connectViewer(key);
+      })
       .on("presence", { event: "sync" }, () => {
         const present = new Set(Object.keys(channel.presenceState()));
         present.delete(userId);
