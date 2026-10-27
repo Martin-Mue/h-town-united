@@ -32,6 +32,7 @@ import type { TournamentTemplate } from "@/utils/tournamentTemplate";
 import ManageTabs, { type ManageTab } from "@/components/tournament/manage/ManageTabs";
 import { setupStepIssues, allSetupIssues, firstStepWithIssue, SETUP_STEP_ORDER, type SetupState, type SetupStepKey } from "@/utils/tournamentSetupSteps";
 import { clubHasFeature } from "@/lib/planFeatures";
+import { hasLocalActiveGame } from "@/lib/activeGameSnapshot";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { useToast } from "@/hooks/use-toast";
 import { matchClubPlayer } from "@/lib/repositories/players";
@@ -1793,8 +1794,11 @@ const TournamentPage = () => {
   // pushes every ~1.2s is the only signal available that a session might already be running, so
   // a plain confirm() (no existing AlertDialog wraps this button, and this only fires on the
   // rare actual collision) is a pragmatic guard rather than silently starting a duplicate.
+  // A game this very device left behind is resumed from its local crash-recovery copy (Game.tsx
+  // restores it on mount), so the "already running elsewhere" confirm must not fire for it.
   const startLiveGame = (match: Match) => {
-    if (isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} ${t("tournament.matchAlreadyRunningConfirm")}`)) {
+    const resumingOwnGame = !!activeTournament && hasLocalActiveGame(activeTournament.id, match.id);
+    if (!resumingOwnGame && isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} ${t("tournament.matchAlreadyRunningConfirm")}`)) {
       return;
     }
     const path = koLiveGamePath(match);
@@ -1802,7 +1806,8 @@ const TournamentPage = () => {
   };
 
   const startLiveGameRr = (match: RoundRobinMatch) => {
-    if (isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} ${t("tournament.matchAlreadyRunningConfirm")}`)) {
+    const resumingOwnGame = !!activeTournament && hasLocalActiveGame(activeTournament.id, match.id);
+    if (!resumingOwnGame && isLiveSnapshotFresh(match.live) && !window.confirm(`${match.player1} vs. ${match.player2} ${t("tournament.matchAlreadyRunningConfirm")}`)) {
       return;
     }
     const path = rrLiveGamePath(match);

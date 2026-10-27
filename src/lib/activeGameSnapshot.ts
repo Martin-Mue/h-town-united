@@ -113,6 +113,22 @@ export function loadActiveGameSnapshot(): ActiveGameSnapshot | null {
   }
 }
 
+/** True when THIS device still holds an unfinished game for exactly this tournament match. Lets the
+ *  bracket's "Spiel starten" tell "I left my own game and am coming back" apart from "another
+ *  device is already playing it" -- both look identical in the match's shared live snapshot. */
+export function hasLocalActiveGame(tournamentId: string, matchId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(`${ACTIVE_GAME_KEY}:${tournamentId}:${matchId}`);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    const game = parsed && typeof parsed === "object" && "currentLeg" in parsed ? parsed : parsed?.game;
+    return !!game && !game.isFinished;
+  } catch {
+    return false;
+  }
+}
+
 export function saveActiveGameSnapshot(snapshot: ActiveGameSnapshot) {
   if (typeof window === "undefined") return;
   try {
