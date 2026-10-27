@@ -1065,6 +1065,51 @@ export type Database = {
         }
         Relationships: []
       }
+      online_open_challenges: {
+        Row: {
+          best_of_legs: number
+          club_id: string
+          created_at: string
+          created_by: string
+          custom_start_score: number | null
+          double_in: boolean
+          double_out: boolean
+          id: string
+          match_id: string | null
+          mode: string
+          status: string
+          taken_by: string | null
+        }
+        Insert: {
+          best_of_legs?: number
+          club_id: string
+          created_at?: string
+          created_by: string
+          custom_start_score?: number | null
+          double_in?: boolean
+          double_out?: boolean
+          id?: string
+          match_id?: string | null
+          mode: string
+          status?: string
+          taken_by?: string | null
+        }
+        Update: {
+          best_of_legs?: number
+          club_id?: string
+          created_at?: string
+          created_by?: string
+          custom_start_score?: number | null
+          double_in?: boolean
+          double_out?: boolean
+          id?: string
+          match_id?: string | null
+          mode?: string
+          status?: string
+          taken_by?: string | null
+        }
+        Relationships: []
+      }
       online_matches: {
         Row: {
           best_of_legs: number
@@ -1755,6 +1800,39 @@ export type Database = {
       }
       respond_online_doubles: {
         Args: { _accept: boolean; _initial_game_state?: Json; _match_id: string; _reason?: string }
+        Returns: string
+      }
+      abort_idle_online_match: {
+        Args: { _match_id: string }
+        Returns: boolean
+      }
+      cancel_open_challenge: {
+        Args: { _id: string }
+        Returns: undefined
+      }
+      create_open_challenge: {
+        Args: {
+          _best_of_legs: number
+          _custom_start_score: number
+          _double_in: boolean
+          _double_out: boolean
+          _mode: string
+        }
+        Returns: string
+      }
+      online_leaderboard: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          emoji: string
+          name: string
+          played: number
+          player_id: string
+          win_rate: number
+          wins: number
+        }[]
+      }
+      take_open_challenge: {
+        Args: { _id: string }
         Returns: string
       }
       accept_online_match: {

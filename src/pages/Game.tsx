@@ -351,6 +351,7 @@ const GamePage = () => {
   // The actual sync effects live further down (after pendingGameIdRef exists), see there.
   const onlineMatchId = searchParams.get("online");
   const onlineMatch = useOnlineMatch(onlineMatchId ?? undefined, session?.user?.id);
+  const [reactionTrayOpen, setReactionTrayOpen] = useState(false);
   // Autodarts: fixed on/off for the whole game (chosen in GameSetup), unlike the camera's own
   // freely-toggled cameraEnabled above — see GameSetup.tsx's own doc comment on why. Declared here
   // (rather than alongside the rest of the Autodarts state further down) specifically so the
@@ -2700,6 +2701,42 @@ const GamePage = () => {
       })()}
     </>
   );
+  // Online play extras (floating pill, shown in every layout): whose turn it is / substitute hint,
+  // quick reactions, a free video-call room, and the 5-minute idle abort.
+  const REACTIONS = ["👏", "🔥", "😅", "🎯", "👍", "GG"];
+  const myOnlineName = game.players[onlineMatch.mySlot ?? (onlineMatch.row?.player1_user_id === session?.user?.id ? 0 : 1)]?.name ?? "?";
+  const onlineTurnName = game.players[game.currentPlayerIndex]?.name ?? "";
+  const onlineBar = onlineMatchId && !game.isFinished ? (
+    <div className="fixed inset-x-0 top-14 z-40 flex flex-col items-center gap-1.5 px-3 pointer-events-none">
+      <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-full border border-border bg-card/95 px-2.5 py-1 text-[11px] shadow-elevation-sm backdrop-blur">
+        <span className={onlineMatch.isMyTurn ? "font-semibold text-primary" : "text-muted-foreground"}>
+          {onlineMatch.substituting
+            ? t("game.onlineSubstitute").replace("{name}", onlineTurnName)
+            : onlineMatch.isMyTurn ? t("game.yourTurn") : t("game.onlineWaitingFor").replace("{name}", onlineTurnName)}
+        </span>
+        <button type="button" onClick={() => setReactionTrayOpen((o) => !o)} aria-label="Reaktion" className="px-1.5 text-base leading-none">😀</button>
+        <a href={`https://meet.jit.si/dartspot-${onlineMatchId}`} target="_blank" rel="noopener noreferrer" aria-label={t("game.onlineVideoCall")} title={t("game.onlineVideoCall")} className="px-1.5 text-base leading-none">📹</a>
+        {onlineMatch.canAbortIdle && (
+          <button type="button" onClick={async () => { if (await onlineMatch.abortIdle()) { toast({ title: t("game.onlineAborted") }); navigate("/"); } }} className="rounded-full border border-destructive/40 px-2 py-0.5 text-destructive">
+            {t("game.onlineAbortIdle")}
+          </button>
+        )}
+      </div>
+      {reactionTrayOpen && (
+        <div className="pointer-events-auto flex gap-1 rounded-full border border-border bg-card/95 px-2 py-1 shadow-elevation-sm backdrop-blur">
+          {REACTIONS.map((r) => (
+            <button key={r} type="button" className="px-1.5 text-lg leading-none" onClick={() => { onlineMatch.sendReaction(r, myOnlineName); setReactionTrayOpen(false); }}>{r}</button>
+          ))}
+        </div>
+      )}
+      {onlineMatch.reaction && Date.now() - onlineMatch.reaction.at < 3500 && (
+        <div key={onlineMatch.reaction.at} className="pointer-events-none animate-slide-up rounded-2xl border border-primary/30 bg-card/95 px-4 py-2 text-center shadow-elevation-sm">
+          <span className="text-2xl">{onlineMatch.reaction.emoji}</span>
+          <span className="ml-2 text-xs text-muted-foreground">{onlineMatch.reaction.from}</span>
+        </div>
+      )}
+    </div>
+  ) : null;
   const arenaOnlineBanner = onlineMatchId && onlineMatch.connectionStatus !== "connected" ? (
     <div className="mx-auto flex w-fit items-center justify-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold text-accent">
       {onlineMatch.connectionStatus === "reconnecting" ? (
@@ -2903,6 +2940,7 @@ const GamePage = () => {
           </div>
         </div>
       )}
+      {onlineBar}
       {/* Winner overlay */}
       {game.isFinished && (
         <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto overscroll-y-contain py-8">

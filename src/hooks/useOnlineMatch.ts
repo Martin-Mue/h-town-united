@@ -17,6 +17,9 @@ export type OnlineConnectionStatus = "connected" | "reconnecting" | "disconnecte
  *  plain GameState fields (see the submit_online_throw/accept_online_match RPCs) — they're normal
  *  sibling useState in local/bot play (src/types/game.ts doesn't include them), but a reconnect
  *  can't reconstruct them from GameState alone, so the online-match row carries all three. */
+/** An ephemeral emoji/phrase reaction — broadcast only, never persisted. */
+export interface OnlineReaction { from: string; emoji: string; at?: number }
+
 export type OnlineGameState = GameState & { dartsThisRound: number; turnStartRemaining: number };
 
 export interface OnlineMatchRow {
@@ -33,6 +36,7 @@ export interface OnlineMatchRow {
   /** true = 2-gegen-2 with four accounts (see online_match_players); players[i] belongs to slot i. */
   is_doubles?: boolean;
   created_by?: string;
+  updated_at?: string;
   best_of_sets?: number | null;
   custom_start_score?: number | null;
   double_in?: boolean;
@@ -53,6 +57,13 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
   const channelRef = useRef<RealtimeChannel | null>(null);
   // Seat of this account in a doubles match (== index into GameState.players); null for 1:1.
   const [mySlot, setMySlot] = useState<number | null>(null);
+  const [reaction, setReaction] = useState<(OnlineReaction & { at: number }) | null>(null);
+  // Re-evaluated every 5 s so the idle-based substitute/abort offers appear without any new event.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 5000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!matchId) {
@@ -83,7 +94,14 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
       .on("broadcast", { event: "throw" }, (payload) => {
         if (cancelled) return;
         const nextState = (payload.payload as { game_state: OnlineGameState })?.game_state;
-        if (nextState) setRow((prev) => (prev ? { ...prev, game_state: nextState } : prev));
+        // updated_at is bumped locally too: the DB row's own value only arrives with the
+        // postgres_changes UPDATE a moment later, and the idle clock below must not read a stale one.
+        if (nextState) setRow((prev) => (prev ? { ...prev, game_state: nextState, updated_at: new Date().toISOString() } : prev));
+      })
+      .on("broadcast", { event: "reaction" }, (payload) => {
+        if (cancelled) return;
+        const r = payload.payload as OnlineReaction;
+        if (r?.emoji) setReaction({ ...r, at: Date.now() });
       })
       .subscribe((status) => {
         if (cancelled) return;
@@ -134,12 +152,20 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
   /** Whose turn it is. 1:1: GameState.currentPlayerIndex 0/1 mapped to the two accounts on the row.
    *  Doubles: currentPlayerIndex IS the seat (players are interleaved [A1, B1, A2, B2]), so it is my
    *  turn exactly when it equals my own seat. */
+  const currentIdx = row?.game_state?.currentPlayerIndex ?? -1;
+  const idleSeconds = row?.updated_at ? Math.max(0, Math.floor((now - new Date(row.updated_at).getTime()) / 1000)) : 0;
+  /** Doubles: my partner is on the clock but hasn't played for 60 s — the server lets me throw for them. */
+  const substituting = isDoubles && row?.status === "active" && mySlot !== null && currentIdx !== mySlot
+    && currentIdx % 2 === mySlot % 2 && idleSeconds > 60;
   const isMyTurn = !!row?.game_state && !!userId && (
-    isDoubles
-      ? mySlot !== null && row.game_state.currentPlayerIndex === mySlot
-      : (row.game_state.currentPlayerIndex === 0 && row.player1_user_id === userId) ||
-        (row.game_state.currentPlayerIndex === 1 && row.player2_user_id === userId)
+    substituting || (
+      isDoubles
+        ? mySlot !== null && currentIdx === mySlot
+        : (currentIdx === 0 && row.player1_user_id === userId) || (currentIdx === 1 && row.player2_user_id === userId)
+    )
   );
+  /** Someone on the OTHER side has been idle 5 min: this player may end the match without a result. */
+  const canAbortIdle = row?.status === "active" && idleSeconds > 300 && !isMyTurn && !(isDoubles && mySlot !== null && currentIdx % 2 === mySlot % 2);
 
   const sendThrow = useCallback(async (newGameState: GameState, dartsThisRound: number, turnStartRemaining: number) => {
     if (!matchId) return;
@@ -158,5 +184,17 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
     if (error) throw error;
   }, [matchId]);
 
-  return { row, loading, isMyTurn, mySlot, sendThrow, connectionStatus };
+  const sendReaction = useCallback((emoji: string, from: string) => {
+    const payload: OnlineReaction = { emoji, from };
+    void channelRef.current?.send({ type: "broadcast", event: "reaction", payload });
+    setReaction({ ...payload, at: Date.now() });
+  }, []);
+
+  const abortIdle = useCallback(async () => {
+    if (!matchId) return false;
+    const { data } = await supabase.rpc("abort_idle_online_match", { _match_id: matchId });
+    return !!data;
+  }, [matchId]);
+
+  return { row, loading, isMyTurn, mySlot, substituting, idleSeconds, canAbortIdle, abortIdle, reaction, sendReaction, sendThrow, connectionStatus };
 }

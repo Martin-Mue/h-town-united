@@ -13,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePlayers } from "@/hooks/usePlayers";
 import { notifyChallengeCreated, notifyDoublesInvited } from "@/lib/onlineMatchNotify";
 import { useOnlineUserIds } from "@/lib/clubPresence";
+import OnlineOpenChallenges from "@/components/game/OnlineOpenChallenges";
+import OnlineLeaderboard from "@/components/game/OnlineLeaderboard";
 
 const MODES = ["501", "301", "cricket", "custom"] as const;
 const BEST_OF_OPTIONS = [1, 3, 5];
@@ -304,6 +306,9 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
               {t("players.sendChallenge")}
             </Button>
           )}
+
+          <OnlineOpenChallenges draft={{ mode, bestOf, doubleIn, doubleOut, customStartScore }} />
+          <OnlineLeaderboard />
         </div>
       )}
     </div>
