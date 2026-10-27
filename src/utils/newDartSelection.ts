@@ -194,3 +194,23 @@ export function keepSupportedDarts<T extends DartCandidate>(known: T[], detectio
     return detections.some((d) => typeof d.x === "number" && typeof d.y === "number" && Math.hypot(d.x - x, d.y - y) < SAME_DART_RADIUS);
   });
 }
+
+/** How many darts the visit currently on the board can legally hold: the full remaining budget
+ *  (dartsRemaining) unless one of the darts already detected ended the visit — a checkout
+ *  (remaining hits exactly 0) or a bust (remaining would go negative). Both end the visit no
+ *  matter the checkout rule, so the capacity is the same either way; leaving 1 only busts under
+ *  double-out, which this doesn't know about, so it keeps the full budget (the visit simply
+ *  isn't over yet in a single-out game). Points are walked in throw order, which the incremental
+ *  detection preserves. Callers use this to decide when a visit is complete enough to commit
+ *  itself — a 1- or 2-dart checkout/bust must count as complete even though it is short of 3. */
+export function visitDartCapacity(points: number[], remainingScore: number | undefined, dartsRemaining: number): number {
+  if (remainingScore === undefined || remainingScore <= 0) return dartsRemaining;
+  let remaining = remainingScore;
+  for (let i = 0; i < points.length; i++) {
+    const next = remaining - points[i];
+    if (next < 0) return i + 1; // bust
+    if (next === 0) return i + 1; // checkout (or a bust finish — the visit is over either way)
+    remaining = next;
+  }
+  return dartsRemaining;
+}

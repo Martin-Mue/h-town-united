@@ -254,33 +254,6 @@ export type Database = {
         }
         Relationships: []
       }
-      game_presets: {
-        Row: {
-          config: Json
-          created_at: string
-          id: string
-          kind: string
-          name: string
-          user_id: string
-        }
-        Insert: {
-          config: Json
-          created_at?: string
-          id?: string
-          kind?: string
-          name: string
-          user_id: string
-        }
-        Update: {
-          config?: Json
-          created_at?: string
-          id?: string
-          kind?: string
-          name?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       game_legs: {
         Row: {
           club_id: string
@@ -354,6 +327,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      game_presets: {
+        Row: {
+          config: Json
+          created_at: string
+          id: string
+          kind: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          config: Json
+          created_at?: string
+          id?: string
+          kind?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       games: {
         Row: {
@@ -1674,10 +1674,6 @@ export type Database = {
       }
     }
     Functions: {
-      merge_players: {
-        Args: { p_keep: string; p_remove: string }
-        Returns: Json
-      }
       _autodarts_cached_token: {
         Args: { p_board_id: string; p_club_id: string }
         Returns: string
@@ -1923,6 +1919,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      merge_players: {
+        Args: { p_keep: string; p_remove: string }
+        Returns: Json
+      }
       public_tournament_highlights: {
         Args: { _tournament_id: string }
         Returns: {
@@ -1940,6 +1940,18 @@ export type Database = {
           throws: Json
           won: boolean
         }[]
+      }
+      rename_in_json: {
+        Args: { p_doc: Json; p_new: string; p_old: string }
+        Returns: Json
+      }
+      rename_in_team_name: {
+        Args: { p_new: string; p_old: string; p_text: string }
+        Returns: string
+      }
+      rename_player_everywhere: {
+        Args: { p_club: string; p_new: string; p_old: string }
+        Returns: undefined
       }
       request_to_join_club: { Args: { _club_id: string }; Returns: string }
       respond_to_join_request: {
