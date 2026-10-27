@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense, type ReactNode } from "react";
 import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info, Trash2, KeyRound } from "lucide-react";
 import { DartLoaderIcon as Loader2, DartGameIcon } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { useOnlineUserIds } from "@/lib/clubPresence";
 import { compressImage } from "@/utils/imageCompression";
 import { SectionCard, StatTile } from "@/components/stats/StatPrimitives";
 import { generatePinSalt, hashPin, isValidPinFormat } from "@/lib/playerPin";
@@ -98,6 +99,7 @@ const EMPTY_PLAYER_FORM = {
  */
 const PlayersPage = () => {
   const { t } = useLanguage();
+  const onlineNow = useOnlineUserIds();
   const { name: clubName, clubId, logoUrl } = useClubBranding();
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -725,9 +727,16 @@ const PlayersPage = () => {
     const sizeClasses = { sm: "w-10 h-10", md: "w-14 h-14", lg: "w-20 h-20" };
     const textSize = { sm: "text-lg", md: "text-2xl", lg: "text-4xl" };
     const imgUrl = player.ai_portrait_url || player.avatar_url || STATIC_PORTRAITS[player.id];
+    const online = !!player.user_id && onlineNow.has(player.user_id);
+    const withDot = (node: ReactNode) => (
+      <span className="relative inline-block shrink-0">
+        {node}
+        {online && <span title={t("players.onlineNow")} className="absolute -bottom-0.5 -right-0.5 block w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-background" />}
+      </span>
+    );
 
     if (imgUrl) {
-      return (
+      return withDot(
         <img
           src={imgUrl}
           alt={`${player.name} portrait`}
@@ -744,7 +753,7 @@ const PlayersPage = () => {
         />
       );
     }
-    return (
+    return withDot(
       <div className={`${sizeClasses[size]} rounded-xl bg-muted flex items-center justify-center ${textSize[size]}`}>
         {player.emoji}
       </div>

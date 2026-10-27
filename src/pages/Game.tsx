@@ -189,7 +189,8 @@ const GamePage = () => {
   // Toggle shown on the plain (not tournament/league-linked) setup screen — "online" swaps the
   // whole form for OnlineChallengeSetup (challenge a real club member, synced two-device play)
   // instead of the usual local player-name entry. Not persisted; always starts on "local".
-  const [setupMode, setSetupMode] = useState<"local" | "online">("local");
+  const [setupMode, setSetupMode] = useState<"local" | "online">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("setup") === "online" ? "online" : "local");
   // Who throws first in the match — a raw player index normally, but effectively a team choice
   // in team mode (0/1 pick each team's first member, matching the [TeamA-1, TeamB-1, TeamA-2,
   // TeamB-2, ...] interleaving createLegState/teamIndexFor already assume). Defaults to 0 (today's
