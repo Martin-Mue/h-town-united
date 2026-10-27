@@ -17,7 +17,7 @@ import OnlineOpenChallenges from "@/components/game/OnlineOpenChallenges";
 import OnlineLeaderboard from "@/components/game/OnlineLeaderboard";
 
 const MODES = ["501", "301", "cricket", "custom"] as const;
-const BEST_OF_OPTIONS = [1, 3, 5];
+const BEST_OF_OPTIONS = [1, 3, 5, 7, 9, 11]; // same First to 1–6 range as the local game setup
 const STARTER_OPTIONS = ["challenger", "opponent", "random"] as const;
 type StarterChoice = (typeof STARTER_OPTIONS)[number];
 
