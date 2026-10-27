@@ -49,6 +49,7 @@ if (typeof window !== "undefined") {
 const Index = lazyWithReload(() => import("./pages/Index"));
 const Players = lazyWithReload(() => import("./pages/Players"));
 const Game = lazyWithReload(() => import("./pages/Game"));
+const OnlineWatch = lazyWithReload(() => import("./pages/OnlineWatch"));
 const Tournament = lazyWithReload(() => import("./pages/Tournament"));
 const Training = lazyWithReload(() => import("./pages/Training"));
 const Statistics = lazyWithReload(() => import("./pages/Statistics"));
@@ -132,6 +133,7 @@ const App = () => (
                           <Route path="/" element={<Index />} />
                           <Route path="/players" element={<Players />} />
                           <Route path="/game" element={<Game />} />
+                          <Route path="/watch/:id" element={<OnlineWatch />} />
                           <Route path="/tournament" element={<Tournament />} />
                           <Route path="/tournament/:id" element={<Tournament />} />
                           <Route path="/tournaments/series" element={<TournamentSeries />} />
