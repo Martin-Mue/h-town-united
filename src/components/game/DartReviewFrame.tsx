@@ -45,6 +45,21 @@ const DartReviewFrame = ({ imageUrl, darts, selectedIndex, onSelect, onMove, onC
   const loupeRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ index: number; offsetX: number; offsetY: number } | null>(null);
   const [loupeAt, setLoupeAt] = useState<{ x: number; y: number } | null>(null);
+  // The neighbour chips are built around the value the dart had when it was selected (or last dragged to) and stay put
+  // while chips are tapped. Rebuilding them around every tapped value shifted the whole row under the finger, so the
+  // next tap hit a different number (2026-10-27: a D9 checkout took ~35 s of T1 / T20 / 1 / 20 back and forth).
+  const [chipAnchor, setChipAnchor] = useState<{ index: number; baseValue: number } | null>(null);
+  const reanchorRef = useRef(false);
+  useEffect(() => {
+    if (selectedIndex === null) { setChipAnchor(null); return; }
+    setChipAnchor({ index: selectedIndex, baseValue: darts[selectedIndex]?.baseValue ?? 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndex]);
+  useEffect(() => {
+    if (!reanchorRef.current || selectedIndex === null) return;
+    const d = darts[selectedIndex];
+    if (d && chipAnchor?.baseValue !== d.baseValue) setChipAnchor({ index: selectedIndex, baseValue: d.baseValue });
+  }, [darts, selectedIndex, chipAnchor]);
 
   const pointerToFraction = (e: React.PointerEvent) => {
     const rect = wrapRef.current?.getBoundingClientRect();
@@ -63,10 +78,12 @@ const DartReviewFrame = ({ imageUrl, darts, selectedIndex, onSelect, onMove, onC
     });
     if (nearest >= 0 && nearestDist <= HIT_RADIUS_PX) {
       onSelect(nearest);
+      reanchorRef.current = true;
       dragRef.current = { index: nearest, offsetX: darts[nearest].x - p.x, offsetY: darts[nearest].y - p.y };
       setLoupeAt({ x: darts[nearest].x, y: darts[nearest].y });
       e.currentTarget.setPointerCapture(e.pointerId);
     } else if (selectedIndex !== null) {
+      reanchorRef.current = true;
       onMove(selectedIndex, clamp01(p.x), clamp01(p.y));
       dragRef.current = { index: selectedIndex, offsetX: 0, offsetY: 0 };
       setLoupeAt({ x: clamp01(p.x), y: clamp01(p.y) });
@@ -172,7 +189,8 @@ const DartReviewFrame = ({ imageUrl, darts, selectedIndex, onSelect, onMove, onC
       {selected && selectedIndex !== null && (
         <CorrectionChips
           dart={selected}
-          onChoose={(choice) => onChoose(selectedIndex, choice)}
+          anchorValue={chipAnchor?.index === selectedIndex ? chipAnchor.baseValue : selected.baseValue}
+          onChoose={(choice) => { reanchorRef.current = false; onChoose(selectedIndex, choice); }}
           labels={labels}
         />
       )}
@@ -182,14 +200,17 @@ const DartReviewFrame = ({ imageUrl, darts, selectedIndex, onSelect, onMove, onC
 
 interface CorrectionChipsProps {
   dart: ReviewDart;
+  /** The value the neighbour row is built around — fixed while chips are being tapped. */
+  anchorValue: number;
   onChoose: (choice: ScoreChoice) => void;
   labels: DartReviewFrameProps["labels"];
 }
 
 /** The few alternatives that cover nearly every misreading: the segment next door, or another ring. */
-const CorrectionChips = ({ dart, onChoose, labels }: CorrectionChipsProps) => {
+const CorrectionChips = ({ dart, anchorValue, onChoose, labels }: CorrectionChipsProps) => {
   const isNumbered = dart.baseValue >= 1 && dart.baseValue <= 20;
-  const segments = isNumbered ? neighbourSegments(dart.baseValue) : SEGMENTS_CLOCKWISE;
+  const anchorNumbered = anchorValue >= 1 && anchorValue <= 20;
+  const segments = anchorNumbered ? neighbourSegments(anchorValue) : SEGMENTS_CLOCKWISE;
   const multiplier = isNumbered ? dart.multiplier : 1;
   const chip = (active: boolean) =>
     `h-9 min-w-9 shrink-0 rounded-lg px-2 text-sm font-display transition-colors ${
@@ -197,7 +218,7 @@ const CorrectionChips = ({ dart, onChoose, labels }: CorrectionChipsProps) => {
     }`;
   return (
     <div className="space-y-1.5 rounded-lg border border-border bg-card/60 p-2">
-      <div className={`flex gap-1.5 ${isNumbered ? "justify-center" : "flex-wrap justify-center"}`}>
+      <div className={`flex gap-1.5 ${anchorNumbered ? "justify-center" : "flex-wrap justify-center"}`}>
         {segments.map((seg) => (
           <button
             key={seg}

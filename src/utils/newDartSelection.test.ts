@@ -145,3 +145,29 @@ describe("weak hits at the board edge", () => {
     expect(selectNewDart([], [inner], edgeSupport, { straightenedFrame: true })).toBeNull();
   });
 });
+
+describe("session 2026-10-27 (hand-checked)", () => {
+  it("does not count the same dart twice when the second hit sits ~5 mm away", () => {
+    const known = [{ x: 0.623, y: 0.331 }];
+    // measured: support 0.36 under the second hit (a hand was in the picture)
+    expect(selectNewDarts(known, [{ x: 0.619, y: 0.342, confidence: 0.79 }], () => 0.36, 3)).toEqual([]);
+  });
+
+  it("takes the second dart of a tight group when the first one is re-detected in the same look", () => {
+    // log 07:14:51: known 13 at (0.779, 0.414); the look found it again 5 mm off AND a confident hit 19 mm away.
+    const known = [{ x: 0.779, y: 0.414 }];
+    const look = [{ x: 0.743, y: 0.391, confidence: 0.71 }, { x: 0.776, y: 0.426, confidence: 0.53 }];
+    const picked = selectNewDarts(known, look, () => 0.1, 2);
+    expect(picked.map((d) => d.x)).toEqual([0.743]);
+  });
+
+  it("still treats a lone shifted hit as the known dart (no re-detection of it in the look)", () => {
+    const known = [{ x: 0.779, y: 0.414 }];
+    expect(selectNewDarts(known, [{ x: 0.743, y: 0.391, confidence: 0.71 }], () => 0.1, 2)).toEqual([]);
+  });
+
+  it("drops a flight reported as a dart just beyond 0.2 from its own tip", () => {
+    const hits = [{ x: 0.519, y: 0.574, confidence: 0.79 }, { x: 0.709, y: 0.505, confidence: 0.26 }];
+    expect(selectNewDarts([], hits, () => 0.9, 3)).toEqual([hits[0]]);
+  });
+});

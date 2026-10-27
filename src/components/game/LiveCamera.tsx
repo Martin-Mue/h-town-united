@@ -257,6 +257,12 @@ const DISMISSED_DART_RADIUS = 0.04;
 const BASELINE_BEATEN_BY = 0.15;
 /** Above this share of changed cells the whole picture moved (exposure, bump) — no comparison possible. */
 const GLOBAL_CHANGE_SHARE_MAX = 0.5;
+/**
+ * A look whose picture changed this much since the last stable one, without a new dart, is a hand or arm reaching in
+ * (log 2026-10-27: hand looks 0.13-0.58, dart landings 0.01-0.05). Such a frame must not become the round's review /
+ * training picture — 4 of 68 hand-checked training samples showed a hand or a still-swinging dart instead of the board.
+ */
+const PEAK_FRAME_MAX_CHANGE = 0.1;
 // Multi-board support: club nights run several boards (and cameras) at once. Each device
 // remembers which physical board it's pointed at, and calibration + camera-device choice are
 // namespaced per board so the same tablet can be reassigned between boards over an evening
@@ -507,6 +513,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const pendingTrainingCaptureRef = useRef<{ before: ImageData; after: ImageData; modelAfter: ImageData | null; frame: "rectified" | "crop" } | null>(null);
   // Which kind of frame preRemovalModelFrameRef holds (set together with it).
   const preRemovalFrameKindRef = useRef<"rectified" | "crop">("crop");
+  /** The round picture was taken while a hand/arm was in view (see PEAK_FRAME_MAX_CHANGE) — never upload it as training data. */
+  const preRemovalFrameDirtyRef = useRef(false);
   // The model frame as of the last stable moment (empty board, or the previous dart's landing) and the
   // pair of frames around the dart that just landed — comparing them shows where THAT dart is, even
   // when it sits right next to the earlier ones (see utils/changeMask.ts).
@@ -662,7 +670,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   }, [needsReview, reviewOpen]);
   // Hands-free hand-over: a finished round (board empty again) counts down and commits itself; touching a
   // dart (select, edit, remove) stops the countdown so a correction never races the clock.
-  const autoCommitActive = needsReview && autoCommitEnabled && !autoCommitHeld && accumulated.length > 0 && !scanFailed;
+  // Only a complete visit commits itself: with fewer darts than expected one was most likely overlooked (2026-10-27: 3 of 7
+  // wrongly scored rounds were one dart short), so the player confirms those by hand.
+  const autoCommitActive = needsReview && autoCommitEnabled && !autoCommitHeld && accumulated.length >= dartsRemaining && !scanFailed;
   useEffect(() => {
     if (!autoCommitActive) { setAutoCommitLeft(null); return; }
     autoCommitSnapshotRef.current = accumulatedRef.current;
@@ -727,6 +737,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     baselineDartsRef.current = null;
     unexplainedLooksRef.current = 0;
     peakPresentRef.current = 0;
+    preRemovalFrameDirtyRef.current = false;
     stillMomentBusyRef.current = false;
     stillMomentQueuedRef.current = false;
     lastEvaluatedFrameRef.current = null;
@@ -1029,6 +1040,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (!modelReadyRef.current && !rectified) return;
     preRemovalModelFrameRef.current = grabModelFrame();
     preRemovalFrameKindRef.current = rectified ? "rectified" : "crop";
+    preRemovalFrameDirtyRef.current = false;
   };
 
   /** A point on the model frame (0-1) -> the camera video (0-1). */
@@ -1941,8 +1953,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       // darts are on the board: remember this picture as the round's peak (the one the review and the
       // final look use) — but not while the player is pulling darts one by one (the count only drops)
-      if (present.length >= peakPresentRef.current) {
+      const handInPicture = added.length === 0 && !!changeMap && changeMap.share > PEAK_FRAME_MAX_CHANGE;
+      if (present.length > peakPresentRef.current || (present.length === peakPresentRef.current && !handInPicture)) {
         peakPresentRef.current = present.length;
+        preRemovalFrameDirtyRef.current = !!changeMap && changeMap.share > PEAK_FRAME_MAX_CHANGE;
         preRemovalImageDataRef.current = grabImageData();
         preRemovalModelFrameRef.current = frame;
         preRemovalFrameKindRef.current = rectMapping() ? "rectified" : "crop";
@@ -2001,6 +2015,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     lastStableModelFrameRef.current = grabModelFrame();
     emptyModelFrameRef.current = lastStableModelFrameRef.current;
     peakPresentRef.current = 0;
+    preRemovalFrameDirtyRef.current = false;
     setStatus(t("camera.boardEmptyThrowFirst"));
   };
 
@@ -2228,7 +2243,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setScanFailed(false);
       setGeminiSuggestion(null);
       playScanStartSound();
-      if (trainingDataEnabled && emptyImageDataRef.current && preRemovalImageDataRef.current) {
+      if (trainingDataEnabled && emptyImageDataRef.current && preRemovalImageDataRef.current && !preRemovalFrameDirtyRef.current) {
         pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current, after: preRemovalImageDataRef.current, modelAfter: preRemovalModelFrameRef.current, frame: preRemovalFrameKindRef.current };
       }
       const overallConfidence = alreadyIdentified.reduce((s, d) => s + d.confidence, 0) / alreadyIdentified.length;

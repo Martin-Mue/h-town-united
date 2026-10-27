@@ -46,7 +46,8 @@ export const inEdgeZone = (x: number, y: number): boolean => Math.hypot(x - 0.5,
  * length from a stronger one is that, not another dart. (Measured: after the first dart of a round the model gave
  * tip 0.73 and, 63 mm further along the barrel, "dart" 0.26; both stood on fresh pixels and the second one became a phantom.)
  */
-export const GHOST_RADIUS = 0.2;
+// 0.24 (was 0.2): batch 2026-10-27 had a flight reported as "dart" 0.26 at 0.202 from its own tip (0.79) — just outside.
+export const GHOST_RADIUS = 0.24;
 export const GHOST_MAX_SCORE = 0.4;
 /** A weak hit must be this much weaker than the dart it shadows. */
 export const GHOST_MARGIN = 0.2;
@@ -60,8 +61,26 @@ export const CHANGE_SUPPORT_NEAR_KNOWN_WEAK = 0.5;
  * at coordinates identical to the third decimal, once per rest, because a later dart changed pixels around the earlier one).
  */
 export const DUPLICATE_DART_RADIUS = 0.006;
+/**
+ * Just outside the duplicate radius (up to ~7 mm) a hit is still far more often the known dart again than a second dart
+ * in its hole: hand-checked rounds of 2026-10-27 had the same dart counted twice with the hits 0.009 and 0.012 apart
+ * ("3, 3, 18" and "13, 13", the second one taken with support 0.36 while a hand was in the picture). A real
+ * robin-hood-close dart leaves a lot of fresh change, so there it takes this much.
+ */
+export const VERY_NEAR_RADIUS = 0.016;
+export const CHANGE_SUPPORT_VERY_NEAR = 0.5;
 export const CONFIDENT_DART_SCORE = 0.5;
 export const CONFIDENT_BYPASS_MIN_DISTANCE = 0.09;
+/**
+ * A tight group: a confident hit 16-40 mm from a known dart is normally that dart's shifted re-hit — but NOT when the
+ * same look also re-detects the known dart on its own tip. Then both darts are in the picture at once, and the
+ * second one is real (measured 2026-10-27: a 0.71-0.74 hit 19-20 mm from a known 13 was dropped four looks in a row
+ * while the 13 itself was found each time 2-6 mm from its spot; the round was scored with one dart too few).
+ */
+export const TIGHT_GROUP_SCORE = 0.6;
+export const TIGHT_GROUP_MIN_DISTANCE = KNOWN_DART_RADIUS;
+/** A hit this close to a known dart counts as "that dart seen again" for the tight-group rule (frame fraction, ~7 mm). */
+export const REDETECTED_RADIUS = 0.015;
 
 export interface SelectOptions {
   /** The candidates are positions in the straightened model frame (board centre 0.5/0.5), so the edge rule applies. */
@@ -89,13 +108,23 @@ export function selectNewDart<T extends DartCandidate>(
     );
     let rank: number;
     if (changeSupportAt) {
-      const confidentFar = c.confidence >= CONFIDENT_DART_SCORE && nearestKnown >= CONFIDENT_BYPASS_MIN_DISTANCE;
+      const tightGroup =
+        c.confidence >= TIGHT_GROUP_SCORE &&
+        nearestKnown >= TIGHT_GROUP_MIN_DISTANCE &&
+        nearestKnown < CONFIDENT_BYPASS_MIN_DISTANCE &&
+        (() => {
+          const k = known.find((kk) => typeof kk.x === "number" && typeof kk.y === "number" && Math.abs(Math.hypot(kk.x - x, kk.y - y) - nearestKnown) < 1e-9);
+          if (!k || typeof k.x !== "number" || typeof k.y !== "number") return false;
+          return candidates.some((o) => o !== c && typeof o.x === "number" && typeof o.y === "number" && Math.hypot(o.x - (k.x as number), o.y - (k.y as number)) < REDETECTED_RADIUS);
+        })();
+      const confidentFar = (c.confidence >= CONFIDENT_DART_SCORE && nearestKnown >= CONFIDENT_BYPASS_MIN_DISTANCE) || tightGroup;
       const support = confidentFar ? 1 : changeSupportAt(x, y);
       const weakNearKnown = c.confidence < GHOST_MAX_SCORE && nearestKnown < GHOST_RADIUS;
       const needed = Math.max(
         nearKnown ? CHANGE_SUPPORT_NEAR_KNOWN : CHANGE_SUPPORT_MIN,
         c.confidence < WEAK_DART_SCORE ? (options.straightenedFrame && inEdgeZone(x, y) ? CHANGE_SUPPORT_WEAK_EDGE : CHANGE_SUPPORT_WEAK) : 0,
         weakNearKnown ? CHANGE_SUPPORT_NEAR_KNOWN_WEAK : 0,
+        nearestKnown < VERY_NEAR_RADIUS ? CHANGE_SUPPORT_VERY_NEAR : 0,
       );
       if (support < needed) continue;
       rank = c.confidence; // the changed pixels only gate; the model decides which candidate is the dart
