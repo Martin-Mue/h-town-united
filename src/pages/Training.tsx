@@ -122,6 +122,10 @@ function computeRecordCandidate(drillId: string, state: DrillState, t: (key: str
       return state.dartsThrown > 0
         ? { value: Math.round((state.hits / state.dartsThrown) * 100), higherIsBetter: true, label: t("training.recordHitRatePercent") }
         : null;
+    case "free-scoring":
+      return state.dartsThrown > 0
+        ? { value: Math.round(((state.totalPoints ?? 0) / state.dartsThrown) * 3 * 10) / 10, higherIsBetter: true, label: t("training.avg3Dart") }
+        : null;
     case "shanghai":
       return { value: state.shanghaiScore ?? 0, higherIsBetter: true, label: t("training.recordShanghaiScore") };
     case "shanghai-rtc":
@@ -225,6 +229,11 @@ interface DrillState {
   comboStreak?: number;
   pendingPoints?: number;
   bankedPoints?: number;
+  /** Warm-up Scoring: every point scored, points of the visit in progress, best finished visit, 180s. */
+  totalPoints?: number;
+  freeRoundPoints?: number;
+  bestRound?: number;
+  count180?: number;
 }
 
 /** Pre-start configuration for a drill */
@@ -404,6 +413,14 @@ const TrainingPage = () => {
         state.bankedPoints = 0;
         break;
       }
+      case "free-scoring":
+        // Nothing to aim at — every dart just scores. undefined maxRounds = endless (ended by the player).
+        state.maxRounds = config.maxRounds;
+        state.totalPoints = 0;
+        state.freeRoundPoints = 0;
+        state.bestRound = 0;
+        state.count180 = 0;
+        break;
       case "random-score": {
         const randTarget = randomTarget(t);
         state.randomBase = randTarget.base;
@@ -680,6 +697,14 @@ const TrainingPage = () => {
           break;
         }
 
+        case "free-scoring": {
+          updated.totalPoints = (prev.totalPoints ?? 0) + points;
+          updated.freeRoundPoints = (prev.freeRoundPoints ?? 0) + points;
+          if (points > 0) updated.hits = prev.hits + 1;
+          updated.roundScores = [...(prev.roundScores || []), points];
+          break;
+        }
+
         case "random-score": {
           if (
             baseValue === (prev.randomBase ?? 0) &&
@@ -927,12 +952,20 @@ const TrainingPage = () => {
           }
         }
 
+        // Warm-up Scoring: close the visit (best round, 180s) and stop at the chosen round count.
+        if (selectedDrill.id === "free-scoring") {
+          const visit = updated.freeRoundPoints ?? 0;
+          updated.bestRound = Math.max(prev.bestRound ?? 0, visit);
+          if (visit === 180) updated.count180 = (prev.count180 ?? 0) + 1;
+          updated.freeRoundPoints = 0;
+        }
+
         // Generic round cap for endless drills
         if (
           !updated.finished &&
           prev.maxRounds &&
           (updated.roundsPlayed ?? 0) >= prev.maxRounds &&
-          ["around-the-clock", "doubles-only", "big-single-lock", "shanghai-rtc"].includes(selectedDrill.id)
+          ["around-the-clock", "doubles-only", "big-single-lock", "shanghai-rtc", "free-scoring"].includes(selectedDrill.id)
         ) {
           updated.finished = true;
         }
@@ -975,6 +1008,31 @@ const TrainingPage = () => {
    *  Resolving bust/checkout once, for the total against remaining, matches every other
    *  quick-round-shaped drill in real darts and can't produce that artifact. */
   const handleQuickRound = (total: number) => {
+    // Warm-up Scoring takes a whole visit as one total too: nothing is aimed at, so a total is all
+    // there is to record (same visit bookkeeping as processDart's end-of-round handling).
+    if (selectedDrill?.id === "free-scoring") {
+      if (!drillState || drillState.finished || !isAchievableVisitTotal(total)) return;
+      pushUndo();
+      setDrillState((prev) => {
+        if (!prev || prev.finished) return prev;
+        const roundsPlayed = (prev.roundsPlayed ?? 0) + 1;
+        const darts = 3 - prev.dartsThisRound;
+        return {
+          ...prev,
+          dartsThrown: prev.dartsThrown + darts,
+          dartsThisRound: 0,
+          roundsPlayed,
+          totalPoints: (prev.totalPoints ?? 0) + total,
+          freeRoundPoints: 0,
+          bestRound: Math.max(prev.bestRound ?? 0, (prev.freeRoundPoints ?? 0) + total),
+          count180: (prev.count180 ?? 0) + ((prev.freeRoundPoints ?? 0) + total === 180 ? 1 : 0),
+          hits: prev.hits + (total > 0 ? 1 : 0),
+          roundScores: [...(prev.roundScores || []), total],
+          finished: !!prev.maxRounds && roundsPlayed >= prev.maxRounds,
+        };
+      });
+      return;
+    }
     if (!selectedDrill || !CHECKOUT_DRILL_IDS.includes(selectedDrill.id) || !isAchievableVisitTotal(total)) return;
     if (!drillState || drillState.finished) return;
     pushUndo();
@@ -1097,6 +1155,7 @@ const TrainingPage = () => {
         return { main: `${t("game.target")} ${multLetter}${drillState.targetBase ?? 20}`, sub: lives ?? bank };
       }
       if (id === "big-single-lock") return { main: `S${drillState.currentTarget}`, sub: `${drillState.hitsThisRound}/3` };
+      if (id === "free-scoring") return { main: `${drillState.totalPoints ?? 0}`, sub: `${t("tournament.roundLabel")} ${(drillState.roundsPlayed ?? 0) + 1}${drillState.maxRounds ? ` / ${drillState.maxRounds}` : ""}` };
       if (id === "random-score") return { main: drillState.randomLabel ?? "", sub: `${(drillState.roundsPlayed ?? 0) + 1} / ${drillState.maxRounds ?? 10}` };
       if (id === "shanghai" || id === "shanghai-rtc") return { main: `${t("game.target")} ${drillState.currentTarget}`, sub: step };
       return drillState.currentTarget > 0 ? { main: `${t("game.target")} ${drillState.currentTarget}`, sub: step } : null;
@@ -1167,6 +1226,27 @@ const TrainingPage = () => {
                       : `${t("training.roundLimitReachedAtNumber")} ${drillState.currentTarget} · ${t("training.scoreLabel")} ${drillState.rtcScore ?? 0}`}
                   </p>
                 </div>
+              ) : selectedDrill.id === "free-scoring" ? (
+                <>
+                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
+                    <p className="text-2xl font-display">{drillState.totalPoints ?? 0}</p>
+                    <p className="text-xs text-muted-foreground">{t("training.freeTotalPoints")}</p>
+                  </div>
+                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
+                    <p className="text-2xl font-display">
+                      {drillState.dartsThrown > 0 ? (((drillState.totalPoints ?? 0) / drillState.dartsThrown) * 3).toFixed(1) : "–"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{t("training.avg3Dart")}</p>
+                  </div>
+                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
+                    <p className="text-2xl font-display">{drillState.bestRound ?? 0}</p>
+                    <p className="text-xs text-muted-foreground">{t("training.freeBestRound")}</p>
+                  </div>
+                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
+                    <p className="text-2xl font-display">{drillState.count180 ?? 0}</p>
+                    <p className="text-xs text-muted-foreground">180</p>
+                  </div>
+                </>
               ) : selectedDrill.id === "halve-it" ? (
                 <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
                   <p className="text-2xl font-display">{drillState.remaining}</p>
@@ -1470,6 +1550,27 @@ const TrainingPage = () => {
                   </p>
                 </div>
               )}
+              {selectedDrill.id === "free-scoring" && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {t("tournament.roundLabel")} {(drillState.roundsPlayed ?? 0) + 1}{drillState.maxRounds ? ` / ${drillState.maxRounds}` : ""}
+                  </p>
+                  <p className="text-5xl font-display text-primary tabular-nums">{drillState.totalPoints ?? 0}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {t("training.avg3Dart")}{" "}
+                    <span className="text-foreground font-bold">
+                      {drillState.dartsThrown > 0 ? (((drillState.totalPoints ?? 0) / drillState.dartsThrown) * 3).toFixed(1) : "–"}
+                    </span>
+                    {" · "}{t("training.freeBestRound")} <span className="text-foreground font-bold">{drillState.bestRound ?? 0}</span>
+                    {" · "}{t("training.freeThisRound")} <span className="text-foreground font-bold">{drillState.freeRoundPoints ?? 0}</span>
+                  </p>
+                  {!drillState.maxRounds && drillState.dartsThrown > 0 && (
+                    <Button size="sm" variant="outline" className="mt-3" onClick={() => setDrillState((p) => (p ? { ...p, finished: true } : p))}>
+                      {t("training.endWarmup")}
+                    </Button>
+                  )}
+                </div>
+              )}
               {selectedDrill.id === "bobs-27" && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">
@@ -1558,7 +1659,7 @@ const TrainingPage = () => {
             <DartScoreInput
               isDisabled={drillState.finished}
               onThrow={handleDrillThrow}
-              onQuickRound={isCheckoutDrill ? handleQuickRound : undefined}
+              onQuickRound={isCheckoutDrill || selectedDrill.id === "free-scoring" ? handleQuickRound : undefined}
               dartsThisRound={drillState.dartsThisRound}
             />
 
@@ -1602,7 +1703,7 @@ const TrainingPage = () => {
 
   // ─── DRILL SELECTION (pre-start) ──────────────────
   if (selectedDrill && !drillState) {
-    const supportsRoundLimit = ["around-the-clock", "doubles-only", "big-single-lock", "target-grind", "shanghai-rtc"].includes(selectedDrill.id);
+    const supportsRoundLimit = ["around-the-clock", "doubles-only", "big-single-lock", "target-grind", "shanghai-rtc", "free-scoring"].includes(selectedDrill.id);
     const isTargetGrind = selectedDrill.id === "target-grind";
     const isSuddenDeath = selectedDrill.id === "sudden-death";
     const isBullControl = selectedDrill.id === "bull-control";
@@ -1759,7 +1860,7 @@ const TrainingPage = () => {
                     {t("training.roundsLabel")} {isTargetGrind ? "" : t("training.optionalUnlimitedNote")}
                   </p>
                   <div className="flex gap-2 flex-wrap">
-                    {[5, 10, 15, 20, 30].map((n) => (
+                    {(selectedDrill.id === "free-scoring" ? [3, 5, 10, 15, 20, 30, 50] : [5, 10, 15, 20, 30]).map((n) => (
                       <button
                         key={n}
                         onClick={() => setDrillConfig((c) => ({ ...c, maxRounds: n }))}

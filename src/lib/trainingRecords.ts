@@ -118,6 +118,15 @@ export const TRAINING_DRILLS: TrainingDrill[] = [
     category: "accuracy",
   },
   {
+    id: "free-scoring",
+    name: "Warm-up Scoring",
+    descriptionKey: "training.freeScoringDesc",
+    icon: Zap,
+    difficulty: "beginner",
+    durationMinutes: 10,
+    category: "accuracy",
+  },
+  {
     id: "random-score",
     name: "Random Score",
     descriptionKey: "training.randomScoreDesc",
@@ -251,6 +260,8 @@ export function recordVariant(drillId: string, ctx: { maxRounds?: number; rtcSta
   if (drillId === "sudden-death") return `${ctx.targetMul ?? 3}x${ctx.targetBase ?? 20}:${ctx.lives ?? 3}`;
   // Combo Risk: which field was chosen changes both how often it hits (streak length) and how
   // much each hit is worth — same reasoning as Target Grind/Sudden Death above.
+  // Warm-up Scoring: the same points over 5 rounds and over 30 are not comparable averages.
+  if (drillId === "free-scoring") return `${ctx.maxRounds ?? "open"}`;
   if (drillId === "combo-risk") return `${ctx.targetMul ?? 3}x${ctx.targetBase ?? 20}`;
   return undefined;
 }
