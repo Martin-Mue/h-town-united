@@ -50,6 +50,8 @@ import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
 import { loadDoublesSeats } from "@/lib/onlineDoubles";
 import { loadMyDuels, duelStartScore, type OnlineDuel } from "@/lib/onlineDuels";
+import { useBoardVideo } from "@/hooks/useBoardVideo";
+import BoardVideoPanel from "@/components/game/BoardVideoPanel";
 import { notifyChallengeCreated, notifyDoublesInvited, notifyDuelPlayed } from "@/lib/onlineMatchNotify";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -353,6 +355,13 @@ const GamePage = () => {
   const onlineMatchId = searchParams.get("online");
   const onlineMatch = useOnlineMatch(onlineMatchId ?? undefined, session?.user?.id);
   const [reactionTrayOpen, setReactionTrayOpen] = useState(false);
+  // Live video of each player's board (WebRTC, opt-in per player) — see useBoardVideo.
+  const boardVideo = useBoardVideo({
+    matchId: onlineMatchId ?? undefined,
+    userId: session?.user?.id,
+    enabled: !!onlineMatchId && onlineMatch.row?.status === "active",
+    getExternalStream: () => liveCameraRef.current?.getVideoStream() ?? null,
+  });
   // Autodarts: fixed on/off for the whole game (chosen in GameSetup), unlike the camera's own
   // freely-toggled cameraEnabled above — see GameSetup.tsx's own doc comment on why. Declared here
   // (rather than alongside the rest of the Autodarts state further down) specifically so the
@@ -3023,6 +3032,17 @@ const GamePage = () => {
         </div>
       )}
       {onlineBar}
+      {onlineMatchId && !game.isFinished && (
+        <BoardVideoPanel
+          supported={boardVideo.supported}
+          sharing={boardVideo.sharing}
+          error={boardVideo.error}
+          feeds={boardVideo.feeds}
+          nameOf={(uid) => dbPlayers.find((p) => p.user_id === uid)?.name ?? "?"}
+          onStart={boardVideo.startSharing}
+          onStop={boardVideo.stopSharing}
+        />
+      )}
       {game.isFinished && duelId && (
         <div className="fixed inset-0 bg-background/90 backdrop-blur-sm z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 text-center shadow-elevation-sm">

@@ -135,6 +135,9 @@ interface LiveCameraProps {
 export interface LiveCameraHandle {
   /** The most recently completed rolling-buffer segment (a few seconds of trailing video), or null if none is ready yet. */
   getRecentClip(): { url: string; mime: string; blob: Blob } | null;
+  /** The camera stream the dart detection is running on (or null when the camera is closed) — the
+   *  live board video of an online match shares this instead of opening the camera a second time. */
+  getVideoStream(): MediaStream | null;
 }
 
 // Rolling video buffer: rather than one long recording, we record back-to-back
@@ -829,6 +832,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   }, [startClipSegment]);
 
   useImperativeHandle(ref, () => ({
+    getVideoStream: () => streamRef.current,
     getRecentClip: () => {
       const clip = lastClipRef.current;
       // Only ever hand back the segment actually pinned to the round currently under review /
