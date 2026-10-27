@@ -1234,4 +1234,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "2'ye 2 oynayın, herkes evinden: bir partner ve iki rakip davet edin, herkes kabul edince başlar. Ayrıca: kimin çevrimiçi olduğu, açık meydan okumalar, rövanş düğmesi, çevrimiçi sıralama, süren oyunları izleme, tepkiler ve görüntülü arama bağlantısı. Bir partner 60 saniye yoksa diğeri onun yerine atabilir. Ligde maç günleri haftalık planlanabilir, gecikenler işaretlenir.",
     },
   },
+  {
+    id: "2026-11-01-remote-duel-board-video",
+    date: "2026-11-01",
+    title: {
+      de: "Fernduell und Live-Video vom Board",
+      en: "Remote duel and live board video",
+      fr: "Duel à distance et vidéo en direct de la cible",
+      pl: "Pojedynek zdalny i wideo tarczy na żywo",
+      nl: "Duel op afstand en live bordvideo",
+      tr: "Uzaktan düello ve tahtadan canlı video",
+    },
+    description: {
+      de: "Fernduell: Fordere jemanden zu einem Leg heraus, das jeder spielt, wann er Zeit hat (7 Tage). Wer weniger Darts braucht, gewinnt, das Ergebnis des Gegners bleibt bis zu deinem eigenen Wurf verborgen. In Online-Spielen kannst du jetzt dein Board per Live-Video teilen (freiwillig, nur Bild, kein Ton). Online-Spiele gehen bis First to 6, und in der Online-Rangliste zählen im Doppel alle Teammitglieder.",
+      en: "Remote duel: challenge someone to a leg that each plays whenever they have time (7 days). Fewest darts wins, and the opponent's result stays hidden until you have played yours. In online games you can now share your board as live video (optional, picture only, no sound). Online games go up to First to 6, and in the online leaderboard every team member counts in doubles.",
+      fr: "Duel à distance : défie quelqu'un sur une manche que chacun joue quand il a le temps (7 jours). Le moins de fléchettes gagne, le résultat de l'adversaire reste caché jusqu'à ce que tu aies joué. En partie en ligne, tu peux partager ta cible en vidéo en direct (facultatif, image seule, sans son). Les parties en ligne vont jusqu'au First to 6, et au classement en ligne tous les membres d'une équipe comptent en double.",
+      pl: "Pojedynek zdalny: wyzwij kogoś na lega, którego każdy gra, kiedy ma czas (7 dni). Wygrywa ten, kto potrzebuje mniej lotek, a wynik rywala jest ukryty, dopóki sam nie zagrasz. W grach online możesz udostępnić tarczę jako wideo na żywo (opcjonalnie, tylko obraz). Gry online sięgają First to 6, a w rankingu online w deblu liczą się wszyscy członkowie drużyny.",
+      nl: "Duel op afstand: daag iemand uit voor een leg die ieder speelt wanneer hij tijd heeft (7 dagen). Wie de minste darts nodig heeft, wint, en het resultaat van de tegenstander blijft verborgen tot jij gespeeld hebt. In online potjes kun je je bord als livevideo delen (optioneel, alleen beeld). Online potjes gaan tot First to 6 en in de online ranglijst tellen bij dubbel alle teamleden mee.",
+      tr: "Uzaktan düello: birini, herkesin vakti olduğunda oynadığı bir lege davet et (7 gün). Daha az ok atan kazanır, rakibin sonucu sen oynayana kadar gizli kalır. Çevrimiçi oyunlarda tahtanı canlı video olarak paylaşabilirsin (isteğe bağlı, yalnızca görüntü). Çevrimiçi oyunlar First to 6'ya kadar çıkar ve çevrimiçi sıralamada çiftlerde tüm takım üyeleri sayılır.",
+    },
+  },
 ];
