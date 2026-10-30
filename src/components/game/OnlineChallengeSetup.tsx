@@ -18,7 +18,7 @@ import OnlineLeaderboard from "@/components/game/OnlineLeaderboard";
 
 const MODES = ["501", "301", "cricket", "custom"] as const;
 const BEST_OF_OPTIONS = [1, 3, 5, 7, 9, 11]; // same First to 1–6 range as the local game setup
-const STARTER_OPTIONS = ["challenger", "opponent", "random"] as const;
+const STARTER_OPTIONS = ["challenger", "opponent", "random", "bulloff"] as const;
 type StarterChoice = (typeof STARTER_OPTIONS)[number];
 
 /** "mehr Einstellungen für Online-Spiele" (2026-09-09): a challenge row may fail with a schema-cache
@@ -306,7 +306,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
           {format !== "duel" && (
           <div>
             <p className="text-xs text-muted-foreground mb-1.5">{t("players.starterLabel")}</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {STARTER_OPTIONS.map((s) => (
                 <button
                   key={s}
@@ -314,7 +314,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
                   onClick={() => setStarter(s)}
                   className={`rounded-lg border px-2 py-2 text-xs font-display uppercase transition-colors ${starter === s ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/50"}`}
                 >
-                  {s === "challenger" ? t("players.starterChallenger") : s === "opponent" ? t("players.starterOpponent") : t("players.starterRandom")}
+                  {s === "challenger" ? t("players.starterChallenger") : s === "opponent" ? t("players.starterOpponent") : s === "random" ? t("players.starterRandom") : t("players.starterBullOff")}
                 </button>
               ))}
             </div>

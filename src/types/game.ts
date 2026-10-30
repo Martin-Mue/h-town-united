@@ -105,6 +105,11 @@ export interface GameState {
    * still work per person.
    */
   teams?: TeamSlot[];
+  /** Bull-off before leg 1 (see utils/bullOff.ts): distances in mm from the bull for the two
+   *  contenders (players 0 and 1; null = not thrown yet), a tie bumps `round` and clears both. Only
+   *  online matches keep it in the shared state; `resolved` flips once the winner is known and then
+   *  currentPlayerIndex / currentLeg.startingPlayerIndex already point at the winner. */
+  bullOff?: { distances: (number | null)[]; round: number; resolved: boolean; winner?: number };
 }
 
 /** Post-game statistics summary, index-aligned with players */

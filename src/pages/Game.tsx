@@ -23,6 +23,8 @@ import GameSetup from "@/components/game/GameSetup";
 import GameWarmup from "@/components/game/GameWarmup";
 import { GameWalkonIntro, GameWalkonStats } from "@/components/game/GameWalkon";
 import GamePostGame from "@/components/game/GamePostGame";
+import GameBullOff from "@/components/game/GameBullOff";
+import { applyBullOffWinner, scoreSlotOf } from "@/utils/bullOff";
 import ThrowHistoryEditor from "@/components/game/ThrowHistoryEditor";
 import GameControlBar from "@/components/game/GameControlBar";
 import ArenaScoreboard, { type ArenaScoreCard } from "@/components/game/ArenaScoreboard";
@@ -197,6 +199,21 @@ const GamePage = () => {
   // fixed "player 1 starts"); the "Ausbullen" picker in setup just lets the group record who
   // actually won the bull-off instead.
   const [starterIndex, setStarterIndex] = useState(0);
+  // Bull-off before leg 1 (instead of picking the starter by hand): the camera (or the group) decides
+  // who was closer to the bull. Remembered per device like the other setup preferences.
+  const BULLOFF_PREF_KEY = "dartcam-bulloff-pref";
+  const [bullOffEnabled, setBullOffEnabledState] = useState(() => {
+    try { return typeof window !== "undefined" && window.localStorage.getItem(BULLOFF_PREF_KEY) === "on"; } catch { return false; }
+  });
+  const setBullOffEnabled = (on: boolean) => {
+    setBullOffEnabledState(on);
+    try { window.localStorage.setItem(BULLOFF_PREF_KEY, on ? "on" : "off"); } catch { /* preference only */ }
+  };
+  /** A local game that still has to be bulled out: shown instead of the play screen until decided. */
+  const [bullOffPending, setBullOffPending] = useState(false);
+  /** Online: the bull-off result card was shown on this device and acknowledged. */
+  const [bullOffSeen, setBullOffSeen] = useState(false);
+  const [bullOffAcked, setBullOffAcked] = useState(false);
   const [teamNames, setTeamNames] = useState<[string, string]>(["Team 1", "Team 2"]);
   const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
   // "PIN pro Spieler": which roster slot is waiting on a PIN, and for which club member — see
@@ -565,6 +582,7 @@ const GamePage = () => {
   // row instead of localStorage.
   useEffect(() => {
     if (!onlineMatchId || !onlineInitializedRef.current || !game || phase !== "playing") return;
+    if (game.bullOff && !game.bullOff.resolved) return;
     if (applyingRemoteOnlineUpdateRef.current) { applyingRemoteOnlineUpdateRef.current = false; return; }
     void onlineMatch.sendThrow(game, dartsThisRound, turnStartRemaining).catch((err) => {
       console.error("online throw sync failed", err);
@@ -572,6 +590,10 @@ const GamePage = () => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game, dartsThisRound, turnStartRemaining, phase, onlineMatchId]);
+
+  useEffect(() => {
+    if (onlineMatchId && game?.bullOff && !game.bullOff.resolved) setBullOffSeen(true);
+  }, [onlineMatchId, game?.bullOff]);
 
   // --- Fernduell (?duel=<online_duels.id>) -------------------------------------------------------
   // Asynchronous 1:1: this device plays one solo leg on its own time and only the RESULT (darts
@@ -1080,6 +1102,12 @@ const GamePage = () => {
       newGame.cricket = Array.from({ length: scoreSlots }, () => createCricketState(cricketNumbers));
     }
     setGame(newGame);
+    // Bull-off instead of the manual starter pick: only for a plain local game with two human
+    // contenders (two players, or the first member of each team), never for a rematch (the loser of
+    // the last bull-off already alternates via starterOverride) or tournament/league matches.
+    const contendersHuman = !players[0]?.isBot && !players[1]?.isBot;
+    const twoSides = teams ? true : n === 2;
+    setBullOffPending(bullOffEnabled && starterOverride === undefined && contendersHuman && twoSides && !tournamentLinkRef.current && !leagueLinkRef.current);
     void loadWalkonH2H(players, teams);
     void loadGhostSequences(players, startScore, teams);
     setDartsThisRound(0);
@@ -2540,6 +2568,8 @@ const GamePage = () => {
         changeCallerVoice={changeCallerVoice}
         starterIndex={starterIndex}
         setStarterIndex={setStarterIndex}
+        bullOffEnabled={bullOffEnabled}
+        setBullOffEnabled={setBullOffEnabled}
         warmupEnabled={warmupEnabled}
         setWarmupEnabled={setWarmupEnabled}
         warmupSeconds={warmupSeconds}
@@ -2586,6 +2616,63 @@ const GamePage = () => {
   }
 
   if (!game) return null;
+
+  // ─── BULL-OFF ───────────────────────────────────────
+  // Who opens leg 1: each contender throws one dart at the bull, the closer one starts.
+  const bullOffNames: [string, string] = game.teams
+    ? [game.teams[0].name, game.teams[1].name]
+    : [game.players[0]?.name ?? "?", game.players[1]?.name ?? "?"];
+  const bullOffCameraAvailable = clubHasFeature(club?.plan_tier, "camera");
+  const renderBullOffCamera = (req: { dartsRemaining: number; playerName: string; onCommit: (darts: DetectedDart[]) => void; onClose: () => void }) => (
+    <ErrorBoundary label="Kamera">
+      <Suspense fallback={<div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
+        <LiveCamera enabled onClose={req.onClose} onRoundCommit={req.onCommit} dartsRemaining={req.dartsRemaining} playerName={req.playerName} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+  if (!onlineMatchId && bullOffPending && phase === "playing") {
+    return (
+      <GameBullOff
+        mode="local"
+        names={bullOffNames}
+        cameraAvailable={bullOffCameraAvailable}
+        renderCamera={renderBullOffCamera}
+        onResolved={(winner) => {
+          const { bullOff: _unused, ...decided } = applyBullOffWinner(game, winner);
+          void _unused;
+          setGame(decided);
+          setTurnStartRemaining(decided.currentLeg.remaining[scoreSlotOf(decided, winner)] ?? decided.startScore);
+          setStarterIndex(winner);
+          setBullOffPending(false);
+          toast({ title: t("game.bullOffWinnerLine").replace("{name}", bullOffNames[winner]) });
+        }}
+      />
+    );
+  }
+  if (onlineMatchId && game.bullOff && (!game.bullOff.resolved || (bullOffSeen && !bullOffAcked))) {
+    const me = session?.user?.id;
+    const slot = onlineMatch.row?.is_doubles
+      ? onlineMatch.mySlot
+      : onlineMatch.row?.player1_user_id === me ? 0 : onlineMatch.row?.player2_user_id === me ? 1 : null;
+    return (
+      <GameBullOff
+        mode="online"
+        names={bullOffNames}
+        cameraAvailable={bullOffCameraAvailable}
+        renderCamera={renderBullOffCamera}
+        mySlot={slot === 0 || slot === 1 ? slot : null}
+        distances={game.bullOff.distances}
+        round={game.bullOff.round}
+        resolved={game.bullOff.resolved}
+        winner={game.bullOff.winner}
+        onSubmitDistance={async (mm) => {
+          const { error } = await supabase.rpc("submit_online_bulloff", { _match_id: onlineMatchId, _distance_mm: mm });
+          if (error) toast({ title: t("game.onlineSyncFailedTitle"), description: error.message, variant: "destructive" });
+        }}
+        onContinue={() => setBullOffAcked(true)}
+      />
+    );
+  }
 
   const activeIdx = game.currentPlayerIndex;
   const activeTeamIdx = teamIndexFor(game.teams, activeIdx);

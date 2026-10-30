@@ -95,6 +95,8 @@ interface GameSetupProps {
   changeCallerVoice: (v: CallerVoice) => void;
   starterIndex: number;
   setStarterIndex: Dispatch<SetStateAction<number>>;
+  bullOffEnabled: boolean;
+  setBullOffEnabled: (on: boolean) => void;
   warmupEnabled: boolean;
   setWarmupEnabled: Dispatch<SetStateAction<boolean>>;
   warmupSeconds: number;
@@ -143,7 +145,7 @@ const GameSetup = (props: GameSetupProps) => {
     pinPrompt, setPinPrompt, pinPromptValue, setPinPromptValue, pinPromptError, setPinPromptError,
     pinPromptChecking, submitPinPrompt,
     soundEnabled, setSoundEnabled, speechEnabled, callerVoice, changeCallerVoice,
-    starterIndex, setStarterIndex, warmupEnabled, setWarmupEnabled, warmupSeconds, setWarmupSeconds,
+    starterIndex, setStarterIndex, bullOffEnabled, setBullOffEnabled, warmupEnabled, setWarmupEnabled, warmupSeconds, setWarmupSeconds,
     walkonEnabled, setWalkonEnabled, setupMode, setSetupMode,
     autodartsAvailable, autodartsBoards, autodartsEnabled, setAutodartsEnabled, autodartsBoardNumber, setAutodartsBoardNumber,
   } = props;
@@ -665,9 +667,25 @@ const GameSetup = (props: GameSetupProps) => {
           </div>
         </div>
 
-        <div className="bg-muted/30 rounded-lg border border-border px-4 py-3 space-y-2">
+        {/* Bull-off: only meaningful with two human contenders (two players, or two teams) */}
+        {(() => {
+          const bullOffPossible = (teamMode || activePlayerCount === 2) && !playerIsBot[0] && !playerIsBot[1];
+          return (
+            <div className="bg-muted/30 rounded-lg border border-border px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label htmlFor="bulloff-mode" className="text-sm">{t("game.bullOffEnabledLabel")}</Label>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{bullOffPossible ? t("game.bullOffEnabledDesc") : t("game.bullOffNeedTwo")}</p>
+                </div>
+                <Switch id="bulloff-mode" checked={bullOffEnabled && bullOffPossible} disabled={!bullOffPossible} onCheckedChange={setBullOffEnabled} />
+              </div>
+            </div>
+          );
+        })()}
+
+        <div className={`bg-muted/30 rounded-lg border border-border px-4 py-3 space-y-2 ${bullOffEnabled ? "opacity-50 pointer-events-none" : ""}`}>
           <Label className="text-sm">{t("game.whoStarts")}</Label>
-          <p className="text-[10px] text-muted-foreground -mt-1">{t("game.whoStartsDesc")}</p>
+          <p className="text-[10px] text-muted-foreground -mt-1">{bullOffEnabled ? t("game.bullOffDecidesStarter") : t("game.whoStartsDesc")}</p>
           <div className="grid grid-cols-2 gap-1.5">
             {(teamMode
               ? [0, 1]

@@ -41,7 +41,7 @@ export interface OnlineMatchRow {
   custom_start_score?: number | null;
   double_in?: boolean;
   double_out?: boolean;
-  starter?: "challenger" | "opponent" | "random";
+  starter?: "challenger" | "opponent" | "random" | "bulloff";
 }
 
 /** Drives Game.tsx's online-play branch — loads an `online_matches` row, keeps it live via a

@@ -1254,4 +1254,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Uzaktan düello: birini, herkesin vakti olduğunda oynadığı bir lege davet et (7 gün). Daha az ok atan kazanır, rakibin sonucu sen oynayana kadar gizli kalır. Çevrimiçi oyunlarda tahtanı canlı video olarak paylaşabilirsin (isteğe bağlı, yalnızca görüntü). Çevrimiçi oyunlar First to 6'ya kadar çıkar ve çevrimiçi sıralamada çiftlerde tüm takım üyeleri sayılır.",
     },
   },
+  {
+    id: "2026-10-30-bull-off",
+    date: "2026-10-30",
+    title: {
+      de: "Ausbullen mit Kamera",
+      en: "Bull-off with camera",
+      fr: "Bull-off avec caméra",
+      pl: "Bull-off z kamerą",
+      nl: "Bull-off met camera",
+      tr: "Kameralı bull-off",
+    },
+    description: {
+      de: "Beim Spielstart lässt sich jetzt Ausbullen einschalten: Jeder wirft einen Dart auf die Mitte, die Kamera misst den Abstand und der Nähere beginnt. Ohne Kamera wählst du von Hand, wer näher war. Das gibt es auch online: Beide werfen am eigenen Board, der Server entscheidet, bei Gleichstand wird neu geworfen. Im Doppel werfen die beiden Teamersten.",
+      en: "You can now switch on a bull-off when starting a game: each side throws one dart at the bull, the camera measures the distance and the closer one starts. Without a camera you pick by hand who was closer. It works online too: both throw at their own board, the server decides, and a tie means throwing again. In doubles the two team starters throw.",
+      fr: "Au début d'une partie, tu peux activer le bull-off : chacun lance une fléchette sur le centre, la caméra mesure la distance et le plus proche commence. Sans caméra, tu choisis à la main qui était plus proche. C'est aussi possible en ligne : chacun lance sur sa cible, le serveur décide, en cas d'égalité on relance. En double, les deux premiers de chaque équipe lancent.",
+      pl: "Przy starcie gry możesz włączyć bull-off: każdy rzuca jedną lotką w środek, kamera mierzy odległość, a bliższy zaczyna. Bez kamery wybierasz ręcznie, kto był bliżej. Działa też online: każdy rzuca w swoją tarczę, decyduje serwer, a przy remisie rzuca się ponownie. W deblu rzucają dwaj pierwsi z drużyn.",
+      nl: "Bij het starten van een spel kun je nu een bull-off aanzetten: ieder gooit één dart op het midden, de camera meet de afstand en de dichtstbijzijnde begint. Zonder camera kies je handmatig wie dichterbij was. Het werkt ook online: beide gooien op hun eigen bord, de server beslist en bij gelijkspel wordt opnieuw gegooid. Bij dubbel gooien de twee teamstarters.",
+      tr: "Oyun başlarken artık bull-off açabilirsin: herkes ortaya bir ok atar, kamera mesafeyi ölçer ve daha yakın olan başlar. Kamera yoksa kimin daha yakın olduğunu elle seçersin. Çevrimiçi de çalışır: herkes kendi tahtasına atar, sunucu karar verir, beraberlikte yeniden atılır. Çiftlerde iki takım başlatıcısı atar.",
+    },
+  },
 ];

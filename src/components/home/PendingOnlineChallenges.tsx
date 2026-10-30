@@ -12,7 +12,7 @@ import type { Json } from "@/integrations/supabase/types";
 
 /** "mehr Einstellungen für Online-Spiele" (2026-09-09): who starts leg 1 — see
  *  20260909200000_add_online_match_settings.sql's own doc comment on the `starter` column. */
-type StarterChoice = "challenger" | "opponent" | "random";
+type StarterChoice = "challenger" | "opponent" | "random" | "bulloff";
 
 interface PendingChallenge {
   id: string;
@@ -213,6 +213,8 @@ const PendingOnlineChallenges = () => {
       // on (see PendingChallenge.best_of_sets's own doc comment) — null/undefined for every casual
       // 1v1 challenge, same reuse-bestOfLegs-as-legs-per-set convention as everywhere else (see
       // GameState.setsMode's own doc comment in types/game.ts).
+      // Bull-off: leg 1 waits for both sides to throw one dart at the bull (see submit_online_bulloff).
+      ...(challenge.starter === "bulloff" ? { bullOff: { distances: [null, null], round: 1, resolved: false } } : {}),
       ...(challenge.mode !== "cricket" && challenge.best_of_sets
         ? { setsMode: { bestOfSets: challenge.best_of_sets }, setsWon: [0, 0] }
         : {}),

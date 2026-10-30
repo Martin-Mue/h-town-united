@@ -1891,6 +1891,10 @@ export type Database = {
       }
       abort_idle_online_match: { Args: { _match_id: string }; Returns: boolean }
       accept_club_invite: { Args: { _token: string }; Returns: string }
+      submit_online_bulloff: {
+        Args: { _distance_mm: number; _match_id: string }
+        Returns: Json
+      }
       accept_online_match: {
         Args: { _initial_game_state: Json; _match_id: string }
         Returns: undefined

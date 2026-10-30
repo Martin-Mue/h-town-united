@@ -24,7 +24,7 @@ export interface DoublesMatchSettings {
   customStartScore?: number | null;
   doubleIn: boolean;
   doubleOut: boolean;
-  starter: "challenger" | "opponent" | "random";
+  starter: "challenger" | "opponent" | "random" | "bulloff";
 }
 
 /** Default team label: both members' first names, e.g. "Anna & Ben". */
@@ -58,6 +58,8 @@ export function buildDoublesInitialState(names: string[], settings: DoublesMatch
     currentPlayerIndex: starter,
     isFinished: false,
     teams,
+    // Bull-off between the two team starters (slots 0 and 1) decides who opens leg 1.
+    ...(settings.starter === "bulloff" ? { bullOff: { distances: [null, null], round: 1, resolved: false } } : {}),
     ...(settings.mode !== "cricket" && settings.bestOfSets ? { setsMode: { bestOfSets: settings.bestOfSets }, setsWon: [0, 0] } : {}),
   };
   if (settings.mode === "cricket") {
