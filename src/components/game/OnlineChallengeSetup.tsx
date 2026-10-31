@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePlayers } from "@/hooks/usePlayers";
 import { notifyChallengeCreated, notifyDoublesInvited, notifyDuelChallenge } from "@/lib/onlineMatchNotify";
 import { useOnlineUserIds } from "@/lib/clubPresence";
+import { trackUsage } from "@/lib/analytics";
 import OnlineOpenChallenges from "@/components/game/OnlineOpenChallenges";
 import OnlineLeaderboard from "@/components/game/OnlineLeaderboard";
 
@@ -116,6 +117,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
     }
     const myName = players.find((p) => p.user_id === user.id)?.name ?? "Jemand";
     notifyDoublesInvited([partner.user_id, opponents[0]!.user_id!, opponents[1]!.user_id!], myName, mode);
+    trackUsage("online_duel_sent");
     toast({ title: t("players.challengeSent"), description: t("players.challengeSentDesc") });
     navigate("/");
   };
@@ -137,6 +139,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
       return;
     }
     notifyDuelChallenge(opponent.user_id, players.find((p) => p.user_id === user.id)?.name ?? "Jemand");
+    trackUsage("online_doubles_sent");
     toast({ title: t("players.challengeSent"), description: t("players.challengeSentDesc") });
     navigate("/");
   };
@@ -177,6 +180,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
     }
     const myName = players.find((p) => p.user_id === user.id)?.name ?? "Jemand";
     notifyChallengeCreated(opponent.user_id, myName, mode);
+    trackUsage("online_1v1_sent");
     toast({ title: t("players.challengeSent"), description: t("players.challengeSentDesc") });
     navigate("/");
   };

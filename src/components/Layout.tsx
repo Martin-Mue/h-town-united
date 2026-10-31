@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { LogOut, CloudOff, RefreshCw, Settings, MoreHorizontal } from "lucide-react";
 import { HomeIcon, DartGameIcon, StatsIcon, TrainingIcon, DartTrophyIcon, ClubIcon, AdminIcon } from "@/components/icons/DartIcons";
@@ -13,6 +13,7 @@ import { useOfflineBracketActionQueue } from "@/hooks/useOfflineBracketActionQue
 import { useOfflineLeagueFixtureQueue } from "@/hooks/useOfflineLeagueFixtureQueue";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useTrackClubPresence } from "@/lib/clubPresence";
+import { trackUsage } from "@/lib/analytics";
 import WhatsNewBanner from "@/components/WhatsNewBanner";
 import OnboardingTour from "@/components/OnboardingTour";
 import htuEmblem from "@/assets/club-emblem.png";
@@ -36,6 +37,12 @@ const Layout = ({ children }: { children: ReactNode }) => {
   const { signOut, user } = useAuth();
   const isAdmin = useIsAdmin(user?.id);
   useTrackClubPresence();
+  // Anonymous usage statistics: which area is open (first path segment only - never ids or query strings).
+  useEffect(() => {
+    if (!user?.id) return;
+    const area = location.pathname.split("/").filter(Boolean)[0] ?? "home";
+    trackUsage(`page:${area.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 30) || "home"}`);
+  }, [location.pathname, user?.id]);
   const { club, name: clubName, logoUrl } = useClubBranding();
   // Until a club uploads its own logo, each slot keeps its ORIGINAL bundled artwork (the
   // watermark and the header badge were always two different images) so the app stays

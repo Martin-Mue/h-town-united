@@ -3,6 +3,7 @@ import { X, Share2, Trophy, Target, TrendingUp, Flame, Crosshair, Award } from "
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { trackUsage } from "@/lib/analytics";
 import { shareOrDownloadSeasonRecap } from "@/utils/seasonRecapImage";
 import type { HighlightClipRecord } from "@/pages/Statistics";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -35,6 +36,7 @@ interface SeasonRecapProps {
  *  timed/swipe-gesture story format — same visual "reveal" feeling, but nothing that depends on
  *  gesture or timing behavior no camera-less environment could ever verify actually feels right. */
 const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
+  useEffect(() => { trackUsage("recap_viewed"); }, []);
   const { t } = useLanguage();
   const { name: clubName } = useClubBranding();
   const [clipUrls, setClipUrls] = useState<Record<string, string>>({});

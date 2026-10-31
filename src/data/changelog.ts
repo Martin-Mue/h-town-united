@@ -1274,4 +1274,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Oyun başlarken artık bull-off açabilirsin: herkes ortaya bir ok atar, kamera mesafeyi ölçer ve daha yakın olan başlar. Kamera yoksa kimin daha yakın olduğunu elle seçersin. Çevrimiçi de çalışır: herkes kendi tahtasına atar, sunucu karar verir, beraberlikte yeniden atılır. Çiftlerde iki takım başlatıcısı atar.",
     },
   },
+  {
+    id: "2026-10-31-usage-stats",
+    date: "2026-10-31",
+    title: {
+      de: "Anonyme Nutzungsstatistik (abschaltbar)",
+      en: "Anonymous usage statistics (can be switched off)",
+      fr: "Statistiques d'utilisation anonymes (désactivables)",
+      pl: "Anonimowe statystyki użycia (można wyłączyć)",
+      nl: "Anonieme gebruiksstatistieken (uit te zetten)",
+      tr: "Anonim kullanım istatistikleri (kapatılabilir)",
+    },
+    description: {
+      de: "Damit wir sehen, was ihr wirklich nutzt, zählt die App jetzt anonym, welche Bereiche geöffnet werden. Keine Namen, keine Drittanbieter. In den Einstellungen unter Konto lässt es sich jederzeit abschalten.",
+      en: "So we can see what you actually use, the app now counts anonymously which areas are opened. No names, no third parties. You can switch it off any time in Settings under Account.",
+      fr: "Pour voir ce que vous utilisez vraiment, l'appli compte maintenant anonymement quelles zones sont ouvertes. Pas de noms, pas de tiers. Désactivable à tout moment dans Réglages > Compte.",
+      pl: "Aby zobaczyć, z czego naprawdę korzystacie, aplikacja liczy teraz anonimowo, które obszary są otwierane. Bez imion, bez stron trzecich. Możesz to wyłączyć w Ustawieniach w sekcji Konto.",
+      nl: "Om te zien wat jullie echt gebruiken, telt de app nu anoniem welke onderdelen worden geopend. Geen namen, geen derden. Je kunt het altijd uitzetten bij Instellingen onder Account.",
+      tr: "Gerçekte neyi kullandığınızı görmek için uygulama artık hangi bölümlerin açıldığını anonim olarak sayıyor. İsim yok, üçüncü taraf yok. Ayarlar > Hesap bölümünden istediğin zaman kapatabilirsin.",
+    },
+  },
 ];

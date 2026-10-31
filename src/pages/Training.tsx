@@ -13,6 +13,7 @@ const LiveCamera = lazy(() => import("@/components/game/LiveCamera"));
 import type { DetectedDart } from "@/components/game/LiveCamera";
 import { CHECKOUT_ROUTES } from "@/utils/checkoutTable";
 import { isAchievableVisitTotal } from "@/utils/dartStats";
+import { trackUsage } from "@/lib/analytics";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Sparkline } from "@/components/stats/StatPrimitives";
 import { useToast } from "@/hooks/use-toast";
@@ -324,6 +325,7 @@ const TrainingPage = () => {
 
   /** Start an active drill session */
   const startDrill = (drill: TrainingDrill, config: DrillConfig = drillConfig) => {
+    trackUsage("training_start");
     setBrokeRecord(false);
     setRtcFlash(false);
     setUndoStack([]);

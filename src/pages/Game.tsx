@@ -53,6 +53,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { loadDoublesSeats } from "@/lib/onlineDoubles";
 import { loadMyDuels, duelStartScore, type OnlineDuel } from "@/lib/onlineDuels";
 import { useBoardVideo } from "@/hooks/useBoardVideo";
+import { trackUsage } from "@/lib/analytics";
 import BoardVideoPanel from "@/components/game/BoardVideoPanel";
 import { notifyChallengeCreated, notifyDoublesInvited, notifyDuelPlayed } from "@/lib/onlineMatchNotify";
 import type { Json } from "@/integrations/supabase/types";
@@ -450,6 +451,9 @@ const GamePage = () => {
   const [walkonH2H, setWalkonH2H] = useState<{ aWins: number; bWins: number; total: number; aAvg: number; bAvg: number; storyline: string | null; aWinProb: number | null } | null>(null);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  // Anonymous usage statistics for the optional extras of the play screen.
+  useEffect(() => { if (cameraEnabled) trackUsage("camera_on"); }, [cameraEnabled]);
+  useEffect(() => { if (phase === "stats" && walkonH2H?.storyline) trackUsage("rivalry_shown"); }, [phase, walkonH2H?.storyline]);
   // Whether a human actually wants the camera on — distinct from cameraEnabled itself, which
   // the bot-auto-play effect below force-closes for bot turns. Lets the camera come back on its
   // own once play returns to a human, instead of the player having to re-tap "Cam" every turn.
@@ -562,6 +566,7 @@ const GamePage = () => {
     if (onlineMatch.row?.status !== "active" || !state) return;
     if (!onlineInitializedRef.current) {
       onlineInitializedRef.current = true;
+      trackUsage(onlineMatch.row?.is_doubles ? "game_online_doubles" : "game_online_1v1");
       // Shared, deterministic id (not a fresh crypto.randomUUID() like a local startGame() would
       // generate) — both devices independently reach game.isFinished and call saveGame(); this is
       // what makes gameSync.ts's existing pendingGameId-existence check actually catch that as one
@@ -1066,6 +1071,7 @@ const GamePage = () => {
    *  startGame's own signature) so every existing `onClick={startGame}` reference stays a plain
    *  zero-arg handler instead of needing a wrapper at each call site. */
   const startGameWithStarter = (starterOverride?: number) => {
+    trackUsage(starterOverride === undefined ? "game_local_start" : "game_local_rematch");
     const startScore = getStartScore();
     const n = numPlayers;
     const players: PlayerSlot[] = Array.from({ length: n }, (_, i) => ({
@@ -2644,6 +2650,7 @@ const GamePage = () => {
           setTurnStartRemaining(decided.currentLeg.remaining[scoreSlotOf(decided, winner)] ?? decided.startScore);
           setStarterIndex(winner);
           setBullOffPending(false);
+          trackUsage("bulloff_used");
           toast({ title: t("game.bullOffWinnerLine").replace("{name}", bullOffNames[winner]) });
         }}
       />
@@ -2666,6 +2673,7 @@ const GamePage = () => {
         resolved={game.bullOff.resolved}
         winner={game.bullOff.winner}
         onSubmitDistance={async (mm) => {
+          trackUsage("bulloff_used");
           const { error } = await supabase.rpc("submit_online_bulloff", { _match_id: onlineMatchId, _distance_mm: mm });
           if (error) toast({ title: t("game.onlineSyncFailedTitle"), description: error.message, variant: "destructive" });
         }}
@@ -3127,7 +3135,7 @@ const GamePage = () => {
           error={boardVideo.error}
           feeds={boardVideo.feeds}
           nameOf={(uid) => dbPlayers.find((p) => p.user_id === uid)?.name ?? "?"}
-          onStart={boardVideo.startSharing}
+          onStart={() => { trackUsage("board_video_shared"); void boardVideo.startSharing(); }}
           onStop={boardVideo.stopSharing}
         />
       )}

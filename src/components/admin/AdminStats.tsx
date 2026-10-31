@@ -173,10 +173,8 @@ const AdminStats = () => {
         <div className="p-4 pt-3 flex gap-2 text-[11px] text-muted-foreground border-t border-border">
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <p>
-            „Zuletzt aktiv" ist der letzte Login-Zeitpunkt (von Supabase Auth) — keine Login-Anzahl
-            und keine Nutzungsdauer, das wird aktuell nirgends erfasst. Beides ließe sich nachrüsten,
-            bräuchte aber neue Tracking-Logik (eigene Tabelle + Events beim Login/während der
-            Nutzung) statt nur einer neuen Abfrage — sag Bescheid, falls das gewünscht ist.
+            „Zuletzt aktiv" ist der letzte Login-Zeitpunkt (von Supabase Auth). Wie oft welche Bereiche
+            genutzt werden und wie viele Mitglieder wiederkommen, steht anonym gezählt im Tab „Nutzung".
           </p>
         </div>
       </div>

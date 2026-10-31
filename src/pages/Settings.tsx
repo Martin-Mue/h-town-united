@@ -12,6 +12,7 @@ import { usePlayers, PLAYERS_QUERY_KEY } from "@/hooks/usePlayers";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
+import { setUsageTrackingEnabled, usageTrackingEnabled } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -112,6 +113,7 @@ const SettingsPage = () => {
   };
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("appearance");
+  const [usageStatsOn, setUsageStatsOn] = useState(usageTrackingEnabled);
 
   useEffect(() => {
     supabase.from("impressum").select("*").limit(1).maybeSingle().then(({ data }) => {
@@ -244,6 +246,18 @@ const SettingsPage = () => {
 
   const accountPanel = (
     <div className="space-y-3">
+      {/* Anonymous usage statistics: on by default, every member can switch it off for this device. */}
+      <SectionCard className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{t("settings.usageStats")}</p>
+          <p className="text-xs text-muted-foreground">{t("settings.usageStatsDesc")}</p>
+        </div>
+        <Switch
+          checked={usageStatsOn}
+          onCheckedChange={(on) => { setUsageStatsOn(on); setUsageTrackingEnabled(on); }}
+          aria-label={t("settings.usageStats")}
+        />
+      </SectionCard>
       <div className="grid gap-3 md:grid-cols-2 md:items-start">
         {push.supported && (
           <SectionCard className="flex items-center justify-between gap-3">

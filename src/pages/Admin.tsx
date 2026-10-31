@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminStats from "@/components/admin/AdminStats";
+import AdminUsage from "@/components/admin/AdminUsage";
+import { useIsPlatformOwner } from "@/hooks/useIsPlatformOwner";
 import AdminTrainingReview from "@/components/admin/AdminTrainingReview";
 import AdminTournamentForecast from "@/components/admin/AdminTournamentForecast";
 import AdminInvites from "@/components/admin/AdminInvites";
@@ -59,7 +61,12 @@ const AdminPage = () => {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // Club admins manage their club; the analysis areas (usage, statistics, AI trainer) are for the
+  // operator of the whole app only (public.platform_owners) and stay hidden for everyone else.
+  const isOwner = useIsPlatformOwner(user?.id) === true;
   const [activeTab, setActiveTab] = useState(readRememberedTab);
+  const OWNER_ONLY_TABS = ["usage", "stats", "trainer"];
+  const shownTab = !isOwner && OWNER_ONLY_TABS.includes(activeTab) ? "members" : activeTab;
   const changeTab = (tab: string) => {
     setActiveTab(tab);
     try {
@@ -150,7 +157,7 @@ const AdminPage = () => {
         <h1 className="text-2xl font-display uppercase">{t("admin.title")}</h1>
       </div>
 
-      <Tabs value={activeTab} onValueChange={changeTab}>
+      <Tabs value={shownTab} onValueChange={changeTab}>
         {/* Wraps onto several rows instead of one long inline strip: the strip used to be wider than
             the screen, so the whole page scrolled sideways and the active tab could be out of sight. */}
         <TabsList className="mb-4 h-auto w-full flex-wrap justify-start gap-1">
@@ -162,9 +169,17 @@ const AdminPage = () => {
               other tabs, same reasoning AdminAutodarts.tsx itself uses plain German strings rather
               than pulling in translation keys for a Paid-Plan admin feature. */}
           <TabsTrigger value="autodarts">Autodarts</TabsTrigger>
-          <TabsTrigger value="stats">{t("admin.tabStats")}</TabsTrigger>
-          <TabsTrigger value="trainer">KI-Trainer</TabsTrigger>
           <TabsTrigger value="forecast">{t("admin.tabForecast")}</TabsTrigger>
+          {isOwner && (
+            <>
+              <span className="mt-2 w-full border-t border-border pt-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Plattform · nur für dich sichtbar
+              </span>
+              <TabsTrigger value="usage">Nutzung</TabsTrigger>
+              <TabsTrigger value="stats">{t("admin.tabStats")}</TabsTrigger>
+              <TabsTrigger value="trainer">KI-Trainer</TabsTrigger>
+            </>
+          )}
         </TabsList>
 
         <TabsContent value="members">
@@ -316,13 +331,21 @@ const AdminPage = () => {
           <AdminAutodarts />
         </TabsContent>
 
-        <TabsContent value="stats">
-          <AdminStats />
-        </TabsContent>
+        {isOwner && (
+          <>
+            <TabsContent value="usage">
+              <AdminUsage />
+            </TabsContent>
 
-        <TabsContent value="trainer">
-          <AdminTrainingReview />
-        </TabsContent>
+            <TabsContent value="stats">
+              <AdminStats />
+            </TabsContent>
+
+            <TabsContent value="trainer">
+              <AdminTrainingReview />
+            </TabsContent>
+          </>
+        )}
 
         <TabsContent value="forecast">
           <AdminTournamentForecast />

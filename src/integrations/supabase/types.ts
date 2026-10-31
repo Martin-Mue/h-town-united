@@ -1895,6 +1895,18 @@ export type Database = {
         Args: { _distance_mm: number; _match_id: string }
         Returns: Json
       }
+      is_platform_owner: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      track_usage: {
+        Args: { _feature: string }
+        Returns: undefined
+      }
+      usage_overview: {
+        Args: { _club?: string; _days?: number }
+        Returns: Json
+      }
       accept_online_match: {
         Args: { _initial_game_state: Json; _match_id: string }
         Returns: undefined

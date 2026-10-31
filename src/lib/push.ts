@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { trackUsage } from "@/lib/analytics";
 
 // Public VAPID key — safe to ship in client code (only the matching private key, held as a
 // Supabase edge function secret, can actually sign/send pushes). Regenerated 2026-09-04 (the
@@ -74,6 +75,7 @@ export async function subscribeToPush(userId: string, clubId: string | null): Pr
     { user_id: userId, club_id: clubId, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth },
     { onConflict: "endpoint" }
   );
+  if (!error) trackUsage("push_enabled");
   return !error;
 }
 
