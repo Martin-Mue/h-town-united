@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminStats from "@/components/admin/AdminStats";
 import AdminUsage from "@/components/admin/AdminUsage";
 import { useIsPlatformOwner } from "@/hooks/useIsPlatformOwner";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import AdminTrainingReview from "@/components/admin/AdminTrainingReview";
 import AdminTournamentForecast from "@/components/admin/AdminTournamentForecast";
 import AdminInvites from "@/components/admin/AdminInvites";
@@ -66,7 +67,11 @@ const AdminPage = () => {
   const isOwner = useIsPlatformOwner(user?.id) === true;
   const [activeTab, setActiveTab] = useState(readRememberedTab);
   const OWNER_ONLY_TABS = ["usage", "stats", "trainer"];
-  const shownTab = !isOwner && OWNER_ONLY_TABS.includes(activeTab) ? "members" : activeTab;
+  // A club with the permanent free plan (free_locked) has nothing to book or pay: the billing tab would
+  // only say "free", so it is hidden there and stays for every club that can actually subscribe.
+  const { club } = useClubBranding();
+  const showBilling = club?.plan_tier !== "free_locked";
+  const shownTab = (!isOwner && OWNER_ONLY_TABS.includes(activeTab)) || (!showBilling && activeTab === "billing") ? "members" : activeTab;
   const changeTab = (tab: string) => {
     setActiveTab(tab);
     try {
@@ -164,7 +169,7 @@ const AdminPage = () => {
           <TabsTrigger value="members">{t("admin.tabMembers")}</TabsTrigger>
           <TabsTrigger value="invites">{t("admin.tabInvites")}</TabsTrigger>
           <TabsTrigger value="branding">{t("admin.tabBranding")}</TabsTrigger>
-          <TabsTrigger value="billing">{t("admin.tabBilling")}</TabsTrigger>
+          {showBilling && <TabsTrigger value="billing">{t("admin.tabBilling")}</TabsTrigger>}
           {/* Proper noun (product name), same in every language -- not routed through t() like the
               other tabs, same reasoning AdminAutodarts.tsx itself uses plain German strings rather
               than pulling in translation keys for a Paid-Plan admin feature. */}
@@ -323,9 +328,11 @@ const AdminPage = () => {
           <AdminClubBranding />
         </TabsContent>
 
-        <TabsContent value="billing">
-          <AdminBilling />
-        </TabsContent>
+        {showBilling && (
+          <TabsContent value="billing">
+            <AdminBilling />
+          </TabsContent>
+        )}
 
         <TabsContent value="autodarts">
           <AdminAutodarts />
