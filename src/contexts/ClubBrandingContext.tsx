@@ -39,6 +39,8 @@ interface ClubRow {
   /** Stripe's own subscription lifecycle state ('none'|'trialing'|'active'|'past_due'|'canceled'),
    *  read by AdminBilling.tsx — same optionality/reasoning as plan_tier above. */
   plan_status?: string;
+  /** Last day of a pilot (plan_tier 'pilot'); an expired pilot is already turned into 'trial' on load. */
+  pilot_until?: string | null;
 }
 
 /** "loading": fetch in flight or not started -- club may still be stale/null, never act on it.
@@ -170,17 +172,25 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
       // (built with a privileged role), not per-caller-role, so it still tries to select those two
       // columns by name and the query then fails outright with a permission error -- an explicit
       // list here is what actually avoids that, not just what hides the columns.
-      const { data: clubRow, error: clubError } = await supabase
-        .from("clubs")
-        .select("id, name, tagline, logo_path, theme_preset, plan_tier, plan_status, created_at, updated_at")
-        .eq("id", roleRow.club_id)
-        .maybeSingle();
+      const fetchClub = (columns: string) => supabase.from("clubs").select(columns).eq("id", roleRow.club_id).maybeSingle();
+      let { data: clubRaw, error: clubError } = await fetchClub("id, name, tagline, logo_path, theme_preset, plan_tier, plan_status, pilot_until, created_at, updated_at");
+      // A device or backend that does not have the pilot_until column yet must not lock people out of the app.
+      if (clubError && (clubError.code === "42703" || String(clubError.message || "").includes("pilot_until"))) {
+        ({ data: clubRaw, error: clubError } = await fetchClub("id, name, tagline, logo_path, theme_preset, plan_tier, plan_status, created_at, updated_at"));
+      }
       if (requestId !== requestIdRef.current) return;
       if (clubError) {
         setStatus("error");
         return;
       }
-      setClub(clubRow ?? null);
+      let clubRow = (clubRaw as unknown as ClubRow | null) ?? null;
+      if (clubRow?.plan_tier === "pilot" && clubRow.pilot_until) {
+        const d = new Date();
+        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        // pilot_until is the last full day: after it the club is back on the trial limits.
+        if (clubRow.pilot_until < today) clubRow = { ...clubRow, plan_tier: "trial" };
+      }
+      setClub(clubRow);
       setStatus("resolved");
       return;
     }

@@ -218,6 +218,7 @@ export type Database = {
           id: string
           logo_path: string | null
           name: string
+          pilot_until: string | null
           plan_status: string
           plan_tier: string
           stripe_customer_id: string | null
@@ -231,6 +232,7 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name: string
+          pilot_until?: string | null
           plan_status?: string
           plan_tier?: string
           stripe_customer_id?: string | null
@@ -244,6 +246,7 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name?: string
+          pilot_until?: string | null
           plan_status?: string
           plan_tier?: string
           stripe_customer_id?: string | null
@@ -1906,6 +1909,27 @@ export type Database = {
       usage_overview: {
         Args: { _club?: string; _days?: number }
         Returns: Json
+      }
+      end_club_pilot: {
+        Args: { _club: string }
+        Returns: undefined
+      }
+      platform_clubs: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          active_7d: number
+          created_at: string
+          id: string
+          members: number
+          name: string
+          pilot_until: string | null
+          plan_tier: string
+          players: number
+        }[]
+      }
+      set_club_pilot: {
+        Args: { _club: string; _until: string }
+        Returns: undefined
       }
       accept_online_match: {
         Args: { _initial_game_state: Json; _match_id: string }

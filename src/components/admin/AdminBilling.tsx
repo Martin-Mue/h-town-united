@@ -94,16 +94,28 @@ const AdminBilling = () => {
     );
   }
 
+  const isPilot = club.plan_tier === "pilot";
+  const pilotEnd = club.pilot_until
+    ? new Date(club.pilot_until + "T12:00:00").toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
+    : null;
+
   return (
     <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-6">
       <div className="flex items-center gap-2 mb-3">
         <CreditCard className="w-5 h-5 text-primary" />
-        <p className="font-semibold text-sm">Trial-Plan</p>
+        <p className="font-semibold text-sm">{isPilot ? "Pilot-Phase" : "Trial-Plan"}</p>
       </div>
-      <ul className="text-xs text-muted-foreground space-y-1 mb-4 list-disc list-inside">
-        <li>Kamera-Scoring ist gesperrt</li>
-        <li>Turniere sind auf 8 Teilnehmer begrenzt</li>
-      </ul>
+      {isPilot ? (
+        <p className="text-xs text-muted-foreground mb-4">
+          Ihr testet DartSpot im Pilot{pilotEnd ? <> bis einschließlich <strong className="text-foreground">{pilotEnd}</strong></> : null}: alle Funktionen sind freigeschaltet
+          (Kamera-Scoring, große Turniere, KI-Kommentar, Autodarts). Danach gilt wieder der Trial-Umfang, außer ihr wechselt in den Paid-Plan.
+        </p>
+      ) : (
+        <ul className="text-xs text-muted-foreground space-y-1 mb-4 list-disc list-inside">
+          <li>Kamera-Scoring ist gesperrt</li>
+          <li>Turniere sind auf 8 Teilnehmer begrenzt</li>
+        </ul>
+      )}
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setPeriod("monthly")}

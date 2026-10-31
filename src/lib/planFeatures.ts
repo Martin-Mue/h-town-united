@@ -2,11 +2,12 @@
  *  real call site — no speculative stub entries for features nobody gates yet. */
 export type PlanFeature = "camera" | "largeTournaments" | "ai-commentary" | "autodarts";
 
-/** `free_locked` (H-Town, permanently exempt) and `paid` get everything; `trial` (the default for
+/** `free_locked` (H-Town, permanently exempt), `paid` and `pilot` (everything, until its end date -
+ *  an expired pilot already arrives here as `trial`, see ClubBrandingContext) get everything; `trial` (the default for
  *  a newly self-created club) is gated on the features above until a real subscription exists.
  *  `plan_tier` is optional/possibly-unknown (see ClubBrandingContext's own doc comment on why) —
  *  treated as the safe default (gated), never as "assume paid". */
 export function clubHasFeature(planTier: string | undefined, feature: PlanFeature): boolean {
-  if (planTier === "free_locked" || planTier === "paid") return true;
+  if (planTier === "free_locked" || planTier === "paid" || planTier === "pilot") return true;
   return false;
 }

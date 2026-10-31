@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminStats from "@/components/admin/AdminStats";
 import AdminUsage from "@/components/admin/AdminUsage";
+import AdminClubs from "@/components/admin/AdminClubs";
 import { useIsPlatformOwner } from "@/hooks/useIsPlatformOwner";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import AdminTrainingReview from "@/components/admin/AdminTrainingReview";
@@ -66,7 +67,7 @@ const AdminPage = () => {
   // operator of the whole app only (public.platform_owners) and stay hidden for everyone else.
   const isOwner = useIsPlatformOwner(user?.id) === true;
   const [activeTab, setActiveTab] = useState(readRememberedTab);
-  const OWNER_ONLY_TABS = ["usage", "stats", "trainer"];
+  const OWNER_ONLY_TABS = ["clubs", "usage", "stats", "trainer"];
   // A club with the permanent free plan (free_locked) has nothing to book or pay: the billing tab would
   // only say "free", so it is hidden there and stays for every club that can actually subscribe.
   const { club } = useClubBranding();
@@ -180,6 +181,7 @@ const AdminPage = () => {
               <span className="mt-2 w-full border-t border-border pt-2 text-[10px] uppercase tracking-wide text-muted-foreground">
                 Plattform · nur für dich sichtbar
               </span>
+              <TabsTrigger value="clubs">Vereine</TabsTrigger>
               <TabsTrigger value="usage">Nutzung</TabsTrigger>
               <TabsTrigger value="stats">{t("admin.tabStats")}</TabsTrigger>
               <TabsTrigger value="trainer">KI-Trainer</TabsTrigger>
@@ -340,6 +342,10 @@ const AdminPage = () => {
 
         {isOwner && (
           <>
+            <TabsContent value="clubs">
+              <AdminClubs />
+            </TabsContent>
+
             <TabsContent value="usage">
               <AdminUsage />
             </TabsContent>
