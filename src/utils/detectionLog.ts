@@ -27,6 +27,8 @@ export interface DetectionLogEntry {
   changeShare: number | null;
   /** How many more darts this visit could still take (0 = the visit counted as full: a checkout or bust, or 3 darts), null if not logged. */
   slotsLeft?: number | null;
+  /** The visit size the game handed the camera (3 = a fresh visit). */
+  dartsRemaining?: number;
   outcome: "dart-added" | "nothing-added" | "board-empty" | "unexplained-change";
   candidates: LoggedCandidate[];
 }

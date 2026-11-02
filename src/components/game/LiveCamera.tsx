@@ -264,6 +264,8 @@ const DISMISSED_DART_RADIUS = 0.04;
 const BASELINE_BEATEN_BY = 0.15;
 /** Above this share of changed cells the whole picture moved (exposure, bump) — no comparison possible. */
 const GLOBAL_CHANGE_SHARE_MAX = 0.5;
+/** No new dart is taken while this much of the picture changed at once. */
+const ADD_MAX_CHANGE_SHARE = 0.25;
 /** A hit this confident that no look took is kept comparable: the reference picture stays put for up to this many looks. */
 const UNEXPLAINED_HIT_SCORE = 0.5;
 /** A known model dart that the look no longer finds within this distance (frame fraction, ~7 mm) may have been placed off its resting spot. */
@@ -431,7 +433,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   onPendingChange,
   enabled,
   onClose,
-  dartsRemaining = 3,
+  dartsRemaining: dartsRemainingProp = 3,
   playerName,
   remainingScore,
   scoreStrip,
@@ -580,6 +582,19 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // live image to realize it's not pointed at the board and redirect it).
   const [boardMissing, setBoardMissing] = useState(false);
   const [scanFailed, setScanFailed] = useState(false);
+  // Darts the last committed visit held. The game reported the next visit with exactly that many darts already thrown
+  // (2026-11-02: after a 2-dart visit the camera offered ONE dart slot, after a 1-dart visit two; full visits reset
+  // fine), so every further dart was dropped because "the visit is full". A committed visit ends the turn, so a prop that
+  // still counts those darts is stale: the camera works with a full visit until the game reports something else.
+  const [lastCommittedCount, setLastCommittedCount] = useState<number | null>(null);
+  useEffect(() => { if (dartsRemainingProp === 3) setLastCommittedCount(null); }, [dartsRemainingProp]);
+  // the stale count shows within moments of the commit; later on the prop means what it says
+  useEffect(() => {
+    if (lastCommittedCount === null) return;
+    const id = window.setTimeout(() => setLastCommittedCount(null), 90_000);
+    return () => window.clearTimeout(id);
+  }, [lastCommittedCount]);
+  const dartsRemaining = lastCommittedCount !== null && lastCommittedCount < 3 && dartsRemainingProp === 3 - lastCommittedCount ? 3 : dartsRemainingProp;
   const [needsReview, setNeedsReview] = useState(false);
   // Mirrors needsReview into a ref for the watcher-loop interval closure (same reason
   // accumulatedRef mirrors accumulated below) — used to tell "this visit's darts are still
@@ -1919,7 +1934,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // Changed pixels gate weak detections; a confident one needs no confirmation (a dart that an earlier
       // picture already contained, but the model only recognised now, must not be lost).
       const support = usable ? (x: number, y: number) => changedShareNear(usable, x, y) : null;
-      const added = selectNewDarts(known, present, support, visitCapacity(known) - known.length, { straightenedFrame: !!rectMapping() });
+      // A hand in the picture (pulling, reaching in) changes a quarter of it or more; a landing dart changes a few per cent. What the
+      // model finds then is the hand or a dart being pulled, never a new dart (2026-11-02: three phantoms at 0.32-0.49 right
+      // before the board went empty).
+      const handChange = !!changeMap && changeMap.share > ADD_MAX_CHANGE_SHARE;
+      const added = handChange ? [] : selectNewDarts(known, present, support, visitCapacity(known) - known.length, { straightenedFrame: !!rectMapping() });
       if (accumulatedRef.current !== known) return; // the round was committed/discarded meanwhile
       {
         const MM_PER_FRAME = 170 / 0.377;
@@ -1933,7 +1952,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           };
         });
         logDetectionLook({
-          zoom: calib.zoom, known: known.length, rawCount: result.darts.length, slotsLeft: visitCapacity(known) - known.length,
+          zoom: calib.zoom, known: known.length, rawCount: result.darts.length, slotsLeft: visitCapacity(known) - known.length, dartsRemaining: dartsRemainingProp,
           bestRawScore: result.darts.length > 0 ? roundForLog.score(Math.max(...result.darts.map((d) => d.confidence))) : null,
           changeShare: changeMap ? roundForLog.score(changeMap.share) : null,
           outcome: added.length > 0 ? "dart-added" : present.some((d) => d.confidence >= BOARD_OCCUPIED_SCORE) ? "nothing-added" : "board-empty",
@@ -2441,6 +2460,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       void uploadTrainingSample(pendingTrainingCaptureRef.current, darts, buildDetectionRecord(darts, removedDetectionsRef.current, DART_MODEL_VERSION));
     }
     removedDetectionsRef.current = [];
+    setLastCommittedCount(Math.min(3, darts.length));
     onRoundCommit(darts.slice(0, dartsRemaining));
     playRoundCommittedSound();
     setAccumulated([]);
