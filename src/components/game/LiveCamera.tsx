@@ -101,6 +101,9 @@ export interface DetectedDart {
   /** The player picked this score from the correction chips: the position is the middle of that
    *  field, not a measured tip — fine for the score, not to be trained on as a tip position. */
   snapped?: boolean;
+  /** A dart the camera never saw: the visit ended with fewer darts than it holds, so the rest is presumed to have missed the board
+   *  (no picture is left by a dart that does not stick). Shown as "Fehlwurf?" until the player corrects or accepts it. */
+  assumedMiss?: boolean;
   /** What the detector reported for this dart when it was found; stays unchanged through the player's corrections
    *  so the finished round can be compared with it (see detectionQuality). Absent on darts the player added. */
   detected?: DetectedSnapshot;
@@ -704,7 +707,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // dart (select, edit, remove) stops the countdown so a correction never races the clock.
   // Only a complete visit commits itself: with fewer darts than expected one was most likely overlooked (2026-10-27: 3 of 7
   // wrongly scored rounds were one dart short), so the player confirms those by hand.
-  const autoCommitActive = needsReview && autoCommitEnabled && !autoCommitHeld && accumulated.length >= visitCapacity(accumulated) && !scanFailed;
+  const autoCommitActive = needsReview && autoCommitEnabled && !autoCommitHeld && accumulated.length >= visitCapacity(accumulated) && !scanFailed && !accumulated.some((d) => d.assumedMiss);
   useEffect(() => {
     if (!autoCommitActive) { setAutoCommitLeft(null); return; }
     autoCommitSnapshotRef.current = accumulatedRef.current;
@@ -2319,6 +2322,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const overallConfidence = alreadyIdentified.reduce((s, d) => s + d.confidence, 0) / alreadyIdentified.length;
       setLastConfidence(overallConfidence);
       setLastDetectionSource("model");
+      // A dart that misses the board or bounces out leaves nothing to see. Every visit holds its darts, so what the camera did not
+      // find is presumed missed: the review shows those slots as "Fehlwurf?" with the others, and one tap accepts it all.
+      const missingDarts = Math.max(0, Math.min(3, visitCapacity(alreadyIdentified)) - alreadyIdentified.length);
+      if (missingDarts > 0) {
+        const padded = [...alreadyIdentified, ...Array.from({ length: missingDarts }, (): DetectedDart => ({ baseValue: 0, multiplier: 1, points: 0, confidence: 1, assumedMiss: true }))];
+        accumulatedRef.current = padded;
+        setAccumulated(padded);
+      }
       setNeedsReview(true);
       setStatus(`${t("camera.pleaseCheck")} ${alreadyIdentified.map(dartLabel).join(", ")}`);
       setPhase("live");
@@ -2655,7 +2666,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setAccumulated((prev) => {
       const d = prev[index];
       if (!d) return prev;
-      let updated: DetectedDart = { ...d, x, y, confidence: 1, snapped: false };
+      let updated: DetectedDart = { ...d, x, y, confidence: 1, snapped: false, assumedMiss: false };
       if (transform && full) {
         const scored = scoreFromBoardPoint(full.fx, full.fy, transform);
         updated = { ...updated, baseValue: scored.baseValue, multiplier: scored.multiplier, points: scored.points, boardU: scored.u, boardV: scored.v };
@@ -2688,6 +2699,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       const next = [...prev];
       next[index] = {
         ...d,
+        assumedMiss: false,
         baseValue: choice.baseValue,
         multiplier: choice.multiplier,
         points: pointsFor(choice.baseValue, choice.multiplier),
@@ -2805,11 +2817,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
         <div ref={stageRef} className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto p-2">
       {showReview && (
-        <div ref={reviewAnchorRef}>
+        <div ref={reviewAnchorRef} className="w-full animate-in fade-in zoom-in-95 duration-300">
         <DartReviewFrame
           maxSide={stageHeight > 0 ? `${Math.max(170, stageHeight - 200)}px` : `calc(100dvh - ${isLandscape ? "7rem" : "24rem"})`}
           imageUrl={reviewFrame.url}
-          darts={accumulated.map((d) => ({ x: d.x ?? 0.5, y: d.y ?? 0.5, baseValue: d.baseValue, multiplier: d.multiplier }))}
+          darts={accumulated.filter((d) => !d.assumedMiss).map((d) => ({ x: d.x ?? 0.5, y: d.y ?? 0.5, baseValue: d.baseValue, multiplier: d.multiplier }))}
           selectedIndex={selectedReviewIndex}
           onSelect={setSelectedReviewIndex}
           onMove={moveDartTo}
@@ -2844,7 +2856,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
 
       <div
-        className={`relative mx-auto shrink-0 overflow-hidden rounded-lg border border-border bg-muted ${showReview ? "hidden" : ""}`}
+        className={`relative mx-auto shrink-0 overflow-hidden rounded-lg border border-border bg-muted animate-in fade-in duration-300 ${showReview ? "hidden" : ""}`}
         style={{
           aspectRatio: videoSize ? `${videoSize.w} / ${videoSize.h}` : "1 / 1",
           width: stageHeight > 0
@@ -3096,7 +3108,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       )}
 
       {scanFailed && onRequestManualEntry && (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[11px]">
+        <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[11px] animate-in fade-in slide-in-from-bottom-1 duration-300">
           <span className="text-destructive">{t("camera.scanFoundNoDarts")}</span>
           <div className="flex shrink-0 gap-1.5">
             <Button size="sm" variant="outline" className="h-9 px-3 text-[11px]" onClick={() => { setScanFailed(false); manualScan(); }}>
@@ -3110,7 +3122,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       )}
 
       {needsReview && (
-        <div className="flex items-center justify-between gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-[11px] text-accent">
+        <div className="flex items-center justify-between gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-[11px] text-accent animate-in fade-in slide-in-from-bottom-1 duration-300">
           <span>
             {autoCommitLeft !== null
               ? t("camera.autoCommitIn").replace("{n}", String(Math.max(0, autoCommitLeft)))
@@ -3129,7 +3141,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           only ever offers, never applies on its own. Dismissing just hides it; nothing about the
           current review list changes either way. */}
       {geminiSuggestion && (
-        <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-[11px] text-primary flex items-center justify-between gap-2 flex-wrap">
+        <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-[11px] text-primary flex items-center justify-between gap-2 flex-wrap animate-in fade-in slide-in-from-bottom-1 duration-300">
           <span>{t("camera.geminiSuggests")} {geminiSuggestion.map(dartLabel).join(", ")}</span>
           <div className="flex gap-1.5 shrink-0">
             <Button size="sm" variant="secondary" className="h-7 gap-1 px-2 text-[10px]" onClick={applyGeminiSuggestion}>
@@ -3186,12 +3198,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 <button
                   key={`dart-${i}`}
                   type="button"
-                  onClick={() => (showReview ? setSelectedReviewIndex(selectedReviewIndex === i ? null : i) : openReviewFor(i))}
+                  onClick={() => (d.assumedMiss ? setExpandedReviewIndex(i) : showReview ? setSelectedReviewIndex(selectedReviewIndex === i ? null : i) : openReviewFor(i))}
                   className={`flex h-[4.5rem] flex-col items-center justify-center rounded-lg border-2 transition-colors ${
-                    miss ? "border-muted bg-muted/40 text-muted-foreground" : "border-primary/60 bg-primary/15 text-primary"
+                    d.assumedMiss ? "border-dashed border-muted-foreground/50 bg-muted/20 text-muted-foreground" : miss ? "border-muted bg-muted/40 text-muted-foreground" : "border-primary/60 bg-primary/15 text-primary"
                   } ${justAddedIndex === i ? "animate-scale-in ring-2 ring-accent" : ""} ${selected ? "ring-2 ring-accent" : ""}`}
                 >
-                  <span className="font-display text-3xl leading-none">{miss ? t("game.miss") : dartLabel(d)}</span>
+                  <span className="font-display text-3xl leading-none">{miss ? t("game.miss") : dartLabel(d)}{d.assumedMiss ? "?" : ""}</span>
                   <span className="mt-1 text-xs text-muted-foreground">{d.points}</span>
                 </button>
               );
