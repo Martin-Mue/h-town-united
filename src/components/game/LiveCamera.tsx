@@ -39,7 +39,7 @@ import { looksLikeUndetectedDarts, UNEXPLAINED_LOOKS_BEFORE_HINT, UNEXPLAINED_LO
 import { logDetectionLook, detectionLogCount, exportDetectionLog, clearDetectionLog, roundForLog, type LoggedCandidate } from "@/utils/detectionLog";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
-import { selectNewDarts, keepSupportedDarts, visitDartCapacity } from "@/utils/newDartSelection";
+import { selectNewDarts, keepSupportedDarts, visitDartCapacity, KNOWN_DART_RADIUS } from "@/utils/newDartSelection";
 import { prepareWireFit, refineTapsToWires, findBoardTaps, WIRE_FIT_CONFIDENT } from "@/utils/boardWireFit";
 import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
@@ -264,6 +264,13 @@ const DISMISSED_DART_RADIUS = 0.04;
 const BASELINE_BEATEN_BY = 0.15;
 /** Above this share of changed cells the whole picture moved (exposure, bump) — no comparison possible. */
 const GLOBAL_CHANGE_SHARE_MAX = 0.5;
+/** A hit this confident that no look took is kept comparable: the reference picture stays put for up to this many looks. */
+const UNEXPLAINED_HIT_SCORE = 0.5;
+/** A known model dart that the look no longer finds within this distance (frame fraction, ~7 mm) may have been placed off its resting spot. */
+const RELOCATE_REFOUND_RADIUS = 0.015;
+const RELOCATE_MAX_DISTANCE = 0.09;
+const RELOCATE_MIN_SCORE = 0.6;
+const HELD_REFERENCE_MAX_LOOKS = 6;
 /**
  * A look whose picture changed this much since the last stable one, without a new dart, is a hand or arm reaching in
  * (log 2026-10-27: hand looks 0.13-0.58, dart landings 0.01-0.05). Such a frame must not become the round's review /
@@ -526,6 +533,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // pair of frames around the dart that just landed — comparing them shows where THAT dart is, even
   // when it sits right next to the earlier ones (see utils/changeMask.ts).
   const lastStableModelFrameRef = useRef<ImageData | null>(null);
+  const heldReferenceLooksRef = useRef(0);
   // Landings waiting for the model, oldest first. The model needs a few seconds on a phone and darts are
   // thrown faster than that, so landings are queued and judged one after the other — each against ITS
   // OWN before/after frames. (A single "busy" flag used to make the second and third dart of a round
@@ -741,6 +749,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     preRemovalImageDataRef.current = null;
     preRemovalModelFrameRef.current = null;
     lastStableModelFrameRef.current = null;
+    heldReferenceLooksRef.current = 0;
     landingQueueRef.current = [];
     emptyModelFrameRef.current = null;
     baselineDartsRef.current = null;
@@ -1924,7 +1933,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           };
         });
         logDetectionLook({
-          zoom: calib.zoom, known: known.length, rawCount: result.darts.length,
+          zoom: calib.zoom, known: known.length, rawCount: result.darts.length, slotsLeft: visitCapacity(known) - known.length,
           bestRawScore: result.darts.length > 0 ? roundForLog.score(Math.max(...result.darts.map((d) => d.confidence))) : null,
           changeShare: changeMap ? roundForLog.score(changeMap.share) : null,
           outcome: added.length > 0 ? "dart-added" : present.some((d) => d.confidence >= BOARD_OCCUPIED_SCORE) ? "nothing-added" : "board-empty",
@@ -1971,7 +1980,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         preRemovalModelFrameRef.current = frame;
         preRemovalFrameKindRef.current = rectMapping() ? "rectified" : "crop";
       }
-      lastStableModelFrameRef.current = frame;
+      // The picture that new darts are measured against moves on only when this look explained itself. A confident hit that was
+      // NOT taken (its fresh change was just under the bar at the first look) would otherwise find the reference already
+      // containing it at the next look: support 0 for ever, the dart never counted (2026-11-02: one dart per round, none addable).
+      const unexplainedHit = added.length === 0 && present.some((d) => d.confidence >= UNEXPLAINED_HIT_SCORE && !known.some((k) => typeof k.x === "number" && typeof k.y === "number" && Math.hypot(k.x - (d.x ?? 0), k.y - (d.y ?? 0)) < KNOWN_DART_RADIUS));
+      if (unexplainedHit && heldReferenceLooksRef.current < HELD_REFERENCE_MAX_LOOKS) {
+        heldReferenceLooksRef.current += 1;
+      } else {
+        heldReferenceLooksRef.current = 0;
+        lastStableModelFrameRef.current = frame;
+      }
 
       // A look that finds nothing new although the picture changed (a dart the model overlooked once, a hand) is repeated at the
       // next rest — the same picture with fresh sensor noise often gives the model a second chance — up to twice; only then
@@ -1981,6 +1999,29 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         emptyLooksRef.current = 0;
       } else {
         emptyLooksRef.current += 1;
+      }
+      // A dart the camera took at its first, blurred look can sit tens of mm off from where it rests (2026-11-02: 0.61 at the
+      // bull, then a steady 0.89 hit 28 mm away, and the later hit was read as "a dart next to it" — or nothing at all). When a
+      // look no longer finds a model dart where it was put, but finds a confident hit close to it that no other dart explains,
+      // that hit is the same dart: move it there. Darts the player corrected by hand stay where they are.
+      if (added.length === 0) {
+        let moved = false;
+        const relocated = known.map((k) => {
+          if (!k.detected || k.snapped || k.baseValue !== k.detected.baseValue || k.multiplier !== k.detected.multiplier || typeof k.x !== "number" || typeof k.y !== "number") return k;
+          const stillThere = present.some((d) => Math.hypot((d.x ?? 9) - (k.x as number), (d.y ?? 9) - (k.y as number)) < RELOCATE_REFOUND_RADIUS);
+          if (stillThere) return k;
+          const hit = present
+            .filter((d) => d.confidence >= RELOCATE_MIN_SCORE && Math.hypot((d.x ?? 9) - (k.x as number), (d.y ?? 9) - (k.y as number)) < RELOCATE_MAX_DISTANCE)
+            .filter((d) => !known.some((o) => o !== k && typeof o.x === "number" && typeof o.y === "number" && Math.hypot((d.x ?? 9) - o.x, (d.y ?? 9) - o.y) < KNOWN_DART_RADIUS))
+            .sort((a, b) => b.confidence - a.confidence)[0];
+          if (!hit) return k;
+          moved = true;
+          return markDetected([hit])[0];
+        });
+        if (moved) {
+          accumulatedRef.current = relocated;
+          setAccumulated(relocated);
+        }
       }
       if (added.length > 0) {
         const next = [...known, ...markDetected(added)];

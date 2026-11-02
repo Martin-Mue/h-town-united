@@ -25,6 +25,8 @@ export interface DetectionLogEntry {
   rawCount: number;
   /** Share of the picture that changed since the last stable picture. */
   changeShare: number | null;
+  /** How many more darts this visit could still take (0 = the visit counted as full: a checkout or bust, or 3 darts), null if not logged. */
+  slotsLeft?: number | null;
   outcome: "dart-added" | "nothing-added" | "board-empty" | "unexplained-change";
   candidates: LoggedCandidate[];
 }
