@@ -72,6 +72,13 @@ export const CHANGE_SUPPORT_VERY_NEAR = 0.5;
 export const CONFIDENT_DART_SCORE = 0.5;
 export const CONFIDENT_BYPASS_MIN_DISTANCE = 0.09;
 /**
+ * Even a confident hit far from every known dart needs a trace of fresh change under it, unless it is very sure. The model
+ * reports a fixed phantom on one spot of a board (2026-11-02: "T17" at (0.58, 0.71) on bare board, score 0.27-0.55, in 8 of 80
+ * pictures and added to rounds with change support 0.01). A real dart always changes the pixels around its tip (barrel, flight).
+ */
+export const CONFIDENT_BYPASS_MIN_SUPPORT = 0.05;
+export const CONFIDENT_BYPASS_NO_CHANGE_SCORE = 0.75;
+/**
  * A tight group: a confident hit 16-40 mm from a known dart is normally that dart's shifted re-hit — but NOT when the
  * same look also re-detects the known dart on its own tip. Then both darts are in the picture at once, and the
  * second one is real (measured 2026-10-27: a 0.71-0.74 hit 19-20 mm from a known 13 was dropped four looks in a row
@@ -118,7 +125,9 @@ export function selectNewDart<T extends DartCandidate>(
           return candidates.some((o) => o !== c && typeof o.x === "number" && typeof o.y === "number" && Math.hypot(o.x - (k.x as number), o.y - (k.y as number)) < REDETECTED_RADIUS);
         })();
       const confidentFar = (c.confidence >= CONFIDENT_DART_SCORE && nearestKnown >= CONFIDENT_BYPASS_MIN_DISTANCE) || tightGroup;
-      const support = confidentFar ? 1 : changeSupportAt(x, y);
+      const measured = changeSupportAt(x, y);
+      const trusted = tightGroup || (confidentFar && (c.confidence >= CONFIDENT_BYPASS_NO_CHANGE_SCORE || measured >= CONFIDENT_BYPASS_MIN_SUPPORT));
+      const support = trusted ? 1 : measured;
       const weakNearKnown = c.confidence < GHOST_MAX_SCORE && nearestKnown < GHOST_RADIUS;
       const needed = Math.max(
         nearKnown ? CHANGE_SUPPORT_NEAR_KNOWN : CHANGE_SUPPORT_MIN,

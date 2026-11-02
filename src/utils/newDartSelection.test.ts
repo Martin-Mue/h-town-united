@@ -101,10 +101,16 @@ describe("barrel and flight hits are not darts", () => {
     expect(selectNewDarts(known, reHit, noFreshChange, 3)).toHaveLength(0);
   });
 
-  it("a confident dart far from every known one needs no fresh change", () => {
+  it("a very confident dart far from every known one needs no fresh change", () => {
     const known = [{ x: 0.2, y: 0.2 }];
-    const far = [{ x: 0.7, y: 0.7, confidence: 0.7 }];
+    const far = [{ x: 0.7, y: 0.7, confidence: 0.8 }];
     expect(selectNewDarts(known, far, () => 0, 3)).toHaveLength(1);
+  });
+
+  it("a fixed phantom on bare board (score 0.55, no change under it) is no dart", () => {
+    const known = [{ x: 0.2, y: 0.2 }];
+    expect(selectNewDarts(known, [{ x: 0.58, y: 0.71, confidence: 0.55 }], () => 0.01, 3)).toHaveLength(0);
+    expect(selectNewDarts(known, [{ x: 0.58, y: 0.71, confidence: 0.55 }], () => 0.14, 3)).toHaveLength(1);
   });
 });
 
