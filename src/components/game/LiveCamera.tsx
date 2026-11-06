@@ -27,6 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
 import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, modelDiagnostics, MODEL_INPUT_SIZE, DART_MODEL_VERSION } from "@/utils/dartModel";
+import { assessSetup } from "@/utils/setupCheck";
 import { buildDetectionRecord, frameLuma, type DetectedSnapshot, type RoundContext } from "@/utils/detectionQuality";
 import { pointsFor, dartLabel } from "@/utils/x01Rules";
 import BoardCalibrator from "@/components/game/BoardCalibrator";
@@ -1699,7 +1700,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // The rings stay drawn over the picture so a wrong fit is obvious, and "Kalibrierung anpassen" is one tap away.
       setCalibDraft(null);
       setPhase("live");
-      setStatus(t("camera.autoCalibratedCheck"));
+      setStatus(t(setupHintKey(fitted) ?? "camera.autoCalibratedCheck"));
       playCalibrationSuccessSound();
       return;
     }
@@ -1715,6 +1716,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setStatus(t("camera.calibDragHint"));
   };
 
+  /** Translation key of the one thing worth fixing before playing (light, contrast, fit), or null when the picture is fine. */
+  const setupHintKey = (taps: { x: number; y: number }[]): string | null => {
+    const picture = grabRectifiedFrame(rectifyMappingFromTaps(taps));
+    const luma = picture ? frameLuma(picture) : null;
+    const problem = assessSetup({ ...(luma ?? {}), calibQuality: calibQualityRef.current });
+    return problem ? `camera.setup${problem.charAt(0).toUpperCase()}${problem.slice(1)}` : null;
+  };
+
   /** Commits the calibration shown on screen (handles as the player left them). */
   const confirmCalibration = () => {
     if (!calibDraft) return;
@@ -1727,7 +1736,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setCalibDraft(null);
     resetLoop();
     setPhase("live");
-    setStatus(t(snapped ? "camera.calibSnapped" : "camera.calibratedReady"));
+    const hint = setupHintKey(snapped ?? calibDraft);
+    setStatus(t(hint ?? (snapped ? "camera.calibSnapped" : "camera.calibratedReady")));
     playCalibrationSuccessSound();
   };
 
