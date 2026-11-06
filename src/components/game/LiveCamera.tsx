@@ -27,7 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { detectDartTipsLocally, VISION_ANALYSIS_SIZE } from "@/utils/dartVision";
 import { detectDartsWithModel, detectCalibrationPointsWithModel, preloadDartModel, modelDiagnostics, MODEL_INPUT_SIZE, DART_MODEL_VERSION } from "@/utils/dartModel";
-import { buildDetectionRecord, type DetectedSnapshot } from "@/utils/detectionQuality";
+import { buildDetectionRecord, frameLuma, type DetectedSnapshot, type RoundContext } from "@/utils/detectionQuality";
 import { pointsFor, dartLabel } from "@/utils/x01Rules";
 import BoardCalibrator from "@/components/game/BoardCalibrator";
 import CameraScoreStrip from "@/components/game/CameraScoreStrip";
@@ -1516,6 +1516,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    */
   /** The whole camera picture, prepared for fitting the calibration onto the real wires of the board. */
   const wireFitCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** Quality telemetry: how well the calibration sat on the wires at its last check, and how often it was moved this round. */
+  const calibQualityRef = useRef<number | null>(null);
+  const refitsThisRoundRef = useRef(0);
   const prepareFrameForWireFit = () => {
     const v = videoRef.current;
     if (!v || !v.videoWidth || !v.videoHeight) return null;
@@ -1538,6 +1541,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     const prepared = prepareFrameForWireFit();
     if (!v || !prepared) return null;
     const fit = refineTapsToWires(prepared, taps);
+    if (fit) calibQualityRef.current = fit.quality;
     if (!fit || fit.quality < WIRE_FIT_CONFIDENT) return null;
     const radiusPx = Math.hypot((taps[3].x - taps[2].x) * v.videoWidth, (taps[3].y - taps[2].y) * v.videoHeight) / 2;
     const moved = fit.taps.some((p, i) => Math.hypot((p.x - taps[i].x) * v.videoWidth, (p.y - taps[i].y) * v.videoHeight) > maxMoveShare * radiusPx);
@@ -1565,6 +1569,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
     let fitted: { x: number; y: number }[] | null = null;
     const near = refineTapsToWires(prepared, taps);
+    if (near) calibQualityRef.current = near.quality;
     if (near && near.quality >= (dartsOnBoard ? CALIB_REFINE_MIN_QUALITY_WITH_DARTS : CALIB_REFINE_MIN_QUALITY)) {
       fitted = near.taps;
     } else {
@@ -1584,6 +1589,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // correct refit does not move them.)
     if (moved < (dartsOnBoard ? CALIB_REFINE_MIN_MOVE_WITH_DARTS : CALIB_REFINE_MIN_MOVE)) return;
     applyCalibrationTaps(fitted, calib.source ?? "manual", calib.confirmed ?? true, false);
+    refitsThisRoundRef.current += 1;
     // A correction the player could notice (about 1.5 mm and up) gets a soft cue; tiny drift stays silent and the cue
     // is rate-limited so a wobbling phone does not beep every two seconds.
     if (moved >= 0.03 && Date.now() - lastRecalibrationSoundRef.current > 20000) {
@@ -2476,8 +2482,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const commitRound = (darts: DetectedDart[]) => {
     setReviewOpen(false);
     if (pendingTrainingCaptureRef.current) {
-      void uploadTrainingSample(pendingTrainingCaptureRef.current, darts, buildDetectionRecord(darts, removedDetectionsRef.current, DART_MODEL_VERSION));
+      const picture = lastStableModelFrameRef.current ?? emptyModelFrameRef.current;
+      const luma = picture ? frameLuma(picture) : null;
+      const context: RoundContext = {
+        ...(luma ?? {}),
+        ...(calibQualityRef.current !== null ? { calibQuality: Math.round(calibQualityRef.current * 100) / 100 } : {}),
+        refits: refitsThisRoundRef.current,
+        ...(calib.source ? { calibSource: calib.source } : {}),
+      };
+      void uploadTrainingSample(pendingTrainingCaptureRef.current, darts, buildDetectionRecord(darts, removedDetectionsRef.current, DART_MODEL_VERSION, context));
     }
+    refitsThisRoundRef.current = 0;
     removedDetectionsRef.current = [];
     setLastCommittedCount(Math.min(3, darts.length));
     onRoundCommit(darts.slice(0, dartsRemaining));

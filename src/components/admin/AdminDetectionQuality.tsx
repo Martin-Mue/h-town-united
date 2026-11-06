@@ -4,9 +4,11 @@ import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { supabase } from "@/integrations/supabase/client";
 import {
   CLOSE_TIP_MM,
+  CONDITION_SPLITS,
   NEAR_TIP_MM,
   evaluateLegacy,
   evaluateRecorded,
+  groupByCondition,
   groupByModel,
   groupByPeriod,
   meanOf,
@@ -65,6 +67,13 @@ const AdminDetectionQuality = () => {
   const legacy = useMemo(() => (samples ? evaluateLegacy(samples) : null), [samples]);
   const periods = useMemo(() => (samples ? groupByPeriod(samples, by) : []), [samples, by]);
   const models = useMemo(() => (samples ? groupByModel(samples) : []), [samples]);
+  const conditionTables = useMemo(
+    () =>
+      samples
+        ? CONDITION_SPLITS.map((s) => ({ id: s.id, title: s.title, rows: groupByCondition(samples, s.bucket) })).filter((t) => t.rows.length > 0)
+        : [],
+    [samples],
+  );
 
   if (failed) return <p className="text-xs text-muted-foreground">Erkennungsqualität konnte nicht geladen werden.</p>;
   if (!samples || !recorded || !legacy) {
@@ -134,6 +143,24 @@ const AdminDetectionQuality = () => {
             </div>
             <FiguresTable rows={periods.map((p) => ({ key: p.period, label: by === "week" ? `ab ${dayLabel(p.period)}` : dayLabel(p.period), figures: p.figures }))} />
           </div>
+
+          {conditionTables.length > 0 && (
+            <div className="space-y-3">
+              <div>
+                <h4 className="text-xs font-semibold uppercase text-muted-foreground">Nach Bedingungen</h4>
+                <p className="text-[11px] text-muted-foreground">
+                  Warum schwanken Runden? Hier siehst du, bei welchem Licht, Kontrast und Kalibriersitz die Kamera öfter korrigiert werden musste.
+                  Gefüllt erst mit Runden aus der neuen Version.
+                </p>
+              </div>
+              {conditionTables.map((t) => (
+                <div key={t.id} className="space-y-1">
+                  <p className="text-xs font-medium">{t.title}</p>
+                  <FiguresTable rows={t.rows.map((r) => ({ key: r.label, label: r.label, figures: r.figures }))} />
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="space-y-2">
             <h4 className="text-xs font-semibold uppercase text-muted-foreground">Nach Modellversion</h4>

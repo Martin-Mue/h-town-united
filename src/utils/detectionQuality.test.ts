@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONDITION_SPLITS,
   buildDetectionRecord,
+  frameLuma,
+  groupByCondition,
   evaluateLegacy,
   evaluateRecorded,
   groupByModel,
@@ -9,6 +12,7 @@ import {
   parseDetectionRecord,
   shareWithin,
   type QualitySample,
+  type RoundContext,
 } from "./detectionQuality";
 
 const snap = (u: number, v: number, baseValue = 20, multiplier = 1, confidence = 0.8) => ({ baseValue, multiplier, confidence, boardU: u, boardV: v });
@@ -97,5 +101,32 @@ describe("parseDetectionRecord", () => {
     expect(parseDetectionRecord(null)).toBeNull();
     expect(parseDetectionRecord({ detection: { version: 2 } })).toBeNull();
     expect(parseDetectionRecord({ detection: { version: 1, darts: [{ outcome: "moved", distanceMm: 3, confidence: 1 }] } })?.model).toBe("unbekannt");
+  });
+});
+
+describe("round context", () => {
+  it("measures brightness and contrast of a picture", () => {
+    const flat = { width: 2, height: 2, data: new Uint8ClampedArray(16).fill(100) };
+    expect(frameLuma(flat)).toEqual({ brightness: 100, contrast: 0 });
+    const split = { width: 2, height: 1, data: new Uint8ClampedArray([0, 0, 0, 255, 200, 200, 200, 255]) };
+    expect(frameLuma(split)).toEqual({ brightness: 100, contrast: 100 });
+    expect(frameLuma({ width: 0, height: 0, data: [] })).toBeNull();
+  });
+
+  it("round-trips the context and ignores junk", () => {
+    const record = buildDetectionRecord([], [], "v", { brightness: 90, refits: 1, calibSource: "auto" });
+    expect(parseDetectionRecord({ detection: record })?.context).toEqual({ brightness: 90, refits: 1, calibSource: "auto", contrast: undefined, calibQuality: undefined });
+    expect(parseDetectionRecord({ detection: { ...record, context: { brightness: "x" } } })?.context).toBeUndefined();
+  });
+
+  it("splits recorded rounds by condition and skips rounds without that fact", () => {
+    const sample = (context?: RoundContext): QualitySample => ({
+      createdAt: "2026-11-01T10:00:00Z",
+      labels: [],
+      detection: buildDetectionRecord([], [], "v", context),
+    });
+    const brightness = CONDITION_SPLITS.find((s) => s.id === "brightness")!.bucket;
+    const rows = groupByCondition([sample({ brightness: 50 }), sample({ brightness: 60 }), sample({ brightness: 120 }), sample()], brightness);
+    expect(rows.map((r) => [r.label, r.figures.rounds])).toEqual([["dunkel (<80)", 2], ["mittel (80–170)", 1]]);
   });
 });

@@ -41,6 +41,23 @@ export type DartRecord = {
   confidence: number | null;
 };
 
+/**
+ * The circumstances of a round, so that good and bad rounds can be told apart by their conditions
+ * instead of guessed about. All fields are optional: records made before this existed have none.
+ */
+export type RoundContext = {
+  /** Mean brightness of the straightened board picture, 0-255. */
+  brightness?: number;
+  /** Spread of brightness (standard deviation, 0-128): low = flat, washed-out or very dark picture. */
+  contrast?: number;
+  /** How well the calibration sat on the board's wires at its last check, 0-1. */
+  calibQuality?: number;
+  /** How often the calibration was moved back onto the board while this round was played. */
+  refits?: number;
+  /** "auto" (found by the model) or "manual" (tapped by hand). */
+  calibSource?: "auto" | "manual";
+}
+
 export type DetectionRecord = {
   version: 1;
   /** Model file version the detections came from (see DART_MODEL_VERSION). */
@@ -48,6 +65,26 @@ export type DetectionRecord = {
   darts: DartRecord[];
   /** Darts the detector reported that the player deleted. */
   removed: number;
+  context?: RoundContext;
+};
+
+/** Brightness and contrast of a picture, sampled sparsely (about 4000 pixels) so it costs next to nothing. */
+export const frameLuma = (img: { data: ArrayLike<number>; width: number; height: number }): { brightness: number; contrast: number } | null => {
+  const pixels = img.width * img.height;
+  if (pixels <= 0 || img.data.length < pixels * 4) return null;
+  const step = Math.max(1, Math.floor(pixels / 4000));
+  let n = 0;
+  let sum = 0;
+  let sumSq = 0;
+  for (let i = 0; i < pixels; i += step) {
+    const o = i * 4;
+    const y = 0.299 * img.data[o] + 0.587 * img.data[o + 1] + 0.114 * img.data[o + 2];
+    sum += y;
+    sumSq += y * y;
+    n += 1;
+  }
+  const mean = sum / n;
+  return { brightness: Math.round(mean), contrast: Math.round(Math.sqrt(Math.max(0, sumSq / n - mean * mean))) };
 };
 
 const tipDistanceMm = (a?: DetectedSnapshot, b?: FinalDart): number | null => {
@@ -60,10 +97,12 @@ export const buildDetectionRecord = (
   finalDarts: FinalDart[],
   removedDetections: unknown[],
   model: string,
+  context?: RoundContext,
 ): DetectionRecord => ({
   version: 1,
   model,
   removed: removedDetections.length,
+  ...(context ? { context } : {}),
   darts: finalDarts.map((d): DartRecord => {
     if (!d.detected) {
       return { outcome: d.baseValue === 0 ? "addedMiss" : "added", distanceMm: null, confidence: null };
@@ -230,6 +269,67 @@ export const groupByModel = (samples: QualitySample[]): { model: string; figures
     .map(([model, group]) => ({ model, figures: evaluateRecorded(group) }));
 };
 
+/** Condition buckets the admin view splits rounds by; each returns null when the record lacks that fact. */
+export const CONDITION_SPLITS: { id: string; title: string; bucket: (c: RoundContext) => string | null }[] = [
+  {
+    id: "brightness",
+    title: "Helligkeit",
+    bucket: (c) => (c.brightness === undefined ? null : c.brightness < 80 ? "dunkel (<80)" : c.brightness > 170 ? "sehr hell (>170)" : "mittel (80–170)"),
+  },
+  {
+    id: "contrast",
+    title: "Kontrast",
+    bucket: (c) => (c.contrast === undefined ? null : c.contrast < 35 ? "flach (<35)" : "normal (≥35)"),
+  },
+  {
+    id: "calibQuality",
+    title: "Kalibriersitz",
+    bucket: (c) => (c.calibQuality === undefined ? null : c.calibQuality < 0.6 ? "schwach (<0,6)" : c.calibQuality < 0.8 ? "ok (0,6–0,8)" : "stark (≥0,8)"),
+  },
+  {
+    id: "refits",
+    title: "Nachkalibrierungen in der Runde",
+    bucket: (c) => (c.refits === undefined ? null : c.refits === 0 ? "keine" : "mindestens eine"),
+  },
+  {
+    id: "calibSource",
+    title: "Kalibrierung",
+    bucket: (c) => (c.calibSource === undefined ? null : c.calibSource === "auto" ? "automatisch" : "von Hand"),
+  },
+];
+
+/** Recorded samples split by one condition; samples without that fact are left out. */
+export const groupByCondition = (
+  samples: QualitySample[],
+  bucket: (c: RoundContext) => string | null,
+): { label: string; figures: QualityFigures }[] => {
+  const groups = new Map<string, QualitySample[]>();
+  for (const s of samples) {
+    if (!s.detection?.context) continue;
+    const label = bucket(s.detection.context);
+    if (label === null) continue;
+    groups.set(label, [...(groups.get(label) ?? []), s]);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, group]) => ({ label, figures: evaluateRecorded(group) }));
+};
+
+const finiteOrUndefined = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+
+const parseContext = (raw: unknown): RoundContext | undefined => {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const context: RoundContext = {
+    brightness: finiteOrUndefined(r.brightness),
+    contrast: finiteOrUndefined(r.contrast),
+    calibQuality: finiteOrUndefined(r.calibQuality),
+    refits: finiteOrUndefined(r.refits),
+    calibSource: r.calibSource === "auto" || r.calibSource === "manual" ? r.calibSource : undefined,
+  };
+  return Object.values(context).some((v) => v !== undefined) ? context : undefined;
+};
+
 /** Reads `calibration_meta.detection` defensively: older or foreign shapes give null. */
 export const parseDetectionRecord = (meta: unknown): DetectionRecord | null => {
   const raw = (meta as { detection?: unknown } | null)?.detection as Partial<DetectionRecord> | undefined;
@@ -238,6 +338,7 @@ export const parseDetectionRecord = (meta: unknown): DetectionRecord | null => {
     version: 1,
     model: typeof raw.model === "string" ? raw.model : "unbekannt",
     removed: typeof raw.removed === "number" ? raw.removed : 0,
+    context: parseContext(raw.context),
     darts: raw.darts.filter((d): d is DartRecord => !!d && typeof d.outcome === "string"),
   };
 };
