@@ -59,6 +59,7 @@ import {
 import {
   playCalibrationSuccessSound,
   playDartDetectedSound,
+  playRecalibrationSound,
   playRoundCommittedSound,
   playScanStartSound,
 } from "@/utils/sounds";
@@ -1549,6 +1550,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
    * the picture shows the board clearly — if it is gone or only partly visible the fit is weak and nothing
    * changes, so the last good calibration stays.
    */
+  const lastRecalibrationSoundRef = useRef(0);
   const refineCalibrationQuietly = () => {
     const taps = calib.taps;
     const v = videoRef.current;
@@ -1582,6 +1584,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // correct refit does not move them.)
     if (moved < (dartsOnBoard ? CALIB_REFINE_MIN_MOVE_WITH_DARTS : CALIB_REFINE_MIN_MOVE)) return;
     applyCalibrationTaps(fitted, calib.source ?? "manual", calib.confirmed ?? true, false);
+    // A correction the player could notice (about 1.5 mm and up) gets a soft cue; tiny drift stays silent and the cue
+    // is rate-limited so a wobbling phone does not beep every two seconds.
+    if (moved >= 0.03 && Date.now() - lastRecalibrationSoundRef.current > 20000) {
+      lastRecalibrationSoundRef.current = Date.now();
+      playRecalibrationSound();
+    }
 
     // The reference pictures of this round were straightened with the old calibration; take them again with the new one
     // so later comparisons are made in one and the same picture.

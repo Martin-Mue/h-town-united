@@ -7,6 +7,29 @@ const audioCtx = typeof window !== "undefined"
   ? new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
   : null;
 
+/**
+ * Browsers (iPhone Safari above all) keep the audio context muted until a tap has started it. Camera sounds are
+ * triggered by the picture, not by a tap, so without this the calibration chime could stay silent for a whole session.
+ * The first touch/click/key anywhere starts the context (and plays one silent sample, which iOS needs).
+ */
+function unlockAudioOnFirstGesture() {
+  if (!audioCtx || typeof window === "undefined") return;
+  const events = ["pointerdown", "touchend", "click", "keydown"] as const;
+  const unlock = () => {
+    try {
+      if (audioCtx.state === "suspended") void audioCtx.resume();
+      const buffer = audioCtx.createBuffer(1, 1, 22050);
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.start(0);
+    } catch { /* audio is a nicety; never break the app over it */ }
+    if (audioCtx.state === "running") events.forEach((e) => window.removeEventListener(e, unlock, true));
+  };
+  events.forEach((e) => window.addEventListener(e, unlock, true));
+}
+unlockAudioOnFirstGesture();
+
 function playTone(frequency: number, duration: number, type: OscillatorType = "sine", volume = 0.15) {
   if (!audioCtx) return;
   // Resume context if suspended (autoplay policy)
@@ -93,6 +116,13 @@ export function playCalibrationSuccessSound() {
     setTimeout(() => playTone(freq, i === 2 ? 0.28 : 0.12, "sine", 0.13), i * 110);
   });
   vibrate([60, 40, 60]);
+}
+
+/** The calibration was corrected while playing (phone nudged) — a short, soft two-note "snapped back" cue. */
+export function playRecalibrationSound() {
+  playTone(659, 0.09, "sine", 0.09);
+  setTimeout(() => playTone(880, 0.16, "sine", 0.1), 90);
+  vibrate(40);
 }
 
 /** AI scan is starting */
