@@ -2849,10 +2849,21 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
         <div ref={stageRef} className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto p-2">
+      {/* The correction view is a popup over the live picture (it used to replace the picture): the camera stays
+          where it is, and a tap beside the popup closes it when nothing is waiting for a decision. */}
       {showReview && (
-        <div ref={reviewAnchorRef} className="w-full animate-in fade-in zoom-in-95 duration-300">
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-background/70 p-3 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={(e) => { if (e.target === e.currentTarget && reviewOpen && !needsReview) closeReview(); }}
+        >
+        <div
+          ref={reviewAnchorRef}
+          role="dialog"
+          aria-modal="true"
+          className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-3 shadow-elevation-lg animate-in zoom-in-95 duration-200"
+        >
         <DartReviewFrame
-          maxSide={stageHeight > 0 ? `${Math.max(170, stageHeight - 200)}px` : `calc(100dvh - ${isLandscape ? "7rem" : "24rem"})`}
+          maxSide={`calc(100dvh - ${isLandscape ? "9rem" : "17rem"})`}
           imageUrl={reviewFrame.url}
           darts={accumulated.filter((d) => !d.assumedMiss).map((d) => ({ x: d.x ?? 0.5, y: d.y ?? 0.5, baseValue: d.baseValue, multiplier: d.multiplier }))}
           selectedIndex={selectedReviewIndex}
@@ -2884,12 +2895,19 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             </Button>
           )}
         </div>
+        {needsReview && (
+          <Button size="lg" className="mt-2 h-12 w-full gap-1.5 font-display text-base uppercase" onClick={() => commitRound(accumulated)}>
+            <Check className="h-4 w-4" /> {t("camera.accept")} · {roundTotal}
+            {autoCommitLeft !== null && <span className="tabular-nums">({Math.max(0, autoCommitLeft)})</span>}
+          </Button>
+        )}
+        </div>
         </div>
       )}
 
 
       <div
-        className={`relative mx-auto shrink-0 overflow-hidden rounded-lg border border-border bg-muted animate-in fade-in duration-300 ${showReview ? "hidden" : ""}`}
+        className={`relative mx-auto shrink-0 overflow-hidden rounded-lg border border-border bg-muted animate-in fade-in duration-300`}
         style={{
           aspectRatio: videoSize ? `${videoSize.w} / ${videoSize.h}` : "1 / 1",
           width: stageHeight > 0
