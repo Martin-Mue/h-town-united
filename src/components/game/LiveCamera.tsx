@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Flag,
   Keyboard,
   RotateCcw,
   Settings,
@@ -109,6 +110,8 @@ export interface DetectedDart {
   /** What the detector reported for this dart when it was found; stays unchanged through the player's corrections
    *  so the finished round can be compared with it (see detectionQuality). Absent on darts the player added. */
   detected?: DetectedSnapshot;
+  /** The player left this dart as recognised although it is wrong, on purpose, so it can be relabelled later. A correction clears it. */
+  flaggedWrong?: boolean;
 }
 
 interface LiveCameraProps {
@@ -1397,8 +1400,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // DART_SCORE_THRESHOLD against this data later.
       const labels = darts
         .filter(hasPosition)
-        .map((d) => ({ x: d.x, y: d.y, baseValue: d.baseValue, multiplier: d.multiplier, boardU: d.boardU, boardV: d.boardV, confidence: d.confidence, snapped: d.snapped === true }));
+        .map((d) => ({ x: d.x, y: d.y, baseValue: d.baseValue, multiplier: d.multiplier, boardU: d.boardU, boardV: d.boardV, confidence: d.confidence, snapped: d.snapped === true, ...(d.flaggedWrong ? { flaggedWrong: true } : {}) }));
       if (labels.length === 0) return;
+      const flaggedCount = labels.filter((l) => "flaggedWrong" in l).length;
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
       if (!userId) return;
@@ -1428,6 +1432,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         // angle instead of accumulating blind to how skewed its coverage is toward one setup.
         camera_zoom: calib.zoom,
         calib_taps: calib.taps ?? null,
+        // A round with a dart the player marked as wrong must never pass as a confirmed label: it waits for a human check.
+        ...(flaggedCount > 0 ? { review_status: "needs_review", ai_notes: `Vom Spieler als falsch erkannt markiert (${flaggedCount} Dart${flaggedCount > 1 ? "s" : ""}), bewusst nicht korrigiert.` } : {}),
       };
       const { error: insertError } = await supabase.from("training_samples").insert({ ...row, calibration_meta: calibrationMeta });
       // Until the calibration_meta column exists in a given database, PostgREST rejects the whole
@@ -2699,7 +2705,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setAccumulated((prev) => {
       const d = prev[index];
       if (!d) return prev;
-      let updated: DetectedDart = { ...d, x, y, confidence: 1, snapped: false, assumedMiss: false };
+      let updated: DetectedDart = { ...d, x, y, confidence: 1, snapped: false, assumedMiss: false, flaggedWrong: false };
       if (transform && full) {
         const scored = scoreFromBoardPoint(full.fx, full.fy, transform);
         updated = { ...updated, baseValue: scored.baseValue, multiplier: scored.multiplier, points: scored.points, boardU: scored.u, boardV: scored.v };
@@ -2738,8 +2744,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         points: pointsFor(choice.baseValue, choice.multiplier),
         confidence: 1,
         snapped: true,
+        flaggedWrong: false,
         ...(position ? { x: position.x, y: position.y, boardU: target.x, boardV: target.y } : {}),
       };
+      return next;
+    });
+  };
+
+  /** Marks dart `index` as wrongly recognised (left as it is, to be relabelled later) or takes the mark back. */
+  const toggleFlaggedWrong = (index: number) => {
+    setAccumulated((prev) => {
+      const d = prev[index];
+      if (!d) return prev;
+      const next = [...prev];
+      next[index] = { ...d, flaggedWrong: !d.flaggedWrong };
       return next;
     });
   };
@@ -2887,6 +2905,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           {selectedReviewIndex !== null && (
             <Button variant="outline" size="sm" className="gap-1.5 text-destructive" onClick={() => setConfirmRemoveIndex(selectedReviewIndex)}>
               <Trash2 className="h-4 w-4" /> {t("camera.removeDartTitle")}
+            </Button>
+          )}
+          {selectedReviewIndex !== null && accumulated[selectedReviewIndex] && (
+            <Button
+              variant={accumulated[selectedReviewIndex].flaggedWrong ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => toggleFlaggedWrong(selectedReviewIndex)}
+              title={t("camera.flagWrongHint")}
+            >
+              <Flag className="h-4 w-4" /> {t(accumulated[selectedReviewIndex].flaggedWrong ? "camera.flagWrongOn" : "camera.flagWrong")}
             </Button>
           )}
           {reviewOpen && !needsReview && (
@@ -3255,7 +3284,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                   } ${justAddedIndex === i ? "animate-scale-in ring-2 ring-accent" : ""} ${selected ? "ring-2 ring-accent" : ""}`}
                 >
                   <span className="font-display text-3xl leading-none">{miss ? t("game.miss") : dartLabel(d)}{d.assumedMiss ? "?" : ""}</span>
-                  <span className="mt-1 text-xs text-muted-foreground">{d.points}</span>
+                  <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">{d.flaggedWrong && <Flag className="h-3 w-3 text-destructive" />}{d.points}</span>
                 </button>
               );
             })}

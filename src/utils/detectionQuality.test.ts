@@ -4,6 +4,8 @@ import {
   buildDetectionRecord,
   frameLuma,
   groupByCondition,
+  groupByNeighborDistance,
+  nearestNeighborMm,
   evaluateLegacy,
   evaluateRecorded,
   groupByModel,
@@ -37,7 +39,7 @@ describe("buildDetectionRecord", () => {
 
   it("leaves the distance unknown without positions", () => {
     const record = buildDetectionRecord([{ baseValue: 20, multiplier: 1, detected: { baseValue: 20, multiplier: 1, confidence: 0.5 } }], [], "m1");
-    expect(record.darts[0]).toEqual({ outcome: "unchanged", distanceMm: null, confidence: 0.5 });
+    expect(record.darts[0]).toEqual({ outcome: "unchanged", distanceMm: null, confidence: 0.5, neighborMm: null });
   });
 });
 
@@ -128,5 +130,35 @@ describe("round context", () => {
     const brightness = CONDITION_SPLITS.find((s) => s.id === "brightness")!.bucket;
     const rows = groupByCondition([sample({ brightness: 50 }), sample({ brightness: 60 }), sample({ brightness: 120 }), sample()], brightness);
     expect(rows.map((r) => [r.label, r.figures.rounds])).toEqual([["dunkel (<80)", 2], ["mittel (80–170)", 1]]);
+  });
+});
+
+describe("flagged darts and neighbour distance", () => {
+  it("finds the nearest neighbour in mm", () => {
+    const darts = [{ boardU: 0, boardV: 0 }, { boardU: 0.1, boardV: 0 }, { boardU: 0.8, boardV: 0 }, {}];
+    expect(nearestNeighborMm(darts, 0)).toBeCloseTo(17, 5);
+    expect(nearestNeighborMm(darts, 2)).toBeCloseTo(0.7 * 170, 5);
+    expect(nearestNeighborMm(darts, 3)).toBeNull();
+    expect(nearestNeighborMm([{ boardU: 0, boardV: 0 }], 0)).toBeNull();
+  });
+
+  it("records a flagged dart as an error, not as unchanged", () => {
+    const detected = { baseValue: 20, multiplier: 1, confidence: 0.7, boardU: 0, boardV: 0 };
+    const record = buildDetectionRecord([{ baseValue: 20, multiplier: 1, boardU: 0, boardV: 0, detected, flaggedWrong: true }], [], "v");
+    expect(record.darts[0].outcome).toBe("flagged");
+    const figures = evaluateRecorded([{ createdAt: "2026-11-01T10:00:00Z", labels: [], detection: record }]);
+    expect(figures.counts.flagged).toBe(1);
+    expect(figures.untouchedRounds).toBe(0);
+  });
+
+  it("splits darts by neighbour distance", () => {
+    const detected = (u: number) => ({ baseValue: 20, multiplier: 1, confidence: 0.9, boardU: u, boardV: 0 });
+    const tight = [
+      { baseValue: 20, multiplier: 1, boardU: 0, boardV: 0, detected: detected(0) },
+      { baseValue: 20, multiplier: 1, boardU: 0.05, boardV: 0, detected: detected(0.05), flaggedWrong: true },
+    ];
+    const rows = groupByNeighborDistance([{ createdAt: "2026-11-01T10:00:00Z", labels: [], detection: buildDetectionRecord(tight, [], "v") }]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ label: "Kopf an Kopf (<12 mm)", darts: 2, unchanged: 1, flagged: 1 });
   });
 });

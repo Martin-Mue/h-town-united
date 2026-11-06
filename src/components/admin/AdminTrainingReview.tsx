@@ -17,6 +17,8 @@ interface SampleLabel {
   multiplier: number;
   /** Score picked from the correction chips: the position is a field centre, not a measured tip. */
   snapped?: boolean;
+  /** The player marked this dart as wrongly recognised and left it uncorrected. */
+  flaggedWrong?: boolean;
 }
 
 interface TrainingSample {
@@ -323,7 +325,7 @@ const AdminTrainingReview = () => {
                 {sample.labels.map((d, i) => (
                   <span
                     key={i}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 rounded bg-primary px-1 text-[10px] font-bold text-primary-foreground"
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 rounded px-1 text-[10px] font-bold ${d.flaggedWrong ? "bg-destructive text-destructive-foreground ring-2 ring-destructive" : "bg-primary text-primary-foreground"}`}
                     style={{ left: `${d.x * 100}%`, top: `${d.y * 100}%` }}
                   >
                     {dartText(d)}
@@ -331,13 +333,13 @@ const AdminTrainingReview = () => {
                 ))}
               </div>
               <p className="text-xs">
-                <span className="text-muted-foreground">Gespeichert:</span> {sample.labels.map(dartText).join(", ") || "–"}
+                <span className="text-muted-foreground">Gespeichert:</span> {sample.labels.map((d) => dartText(d) + (d.flaggedWrong ? " ⚑" : "")).join(", ") || "–"}
                 {sample.ai_segments && <> · <span className="text-muted-foreground">KI:</span> {sample.ai_segments.map(dartText).join(", ") || "–"}</>}
               </p>
               {sample.ai_notes && <p className="text-xs text-muted-foreground">{sample.ai_notes}</p>}
               {(filter === "needs_review" || filter === "pending") && (
                 <div className="flex gap-2">
-                  <Button size="sm" className="flex-1 gap-1" onClick={() => decide(sample.id, "confirmed")}><Check className="w-4 h-4" /> Bestätigen</Button>
+                  <Button size="sm" className="flex-1 gap-1" disabled={sample.labels.some((d) => d.flaggedWrong)} title={sample.labels.some((d) => d.flaggedWrong) ? "Enthält als falsch markierte Darts: erst nachlabeln" : undefined} onClick={() => decide(sample.id, "confirmed")}><Check className="w-4 h-4" /> Bestätigen</Button>
                   <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => decide(sample.id, "rejected")}><X className="w-4 h-4" /> Verwerfen</Button>
                 </div>
               )}

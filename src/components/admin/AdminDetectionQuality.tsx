@@ -10,6 +10,7 @@ import {
   evaluateRecorded,
   groupByCondition,
   groupByModel,
+  groupByNeighborDistance,
   groupByPeriod,
   meanOf,
   parseDetectionRecord,
@@ -67,6 +68,7 @@ const AdminDetectionQuality = () => {
   const legacy = useMemo(() => (samples ? evaluateLegacy(samples) : null), [samples]);
   const periods = useMemo(() => (samples ? groupByPeriod(samples, by) : []), [samples, by]);
   const models = useMemo(() => (samples ? groupByModel(samples) : []), [samples]);
+  const neighborRows = useMemo(() => (samples ? groupByNeighborDistance(samples) : []), [samples]);
   const conditionTables = useMemo(
     () =>
       samples
@@ -110,6 +112,7 @@ const AdminDetectionQuality = () => {
             <Tile value={percent(share(c.moved, handled))} label="Verschoben" note={`${c.moved} von ${handled}`} />
             <Tile value={percent(share(c.valueChanged, handled))} label="Wert geändert" note={`${c.valueChanged} von ${handled}`} />
             <Tile value={String(c.removed)} label="Entfernt" note="vom Modell erkannt, gelöscht" />
+            <Tile value={percent(share(c.flagged, handled))} label="Falsch markiert" note={`${c.flagged} von ${handled}, unkorrigiert`} />
             <Tile value={String(c.added + c.addedMiss)} label="Ergänzt" note={`davon ${c.addedMiss} als Fehlwurf`} />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -143,6 +146,37 @@ const AdminDetectionQuality = () => {
             </div>
             <FiguresTable rows={periods.map((p) => ({ key: p.period, label: by === "week" ? `ab ${dayLabel(p.period)}` : dayLabel(p.period), figures: p.figures }))} />
           </div>
+
+          {neighborRows.length > 0 && (
+            <div className="space-y-1">
+              <h4 className="text-xs font-semibold uppercase text-muted-foreground">Nach Abstand zum nächsten Dart</h4>
+              <p className="text-[11px] text-muted-foreground">Enge Gruppen: wie oft stimmte die Erkennung, wie oft wurde korrigiert oder als falsch markiert.</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-muted-foreground">
+                      <th className="py-1 pr-2 font-normal">&nbsp;</th>
+                      <th className="py-1 pr-2 font-normal">Darts</th>
+                      <th className="py-1 pr-2 font-normal">unverändert</th>
+                      <th className="py-1 pr-2 font-normal">korrigiert</th>
+                      <th className="py-1 font-normal">falsch markiert</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {neighborRows.map((r) => (
+                      <tr key={r.label} className="border-t border-border/60 tabular-nums">
+                        <td className="py-1 pr-2">{r.label}</td>
+                        <td className="py-1 pr-2">{r.darts}</td>
+                        <td className="py-1 pr-2">{percent(share(r.unchanged, r.darts))}</td>
+                        <td className="py-1 pr-2">{percent(share(r.corrected, r.darts))}</td>
+                        <td className="py-1">{percent(share(r.flagged, r.darts))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {conditionTables.length > 0 && (
             <div className="space-y-3">

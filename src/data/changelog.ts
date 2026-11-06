@@ -1314,4 +1314,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Dart düzeltme artık canlı görüntü yerinde dururken açılır pencerede açılıyor. Kalibrasyondan sonra ışık veya oturma ideal değilse ipucu alırsın. Başarı sesi artık iPhone'da da çalışıyor.",
     },
   },
+  {
+    id: "2026-11-06-flag-wrong-dart",
+    date: "2026-11-06",
+    title: {
+      de: "Kamera: Falsch erkannte Darts markieren",
+      en: "Camera: mark wrongly detected darts",
+      fr: "Caméra : marquer les fléchettes mal détectées",
+      pl: "Kamera: oznaczanie błędnie wykrytych lotek",
+      nl: "Camera: verkeerd herkende darts markeren",
+      tr: "Kamera: yanlış algılanan dartları işaretle",
+    },
+    description: {
+      de: "Im Korrektur-Popup kannst du einen falsch erkannten Dart so lassen und als „Falsch erkannt“ markieren. Er wird später für das Training sauber nachgelabelt und verfälscht die Erkennungsstatistik nicht.",
+      en: "In the correction popup you can leave a wrongly detected dart as it is and mark it as “Wrongly detected”. It is relabelled properly for training later and does not distort the detection statistics.",
+      fr: "Dans la fenêtre de correction, tu peux laisser une fléchette mal détectée telle quelle et la marquer « Mal détectée ». Elle sera réétiquetée plus tard pour l'entraînement.",
+      pl: "W oknie poprawek możesz zostawić błędnie wykrytą lotkę bez zmian i oznaczyć ją jako „Błędnie wykryta”. Zostanie później poprawnie opisana do treningu.",
+      nl: "In het correctie-pop-up kun je een verkeerd herkende dart laten staan en markeren als „Verkeerd herkend”. Hij wordt later goed gelabeld voor de training.",
+      tr: "Düzeltme penceresinde yanlış algılanan bir darti olduğu gibi bırakıp „Yanlış algılandı“ olarak işaretleyebilirsin. Daha sonra eğitim için doğru etiketlenir.",
+    },
+  },
 ];

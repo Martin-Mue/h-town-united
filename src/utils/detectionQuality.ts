@@ -13,7 +13,7 @@ export const UNMOVED_TOLERANCE_MM = 1.5;
 export const NEAR_TIP_MM = 8.5;
 export const CLOSE_TIP_MM = 17;
 
-export type DartOutcome = "unchanged" | "moved" | "valueChanged" | "added" | "addedMiss";
+export type DartOutcome = "unchanged" | "moved" | "valueChanged" | "added" | "addedMiss" | "flagged";
 
 /** What the detector reported for a dart, frozen at the moment it was found. */
 export interface DetectedSnapshot {
@@ -26,6 +26,8 @@ export interface DetectedSnapshot {
 
 /** The parts of a committed dart this module needs. */
 export interface FinalDart {
+  /** The player left a wrongly recognised dart as it is and marked it for relabelling later. */
+  flaggedWrong?: boolean;
   baseValue: number;
   multiplier: number;
   boardU?: number;
@@ -39,6 +41,8 @@ export type DartRecord = {
   distanceMm: number | null;
   /** Detector confidence for this dart; null for darts the player added. */
   confidence: number | null;
+  /** Distance in mm to the nearest other dart of the same round; null when there is none or a position is unknown. */
+  neighborMm?: number | null;
 };
 
 /**
@@ -87,6 +91,22 @@ export const frameLuma = (img: { data: ArrayLike<number>; width: number; height:
   return { brightness: Math.round(mean), contrast: Math.round(Math.sqrt(Math.max(0, sumSq / n - mean * mean))) };
 };
 
+const finitePosition = (d: { boardU?: number; boardV?: number }) =>
+  typeof d.boardU === "number" && Number.isFinite(d.boardU) && typeof d.boardV === "number" && Number.isFinite(d.boardV);
+
+/** Distance from dart `index` to its nearest neighbour among the round's darts, in mm (tight groups are where detection struggles). */
+export const nearestNeighborMm = (darts: { boardU?: number; boardV?: number }[], index: number): number | null => {
+  const me = darts[index];
+  if (!me || !finitePosition(me)) return null;
+  let best: number | null = null;
+  darts.forEach((other, k) => {
+    if (k === index || !finitePosition(other)) return;
+    const d = Math.hypot(me.boardU! - other.boardU!, me.boardV! - other.boardV!) * DOUBLE_EDGE_MM;
+    if (best === null || d < best) best = d;
+  });
+  return best;
+};
+
 const tipDistanceMm = (a?: DetectedSnapshot, b?: FinalDart): number | null => {
   if (!a || !b) return null;
   if (![a.boardU, a.boardV, b.boardU, b.boardV].every((n) => typeof n === "number" && Number.isFinite(n))) return null;
@@ -103,9 +123,13 @@ export const buildDetectionRecord = (
   model,
   removed: removedDetections.length,
   ...(context ? { context } : {}),
-  darts: finalDarts.map((d): DartRecord => {
+  darts: finalDarts.map((d, index): DartRecord => {
+    const neighborMm = nearestNeighborMm(finalDarts, index);
+    if (d.flaggedWrong) {
+      return { outcome: "flagged", distanceMm: tipDistanceMm(d.detected, d), confidence: d.detected?.confidence ?? null, neighborMm };
+    }
     if (!d.detected) {
-      return { outcome: d.baseValue === 0 ? "addedMiss" : "added", distanceMm: null, confidence: null };
+      return { outcome: d.baseValue === 0 ? "addedMiss" : "added", distanceMm: null, confidence: null, neighborMm };
     }
     const distanceMm = tipDistanceMm(d.detected, d);
     const sameValue = d.detected.baseValue === d.baseValue && d.detected.multiplier === d.multiplier;
@@ -114,7 +138,7 @@ export const buildDetectionRecord = (
       : distanceMm !== null && distanceMm > UNMOVED_TOLERANCE_MM
         ? "moved"
         : "unchanged";
-    return { outcome, distanceMm, confidence: d.detected.confidence };
+    return { outcome, distanceMm, confidence: d.detected.confidence, neighborMm };
   }),
 });
 
@@ -133,6 +157,8 @@ export interface OutcomeCounts {
   valueChanged: number;
   added: number;
   addedMiss: number;
+  /** Darts the player marked as wrongly recognised and left uncorrected. */
+  flagged: number;
   removed: number;
 }
 
@@ -148,7 +174,7 @@ export interface QualityFigures {
   distances: number[];
 }
 
-const emptyCounts = (): OutcomeCounts => ({ unchanged: 0, moved: 0, valueChanged: 0, added: 0, addedMiss: 0, removed: 0 });
+const emptyCounts = (): OutcomeCounts => ({ unchanged: 0, moved: 0, valueChanged: 0, added: 0, addedMiss: 0, flagged: 0, removed: 0 });
 
 /** A recorded round is untouched when every dart is unchanged and none was removed. */
 const isUntouched = (r: DetectionRecord) => r.removed === 0 && r.darts.every((d) => d.outcome === "unchanged");
@@ -267,6 +293,40 @@ export const groupByModel = (samples: QualitySample[]): { model: string; figures
   return [...groups.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([model, group]) => ({ model, figures: evaluateRecorded(group) }));
+};
+
+/** Neighbour-distance buckets, nearest first. */
+export const NEIGHBOR_BUCKETS: { label: string; matches: (mm: number) => boolean }[] = [
+  { label: "Kopf an Kopf (<12 mm)", matches: (mm) => mm < 12 },
+  { label: "eng (12–25 mm)", matches: (mm) => mm >= 12 && mm < 25 },
+  { label: "mittel (25–50 mm)", matches: (mm) => mm >= 25 && mm < 50 },
+  { label: "frei (≥50 mm)", matches: (mm) => mm >= 50 },
+];
+
+export interface NeighborRow {
+  label: string;
+  darts: number;
+  unchanged: number;
+  flagged: number;
+  /** Corrected by the player in any way (moved, value changed). */
+  corrected: number;
+}
+
+/** How often darts were right, wrongly marked or corrected, by how close the next dart sat. */
+export const groupByNeighborDistance = (samples: QualitySample[]): NeighborRow[] => {
+  const rows: NeighborRow[] = NEIGHBOR_BUCKETS.map((b) => ({ label: b.label, darts: 0, unchanged: 0, flagged: 0, corrected: 0 }));
+  for (const s of samples) {
+    for (const d of s.detection?.darts ?? []) {
+      if (typeof d.neighborMm !== "number") continue;
+      const i = NEIGHBOR_BUCKETS.findIndex((b) => b.matches(d.neighborMm!));
+      if (i < 0) continue;
+      rows[i].darts += 1;
+      if (d.outcome === "unchanged") rows[i].unchanged += 1;
+      else if (d.outcome === "flagged") rows[i].flagged += 1;
+      else if (d.outcome === "moved" || d.outcome === "valueChanged") rows[i].corrected += 1;
+    }
+  }
+  return rows.filter((r) => r.darts > 0);
 };
 
 /** Condition buckets the admin view splits rounds by; each returns null when the record lacks that fact. */
