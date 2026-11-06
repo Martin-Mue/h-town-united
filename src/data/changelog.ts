@@ -1294,4 +1294,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Gerçekte neyi kullandığınızı görmek için uygulama artık hangi bölümlerin açıldığını anonim olarak sayıyor. İsim yok, üçüncü taraf yok. Ayarlar > Hesap bölümünden istediğin zaman kapatabilirsin.",
     },
   },
+  {
+    id: "2026-11-06-camera-popup-and-checks",
+    date: "2026-11-06",
+    title: {
+      de: "Kamera: Korrektur als Popup, Licht-Check, Erfolgston",
+      en: "Camera: corrections as a popup, light check, success chime",
+      fr: "Caméra : corrections en fenêtre, contrôle de la lumière, son de réussite",
+      pl: "Kamera: poprawki w oknie, kontrola światła, dźwięk powodzenia",
+      nl: "Camera: correcties als pop-up, lichtcheck, succesgeluid",
+      tr: "Kamera: düzeltmeler açılır pencerede, ışık kontrolü, başarı sesi",
+    },
+    description: {
+      de: "Beim Korrigieren von Darts bleibt das Live-Bild stehen, die Korrektur öffnet sich als Popup. Nach dem Kalibrieren gibt es einen Hinweis, wenn Licht oder Sitz nicht ideal sind. Der Erfolgston funktioniert jetzt auch auf dem iPhone, und eine Nachkalibrierung im Spiel meldet sich leise.",
+      en: "Correcting darts now opens a popup while the live picture stays put. After calibrating you get a hint if light or fit is not ideal. The success chime now also works on iPhone, and a recalibration during play gives a soft cue.",
+      fr: "La correction des fléchettes s'ouvre en fenêtre pendant que l'image reste en place. Après l'étalonnage, un conseil apparaît si la lumière ou l'alignement ne sont pas idéaux. Le son de réussite fonctionne aussi sur iPhone.",
+      pl: "Poprawianie lotek otwiera się w oknie, a obraz na żywo zostaje na miejscu. Po kalibracji dostaniesz wskazówkę, jeśli światło lub dopasowanie nie są idealne. Dźwięk powodzenia działa teraz także na iPhonie.",
+      nl: "Darts corrigeren opent nu als pop-up terwijl het live beeld blijft staan. Na het kalibreren krijg je een tip als licht of pasvorm niet ideaal is. Het succesgeluid werkt nu ook op iPhone.",
+      tr: "Dart düzeltme artık canlı görüntü yerinde dururken açılır pencerede açılıyor. Kalibrasyondan sonra ışık veya oturma ideal değilse ipucu alırsın. Başarı sesi artık iPhone'da da çalışıyor.",
+    },
+  },
 ];
