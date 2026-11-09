@@ -58,8 +58,8 @@ interface AiVerdict {
   labels?: SampleLabel[];
 }
 
-const dartText = (d: { baseValue: number; multiplier: number }) =>
-  d.baseValue === 0 ? "Miss" : d.baseValue === 50 ? "Bull" : `${["", "", "D", "T"][d.multiplier] ?? ""}${d.baseValue}`;
+const dartText = (d: { baseValue?: number; multiplier?: number }) =>
+  d.baseValue === undefined || d.multiplier === undefined ? "?" : d.baseValue === 0 ? "Miss" : d.baseValue === 50 ? "Bull" : `${["", "", "D", "T"][d.multiplier] ?? ""}${d.baseValue}`;
 
 /**
  * Admin queue for the training-data review pipeline: shows how many samples are in each state
@@ -314,13 +314,28 @@ const AdminTrainingReview = () => {
         // A verdict that carries corrected tips may also fix a sample that is already confirmed (re-check of old labels);
         // a plain verdict only ever touches samples that are still waiting for a decision.
         const correcting = Array.isArray(v.labels);
+        // New tips that come without a score (positions measured on old crop images, where the board geometry is unknown)
+        // inherit baseValue/multiplier from the nearest stored label when one is close enough; otherwise the score stays unset.
+        let newLabels = v.labels as Partial<SampleLabel>[] | undefined;
+        if (correcting && newLabels?.some((l) => l.baseValue === undefined)) {
+          const { data: current } = await supabase.from("training_samples").select("labels").eq("id", v.id).maybeSingle();
+          const old = ((current?.labels ?? []) as unknown as SampleLabel[]).filter((o) => typeof o.x === "number" && typeof o.y === "number");
+          newLabels = newLabels.map((l) => {
+            if (l.baseValue !== undefined || typeof l.x !== "number" || typeof l.y !== "number") return l;
+            const near = old.reduce<{ d: number; o: SampleLabel | null }>((best, o) => {
+              const d = Math.hypot(o.x - l.x!, o.y - l.y!);
+              return d < best.d ? { d, o } : best;
+            }, { d: Infinity, o: null });
+            return near.o && near.d < 0.08 ? { ...l, baseValue: near.o.baseValue, multiplier: near.o.multiplier } : l;
+          });
+        }
         const { error } = await supabase
           .from("training_samples")
           .update({
             review_status: v.status,
             ai_segments: v.ai_segments ?? null,
             ai_notes: v.notes ?? null,
-            ...(correcting ? { labels: v.labels as unknown as Json } : {}),
+            ...(correcting ? { labels: newLabels as unknown as Json } : {}),
             reviewed_at: new Date().toISOString(),
             reviewed_by: "ai",
           })
