@@ -169,54 +169,69 @@ const AdminTrainingReview = () => {
 
   const [exportingDataset, setExportingDataset] = useState(false);
 
-  /** Downloads every CONFIRMED sample (final after-image + dart tip positions) as one json file —
-   *  the input for scripts/build-yolo-dataset.mjs, which turns it into the folder layout the
-   *  Colab fine-tune expects. Only confirmed samples, so unreviewed labels never reach training. */
-  const exportDataset = async () => {
+  /** Downloads every CONFIRMED sample (final after-image + dart tip positions) as json — the input
+   *  for scripts/build-yolo-dataset.mjs, which turns it into the folder layout the Colab fine-tune
+   *  expects. Only confirmed samples, so unreviewed labels never reach training. With `partSize` the
+   *  export is split into several files (a single file of 1000+ inlined images gets too big for the browser). */
+  const exportDataset = async (partSize = Infinity) => {
     setExportingDataset(true);
     try {
-      let result = await supabase
+      // Paged: a plain select stops silently at the API's 1000-row cap.
+      const fetchPage = async (from: number, withMeta: boolean) => supabase
         .from("training_samples")
-        .select("id, after_path, labels, camera_zoom, image_size, calibration_meta")
+        .select(withMeta ? "id, after_path, labels, camera_zoom, image_size, calibration_meta" : "id, after_path, labels, camera_zoom, image_size")
         .eq("review_status", "confirmed")
-        .order("created_at", { ascending: true });
-      if (result.error && /calibration_meta/.test(result.error.message)) {
-        // Database without the calibration_meta column yet — export the rest.
-        const fallback = await supabase
-          .from("training_samples")
-          .select("id, after_path, labels, camera_zoom, image_size")
-          .eq("review_status", "confirmed")
-          .order("created_at", { ascending: true });
-        result = { ...fallback, data: fallback.data?.map((r) => ({ ...r, calibration_meta: null })) ?? null } as typeof result;
+        .order("created_at", { ascending: true })
+        .range(from, from + 999);
+      type Row = { id: string; after_path: string; labels: Json; camera_zoom: number | null; image_size: number | null; calibration_meta?: Json | null };
+      const rows: Row[] = [];
+      let withMeta = true;
+      for (let from = 0; ; from += 1000) {
+        let res = await fetchPage(from, withMeta);
+        if (res.error && withMeta && /calibration_meta/.test(res.error.message)) {
+          // Database without the calibration_meta column yet — export the rest.
+          withMeta = false;
+          res = await fetchPage(from, false);
+        }
+        if (res.error) throw res.error;
+        const page = (res.data ?? []) as unknown as Row[];
+        rows.push(...page);
+        if (page.length < 1000) break;
       }
-      const { data, error } = result;
-      if (error) throw error;
-      if (!data || data.length === 0) {
+      if (rows.length === 0) {
         toast({ title: "Nichts zu exportieren", description: "Es gibt noch keine bestätigten Samples." });
         return;
       }
-      const samples = [];
-      for (const row of data) {
-        const after = await supabase.storage.from("dart-training").download(row.after_path);
-        if (after.error || !after.data) continue;
-        const darts = (row.labels as unknown as SampleLabel[]).filter((d) => typeof d.x === "number" && typeof d.y === "number");
-        if (darts.length === 0) continue;
-        samples.push({
-          id: row.id,
-          camera_zoom: row.camera_zoom,
-          image_size: row.image_size,
-          calibration_meta: row.calibration_meta,
-          darts: darts.map((d) => ({ x: d.x, y: d.y, snapped: d.snapped === true })),
-          image: await blobToDataUrl(after.data),
-        });
+      const day = new Date().toISOString().slice(0, 10);
+      const parts = Number.isFinite(partSize) ? Math.ceil(rows.length / partSize) : 1;
+      let exported = 0;
+      for (let part = 0; part < parts; part++) {
+        const samples = [];
+        for (const row of rows.slice(part * partSize, Number.isFinite(partSize) ? (part + 1) * partSize : undefined)) {
+          const after = await supabase.storage.from("dart-training").download(row.after_path);
+          if (after.error || !after.data) continue;
+          const darts = (row.labels as unknown as SampleLabel[]).filter((d) => typeof d.x === "number" && typeof d.y === "number");
+          if (darts.length === 0) continue;
+          samples.push({
+            id: row.id,
+            camera_zoom: row.camera_zoom,
+            image_size: row.image_size,
+            calibration_meta: row.calibration_meta ?? null,
+            darts: darts.map((d) => ({ x: d.x, y: d.y, snapped: d.snapped === true })),
+            image: await blobToDataUrl(after.data),
+          });
+        }
+        const file = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), samples })], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(file);
+        link.download = parts > 1 ? `training-dataset-${day}-teil${part + 1}von${parts}.json` : `training-dataset-${day}.json`;
+        link.click();
+        // Give the browser time to start the download before the next (big) part is built.
+        await new Promise((r) => setTimeout(r, 1500));
+        URL.revokeObjectURL(link.href);
+        exported += samples.length;
       }
-      const file = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), samples })], { type: "application/json" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(file);
-      link.download = `training-dataset-${new Date().toISOString().slice(0, 10)}.json`;
-      link.click();
-      URL.revokeObjectURL(link.href);
-      toast({ title: `${samples.length} bestätigte Samples exportiert` });
+      toast({ title: `${exported} bestätigte Samples exportiert`, description: parts > 1 ? `In ${parts} Dateien.` : undefined });
     } catch (err) {
       toast({ title: "Export fehlgeschlagen", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
@@ -304,8 +319,11 @@ const AdminTrainingReview = () => {
         />
       </div>
 
-      <Button size="sm" variant="secondary" className="w-full gap-1" onClick={exportDataset} disabled={exportingDataset || counts.confirmed === 0}>
+      <Button size="sm" variant="secondary" className="w-full gap-1" onClick={() => void exportDataset()} disabled={exportingDataset || counts.confirmed === 0}>
         {exportingDataset ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Trainingsset exportieren ({counts.confirmed} bestätigt)
+      </Button>
+      <Button size="sm" variant="outline" className="w-full gap-1" onClick={() => void exportDataset(100)} disabled={exportingDataset || counts.confirmed === 0}>
+        <Download className="w-4 h-4" /> Bestätigte in Teilen zu je 100 exportieren (zur Durchsicht)
       </Button>
 
       <p className="text-xs text-muted-foreground">
