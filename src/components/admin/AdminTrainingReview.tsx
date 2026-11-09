@@ -39,7 +39,7 @@ const STATUS_LABELS: Record<ReviewStatus, string> = {
   rejected: "Verworfen",
 };
 
-const EXPORT_BATCH_SIZE = 40;
+const EXPORT_BATCH_SIZE = 100;
 
 const blobToDataUrl = (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
