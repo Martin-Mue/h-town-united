@@ -78,8 +78,13 @@ const AdminTrainingReview = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Counts per status via head requests: selecting all rows silently stops at the API's 1000-row cap.
+    const statuses: ReviewStatus[] = ["needs_review", "pending", "confirmed", "rejected"];
+    const countRes = await Promise.all(
+      statuses.map((s) => supabase.from("training_samples").select("id", { count: "exact", head: true }).eq("review_status", s)),
+    );
     const [overview, queueRes] = await Promise.all([
-      supabase.from("training_samples").select("review_status, camera_zoom"),
+      supabase.from("training_samples").select("camera_zoom").eq("review_status", "confirmed").range(0, 4999),
       supabase
         .from("training_samples")
         .select("id, after_path, labels, camera_zoom, review_status, ai_segments, ai_notes, created_at")
@@ -89,12 +94,10 @@ const AdminTrainingReview = () => {
     ]);
     const nextCounts: Record<ReviewStatus, number> = { needs_review: 0, pending: 0, confirmed: 0, rejected: 0 };
     const nextZooms: Record<string, number> = {};
+    statuses.forEach((s, i) => { nextCounts[s] = countRes[i].count ?? 0; });
     (overview.data ?? []).forEach((r) => {
-      nextCounts[r.review_status as ReviewStatus] += 1;
-      if (r.review_status === "confirmed") {
-        const key = r.camera_zoom === null ? "unbekannt" : `${r.camera_zoom}x`;
-        nextZooms[key] = (nextZooms[key] ?? 0) + 1;
-      }
+      const key = r.camera_zoom === null ? "unbekannt" : `${r.camera_zoom}x`;
+      nextZooms[key] = (nextZooms[key] ?? 0) + 1;
     });
     setCounts(nextCounts);
     setZoomCounts(nextZooms);
