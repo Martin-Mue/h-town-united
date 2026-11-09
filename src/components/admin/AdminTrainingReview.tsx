@@ -239,6 +239,69 @@ const AdminTrainingReview = () => {
     }
   };
 
+  const [exportingRejected, setExportingRejected] = useState(false);
+
+  /** Downloads the REJECTED samples (final image + full labels + calibration meta) in parts of 70, so
+   *  the ones thrown out only because of wrong labels can be relabelled and revived by importVerdicts. */
+  const exportRejected = async () => {
+    setExportingRejected(true);
+    try {
+      type Row = { id: string; after_path: string; labels: Json; camera_zoom: number | null; image_size: number | null; calibration_meta?: Json | null };
+      const rows: Row[] = [];
+      let withMeta = true;
+      for (let from = 0; ; from += 1000) {
+        const page = async (meta: boolean) => supabase
+          .from("training_samples")
+          .select(meta ? "id, after_path, labels, camera_zoom, image_size, calibration_meta" : "id, after_path, labels, camera_zoom, image_size")
+          .eq("review_status", "rejected")
+          .order("created_at", { ascending: true })
+          .range(from, from + 999);
+        let res = await page(withMeta);
+        if (res.error && withMeta && /calibration_meta/.test(res.error.message)) { withMeta = false; res = await page(false); }
+        if (res.error) throw res.error;
+        const got = (res.data ?? []) as unknown as Row[];
+        rows.push(...got);
+        if (got.length < 1000) break;
+      }
+      if (rows.length === 0) {
+        toast({ title: "Nichts zu exportieren", description: "Es gibt keine verworfenen Samples." });
+        return;
+      }
+      const partSize = 70;
+      const parts = Math.ceil(rows.length / partSize);
+      const day = new Date().toISOString().slice(0, 10);
+      let exported = 0;
+      for (let part = 0; part < parts; part++) {
+        const samples = [];
+        for (const row of rows.slice(part * partSize, (part + 1) * partSize)) {
+          const after = await supabase.storage.from("dart-training").download(row.after_path);
+          if (after.error || !after.data) continue;
+          samples.push({
+            id: row.id,
+            labels: row.labels,
+            camera_zoom: row.camera_zoom,
+            image_size: row.image_size,
+            calibration_meta: row.calibration_meta ?? null,
+            after: await blobToDataUrl(after.data),
+          });
+        }
+        const file = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), samples })], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(file);
+        link.download = `training-rejected-${day}-teil${part + 1}von${parts}.json`;
+        link.click();
+        await new Promise((r) => setTimeout(r, 1500));
+        URL.revokeObjectURL(link.href);
+        exported += samples.length;
+      }
+      toast({ title: `${exported} verworfene Samples exportiert`, description: `In ${parts} Dateien.` });
+    } catch (err) {
+      toast({ title: "Export fehlgeschlagen", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setExportingRejected(false);
+    }
+  };
+
   /** Applies a verdict file produced by the AI review (array of AiVerdict) to the matching rows. */
   const importVerdicts = async (file: File) => {
     try {
@@ -262,8 +325,8 @@ const AdminTrainingReview = () => {
             reviewed_by: "ai",
           })
           .eq("id", v.id)
-          // pending rows, and rows an earlier import left on "needs review" (so they can be corrected and confirmed later)
-          .in("review_status", correcting ? ["pending", "needs_review", "confirmed"] : ["pending", "needs_review"]);
+          // pending rows, and rows an earlier import left on "needs review" (so they can be corrected and confirmed later); a corrected-labels verdict also revives rejected ones
+          .in("review_status", correcting ? ["pending", "needs_review", "confirmed", "rejected"] : ["pending", "needs_review"]);
         if (!error) applied += 1;
       }
       toast({ title: `${applied} von ${verdicts.length} Ergebnissen übernommen` });
@@ -324,6 +387,9 @@ const AdminTrainingReview = () => {
       </Button>
       <Button size="sm" variant="outline" className="w-full gap-1" onClick={() => void exportDataset(100)} disabled={exportingDataset || counts.confirmed === 0}>
         <Download className="w-4 h-4" /> Bestätigte in Teilen zu je 100 exportieren (zur Durchsicht)
+      </Button>
+      <Button size="sm" variant="outline" className="w-full gap-1" onClick={() => void exportRejected()} disabled={exportingRejected || counts.rejected === 0}>
+        {exportingRejected ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Verworfene exportieren ({counts.rejected}, zur Durchsicht)
       </Button>
 
       <p className="text-xs text-muted-foreground">
