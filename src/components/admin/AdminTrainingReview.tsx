@@ -315,18 +315,31 @@ const AdminTrainingReview = () => {
         // a plain verdict only ever touches samples that are still waiting for a decision.
         const correcting = Array.isArray(v.labels);
         // New tips that come without a score (positions measured on old crop images, where the board geometry is unknown)
-        // inherit baseValue/multiplier from the nearest stored label when one is close enough; otherwise the score stays unset.
+        // inherit baseValue/multiplier from a close stored label (each used once); otherwise the score stays unset.
         let newLabels = v.labels as Partial<SampleLabel>[] | undefined;
         if (correcting && newLabels?.some((l) => l.baseValue === undefined)) {
           const { data: current } = await supabase.from("training_samples").select("labels").eq("id", v.id).maybeSingle();
           const old = ((current?.labels ?? []) as unknown as SampleLabel[]).filter((o) => typeof o.x === "number" && typeof o.y === "number");
-          newLabels = newLabels.map((l) => {
-            if (l.baseValue !== undefined || typeof l.x !== "number" || typeof l.y !== "number") return l;
-            const near = old.reduce<{ d: number; o: SampleLabel | null }>((best, o) => {
-              const d = Math.hypot(o.x - l.x!, o.y - l.y!);
-              return d < best.d ? { d, o } : best;
-            }, { d: Infinity, o: null });
-            return near.o && near.d < 0.08 ? { ...l, baseValue: near.o.baseValue, multiplier: near.o.multiplier } : l;
+          // One-to-one, closest pairs first, so a new dart never inherits the score of a neighbouring dart that is matched elsewhere.
+          const pairs: { i: number; j: number; d: number }[] = [];
+          newLabels.forEach((l, i) => {
+            if (l.baseValue !== undefined || typeof l.x !== "number" || typeof l.y !== "number") return;
+            old.forEach((o, j) => pairs.push({ i, j, d: Math.hypot(o.x - l.x!, o.y - l.y!) }));
+          });
+          pairs.sort((p1, p2) => p1.d - p2.d);
+          const usedNew = new Set<number>();
+          const usedOld = new Set<number>();
+          const inherited = new Map<number, SampleLabel>();
+          for (const pr of pairs) {
+            if (pr.d >= 0.05) break;
+            if (usedNew.has(pr.i) || usedOld.has(pr.j)) continue;
+            usedNew.add(pr.i);
+            usedOld.add(pr.j);
+            inherited.set(pr.i, old[pr.j]);
+          }
+          newLabels = newLabels.map((l, i) => {
+            const o = inherited.get(i);
+            return o ? { ...l, baseValue: o.baseValue, multiplier: o.multiplier } : l;
           });
         }
         const { error } = await supabase
