@@ -32,9 +32,9 @@ import os, shutil, zipfile
 
 drive.mount("/content/drive")
 DRIVE = "/content/drive/MyDrive/DeepDarts-Dataset/"
-# Neuestes Modell zuerst: v4 ist das, was gerade in der App läuft; tip ist der Stand davor.
-# Der Lauf, der das heutige Modell (v4) erzeugt hat, hat es unter dem alten Namen dartspot_tip_best.pt gesichert - die Datei
-# heisst also "tip", enthaelt aber v4 (das, was in der App laeuft). v5 war ein Lauf ohne Verbesserung, wird NICHT genommen.
+# Neuestes Modell zuerst: v10 (Lauf vom 2.11.2026) ist das, was gerade in der App laeuft.
+# Davor: dartspot_tip_best.pt enthaelt v4 (so hiess die Datei, als v4 entstand), dartspot_v4_best.pt ist dieselbe Sicherung.
+# v5 bis v9 waren Laeufe ohne Verbesserung und werden NICHT genommen.
 # Neuere Laeufe sichern unter dartspot_v11_best.pt usw. und werden nur dann hier eingetragen, wenn sie in die App gehen.
 # v10 (2026-11-02) ist das Modell in der App; es steht an erster Stelle.
 CANDIDATES = [DRIVE + "dartspot_v10_best.pt", DRIVE + "dartspot_tip_best.pt", DRIVE + "dartspot_v4_best.pt"]
