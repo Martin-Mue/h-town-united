@@ -1294,6 +1294,9 @@ export const translations: Record<string, Record<Language, string>> = {
   "series.deleteSeries": { de: "Serie löschen", en: "Delete series", fr: "Supprimer la série", pl: "Usuń serię", nl: "Reeks verwijderen", tr: "Seriyi sil" },
   "series.deleteSeriesConfirm": { de: "Serie löschen?", en: "Delete series?", fr: "Supprimer la série ?", pl: "Usunąć serię?", nl: "Reeks verwijderen?", tr: "Seri silinsin mi?" },
   "series.deleteSeriesWarning": { de: "wird gelöscht. Die enthaltenen Turniere bleiben erhalten, verlieren aber ihre Zuordnung zur Serie.", en: "will be deleted. The tournaments it contains stay intact but lose their assignment to the series.", fr: "sera supprimée. Les tournois qu'elle contient restent intacts mais perdent leur association à la série.", pl: "zostanie usunięta. Zawarte w niej turnieje pozostaną, ale stracą przypisanie do serii.", nl: "wordt verwijderd. De toernooien erin blijven behouden, maar verliezen hun koppeling aan de reeks.", tr: "silinecek. İçerdiği turnuvalar kalır ancak seriye atanmışlıkları kaybolur." },
+  "series.countLabel": { de: "{count} Serien", en: "{count} series", fr: "{count} séries", pl: "Serie: {count}", nl: "{count} reeksen", tr: "{count} seri" },
+  "series.colTournaments": { de: "Turniere", en: "Events", fr: "Tournois", pl: "Turnieje", nl: "Toern.", tr: "Turnuva" },
+  "series.colTitles": { de: "Titel", en: "Titles", fr: "Titres", pl: "Tytuły", nl: "Titels", tr: "Şamp." },
   // Round 3 Rang 7: League.tsx's first two i18n keys — the file otherwise still has no useLanguage()
   // call at all (a standalone, not-yet-fully-integrated page, unlike every other page in the app),
   // added here only for its two empty states (the "illustrated empty states" gap the audit found:
@@ -1943,6 +1946,9 @@ export const translations: Record<string, Record<Language, string>> = {
   "league.endSeasonConfirmBtn": { de: "Saison beenden", en: "End season", fr: "Terminer la saison", pl: "Zakończ sezon", nl: "Seizoen beëindigen", tr: "Sezonu bitir" },
   "league.seasonEndedTitle": { de: "Neue Saison gestartet", en: "New season started", fr: "Nouvelle saison démarrée", pl: "Rozpoczęto nowy sezon", nl: "Nieuw seizoen gestart", tr: "Yeni sezon başlatıldı" },
   "league.seasonEndFailedGeneric": { de: "Saison konnte nicht beendet werden.", en: "The season couldn't be ended.", fr: "La saison n'a pas pu être terminée.", pl: "Nie udało się zakończyć sezonu.", nl: "Het seizoen kon niet worden beëindigd.", tr: "Sezon bitirilemedi." },
+  "league.openFixturesCount": { de: "{count} offen", en: "{count} open", fr: "{count} à jouer", pl: "{count} otwartych", nl: "{count} open", tr: "{count} açık" },
+  "league.zonePromote": { de: "Aufstiegsplatz", en: "Promotion place", fr: "Place de montée", pl: "Miejsce awansu", nl: "Promotieplaats", tr: "Yükselme sırası" },
+  "league.zoneRelegate": { de: "Abstiegsplatz", en: "Relegation place", fr: "Place de relégation", pl: "Miejsce spadkowe", nl: "Degradatieplaats", tr: "Düşme sırası" },
 
   // ─── NotFound.tsx (Round 5) ─────────────────────────────────────────────
   // The last page that was still 100% the unmodified Lovable default-template English text.
