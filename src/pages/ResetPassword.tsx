@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import ClubCrest from "@/components/ClubCrest";
+import EntryPageShell from "@/components/entry/EntryPageShell";
+import EntryHeader from "@/components/entry/EntryHeader";
+import EntryCard from "@/components/entry/EntryCard";
+import ClubLogoTile from "@/components/entry/ClubLogoTile";
+import EntryPrimaryButton from "@/components/entry/EntryPrimaryButton";
+import { ENTRY_INPUT_CLASS } from "@/components/entry/entryFieldStyles";
 import { Eye, EyeOff } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { useNavigate } from "react-router-dom";
@@ -81,26 +85,14 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
-          <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
-          <div className="relative">
-            <ClubCrest
-              logoUrl={club?.logo_path ? logoUrl : null}
-              alt={clubName}
-              initial={clubName.charAt(0).toUpperCase()}
-            />
-            <h1 className="text-3xl font-display uppercase">{clubName}</h1>
-            {tagline && (
-              <p className="font-graffiti text-lg mt-1 -rotate-1 select-none text-primary drop-shadow-[0_0_10px_hsl(var(--primary)/0.4)]">
-                {tagline}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
-          <h2 className="font-display uppercase text-lg mb-4">{t("resetPassword.title")}</h2>
+    <EntryPageShell>
+      <EntryHeader
+        mark={<ClubLogoTile logoUrl={club?.logo_path ? logoUrl : null} name={clubName} />}
+        eyebrow={clubName}
+        title={t("resetPassword.title")}
+        subtitle={tagline}
+      />
+      <EntryCard>
           {!ready ? (
             <div role="status" aria-label={t("common.loading")} className="flex items-center justify-center py-8">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -110,27 +102,28 @@ const ResetPassword = () => {
               <p className="text-sm text-muted-foreground">
                 {t("resetPassword.linkExpiredMsg")}
               </p>
-              <Button className="w-full" onClick={() => navigate("/auth")}>{t("common.goToLoginBtn")}</Button>
+              <EntryPrimaryButton onClick={() => navigate("/auth")}>{t("common.goToLoginBtn")}</EntryPrimaryButton>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>{t("resetPassword.title")}</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="reset-password">{t("resetPassword.title")}</Label>
                 <div className="relative">
                   <Input
+                    id="reset-password"
                     type={show ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="new-password"
                     placeholder="••••••••"
-                    className="bg-muted border-border pr-10"
+                    className={`${ENTRY_INPUT_CLASS} pr-12`}
                     required
                     minLength={6}
                   />
                   <button
                     type="button"
                     onClick={() => setShow((s) => !s)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    className="absolute right-0 top-0 flex h-12 w-12 items-center justify-center text-muted-foreground hover:text-foreground"
                     tabIndex={-1}
                     aria-label={show ? t("auth.hidePassword") : t("auth.showPassword")}
                   >
@@ -138,36 +131,36 @@ const ResetPassword = () => {
                   </button>
                 </div>
               </div>
-              <div>
-                <Label>{t("resetPassword.repeatPasswordLabel")}</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="reset-password-repeat">{t("resetPassword.repeatPasswordLabel")}</Label>
                 <Input
+                  id="reset-password-repeat"
                   type={show ? "text" : "password"}
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   autoComplete="new-password"
                   placeholder="••••••••"
-                  className="bg-muted border-border"
+                  className={ENTRY_INPUT_CLASS}
                   required
                   minLength={6}
                 />
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" className="w-full" disabled={loading}>
+              <EntryPrimaryButton type="submit" disabled={loading}>
                 {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 {t("resetPassword.saveBtn")}
-              </Button>
+              </EntryPrimaryButton>
               <button
                 type="button"
                 onClick={() => navigate("/auth")}
-                className="w-full text-sm text-muted-foreground hover:text-foreground"
+                className="w-full min-h-11 text-sm text-muted-foreground hover:text-foreground"
               >
                 {t("common.cancel")}
               </button>
             </form>
           )}
-        </div>
-      </div>
-    </div>
+      </EntryCard>
+    </EntryPageShell>
   );
 };
 

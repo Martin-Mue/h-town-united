@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import { useQueryClient } from "@tanstack/react-query";
-import { Settings as SettingsIcon, Moon, Bell, FileText, TriangleAlert, Languages, Pencil, Check, X, Palette, BookOpen, SlidersHorizontal, KeyRound } from "lucide-react";
+import { Moon, Bell, TriangleAlert, Languages, Pencil, Check, X, Palette, BookOpen, SlidersHorizontal, KeyRound, BarChart3, type LucideIcon } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { usePlayers, PLAYERS_QUERY_KEY } from "@/hooks/usePlayers";
@@ -15,12 +14,12 @@ import { Switch } from "@/components/ui/switch";
 import { setUsageTrackingEnabled, usageTrackingEnabled } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LANGUAGES, type Language } from "@/i18n/translations";
-import { CLUB_THEME_PRESETS, resolveClubTheme, DEFAULT_CLUB_THEME_PRESET_ID } from "@/lib/clubThemePresets";
-import { SectionCard } from "@/components/stats/StatPrimitives";
-import ManageTabs, { type ManageTab } from "@/components/tournament/manage/ManageTabs";
+import SettingsSection from "@/components/settings/SettingsSection";
+import SettingsRow from "@/components/settings/SettingsRow";
+import SegmentedControl from "@/components/settings/SegmentedControl";
+import PersonalThemePicker from "@/components/settings/PersonalThemePicker";
 import GameDefaultsSection from "@/components/settings/GameDefaultsSection";
 import GuidesTab from "@/components/settings/GuidesTab";
 import { generatePinSalt, hashPin, isValidPinFormat } from "@/lib/playerPin";
@@ -43,6 +42,8 @@ interface ImpressumRow {
   register_info: string;
 }
 
+const IMPRESSUM_INPUT_CLASS = "h-11 rounded-xl bg-background border-border text-base";
+
 const EMPTY_IMPRESSUM: Omit<ImpressumRow, "id"> = {
   club_name: "", address: "", city: "", represented_by: "", email: "", phone: "", register_info: "",
 };
@@ -57,7 +58,6 @@ const SettingsPage = () => {
   const { resolvedTheme, setTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
   const push = usePushSubscription(user?.id);
-  const { club, personalThemePreset, setPersonalThemePreset } = useClubBranding();
   const queryClient = useQueryClient();
   const { data: dbPlayers = [] } = usePlayers();
   const myPlayer = dbPlayers.find((p) => p.user_id === user?.id);
@@ -151,189 +151,123 @@ const SettingsPage = () => {
   const isComplete = !!impressum && [impressum.club_name, impressum.address, impressum.city, impressum.represented_by, impressum.email].every((f) => f.trim() !== "");
 
   const appearancePanel = (
-    <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-2">
-        <SectionCard className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Languages className="w-5 h-5 text-muted-foreground shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{t("settings.language")}</p>
-              <p className="text-xs text-muted-foreground">{t("settings.languageDesc")}</p>
-            </div>
-          </div>
-          <Select value={language} onValueChange={(v) => setLanguage(v as Language)}>
-            <SelectTrigger className="w-[140px] shrink-0 bg-background border-border"><SelectValue /></SelectTrigger>
-            <SelectContent className="bg-card border-border">
-              {LANGUAGES.map((lang) => (
-                <SelectItem key={lang} value={lang}>{t(LANGUAGE_LABEL_KEY[lang])}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SectionCard>
+    <div className="space-y-5">
+      <SettingsSection>
+        <SettingsRow
+          icon={Languages}
+          label={t("settings.language")}
+          description={t("settings.languageDesc")}
+          control={
+            <Select value={language} onValueChange={(v) => setLanguage(v as Language)}>
+              <SelectTrigger className="h-11 w-[132px] rounded-xl bg-background border-border" aria-label={t("settings.language")}><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-card border-border">
+                {LANGUAGES.map((lang) => (
+                  <SelectItem key={lang} value={lang}>{t(LANGUAGE_LABEL_KEY[lang])}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          }
+        />
+        <SettingsRow
+          icon={Moon}
+          label={t("settings.darkMode")}
+          description={t("settings.darkModeDesc")}
+          control={
+            <Switch
+              checked={resolvedTheme === "dark"}
+              onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+              aria-label={t("settings.darkMode")}
+            />
+          }
+        />
+      </SettingsSection>
 
-        <SectionCard className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Moon className="w-5 h-5 text-muted-foreground shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{t("settings.darkMode")}</p>
-              <p className="text-xs text-muted-foreground">{t("settings.darkModeDesc")}</p>
-            </div>
-          </div>
-          <Switch
-            checked={resolvedTheme === "dark"}
-            onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
-            aria-label={t("settings.darkMode")}
-          />
-        </SectionCard>
-      </div>
-
-      {/* Personal color override — local to this device only (localStorage, see
-          ClubBrandingContext), never written anywhere shared. Everyone gets this, not just
-          admins: only the 3 accent hues are personal, name/logo/tagline stay admin-only below. */}
-      <SectionCard>
-        <div className="flex items-center gap-3 mb-3">
-          <Palette className="w-5 h-5 text-muted-foreground shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-medium">{t("settings.myColor")}</p>
-            <p className="text-xs text-muted-foreground">{t("settings.myColorDesc")}</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setPersonalThemePreset(null)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs text-left transition-colors ${
-              !personalThemePreset ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border hover:border-primary/50"
-            }`}
-          >
-            <span className="flex gap-1 shrink-0">
-              {(["--primary", "--secondary", "--accent"] as const).map((key) => {
-                const vars = resolveClubTheme(club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID, resolvedTheme === "light" ? "light" : "dark");
-                return <span key={key} className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars[key]})` }} />;
-              })}
-            </span>
-            <span className="truncate">{t("settings.myColorClubDefault")}</span>
-          </button>
-          {/* The preset matching the club's own current theme is skipped here — selecting it
-              explicitly would look and behave identically to "Vereinsfarbe" above, since that
-              option already resolves to exactly this preset. Showing both was a literal
-              duplicate, not just a stylistic one. */}
-          {CLUB_THEME_PRESETS.filter((preset) => preset.id !== (club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID)).map((preset) => {
-            const vars = resolveClubTheme(preset.id, resolvedTheme === "light" ? "light" : "dark");
-            const selected = personalThemePreset === preset.id;
-            return (
-              <button
-                type="button"
-                key={preset.id}
-                onClick={() => setPersonalThemePreset(preset.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs text-left transition-colors ${
-                  selected ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border hover:border-primary/50"
-                }`}
-              >
-                <span className="flex items-center gap-1 shrink-0">
-                  {/* Preview of a real button: action color with its own text color on it. */}
-                  <span
-                    aria-hidden="true"
-                    className="px-1.5 rounded font-display font-bold text-[11px] leading-4"
-                    style={{ background: `hsl(${vars["--primary"]})`, color: `hsl(${vars["--primary-foreground"]})` }}
-                  >
-                    Aa
-                  </span>
-                  <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--secondary"]})` }} />
-                  <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--accent"]})` }} />
-                </span>
-                <span className="truncate">{preset.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </SectionCard>
+      <SettingsSection>
+        <SettingsRow icon={Palette} label={t("settings.myColor")} description={t("settings.myColorDesc")}>
+          <PersonalThemePicker />
+        </SettingsRow>
+      </SettingsSection>
     </div>
   );
 
   const accountPanel = (
-    <div className="space-y-3">
-      {/* Anonymous usage statistics: on by default, every member can switch it off for this device. */}
-      <SectionCard className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{t("settings.usageStats")}</p>
-          <p className="text-xs text-muted-foreground">{t("settings.usageStatsDesc")}</p>
-        </div>
-        <Switch
-          checked={usageStatsOn}
-          onCheckedChange={(on) => { setUsageStatsOn(on); setUsageTrackingEnabled(on); }}
-          aria-label={t("settings.usageStats")}
-        />
-      </SectionCard>
-      <div className="grid gap-3 md:grid-cols-2 md:items-start">
+    <div className="space-y-5">
+      <SettingsSection>
         {push.supported && (
-          <SectionCard className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Bell className="w-5 h-5 text-muted-foreground shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{t("settings.notifications")}</p>
-                <p className="text-xs text-muted-foreground">{t("settings.notificationsDesc")}</p>
-              </div>
-            </div>
-            <Switch checked={push.enabled} onCheckedChange={push.toggle} disabled={push.busy} aria-label={t("settings.notifications")} />
-          </SectionCard>
+          <SettingsRow
+            icon={Bell}
+            label={t("settings.notifications")}
+            description={t("settings.notificationsDesc")}
+            control={<Switch checked={push.enabled} onCheckedChange={push.toggle} disabled={push.busy} aria-label={t("settings.notifications")} />}
+          />
         )}
+        {/* Anonymous usage statistics: on by default, every member can switch it off for this device. */}
+        <SettingsRow
+          icon={BarChart3}
+          label={t("settings.usageStats")}
+          description={t("settings.usageStatsDesc")}
+          control={
+            <Switch
+              checked={usageStatsOn}
+              onCheckedChange={(on) => { setUsageStatsOn(on); setUsageTrackingEnabled(on); }}
+              aria-label={t("settings.usageStats")}
+            />
+          }
+        />
+      </SettingsSection>
 
-        {/* "PIN pro Spieler": only meaningful once you have a linked profile at all — a bare
-            account with no players row (not yet created one, see Players.tsx) has nothing to
-            attach a PIN to. */}
-        {myPlayer && (
-          <SectionCard>
-            <div className="flex items-center gap-3 mb-3">
-              <KeyRound className="w-5 h-5 text-muted-foreground shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{t("players.pinSectionTitle")}</p>
-                <p className="text-xs text-muted-foreground">{t("players.pinSectionDescSelf")}</p>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mb-2">
+      {/* "PIN pro Spieler": only meaningful once you have a linked profile at all — a bare
+          account with no players row (not yet created one, see Players.tsx) has nothing to
+          attach a PIN to. */}
+      {myPlayer && (
+        <SettingsSection>
+          <SettingsRow
+            icon={KeyRound}
+            label={t("players.pinSectionTitle")}
+            description={t("players.pinSectionDescSelf")}
+          >
+            <p className="text-[13px] text-muted-foreground">
               {myPlayer.pin_hash ? t("players.pinCurrentSet") : t("players.pinNotSet")}
             </p>
-            <div className="grid grid-cols-2 gap-2 mb-2">
+            <div className="grid grid-cols-2 gap-2">
               <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
                 value={pinNew} onChange={(e) => setPinNew(e.target.value.replace(/\D/g, "").slice(0, 4))}
                 placeholder={t("players.pinNewPlaceholder")}
-                className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground text-center tracking-widest" />
+                aria-label={t("players.pinNewPlaceholder")}
+                className="h-11 min-w-0 rounded-xl bg-background border border-border px-3 text-base text-foreground text-center tracking-widest placeholder:tracking-normal placeholder:text-sm" />
               <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
                 value={pinConfirm} onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
                 placeholder={t("players.pinConfirmPlaceholder")}
-                className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground text-center tracking-widest" />
+                aria-label={t("players.pinConfirmPlaceholder")}
+                className="h-11 min-w-0 rounded-xl bg-background border border-border px-3 text-base text-foreground text-center tracking-widest placeholder:tracking-normal placeholder:text-sm" />
             </div>
             <div className="flex gap-2">
-              <Button size="sm" className="flex-1 gap-1.5" disabled={pinSaving || pinNew.length !== 4} onClick={savePin}>
+              <Button className="h-11 flex-1 gap-1.5 rounded-xl font-semibold hover:shadow-none" disabled={pinSaving || pinNew.length !== 4} onClick={savePin}>
                 {pinSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                 {myPlayer.pin_hash ? t("players.pinChangeButton") : t("players.pinSetButton")}
               </Button>
               {myPlayer.pin_hash && (
-                <Button size="sm" variant="outline" disabled={pinRemoving} onClick={removePin}>
+                <Button variant="outline" className="h-11 rounded-xl hover:shadow-none" disabled={pinRemoving} onClick={removePin}>
                   {pinRemoving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("players.pinRemoveButton")}
                 </Button>
               )}
             </div>
-          </SectionCard>
-        )}
-      </div>
+          </SettingsRow>
+        </SettingsSection>
+      )}
 
-      <SectionCard>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
-            <FileText className="w-4 h-4" /> {t("settings.impressum")}
-          </h3>
-          {isAdmin && impressum && !editing && (
-            <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={startEdit}>
-              <Pencil className="w-3.5 h-3.5" /> {t("common.edit")}
-            </Button>
-          )}
-        </div>
-
+      <SettingsSection
+        rows={false}
+        label={t("settings.impressum")}
+        labelAction={isAdmin && impressum && !editing ? (
+          <Button size="sm" variant="ghost" className="h-11 gap-1.5 rounded-xl text-sm" onClick={startEdit}>
+            <Pencil className="w-3.5 h-3.5" /> {t("common.edit")}
+          </Button>
+        ) : null}
+      >
         {!isComplete && (
-          <div className="flex items-start gap-2 mb-3 text-xs text-accent bg-accent/10 rounded-lg p-2.5">
-            <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2 mb-3 text-xs text-muted-foreground bg-muted rounded-xl p-3">
+            <TriangleAlert className="w-4 h-4 shrink-0 text-accent" />
             <p>{t("settings.impressumWarning")}</p>
           </div>
         )}
@@ -342,22 +276,22 @@ const SettingsPage = () => {
           <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
         ) : editing ? (
           <div className="space-y-2.5">
-            <Input value={form.club_name} onChange={(e) => setForm((f) => ({ ...f, club_name: e.target.value }))} placeholder={t("settings.impressumClubPlaceholder")} className="bg-background border-border" />
-            <Input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder={t("settings.impressumAddressPlaceholder")} className="bg-background border-border" />
-            <Input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} placeholder={t("settings.impressumCityPlaceholder")} className="bg-background border-border" />
-            <Input value={form.represented_by} onChange={(e) => setForm((f) => ({ ...f, represented_by: e.target.value }))} placeholder={t("settings.impressumRepresentedPlaceholder")} className="bg-background border-border" />
-            <Input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder={t("settings.impressumEmailPlaceholder")} type="email" className="bg-background border-border" />
-            <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder={t("settings.impressumPhoneOptional")} className="bg-background border-border" />
-            <Input value={form.register_info} onChange={(e) => setForm((f) => ({ ...f, register_info: e.target.value }))} placeholder={t("settings.impressumRegisterPlaceholder")} className="bg-background border-border" />
+            <Input value={form.club_name} onChange={(e) => setForm((f) => ({ ...f, club_name: e.target.value }))} placeholder={t("settings.impressumClubPlaceholder")} className={IMPRESSUM_INPUT_CLASS} />
+            <Input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder={t("settings.impressumAddressPlaceholder")} className={IMPRESSUM_INPUT_CLASS} />
+            <Input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} placeholder={t("settings.impressumCityPlaceholder")} className={IMPRESSUM_INPUT_CLASS} />
+            <Input value={form.represented_by} onChange={(e) => setForm((f) => ({ ...f, represented_by: e.target.value }))} placeholder={t("settings.impressumRepresentedPlaceholder")} className={IMPRESSUM_INPUT_CLASS} />
+            <Input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder={t("settings.impressumEmailPlaceholder")} type="email" className={IMPRESSUM_INPUT_CLASS} />
+            <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder={t("settings.impressumPhoneOptional")} className={IMPRESSUM_INPUT_CLASS} />
+            <Input value={form.register_info} onChange={(e) => setForm((f) => ({ ...f, register_info: e.target.value }))} placeholder={t("settings.impressumRegisterPlaceholder")} className={IMPRESSUM_INPUT_CLASS} />
             <div className="flex gap-2 justify-end pt-1">
-              <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={saving}><X className="w-3.5 h-3.5" /></Button>
-              <Button size="sm" onClick={saveImpressum} disabled={saving} className="gap-1.5">
+              <Button variant="ghost" className="h-11 w-11 rounded-xl p-0" onClick={() => setEditing(false)} disabled={saving} aria-label={t("common.cancel")}><X className="w-4 h-4" /></Button>
+              <Button onClick={saveImpressum} disabled={saving} className="h-11 gap-1.5 rounded-xl px-5 font-semibold hover:shadow-none">
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} {t("game.save")}
               </Button>
             </div>
           </div>
         ) : (
-          <div className="text-xs text-muted-foreground space-y-3 leading-relaxed">
+          <div className="text-[13px] text-muted-foreground space-y-3 leading-relaxed">
             <p>{t("settings.impressumHeading")}</p>
             <p>
               {impressum.club_name || t("settings.impressumClubPlaceholder")}<br />
@@ -373,25 +307,32 @@ const SettingsPage = () => {
             <p><strong className="text-foreground">{t("settings.impressumRegister")}</strong><br />{impressum.register_info || t("settings.impressumRegisterPlaceholder")}</p>
           </div>
         )}
-      </SectionCard>
+      </SettingsSection>
     </div>
   );
 
-  const tabs: ManageTab[] = [
-    { key: "appearance", label: t("settings.groupAppearance"), icon: Palette, content: appearancePanel },
-    { key: "game", label: t("settings.groupGame"), icon: SlidersHorizontal, content: <GameDefaultsSection /> },
-    { key: "account", label: t("settings.groupAccount"), icon: KeyRound, content: accountPanel },
-    { key: "guides", label: t("settings.tabGuides"), icon: BookOpen, content: <GuidesTab /> },
+  const tabs: { value: SettingsTab; label: string; icon: LucideIcon; content: ReactNode }[] = [
+    { value: "appearance", label: t("settings.groupAppearance"), icon: Palette, content: appearancePanel },
+    { value: "game", label: t("settings.groupGame"), icon: SlidersHorizontal, content: <GameDefaultsSection /> },
+    { value: "account", label: t("settings.groupAccount"), icon: KeyRound, content: accountPanel },
+    { value: "guides", label: t("settings.tabGuides"), icon: BookOpen, content: <GuidesTab /> },
   ];
+  const activePanel = tabs.find((tab) => tab.value === activeTab) ?? tabs[0];
 
   return (
-    <div className="container py-6 animate-slide-up max-w-2xl lg:max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-4">
-        <SettingsIcon className="w-6 h-6 text-accent" />
-        <h2 className="text-2xl font-display uppercase">{t("settings.title")}</h2>
-      </div>
+    <div className="container py-4 animate-slide-up max-w-2xl mx-auto space-y-4">
+      <h1 className="font-display text-[28px] font-bold leading-tight">{t("settings.title")}</h1>
 
-      <ManageTabs tabs={tabs} active={activeTab} onChange={(key) => setActiveTab(key as SettingsTab)} />
+      <SegmentedControl<SettingsTab>
+        kind="tabs"
+        ariaLabel={t("settings.title")}
+        options={tabs}
+        value={activePanel.value}
+        onChange={setActiveTab}
+        columnsClassName="grid-cols-2 md:grid-cols-4"
+      />
+
+      <div role="tabpanel" aria-label={activePanel.label}>{activePanel.content}</div>
     </div>
   );
 };

@@ -67,7 +67,7 @@ const AdminBilling = () => {
 
   if (club.plan_tier === "free_locked") {
     return (
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-6 flex items-center gap-3">
+      <div className="bg-card border border-border rounded-2xl p-6 flex items-center gap-3">
         <CheckCircle2 className="w-6 h-6 text-secondary shrink-0" />
         <div>
           <p className="font-semibold text-sm">Kostenlos &amp; uneingeschränkt</p>
@@ -80,7 +80,7 @@ const AdminBilling = () => {
   if (club.plan_tier === "paid") {
     const pastDue = club.plan_status === "past_due";
     return (
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-6 flex items-center gap-3">
+      <div className="bg-card border border-border rounded-2xl p-6 flex items-center gap-3">
         {pastDue ? <AlertTriangle className="w-6 h-6 text-accent shrink-0" /> : <CheckCircle2 className="w-6 h-6 text-secondary shrink-0" />}
         <div>
           <p className="font-semibold text-sm">{pastDue ? "Zahlung ausstehend" : "Paid-Plan aktiv"}</p>
@@ -100,7 +100,7 @@ const AdminBilling = () => {
     : null;
 
   return (
-    <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-6">
+    <div className="bg-card border border-border rounded-2xl p-6">
       <div className="flex items-center gap-2 mb-3">
         <CreditCard className="w-5 h-5 text-primary" />
         <p className="font-semibold text-sm">{isPilot ? "Pilot-Phase" : "Trial-Plan"}</p>
@@ -119,7 +119,7 @@ const AdminBilling = () => {
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setPeriod("monthly")}
-          className={`flex-1 rounded-lg border px-3 py-2 text-left transition-colors ${
+          className={`flex-1 rounded-xl border px-3 py-2 min-h-11 text-left transition-colors ${
             period === "monthly" ? "border-primary bg-primary/10" : "border-border hover:bg-muted"
           }`}
         >
@@ -128,7 +128,7 @@ const AdminBilling = () => {
         </button>
         <button
           onClick={() => setPeriod("yearly")}
-          className={`flex-1 rounded-lg border px-3 py-2 text-left transition-colors ${
+          className={`flex-1 rounded-xl border px-3 py-2 min-h-11 text-left transition-colors ${
             period === "yearly" ? "border-primary bg-primary/10" : "border-border hover:bg-muted"
           }`}
         >
@@ -136,7 +136,7 @@ const AdminBilling = () => {
           <p className="text-[10px] text-muted-foreground">{PRICE_DISPLAY.yearly} — günstiger</p>
         </button>
       </div>
-      <Button onClick={startUpgrade} disabled={startingCheckout} className="gap-1.5 w-full">
+      <Button onClick={startUpgrade} disabled={startingCheckout} className="gap-1.5 w-full h-[52px] rounded-[14px] text-base font-semibold hover:shadow-none">
         {startingCheckout ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
         {period === "yearly" ? "Jährlich upgraden" : "Monatlich upgraden"}
       </Button>

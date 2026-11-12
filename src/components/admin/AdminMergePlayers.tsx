@@ -4,7 +4,7 @@ import { Merge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
+import { Eyebrow } from "@/components/stats/StatPrimitives";
 import { usePlayers, PLAYERS_QUERY_KEY } from "@/hooks/usePlayers";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -45,7 +45,7 @@ const AdminMergePlayers = () => {
   };
 
   return (
-    <SectionCard className="mt-6 space-y-3">
+    <section className="mt-6 space-y-3 rounded-2xl border border-border bg-card p-4">
       <Eyebrow icon={Merge}>Spieler zusammenführen</Eyebrow>
       <p className="text-xs text-muted-foreground">
         Für ein doppelt angelegtes Profil: Alle Spiele, Legs, Turniere und Highlights des zweiten Profils wandern zum ersten, dessen Statistik wird neu berechnet, danach wird das zweite gelöscht. Das lässt sich nicht rückgängig machen.
@@ -88,7 +88,7 @@ const AdminMergePlayers = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </SectionCard>
+    </section>
   );
 };
 

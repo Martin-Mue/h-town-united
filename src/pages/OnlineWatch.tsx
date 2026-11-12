@@ -1,6 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Eye } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronLeft, Eye } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useOnlineMatch } from "@/hooks/useOnlineMatch";
@@ -17,11 +16,18 @@ const OnlineWatch = () => {
   const game = row?.game_state;
 
   return (
-    <div className="container py-6 max-w-lg mx-auto animate-slide-up">
-      <Button asChild variant="ghost" className="mb-4 -ml-2 text-muted-foreground">
-        <Link to="/"><ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}</Link>
-      </Button>
-      <h1 className="font-display uppercase text-xl mb-4 flex items-center gap-2"><Eye className="w-5 h-5 text-accent" /> {t("home.watchMatch")}</h1>
+    <div className="container py-4 max-w-lg mx-auto animate-slide-up">
+      <header className="mb-4 flex items-center gap-2">
+        <Link
+          to="/"
+          aria-label={t("common.back")}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </Link>
+        <h1 className="min-w-0 flex-1 truncate font-display text-[28px] font-bold leading-tight">{t("home.watchMatch")}</h1>
+        <Eye aria-hidden="true" className="h-5 w-5 shrink-0 text-accent" />
+      </header>
 
       {loading ? <p className="text-sm text-muted-foreground">…</p>
         : !game || row?.status !== "active" ? <p className="text-sm text-muted-foreground">{t("game.onlineMatchNotActive")}</p>
@@ -33,14 +39,14 @@ const OnlineWatch = () => {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 {slots.map((name, i) => (
-                  <div key={i} className={`rounded-xl border px-3 py-4 text-center ${turnTeam === i ? "border-primary bg-primary/10" : "border-border bg-card"}`}>
-                    <p className="text-sm font-semibold truncate">{name}</p>
-                    <p className="font-display text-4xl tabular-nums my-1">{game.mode === "cricket" ? "–" : game.currentLeg.remaining[i]}</p>
-                    <p className="text-[11px] text-muted-foreground uppercase">{t("game.legsSuffix")}: {game.legsWon[i] ?? 0}</p>
+                  <div key={i} className={`rounded-2xl border bg-card px-3 py-4 text-center ${turnTeam === i ? "border-primary" : "border-border"}`}>
+                    <p className={`text-sm font-semibold truncate ${turnTeam === i ? "" : "text-muted-foreground"}`}>{name}</p>
+                    <p className={`font-display font-bold text-5xl leading-none tabular-nums my-2 ${turnTeam === i ? "" : "text-muted-foreground"}`}>{game.mode === "cricket" ? "–" : game.currentLeg.remaining[i]}</p>
+                    <p className="text-xs text-muted-foreground">{t("game.legsSuffix")}: {game.legsWon[i] ?? 0}</p>
                   </div>
                 ))}
               </div>
-              <p className="text-center text-xs text-muted-foreground">
+              <p className="text-center text-sm text-muted-foreground">
                 {game.players[game.currentPlayerIndex]?.name} · {game.mode === "cricket" ? "Cricket" : game.mode} · {t("stats.firstTo")} {Math.ceil(game.bestOfLegs / 2)}
               </p>
             </div>

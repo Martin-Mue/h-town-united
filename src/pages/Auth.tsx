@@ -7,7 +7,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import ClubCrest from "@/components/ClubCrest";
+import EntryPageShell from "@/components/entry/EntryPageShell";
+import EntryHeader from "@/components/entry/EntryHeader";
+import EntryCard from "@/components/entry/EntryCard";
+import ClubLogoTile from "@/components/entry/ClubLogoTile";
+import EntryPrimaryButton from "@/components/entry/EntryPrimaryButton";
+import { ENTRY_INPUT_CLASS, ENTRY_TEXT_LINK_CLASS } from "@/components/entry/entryFieldStyles";
 import { Eye, EyeOff } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -151,60 +156,48 @@ const AuthPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
-          <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
-          <div className="relative">
-            <ClubCrest
-              logoUrl={club?.logo_path ? logoUrl : null}
-              alt={clubName}
-              initial={clubName.charAt(0).toUpperCase()}
-            />
-            <h1 className="text-3xl font-display uppercase">{clubName}</h1>
-            {tagline && (
-              <p className="font-graffiti text-lg mt-1 -rotate-1 select-none text-primary drop-shadow-[0_0_10px_hsl(var(--primary)/0.4)]">
-                {tagline}
-              </p>
-            )}
-          </div>
-        </div>
+    <EntryPageShell>
+      <EntryHeader
+        mark={<ClubLogoTile logoUrl={club?.logo_path ? logoUrl : null} name={clubName} />}
+        eyebrow={clubName}
+        title={mode === "login" ? t("auth.loginTitle") : mode === "signup" ? t("auth.signupTitle") : t("auth.resetTitle")}
+        subtitle={tagline}
+      />
 
-        <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
-          <h2 className="font-display uppercase text-lg mb-4">
-            {mode === "login" ? t("auth.loginTitle") : mode === "signup" ? t("auth.signupTitle") : t("auth.resetTitle")}
-          </h2>
+      <EntryCard>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label>{t("auth.emailLabel")}</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="auth-email">{t("auth.emailLabel")}</Label>
               <Input
+                id="auth-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
                 placeholder="email@example.com"
-                className="bg-muted border-border"
+                className={ENTRY_INPUT_CLASS}
                 required
               />
             </div>
             {mode !== "reset" && (
-              <div>
-                <Label>{t("auth.passwordLabel")}</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="auth-password">{t("auth.passwordLabel")}</Label>
                 <div className="relative">
                   <Input
+                    id="auth-password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete={mode === "login" ? "current-password" : "new-password"}
                     placeholder="••••••••"
-                    className="bg-muted border-border pr-10"
+                    className={`${ENTRY_INPUT_CLASS} pr-12`}
                     required
                     minLength={6}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    className="absolute right-0 top-0 flex h-12 w-12 items-center justify-center text-muted-foreground hover:text-foreground"
                     tabIndex={-1}
                     aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                   >
@@ -217,15 +210,16 @@ const AuthPage = () => {
               </div>
             )}
             {mode === "signup" && (
-              <div>
-                <Label>{t("auth.confirmPasswordLabel")}</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="auth-confirm-password">{t("auth.confirmPasswordLabel")}</Label>
                 <Input
+                  id="auth-confirm-password"
                   type={showPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   autoComplete="new-password"
                   placeholder="••••••••"
-                  className="bg-muted border-border"
+                  className={ENTRY_INPUT_CLASS}
                   required
                   minLength={6}
                 />
@@ -234,21 +228,20 @@ const AuthPage = () => {
                 )}
               </div>
             )}
-            <Button type="submit" className="w-full" disabled={loading}>
+            <EntryPrimaryButton type="submit" disabled={loading}>
               {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {mode === "login" ? t("auth.loginBtn") : mode === "signup" ? t("auth.signupTitle") : t("auth.resetLinkBtn")}
-            </Button>
+            </EntryPrimaryButton>
           </form>
           {pendingConfirm && mode !== "reset" && (
-            <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+            <div className="mt-4 rounded-xl border border-border bg-muted p-3 text-sm">
               <p className="text-muted-foreground">
                 {t("auth.confirmSentPrefix")} <span className="text-foreground">{pendingConfirm}</span> {t("auth.confirmSentSuffix")}
               </p>
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
-                className="mt-2 w-full"
+                className="mt-3 h-11 w-full rounded-xl hover:shadow-none"
                 onClick={resendConfirmation}
                 disabled={resending}
               >
@@ -257,17 +250,17 @@ const AuthPage = () => {
               </Button>
             </div>
           )}
-          <div className="mt-4 space-y-2 text-sm text-center text-muted-foreground">
+          <div className="mt-3 space-y-1 text-sm text-center text-muted-foreground">
             {mode === "login" && (
               <>
                 <p>
                   {t("auth.noAccountYet")}{" "}
-                  <button onClick={() => setMode("signup")} className="text-primary hover:underline">
+                  <button onClick={() => setMode("signup")} className={ENTRY_TEXT_LINK_CLASS}>
                     {t("auth.signupTitle")}
                   </button>
                 </p>
                 <p>
-                  <button onClick={() => setMode("reset")} className="text-primary hover:underline">
+                  <button onClick={() => setMode("reset")} className={ENTRY_TEXT_LINK_CLASS}>
                     {t("auth.forgotPassword")}
                   </button>
                 </p>
@@ -276,22 +269,21 @@ const AuthPage = () => {
             {mode === "signup" && (
               <p>
                 {t("auth.alreadyRegistered")}{" "}
-                <button onClick={() => setMode("login")} className="text-primary hover:underline">
+                <button onClick={() => setMode("login")} className={ENTRY_TEXT_LINK_CLASS}>
                   {t("auth.loginTitle")}
                 </button>
               </p>
             )}
             {mode === "reset" && (
               <p>
-                <button onClick={() => setMode("login")} className="text-primary hover:underline">
+                <button onClick={() => setMode("login")} className={ENTRY_TEXT_LINK_CLASS}>
                   {t("auth.backToLogin")}
                 </button>
               </p>
             )}
           </div>
-        </div>
-      </div>
-    </div>
+      </EntryCard>
+    </EntryPageShell>
   );
 };
 

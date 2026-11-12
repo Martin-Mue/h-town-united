@@ -183,7 +183,7 @@ const AdminAutodarts = () => {
 
   if (!available) {
     return (
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-6 flex items-center gap-3">
+      <div className="bg-card border border-border rounded-2xl p-6 flex items-center gap-3">
         <Lock className="w-6 h-6 text-muted-foreground shrink-0" />
         <div>
           <p className="font-semibold text-sm">Autodarts-Integration ist Teil des Paid-Plans</p>
@@ -195,7 +195,7 @@ const AdminAutodarts = () => {
 
   return (
     <div className="space-y-4">
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-6">
+      <div className="bg-card border border-border rounded-2xl p-6">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
             <Radio className="w-5 h-5 text-primary" />
@@ -236,7 +236,7 @@ const AdminAutodarts = () => {
                     </p>
                   </div>
                 </button>
-                <Button size="icon" variant="ghost" className="shrink-0 h-8 w-8" onClick={() => void remove(b)}>
+                <Button size="icon" variant="ghost" className="shrink-0 h-11 w-11 rounded-xl" onClick={() => void remove(b)}>
                   <Trash2 className="w-4 h-4 text-destructive" />
                 </Button>
               </div>

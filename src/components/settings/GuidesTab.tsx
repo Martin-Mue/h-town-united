@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, BookOpen, Search } from "lucide-react";
 import { GUIDES } from "@/data/guides";
-import { SectionCard } from "@/components/stats/StatPrimitives";
 
 /** Settings.tsx's "Anleitungen" tab — simple collapsible guides for club members. Starts fully
  *  collapsed (see feedback_expandable_lists_ux) — a member opens the one guide they actually
@@ -18,8 +17,8 @@ const GuidesTab = () => {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-        <BookOpen className="w-4 h-4 shrink-0 mt-0.5 text-primary" />
+      <div className="flex items-start gap-2.5 rounded-2xl border border-border bg-card p-3 text-[13px] text-muted-foreground">
+        <BookOpen className="w-4 h-4 shrink-0 mt-0.5 text-accent" />
         <p>Kurze Anleitungen zu den wichtigsten Bereichen der App. Zum Aufklappen einfach auf eine Anleitung tippen.</p>
       </div>
 
@@ -30,7 +29,7 @@ const GuidesTab = () => {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="In den Anleitungen suchen …"
-          className="w-full rounded-xl border border-border bg-muted/40 py-2.5 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+          className="h-12 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-base placeholder:text-muted-foreground focus:border-primary focus:outline-none"
         />
       </div>
       {visibleGuides.length === 0 && (
@@ -42,20 +41,21 @@ const GuidesTab = () => {
         // list just narrows, and the member taps the one they want (same collapsed-by-default rule).
         const isOpen = openId === guide.id;
         return (
-          <SectionCard key={guide.id} className="!p-0 overflow-hidden">
+          <section key={guide.id} className="overflow-hidden rounded-2xl border border-border bg-card">
             <button
               onClick={() => setOpenId(isOpen ? null : guide.id)}
-              className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left"
+              aria-expanded={isOpen}
+              className="w-full min-h-[52px] flex items-center justify-between gap-3 px-4 py-3 text-left"
             >
               <div className="min-w-0">
-                <p className="font-display text-sm uppercase">{guide.title}</p>
-                <p className="text-xs text-muted-foreground truncate">{guide.teaser}</p>
+                <p className="text-[15px] font-semibold leading-snug">{guide.title}</p>
+                <p className="text-[13px] text-muted-foreground truncate">{guide.teaser}</p>
               </div>
               {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
             </button>
 
             {isOpen && (
-              <div className="px-4 pb-4 border-t border-border/60 pt-3 space-y-4">
+              <div className="px-4 pb-4 border-t border-border pt-3 space-y-4">
                 {guide.image && (
                   <img
                     src={guide.image}
@@ -67,7 +67,7 @@ const GuidesTab = () => {
                 {guide.sections.map((section, i) => (
                   <div key={i}>
                     {section.heading && (
-                      <p className="text-xs font-display uppercase tracking-wide text-primary mb-1">{section.heading}</p>
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-1">{section.heading}</p>
                     )}
                     {section.body.map((p, pi) => (
                       <p key={pi} className="text-sm text-muted-foreground leading-relaxed">{p}</p>
@@ -94,7 +94,7 @@ const GuidesTab = () => {
                 ))}
               </div>
             )}
-          </SectionCard>
+          </section>
         );
       })}
     </div>

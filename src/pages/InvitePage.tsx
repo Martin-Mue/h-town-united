@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import ClubCrest from "@/components/ClubCrest";
+import EntryPageShell from "@/components/entry/EntryPageShell";
+import EntryHeader from "@/components/entry/EntryHeader";
+import EntryCard from "@/components/entry/EntryCard";
+import ClubLogoTile from "@/components/entry/ClubLogoTile";
+import EntryPrimaryButton from "@/components/entry/EntryPrimaryButton";
+import EntryStatusMessage from "@/components/entry/EntryStatusMessage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -66,61 +70,56 @@ const InvitePage = () => {
     : htuLogoFallback;
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-sm text-center">
+    <EntryPageShell>
         {loading || authLoading ? (
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
         ) : preview === "not_found" ? (
-          <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
-            <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
-            <h1 className="text-lg font-display uppercase mb-1">{t("invite.notFoundTitle")}</h1>
-            <p className="text-sm text-muted-foreground">{t("common.invalidLinkGeneric")}</p>
-          </div>
+          <EntryStatusMessage
+            icon={TriangleAlert}
+            tone="destructive"
+            title={t("invite.notFoundTitle")}
+            description={t("common.invalidLinkGeneric")}
+          />
         ) : preview?.expired ? (
-          <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
-            <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
-            <h1 className="text-lg font-display uppercase mb-1">{t("invite.expiredTitle")}</h1>
-            <p className="text-sm text-muted-foreground">{t("invite.expiredDesc")}</p>
-          </div>
+          <EntryStatusMessage
+            icon={TriangleAlert}
+            tone="destructive"
+            title={t("invite.expiredTitle")}
+            description={t("invite.expiredDesc")}
+          />
         ) : preview?.already_accepted ? (
-          <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
-            <PartyPopper className="w-8 h-8 text-accent mx-auto mb-3" />
-            <h1 className="text-lg font-display uppercase mb-1">{t("invite.alreadyAcceptedTitle")}</h1>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t("invite.alreadyAcceptedDesc")}
-            </p>
-            <Button onClick={() => navigate("/auth")}>{t("common.goToLoginBtn")}</Button>
-          </div>
+          <EntryStatusMessage
+            icon={PartyPopper}
+            title={t("invite.alreadyAcceptedTitle")}
+            description={t("invite.alreadyAcceptedDesc")}
+            action={<EntryPrimaryButton onClick={() => navigate("/auth")}>{t("common.goToLoginBtn")}</EntryPrimaryButton>}
+          />
         ) : preview ? (
           <>
-            <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden">
-              <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
-              <div className="relative">
-                <ClubCrest logoUrl={logoUrl} alt={preview.club_name} initial={preview.club_name.charAt(0).toUpperCase()} />
-                <h1 className="text-2xl font-display uppercase">{preview.club_name}</h1>
-                {preview.tagline && <p className="text-sm text-muted-foreground mt-1">{preview.tagline}</p>}
-              </div>
-            </div>
-            <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
+            <EntryHeader
+              mark={<ClubLogoTile logoUrl={logoUrl} name={preview.club_name} />}
+              title={preview.club_name}
+              subtitle={preview.tagline}
+            />
+            <EntryCard>
               <p className="text-sm mb-4">{t("invite.prompt")}</p>
               {user ? (
-                <Button className="w-full" onClick={handleAccept} disabled={accepting}>
+                <EntryPrimaryButton onClick={handleAccept} disabled={accepting}>
                   {accepting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   {t("invite.acceptBtn")}
-                </Button>
+                </EntryPrimaryButton>
               ) : (
                 <div className="space-y-2">
-                  <Button className="w-full" onClick={() => navigate("/auth", { state: { from: `/invite/${token}` } })}>
+                  <EntryPrimaryButton onClick={() => navigate("/auth", { state: { from: `/invite/${token}` } })}>
                     {t("auth.loginTitle")}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">{t("common.noAccountRegisterHint")}</p>
+                  </EntryPrimaryButton>
+                  <p className="text-xs text-center text-muted-foreground">{t("common.noAccountRegisterHint")}</p>
                 </div>
               )}
-            </div>
+            </EntryCard>
           </>
         ) : null}
-      </div>
-    </div>
+    </EntryPageShell>
   );
 };
 

@@ -106,8 +106,8 @@ const AdminInvites = () => {
   return (
     <div className="space-y-6">
       {/* Standing join-request link */}
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-2">Beitritts-Link</h3>
+      <div className="bg-card border border-border rounded-2xl p-4">
+        <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-2">Beitritts-Link</h3>
         <p className="text-xs text-muted-foreground mb-3">
           Dieser Link kann überall geteilt werden (Website, WhatsApp-Gruppe, ...). Jede Anfrage muss hier bestätigt werden, bevor sie Zugriff bekommt.
         </p>
@@ -123,8 +123,8 @@ const AdminInvites = () => {
       </div>
 
       {/* Pending join requests */}
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Offene Beitrittsanfragen</h3>
+      <div className="bg-card border border-border rounded-2xl p-4">
+        <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-3">Offene Beitrittsanfragen</h3>
         {requests.length === 0 ? (
           <p className="text-xs text-muted-foreground">Keine offenen Anfragen.</p>
         ) : (
@@ -147,8 +147,8 @@ const AdminInvites = () => {
       </div>
 
       {/* Send a per-person invite */}
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Einladung versenden</h3>
+      <div className="bg-card border border-border rounded-2xl p-4">
+        <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-3">Einladung versenden</h3>
         <div className="flex flex-col sm:flex-row gap-2">
           <Input
             type="email"
@@ -171,8 +171,8 @@ const AdminInvites = () => {
       </div>
 
       {/* Pending invites already sent */}
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">Offene Einladungen</h3>
+      <div className="bg-card border border-border rounded-2xl p-4">
+        <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-3">Offene Einladungen</h3>
         {invites.length === 0 ? (
           <p className="text-xs text-muted-foreground">Keine offenen Einladungen.</p>
         ) : (
