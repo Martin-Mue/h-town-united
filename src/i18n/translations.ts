@@ -1443,6 +1443,9 @@ export const translations: Record<string, Record<Language, string>> = {
   "training.daysInARow": { de: "Tage in Folge trainiert", en: "days in a row", fr: "jours d'affilée", pl: "dni z rzędu", nl: "dagen op rij", tr: "üst üste gün" },
   "training.yourRecordLabel": { de: "Dein Rekord:", en: "Your record:", fr: "Ton record :", pl: "Twój rekord:", nl: "Jouw record:", tr: "Rekorun:" },
   "training.recentAttemptsLabel": { de: "Letzte Versuche", en: "Recent attempts", fr: "Tentatives récentes", pl: "Ostatnie próby", nl: "Recente pogingen", tr: "Son denemeler" },
+  // Redesign step 11 (2026-11) — section labels on the drill list and the drill setup screen.
+  "training.drillsHeading": { de: "Übungen", en: "Drills", fr: "Exercices", pl: "Ćwiczenia", nl: "Oefeningen", tr: "Alıştırmalar" },
+  "training.recordHeading": { de: "Dein Rekord", en: "Your record", fr: "Ton record", pl: "Twój rekord", nl: "Jouw record", tr: "Rekorun" },
   "training.dartsThrownLabel": { de: "Darts geworfen", en: "Darts thrown", fr: "Fléchettes lancées", pl: "Rzucone lotki", nl: "Darts geworpen", tr: "Atılan dartlar" },
   "training.hitsLabel": { de: "Treffer", en: "Hits", fr: "Réussites", pl: "Trafienia", nl: "Treffers", tr: "İsabetler" },
   "training.avg3Dart": { de: "Ø 3-Dart", en: "Ø 3-dart", fr: "Ø 3-fléchettes", pl: "Ø 3-lotkowa", nl: "Ø 3-dart", tr: "Ø 3-dart" },
