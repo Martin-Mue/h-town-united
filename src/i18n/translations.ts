@@ -24,6 +24,7 @@ export const translations: Record<string, Record<Language, string>> = {
   "nav.club": { de: "Verein", en: "Club", fr: "Club", pl: "Klub", nl: "Club", tr: "Kulüp" },
   "nav.admin": { de: "Admin", en: "Admin", fr: "Admin", pl: "Admin", nl: "Admin", tr: "Yönetici" },
   "nav.more": { de: "Mehr", en: "More", fr: "Plus", pl: "Więcej", nl: "Meer", tr: "Daha fazla" },
+  "nav.main": { de: "Hauptnavigation", en: "Main navigation", fr: "Navigation principale", pl: "Nawigacja główna", nl: "Hoofdnavigatie", tr: "Ana gezinme" },
 
   // Layout.tsx — header controls
   "header.lightTheme": { de: "Helles Design", en: "Light theme", fr: "Thème clair", pl: "Jasny motyw", nl: "Licht thema", tr: "Açık tema" },

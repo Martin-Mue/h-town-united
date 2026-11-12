@@ -79,7 +79,7 @@ const TournamentSetupWizard = ({ heading, steps, current, onChange, onExit, fina
       <div className="space-y-4">{step.content}</div>
 
       <div
-        className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:bottom-0 z-10 -mx-4 mt-6 border-t border-border/60 bg-background/95 px-4 pb-9 pt-3 backdrop-blur-sm md:pb-3"
+        className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-0 z-10 -mx-4 mt-6 border-t border-border/60 bg-background/95 px-4 pb-9 pt-3 backdrop-blur-sm md:pb-3"
       >
         {blocked && (
           <ul className="mb-2 space-y-0.5 text-xs text-accent" role="status">
