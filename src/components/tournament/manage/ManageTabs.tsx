@@ -44,7 +44,7 @@ const ManageTabs = ({ tabs, active, onChange, bleed = false }: ManageTabsProps) 
                 aria-label={tab.label}
                 title={tab.label}
                 onClick={() => onChange(tab.key)}
-                className={`flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-display uppercase tracking-wide transition-colors ${
+                className={`flex h-11 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-colors ${
                   isActive ? "border-primary bg-primary/15 text-primary" : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >

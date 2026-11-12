@@ -286,7 +286,7 @@ const TournamentSeriesPage = () => {
         onChange={setWizardStep}
         onExit={resetForm}
         finalAction={
-          <Button onClick={saveSeries} className="h-12 w-full font-display text-base uppercase tracking-wide" disabled={!name.trim() || savingSeries}>
+          <Button onClick={saveSeries} className="h-[52px] w-full rounded-[14px] text-base font-semibold" disabled={!name.trim() || savingSeries}>
             {savingSeries ? t("tournament.saving") : editingId ? t("tournament.saveChanges") : t("series.createSeries")}
           </Button>
         }
