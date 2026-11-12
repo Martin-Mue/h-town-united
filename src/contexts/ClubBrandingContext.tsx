@@ -226,11 +226,15 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
   // Re-apply CSS vars whenever the preset or the resolved light/dark mode changes. The personal
   // override (this browser only) wins over the club's own admin-set default when present.
   useEffect(() => {
+    // While the club is still loading, keep whatever is on screen (index.css's Cyan on a cold
+    // start) instead of painting the new-club default for a moment: since Dartspot became that
+    // default, an existing Cyan club would otherwise flash yellow on every app start.
+    if (!personalThemePreset && !club && status !== "resolved") return;
     const mode = resolvedTheme === "light" ? "light" : "dark";
     const vars = resolveClubTheme(personalThemePreset ?? club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID, mode);
     const root = document.documentElement.style;
     Object.entries(vars).forEach(([key, value]) => root.setProperty(key, value));
-  }, [club?.theme_preset, personalThemePreset, resolvedTheme]);
+  }, [club?.theme_preset, club, status, personalThemePreset, resolvedTheme]);
 
   const logoUrl = useMemo(() => {
     if (!club?.logo_path) return htuLogoFallback;

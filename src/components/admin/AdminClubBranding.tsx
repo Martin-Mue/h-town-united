@@ -162,8 +162,14 @@ const AdminClubBranding = () => {
                       selected ? "border-primary ring-2 ring-primary bg-primary/5" : "border-border hover:border-primary/50"
                     }`}
                   >
-                    <span className="flex gap-1 shrink-0">
-                      <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--primary"]})` }} />
+                    <span className="flex items-center gap-1 shrink-0">
+                      <span
+                        aria-hidden="true"
+                        className="px-1.5 rounded font-display font-bold text-[11px] leading-4"
+                        style={{ background: `hsl(${vars["--primary"]})`, color: `hsl(${vars["--primary-foreground"]})` }}
+                      >
+                        Aa
+                      </span>
                       <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--secondary"]})` }} />
                       <span className="w-3 h-3 rounded-full" style={{ background: `hsl(${vars["--accent"]})` }} />
                     </span>
