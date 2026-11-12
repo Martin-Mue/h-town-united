@@ -1,13 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { Trophy, Plus, ArrowLeft, Play, Pencil, Trash2, Check, Users, Swords, Wifi, CalendarDays, CalendarPlus, Radio, QrCode, Copy, Layers, ArrowUp, ArrowDown, X, FlagTriangleRight } from "lucide-react";
+import { Trophy, Plus, Pencil, Trash2, Check, Users, Swords, CalendarDays, Radio, QrCode, Copy, Layers, X, FlagTriangleRight, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -27,7 +24,15 @@ import { enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
 import { generateRoundRobinFixtures } from "@/utils/roundRobin";
 import TournamentSetupWizard, { type WizardStep } from "@/components/tournament/setup/TournamentSetupWizard";
 import ManageTabs, { type ManageTab } from "@/components/tournament/manage/ManageTabs";
-import { SectionCard, Eyebrow, RankBadge, RankAvatar } from "@/components/stats/StatPrimitives";
+import CompetitionHeader from "@/components/competition/CompetitionHeader";
+import CompetitionListRow from "@/components/competition/CompetitionListRow";
+import SectionLabel from "@/components/competition/SectionLabel";
+import ChoiceChips from "@/components/competition/ChoiceChips";
+import ParticipantPicker from "@/components/competition/ParticipantPicker";
+import LeagueStandingsTable, { type LeagueStandingsTableRow } from "@/components/league/LeagueStandingsTable";
+import LeagueFixtureCard from "@/components/league/LeagueFixtureCard";
+import LeagueFixtureActions from "@/components/league/LeagueFixtureActions";
+import LeagueRoundHeader from "@/components/league/LeagueRoundHeader";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
@@ -605,34 +610,39 @@ const LeaguePage = () => {
     const hasDivisionBelow = myDivisionIdx >= 0 && myDivisionIdx < seasonSiblings.length - 1;
     const unfinishedFixtureCount = fixtures.filter((f) => f.status !== "finished").length;
     const seasonPanel = (
-      <div className="space-y-3">
+      <div className="space-y-5">
     {isSeasonLiga && (
-      <div className="flex items-center flex-wrap gap-1.5 mt-2">
-        {seasonSiblings.map((l) => (
-          <Link
-            key={l.id}
-            to={`/leagues/${l.id}`}
-            className={`px-2.5 py-1 rounded-full text-[11px] border transition-colors ${l.id === activeLeague.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
-          >
-            {l.division_name ?? `${t("league.divisionLabel")} ${l.division_level}`}
-          </Link>
-        ))}
-      </div>
+      <section>
+        <SectionLabel>{t("league.divisionsSuffix")}</SectionLabel>
+        <div className="flex flex-wrap gap-2">
+          {seasonSiblings.map((l) => (
+            <Link
+              key={l.id}
+              to={`/leagues/${l.id}`}
+              aria-current={l.id === activeLeague.id ? "page" : undefined}
+              className={`flex min-h-11 items-center rounded-xl border px-3.5 text-sm font-semibold transition-colors ${l.id === activeLeague.id ? "border-primary bg-primary/15 text-primary" : "border-border bg-card text-foreground hover:bg-muted"}`}
+            >
+              {l.division_name ?? `${t("league.divisionLabel")} ${l.division_level}`}
+            </Link>
+          ))}
+        </div>
+      </section>
     )}
 
     {isLeagueOrganizer && (
-      <div className="mt-3">
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <SectionLabel>{t("league.seasonLabel")} {activeLeague.season_number}</SectionLabel>
         {activeLeague.next_season_league_id ? (
-          <Button asChild variant="outline" size="sm" className="gap-1.5">
+          <Button asChild variant="outline" className="h-11 gap-1.5 rounded-xl">
             <Link to={`/leagues/${activeLeague.next_season_league_id}`}>
-              <FlagTriangleRight className="w-3.5 h-3.5" /> {t("league.nextSeasonLink")}
+              <FlagTriangleRight className="w-4 h-4" /> {t("league.nextSeasonLink")}
             </Link>
           </Button>
         ) : (
           <AlertDialog open={showEndSeasonDialog} onOpenChange={setShowEndSeasonDialog}>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <FlagTriangleRight className="w-3.5 h-3.5" /> {t("league.endSeasonBtn")}
+              <Button variant="outline" className="h-11 gap-1.5 rounded-xl">
+                <FlagTriangleRight className="w-4 h-4" /> {t("league.endSeasonBtn")}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -641,8 +651,9 @@ const LeaguePage = () => {
                 <AlertDialogDescription>
                   {isSeasonLiga ? t("league.endSeasonDialogDescSeasonLiga") : t("league.endSeasonDialogDescSimple")}
                   {unfinishedFixtureCount > 0 && (
-                    <span className="block mt-2 text-accent">
-                      {unfinishedFixtureCount} {t("league.endSeasonUnfinishedWarning")}
+                    <span className="mt-2 flex items-center gap-1.5 text-accent">
+                      <AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" />
+                      <span className="tabular-nums">{unfinishedFixtureCount} {t("league.endSeasonUnfinishedWarning")}</span>
                     </span>
                   )}
                 </AlertDialogDescription>
@@ -656,20 +667,22 @@ const LeaguePage = () => {
             </AlertDialogContent>
           </AlertDialog>
         )}
-      </div>
+      </section>
     )}
       </div>
     );
     const sharePanel = (
       <>
       {activeLeague.public_view && activeLeague.public_slug && (
-        <div className="bg-gradient-to-r from-secondary/10 via-primary/10 to-accent/10 border border-secondary/30 rounded-xl px-4 py-1.5 text-xs flex items-center gap-2 mb-4">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-secondary animate-pulse shrink-0" />
-          <span className="text-muted-foreground shrink-0 hidden sm:inline">{t("league.publicLinkLabel")}</span>
-          <code className="font-mono text-secondary truncate">{window.location.origin}/liga-live/{activeLeague.public_slug}</code>
-          <div className="flex items-center gap-1.5 ml-auto shrink-0">
-            <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1" onClick={copyPublicLink}>
-              <Copy className="w-3 h-3" /> {t("common.copy")}
+        <section className="rounded-2xl border border-border bg-card p-4">
+          <SectionLabel>{t("league.publicLinkLabel")}</SectionLabel>
+          <p className="mb-3 flex items-center gap-2 text-sm">
+            <Radio aria-hidden="true" className="h-4 w-4 shrink-0 text-secondary" />
+            <code className="min-w-0 truncate font-mono text-foreground">{window.location.origin}/liga-live/{activeLeague.public_slug}</code>
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" className="h-11 flex-1 gap-1.5 rounded-xl" onClick={copyPublicLink}>
+              <Copy className="w-4 h-4" /> {t("common.copy")}
             </Button>
             <QrCodeDialog
               url={`${window.location.origin}/liga-live/${activeLeague.public_slug}`}
@@ -677,176 +690,128 @@ const LeaguePage = () => {
               description={t("league.scanForPublicView")}
               downloadName={`liga-live-${activeLeague.public_slug}`}
               trigger={
-                <Button variant="outline" size="sm" className="h-9 px-2.5 text-[11px] gap-1">
-                  <QrCode className="w-3 h-3" /> QR
+                <Button variant="outline" className="h-11 flex-1 gap-1.5 rounded-xl">
+                  <QrCode className="w-4 h-4" /> QR
                 </Button>
               }
             />
           </div>
-        </div>
+        </section>
       )}
 
       </>
     );
     const standingsPanel = (
-      <SectionCard>
-        <Eyebrow icon={Trophy}>{t("league.standingsTitle")}</Eyebrow>
+      <section>
+        <SectionLabel>{t("league.standingsTitle")}</SectionLabel>
         {standings.length === 0 ? (
-          // Round 3 Rang 7: the one remaining "pure text" empty state in the app — every other
-          // list-empty-state already leads with an icon (Trophy/Layers/Target/... elsewhere),
-          // this was the last gap the audit found. Swords matches this page's own header/list
-          // icon just below, so it stays visually consistent with the rest of League.tsx too.
-          <div className="text-center py-8 text-muted-foreground">
+          // Round 3 Rang 7: every list empty state leads with an icon.
+          <div className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-muted-foreground">
             <Swords className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">{t("league.noParticipantsYet")}</p>
           </div>
         ) : (
-          <div className="space-y-1">
-            <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-2 px-3 text-[10px] text-muted-foreground uppercase mb-1">
-              <span className="w-6" />
-              <span />
-              <span className="w-8 text-center">{t("league.colPlayed")}</span>
-              <span className="w-8 text-center">{t("league.colWon")}</span>
-              <span className="w-14 text-center">{t("league.colLegs")}</span>
-              <span className="w-10 text-right">{t("league.colPoints")}</span>
-            </div>
-            {pagedStandings.visible.map((s) => {
-              const i = standings.indexOf(s);
-              const player = playerById.get(s.playerId);
-              // Saison-Liga mit Auf-/Abstieg (2026-09-10): only meaningful when there's an
-              // actual division to move to/from in this direction — a top division has nowhere
-              // to promote into, a bottom division has nowhere to relegate to.
-              const inPromoteZone = isSeasonLiga && hasDivisionAbove && i < activeLeague.promote_count;
-              const inRelegateZone = isSeasonLiga && hasDivisionBelow && i >= standings.length - activeLeague.relegate_count;
-              return (
-                <div key={s.playerId} className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-2 px-3 py-2 rounded-lg border-l-2 ${inPromoteZone ? "border-l-secondary bg-secondary/5" : inRelegateZone ? "border-l-destructive bg-destructive/5" : "border-l-transparent"} ${i < 3 ? "bg-muted/50" : "bg-muted/30"}`}>
-                  <RankBadge rank={i + 1} />
-                  <div className="flex items-center gap-2 min-w-0">
-                    <RankAvatar emoji={player?.emoji ?? "🎯"} rank={i + 1} size={26} />
-                    <span className="text-sm font-medium truncate">{player?.name ?? "?"}</span>
-                    {inPromoteZone && <ArrowUp className="w-3 h-3 text-secondary shrink-0" />}
-                    {inRelegateZone && <ArrowDown className="w-3 h-3 text-destructive shrink-0" />}
-                  </div>
-                  <span className="w-8 text-center text-xs text-muted-foreground">{s.played}</span>
-                  <span className="w-8 text-center text-xs text-muted-foreground">{s.won}</span>
-                  <span className="w-14 text-center text-xs text-muted-foreground font-mono">{s.legsFor}:{s.legsAgainst}</span>
-                  <span className="w-10 text-right font-display text-primary">{s.points}</span>
-                </div>
-              );
-            })}
+          <>
+            <LeagueStandingsTable
+              rows={pagedStandings.visible.map((s): LeagueStandingsTableRow => {
+                const i = standings.indexOf(s);
+                const player = playerById.get(s.playerId);
+                // Saison-Liga mit Auf-/Abstieg (2026-09-10): only meaningful when there's an
+                // actual division to move to/from in this direction — a top division has nowhere
+                // to promote into, a bottom division has nowhere to relegate to.
+                const inPromoteZone = isSeasonLiga && hasDivisionAbove && i < activeLeague.promote_count;
+                const inRelegateZone = isSeasonLiga && hasDivisionBelow && i >= standings.length - activeLeague.relegate_count;
+                return {
+                  playerId: s.playerId, rank: i + 1, name: player?.name ?? "?", emoji: player?.emoji ?? null,
+                  played: s.played, won: s.won, legsFor: s.legsFor, legsAgainst: s.legsAgainst, points: s.points,
+                  zone: inPromoteZone ? "promote" : inRelegateZone ? "relegate" : null,
+                };
+              })}
+            />
             <ListPaginationFooter list={pagedStandings} />
-          </div>
+          </>
         )}
-      </SectionCard>
-
+      </section>
     );
+    // The first open fixture (lowest round) carries the screen's one filled button.
+    const nextUpFixtureId = fixturesByRound.flatMap(([, roundFixtures]) => roundFixtures).find((f) => f.status === "pending")?.id ?? null;
+    const todayIso = new Date().toISOString().slice(0, 10);
     const fixturesPanel = (
-      <SectionCard>
-        <div className="flex items-center justify-between gap-2">
-          <Eyebrow icon={Users}>{t("league.fixturesTitle")}</Eyebrow>
-          {activeLeague.created_by === session?.user?.id && fixturesByRound.length > 0 && (
-            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" disabled={savingRoundDate !== null} onClick={scheduleRoundsWeekly}>
-              <CalendarDays className="w-3 h-3" /> {t("league.scheduleWeekly")}
+      <section>
+        <SectionLabel
+          trailing={isLeagueOrganizer && fixturesByRound.length > 0 ? (
+            <Button variant="outline" className="h-11 gap-1.5 rounded-xl text-sm" disabled={savingRoundDate !== null} onClick={scheduleRoundsWeekly}>
+              <CalendarDays className="w-4 h-4" /> {t("league.scheduleWeekly")}
             </Button>
+          ) : (
+            <span className="text-[13px] tabular-nums text-muted-foreground">
+              {t("league.openFixturesCount").replace("{count}", String(unfinishedFixtureCount))}
+            </span>
           )}
-        </div>
+        >
+          {t("league.fixturesTitle")}
+        </SectionLabel>
         {fixturesByRound.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("league.noFixturesYet")}</p>
+          <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">{t("league.noFixturesYet")}</p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {fixturesByRound.map(([round, roundFixtures]) => {
               const scheduledDate = roundFixtures[0].scheduled_date;
-              const todayIso = new Date().toISOString().slice(0, 10);
               const roundOverdue = !!scheduledDate && scheduledDate < todayIso && roundFixtures.some((fx) => fx.status !== "finished");
-              const isOrganizer = activeLeague.created_by === session?.user?.id;
+              const roundLegLabel = legLabel(roundFixtures[0].leg);
               return (
               <div key={round}>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {t("league.roundLabel")} {round}{legLabel(roundFixtures[0].leg) ? ` · ${legLabel(roundFixtures[0].leg)}` : ""}
-                    {roundOverdue && <span className="ml-2 rounded bg-destructive/15 px-1.5 py-0.5 text-destructive normal-case">{t("league.deadlineOverdue")}</span>}
-                  </p>
-                  {/* Round 3 Rang 10: a Spieltag is scheduled as a whole round, not per fixture —
-                      see setRoundScheduledDate's doc comment. Read-only date text for everyone
-                      else once a date is set; only the league's organizer gets the editable
-                      input (same creator-only gate as the league edit/delete buttons above). */}
-                  {isOrganizer ? (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <CalendarDays className="w-3 h-3 text-muted-foreground" />
-                      <Input
-                        type="date"
-                        value={scheduledDate ?? ""}
-                        disabled={savingRoundDate === round}
-                        onChange={(e) => setRoundScheduledDate(round, e.target.value)}
-                        className="h-6 w-[130px] text-[10px] px-1.5 bg-muted border-border"
-                      />
-                    </div>
-                  ) : scheduledDate ? (
-                    <p className="flex items-center gap-1 text-[10px] text-muted-foreground shrink-0">
-                      <CalendarDays className="w-3 h-3" />
-                      {new Date(scheduledDate).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
-                    </p>
-                  ) : null}
-                  {/* Calendar export (2026-09-09) — shown to EVERYONE once a date is set, not
-                      just the organizer (unlike the editable date input above): any participant
-                      might want this specific matchday in their own phone's calendar, and this
-                      is a pure client-side download, nothing to save back. */}
-                  {scheduledDate && (
-                    <Button
-                      size="icon" variant="ghost" className="h-6 w-6 shrink-0"
-                      title={t("league.addToCalendar")}
-                      onClick={() => downloadIcsEvent(
-                        {
-                          date: scheduledDate,
-                          uid: `league-${activeLeague.id}-round-${round}`,
-                          title: `${activeLeague.name} · ${t("league.roundLabel")} ${round}`,
-                          description: roundFixtures.map((f) => {
-                            const p1 = playerById.get(f.player1_id);
-                            const p2 = playerById.get(f.player2_id);
-                            return `${p1?.name ?? "?"} vs ${p2?.name ?? "?"}`;
-                          }).join("\n"),
-                        },
-                        `${activeLeague.name.replace(/\s+/g, "_")}-Runde${round}.ics`,
-                      )}
-                    >
-                      <CalendarPlus className="w-3.5 h-3.5" />
-                    </Button>
-                  )}
-                </div>
-                <div className="space-y-1.5">
+                {/* Round 3 Rang 10: a Spieltag is scheduled as a whole round, not per fixture —
+                    see setRoundScheduledDate's doc comment. Only the organizer edits the date;
+                    the calendar export is offered to everyone once a date is set. */}
+                <LeagueRoundHeader
+                  label={`${t("league.roundLabel")} ${round}${roundLegLabel ? ` · ${roundLegLabel}` : ""}`}
+                  overdue={roundOverdue}
+                  scheduledDate={scheduledDate}
+                  formattedDate={scheduledDate ? new Date(scheduledDate).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }) : null}
+                  editable={isLeagueOrganizer}
+                  saving={savingRoundDate === round}
+                  onDateChange={(date) => setRoundScheduledDate(round, date)}
+                  onExportCalendar={() => {
+                    if (!scheduledDate) return;
+                    downloadIcsEvent(
+                      {
+                        date: scheduledDate,
+                        uid: `league-${activeLeague.id}-round-${round}`,
+                        title: `${activeLeague.name} · ${t("league.roundLabel")} ${round}`,
+                        description: roundFixtures.map((f) => {
+                          const p1 = playerById.get(f.player1_id);
+                          const p2 = playerById.get(f.player2_id);
+                          return `${p1?.name ?? "?"} vs ${p2?.name ?? "?"}`;
+                        }).join("\n"),
+                      },
+                      `${activeLeague.name.replace(/\s+/g, "_")}-Runde${round}.ics`,
+                    );
+                  }}
+                />
+                <div className="grid gap-2 lg:grid-cols-2">
                   {roundFixtures.map((f) => {
                     const p1 = playerById.get(f.player1_id);
                     const p2 = playerById.get(f.player2_id);
+                    const myUserId = session?.user?.id;
                     return (
-                      <div key={f.id} className="flex items-center gap-2 bg-muted/30 rounded-lg px-3 py-2">
-                        <div className="flex-1 min-w-0 flex items-center justify-between gap-2 text-sm">
-                          <span className={`truncate ${f.winner_id === f.player1_id ? "font-semibold text-primary" : ""}`}>{p1?.emoji} {p1?.name ?? "?"}</span>
-                          {f.status === "finished" ? (
-                            <span className="text-xs font-mono text-muted-foreground shrink-0">{f.player1_legs_won}:{f.player2_legs_won}</span>
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground shrink-0">vs</span>
-                          )}
-                          <span className={`truncate text-right ${f.winner_id === f.player2_id ? "font-semibold text-primary" : ""}`}>{p2?.name ?? "?"} {p2?.emoji}</span>
-                        </div>
-                        {f.status === "pending" && (
-                          activeLeague.result_mode === "live" ? (
-                            <>
-                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={() => startFixtureGame(f)}>
-                                <Play className="w-3 h-3" /> {t("league.playBtn")}
-                              </Button>
-                              {session?.user?.id && [p1?.user_id, p2?.user_id].includes(session.user.id) && p1?.user_id && p2?.user_id && (
-                                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" disabled={startingOnlineId === f.id} onClick={() => startFixtureOnline(f)}>
-                                  {startingOnlineId === f.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} {t("game.setupOnline")}
-                                </Button>
-                              )}
-                            </>
-                          ) : (
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={() => openManualEntry(f)}>
-                              <Pencil className="w-3 h-3" /> {t("league.enterResultBtn")}
-                            </Button>
-                          )
-                        )}
-                      </div>
+                      <LeagueFixtureCard
+                        key={f.id}
+                        player1={{ name: p1?.name ?? "?", emoji: p1?.emoji ?? null, isWinner: f.winner_id === f.player1_id }}
+                        player2={{ name: p2?.name ?? "?", emoji: p2?.emoji ?? null, isWinner: f.winner_id === f.player2_id }}
+                        score={f.status === "finished" ? { player1: f.player1_legs_won, player2: f.player2_legs_won } : null}
+                        actions={f.status === "pending" ? (
+                          <LeagueFixtureActions
+                            resultMode={activeLeague.result_mode}
+                            isNextUp={f.id === nextUpFixtureId}
+                            canPlayOnline={!!myUserId && [p1?.user_id, p2?.user_id].includes(myUserId) && !!p1?.user_id && !!p2?.user_id}
+                            startingOnline={startingOnlineId === f.id}
+                            onPlay={() => startFixtureGame(f)}
+                            onPlayOnline={() => startFixtureOnline(f)}
+                            onEnterResult={() => openManualEntry(f)}
+                          />
+                        ) : undefined}
+                      />
                     );
                   })}
                 </div>
@@ -855,7 +820,7 @@ const LeaguePage = () => {
             })}
           </div>
         )}
-      </SectionCard>
+      </section>
     );
     const leagueTabs: ManageTab[] = [
       { key: "table", label: t("league.tabTable"), icon: Trophy, content: standingsPanel },
@@ -865,85 +830,81 @@ const LeaguePage = () => {
     ];
     return (
       <div className="container py-6 animate-slide-up max-w-3xl lg:max-w-6xl mx-auto">
-        <Link to="/leagues" className="inline-flex items-center gap-1 text-sm text-muted-foreground mb-4 hover:text-foreground">
-          <ArrowLeft className="w-4 h-4" /> {t("league.allLeaguesLink")}
-        </Link>
-
-        <div className="mb-6">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <div className="flex items-center gap-3 min-w-0">
-              <Swords className="w-6 h-6 text-accent shrink-0" />
-              <h2 className="text-2xl font-display uppercase truncate">{activeLeague.name}</h2>
-            </div>
-            {/* Öffentliche Liga-Ansicht (2026-09-09): organizer-only, same opt-in switch as
-                Tournament.tsx's own "Live-Ansicht" button — everyone else simply never sees it,
-                so the detail view is unchanged for the vast majority of leagues that stay private. */}
-            {isLeagueOrganizer && (
-              <Button variant={activeLeague.public_view ? "default" : "outline"} size="sm" disabled={publicToggling} onClick={togglePublicView} className="gap-1 shrink-0">
-                <Radio className="w-3.5 h-3.5" />
-                {activeLeague.public_view ? t("tournament.liveOn") : t("league.publicViewBtn")}
-              </Button>
-            )}
-          </div>
+        <CompetitionHeader
+          backTo="/leagues"
+          backLabel={t("league.allLeaguesLink")}
+          kicker={[
+            activeLeague.game_mode,
+            `${activeLeague.participant_ids.length} ${t("league.participantsSuffix")}`,
+            `${t("league.seasonLabel")} ${activeLeague.season_number}`,
+            isSeasonLiga ? activeLeague.division_name ?? `${t("league.divisionLabel")} ${activeLeague.division_level}` : null,
+          ].filter(Boolean).join(" · ")}
+          title={activeLeague.name}
+          action={isLeagueOrganizer ? (
+            // Öffentliche Liga-Ansicht (2026-09-09): organizer-only, same opt-in switch as
+            // Tournament.tsx's own "Live-Ansicht" button — everyone else simply never sees it.
+            <Button
+              variant="outline"
+              aria-pressed={activeLeague.public_view}
+              disabled={publicToggling}
+              onClick={togglePublicView}
+              className={`h-11 gap-1.5 rounded-xl px-3.5 ${activeLeague.public_view ? "border-secondary/60 text-secondary hover:text-secondary" : ""}`}
+            >
+              <Radio className="w-4 h-4" />
+              <span className="hidden sm:inline">{activeLeague.public_view ? t("tournament.liveOn") : t("league.publicViewBtn")}</span>
+              <span className="sr-only sm:hidden">{activeLeague.public_view ? t("tournament.liveOn") : t("league.publicViewBtn")}</span>
+            </Button>
+          ) : undefined}
+        >
           <p className="text-sm text-muted-foreground">
-            {activeLeague.game_mode} · {t("stats.firstTo")} {Math.ceil(activeLeague.best_of_legs / 2)} · {activeLeague.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")} ·{" "}
+            {t("stats.firstTo")} {Math.ceil(activeLeague.best_of_legs / 2)} · {activeLeague.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")} ·{" "}
             {activeLeague.result_mode === "live" ? t("league.liveGamesLabel") : t("league.manualEntryLabel")}
           </p>
-
-          {/* Saison-Liga mit Auf-/Abstieg (2026-09-10) — season/division context, shown for every
-              league (season badge is harmless even at "Saison 1" of a standalone league) so the
-              prev/next-season and "Saison beenden" controls always have a consistent home. */}
-          <div className="flex items-center flex-wrap gap-1.5 mt-2.5">
-            <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-transparent">
-              {t("league.seasonLabel")} {activeLeague.season_number}
-            </Badge>
-            {isSeasonLiga && (
-              <Badge variant="outline" className="text-[10px] bg-primary/15 text-primary border-transparent">
-                {activeLeague.division_name ?? `${t("league.divisionLabel")} ${activeLeague.division_level}`}
-              </Badge>
-            )}
-            {activeLeague.previous_season_league_id && (
-              <Link to={`/leagues/${activeLeague.previous_season_league_id}`} className="text-[11px] text-muted-foreground hover:text-foreground">
-                ← {t("league.previousSeasonLink")}
-              </Link>
-            )}
-            {activeLeague.next_season_league_id && (
-              <Link to={`/leagues/${activeLeague.next_season_league_id}`} className="text-[11px] text-primary hover:underline">
-                {t("league.nextSeasonLink")} →
-              </Link>
-            )}
-          </div>
-
-        </div>
+          {/* Saison-Liga mit Auf-/Abstieg (2026-09-10) — links between the seasons of the same league. */}
+          {(activeLeague.previous_season_league_id || activeLeague.next_season_league_id) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {activeLeague.previous_season_league_id && (
+                <Link to={`/leagues/${activeLeague.previous_season_league_id}`} className="flex min-h-11 items-center gap-1 rounded-xl border border-border px-3 text-sm text-muted-foreground hover:text-foreground">
+                  <ChevronLeft aria-hidden="true" className="h-4 w-4" /> {t("league.previousSeasonLink")}
+                </Link>
+              )}
+              {activeLeague.next_season_league_id && (
+                <Link to={`/leagues/${activeLeague.next_season_league_id}`} className="flex min-h-11 items-center gap-1 rounded-xl border border-border px-3 text-sm text-foreground hover:bg-muted">
+                  {t("league.nextSeasonLink")} <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                </Link>
+              )}
+            </div>
+          )}
+        </CompetitionHeader>
 
         <ManageTabs tabs={leagueTabs} active={leagueTab} onChange={setLeagueTab} />
 
         <Dialog open={!!manualEntryFixture} onOpenChange={(open) => !open && setManualEntryFixture(null)}>
           <DialogContent className="bg-card border-border">
             <DialogHeader>
-              <DialogTitle className="font-display uppercase">{t("league.enterResultDialogTitle")}</DialogTitle>
+              <DialogTitle className="font-display text-2xl font-bold">{t("league.enterResultDialogTitle")}</DialogTitle>
             </DialogHeader>
             {manualEntryFixture && (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3 items-end">
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block truncate">
+                    <label htmlFor="league-manual-p1-legs" className="text-xs uppercase tracking-[0.12em] text-muted-foreground mb-1.5 block truncate">
                       {playerById.get(manualEntryFixture.player1_id)?.name ?? t("league.player1Label")}
                     </label>
-                    <Input type="number" min={0} value={manualP1Legs} onChange={(e) => setManualP1Legs(e.target.value)} className="bg-muted border-border" />
+                    <Input id="league-manual-p1-legs" type="number" inputMode="numeric" min={0} value={manualP1Legs} onChange={(e) => setManualP1Legs(e.target.value)} className="h-14 rounded-xl bg-muted border-border text-center font-display text-3xl font-bold tabular-nums" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block truncate">
+                    <label htmlFor="league-manual-p2-legs" className="text-xs uppercase tracking-[0.12em] text-muted-foreground mb-1.5 block truncate">
                       {playerById.get(manualEntryFixture.player2_id)?.name ?? t("league.player2Label")}
                     </label>
-                    <Input type="number" min={0} value={manualP2Legs} onChange={(e) => setManualP2Legs(e.target.value)} className="bg-muted border-border" />
+                    <Input id="league-manual-p2-legs" type="number" inputMode="numeric" min={0} value={manualP2Legs} onChange={(e) => setManualP2Legs(e.target.value)} className="h-14 rounded-xl bg-muted border-border text-center font-display text-3xl font-bold tabular-nums" />
                   </div>
                 </div>
                 {manualP1Legs !== "" && manualP2Legs !== "" && manualP1Legs === manualP2Legs && (
                   <p className="text-xs text-destructive">{t("league.noDrawAllowedMsg")}</p>
                 )}
                 <Button
-                  className="w-full gap-1.5"
+                  className="h-12 w-full gap-1.5 rounded-xl font-semibold"
                   disabled={savingResult || manualP1Legs === "" || manualP2Legs === "" || manualP1Legs === manualP2Legs}
                   onClick={submitManualResult}
                 >
@@ -974,171 +935,156 @@ const LeaguePage = () => {
         key: "basics", title: t("tournament.wizardBasics"), icon: Swords,
         issues: name.trim() ? [] : [t("league.issueName")],
         content: (
-          <SectionCard className="space-y-3">
-          <div>
-            <label className="text-sm text-muted-foreground mb-1 block">{t("common.name")}</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("league.namePlaceholder")} className="bg-muted border-border" />
-          </div>
+          <div className="space-y-4">
+            <section className="rounded-2xl border border-border bg-card p-4">
+              <label htmlFor="league-name" className="mb-1.5 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("common.name")}</label>
+              <Input id="league-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("league.namePlaceholder")} className="h-12 rounded-xl bg-muted border-border text-base" />
+            </section>
 
-          <div className="grid grid-cols-2 gap-3">
-            {!editingLeagueId && (
-              <div>
-                <label className="text-sm text-muted-foreground mb-1 block">{t("league.formatLabel")}</label>
-                <Select value={format} onValueChange={(v) => setFormat(v as "single" | "double")}>
-                  <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    <SelectItem value="single">{t("league.singleRoundLabel")}</SelectItem>
-                    <SelectItem value="double">{t("league.doubleRoundLabel")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("league.resultModeLabel")}</label>
-              <Select value={resultMode} onValueChange={(v) => setResultMode(v as "live" | "manual")}>
-                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="live">{t("league.liveModeOption")}</SelectItem>
-                  <SelectItem value="manual">{t("league.manualModeOption")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+            <section className="space-y-4 rounded-2xl border border-border bg-card p-4">
+              <ChoiceChips
+                label={t("league.gameModeLabel")}
+                options={[{ value: "501", label: "501" }, { value: "301", label: "301" }, { value: "Cricket", label: "Cricket" }]}
+                value={gameMode}
+                onChange={setGameMode}
+              />
+              <ChoiceChips
+                label={t("tournament.firstToLegsLabel")}
+                options={BEST_OF_OPTIONS.map((n) => ({ value: n, label: `${t("stats.firstTo")} ${Math.ceil(n / 2)}` }))}
+                value={bestOfLegs}
+                onChange={setBestOfLegs}
+                columnsClass="grid-cols-2 sm:grid-cols-4"
+              />
+            </section>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("league.gameModeLabel")}</label>
-              <Select value={gameMode} onValueChange={setGameMode}>
-                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  <SelectItem value="501">501</SelectItem>
-                  <SelectItem value="301">301</SelectItem>
-                  <SelectItem value="Cricket">Cricket</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm text-muted-foreground mb-1 block">{t("tournament.firstToLegsLabel")}</label>
-              <Select value={String(bestOfLegs)} onValueChange={(v) => setBestOfLegs(Number(v))}>
-                <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  {BEST_OF_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{t("stats.firstTo")} {Math.ceil(n / 2)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <section className="space-y-4 rounded-2xl border border-border bg-card p-4">
+              {/* Format is fixed once the fixture list exists — the edit form leaves it out (see saveLeagueEdit). */}
+              {!editingLeagueId && (
+                <ChoiceChips
+                  label={t("league.formatLabel")}
+                  options={[{ value: "single", label: t("league.singleRoundLabel") }, { value: "double", label: t("league.doubleRoundLabel") }]}
+                  value={format}
+                  onChange={setFormat}
+                />
+              )}
+              <ChoiceChips
+                label={t("league.resultModeLabel")}
+                options={[{ value: "live", label: t("league.liveModeOption") }, { value: "manual", label: t("league.manualModeOption") }]}
+                value={resultMode}
+                onChange={setResultMode}
+              />
+            </section>
           </div>
-
-          </SectionCard>
         ),
       },
       {
         key: "players", title: t("tournament.wizardPlayers"), icon: Users,
         issues: participantsInvalid ? [seasonLigaMode ? t("league.issueDivisions") : t("league.issueParticipants")] : [],
         content: (
-          <SectionCard className="space-y-3">
+          <div className="space-y-4">
           {editingLeagueId ? (
-            <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-lg p-2.5">
+            <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
               {t("league.editRestrictionNotice")}
             </p>
           ) : (
             <>
               {/* Saison-Liga mit Auf-/Abstieg (2026-09-10) — opt-in toggle, only offered at
                   creation time (see the state declarations' own doc comment for why). */}
-              <label className="flex items-center justify-between gap-3 px-1 py-1 rounded-lg cursor-pointer">
-                <span className="flex items-center gap-2 text-sm">
-                  <Layers className="w-4 h-4 text-primary shrink-0" />
-                  {t("league.seasonLigaToggleLabel")}
-                </span>
-                <Switch checked={seasonLigaMode} onCheckedChange={setSeasonLigaMode} />
-              </label>
-              {seasonLigaMode && (
-                <p className="text-[11px] text-muted-foreground bg-muted/30 rounded-lg p-2.5 -mt-1">
-                  {t("league.seasonLigaExplainer")}
-                </p>
-              )}
+              <section className="rounded-2xl border border-border bg-card p-4">
+                <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    <Layers className="w-4 h-4 text-primary shrink-0" />
+                    {t("league.seasonLigaToggleLabel")}
+                  </span>
+                  <Switch checked={seasonLigaMode} onCheckedChange={setSeasonLigaMode} />
+                </label>
+                {seasonLigaMode && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {t("league.seasonLigaExplainer")}
+                  </p>
+                )}
+              </section>
 
               {seasonLigaMode ? (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-sm text-muted-foreground mb-1 block">{t("league.swapCountLabel")}</label>
-                    <Select value={String(swapCount)} onValueChange={(v) => setSwapCount(Number(v))}>
-                      <SelectTrigger className="bg-muted border-border"><SelectValue /></SelectTrigger>
-                      <SelectContent className="bg-card border-border">
-                        {[1, 2, 3, 4].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <>
+                  <section className="rounded-2xl border border-border bg-card p-4">
+                    <ChoiceChips
+                      label={t("league.swapCountLabel")}
+                      options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))}
+                      value={swapCount}
+                      onChange={setSwapCount}
+                    />
+                  </section>
 
                   {divisions.map((d, idx) => (
-                    <div key={idx} className="border border-border rounded-lg p-3 space-y-2">
+                    <section key={idx} className="space-y-3 rounded-2xl border border-border bg-card p-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-display uppercase text-muted-foreground shrink-0">{t("league.divisionLabel")} {idx + 1}</span>
+                        <span className="shrink-0 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("league.divisionLabel")} {idx + 1}</span>
                         <Input
                           value={d.name}
+                          aria-label={`${t("league.divisionLabel")} ${idx + 1}`}
                           onChange={(e) => renameDivision(idx, e.target.value)}
-                          className="h-8 bg-muted border-border text-sm flex-1"
+                          className="h-11 flex-1 rounded-xl bg-muted border-border text-sm"
                         />
                         {divisions.length > 2 && (
-                          <button onClick={() => removeDivision(idx)} className="text-muted-foreground hover:text-destructive shrink-0 p-1">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`${t("league.divisionLabel")} ${idx + 1}: ${t("stats.delete")}`}
+                            onClick={() => removeDivision(idx)}
+                            className="h-11 w-11 shrink-0 text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
                         )}
                       </div>
-                      <p className="text-[11px] text-muted-foreground">{t("league.participantsLabel")} ({d.participantIds.size})</p>
-                      <div className="space-y-1 max-h-[22vh] overflow-y-auto -mx-1 px-1">
-                        {dbPlayers.map((p) => (
-                          <label key={p.id} className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-muted/50 cursor-pointer">
-                            <Checkbox checked={d.participantIds.has(p.id)} onCheckedChange={() => toggleDivisionParticipant(idx, p.id)} />
-                            <span className="text-base shrink-0">{p.emoji}</span>
-                            <span className="flex-1 min-w-0 truncate text-xs">{p.name}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                      <ParticipantPicker
+                        label={t("league.participantsLabel")}
+                        players={dbPlayers}
+                        selected={d.participantIds}
+                        onToggle={(pid) => toggleDivisionParticipant(idx, pid)}
+                        maxHeightClass="max-h-[30vh]"
+                      />
+                    </section>
                   ))}
-                  <Button variant="outline" size="sm" onClick={addDivision} className="w-full gap-1">
-                    <Plus className="w-3.5 h-3.5" /> {t("league.addDivisionBtn")}
+                  <Button variant="outline" onClick={addDivision} className="h-11 w-full gap-1.5 rounded-xl">
+                    <Plus className="w-4 h-4" /> {t("league.addDivisionBtn")}
                   </Button>
-                </div>
+                </>
               ) : (
-                <div>
-                  <label className="text-sm text-muted-foreground mb-1.5 block">{t("league.participantsLabel")} ({selectedParticipants.size})</label>
-                  <div className="space-y-1 max-h-[40vh] overflow-y-auto -mx-1 px-1">
-                    {dbPlayers.map((p) => (
-                      <label key={p.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 cursor-pointer">
-                        <Checkbox checked={selectedParticipants.has(p.id)} onCheckedChange={() => toggleParticipant(p.id)} />
-                        <span className="text-lg shrink-0">{p.emoji}</span>
-                        <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                <section className="rounded-2xl border border-border bg-card p-4">
+                  <ParticipantPicker
+                    label={t("league.participantsLabel")}
+                    players={dbPlayers}
+                    selected={selectedParticipants}
+                    onToggle={toggleParticipant}
+                  />
+                </section>
               )}
             </>
           )}
-
-          </SectionCard>
+          </div>
         ),
       },
       {
         key: "review", title: t("tournament.wizardReview"), icon: Check, issues: [],
         content: (
-          <SectionCard glow="primary">
+          <section className="rounded-2xl border border-border bg-card px-4 py-2">
             <dl className="divide-y divide-border/60 text-sm">
               {summaryRows.map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-3 py-2">
+                <div key={label} className="flex min-h-11 items-center justify-between gap-3 py-2">
                   <dt className="text-muted-foreground">{label}</dt>
-                  <dd className="truncate text-right font-medium">{value}</dd>
+                  <dd className="truncate text-right font-semibold tabular-nums">{value}</dd>
                 </div>
               ))}
             </dl>
-          </SectionCard>
+          </section>
         ),
       },
     ];
     return (
       <TournamentSetupWizard
-        heading={<div className="mb-4 flex items-center gap-3"><Swords className="h-6 w-6 text-accent" /><h2 className="text-2xl font-display uppercase">{editingLeagueId ? t("league.editLeagueBtn") : t("league.newLeagueBtn")}</h2></div>}
+        heading={<CompetitionHeader kicker={t("league.pageTitle")} title={editingLeagueId ? t("league.editLeagueBtn") : t("league.newLeagueBtn")} />}
         steps={steps}
         current={wizardStep}
         onChange={setWizardStep}
@@ -1157,59 +1103,58 @@ const LeaguePage = () => {
   }
 
   // ─── LIST ─────────────────────────────────────────
+  const finishedLeagueCount = leagues.filter((l) => l.status === "finished").length;
+  const startCreating = () => { setWizardStep(0); setCreating(true); };
   return (
     <div className="container py-6 animate-slide-up max-w-3xl lg:max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Swords className="w-6 h-6 text-accent" />
-          <h2 className="text-2xl font-display uppercase">{t("league.pageTitle")}</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link to="/tournament" className="text-xs text-muted-foreground hover:text-foreground">← {t("league.tournamentsLink")}</Link>
-          <Button size="sm" onClick={() => { setWizardStep(0); setCreating(true); }} className="gap-1">
+      <CompetitionHeader
+        backTo="/tournament"
+        backLabel={t("league.tournamentsLink")}
+        kicker={`${leagues.length - finishedLeagueCount} ${t("league.activeStatusLabel")} · ${finishedLeagueCount} ${t("league.finishedStatusLabel")}`}
+        title={t("league.pageTitle")}
+        action={leagues.length > 0 ? (
+          <Button onClick={startCreating} className="h-11 gap-1.5 rounded-xl px-3.5 font-semibold">
             <Plus className="w-4 h-4" /> {t("league.newLeagueBtn")}
           </Button>
-        </div>
-      </div>
-
+        ) : undefined}
+      />
 
       {loading || playersLoading ? (
         <div role="status" aria-label={t("common.loading")} className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
       ) : leagues.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
+        <div className="rounded-2xl border border-dashed border-border px-4 py-10 text-center text-muted-foreground">
           <Swords className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="text-sm">{t("league.noLeaguesYet")}</p>
-          <Button className="mt-4 gap-1.5" onClick={() => { setWizardStep(0); setCreating(true); }}><Plus className="h-4 w-4" /> {t("league.createFirstLeague")}</Button>
+          <Button className="mt-4 h-11 gap-1.5 rounded-xl font-semibold" onClick={startCreating}><Plus className="h-4 w-4" /> {t("league.createFirstLeague")}</Button>
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-2.5 md:grid-cols-2">
           {pagedLeagues.visible.map((l) => (
-            <div key={l.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
-              <Link to={`/leagues/${l.id}`} className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
-                  <Swords className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{l.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {l.participant_ids.length} {t("league.participantsSuffix")} · {l.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")} · {l.status === "finished" ? t("league.finishedStatusLabel") : t("league.activeStatusLabel")}
-                    {/* Saison-Liga mit Auf-/Abstieg (2026-09-10) — only shown once it's actually
-                        relevant (a division, or past season 1), so a plain league's row is
-                        unchanged from before this feature existed. */}
-                    {(l.division_name || l.season_number > 1) && (
-                      <> · {l.division_name ?? `${t("league.divisionLabel")} ${l.division_level}`}{l.season_number > 1 ? ` · ${t("league.seasonLabel")} ${l.season_number}` : ""}</>
-                    )}
-                  </p>
-                </div>
-              </Link>
-              {l.created_by === session?.user?.id && (
-                <div className="flex items-center shrink-0">
-                  <Button variant="ghost" size="icon" title={t("league.editLeagueBtn")} aria-label={t("league.editLeagueBtn")} onClick={() => startEditLeague(l)}>
+            <CompetitionListRow
+              key={l.id}
+              to={`/leagues/${l.id}`}
+              icon={Swords}
+              title={l.name}
+              meta={
+                <>
+                  <span className="tabular-nums">{l.participant_ids.length}</span> {t("league.participantsSuffix")} · {l.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")} ·{" "}
+                  <span className={l.status === "finished" ? "" : "text-secondary"}>{l.status === "finished" ? t("league.finishedStatusLabel") : t("league.activeStatusLabel")}</span>
+                  {/* Saison-Liga mit Auf-/Abstieg (2026-09-10) — only shown once it's actually
+                      relevant (a division, or past season 1), so a plain league's row is
+                      unchanged from before this feature existed. */}
+                  {(l.division_name || l.season_number > 1) && (
+                    <> · {l.division_name ?? `${t("league.divisionLabel")} ${l.division_level}`}{l.season_number > 1 ? ` · ${t("league.seasonLabel")} ${l.season_number}` : ""}</>
+                  )}
+                </>
+              }
+              actions={l.created_by === session?.user?.id ? (
+                <>
+                  <Button variant="ghost" size="icon" className="h-11 w-11" title={t("league.editLeagueBtn")} aria-label={t("league.editLeagueBtn")} onClick={() => startEditLeague(l)}>
                     <Pencil className="w-4 h-4 text-muted-foreground hover:text-primary" />
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" title={t("league.deleteLeagueBtn")} aria-label={t("league.deleteLeagueBtn")}>
+                      <Button variant="ghost" size="icon" className="h-11 w-11" title={t("league.deleteLeagueBtn")} aria-label={t("league.deleteLeagueBtn")}>
                         <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                       </Button>
                     </AlertDialogTrigger>
@@ -1226,9 +1171,9 @@ const LeaguePage = () => {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                </div>
-              )}
-            </div>
+                </>
+              ) : undefined}
+            />
           ))}
           <div className="md:col-span-2"><ListPaginationFooter list={pagedLeagues} /></div>
         </div>
