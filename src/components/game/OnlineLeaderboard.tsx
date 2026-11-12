@@ -19,7 +19,7 @@ const OnlineLeaderboard = () => {
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between text-xs text-muted-foreground uppercase font-display">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full min-h-11 flex items-center justify-between text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
         <span className="flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5 text-accent" /> {t("players.onlineLeaderboard")}</span>
         <span>{open ? "−" : "+"}</span>
       </button>

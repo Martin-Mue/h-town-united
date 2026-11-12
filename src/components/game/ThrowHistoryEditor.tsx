@@ -69,9 +69,9 @@ const ThrowHistoryEditor = ({ throws, playerName, editModeOn, onToggleEditMode, 
   if (throws.length === 0) return null;
 
   return (
-    <div className="mt-3 gradient-card rounded-2xl border border-border shadow-elevation-sm p-3">
+    <div className="mt-3 bg-card rounded-2xl border border-border p-3">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-muted-foreground uppercase font-display">{t("game.throwsHeading")} · {playerName}</p>
+        <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("game.throwsHeading")} · {playerName}</p>
         {!readOnly && (
           <button onClick={onToggleEditMode} className="text-xs text-primary flex items-center gap-1">
             <Edit2 className="w-3 h-3" /> {editModeOn ? t("game.done") : t("game.edit")}

@@ -2698,7 +2698,7 @@ const GamePage = () => {
   ) : null;
 
   const cricketBoard = isCricket && game.cricket ? (
-    <div className="gradient-card rounded-2xl border border-border shadow-elevation-sm p-3 mb-3 overflow-x-auto">
+    <div className="bg-card rounded-2xl border border-border p-3 mb-3 overflow-x-auto">
       <table className="w-full text-center text-xs border-separate border-spacing-y-1">
         <thead>
           <tr>
@@ -3125,10 +3125,10 @@ const GamePage = () => {
       {confettiKey !== null && <ConfettiBurst triggerKey={confettiKey} />}
       {legWonBanner && (
         <div className="pointer-events-none fixed inset-x-0 top-16 z-[65] flex justify-center px-4" role="status">
-          <div className="animate-slide-up w-full max-w-sm overflow-hidden rounded-2xl border border-primary/50 bg-background/95 shadow-[0_8px_28px_-8px_hsl(185_85%_48%/0.6)]">
+          <div className="animate-slide-up w-full max-w-sm overflow-hidden rounded-2xl border border-primary/50 bg-card shadow-elevation-lg">
             <div className="flex items-center justify-center gap-2 px-4 py-3">
               <Trophy className="h-5 w-5 shrink-0 text-accent" />
-              <span className="truncate font-display text-base font-semibold">{legWonBanner.winner} · {t("game.leg")} {legWonBanner.legNumber} {t("game.legWonSuffix")}</span>
+              <span className="truncate font-display text-base font-bold">{legWonBanner.winner} · {t("game.leg")} {legWonBanner.legNumber} {t("game.legWonSuffix")}</span>
             </div>
             {legWonBanner.stats && (
               <div className="grid grid-cols-3 divide-x divide-border/60 border-t border-border/60 text-center">
@@ -3138,8 +3138,8 @@ const GamePage = () => {
                   [t("game.legHighestVisit"), String(legWonBanner.stats.highestVisit)],
                 ].map(([label, value]) => (
                   <div key={label} className="px-2 py-2">
-                    <p className="font-display text-xl leading-none tabular-nums text-primary">{value}</p>
-                    <p className="mt-1 truncate text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+                    <p className="font-display text-xl font-bold leading-none tabular-nums">{value}</p>
+                    <p className="mt-1 truncate text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
                   </div>
                 ))}
               </div>
@@ -3149,9 +3149,9 @@ const GamePage = () => {
       )}
       {bustCard && (
         <div className="pointer-events-none fixed inset-x-0 top-16 z-[65] flex justify-center px-4" role="alert">
-          <div className="animate-slide-up w-full max-w-sm overflow-hidden rounded-2xl border border-destructive/60 bg-background/95 shadow-[0_8px_28px_-8px_hsl(0_70%_46%/0.6)]">
+          <div className="animate-slide-up w-full max-w-sm overflow-hidden rounded-2xl border border-destructive/60 bg-card shadow-elevation-lg">
             <div className="px-4 pt-3 text-center">
-              <p className="font-display text-lg font-semibold uppercase tracking-wide text-destructive">{t("game.bustTitle")}</p>
+              <p className="font-display text-lg font-bold text-destructive">{t("game.bustTitle")}</p>
               <p className="truncate text-xs text-muted-foreground">{bustCard.name} — {t("game.remainingStaysAt")} {bustCard.staysAt}</p>
             </div>
             <div className="flex justify-center gap-2 px-4 py-3">
@@ -3176,24 +3176,24 @@ const GamePage = () => {
       )}
       {game.isFinished && duelId && (
         <div className="fixed inset-0 bg-background/90 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 text-center shadow-elevation-sm">
-            <p className="font-display uppercase text-sm text-muted-foreground mb-2">{t("game.duelResultTitle")}</p>
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 text-center">
+            <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-2">{t("game.duelResultTitle")}</p>
             {duelResult ? (
               <>
-                <p className="font-display text-5xl tabular-nums text-primary">{duelResult.darts}</p>
+                <p className="font-display text-5xl font-bold tabular-nums">{duelResult.darts}</p>
                 <p className="text-xs text-muted-foreground mb-1">{t("home.duelDarts")} · Ø {duelResult.average.toFixed(1)}</p>
                 <p className="text-sm text-muted-foreground mt-4">{t("game.duelWaiting").replace("{name}", duelResult.opponentName)}</p>
               </>
             ) : (
               <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto my-4" />
             )}
-            <Button className="mt-5 w-full" onClick={() => navigate("/")}>{t("game.duelBackHome")}</Button>
+            <Button className="mt-5 h-[52px] w-full rounded-[14px] text-base font-semibold" onClick={() => navigate("/")}>{t("game.duelBackHome")}</Button>
           </div>
         </div>
       )}
       {/* Winner overlay */}
       {game.isFinished && !duelId && (
-        <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex items-center justify-center overflow-y-auto overscroll-y-contain py-8">
+        <div className="fixed inset-0 bg-background/85 backdrop-blur-sm z-50 flex justify-center overflow-y-auto overscroll-y-contain py-8">
           <GamePostGame
             game={game}
             postGameStats={postGameStats}
@@ -3424,7 +3424,7 @@ const GamePage = () => {
       <Dialog open={correctorOpen} onOpenChange={setCorrectorOpen}>
         <DialogContent hideClose className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display uppercase text-base">
+            <DialogTitle className="font-display font-bold text-lg">
               {t("game.correctThrowsTitle")} · {currentPlayerName}
             </DialogTitle>
           </DialogHeader>

@@ -48,11 +48,11 @@ const AiMatchReport = ({ gameId }: AiMatchReportProps) => {
 
   if (report) {
     return (
-      <div className="bg-muted/30 border border-primary/30 rounded-lg p-3 mb-4 text-left">
+      <div className="rounded-xl border border-border p-3 mb-4 text-left">
         <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-1.5">
             <Newspaper className="w-3.5 h-3.5 text-primary" />
-            <span className="text-xs font-display uppercase text-primary">{t("aiReport.title")}</span>
+            <span className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("aiReport.title")}</span>
           </div>
           <span className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Sparkles className="w-2.5 h-2.5" /> {t("aiReport.aiGeneratedTag")}
@@ -65,7 +65,7 @@ const AiMatchReport = ({ gameId }: AiMatchReportProps) => {
 
   return (
     <div className="mb-4 flex flex-col items-center gap-1.5">
-      <Button variant="outline" size="sm" onClick={generate} disabled={loading} className="gap-1.5">
+      <Button variant="outline" size="sm" onClick={generate} disabled={loading} className="h-11 gap-1.5 rounded-xl">
         {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Newspaper className="w-3.5 h-3.5" />}
         {loading ? t("aiReport.generating") : t("aiReport.generateBtn")}
       </Button>

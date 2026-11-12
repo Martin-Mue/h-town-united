@@ -27,18 +27,17 @@ const GameWarmup = ({ warmupRemaining, warmupDarts, warmupTotal, setWarmupRemain
   return (
     <div className="container py-6 animate-slide-up max-w-lg md:max-w-2xl mx-auto">
       <div className="text-center mb-4">
-        <h2 className="text-2xl font-display uppercase text-primary">{t("game.warmup")}</h2>
+        <h1 className="font-display text-[28px] font-bold leading-tight">{t("game.warmup")}</h1>
         <p className="text-xs text-muted-foreground mt-1">{t("game.warmupDesc")}</p>
       </div>
 
-      <div className="relative overflow-hidden rounded-2xl border border-primary/40 bg-gradient-to-b from-primary/10 to-card glow-cyan p-6 mb-4 text-center">
-        <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-primary" />
-        <div className="font-display text-7xl tabular-nums text-primary leading-none">
+      <div className="rounded-2xl border border-border bg-card p-6 mb-4 text-center">
+        <div className="font-display text-7xl font-bold tabular-nums leading-none">
           {mm}:{String(ss).padStart(2, "0")}
         </div>
         <div className="flex items-center justify-center gap-2 mt-4 text-xs text-muted-foreground">
-          <span className="rounded-full bg-white/[0.06] px-3 py-1">{warmupDarts} {t("game.dartsSuffix")}</span>
-          <span className="rounded-full bg-white/[0.06] px-3 py-1">{warmupTotal} {t("game.points")}</span>
+          <span className="rounded-full bg-muted px-3 py-1">{warmupDarts} {t("game.dartsSuffix")}</span>
+          <span className="rounded-full bg-muted px-3 py-1">{warmupTotal} {t("game.points")}</span>
         </div>
         <div className="flex items-center justify-center gap-2 mt-3">
           <Button size="sm" variant="outline" className="rounded-full" onClick={() => setWarmupRemaining((s) => s + 30)}>+30s</Button>
@@ -48,7 +47,7 @@ const GameWarmup = ({ warmupRemaining, warmupDarts, warmupTotal, setWarmupRemain
 
       <DartScoreInput isDisabled={false} onThrow={submitWarmupDart} />
 
-      <Button onClick={enterMatch} className="w-full mt-4 font-display uppercase text-lg py-6">
+      <Button onClick={enterMatch} className="mt-4 h-[52px] w-full rounded-[14px] text-base font-semibold">
         <Target className="w-5 h-5 mr-2" /> {t("game.letsGo")}
       </Button>
     </div>

@@ -65,7 +65,7 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-display uppercase text-base">
+          <DialogTitle className="flex items-center gap-2 font-display font-bold text-lg">
             <Badge variant="outline" className="font-mono shrink-0">{game.mode}</Badge>
             <span className="truncate flex-1 min-w-0">{game.player1_name} vs {game.player2_name}</span>
           </DialogTitle>
@@ -75,7 +75,7 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
           <p className="text-xs text-muted-foreground">
             {new Date(game.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "long", year: "numeric" })}
           </p>
-          <p className="text-4xl font-display mt-1">{game.player1_legs_won} : {game.player2_legs_won}</p>
+          <p className="text-4xl font-display font-bold tabular-nums mt-1">{game.player1_legs_won} : {game.player2_legs_won}</p>
           <p className="text-sm text-secondary font-medium flex items-center justify-center gap-1 mt-0.5">
             <Trophy className="w-4 h-4" /> {game.winner_name}
           </p>
@@ -92,7 +92,7 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
             ) : (
             <div className="grid grid-cols-2 gap-3">
               {matchTotals.map((p) => (
-                <div key={p.name} className={`rounded-lg border p-3 ${p.won ? "border-secondary/40 bg-secondary/5" : "border-border"}`}>
+                <div key={p.name} className={`rounded-xl border p-3 ${p.won ? "border-secondary/40" : "border-border"}`}>
                   <p className={`text-sm truncate mb-2 ${p.won ? "text-secondary font-semibold" : "text-foreground"}`}>
                     {p.won && "🏆 "}{p.name}
                   </p>
@@ -127,10 +127,10 @@ const MatchDetailDialog = ({ game, legs, matchTotals, onClose }: MatchDetailDial
                 const rows = legs.filter((l) => l.leg_number === legNumber).sort((a, b) => a.player_index - b.player_index);
                 const isOpen = expandedLeg === legNumber;
                 return (
-                  <div key={legNumber} className="rounded-lg border border-border bg-muted/20 overflow-hidden">
+                  <div key={legNumber} className="rounded-xl border border-border bg-card overflow-hidden">
                     <button
                       onClick={() => setExpandedLeg(isOpen ? null : legNumber)}
-                      className="w-full px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
+                      className="w-full min-h-11 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">{t("game.leg")} {legNumber}</span>

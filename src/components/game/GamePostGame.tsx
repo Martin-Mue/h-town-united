@@ -51,10 +51,12 @@ const GamePostGame = ({
 }: GamePostGameProps) => {
   const { t } = useLanguage();
   return (
-    <div className="bg-card border border-primary/30 rounded-2xl p-8 text-center animate-scale-in max-w-md mx-4 glow-cyan">
-      <Trophy className="w-16 h-16 text-accent mx-auto mb-4" />
-      <h2 className="text-3xl font-display uppercase mb-1">{game.winnerName}</h2>
-      <p className="text-accent font-display text-xl uppercase mb-4">{t("game.wins")}</p>
+    <div className="bg-card border border-border rounded-2xl p-6 text-center animate-scale-in max-w-md mx-4 my-auto h-fit">
+      <span aria-hidden="true" className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+        <Trophy className="h-8 w-8" />
+      </span>
+      <h2 className="text-[32px] leading-tight font-display font-bold break-words">{game.winnerName}</h2>
+      <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mt-1 mb-3">{t("game.wins")}</p>
       {/* Sets-Modus: the match was actually decided by sets, not by the final set's leg
           score alone — leading with setsWon (and naming the final set's own leg score
           underneath, in parentheses, for anyone who wants the detail) avoids the final
@@ -66,7 +68,7 @@ const GamePostGame = ({
           <span className="text-xs text-muted-foreground/70"> ({game.legsWon.join(" : ")} {t("game.legsSuffix")} {t("game.inFinalSet")})</span>
         </p>
       )}
-      {game.bestOfLegs > 1 && !game.setsMode && <p className="text-sm text-muted-foreground mb-4">{game.legsWon.join(" : ")} {t("game.legsSuffix")}</p>}
+      {game.bestOfLegs > 1 && !game.setsMode && <p className="mb-4 text-sm text-muted-foreground"><span className="font-display text-2xl font-bold tabular-nums text-foreground">{game.legsWon.join(" : ")}</span> {t("game.legsSuffix")}</p>}
 
       {/* Round 3 Rang 8: a small supportive line for whoever didn't win — this screen used
           to be entirely one-sided (trophy + winner name only), with nothing acknowledging
@@ -91,12 +93,12 @@ const GamePostGame = ({
       {postGameStats && postGameStats[0].perLeg.length > 1 && (
         <div className="flex flex-wrap justify-center gap-1.5 mb-4">
           <button onClick={() => setSelectedLegTab("all")}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${selectedLegTab === "all" ? "bg-primary/15 text-primary" : "bg-muted/40 text-muted-foreground hover:text-foreground"}`}>
+            aria-pressed={selectedLegTab === "all"} className={`min-h-11 px-3.5 rounded-xl border text-sm font-semibold transition-colors ${selectedLegTab === "all" ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
             {t("game.overallTab")}
           </button>
           {postGameStats[0].perLeg.map((_, li) => (
             <button key={li} onClick={() => setSelectedLegTab(li)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${selectedLegTab === li ? "bg-primary/15 text-primary" : "bg-muted/40 text-muted-foreground hover:text-foreground"}`}>
+              aria-pressed={selectedLegTab === li} className={`min-h-11 px-3.5 rounded-xl border text-sm font-semibold transition-colors ${selectedLegTab === li ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
               {t("game.leg")} {li + 1}
             </button>
           ))}
@@ -104,7 +106,7 @@ const GamePostGame = ({
       )}
 
       {postGameStats && postGameStats.length === 2 && game.mode !== "cricket" && (
-        <div className="bg-muted/30 rounded-lg p-3 mb-4 text-left">
+        <div className="rounded-xl border border-border p-3 mb-4 text-left">
           <MatchStatComparison
             players={[
               { name: postGameStats[0].name, won: postGameStats[0].name === game.winnerName, bundle: statFor(postGameStats[0]) },
@@ -120,7 +122,7 @@ const GamePostGame = ({
           {postGameStats.map((p) => {
             const s = statFor(p);
             return (
-              <div key={p.name} className="bg-muted/50 rounded-lg p-3 text-xs space-y-1">
+              <div key={p.name} className="rounded-xl border border-border p-3 text-xs space-y-1">
                 <p className="font-semibold text-sm truncate">{p.name}</p>
                 <p className="text-muted-foreground">Ø <span className="text-foreground font-bold">{s.average.toFixed(1)}</span></p>
                 <p className="text-muted-foreground">High <span className="text-foreground font-bold">{s.highscore}</span></p>
@@ -128,7 +130,7 @@ const GamePostGame = ({
                 {averageToCheckoutRange(s.scoringPhase) !== null && (
                   <p className="text-muted-foreground">{t("stats.averageTo170")} <span className="text-foreground font-bold">{averageToCheckoutRange(s.scoringPhase)!.toFixed(1)}</span></p>
                 )}
-                {s.s180 > 0 && <p className="text-accent font-bold">🎯 {s.s180}× 180!</p>}
+                {s.s180 > 0 && <p className="text-foreground font-bold">🎯 {s.s180}× 180!</p>}
               </div>
             );
           })}
@@ -139,8 +141,8 @@ const GamePostGame = ({
           "detaillierte Statistiken", since seeing HOW an average was built up (a run of
           steady 60s vs. one lucky 180) is exactly what a post-match glance is for. */}
       {postGameStats && postGameStats.some((p) => statFor(p).tierBreakdown.some((tier) => tier.count > 0)) && (
-        <div className="bg-muted/30 rounded-lg p-3 mb-4 text-xs overflow-x-auto">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 text-left">{t("game.scoreDistribution")}</p>
+        <div className="rounded-xl border border-border p-3 mb-4 text-xs overflow-x-auto">
+          <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-2 text-left">{t("game.scoreDistribution")}</p>
           <div className="grid gap-y-1" style={{ gridTemplateColumns: `1fr repeat(${postGameStats.length}, 1fr)` }}>
             <span />
             {postGameStats.map((p) => <span key={p.name} className="font-semibold text-primary text-center truncate">{p.name}</span>)}
@@ -150,7 +152,7 @@ const GamePostGame = ({
                 {postGameStats.map((p) => {
                   const count = statFor(p).tierBreakdown[ti].count;
                   return (
-                    <span key={p.name} className={`text-center font-display ${tier.label === "180" && count > 0 ? "text-accent font-bold" : ""}`}>
+                    <span key={p.name} className={`text-center font-display tabular-nums ${tier.label === "180" && count > 0 ? "text-primary font-bold" : ""}`}>
                       {count || "–"}
                     </span>
                   );
@@ -162,7 +164,7 @@ const GamePostGame = ({
       )}
 
       {postGameStats && (
-        <button onClick={() => setShowDetailedStats(!showDetailedStats)} className="text-xs text-primary underline mb-4 block mx-auto">
+        <button onClick={() => setShowDetailedStats(!showDetailedStats)} className="min-h-11 px-2 text-sm font-semibold text-primary mb-2 block mx-auto">
           {showDetailedStats ? t("game.lessStats") : t("game.detailedStats")}
         </button>
       )}
@@ -171,7 +173,7 @@ const GamePostGame = ({
           are already visible above (the cards and the distribution table), so this only
           adds numbers that aren't shown anywhere else yet. */}
       {showDetailedStats && postGameStats && (
-        <div className="bg-muted/30 rounded-lg p-4 mb-4 text-xs overflow-x-auto">
+        <div className="rounded-xl border border-border p-4 mb-4 text-xs overflow-x-auto">
           <div className="grid gap-y-2" style={{ gridTemplateColumns: `1fr repeat(${postGameStats.length}, 1fr)` }}>
             <span className="text-muted-foreground text-left">{t("game.statistic")}</span>
             {postGameStats.map(p => <span key={p.name} className="font-semibold text-primary text-center truncate">{p.name}</span>)}
@@ -188,7 +190,7 @@ const GamePostGame = ({
             ].map(row => (
               <span key={row.l} className="contents">
                 <span className="text-left text-muted-foreground">{row.l}</span>
-                {postGameStats.map(p => <span key={p.name} className="text-center font-display">{row.v(p)}</span>)}
+                {postGameStats.map(p => <span key={p.name} className="text-center font-display tabular-nums">{row.v(p)}</span>)}
               </span>
             ))}
           </div>
@@ -198,7 +200,7 @@ const GamePostGame = ({
               row, since most matches leave most of the board untouched. */}
           {visibleSegmentRows.length > 0 && (
             <div className="mt-4 pt-3 border-t border-border/40">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 text-left">{t("game.fieldBreakdown")}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-2 text-left">{t("game.fieldBreakdown")}</p>
               <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${postGameStats.length}, 1fr)` }}>
                 {postGameStats.map((p) => {
                   const segments = statFor(p).segments;
@@ -243,13 +245,13 @@ const GamePostGame = ({
       {gameSaved && !queuedOffline && <AiMatchReport gameId={pendingGameIdRef.current} />}
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={shareResult} disabled={sharingResult} className="gap-1.5 shrink-0">
+        <Button variant="outline" onClick={shareResult} disabled={sharingResult} className="h-[52px] rounded-[14px] gap-1.5 shrink-0">
           <Share2 className="w-4 h-4" /> {sharingResult ? "…" : t("game.share")}
         </Button>
         {/* Rematch only for a plain, freely-configured game — a tournament/league match
             comes from a fixed bracket/fixture, not a setup a rematch could just re-run. */}
         {!tournamentLinkName && !leagueLinkRef.current && (
-          <Button variant="outline" onClick={startRematch} className="gap-1.5 shrink-0">
+          <Button variant="outline" onClick={startRematch} className="h-[52px] rounded-[14px] gap-1.5 shrink-0">
             <RotateCcw className="w-4 h-4" /> {t("game.rematch")}
           </Button>
         )}
@@ -260,20 +262,20 @@ const GamePostGame = ({
               if (!link) { navigate("/tournament"); return; }
               navigate(link.board ? `/tournament/${link.tournamentId}?board=${link.board}` : `/tournament/${link.tournamentId}`);
             }}
-            className="flex-1 font-display uppercase"
+            className="h-[52px] flex-1 rounded-[14px] text-base font-semibold"
           >
             {t("game.backToTournament")}
           </Button>
         ) : leagueLinkRef.current ? (
-          <Button onClick={() => navigate(`/leagues/${leagueLinkRef.current!.leagueId}`)} className="flex-1 font-display uppercase">
+          <Button onClick={() => navigate(`/leagues/${leagueLinkRef.current!.leagueId}`)} className="h-[52px] flex-1 rounded-[14px] text-base font-semibold">
             {t("game.backToLeague")}
           </Button>
         ) : (
-          <Button onClick={() => { resetGame(); navigate("/game"); }} className="flex-1 font-display uppercase">{t("home.newGame")}</Button>
+          <Button onClick={() => { resetGame(); navigate("/game"); }} className="h-[52px] flex-1 rounded-[14px] text-base font-semibold">{t("home.newGame")}</Button>
         )}
       </div>
       {gameSaved && (
-        <p className="text-[10px] text-muted-foreground mt-2">
+        <p className="text-xs text-muted-foreground mt-2">
           {queuedOffline ? t("game.savedOffline") : t("game.gameSaved")}
         </p>
       )}

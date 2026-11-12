@@ -1092,7 +1092,7 @@ const LeaguePage = () => {
         finalAction={
           <Button
             onClick={editingLeagueId ? saveLeagueEdit : createLeague}
-            className="h-12 w-full font-display text-base uppercase tracking-wide"
+            className="h-[52px] w-full rounded-[14px] text-base font-semibold"
             disabled={!name.trim() || savingLeague || participantsInvalid}
           >
             {savingLeague ? t("league.savingBtn") : editingLeagueId ? t("league.saveChangesBtn") : t("league.createLeagueBtn")}

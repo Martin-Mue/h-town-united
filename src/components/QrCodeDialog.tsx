@@ -37,7 +37,7 @@ const QrCodeDialog = ({ url, title, description, trigger, downloadName = "qr-cod
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="font-display uppercase flex items-center gap-2">
+          <DialogTitle className="font-display font-bold flex items-center gap-2">
             <QrCodeIcon className="w-4 h-4 text-primary" /> {title}
           </DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}

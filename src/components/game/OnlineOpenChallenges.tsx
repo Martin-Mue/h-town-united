@@ -120,7 +120,7 @@ const OnlineOpenChallenges = ({ draft }: Props) => {
 
   return (
     <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 space-y-3">
-      <p className="text-xs text-muted-foreground uppercase font-display flex items-center gap-1.5">
+      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
         <Megaphone className="w-3.5 h-3.5 text-accent" /> {t("players.openChallenges")}
       </p>
 

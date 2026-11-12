@@ -76,7 +76,7 @@ const PendingOnlineDuels = () => {
           const outcome = duelOutcome(d, user.id);
           const daysLeft = Math.max(0, Math.ceil((new Date(d.expires_at).getTime() - Date.now()) / 86400000));
           return (
-            <div key={d.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl px-4 py-3">
+            <div key={d.id} className="bg-card border border-border rounded-2xl px-4 py-3">
               <div className="flex items-center gap-3">
                 <span className="text-xl shrink-0">{other?.emoji ?? "🎯"}</span>
                 <div className="min-w-0 flex-1">

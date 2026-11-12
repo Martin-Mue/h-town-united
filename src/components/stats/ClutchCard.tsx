@@ -32,20 +32,20 @@ const ClutchCard = ({ stats }: ClutchCardProps) => {
         {t("clutch.subtitle")}
       </p>
       <div className="flex items-center gap-3">
-        <div className="flex-1 text-center bg-muted/40 rounded-lg py-3">
-          <p className="font-display text-2xl">{normal.percentage.toFixed(0)}%</p>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{t("clutch.normal")}</p>
+        <div className="flex-1 text-center rounded-xl border border-border py-3">
+          <p className="font-display text-2xl font-bold tabular-nums">{normal.percentage.toFixed(0)}%</p>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground mt-1">{t("clutch.normal")}</p>
           <p className="text-[10px] text-muted-foreground">{normal.hits}/{normal.attempts}</p>
         </div>
-        <div className="flex-1 text-center bg-accent/10 rounded-lg py-3 border border-accent/30">
-          <p className="font-display text-2xl text-accent">{clutch.percentage.toFixed(0)}%</p>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{t("clutch.underPressure")}</p>
+        <div className="flex-1 text-center rounded-xl py-3 border border-primary/40">
+          <p className="font-display text-2xl font-bold tabular-nums">{clutch.percentage.toFixed(0)}%</p>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground mt-1">{t("clutch.underPressure")}</p>
           <p className="text-[10px] text-muted-foreground">{clutch.hits}/{clutch.attempts}</p>
         </div>
       </div>
       <div className="mt-3 pt-3 border-t border-border/60 flex items-start gap-2">
         <Flame className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
-        <p className="text-xs text-accent">{describeClutchTakeaway(stats, t)}</p>
+        <p className="text-xs text-foreground">{describeClutchTakeaway(stats, t)}</p>
       </div>
     </SectionCard>
   );
