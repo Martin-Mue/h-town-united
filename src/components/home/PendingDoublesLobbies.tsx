@@ -130,7 +130,7 @@ const PendingDoublesLobbies = () => {
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
         <Users className="w-3.5 h-3.5 text-accent" /> {t("home.doublesLobbies")}
       </h2>
-      <div className="space-y-2 mb-6">
+      <div className="space-y-2">
         {matches.map((m) => {
           const mySeat = m.seats.find((s) => s.userId === user.id);
           const iAmInvited = mySeat?.status === "invited";

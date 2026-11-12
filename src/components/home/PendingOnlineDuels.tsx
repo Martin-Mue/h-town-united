@@ -69,7 +69,7 @@ const PendingOnlineDuels = () => {
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
         <Swords className="w-3.5 h-3.5 text-accent" /> {t("home.duels")}
       </h2>
-      <div className="space-y-2 mb-6">
+      <div className="space-y-2">
         {visible.map((d) => {
           const iAmChallenger = d.challenger_user_id === user.id;
           const other = nameOf(iAmChallenger ? d.opponent_user_id : d.challenger_user_id);
