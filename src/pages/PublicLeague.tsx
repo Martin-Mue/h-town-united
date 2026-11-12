@@ -7,6 +7,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { downloadIcsEvent } from "@/utils/calendarExport";
 import { Button } from "@/components/ui/button";
+import LivePanel from "@/components/live/LivePanel";
+import LiveSectionLabel from "@/components/live/LiveSectionLabel";
+import LiveDot from "@/components/live/LiveDot";
 
 interface PublicLeagueRow {
   id: string;
@@ -138,23 +141,23 @@ const PublicLeaguePage = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="container py-6 animate-slide-up max-w-3xl mx-auto">
-        <div className="flex items-center gap-2 mb-1 text-xs text-secondary uppercase tracking-widest">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-secondary animate-pulse" /> {t("tournament.live")}
+        <div className="flex items-center gap-1.5 mb-1 text-xs font-semibold text-secondary uppercase tracking-[0.12em]">
+          <LiveDot /> {t("tournament.live")}
         </div>
-        <h1 className="text-2xl font-display uppercase mb-1">{league.name}</h1>
+        <h1 className="text-[clamp(1.75rem,4vw,2.5rem)] font-display font-bold leading-tight mb-1 break-words">{league.name}</h1>
         <p className="text-sm text-muted-foreground mb-6">
           {league.game_mode} · {t("stats.firstTo")} {Math.ceil(league.best_of_legs / 2)} · {league.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")}
         </p>
 
-        <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 mb-4">
-          <h2 className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground mb-3">
+        <LivePanel className="mb-4">
+          <LiveSectionLabel className="mb-3">
             <Trophy className="w-4 h-4" /> {t("league.standingsTitle")}
-          </h2>
+          </LiveSectionLabel>
           {standings.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">{t("league.noParticipantsYet")}</p>
           ) : (
             <div className="space-y-1">
-              <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-2 px-3 text-[10px] text-muted-foreground uppercase mb-1">
+              <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-2 px-3 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase mb-1">
                 <span className="w-6" />
                 <span />
                 <span className="w-8 text-center">{t("league.colPlayed")}</span>
@@ -163,25 +166,25 @@ const PublicLeaguePage = () => {
                 <span className="w-10 text-right">{t("league.colPoints")}</span>
               </div>
               {standings.map((s, i) => (
-                <div key={s.name} className={`grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-2 px-3 py-2 rounded-lg ${i < 3 ? "bg-muted/50" : "bg-muted/30"}`}>
+                <div key={s.name} className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-2 px-3 py-2 rounded-xl bg-muted">
                   <span className={`font-display w-6 ${i === 0 ? "text-accent" : "text-muted-foreground"}`}>
                     {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`}
                   </span>
-                  <span className="text-sm font-medium truncate">{s.name}</span>
-                  <span className="w-8 text-center text-xs text-muted-foreground">{s.played}</span>
-                  <span className="w-8 text-center text-xs text-muted-foreground">{s.won}</span>
-                  <span className="w-14 text-center text-xs text-muted-foreground font-mono">{s.legsFor}:{s.legsAgainst}</span>
-                  <span className="w-10 text-right font-display text-primary">{s.points}</span>
+                  <span className="text-sm font-semibold truncate">{s.name}</span>
+                  <span className="w-8 text-center text-xs text-muted-foreground tabular-nums">{s.played}</span>
+                  <span className="w-8 text-center text-xs text-muted-foreground tabular-nums">{s.won}</span>
+                  <span className="w-14 text-center text-xs text-muted-foreground tabular-nums">{s.legsFor}:{s.legsAgainst}</span>
+                  <span className="w-10 text-right font-display font-bold text-xl leading-none tabular-nums">{s.points}</span>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </LivePanel>
 
-        <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
-          <h2 className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground mb-3">
+        <LivePanel>
+          <LiveSectionLabel className="mb-3">
             <Users className="w-4 h-4" /> {t("league.fixturesTitle")}
-          </h2>
+          </LiveSectionLabel>
           {fixturesByRound.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("league.noFixturesYet")}</p>
           ) : (
@@ -191,17 +194,17 @@ const PublicLeaguePage = () => {
                 return (
                   <div key={round}>
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         {t("league.roundLabel")} {round}{legLabel(roundFixtures[0].leg) ? ` · ${legLabel(roundFixtures[0].leg)}` : ""}
                       </p>
                       {scheduledDate && (
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <p className="flex items-center gap-1 text-xs text-muted-foreground">
                             <CalendarDays className="w-3 h-3" />
                             {new Date(scheduledDate).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}
                           </p>
                           <Button
-                            size="icon" variant="ghost" className="h-6 w-6 shrink-0"
+                            size="icon" variant="ghost" className="h-9 w-9 shrink-0"
                             title={t("league.addToCalendar")}
                             onClick={() => downloadIcsEvent(
                               {
@@ -220,15 +223,15 @@ const PublicLeaguePage = () => {
                     </div>
                     <div className="space-y-1.5">
                       {roundFixtures.map((f) => (
-                        <div key={f.id} className="flex items-center gap-2 bg-muted/30 rounded-lg px-3 py-2">
+                        <div key={f.id} className="flex items-center gap-2 bg-muted rounded-xl px-3 py-2">
                           <div className="flex-1 min-w-0 flex items-center justify-between gap-2 text-sm">
-                            <span className={`truncate ${f.winner_slot === 1 ? "font-semibold text-primary" : ""}`}>{f.player1_name ?? "?"}</span>
+                            <span className={`truncate font-semibold ${f.winner_slot === 1 ? "text-secondary" : f.winner_slot ? "text-muted-foreground" : ""}`}>{f.player1_name ?? "?"}</span>
                             {f.status === "finished" ? (
-                              <span className="text-xs font-mono text-muted-foreground shrink-0">{f.player1_legs_won}:{f.player2_legs_won}</span>
+                              <span className="font-display font-bold text-lg leading-none tabular-nums shrink-0">{f.player1_legs_won}:{f.player2_legs_won}</span>
                             ) : (
-                              <span className="text-[10px] text-muted-foreground shrink-0">vs</span>
+                              <span className="text-xs text-muted-foreground shrink-0">{t("common.vs")}</span>
                             )}
-                            <span className={`truncate text-right ${f.winner_slot === 2 ? "font-semibold text-primary" : ""}`}>{f.player2_name ?? "?"}</span>
+                            <span className={`truncate text-right font-semibold ${f.winner_slot === 2 ? "text-secondary" : f.winner_slot ? "text-muted-foreground" : ""}`}>{f.player2_name ?? "?"}</span>
                           </div>
                         </div>
                       ))}
@@ -238,7 +241,7 @@ const PublicLeaguePage = () => {
               })}
             </div>
           )}
-        </div>
+        </LivePanel>
       </div>
     </div>
   );

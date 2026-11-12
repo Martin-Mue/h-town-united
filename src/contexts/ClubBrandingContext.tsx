@@ -3,6 +3,7 @@ import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveClubTheme, DEFAULT_CLUB_THEME_PRESET_ID } from "@/lib/clubThemePresets";
+import { resolveVenueThemeVars } from "@/lib/venueTheme";
 import htuLogoFallback from "@/assets/htu-logo.jpg";
 
 // Personal color override: local to this browser only (not synced anywhere), so one member
@@ -231,7 +232,9 @@ export const ClubBrandingProvider = ({ children }: { children: ReactNode }) => {
     // default, an existing Cyan club would otherwise flash yellow on every app start.
     if (!personalThemePreset && !club && status !== "resolved") return;
     const mode = resolvedTheme === "light" ? "light" : "dark";
-    const vars = resolveClubTheme(personalThemePreset ?? club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID, mode);
+    const presetId = personalThemePreset ?? club?.theme_preset ?? DEFAULT_CLUB_THEME_PRESET_ID;
+    // Dark-tone copies (--venue-*) for the always-dark venue screens, independent of `mode`.
+    const vars = { ...resolveClubTheme(presetId, mode), ...resolveVenueThemeVars(presetId) };
     const root = document.documentElement.style;
     Object.entries(vars).forEach(([key, value]) => root.setProperty(key, value));
   }, [club?.theme_preset, club, status, personalThemePreset, resolvedTheme]);

@@ -40,10 +40,10 @@ const MatchPredictionsPanel = ({ matches, tallies, myVotes, onVote }: MatchPredi
   const tipsLabel = (n: number) => (n === 0 ? t("pt.noTipsYet") : `${n} ${n === 1 ? t("pt.tipOne") : t("pt.tipMany")}`);
 
   return (
-    <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-3 sm:p-4 mb-4">
+    <div className="bg-card border border-border rounded-[20px] p-3 sm:p-4 mb-4">
       <div className="flex items-baseline justify-between gap-2 mb-3">
-        <h3 className="font-display uppercase text-sm text-muted-foreground">{t("pt.predictionsHeading")}</h3>
-        <span className="text-[11px] text-muted-foreground font-mono shrink-0">{tipsLabel(evaluation.totalTips)}</span>
+        <h3 className="font-body text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("pt.predictionsHeading")}</h3>
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0">{tipsLabel(evaluation.totalTips)}</span>
       </div>
 
       {open.length > 0 && (
@@ -56,7 +56,7 @@ const MatchPredictionsPanel = ({ matches, tallies, myVotes, onVote }: MatchPredi
             const pct1 = total > 0 ? Math.round((votes1 / total) * 100) : 0;
             const myVote = myVotes[m.id];
             return (
-              <div key={m.id} className="rounded-lg border border-border/60 p-2.5 sm:p-3">
+              <div key={m.id} className="rounded-2xl border border-border p-2.5 sm:p-3">
                 <div className="grid grid-cols-2 gap-2">
                   {[m.player1!, m.player2!].map((player, idx) => (
                     <button
@@ -64,12 +64,12 @@ const MatchPredictionsPanel = ({ matches, tallies, myVotes, onVote }: MatchPredi
                       type="button"
                       onClick={() => handleVote(m.id, player)}
                       disabled={pendingId === m.id}
-                      className={`rounded-lg px-2 py-2.5 min-h-[44px] text-sm font-semibold transition-all border disabled:opacity-50 ${
-                        myVote === player ? "bg-primary/15 border-primary text-primary" : "bg-muted/30 border-border hover:border-primary/40"
+                      className={`rounded-xl px-2 py-2.5 min-h-[44px] text-sm font-semibold transition-colors border disabled:opacity-50 ${
+                        myVote === player ? "bg-primary border-primary text-primary-foreground" : "bg-muted border-border hover:border-primary"
                       }`}
                     >
-                      <span className="block break-words leading-tight uppercase tracking-wide text-[13px]">{player}</span>
-                      {total > 0 && <span className="block text-xs mt-1 font-mono">{idx === 0 ? pct1 : 100 - pct1}%</span>}
+                      <span className="block break-words leading-tight text-[15px]">{player}</span>
+                      {total > 0 && <span className="block mt-1 font-display font-bold text-lg leading-none tabular-nums">{idx === 0 ? pct1 : 100 - pct1}%</span>}
                     </button>
                   ))}
                 </div>
@@ -97,19 +97,19 @@ const MatchPredictionsPanel = ({ matches, tallies, myVotes, onVote }: MatchPredi
             className="w-full flex items-center justify-between gap-2 text-left"
             aria-expanded={showEvaluation}
           >
-            <span className="font-display uppercase text-xs text-muted-foreground">{t("pt.evaluationHeading")}</span>
+            <span className="font-body text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("pt.evaluationHeading")}</span>
             {showEvaluation ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
           </button>
 
           <div className="grid grid-cols-2 gap-2 mt-2 text-center">
-            <div className="rounded-lg bg-muted/30 py-2">
-              <div className="text-lg font-display leading-none">
+            <div className="rounded-xl bg-muted py-2">
+              <div className="text-2xl font-display font-bold tabular-nums leading-none">
                 {evaluation.crowdDecided > 0 ? `${evaluation.crowdCorrect}/${evaluation.crowdDecided}` : "–"}
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">{t("pt.crowdRight")}</div>
             </div>
-            <div className="rounded-lg bg-muted/30 py-2">
-              <div className="text-lg font-display leading-none">
+            <div className="rounded-xl bg-muted py-2">
+              <div className="text-2xl font-display font-bold tabular-nums leading-none">
                 {evaluation.myDecided > 0 ? `${evaluation.myCorrect}/${evaluation.myDecided}` : "–"}
               </div>
               <div className="text-[10px] text-muted-foreground mt-1">{t("pt.youRight")}</div>
@@ -124,7 +124,7 @@ const MatchPredictionsPanel = ({ matches, tallies, myVotes, onVote }: MatchPredi
           {showEvaluation && (
             <div className="mt-3 space-y-1.5">
               {evaluation.decided.map((e) => (
-                <div key={e.match.id} className="rounded-lg border border-border/60 px-2.5 py-2 text-xs">
+                <div key={e.match.id} className="rounded-xl border border-border px-2.5 py-2 text-xs">
                   <div className="flex items-center justify-between gap-2">
                     <span className="min-w-0 break-words font-semibold">
                       <span className={e.match.winner === e.match.player1 ? "text-primary" : "text-muted-foreground"}>{e.match.player1}</span>
