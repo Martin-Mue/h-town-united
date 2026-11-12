@@ -81,7 +81,7 @@ const Manual180Editor = ({ playerId, entries, onChanged }: Manual180EditorProps)
 
   return (
     <div className="mt-3 pt-3 border-t border-border/60">
-      <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">180er nachtragen (vor Kamera-Erfassung)</p>
+      <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">180er nachtragen (vor Kamera-Erfassung)</p>
       <div className="space-y-1">
         {entries.sort((a, b) => b.year - a.year).map((e) => (
           <div key={e.id} className="flex items-center justify-between gap-2 text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">

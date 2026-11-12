@@ -8,32 +8,21 @@ import type { LucideIcon } from "lucide-react";
  *  instead of hand-tuning every card individually. Pure presentation — none of these carry
  *  their own data logic, they only lay out values already computed elsewhere. */
 
-/** Small uppercase section label, optionally with a leading icon — the one recurring heading
- *  style across every card (light text with a cyan icon so it stands out from the card content, tinted variants for hero cards). */
+/** Small uppercase section label of the redesign (12px, wide tracking, muted ink), optionally
+ *  with a leading icon. The tone only tints the icon, so the pale accent color never stands alone. */
 export const Eyebrow = ({ icon: Icon, children, tone = "muted" }: { icon?: LucideIcon; children: ReactNode; tone?: "muted" | "primary" | "accent" }) => (
-  <h3 className={`font-display text-[0.95rem] uppercase tracking-wide mb-3 flex items-center gap-2 ${tone === "primary" ? "text-primary" : tone === "accent" ? "text-accent" : "text-foreground"}`}>
-    {Icon && <Icon className={`w-4 h-4 shrink-0 ${tone === "muted" ? "text-primary" : ""}`} />}
+  <h3 className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+    {Icon && <Icon aria-hidden="true" className={`h-4 w-4 shrink-0 ${tone === "accent" ? "text-accent" : "text-primary"}`} />}
     {children}
   </h3>
 );
 
-/** Standard card shell. `glow` adds the accent gradient + border treatment reserved for the one
- *  or two highest-priority moments per view (a section's own hero number), never used for
- *  routine content — overusing it would just make it the new wall of noise.
- *  Design-Sprint Runde 3 Rang 2: the routine (non-glow) case used to be completely flat
- *  (`border-border bg-card`, no shadow at all) — every SectionCard in the app (this is the one
- *  actually-used card shell; the shadcn `<Card>` primitive sits unused, see components/ui/card.tsx)
- *  now sits at this app's own --shadow-sm elevation on the `gradient-card` two-stop surface
- *  instead of a flat fill, so even routine content reads as a physical panel, not a div with a
- *  border. The glow variants are untouched — they already have their own, stronger treatment. */
+/** Standard flat card shell of the redesign (bg-card, border, rounded-2xl). `glow` no longer adds
+ *  a glow or gradient wash — it only tints the border of the one highlighted card of a view. */
 export const SectionCard = ({ children, glow, className = "" }: { children: ReactNode; glow?: "primary" | "accent"; className?: string }) => (
   <div
-    className={`rounded-xl border p-4 ${
-      glow === "primary"
-        ? "border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card shadow-[0_0_30px_hsl(var(--primary)/0.12)]"
-        : glow === "accent"
-        ? "border-accent/30 bg-gradient-to-br from-accent/10 via-card to-card shadow-[0_0_24px_hsl(var(--accent)/0.1)]"
-        : "border-border gradient-card shadow-elevation-sm"
+    className={`rounded-2xl border bg-card p-4 ${
+      glow === "primary" ? "border-primary/40" : glow === "accent" ? "border-accent/40" : "border-border"
     } ${className}`}
   >
     {children}
@@ -58,7 +47,7 @@ export const TONE_TEXT: Record<"foreground" | "primary" | "secondary" | "accent"
 export const StatTile = ({ label, value, tone = "foreground", icon: Icon }: { label: string; value: ReactNode; tone?: keyof typeof TONE_TEXT; icon?: LucideIcon }) => (
   <div className="text-center">
     {Icon && <Icon className={`w-3.5 h-3.5 mx-auto mb-1 ${tone === "foreground" ? "text-muted-foreground" : TONE_TEXT[tone]}`} />}
-    <p className={`font-display text-lg ${TONE_TEXT[tone]}`}>{value}</p>
+    <p className={`font-display text-lg font-bold tabular-nums ${TONE_TEXT[tone]}`}>{value}</p>
     <p className="text-[10px] text-muted-foreground">{label}</p>
   </div>
 );
@@ -160,7 +149,7 @@ export const RankAvatar = ({ emoji, rank, size = 32 }: { emoji: string; rank?: n
 /** The numeric rank marker ("1", "2", ...) beside a RankAvatar — top 3 get accent/silver/bronze
  *  ink, matching RankAvatar's ring so the two always agree. */
 export const RankBadge = ({ rank }: { rank: number }) => (
-  <span className={`w-6 shrink-0 text-center font-display text-sm ${rank === 1 ? "text-accent" : rank === 2 ? "text-muted-foreground" : rank === 3 ? "text-orange-400" : "text-muted-foreground"}`}>
+  <span className={`w-6 shrink-0 text-center font-display text-sm font-bold tabular-nums ${rank === 1 ? "text-accent" : rank === 2 ? "text-muted-foreground" : rank === 3 ? "text-orange-400" : "text-muted-foreground"}`}>
     {rank}
   </span>
 );
