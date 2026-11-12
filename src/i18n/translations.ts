@@ -1667,6 +1667,10 @@ export const translations: Record<string, Record<Language, string>> = {
   "players.linkAccountConflict": { de: "Verknüpfen nicht möglich — das Profil ist inzwischen bereits verknüpft oder du hast keine Berechtigung.", en: "Couldn't link — the profile is already linked, or you don't have permission.", fr: "Impossible de lier — le profil est déjà lié, ou tu n'as pas la permission.", pl: "Nie można połączyć — profil jest już połączony albo nie masz uprawnień.", nl: "Koppelen niet mogelijk — het profiel is al gekoppeld, of je hebt geen toestemming.", tr: "Bağlanamadı — profil zaten bağlı ya da yetkin yok." },
   "players.clubEmblemAlt": { de: "Vereinsemblem", en: "Club emblem", fr: "Emblème du club", pl: "Godło klubu", nl: "Clubembleem", tr: "Kulüp amblemi" },
   "players.skillProfile": { de: "Skill Profil", en: "Skill profile", fr: "Profil de compétences", pl: "Profil umiejętności", nl: "Vaardighedenprofiel", tr: "Yetenek profili" },
+  "players.clubPageTitle": { de: "Verein", en: "Club", fr: "Club", pl: "Klub", nl: "Club", tr: "Kulüp" },
+  "players.clubTotalsLabel": { de: "Vereinszahlen", en: "Club totals", fr: "Chiffres du club", pl: "Liczby klubu", nl: "Clubcijfers", tr: "Kulüp rakamları" },
+  "players.profileStatsHeading": { de: "Spielerstatistik", en: "Player stats", fr: "Statistiques du joueur", pl: "Statystyki gracza", nl: "Spelersstatistieken", tr: "Oyuncu istatistikleri" },
+  "players.profileFactsHeading": { de: "Auf einen Blick", en: "At a glance", fr: "En bref", pl: "W skrócie", nl: "In één oogopslag", tr: "Bir bakışta" },
 
   "tournament.attendancePresent": { de: "anwesend", en: "present", fr: "présent", pl: "obecny", nl: "aanwezig", tr: "mevcut" },
   "tournament.markAllPresent": { de: "Alle anwesend", en: "Mark all present", fr: "Tous présents", pl: "Wszyscy obecni", nl: "Allen aanwezig", tr: "Tümü mevcut" },

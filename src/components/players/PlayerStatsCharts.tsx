@@ -17,25 +17,25 @@ export interface WinLossBar {
 const PlayerStatsCharts = ({ skillRadarData, winLossData }: { skillRadarData: SkillRadarPoint[]; winLossData: WinLossBar[] }) => {
   const { t } = useLanguage();
   return (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
-      <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("players.skillProfile")}</h3>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.12em] mb-3 text-muted-foreground">{t("players.skillProfile")}</h3>
       <ResponsiveContainer width="100%" height={180}>
         <RadarChart data={skillRadarData}>
-          <PolarGrid stroke="hsl(222 18% 14%)" />
-          <PolarAngleAxis dataKey="skill" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} />
+          <PolarGrid stroke="hsl(var(--border))" />
+          <PolarAngleAxis dataKey="skill" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
           <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
           <Radar dataKey="value" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.15} strokeWidth={2} />
         </RadarChart>
       </ResponsiveContainer>
     </div>
 
-    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
-      <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground">{t("game.winsLabel")} / {t("players.losses")}</h3>
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.12em] mb-3 text-muted-foreground">{t("game.winsLabel")} / {t("players.losses")}</h3>
       <ResponsiveContainer width="100%" height={120}>
         <BarChart data={winLossData} layout="vertical">
-          <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} />
-          <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "hsl(222 12% 50%)" }} axisLine={false} tickLine={false} width={80} />
+          <XAxis type="number" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+          <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={80} />
           <Bar dataKey="value" radius={[0, 6, 6, 0]} />
         </BarChart>
       </ResponsiveContainer>

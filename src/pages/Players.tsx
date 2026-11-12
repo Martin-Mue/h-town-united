@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense, type ReactNode } from "react";
-import { Plus, Search, Trophy, Target, TrendingUp, BarChart3, Camera, Sparkles, ArrowLeft, Upload, Users, Quote, Calendar, MapPin, Hand, Pencil, ChevronDown, Info, Trash2, KeyRound } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
+import { Plus, Search, Target, Camera, Sparkles, ArrowLeft, Upload, Users, Quote, Info, Trash2, KeyRound } from "lucide-react";
 import { DartLoaderIcon as Loader2, DartGameIcon } from "@/components/icons/DartIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,9 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { experienceScore } from "@/utils/dartStats";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { usePagedList } from "@/hooks/usePagedList";
@@ -26,55 +23,17 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useOnlineUserIds } from "@/lib/clubPresence";
 import { compressImage } from "@/utils/imageCompression";
-import { SectionCard, StatTile } from "@/components/stats/StatPrimitives";
 import { generatePinSalt, hashPin, isValidPinFormat } from "@/lib/playerPin";
+import { formatPlayerAverage, playerWinRate, type PlayerProfile } from "@/components/players/playerProfile";
+import ClubRosterHeader from "@/components/players/ClubRosterHeader";
+import PlayerRosterRow from "@/components/players/PlayerRosterRow";
+import PlayerProfileHeader from "@/components/players/PlayerProfileHeader";
+import PlayerProfileFacts from "@/components/players/PlayerProfileFacts";
+import { PlayerNumberTile, PlayersCard, PlayersSectionLabel } from "@/components/players/PlayersPagePrimitives";
 
 // recharts (~390KB) is only needed once a player's detail view is open, not for browsing
 // the roster list — split into its own chunk instead of loading it for every /players visit.
 const PlayerStatsCharts = lazy(() => import("@/components/players/PlayerStatsCharts"));
-
-// Static fallback portraits
-import portraitKarsten from "@/assets/portraits/karsten.jpg";
-import portraitMartin1 from "@/assets/portraits/martin1.jpg";
-import portraitMartin2 from "@/assets/portraits/martin2.jpg";
-import portraitMartin3 from "@/assets/portraits/martin3.jpg";
-
-/** Static portrait mapping by player ID */
-const STATIC_PORTRAITS: Record<string, string> = {
-  "a2f19689-d758-4c77-ad7d-69cedd69115a": portraitKarsten,
-  "b1015e88-4cfd-43f5-a529-c5a193cb1ebe": portraitMartin1,
-  "e5b1736c-a098-485b-9709-a692db1f4dee": portraitMartin2,
-  "ff73f02d-6475-410e-8b97-c7c1452c2af3": portraitMartin3,
-};
-
-/** Player profile mapped from database */
-interface PlayerProfile {
-  id: string;
-  user_id?: string | null;
-  name: string;
-  nickname: string | null;
-  emoji: string;
-  avatar_url: string | null;
-  ai_portrait_url: string | null;
-  games_played: number;
-  games_won: number;
-  high_score: number;
-  average: number;
-  double_rate: number;
-  elo_rating?: number | null;
-  bio?: string | null;
-  throwing_hand?: string | null;
-  dart_weight_g?: number | null;
-  favorite_double?: string | null;
-  hometown?: string | null;
-  joined_year?: number | null;
-  motto?: string | null;
-  birthday?: string | null;
-  /** "PIN pro Spieler" (local-game opponent confirmation, @/lib/playerPin) — a salted hash+salt,
-   *  or null/undefined if no PIN is set. Comes along for free via this page's `select("*")`. */
-  pin_hash?: string | null;
-  pin_salt?: string | null;
-}
 
 const EMOJI_AVATARS = ["🎯", "🏆", "⭐", "🔥", "💎", "🦅", "🐉", "🎪"];
 const PHOTO_COMPRESS_THRESHOLD_BYTES = 2 * 1024 * 1024;
@@ -100,7 +59,7 @@ const EMPTY_PLAYER_FORM = {
 const PlayersPage = () => {
   const { t } = useLanguage();
   const onlineNow = useOnlineUserIds();
-  const { name: clubName, clubId, logoUrl } = useClubBranding();
+  const { name: clubName, clubId } = useClubBranding();
   const [players, setPlayers] = useState<PlayerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -722,48 +681,11 @@ const PlayersPage = () => {
   );
   const pagedPlayers = usePagedList(filteredPlayers);
 
-  /** Renders the player's display image (AI portrait > avatar > emoji, with static fallback) */
-  const PlayerAvatar = ({ player, size = "md" }: { player: PlayerProfile; size?: "sm" | "md" | "lg" }) => {
-    const sizeClasses = { sm: "w-10 h-10", md: "w-14 h-14", lg: "w-20 h-20" };
-    const textSize = { sm: "text-lg", md: "text-2xl", lg: "text-4xl" };
-    const imgUrl = player.ai_portrait_url || player.avatar_url || STATIC_PORTRAITS[player.id];
-    const online = !!player.user_id && onlineNow.has(player.user_id);
-    const withDot = (node: ReactNode) => (
-      <span className="relative inline-block shrink-0">
-        {node}
-        {online && <span title={t("players.onlineNow")} className="absolute -bottom-0.5 -right-0.5 block w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-background" />}
-      </span>
-    );
-
-    if (imgUrl) {
-      return withDot(
-        <img
-          src={imgUrl}
-          alt={`${player.name} portrait`}
-          className={`${sizeClasses[size]} rounded-xl object-cover border border-border`}
-          onError={(e) => {
-            // Fall back to static portrait or emoji on load failure
-            const staticUrl = STATIC_PORTRAITS[player.id];
-            if (staticUrl && e.currentTarget.src !== staticUrl) {
-              e.currentTarget.src = staticUrl;
-            } else {
-              e.currentTarget.style.display = "none";
-            }
-          }}
-        />
-      );
-    }
-    return withDot(
-      <div className={`${sizeClasses[size]} rounded-xl bg-muted flex items-center justify-center ${textSize[size]}`}>
-        {player.emoji}
-      </div>
-    );
-  };
+  const isOnline = (player: PlayerProfile) => !!player.user_id && onlineNow.has(player.user_id);
 
   // ─── PLAYER DETAIL VIEW ────────────────────────────
   if (selectedPlayer) {
-    const winRate = selectedPlayer.games_played > 0
-      ? Math.round((selectedPlayer.games_won / selectedPlayer.games_played) * 100) : 0;
+    const winRate = playerWinRate(selectedPlayer);
 
     const skillRadarData = [
       { skill: "Average", value: Math.min(Number(selectedPlayer.average), 100) },
@@ -779,167 +701,119 @@ const PlayersPage = () => {
     ];
 
     return (
-      <div className="container py-6 animate-slide-up">
-        <Button variant="ghost" onClick={() => setSelectedPlayer(null)} className="mb-4 text-muted-foreground">
+      <div className="container py-5 space-y-4 animate-slide-up">
+        <Button variant="ghost" onClick={() => setSelectedPlayer(null)} className="-ml-2 h-11 text-muted-foreground">
           <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
         </Button>
 
-        {/* Player header with portrait */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="rounded-xl ring-2 ring-primary/40 shadow-[0_0_24px_hsl(var(--primary)/0.2)]">
-            <PlayerAvatar player={selectedPlayer} size="lg" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-display uppercase">{selectedPlayer.name}</h2>
-            {selectedPlayer.nickname && <p className="text-primary text-sm font-medium">"{selectedPlayer.nickname}"</p>}
-            {selectedPlayer.hometown && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                <MapPin className="w-3 h-3" /> {selectedPlayer.hometown}
-                {selectedPlayer.joined_year && <span>· {t("players.sinceYear")} {selectedPlayer.joined_year}</span>}
-              </p>
-            )}
-          </div>
-          {canEditPlayer(selectedPlayer) && (
-            <Button variant="outline" size="sm" className="ml-auto gap-2" onClick={() => openEditProfile(selectedPlayer)}>
-              <Pencil className="w-3.5 h-3.5" /> {t("players.editProfile")}
-            </Button>
-          )}
-        </div>
+        <PlayerProfileHeader
+          player={selectedPlayer}
+          online={isOnline(selectedPlayer)}
+          canEdit={canEditPlayer(selectedPlayer)}
+          onEdit={() => openEditProfile(selectedPlayer)}
+        />
 
-        {/* "PIN pro Spieler" (@/lib/playerPin): a set/change form for your own profile or, as
-            admin, a walk-in (no-account) member's — same reach as the Edit button above. For a
-            player WITH an account that isn't you, an admin still gets a bare reset-to-null
-            (they forgot it), but can't choose a new one on that member's behalf. */}
-        {(canEditPlayer(selectedPlayer) || (isAdmin && selectedPlayer.pin_hash)) && (
-          <SectionCard className="mb-6">
-            <div className="flex items-center gap-3 mb-3">
-              <KeyRound className="w-5 h-5 text-muted-foreground shrink-0" />
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{t("players.pinSectionTitle")}</p>
-                <p className="text-xs text-muted-foreground">
-                  {canEditPlayer(selectedPlayer)
-                    ? (selectedPlayer.user_id === user?.id ? t("players.pinSectionDescSelf") : t("players.pinSectionDescAdmin"))
-                    : (selectedPlayer.pin_hash ? t("players.pinCurrentSet") : t("players.pinNotSet"))}
-                </p>
-              </div>
-            </div>
+        <section aria-label={t("players.profileStatsHeading")} className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          <PlayerNumberTile label={t("stats.games")} value={selectedPlayer.games_played} />
+          <PlayerNumberTile label={t("game.winsLabel")} value={selectedPlayer.games_won} sub={`${winRate} %`} />
+          <PlayerNumberTile label="Highscore" value={selectedPlayer.high_score} />
+          <PlayerNumberTile label={t("stats.average")} value={formatPlayerAverage(selectedPlayer)} />
+        </section>
 
-            {canEditPlayer(selectedPlayer) ? (
-              <>
-                <p className="text-xs text-muted-foreground mb-2">
-                  {selectedPlayer.pin_hash ? t("players.pinCurrentSet") : t("players.pinNotSet")}
-                </p>
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
-                    value={pinNew} onChange={(e) => setPinNew(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                    placeholder={t("players.pinNewPlaceholder")}
-                    className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground text-center tracking-widest" />
-                  <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
-                    value={pinConfirm} onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                    placeholder={t("players.pinConfirmPlaceholder")}
-                    className="rounded-lg bg-muted border border-border px-3 py-2 text-sm text-foreground text-center tracking-widest" />
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" className="flex-1 gap-1.5" disabled={pinSaving || pinNew.length !== 4} onClick={() => savePlayerPin(selectedPlayer)}>
-                    {pinSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                    {selectedPlayer.pin_hash ? t("players.pinChangeButton") : t("players.pinSetButton")}
-                  </Button>
-                  {selectedPlayer.pin_hash && (
-                    <Button size="sm" variant="outline" disabled={pinResetting} onClick={() => adminResetPlayerPin(selectedPlayer)}>
-                      {pinResetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("players.pinRemoveButton")}
-                    </Button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <Button size="sm" variant="outline" disabled={pinResetting} onClick={() => adminResetPlayerPin(selectedPlayer)}>
-                {pinResetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("players.pinResetAdminButton")}
-              </Button>
-            )}
-          </SectionCard>
-        )}
-
-        {/* Motto */}
         {selectedPlayer.motto && (
-          <div className="bg-card border border-primary/20 rounded-xl p-4 mb-4 flex items-start gap-3">
-            <Quote className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-            <p className="font-display italic text-base">{selectedPlayer.motto}</p>
-          </div>
+          <PlayersCard className="flex items-start gap-3">
+            <Quote className="w-5 h-5 text-accent shrink-0 mt-0.5" aria-hidden />
+            <p className="font-display italic text-lg leading-snug">{selectedPlayer.motto}</p>
+          </PlayersCard>
         )}
 
-        {/* Bio */}
+        <PlayerProfileFacts player={selectedPlayer} />
+
         {selectedPlayer.bio && (
-          <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 mb-4">
-            <p className="text-xs uppercase text-muted-foreground font-display mb-2">{t("players.bioHeading")}</p>
-            <p className="text-sm whitespace-pre-line text-foreground/90">{selectedPlayer.bio}</p>
-          </div>
+          <section className="space-y-2">
+            <PlayersSectionLabel>{t("players.bioHeading")}</PlayersSectionLabel>
+            <PlayersCard>
+              <p className="text-sm whitespace-pre-line text-foreground/90">{selectedPlayer.bio}</p>
+            </PlayersCard>
+          </section>
         )}
-
-        {/* Quick facts */}
-        {(selectedPlayer.throwing_hand || selectedPlayer.dart_weight_g || selectedPlayer.favorite_double || selectedPlayer.birthday) && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            {selectedPlayer.throwing_hand && (
-              <SectionCard>
-                <StatTile
-                  icon={Hand}
-                  tone="primary"
-                  value={selectedPlayer.throwing_hand === "right" ? t("players.right") : selectedPlayer.throwing_hand === "left" ? t("players.left") : t("players.ambidextrous")}
-                  label={t("players.throwingHand")}
-                />
-              </SectionCard>
-            )}
-            {selectedPlayer.dart_weight_g && (
-              <SectionCard>
-                <StatTile icon={Target} tone="primary" value={`${selectedPlayer.dart_weight_g} g`} label={t("players.dartWeight")} />
-              </SectionCard>
-            )}
-            {selectedPlayer.favorite_double && (
-              <SectionCard>
-                <StatTile icon={Trophy} tone="primary" value={selectedPlayer.favorite_double} label={t("players.favoriteDouble")} />
-              </SectionCard>
-            )}
-            {selectedPlayer.birthday && (
-              <SectionCard>
-                <StatTile icon={Calendar} tone="primary" value={new Date(selectedPlayer.birthday).toLocaleDateString("de-DE")} label={t("players.birthday")} />
-              </SectionCard>
-            )}
-          </div>
-        )}
-
-        {/* Stats cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          {[
-            { label: t("stats.games"), value: selectedPlayer.games_played, icon: Target },
-            { label: t("game.winsLabel"), value: `${selectedPlayer.games_won} (${winRate}%)`, icon: Trophy },
-            { label: "Highscore", value: selectedPlayer.high_score, icon: TrendingUp },
-            { label: t("stats.average"), value: selectedPlayer.games_played > 0 ? Number(selectedPlayer.average).toFixed(1) : "–", icon: BarChart3 },
-          ].map((stat) => (
-            <SectionCard key={stat.label}>
-              <StatTile icon={stat.icon} value={stat.value} label={stat.label} tone="primary" />
-            </SectionCard>
-          ))}
-        </div>
 
         {/* Charts — at 0 games every value in both datasets is 0, which renders as a collapsed
             radar (a single invisible point) and two zero-width bars: just axis labels over blank
-            space, reading as broken rather than "no data yet". UX-Audit Befund #4: previously
-            plain centered text with no visual anchor — now aligned with the Dashboard's
-            established empty-state pattern (Index.tsx "noch keine Spiele" card): same
-            DartGameIcon at reduced opacity, same clickable card that sends you to start a game,
-            since that's the one action that actually produces the missing data. */}
+            space, reading as broken rather than "no data yet". Instead a card that sends you to
+            start a game, since that's the one action that actually produces the missing data. */}
         {selectedPlayer.games_played === 0 ? (
           <Link
             to="/game"
-            className="block gradient-card border border-border shadow-elevation-sm hover:border-primary/40 active:scale-[0.98] active:border-primary/40 rounded-xl px-4 py-6 mb-6 text-center text-sm text-muted-foreground transition-all"
+            className="block rounded-2xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground hover:bg-muted active:scale-[0.98] transition-transform"
             style={{ transitionTimingFunction: "var(--ease-press)" }}
           >
             <DartGameIcon className="w-10 h-10 mx-auto mb-2 opacity-40" />
             {t("players.noStatsYetForCharts")}
           </Link>
         ) : (
-          <Suspense fallback={<div className="h-[180px] mb-6 flex items-center justify-center text-muted-foreground text-sm">{t("players.loadingCharts")}</div>}>
+          <Suspense fallback={<div className="h-[180px] flex items-center justify-center text-muted-foreground text-sm">{t("players.loadingCharts")}</div>}>
             <PlayerStatsCharts skillRadarData={skillRadarData} winLossData={winLossData} />
           </Suspense>
+        )}
+
+        {/* "PIN pro Spieler" (@/lib/playerPin): a set/change form for your own profile or, as
+            admin, a walk-in (no-account) member's — same reach as the Edit button above. For a
+            player WITH an account that isn't you, an admin still gets a bare reset-to-null
+            (they forgot it), but can't choose a new one on that member's behalf. */}
+        {(canEditPlayer(selectedPlayer) || (isAdmin && selectedPlayer.pin_hash)) && (
+          <section className="space-y-2">
+            <PlayersSectionLabel>{t("players.pinSectionTitle")}</PlayersSectionLabel>
+            <PlayersCard className="space-y-3">
+              <div className="flex items-start gap-3">
+                <KeyRound className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" aria-hidden />
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-sm text-muted-foreground">
+                    {canEditPlayer(selectedPlayer)
+                      ? (selectedPlayer.user_id === user?.id ? t("players.pinSectionDescSelf") : t("players.pinSectionDescAdmin"))
+                      : (selectedPlayer.pin_hash ? t("players.pinCurrentSet") : t("players.pinNotSet"))}
+                  </p>
+                  {canEditPlayer(selectedPlayer) && (
+                    <p className="text-sm font-semibold">
+                      {selectedPlayer.pin_hash ? t("players.pinCurrentSet") : t("players.pinNotSet")}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {canEditPlayer(selectedPlayer) ? (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
+                      value={pinNew} onChange={(e) => setPinNew(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      placeholder={t("players.pinNewPlaceholder")}
+                      aria-label={t("players.pinNewPlaceholder")}
+                      className="h-11 min-w-0 rounded-xl bg-muted border border-border px-3 text-base text-foreground text-center tracking-widest" />
+                    <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4}
+                      value={pinConfirm} onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      placeholder={t("players.pinConfirmPlaceholder")}
+                      aria-label={t("players.pinConfirmPlaceholder")}
+                      className="h-11 min-w-0 rounded-xl bg-muted border border-border px-3 text-base text-foreground text-center tracking-widest" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button className="h-11 flex-1 gap-1.5 rounded-xl" disabled={pinSaving || pinNew.length !== 4} onClick={() => savePlayerPin(selectedPlayer)}>
+                      {pinSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                      {selectedPlayer.pin_hash ? t("players.pinChangeButton") : t("players.pinSetButton")}
+                    </Button>
+                    {selectedPlayer.pin_hash && (
+                      <Button variant="outline" className="h-11 rounded-xl" disabled={pinResetting} onClick={() => adminResetPlayerPin(selectedPlayer)}>
+                        {pinResetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("players.pinRemoveButton")}
+                      </Button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <Button variant="outline" className="h-11 rounded-xl" disabled={pinResetting} onClick={() => adminResetPlayerPin(selectedPlayer)}>
+                  {pinResetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("players.pinResetAdminButton")}
+                </Button>
+              )}
+            </PlayersCard>
+          </section>
         )}
       </div>
     );
@@ -947,71 +821,27 @@ const PlayersPage = () => {
 
   // ─── PLAYER LIST VIEW ──────────────────────────────
   return (
-    <div className="container py-6 animate-slide-up relative">
+    <div className="container pt-5 pb-24 md:pb-5 space-y-4 animate-slide-up">
+      <ClubRosterHeader clubName={clubName} players={players} />
+
       {shouldShowProfileHint && (
-        <Alert className="mb-4 border-primary/30 bg-primary/5">
-          <Info className="h-4 w-4" />
-          <AlertTitle>{t("players.newProfileUpdateTitle")}</AlertTitle>
-          <AlertDescription className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <p>{t("players.profileUpdateDesc")}</p>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={openCreateProfile}>{t("players.createProfileBtn")}</Button>
-              <Button size="sm" variant="ghost" onClick={dismissProfileHint}>{t("players.later")}</Button>
+        <PlayersCard className="space-y-3">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-accent shrink-0 mt-0.5" aria-hidden />
+            <div className="min-w-0 space-y-0.5">
+              <p className="font-semibold">{t("players.newProfileUpdateTitle")}</p>
+              <p className="text-sm text-muted-foreground">{t("players.profileUpdateDesc")}</p>
             </div>
-          </AlertDescription>
-        </Alert>
+          </div>
+          <div className="flex gap-2">
+            <Button className="h-11 flex-1 rounded-xl" onClick={openCreateProfile}>{t("players.createProfileBtn")}</Button>
+            <Button variant="ghost" className="h-11 rounded-xl" onClick={dismissProfileHint}>{t("players.later")}</Button>
+          </div>
+        </PlayersCard>
       )}
 
-      {/* Decorative watermark logo */}
-      <img
-        src={logoUrl}
-        alt=""
-        aria-hidden
-        className="absolute right-0 top-32 w-[500px] h-[500px] object-contain opacity-[0.04] pointer-events-none select-none hidden md:block"
-      />
-
-      {/* Club emblem header — interactive spinning logo with live stats */}
-      <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-card via-card to-primary/5 p-6 mb-6">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.08),transparent_70%)]" />
-        <div className="relative flex items-center gap-5">
-          <div className="relative shrink-0 group cursor-pointer">
-            <div className="absolute inset-0 rounded-full bg-primary/30 blur-xl group-hover:bg-primary/50 transition-colors duration-500" />
-            <div className="absolute -inset-1 rounded-full border border-primary/40 group-hover:rotate-180 transition-transform duration-[2000ms]" />
-            <img
-              src={logoUrl}
-              alt={t("players.clubEmblemAlt")}
-              className="relative w-24 h-24 md:w-28 md:h-28 rounded-full object-cover border-2 border-primary/50 glow-cyan group-hover:scale-105 group-active:scale-95 transition-transform duration-300"
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-primary font-display mb-1">{t("players.clubManagement")}</p>
-            <h2 className="text-2xl md:text-3xl font-display uppercase leading-tight">
-              {clubName}
-            </h2>
-            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Users className="w-3.5 h-3.5 text-secondary" />
-                <span className="font-display text-foreground">{players.length}</span> {t("stats.members")}
-              </span>
-              <span className="flex items-center gap-1">
-                <Trophy className="w-3.5 h-3.5 text-accent" />
-                <span className="font-display text-foreground">
-                  {players.reduce((s, p) => s + p.games_won, 0)}
-                </span> {t("game.winsLabel")}
-              </span>
-              <span className="flex items-center gap-1">
-                <Target className="w-3.5 h-3.5 text-primary" />
-                <span className="font-display text-foreground">
-                  {Math.max(0, ...players.map(p => p.high_score))}
-                </span> Highscore
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between mb-6 relative gap-2 flex-wrap">
-        <h3 className="text-sm font-display uppercase tracking-widest text-muted-foreground">{t("stats.members")}</h3>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <PlayersSectionLabel>{t("stats.members")}</PlayersSectionLabel>
         <div className="flex items-center gap-2">
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open);
@@ -1019,15 +849,16 @@ const PlayersPage = () => {
             resetForm();
           }
         }}>
+          {/* Header add button only from md up — on phones the thumb-zone button below is the
+              same action, so each screen width shows exactly one primary "add" button. */}
           <DialogTrigger asChild>
-            <Button size="sm" className="gap-1" onClick={openCreateProfile}><Plus className="w-4 h-4" /> {t("players.memberButton")}</Button>
+            <Button className="hidden md:inline-flex h-11 gap-1 rounded-xl" onClick={openCreateProfile}><Plus className="w-4 h-4" /> {t("players.memberButton")}</Button>
           </DialogTrigger>
           {/* Admin-only: Profil ohne Account (Walk-in) — nutzt denselben Dialog. */}
           <DialogTrigger asChild>
             <Button
-              size="sm"
               variant="outline"
-              className={`gap-1 ${isAdmin ? "" : "hidden"}`}
+              className={`h-11 gap-1 rounded-xl ${isAdmin ? "" : "hidden"}`}
               onClick={openCreateWalkInProfile}
               title={t("players.walkInHint")}
             >
@@ -1035,36 +866,29 @@ const PlayersPage = () => {
             </Button>
           </DialogTrigger>
 
-          {/* "Daumenzone" — one of Round 3's three unscheduled design directions. The header
-              button above is the only way to add a member, but it sits at the very top of the
-              screen — outside a thumb's natural reach on a one-handed phone grip, on what is
-              otherwise a long, frequently-scrolled list page. This duplicates the SAME trigger
-              (same openCreateProfile handler, same shared `dialogOpen` Dialog above — no second
-              dialog instance, no new state) as a fixed, always-reachable bottom-right FAB, mobile
-              only (the desktop header button is already a short, precise mouse click away).
-              Positioned above Layout.tsx's bottom nav (fixed, h~64px, z-50) with clearance to
-              spare, at a lower z-index so it never competes with the nav for taps. Deliberately a
-              single new, self-contained element — NOT a restructure of this page's scroll/layout
-              containers, per the lesson documented in Game.tsx's reverted full-pinning attempt. */}
+          {/* "Daumenzone": the same openCreateProfile trigger (same shared `dialogOpen` Dialog,
+              no second dialog instance) as a fixed bottom-right button, mobile only — the top of
+              a long, scrolled list is outside a thumb's reach. Sits above Layout.tsx's bottom nav
+              (fixed, z-50) at a lower z-index so it never competes with the nav for taps. */}
           <Button
             size="icon"
             onClick={openCreateProfile}
             aria-label={t("players.addMemberFab")}
             title={t("players.addMemberFab")}
-            className="md:hidden fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full shadow-lg glow-cyan"
+            className="md:hidden fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full shadow-lg"
           >
             <Plus className="w-6 h-6" />
           </Button>
-          <DialogContent className="bg-card border-border max-h-[90vh] overflow-y-auto">
+          <DialogContent className="bg-card border-border rounded-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-display uppercase">{isEditMode ? t("players.editPlayerProfileTitle") : createWithoutAccount ? t("players.walkInTitle") : t("players.newMemberTitle")}</DialogTitle>
+              <DialogTitle className="font-display font-bold text-2xl">{isEditMode ? t("players.editPlayerProfileTitle") : createWithoutAccount ? t("players.walkInTitle") : t("players.newMemberTitle")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               {/* Admin-Umschalter: eigenes Profil vs. Profil ohne Account. Existiert bereits ein
                   eigenes Profil, bleibt nur der Walk-in-Weg (ein zweites eigenes Profil wäre
                   ein Duplikat). */}
               {isAdmin && !isEditMode && (
-                <label className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/30 p-3 cursor-pointer">
+                <label className="flex items-start gap-2.5 rounded-[14px] border border-border bg-muted px-3.5 py-2.5 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={createWithoutAccount}
@@ -1079,7 +903,7 @@ const PlayersPage = () => {
                 </label>
               )}
               {!isEditMode && !createWithoutAccount && (
-                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-200">
+                <div className="rounded-[14px] border border-amber-500/50 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-200">
                   {t("players.ownAccountWarning")}
                 </div>
               )}
@@ -1097,8 +921,8 @@ const PlayersPage = () => {
                 <Label>{t("players.emojiAvatar")}</Label>
                 <div className="flex gap-2 mt-1 flex-wrap">
                   {EMOJI_AVATARS.map((a) => (
-                    <button key={a} onClick={() => setNewEmoji(a)}
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all ${newEmoji === a ? "bg-primary/20 ring-2 ring-primary" : "bg-muted hover:bg-muted/80"}`}>
+                    <button key={a} type="button" onClick={() => setNewEmoji(a)} aria-pressed={newEmoji === a}
+                      className={`w-11 h-11 rounded-full border flex items-center justify-center text-xl transition-colors ${newEmoji === a ? "border-primary bg-primary/15 text-primary" : "border-border bg-muted hover:bg-muted/80"}`}>
                       {a}
                     </button>
                   ))}
@@ -1111,7 +935,7 @@ const PlayersPage = () => {
                   <Camera className="w-3.5 h-3.5" /> {t("players.uploadPhoto")}
                 </Label>
                 <p className="text-xs text-muted-foreground mb-2">{t("players.uploadPhotoDesc")}</p>
-                <label className="flex items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 transition-colors bg-muted/30">
+                <label className="flex items-center justify-center gap-2 w-full h-24 border-2 border-dashed border-border rounded-2xl cursor-pointer hover:border-primary/50 transition-colors bg-muted">
                   <input type="file" accept="image/*" onChange={handlePhotoSelect} disabled={compressingPhoto} className="hidden" />
                   {compressingPhoto ? (
                     <div className="text-center">
@@ -1130,7 +954,7 @@ const PlayersPage = () => {
                   )}
                 </label>
                 {(uploadedPhoto || (existingPhotoUrl && !removeExistingPhoto)) && (
-                  <button type="button" onClick={clearPhoto} className="text-xs text-destructive hover:underline mt-1.5">
+                  <button type="button" onClick={clearPhoto} className="min-h-11 text-sm text-destructive hover:underline">
                     {t("players.removePhoto")}
                   </button>
                 )}
@@ -1143,7 +967,7 @@ const PlayersPage = () => {
                     variant="outline"
                     onClick={generateAiPortrait}
                     disabled={generatingPortrait}
-                    className="w-full gap-2 border-primary/30 hover:border-primary/60"
+                    className="h-11 w-full gap-2 rounded-xl"
                   >
                     {generatingPortrait ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> {t("players.aiGeneratingPortrait")}</>
@@ -1158,7 +982,7 @@ const PlayersPage = () => {
                       <img
                         src={generatedPortrait}
                         alt="AI Generated Portrait"
-                        className="w-32 h-32 rounded-xl object-cover mx-auto border-2 border-primary/30 glow-cyan"
+                        className="w-32 h-32 rounded-full object-cover mx-auto bg-muted border border-border"
                       />
                     </div>
                   )}
@@ -1166,19 +990,19 @@ const PlayersPage = () => {
               )}
 
               {/* Optional details — collapsible-feel */}
-              <details className="rounded-lg border border-border bg-muted/20 p-3">
-                <summary className="text-sm font-medium cursor-pointer select-none flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+              <details className="rounded-[14px] border border-border bg-muted px-3.5 py-1">
+                <summary className="min-h-11 text-sm font-medium cursor-pointer select-none flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-accent" />
                   {t("players.moreAboutMe")} <span className="text-xs text-muted-foreground">{t("players.allOptional")}</span>
                 </summary>
-                <div className="mt-3 space-y-3">
+                <div className="mt-1 mb-3 space-y-3">
                   <div>
                     <Label>{t("players.bioLabel")}</Label>
                     <Textarea
                       value={newBio}
                       onChange={(e) => setNewBio(e.target.value)}
                       placeholder={t("players.bioPlaceholder")}
-                      className="bg-muted border-border min-h-[70px]"
+                      className="bg-card border-border min-h-[70px]"
                     />
                   </div>
                   <div>
@@ -1187,14 +1011,14 @@ const PlayersPage = () => {
                       value={newMotto}
                       onChange={(e) => setNewMotto(e.target.value)}
                       placeholder={t("players.mottoPlaceholder")}
-                      className="bg-muted border-border"
+                      className="bg-card border-border"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>{t("players.throwingHand")}</Label>
                       <Select value={newHand} onValueChange={setNewHand}>
-                        <SelectTrigger className="bg-muted border-border"><SelectValue placeholder={t("players.choosePlaceholder")} /></SelectTrigger>
+                        <SelectTrigger className="bg-card border-border"><SelectValue placeholder={t("players.choosePlaceholder")} /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="right">{t("players.right")}</SelectItem>
                           <SelectItem value="left">{t("players.left")}</SelectItem>
@@ -1209,7 +1033,7 @@ const PlayersPage = () => {
                         value={newWeight}
                         onChange={(e) => setNewWeight(e.target.value)}
                         placeholder={t("players.egWeight")}
-                        className="bg-muted border-border"
+                        className="bg-card border-border"
                       />
                     </div>
                     <div>
@@ -1218,7 +1042,7 @@ const PlayersPage = () => {
                         value={newFavDouble}
                         onChange={(e) => setNewFavDouble(e.target.value)}
                         placeholder={t("players.egDouble")}
-                        className="bg-muted border-border"
+                        className="bg-card border-border"
                       />
                     </div>
                     <div>
@@ -1227,7 +1051,7 @@ const PlayersPage = () => {
                         value={newHometown}
                         onChange={(e) => setNewHometown(e.target.value)}
                         placeholder={t("players.egHometown")}
-                        className="bg-muted border-border"
+                        className="bg-card border-border"
                       />
                     </div>
                     <div>
@@ -1237,7 +1061,7 @@ const PlayersPage = () => {
                         value={newJoinedYear}
                         onChange={(e) => setNewJoinedYear(e.target.value)}
                         placeholder={t("players.egYear")}
-                        className="bg-muted border-border"
+                        className="bg-card border-border"
                       />
                     </div>
                     <div>
@@ -1246,14 +1070,14 @@ const PlayersPage = () => {
                         type="date"
                         value={newBirthday}
                         onChange={(e) => setNewBirthday(e.target.value)}
-                        className="bg-muted border-border"
+                        className="bg-card border-border"
                       />
                     </div>
                   </div>
                 </div>
               </details>
 
-              <Button onClick={addPlayer} className="w-full" disabled={!newName.trim() || savingPlayer}>
+              <Button onClick={addPlayer} className="h-12 w-full rounded-[14px] text-base font-semibold" disabled={!newName.trim() || savingPlayer}>
                 {savingPlayer ? t("players.saving") : isEditMode ? t("players.saveProfile") : t("players.addMemberBtn")}
               </Button>
             </div>
@@ -1262,9 +1086,9 @@ const PlayersPage = () => {
         </div>
       </div>
 
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("players.searchMemberPlaceholder")} className="pl-9 bg-card border-border" />
+      <div className="relative">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("players.searchMemberPlaceholder")} aria-label={t("players.searchMemberPlaceholder")} className="h-11 rounded-[14px] pl-10 bg-card border-border text-base md:text-sm" />
       </div>
 
       {loading ? (
@@ -1272,165 +1096,100 @@ const PlayersPage = () => {
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       ) : filteredPlayers.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <Target className="w-12 h-12 mx-auto mb-3 opacity-30" />
+        <PlayersCard className="py-10 text-center text-muted-foreground">
+          <Target className="w-10 h-10 mx-auto mb-3 opacity-30" aria-hidden />
           <p className="text-sm">{search.trim() ? t("players.noSearchMatches") : t("players.noMembersYet")}</p>
-        </div>
+        </PlayersCard>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 items-start">
           {pagedPlayers.visible.map((player) => (
-            <Collapsible key={player.id} open={!!expandedCards[player.id]} onOpenChange={() => toggleCard(player.id)}>
-              <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-4 text-left transition-all group hover:border-primary/50 hover:shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]">
-                <div className="flex items-start gap-3">
-                  <div className="group-hover:scale-105 transition-transform">
-                    <PlayerAvatar player={player} size="md" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <button onClick={() => setSelectedPlayer(player)} className="text-left">
-                          <p className="font-semibold truncate">{player.name}</p>
-                          {player.nickname && <p className="text-xs text-primary truncate">"{player.nickname}"</p>}
-                        </button>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <Badge variant="outline" className="border-primary/30 text-primary">{player.games_played} {t("stats.games")}</Badge>
-                          <Badge variant="outline" className="border-secondary/40 text-secondary">{player.games_played > 0 ? Math.round((player.games_won / player.games_played) * 100) : 0}% {t("game.winsLabel")}</Badge>
-                          {player.favorite_double && <Badge variant="outline">{player.favorite_double}</Badge>}
-                        </div>
-                      </div>
-                      {canEditPlayer(player) && (
-                        <Button variant="ghost" size="icon" onClick={() => openEditProfile(player)} title={t("players.editProfile")}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                      )}
+            <PlayerRosterRow
+              key={player.id}
+              player={player}
+              online={isOnline(player)}
+              expanded={!!expandedCards[player.id]}
+              onExpandedChange={() => toggleCard(player.id)}
+              onOpenProfile={() => setSelectedPlayer(player)}
+              canEdit={canEditPlayer(player)}
+              onEdit={() => openEditProfile(player)}
+            >
+              {isAdmin && !player.user_id && (
+                <div className="rounded-xl bg-muted px-3 py-2.5 space-y-2">
+                  <p className="text-sm font-semibold flex items-center gap-1.5"><Users className="w-4 h-4 text-muted-foreground" aria-hidden /> {t("players.linkAccountLabel")}</p>
+                  <p className="text-xs text-muted-foreground">{t("players.linkAccountDesc")}</p>
+                  {linkableAccounts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">{t("players.linkAccountEmpty")}</p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Select
+                        value={linkTarget[player.id] ?? ""}
+                        onValueChange={(v) => setLinkTarget((prev) => ({ ...prev, [player.id]: v }))}
+                      >
+                        <SelectTrigger className="h-11 min-w-0 rounded-xl bg-card text-sm flex-1">
+                          <SelectValue placeholder={t("players.linkAccountPlaceholder")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {linkableAccounts.map((a) => (
+                            <SelectItem key={a.user_id} value={a.user_id} className="text-xs">{a.email}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        className="h-11 rounded-xl shrink-0"
+                        disabled={!linkTarget[player.id] || linkingId === player.id}
+                        onClick={() => linkPlayerAccount(player)}
+                      >
+                        {linkingId === player.id ? t("players.linkAccountLinking") : t("players.linkAccountBtn")}
+                      </Button>
                     </div>
-
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      <div className="rounded-lg bg-muted/40 py-2">
-                        <StatTile value={player.high_score || 0} label="High" />
-                      </div>
-                      <div className="rounded-lg bg-muted/40 py-2">
-                        <StatTile value={player.games_played > 0 ? Number(player.average).toFixed(1) : "–"} label="Ø" />
-                      </div>
-                      <div className="rounded-lg bg-muted/40 py-2">
-                        <StatTile value={player.throwing_hand === "left" ? t("players.left") : player.throwing_hand === "right" ? t("players.right") : player.throwing_hand === "ambi" ? t("players.both") : "–"} label="Hand" />
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
-
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" className="mt-3 w-full justify-between text-xs text-muted-foreground">
-                    {t("players.moreDetails")}
-                    <ChevronDown className={`w-4 h-4 transition-transform ${expandedCards[player.id] ? "rotate-180" : ""}`} />
-                  </Button>
-                </CollapsibleTrigger>
-
-                <CollapsibleContent className="pt-2">
-                  <div className="grid grid-cols-2 gap-2 border-t border-border pt-3 text-xs">
-                    <div className="rounded-lg bg-muted/30 p-3">
-                      <p className="text-muted-foreground uppercase mb-1">{t("players.residence")}</p>
-                      <p>{player.hometown || t("players.notSpecified")}</p>
-                    </div>
-                    <div className="rounded-lg bg-muted/30 p-3">
-                      <p className="text-muted-foreground uppercase mb-1">{t("players.memberSince")}</p>
-                      <p>{player.joined_year || "–"}</p>
-                    </div>
-                    <div className="rounded-lg bg-muted/30 p-3">
-                      <p className="text-muted-foreground uppercase mb-1">{t("players.dartWeightShort")}</p>
-                      <p>{player.dart_weight_g ? `${player.dart_weight_g} g` : "–"}</p>
-                    </div>
-                    <div className="rounded-lg bg-muted/30 p-3">
-                      <p className="text-muted-foreground uppercase mb-1">{t("players.birthday")}</p>
-                      <p>{player.birthday ? new Date(player.birthday).toLocaleDateString("de-DE") : "–"}</p>
-                    </div>
-                  </div>
-                  {(player.motto || player.bio) && (
-                    <div className="mt-3 space-y-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
-                      {player.motto && <p className="font-display italic text-sm">“{player.motto}”</p>}
-                      {player.bio && <p className="text-xs text-muted-foreground line-clamp-4 whitespace-pre-line">{player.bio}</p>}
-                    </div>
-                  )}
-                  {isAdmin && !player.user_id && (
-                    <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
-                      <p className="text-xs font-medium flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> {t("players.linkAccountLabel")}</p>
-                      <p className="text-[11px] text-muted-foreground">{t("players.linkAccountDesc")}</p>
-                      {linkableAccounts.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground italic">{t("players.linkAccountEmpty")}</p>
-                      ) : (
-                        <div className="flex gap-2">
-                          <Select
-                            value={linkTarget[player.id] ?? ""}
-                            onValueChange={(v) => setLinkTarget((prev) => ({ ...prev, [player.id]: v }))}
-                          >
-                            <SelectTrigger className="h-9 text-xs flex-1">
-                              <SelectValue placeholder={t("players.linkAccountPlaceholder")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {linkableAccounts.map((a) => (
-                                <SelectItem key={a.user_id} value={a.user_id} className="text-xs">{a.email}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            size="sm"
-                            className="h-9 text-xs shrink-0"
-                            disabled={!linkTarget[player.id] || linkingId === player.id}
-                            onClick={() => linkPlayerAccount(player)}
-                          >
-                            {linkingId === player.id ? t("players.linkAccountLinking") : t("players.linkAccountBtn")}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {isAdmin && !player.user_id && (
-                    <AlertDialog open={confirmDeleteId === player.id} onOpenChange={(open) => setConfirmDeleteId(open ? player.id : null)}>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mt-3 w-full justify-center gap-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          disabled={deletingId === player.id}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> {t("players.removeProfile")}
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>{player.name} {t("players.removeConfirmSuffix")}</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            {t("players.removeWarning")}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel disabled={deletingId === player.id}>{t("common.cancel")}</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={async (e) => {
-                              // Radix closes the dialog synchronously on click by default — without
-                              // preventDefault the "Entfernt…" disabled state never gets a chance to
-                              // render, and a failed delete's error toast appears after the
-                              // confirmation dialog has already vanished.
-                              e.preventDefault();
-                              await deletePlayer(player);
-                              setConfirmDeleteId(null);
-                            }}
-                            disabled={deletingId === player.id}
-                          >
-                            {deletingId === player.id ? t("players.removing") : t("players.remove")}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                  {isAdmin && player.user_id && (
-                    <p className="mt-3 text-[11px] text-muted-foreground text-center">
-                      {t("players.linkedAccountNotePrefix")} <Link to="/admin" className="text-primary underline">{t("players.memberManagement")}</Link> {t("players.linkedAccountNoteSuffix")}
-                    </p>
-                  )}
-                </CollapsibleContent>
-              </div>
-            </Collapsible>
+              )}
+              {isAdmin && !player.user_id && (
+                <AlertDialog open={confirmDeleteId === player.id} onOpenChange={(open) => setConfirmDeleteId(open ? player.id : null)}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="h-11 w-full justify-center gap-1.5 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      disabled={deletingId === player.id}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> {t("players.removeProfile")}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{player.name} {t("players.removeConfirmSuffix")}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {t("players.removeWarning")}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={deletingId === player.id}>{t("common.cancel")}</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={async (e) => {
+                          // Radix closes the dialog synchronously on click by default — without
+                          // preventDefault the "Entfernt…" disabled state never gets a chance to
+                          // render, and a failed delete's error toast appears after the
+                          // confirmation dialog has already vanished.
+                          e.preventDefault();
+                          await deletePlayer(player);
+                          setConfirmDeleteId(null);
+                        }}
+                        disabled={deletingId === player.id}
+                      >
+                        {deletingId === player.id ? t("players.removing") : t("players.remove")}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+              {isAdmin && player.user_id && (
+                <p className="text-xs text-muted-foreground text-center">
+                  {t("players.linkedAccountNotePrefix")} <Link to="/admin" className="text-primary underline">{t("players.memberManagement")}</Link> {t("players.linkedAccountNoteSuffix")}
+                </p>
+              )}
+            </PlayerRosterRow>
           ))}
         </div>
       )}
