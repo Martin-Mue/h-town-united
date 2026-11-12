@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Permanent+Marker&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@300;400;500;600;700&family=Permanent+Marker&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -57,7 +57,8 @@
     --input: 210 20% 88%;
     --ring: 185 85% 38%;
 
-    --radius: 0.75rem;
+    /* 14px: buttons/inputs land on 12px (rounded-md), cards use rounded-2xl (16px) — redesign canvas. */
+    --radius: 0.875rem;
 
     /* Elevation scale + motion timing (Design-Sprint Runde 2 Rang 3) — a fixed vocabulary for
      * "how far off the page does this sit" and "how does it move", so new UI reaches for one of
@@ -106,16 +107,19 @@
     --chart-8: #e34948;
   }
 
-  /* Dark theme (original palette, unchanged) — applied via next-themes' `.dark` class on <html>. */
+  /* Dark theme — applied via next-themes' `.dark` class on <html>. Surfaces follow the 2026-11
+   * redesign canvas: ground #0A0D12, card #131821, raised #1B2230, line #263041, text #EEF2F6,
+   * secondary text #9AA7B8 (brighter than before, so small grey labels pass 4.5:1 on cards).
+   * The brand hues below are overwritten per club by ClubBrandingContext. */
   .dark {
-    --background: 222 30% 5%;
-    --foreground: 210 15% 92%;
+    --background: 218 29% 5%;
+    --foreground: 210 31% 95%;
 
-    --card: 222 25% 9%;
-    --card-foreground: 210 15% 92%;
+    --card: 219 27% 10%;
+    --card-foreground: 210 31% 95%;
 
-    --popover: 222 25% 11%;
-    --popover-foreground: 210 15% 92%;
+    --popover: 220 28% 13%;
+    --popover-foreground: 210 31% 95%;
 
     --primary: 185 85% 48%;
     --primary-foreground: 222 30% 5%;
@@ -123,8 +127,8 @@
     --secondary: 155 65% 42%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 222 20% 14%;
-    --muted-foreground: 222 12% 50%;
+    --muted: 220 28% 15%;
+    --muted-foreground: 214 17% 66%;
 
     --accent: 45 100% 58%;
     --accent-foreground: 222 30% 5%;
@@ -132,25 +136,26 @@
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 222 18% 14%;
-    --input: 222 18% 14%;
+    --border: 218 26% 20%;
+    --input: 218 26% 20%;
     --ring: 185 85% 48%;
 
-    --sidebar-background: 222 25% 7%;
-    --sidebar-foreground: 210 15% 92%;
+    --sidebar-background: 219 27% 10%;
+    --sidebar-foreground: 210 31% 95%;
     --sidebar-primary: 185 85% 48%;
     --sidebar-primary-foreground: 222 30% 5%;
-    --sidebar-accent: 222 20% 14%;
-    --sidebar-accent-foreground: 210 15% 92%;
-    --sidebar-border: 222 18% 14%;
+    --sidebar-accent: 220 28% 15%;
+    --sidebar-accent-foreground: 210 31% 95%;
+    --sidebar-border: 218 26% 20%;
     --sidebar-ring: 185 85% 48%;
 
     --dart-green: 155 65% 42%;
     --dart-cyan: 185 85% 48%;
     --dart-gold: 45 100% 58%;
-    --dart-surface: 222 25% 11%;
+    --dart-surface: 220 28% 13%;
     --gradient-hero: linear-gradient(135deg, hsl(185 85% 48% / 0.08), hsl(155 65% 42% / 0.05), hsl(45 100% 58% / 0.03));
-    --gradient-card: linear-gradient(180deg, hsl(222 25% 11%), hsl(222 25% 7%));
+    /* Flat card per the redesign (was a two-stop gradient); kept as a token so <Card> needs no change. */
+    --gradient-card: linear-gradient(180deg, hsl(219 27% 10%), hsl(219 27% 10%));
     --shadow-glow-cyan: 0 0 30px hsl(185 85% 48% / 0.25);
     --shadow-glow-green: 0 0 30px hsl(155 65% 42% / 0.25);
     --shadow-glow-gold: 0 0 20px hsl(45 100% 58% / 0.2);

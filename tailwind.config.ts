@@ -16,8 +16,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ["Oswald", "sans-serif"],
-        body: ["Inter", "sans-serif"],
+        display: ["'Barlow Condensed'", "Oswald", "sans-serif"],
+        body: ["Barlow", "Inter", "system-ui", "sans-serif"],
         graffiti: ["'Permanent Marker'", "cursive"],
       },
       colors: {
