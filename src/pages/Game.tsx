@@ -89,6 +89,7 @@ import {
   type StatBundle,
   type CheckoutDoubleBreakdown,
 } from "@/utils/dartStats";
+import { splitVisitTotal } from "@/utils/quickRoundSplit";
 
 /** Bot personas with their target 3-dart average range. `nameKey` (not a literal string) since
  *  this is a module-level constant with no access to the language context — resolved via t() at
@@ -1562,7 +1563,7 @@ const GamePage = () => {
     darts: DetectedDart[],
     forced?: { kind: "checkout"; finisherIndex: number } | { kind: "bust" },
     // Quick-round entry ("just type the total") synthesizes plausible-looking darts purely to
-    // make the math add up (see splitQuickRound) — they're invented, not what was really thrown,
+    // make the math add up (see splitVisitTotal in utils/quickRoundSplit.ts) — they're invented, not what was really thrown,
     // so asking "which of these fabricated darts finished it" would be nonsensical. The player
     // typed a total that matches remaining exactly, so trust that as a deliberate, valid checkout
     // instead of surfacing the disambiguation prompt built for genuine (camera-sourced) ambiguity.
@@ -2004,39 +2005,24 @@ const GamePage = () => {
     setEditingChipIdx(null);
   };
 
-  const splitQuickRound = (total: number): DetectedDart[] => {
-    let rem = total;
-    const out: DetectedDart[] = [];
-    for (let i = 0; i < 3; i++) {
-      const dartsLeft = 3 - i;
-      let pts = i === 2 ? rem : Math.min(60, Math.ceil(rem / dartsLeft));
-      if (rem - pts > 60 * (dartsLeft - 1)) pts = rem - 60 * (dartsLeft - 1);
-      pts = Math.max(0, Math.min(60, pts));
-      let base = pts;
-      let mul: 1 | 2 | 3 = 1;
-      if (pts === 0) { base = 0; mul = 1; }
-      else if (pts <= 20) { base = pts; mul = 1; }
-      else if (pts === 25) { base = 25; mul = 1; }
-      else if (pts === 50) { base = 25; mul = 2; }
-      else if (pts % 3 === 0 && pts / 3 <= 20) { base = pts / 3; mul = 3; }
-      else if (pts % 2 === 0 && pts / 2 <= 20) { base = pts / 2; mul = 2; }
-      else { base = 20; mul = 1; pts = 20; }
-      out.push({ baseValue: base, multiplier: mul, points: pts, confidence: 1 });
-      rem -= pts;
-    }
-    return out;
-  };
-
   const handleQuickRound = (total: number) => {
     if (!game || game.isFinished) return;
     if (game.mode === "cricket") return;
     // Belt-and-suspenders: the curated QUICK_ROUNDS presets are all real achievable totals, but
     // this same handler also serves the free-typed "Eintippen" mode — reject anything a real
-    // 3-dart visit could never add up to, rather than have splitQuickRound silently fabricate a
+    // 3-dart visit could never add up to, rather than have the split silently fabricate a
     // fake per-dart breakdown for it (that breakdown gets persisted into game_legs.throws and
     // would corrupt downstream per-dart stats like 180-count and aim bias).
     if (!isAchievableVisitTotal(total)) return;
-    submitDetectedRound(splitQuickRound(total), undefined, true);
+    const player = game.players[game.currentPlayerIndex];
+    const teamIdx = teamIndexFor(game.teams, game.currentPlayerIndex);
+    const split = splitVisitTotal(total, {
+      remaining: game.currentLeg.remaining[teamIdx],
+      doubleOut: player.doubleOut ?? true,
+      needsDouble: (player.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[teamIdx] ?? true),
+    });
+    if (!split) return;
+    submitDetectedRound(split.map((d) => ({ ...d, confidence: 1 })), undefined, true);
   };
 
   // Stable identity for the onThrow/onQuickRound props DartScoreInput takes (it's wrapped in
