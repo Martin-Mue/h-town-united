@@ -1,6 +1,8 @@
 import { useLocation, Link } from "react-router-dom";
 import { useEffect } from "react";
+import { MapPinOff } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import EntryIconTile from "@/components/entry/EntryIconTile";
 
 const NotFound = () => {
   const location = useLocation();
@@ -11,14 +13,20 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">404</h1>
-        <p className="mb-4 text-xl text-muted-foreground">{t("notFound.pageNotFound")}</p>
-        <Link to="/" className="text-primary underline hover:text-primary/90">
-          {t("notFound.returnHome")}
-        </Link>
-      </div>
+    <div className="container flex min-h-[60vh] max-w-sm flex-col justify-center gap-4 py-8 animate-slide-up">
+      <header className="flex items-center gap-3">
+        <EntryIconTile icon={MapPinOff} />
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">404</p>
+          <h1 className="font-display text-[28px] font-bold leading-tight">{t("notFound.pageNotFound")}</h1>
+        </div>
+      </header>
+      <Link
+        to="/"
+        className="flex h-[52px] items-center justify-center rounded-[14px] bg-primary text-base font-semibold text-primary-foreground transition-transform active:scale-[0.98]"
+      >
+        {t("notFound.returnHome")}
+      </Link>
     </div>
   );
 };

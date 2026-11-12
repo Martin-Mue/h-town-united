@@ -89,7 +89,7 @@ const AdminDetectionQuality = () => {
   return (
     <Card className="p-4 space-y-4">
       <div>
-        <h3 className="font-display uppercase text-sm">Erkennungsqualität</h3>
+        <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Erkennungsqualität</h3>
         <p className="text-xs text-muted-foreground">
           Was die Kamera zuerst erkannt hat – verglichen mit dem, was der Spieler bestätigt hat. Aufgezeichnet seit der Version, die
           die Roh-Erkennung mitspeichert; ältere Samples siehe unten.

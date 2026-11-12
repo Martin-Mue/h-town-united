@@ -3,22 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Shield, ShieldOff, Trash2, Pencil, PencilOff } from "lucide-react";
-import { AdminIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Shield } from "lucide-react";
+import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
+import { Tabs, TabsContent, TabsList } from "@/components/ui/tabs";
+import AdminTabTrigger from "@/components/admin/AdminTabTrigger";
+import AdminMemberCard, { type AdminUser } from "@/components/admin/AdminMemberCard";
 import AdminStats from "@/components/admin/AdminStats";
 import AdminUsage from "@/components/admin/AdminUsage";
 import AdminClubs from "@/components/admin/AdminClubs";
@@ -33,14 +22,6 @@ import AdminBilling from "@/components/admin/AdminBilling";
 import AdminAutodarts from "@/components/admin/AdminAutodarts";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
-import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
-
-interface AdminUser {
-  user_id: string;
-  email: string;
-  created_at: string;
-  roles: ("admin" | "member" | "editor")[];
-}
 
 const ACTIVE_TAB_STORAGE_KEY = "admin-active-tab";
 
@@ -55,7 +36,7 @@ const readRememberedTab = (): string => {
 /** Admin-only page: manage member roles and accounts. */
 const AdminPage = () => {
   const { user } = useAuth();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const { toast } = useToast();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const pagedUsers = usePagedList(users);
@@ -148,178 +129,71 @@ const AdminPage = () => {
 
   if (!isAdmin) {
     return (
-      <div className="container py-12 text-center">
-        <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-        <h2 className="text-xl font-display uppercase">{t("admin.noAccessTitle")}</h2>
-        <p className="text-sm text-muted-foreground mt-1">{t("admin.noAccessDesc")}</p>
+      <div className="container py-12 max-w-sm mx-auto">
+        <div className="rounded-2xl border border-border bg-card p-5 flex items-start gap-3">
+          <div aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted">
+            <Shield className="w-6 h-6 text-accent" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-[22px] font-bold leading-tight">{t("admin.noAccessTitle")}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t("admin.noAccessDesc")}</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container py-6 animate-slide-up">
-      <div className="flex items-center gap-2 mb-6">
-        <AdminIcon className="w-6 h-6 text-primary" />
-        <h1 className="text-2xl font-display uppercase">{t("admin.title")}</h1>
-      </div>
+    <div className="container py-4 animate-slide-up space-y-4">
+      <h1 className="font-display text-[28px] font-bold leading-tight">{t("admin.title")}</h1>
 
       <Tabs value={shownTab} onValueChange={changeTab}>
         {/* Wraps onto several rows instead of one long inline strip: the strip used to be wider than
             the screen, so the whole page scrolled sideways and the active tab could be out of sight. */}
-        <TabsList className="mb-4 h-auto w-full flex-wrap justify-start gap-1">
-          <TabsTrigger value="members">{t("admin.tabMembers")}</TabsTrigger>
-          <TabsTrigger value="invites">{t("admin.tabInvites")}</TabsTrigger>
-          <TabsTrigger value="branding">{t("admin.tabBranding")}</TabsTrigger>
-          {showBilling && <TabsTrigger value="billing">{t("admin.tabBilling")}</TabsTrigger>}
+        <TabsList className="mb-4 h-auto w-full flex-wrap justify-start gap-1 rounded-[14px] border border-border bg-card p-1">
+          <AdminTabTrigger value="members">{t("admin.tabMembers")}</AdminTabTrigger>
+          <AdminTabTrigger value="invites">{t("admin.tabInvites")}</AdminTabTrigger>
+          <AdminTabTrigger value="branding">{t("admin.tabBranding")}</AdminTabTrigger>
+          {showBilling && <AdminTabTrigger value="billing">{t("admin.tabBilling")}</AdminTabTrigger>}
           {/* Proper noun (product name), same in every language -- not routed through t() like the
               other tabs, same reasoning AdminAutodarts.tsx itself uses plain German strings rather
               than pulling in translation keys for a Paid-Plan admin feature. */}
-          <TabsTrigger value="autodarts">Autodarts</TabsTrigger>
-          <TabsTrigger value="forecast">{t("admin.tabForecast")}</TabsTrigger>
+          <AdminTabTrigger value="autodarts">Autodarts</AdminTabTrigger>
+          <AdminTabTrigger value="forecast">{t("admin.tabForecast")}</AdminTabTrigger>
           {isOwner && (
             <>
-              <span className="mt-2 w-full border-t border-border pt-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span className="mt-1 w-full border-t border-border px-2 pt-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 Plattform · nur für dich sichtbar
               </span>
-              <TabsTrigger value="clubs">Vereine</TabsTrigger>
-              <TabsTrigger value="usage">Nutzung</TabsTrigger>
-              <TabsTrigger value="stats">{t("admin.tabStats")}</TabsTrigger>
-              <TabsTrigger value="trainer">KI-Trainer</TabsTrigger>
+              <AdminTabTrigger value="clubs">Vereine</AdminTabTrigger>
+              <AdminTabTrigger value="usage">Nutzung</AdminTabTrigger>
+              <AdminTabTrigger value="stats">{t("admin.tabStats")}</AdminTabTrigger>
+              <AdminTabTrigger value="trainer">KI-Trainer</AdminTabTrigger>
             </>
           )}
         </TabsList>
 
         <TabsContent value="members">
-      <p className="text-sm text-muted-foreground mb-4">
-        {t("admin.membersIntro")}
-      </p>
+          <p className="text-sm text-muted-foreground mb-4">
+            {t("admin.membersIntro")}
+          </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {pagedUsers.visible.map((u) => {
-          const isSelf = u.user_id === user?.id;
-          const isAdminUser = u.roles?.includes("admin");
-          const isEditorUser = u.roles?.includes("editor");
-          const initial = u.email.trim().charAt(0).toUpperCase() || "?";
-          return (
-            <div key={u.user_id} className="rounded-xl border border-border gradient-card shadow-elevation-sm p-4 flex items-start gap-3 hover:border-primary/40 transition-colors">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-display text-sm ${isAdminUser ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
-                {initial}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-mono truncate">
-                  {u.email}
-                  {isSelf && <span className="ml-1.5 text-[10px] text-primary uppercase">({t("admin.selfBadge")})</span>}
-                </p>
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  {u.roles?.length ? (
-                    u.roles.map((r) => (
-                      <Badge
-                        key={r}
-                        variant="outline"
-                        className={`text-[10px] uppercase px-1.5 py-0.5 border-transparent ${
-                          r === "admin" ? "bg-primary/15 text-primary" : r === "editor" ? "bg-secondary/15 text-secondary" : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {r}
-                      </Badge>
-                    ))
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground">–</span>
-                  )}
-                  <span className="text-[10px] text-muted-foreground">· {t("admin.memberSinceLabel")} {new Date(u.created_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language])}</span>
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {isAdminUser ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs gap-1.5"
-                      disabled={isSelf || busyId === u.user_id}
-                      onClick={() => setRole(u, "admin", false)}
-                      title={isSelf ? t("admin.cantRevokeOwnAdminTitle") : t("admin.revokeAdminBtn")}
-                    >
-                      <ShieldOff className="w-3.5 h-3.5" /> {t("admin.revokeAdminBtn")}
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs gap-1.5"
-                      disabled={busyId === u.user_id}
-                      onClick={() => setRole(u, "admin", true)}
-                      title={t("admin.makeAdminBtn")}
-                    >
-                      <Shield className="w-3.5 h-3.5" /> {t("admin.makeAdminBtn")}
-                    </Button>
-                  )}
-                  {/* Vereinsweite Turnier-/Saison-Bearbeitungsrechte ohne volle Admin-Rolle —
-                      ersetzt den früher hartkodierten TRUSTED_RESULT_EDITOR_ID-Sonderfall. */}
-                  {isEditorUser ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs gap-1.5"
-                      disabled={busyId === u.user_id}
-                      onClick={() => setRole(u, "editor", false)}
-                      title={t("admin.revokeEditorTitle")}
-                    >
-                      <PencilOff className="w-3.5 h-3.5" /> {t("admin.revokeEditorBtn")}
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs gap-1.5"
-                      disabled={busyId === u.user_id}
-                      onClick={() => setRole(u, "editor", true)}
-                      title={t("admin.grantEditorTitle")}
-                    >
-                      <Pencil className="w-3.5 h-3.5" /> {t("admin.grantEditorBtn")}
-                    </Button>
-                  )}
-                  <AlertDialog open={confirmDeleteId === u.user_id} onOpenChange={(open) => setConfirmDeleteId(open ? u.user_id : null)}>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        disabled={isSelf || busyId === u.user_id}
-                        title={isSelf ? t("admin.cantDeleteSelfTitle") : t("admin.removeMemberBtnTitle")}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{t("admin.removeMemberDialogTitle")}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {u.email} {t("admin.removeMemberDescSuffix")}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel disabled={busyId === u.user_id}>{t("common.cancel")}</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            await deleteUser(u);
-                            setConfirmDeleteId(null);
-                          }}
-                          disabled={busyId === u.user_id}
-                        >
-                          {busyId === u.user_id ? t("admin.removingBtn") : t("admin.removeBtn")}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <ListPaginationFooter list={pagedUsers} />
-      <AdminMergePlayers />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {pagedUsers.visible.map((u) => (
+              <AdminMemberCard
+                key={u.user_id}
+                member={u}
+                isSelf={u.user_id === user?.id}
+                busy={busyId === u.user_id}
+                confirmDeleteOpen={confirmDeleteId === u.user_id}
+                onConfirmDeleteOpenChange={(open) => setConfirmDeleteId(open ? u.user_id : null)}
+                onSetRole={(role, grant) => setRole(u, role, grant)}
+                onDelete={() => deleteUser(u)}
+              />
+            ))}
+          </div>
+          <ListPaginationFooter list={pagedUsers} />
+          <AdminMergePlayers />
         </TabsContent>
 
         <TabsContent value="invites">

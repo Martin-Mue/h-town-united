@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Volume2, VolumeX, Mic, MicOff, Keyboard, Sparkles } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { SectionCard } from "@/components/stats/StatPrimitives";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getCallerVoice, setCallerVoice, type CallerVoice } from "@/utils/speech";
+import SettingsSection from "@/components/settings/SettingsSection";
+import SettingsRow from "@/components/settings/SettingsRow";
+import SegmentedControl from "@/components/settings/SegmentedControl";
 
 // Same localStorage keys Game.tsx reads when a match screen mounts (INPUT_MODE_PREF_KEY,
 // SOUND_PREF_KEY, WALKON_PREF_KEY there) — these are start-up defaults, so a change here simply
@@ -46,79 +48,55 @@ const GameDefaultsSection = () => {
   const [voice, setVoice] = useState<CallerVoice>(() => getCallerVoice());
 
   return (
-    <div className="space-y-3">
-      <SectionCard>
-        <div className="flex items-center gap-3 mb-3">
-          <Keyboard className="w-5 h-5 text-muted-foreground shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-medium">{t("settings.inputModeDefault")}</p>
-            <p className="text-xs text-muted-foreground">{t("settings.inputModeDefaultDesc")}</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted/50 p-1">
-          {INPUT_MODES.map((m) => (
-            <button
-              key={m.value}
-              onClick={() => { setInputMode(m.value); writeStored(INPUT_MODE_KEY, m.value); }}
-              className={`py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${inputMode === m.value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {t(m.labelKey)}
-            </button>
-          ))}
-        </div>
-      </SectionCard>
-
-      <SectionCard className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          {soundOn ? <Volume2 className="w-5 h-5 text-muted-foreground shrink-0" /> : <VolumeX className="w-5 h-5 text-muted-foreground shrink-0" />}
-          <div className="min-w-0">
-            <p className="text-sm font-medium">{t("game.soundHaptics")}</p>
-            <p className="text-xs text-muted-foreground">{t("settings.soundDefaultDesc")}</p>
-          </div>
-        </div>
-        <Switch
-          checked={soundOn}
-          onCheckedChange={(on) => { setSoundOn(on); writeStored(SOUND_KEY, JSON.stringify(on)); }}
-          aria-label={t("game.soundHaptics")}
+    <SettingsSection>
+      <SettingsRow icon={Keyboard} label={t("settings.inputModeDefault")} description={t("settings.inputModeDefaultDesc")}>
+        <SegmentedControl
+          ariaLabel={t("settings.inputModeDefault")}
+          options={INPUT_MODES.map((m) => ({ value: m.value, label: t(m.labelKey) }))}
+          value={inputMode}
+          onChange={(mode) => { setInputMode(mode); writeStored(INPUT_MODE_KEY, mode); }}
+          columnsClassName="grid-cols-3"
+          surfaceClassName="bg-background"
         />
-      </SectionCard>
+      </SettingsRow>
 
-      <SectionCard>
-        <div className="flex items-center gap-3 mb-3">
-          {voice === "off" ? <MicOff className="w-5 h-5 text-muted-foreground shrink-0" /> : <Mic className="w-5 h-5 text-muted-foreground shrink-0" />}
-          <div className="min-w-0">
-            <p className="text-sm font-medium">{t("game.callerVoice")}</p>
-            <p className="text-xs text-muted-foreground">{t("settings.callerVoiceDefaultDesc")}</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-4 gap-1 rounded-xl bg-muted/50 p-1">
-          {VOICES.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => { setVoice(opt.value); setCallerVoice(opt.value); }}
-              className={`py-2 rounded-lg text-xs font-semibold transition-all ${voice === opt.value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {t(opt.labelKey)}
-            </button>
-          ))}
-        </div>
-      </SectionCard>
+      <SettingsRow
+        icon={soundOn ? Volume2 : VolumeX}
+        label={t("game.soundHaptics")}
+        description={t("settings.soundDefaultDesc")}
+        control={
+          <Switch
+            checked={soundOn}
+            onCheckedChange={(on) => { setSoundOn(on); writeStored(SOUND_KEY, JSON.stringify(on)); }}
+            aria-label={t("game.soundHaptics")}
+          />
+        }
+      />
 
-      <SectionCard className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <Sparkles className="w-5 h-5 text-muted-foreground shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-medium">{t("game.walkonIntro")}</p>
-            <p className="text-xs text-muted-foreground">{t("game.walkonIntroDesc")}</p>
-          </div>
-        </div>
-        <Switch
-          checked={walkonOn}
-          onCheckedChange={(on) => { setWalkonOn(on); writeStored(WALKON_KEY, JSON.stringify(on)); }}
-          aria-label={t("game.walkonIntro")}
+      <SettingsRow icon={voice === "off" ? MicOff : Mic} label={t("game.callerVoice")} description={t("settings.callerVoiceDefaultDesc")}>
+        <SegmentedControl
+          ariaLabel={t("game.callerVoice")}
+          options={VOICES.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
+          value={voice}
+          onChange={(next) => { setVoice(next); setCallerVoice(next); }}
+          columnsClassName="grid-cols-2 min-[400px]:grid-cols-4"
+          surfaceClassName="bg-background"
         />
-      </SectionCard>
-    </div>
+      </SettingsRow>
+
+      <SettingsRow
+        icon={Sparkles}
+        label={t("game.walkonIntro")}
+        description={t("game.walkonIntroDesc")}
+        control={
+          <Switch
+            checked={walkonOn}
+            onCheckedChange={(on) => { setWalkonOn(on); writeStored(WALKON_KEY, JSON.stringify(on)); }}
+            aria-label={t("game.walkonIntro")}
+          />
+        }
+      />
+    </SettingsSection>
   );
 };
 

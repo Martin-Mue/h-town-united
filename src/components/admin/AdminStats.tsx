@@ -85,8 +85,8 @@ const AdminStats = () => {
 
   return (
     <div className="space-y-4">
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3 flex items-center gap-2">
+      <div className="bg-card border border-border rounded-2xl p-4">
+        <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-3 flex items-center gap-2">
           <ImageIcon className="w-4 h-4" /> Trainingsdaten
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
@@ -121,8 +121,8 @@ const AdminStats = () => {
         )}
       </div>
 
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3 flex items-center gap-2">
+      <div className="bg-card border border-border rounded-2xl p-4">
+        <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mb-3 flex items-center gap-2">
           <Gamepad2 className="w-4 h-4" /> Spiele
         </h3>
         <div className="grid grid-cols-3 gap-3">
@@ -139,8 +139,8 @@ const AdminStats = () => {
         </div>
       </div>
 
-      <div className="gradient-card border border-border shadow-elevation-sm rounded-xl overflow-hidden">
-        <h3 className="font-display text-sm uppercase text-muted-foreground p-4 pb-0 flex items-center gap-2">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground p-4 pb-0 flex items-center gap-2">
           <Users className="w-4 h-4" /> Mitglieder-Aktivität
         </h3>
         <div className="overflow-x-auto">

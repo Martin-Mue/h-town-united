@@ -103,13 +103,13 @@ const AdminClubBranding = () => {
   };
 
   return (
-    <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
+    <div className="bg-card border border-border rounded-2xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
+        <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-2">
           <Palette className="w-4 h-4" /> Vereinsdesign
         </h3>
         {club && !editingBranding && (
-          <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={startEditBranding}>
+          <Button size="sm" variant="ghost" className="h-11 gap-1.5 rounded-xl text-sm" onClick={startEditBranding}>
             <Pencil className="w-3.5 h-3.5" /> Bearbeiten
           </Button>
         )}

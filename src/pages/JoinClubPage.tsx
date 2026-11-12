@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import ClubCrest from "@/components/ClubCrest";
+import EntryPageShell from "@/components/entry/EntryPageShell";
+import EntryHeader from "@/components/entry/EntryHeader";
+import EntryCard from "@/components/entry/EntryCard";
+import ClubLogoTile from "@/components/entry/ClubLogoTile";
+import EntryPrimaryButton from "@/components/entry/EntryPrimaryButton";
+import EntryStatusMessage from "@/components/entry/EntryStatusMessage";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -61,27 +65,20 @@ const JoinClubPage = () => {
     : htuLogoFallback;
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-sm text-center">
+    <EntryPageShell>
         {loading || authLoading ? (
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
         ) : club === "not_found" ? (
-          <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
-            <TriangleAlert className="w-8 h-8 text-destructive mx-auto mb-3" />
-            <h1 className="text-lg font-display uppercase mb-1">{t("joinClub.notFoundTitle")}</h1>
-            <p className="text-sm text-muted-foreground">{t("common.invalidLinkGeneric")}</p>
-          </div>
+          <EntryStatusMessage
+            icon={TriangleAlert}
+            tone="destructive"
+            title={t("joinClub.notFoundTitle")}
+            description={t("common.invalidLinkGeneric")}
+          />
         ) : club ? (
           <>
-            <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden">
-              <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
-              <div className="relative">
-                <ClubCrest logoUrl={logoUrl} alt={club.name} initial={club.name.charAt(0).toUpperCase()} />
-                <h1 className="text-2xl font-display uppercase">{club.name}</h1>
-                {club.tagline && <p className="text-sm text-muted-foreground mt-1">{club.tagline}</p>}
-              </div>
-            </div>
-            <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
+            <EntryHeader mark={<ClubLogoTile logoUrl={logoUrl} name={club.name} />} title={club.name} subtitle={club.tagline} />
+            <EntryCard>
               {requested ? (
                 <p className="text-sm">
                   {t("joinClub.requestSentMsg")}
@@ -90,25 +87,24 @@ const JoinClubPage = () => {
                 <>
                   <p className="text-sm mb-4">{t("joinClub.prompt")}</p>
                   {user ? (
-                    <Button className="w-full gap-2" onClick={handleRequest} disabled={requesting}>
+                    <EntryPrimaryButton onClick={handleRequest} disabled={requesting}>
                       {requesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                       {t("joinClub.requestBtn")}
-                    </Button>
+                    </EntryPrimaryButton>
                   ) : (
                     <div className="space-y-2">
-                      <Button className="w-full" onClick={() => navigate("/auth", { state: { from: `/join/${clubId}` } })}>
+                      <EntryPrimaryButton onClick={() => navigate("/auth", { state: { from: `/join/${clubId}` } })}>
                         {t("auth.loginTitle")}
-                      </Button>
-                      <p className="text-xs text-muted-foreground">{t("common.noAccountRegisterHint")}</p>
+                      </EntryPrimaryButton>
+                      <p className="text-xs text-center text-muted-foreground">{t("common.noAccountRegisterHint")}</p>
                     </div>
                   )}
                 </>
               )}
-            </div>
+            </EntryCard>
           </>
         ) : null}
-      </div>
-    </div>
+    </EntryPageShell>
   );
 };
 
