@@ -111,6 +111,9 @@ export interface DetectedDart {
   /** What the detector reported for this dart when it was found; stays unchanged through the player's corrections
    *  so the finished round can be compared with it (see detectionQuality). Absent on darts the player added. */
   detected?: DetectedSnapshot;
+  /** Where the camera found this dart in the analysis frame (x/y above can move: a score chip puts the dart in the middle
+   *  of the chosen field, 10-20 mm from its tip). The model keeps seeing the dart HERE, so this spot stays taken. */
+  detectedAt?: { x: number; y: number };
   /** The player left this dart as recognised although it is wrong, on purpose, so it can be relabelled later. A correction clears it. */
   flaggedWrong?: boolean;
 }
@@ -443,7 +446,17 @@ const markDetected = (darts: DetectedDart[]): DetectedDart[] =>
   darts.map((d) => ({
     ...d,
     detected: { baseValue: d.baseValue, multiplier: d.multiplier, confidence: d.confidence, boardU: d.boardU, boardV: d.boardV },
+    ...(typeof d.x === "number" && typeof d.y === "number" ? { detectedAt: { x: d.x, y: d.y } } : {}),
   }));
+
+/** Every spot the known darts occupy for the model: where they are now and, for corrected darts, where the camera saw them.
+ *  New-dart selection compares against this, so a corrected dart's own detection is never added as one more dart. */
+const occupiedSpots = (known: DetectedDart[]): { x?: number; y?: number }[] => [
+  ...known,
+  ...known.flatMap((k) =>
+    k.detectedAt && (k.detectedAt.x !== k.x || k.detectedAt.y !== k.y) ? [{ x: k.detectedAt.x, y: k.detectedAt.y }] : [],
+  ),
+];
 
 const hasPosition = (d: DetectedDart) =>
   typeof d.x === "number" && Number.isFinite(d.x) && typeof d.y === "number" && Number.isFinite(d.y);
@@ -1844,7 +1857,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // dropping it frees its slot instead of leaving the round one real dart short.
     const kept = keepSupportedDarts(already, scored);
     // Several darts can land between two looks (quick throws), so take every new one, not just the best.
-    const newDarts = selectNewDarts(kept, scored, usable ? (x, y) => changedShareNear(usable, x, y) : null, visitCapacity(kept) - kept.length, { straightenedFrame: !!rectMapping() });
+    const newDarts = selectNewDarts(occupiedSpots(kept), scored, usable ? (x, y) => changedShareNear(usable, x, y) : null, visitCapacity(kept) - kept.length, { straightenedFrame: !!rectMapping() });
     if (newDarts.length === 0 && kept.length === already.length) return; // nothing new — the end-of-visit pass gets another look
 
     // A discarded/committed round replaces the array underneath us — then this result is stale.
@@ -1878,6 +1891,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     ).filter((d) => !dismissedRef.current.some((g) => Math.hypot(g.x - (d.x ?? 0), g.y - (d.y ?? 0)) < DISMISSED_DART_RADIUS));
     const before = accumulatedRef.current;
     const kept = keepSupportedDarts(before, found);
+    const keptSpots = occupiedSpots(kept);
     const baseline = emptyModelFrameRef.current;
     const map = baseline ? buildChangeMap(baseline, frame) : null;
     const usable = map && map.share < GLOBAL_CHANGE_SHARE_MAX ? map : null;
@@ -1885,9 +1899,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // Compared with the EMPTY board every pixel of a dart is "fresh", so the change check cannot tell the barrel or flight
     // of a dart that is already known from a new dart. Anything close to a known dart therefore needs a confident hit.
     const eligible = (usable ? found : found.filter((d) => d.confidence >= 0.4)).filter(
-      (d) => d.confidence >= FINAL_PASS_NEAR_KNOWN_SCORE || !kept.some((k) => Math.hypot((k.x ?? 0) - (d.x ?? 0), (k.y ?? 0) - (d.y ?? 0)) < FINAL_PASS_NEAR_KNOWN_DISTANCE),
-    ).filter((d) => !kept.some((k) => Math.hypot((k.x ?? 0) - (d.x ?? 0), (k.y ?? 0) - (d.y ?? 0)) < FINAL_PASS_SAME_DART_DISTANCE));
-    const added = selectNewDarts(kept, eligible, usable ? (x, y) => changedShareNear(usable, x, y) : null, visitCapacity(kept) - kept.length);
+      (d) => d.confidence >= FINAL_PASS_NEAR_KNOWN_SCORE || !keptSpots.some((k) => Math.hypot((k.x ?? 0) - (d.x ?? 0), (k.y ?? 0) - (d.y ?? 0)) < FINAL_PASS_NEAR_KNOWN_DISTANCE),
+    ).filter((d) => !keptSpots.some((k) => Math.hypot((k.x ?? 0) - (d.x ?? 0), (k.y ?? 0) - (d.y ?? 0)) < FINAL_PASS_SAME_DART_DISTANCE));
+    const added = selectNewDarts(keptSpots, eligible, usable ? (x, y) => changedShareNear(usable, x, y) : null, visitCapacity(kept) - kept.length);
     if (added.length === 0 && kept.length === before.length) return;
     if (accumulatedRef.current !== before) return;
     const next = [...kept, ...markDetected(added)];
@@ -1989,6 +2003,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
       const before = lastStableModelFrameRef.current;
       const known = accumulatedRef.current;
+      const knownSpots = occupiedSpots(known);
       const changeMap = before ? buildChangeMap(before, frame) : null;
       const usable = changeMap && changeMap.share < GLOBAL_CHANGE_SHARE_MAX ? changeMap : null;
       // Changed pixels gate weak detections; a confident one needs no confirmation (a dart that an earlier
@@ -2001,13 +2016,13 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // ...unless a confident hit has sat on the same spot for several looks: then the board is at rest and the reference is
       // the stale one (taken with a hand in view) — a dart does not move, a hand does.
       const added = handChange
-        ? selectSteadyNewDarts(known, present, steadyHitsRef.current, visitCapacity(known) - known.length, KNOWN_DART_RADIUS)
-        : selectNewDarts(known, present, support, visitCapacity(known) - known.length, { straightenedFrame: !!rectMapping() });
+        ? selectSteadyNewDarts(knownSpots, present, steadyHitsRef.current, visitCapacity(known) - known.length, KNOWN_DART_RADIUS)
+        : selectNewDarts(knownSpots, present, support, visitCapacity(known) - known.length, { straightenedFrame: !!rectMapping() });
       if (accumulatedRef.current !== known) return; // the round was committed/discarded meanwhile
       {
         const MM_PER_FRAME = 170 / 0.377;
         const candidates: LoggedCandidate[] = present.map((d) => {
-          const nearest = known.reduce((m, k2) => (typeof k2.x === "number" && typeof k2.y === "number" ? Math.min(m, Math.hypot(k2.x - (d.x ?? 0), k2.y - (d.y ?? 0))) : m), Infinity);
+          const nearest = knownSpots.reduce((m, k2) => (typeof k2.x === "number" && typeof k2.y === "number" ? Math.min(m, Math.hypot(k2.x - (d.x ?? 0), k2.y - (d.y ?? 0))) : m), Infinity);
           return {
             x: roundForLog.pos(d.x ?? 0), y: roundForLog.pos(d.y ?? 0), score: roundForLog.score(d.confidence),
             support: support ? roundForLog.score(support(d.x ?? 0, d.y ?? 0)) : null,
@@ -2069,7 +2084,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // The picture that new darts are measured against moves on only when this look explained itself. A confident hit that was
       // NOT taken (its fresh change was just under the bar at the first look) would otherwise find the reference already
       // containing it at the next look: support 0 for ever, the dart never counted (2026-11-02: one dart per round, none addable).
-      const unexplainedHit = added.length === 0 && present.some((d) => d.confidence >= UNEXPLAINED_HIT_SCORE && !known.some((k) => typeof k.x === "number" && typeof k.y === "number" && Math.hypot(k.x - (d.x ?? 0), k.y - (d.y ?? 0)) < KNOWN_DART_RADIUS));
+      const unexplainedHit = added.length === 0 && present.some((d) => d.confidence >= UNEXPLAINED_HIT_SCORE && !knownSpots.some((k) => typeof k.x === "number" && typeof k.y === "number" && Math.hypot(k.x - (d.x ?? 0), k.y - (d.y ?? 0)) < KNOWN_DART_RADIUS));
       if (unexplainedHit && heldReferenceLooksRef.current < HELD_REFERENCE_MAX_LOOKS) {
         heldReferenceLooksRef.current += 1;
       } else {
