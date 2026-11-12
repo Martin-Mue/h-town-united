@@ -52,6 +52,13 @@ import { Sparkles } from "lucide-react";
 import { Eyebrow, SectionCard, StatTile, TrendBadge, Sparkline, RingStat, RankAvatar, RankBadge, BarRow, TONE_TEXT as TONE_ICON } from "@/components/stats/StatPrimitives";
 import { averageToCheckoutRange, scoringPhaseTotals, combineScoringPhaseTotals, type ScoringPhaseTotals } from "@/utils/averageToCheckoutRange";
 import MatchDetailDialog from "@/components/stats/MatchDetailDialog";
+import StatsPeriodSwitch from "@/components/stats/StatsPeriodSwitch";
+import AverageHeadlineCard from "@/components/stats/AverageHeadlineCard";
+import HeadlineStatTiles, { type HeadlineStatTile } from "@/components/stats/HeadlineStatTiles";
+import {
+  activeStatsPeriod, filterStateForPeriod, previousWindowFor, isInWindow, meanOfGameAverages, averageChange,
+  averagesPerPlayDay, type StatsPeriod, type GameAverageSample,
+} from "@/utils/statsHeadline";
 
 interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
@@ -1424,6 +1431,79 @@ const StatisticsPage = () => {
   const recentGames = viewScope === "personal" ? personalGames : filteredGames;
   const pagedRecentGames = usePagedList(recentGames);
 
+  // ── Page head: period switch + 3-dart average with trend + headline tiles ──
+  // Whose numbers the head shows: the logged-in member in "Ich", every member in "Verein".
+  const headlinePlayerId = viewScope === "personal" ? myPlayer?.id ?? null : null;
+  const currentSeasonYear = new Date().getFullYear();
+  const activePeriod = activeStatsPeriod(filterTime, filterYear, currentSeasonYear);
+  const selectStatsPeriod = (period: StatsPeriod) => {
+    const next = filterStateForPeriod(period, currentSeasonYear);
+    setFilterTime(next.filterTime);
+    setFilterYear(next.filterYear);
+  };
+
+  // One sample per (member, X01 game): that member's own darts in that game pooled — same
+  // per-game convention as filteredPlayerStats above. Built over every date (not just
+  // filteredGames) so the previous period can be compared too; the mode/player/format filters
+  // still apply, the time filters are applied per side below. Cricket is left out, a 3-dart
+  // average is an X01 number.
+  const headlineAverageSamples = useMemo(() => {
+    const gameById = new Map(games.filter((g) => {
+      if (g.mode === "cricket") return false;
+      if (filterMode !== "all" && g.mode !== filterMode) return false;
+      if (filterPlayerId !== "all" && g.player1_id !== filterPlayerId && g.player2_id !== filterPlayerId) return false;
+      if (filterBestOf !== "all" && Number(g.best_of_legs) !== Number(filterBestOf)) return false;
+      return true;
+    }).map((g) => [g.id, g]));
+    const byPlayerGame = new Map<string, { gameId: string; playedAt: number; throws: DartThrow[] }>();
+    gameLegs.forEach((leg) => {
+      if (!leg.player_id || !Array.isArray(leg.throws) || leg.throws.length === 0) return;
+      if (headlinePlayerId && leg.player_id !== headlinePlayerId) return;
+      const g = gameById.get(leg.game_id);
+      if (!g) return;
+      const key = `${leg.player_id}:${leg.game_id}`;
+      const entry = byPlayerGame.get(key) ?? byPlayerGame.set(key, { gameId: g.id, playedAt: new Date(g.played_at).getTime(), throws: [] }).get(key)!;
+      entry.throws.push(...leg.throws);
+    });
+    return Array.from(byPlayerGame.values()).map((e): GameAverageSample => ({ gameId: e.gameId, playedAt: e.playedAt, average: average(e.throws) }));
+  }, [games, gameLegs, headlinePlayerId, filterMode, filterPlayerId, filterBestOf]);
+
+  const headlineAverage = useMemo(() => {
+    const currentIds = new Set(filteredGames.map((g) => g.id));
+    const current = headlineAverageSamples.filter((s) => currentIds.has(s.gameId));
+    const previous = previousWindowFor(filterTime, filterYear, Date.now());
+    const previousSamples = previous ? headlineAverageSamples.filter((s) => isInWindow(s.playedAt, previous.window)) : [];
+    const currentAverage = meanOfGameAverages(current);
+    return {
+      average: currentAverage,
+      change: averageChange(currentAverage, meanOfGameAverages(previousSamples)),
+      previousKind: previous?.kind ?? null,
+      days: averagesPerPlayDay(current),
+    };
+  }, [headlineAverageSamples, filteredGames, filterTime, filterYear]);
+
+  const headlineTiles = useMemo((): HeadlineStatTile[] => {
+    const checkout = headlinePlayerId
+      ? advancedByPlayer[headlinePlayerId]?.checkout
+      : combineCheckoutStats(Object.values(advancedByPlayer).map((p) => p.checkout));
+    const oneEighties = headlinePlayerId ? player180TotalById[headlinePlayerId] ?? 0 : club180Total;
+    const highestFinish = checkout?.highestCheckout ?? 0;
+    const locale = LOCALE_BY_LANGUAGE[language];
+    const tiles: HeadlineStatTile[] = [
+      { key: "checkout", label: t("stats.headCheckoutRate"), value: checkout && checkout.attempts > 0 ? `${checkout.percentage.toLocaleString(locale, { maximumFractionDigits: 1 })} %` : "–" },
+      { key: "180s", label: t("stats.oneEighties"), value: String(oneEighties), accentIcon: Flame },
+      { key: "highestFinish", label: t("stats.highestCheckout"), value: highestFinish > 0 ? String(highestFinish) : "–", accentIcon: Trophy },
+    ];
+    // A club-wide win rate is always ~50 %, so "Verein" shows the number of games instead.
+    if (headlinePlayerId) {
+      const ownDetail = playerDetailStats?.player.id === headlinePlayerId ? playerDetailStats : null;
+      tiles.push({ key: "winRate", label: t("stats.headWinRate"), value: ownDetail && ownDetail.totalGames > 0 ? `${ownDetail.winRate} %` : "–" });
+    } else {
+      tiles.push({ key: "games", label: t("stats.gamesPlayed"), value: String(clubStats.totalGames) });
+    }
+    return tiles;
+  }, [headlinePlayerId, advancedByPlayer, player180TotalById, club180Total, playerDetailStats, clubStats.totalGames, language, t]);
+
   // Full match-total stat bundle per player (checkout%, 180s, highscore, tier breakdown) for the
   // match-detail dialog's "Gesamt" card, from the same game_legs data via the exact leg-boundary-
   // safe aggregation Game.tsx's own post-match screen uses. Cricket games are skipped — checkout/
@@ -1620,6 +1700,20 @@ const StatisticsPage = () => {
 
       {(viewScope === "club" || myPlayer) && (
       <>
+      {/* Page head: one main number with its trend, then the headline tiles. The period switch
+          is a shortcut over the filter bar's own time/season filters below. */}
+      <div className="flex flex-col gap-3.5 mb-4">
+        <StatsPeriodSwitch active={activePeriod} onSelect={selectStatsPeriod} />
+        <AverageHeadlineCard
+          subjectLabel={headlinePlayerId && myPlayer ? myPlayer.name : t("nav.club")}
+          average={headlineAverage.average}
+          change={headlineAverage.change}
+          previousKind={headlineAverage.previousKind}
+          days={headlineAverage.days}
+        />
+        <HeadlineStatTiles tiles={headlineTiles} />
+      </div>
+
       {/* Filter bar */}
       <SectionCard className="mb-4">
         <div className="flex items-center justify-between mb-2">
