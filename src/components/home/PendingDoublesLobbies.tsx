@@ -140,7 +140,7 @@ const PendingDoublesLobbies = () => {
           const label = (team: DoublesSeat[], idx: number) =>
             m.teamNames?.[idx] || (team[0] && team[1] ? defaultTeamName(team[0].name, team[1].name) : "?");
           return (
-            <div key={m.id} className={`rounded-xl border px-4 py-3 ${m.status === "active" ? "border-primary/40 bg-card" : "gradient-card border-border shadow-elevation-sm"}`}>
+            <div key={m.id} className={`rounded-xl border px-4 py-3 ${m.status === "active" ? "border-primary/40 bg-card" : "bg-card border-border"}`}>
               <div className="flex items-center justify-between gap-2 mb-2">
                 <p className="text-sm font-semibold truncate">
                   {label(teamA, 0)} <span className="text-muted-foreground font-normal">{t("home.versus")}</span> {label(teamB, 1)}

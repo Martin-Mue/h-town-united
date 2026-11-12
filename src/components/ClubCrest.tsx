@@ -39,7 +39,7 @@ const ClubCrest = ({ logoUrl, alt, initial, size = 64, className = "" }: ClubCre
       width={size}
       height={Math.round(size * 1.1)}
       viewBox="0 0 100 110"
-      className={`glow-cyan mx-auto mb-4 ${className}`}
+      className={`mx-auto mb-4 ${className}`}
     >
       <defs>
         <clipPath id={clipId}>

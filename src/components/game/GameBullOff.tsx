@@ -110,7 +110,7 @@ const GameBullOff = (props: Props) => {
   const header = (
     <div className="text-center mb-5">
       <Target className="mx-auto mb-2 h-10 w-10 text-primary" />
-      <h2 className="font-display text-2xl uppercase">{t("game.bullOffTitle")}</h2>
+      <h1 className="font-display text-[28px] font-bold leading-tight">{t("game.bullOffTitle")}</h1>
       <p className="mt-1 text-xs text-muted-foreground">{t("game.bullOffHint")}</p>
     </div>
   );
@@ -122,7 +122,7 @@ const GameBullOff = (props: Props) => {
           key={m}
           type="button"
           onClick={() => setMethod(m)}
-          className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-display uppercase transition-colors ${method === m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/50"}`}
+          className={`flex items-center justify-center gap-1.5 min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${method === m ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:bg-muted/50"}`}
         >
           {m === "camera" ? <Camera className="h-3.5 w-3.5" /> : <Hand className="h-3.5 w-3.5" />}
           {m === "camera" ? t("game.bullOffCamera") : t("game.bullOffManual")}
@@ -166,7 +166,7 @@ const GameBullOff = (props: Props) => {
         <div className="container mx-auto max-w-sm py-8">
           {header}
           {resultCard(online.winner, closerBy)}
-          <Button className="mt-5 w-full font-display uppercase" onClick={online.onContinue}>
+          <Button className="mt-5 h-[52px] w-full rounded-[14px] text-base font-semibold" onClick={online.onContinue}>
             {t("game.bullOffStart").replace("{name}", names[online.winner])}
           </Button>
         </div>
@@ -216,7 +216,7 @@ const GameBullOff = (props: Props) => {
         {resultCard(outcome.winner, outcome.closerByMm)}
         <div className="mt-5 flex gap-2">
           <Button variant="outline" className="gap-1.5" onClick={localRepeat}><RotateCcw className="h-4 w-4" /> {t("game.bullOffRepeat")}</Button>
-          <Button className="flex-1 font-display uppercase" onClick={() => localDecide(outcome.winner)}>
+          <Button className="h-[52px] flex-1 rounded-[14px] text-base font-semibold" onClick={() => localDecide(outcome.winner)}>
             {t("game.bullOffStart").replace("{name}", names[outcome.winner])}
           </Button>
         </div>

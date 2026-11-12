@@ -257,7 +257,7 @@ const PendingOnlineChallenges = () => {
           </Link>
         ))}
         {challenges.map((c) => (
-          <div key={c.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl px-4 py-2.5">
+          <div key={c.id} className="bg-card border border-border rounded-2xl px-4 py-2.5">
             {decliningId === c.id ? (
               <div className="flex items-center gap-2">
                 <input
