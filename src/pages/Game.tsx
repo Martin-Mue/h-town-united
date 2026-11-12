@@ -30,6 +30,7 @@ import GameControlBar from "@/components/game/GameControlBar";
 import ArenaScoreboard, { type ArenaScoreCard } from "@/components/game/ArenaScoreboard";
 import ArenaDartSlots, { type ArenaSlotDart } from "@/components/game/ArenaDartSlots";
 import ArenaActionBar from "@/components/game/ArenaActionBar";
+import PlayerScoreCards from "@/components/game/PlayerScoreCards";
 import SimulatedBoard, { type SimulatedDart } from "@/components/game/SimulatedBoard";
 import { markerPositionFor } from "@/utils/dartMarkerPosition";
 import type { CameraScoreCard } from "@/components/game/CameraScoreStrip";
@@ -2984,6 +2985,43 @@ const GamePage = () => {
     ...(d.boardU !== undefined && d.boardV !== undefined ? { u: d.boardU, v: d.boardV } : markerPositionFor(d.baseValue, d.multiplier, game.currentLeg.legNumber * 101 + i * 31 + d.baseValue * 7 + d.multiplier)),
     fresh: i === all.length - 1,
   }));
+  // The manual play screen's top half: scoreboard cards, the round's dart slots and the checkout strip. Same data as
+  // arenaTop (the camera view's), drawn as the redesign's two big score cards.
+  const manualScoreboardLabels = {
+    set: t("game.setsSuffix"), lastVisit: t("game.lastVisitShort"), legAvg: t("game.legAvgShort"), matchAvg: t("game.matchAvgShort"),
+    starts: t("game.startsFirst"), throwing: t("game.isThrowing"), inARow: t("game.legsInARow"), legsWonOf: t("game.legsWonOf"),
+  };
+  const manualTop = (
+    <>
+      {arenaOnlineBanner}
+      <PlayerScoreCards
+        cards={arenaCards}
+        legsToWin={game.bestOfLegs > 1 ? Math.ceil(game.bestOfLegs / 2) : 0}
+        showSets={!!game.setsMode}
+        isCricket={isCricket}
+        labels={manualScoreboardLabels}
+        activeExtra={arenaActiveExtra}
+      />
+      {doubleInBanner}
+      <ArenaDartSlots
+        darts={arenaSlotDarts}
+        total={currentRoundTotal + arenaLivePoints}
+        roundLabel={`${t("game.roundLabel")} ${Math.floor(currentThrows.length / 3) + 1}`}
+        checkout={isCricket ? undefined : { active: checkoutSuggestionEnabled, label: t("game.checkoutToggle"), onToggle: () => setCheckoutSuggestionEnabled(!checkoutSuggestionEnabled) }}
+        onTapSlot={currentPlayer?.isBot || onlineMatchId ? undefined : () => setCorrectorOpen(true)}
+      />
+      {/* Fixed-height strip while the checkout switch is on: the route appears in place, nothing below it moves. */}
+      {checkoutSuggestionEnabled && !isCricket && (
+        <CheckoutSuggestion
+          reserveSpace
+          active={!currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
+          remaining={currentRemaining} playerName={currentPlayerName}
+          personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
+          personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
+        />
+      )}
+    </>
+  );
   const arenaManualScreen = (
     <>
       <GameControlBar
@@ -3006,17 +3044,14 @@ const GamePage = () => {
         onOpenCorrector={arenaCorrect}
       />
       <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
-        <div className="shrink-0 space-y-2 px-3 pb-2 pt-3 portrait:short:space-y-1.5 portrait:short:pt-2 tablet:space-y-3 tablet:px-6 tablet:pt-5 landscape:w-[46%] landscape:overflow-y-auto landscape:overscroll-y-contain landscape:pt-2">
-          {arenaTop}
-          <CheckoutSuggestion
-            active={checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
-            remaining={currentRemaining} playerName={currentPlayerName}
-            personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
-            personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
-          />
+        {/* Portrait: this block keeps its natural height and the pad below takes the rest. Landscape: a left column
+            next to the pad. The pad stretches its keys to the space it gets (layout="fill"), so the screen fits
+            without scrolling; the scroll containers stay only as a fallback (Cricket's table, very small screens). */}
+        <div className="shrink-0 space-y-2 px-3 pb-2 pt-2 portrait:short:space-y-1.5 portrait:short:pb-1.5 tablet:space-y-3 tablet:px-6 tablet:pt-4 landscape:min-h-0 landscape:w-[46%] landscape:overflow-y-auto landscape:overscroll-y-contain landscape:pr-1.5">
+          {manualTop}
           {cricketBoard}
           {!isCricket && !botBoardShown && (
-            <SimulatedBoard darts={ownDartsOnBoard} className="mx-auto hidden aspect-square w-full max-w-[17rem] landscape:tablet:block" />
+            <SimulatedBoard darts={ownDartsOnBoard} className="mx-auto hidden aspect-square w-full max-w-[16rem] landscape:tablet:block" />
           )}
           {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
             <ErrorBoundary label="Autodarts">
@@ -3046,7 +3081,7 @@ const GamePage = () => {
             </ErrorBoundary>
           )}
         </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-3 pb-2 pt-1 portrait:short:pb-1 tablet:px-6 tablet:pt-2 landscape:pt-2">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-3 pb-2 pt-0.5 portrait:short:pb-1.5 tablet:px-6 tablet:pt-1 landscape:pl-1.5 landscape:pt-2">
           {botBoardShown ? (
             <div className="flex min-h-0 flex-1 flex-col items-center gap-1">
               <p className="shrink-0 font-display text-xs uppercase tracking-wide text-muted-foreground">{t("game.botBoardLabel")} {currentPlayer?.isBot ? currentPlayerName : botHold?.name}</p>
@@ -3057,7 +3092,7 @@ const GamePage = () => {
               onThrow={stableThrowDart}
               onQuickRound={!isCricket && !currentPlayer?.isBot ? stableHandleQuickRound : undefined}
               inputMode={dartInputMode} onInputModeChange={setDartInputMode}
-              dartsThisRound={dartsThisRound} />
+              dartsThisRound={dartsThisRound} layout="fill" />
           )}
         </div>
       </div>

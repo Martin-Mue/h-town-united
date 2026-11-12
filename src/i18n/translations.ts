@@ -450,6 +450,8 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.dartsThrownShort": { de: "Darts", en: "Darts", fr: "Fléch.", pl: "Lotki", nl: "Darts", tr: "Dart" },
   "game.lastVisitShort": { de: "Letzte", en: "Last", fr: "Dernier", pl: "Ostatni", nl: "Laatste", tr: "Son" },
   "game.checkoutToggle": { de: "Checkout", en: "Checkout", fr: "Checkout", pl: "Checkout", nl: "Checkout", tr: "Checkout" },
+  "game.noCheckoutYet": { de: "Noch kein Finish", en: "No finish yet", fr: "Pas encore de finish", pl: "Jeszcze bez checkoutu", nl: "Nog geen finish", tr: "Henüz bitiriş yok" },
+  "game.legsWonOf": { de: "{won} von {total} Legs", en: "{won} of {total} legs", fr: "{won} legs sur {total}", pl: "{won} z {total} legów", nl: "{won} van {total} legs", tr: "{total} legin {won} tanesi" },
   "game.legWonSuffix": { de: "gewonnen", en: "won", fr: "gagné", pl: "wygrany", nl: "gewonnen", tr: "kazanıldı" },
   "game.presetsTitle": { de: "Schnellstart", en: "Quick start", fr: "Démarrage rapide", pl: "Szybki start", nl: "Snelstart", tr: "Hızlı başlat" },
   "game.presetLast": { de: "Letztes Spiel", en: "Last game", fr: "Dernière partie", pl: "Ostatnia gra", nl: "Laatste spel", tr: "Son oyun" },

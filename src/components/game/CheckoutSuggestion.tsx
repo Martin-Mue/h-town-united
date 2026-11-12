@@ -31,7 +31,25 @@ interface CheckoutSuggestionProps {
    *  `personalCheckoutRate` (the overall rate) whenever the current remaining isn't a direct
    *  double, or this specific double has no recorded attempts yet. */
   personalDoubleBreakdown?: CheckoutDoubleBreakdown[] | null;
+  /** The manual play screen keeps a fixed-height checkout strip on screen the whole time instead of animating the
+   *  card open and closed: the space is always there, so nothing below it moves, and when there is no route the
+   *  strip says so. Off by default, so the camera view and the training drills keep the collapsing card. */
+  reserveSpace?: boolean;
 }
+
+/** One dart of the route as a chip, tinted by what it aims at (treble / double / bull). */
+const RouteDartChip = ({ dart, large }: { dart: string; large: boolean }) => (
+  <span className={`flex items-center justify-center rounded-lg font-display font-bold leading-none tabular-nums ${
+    large ? "h-8 min-w-[3rem] px-2 text-xl portrait:short:h-7 tablet:h-10 tablet:min-w-[4rem] tablet:text-2xl" : "px-2.5 py-0.5 text-xl leading-tight"
+  } ${
+    dart.startsWith("D") ? "bg-secondary/15 text-secondary" :
+    dart.startsWith("T") ? "bg-primary/15 text-primary" :
+    dart === "Bull" ? "bg-accent/15 text-accent" :
+    large ? "bg-background text-foreground" : "bg-foreground/10 text-foreground"
+  }`}>
+    {dart}
+  </span>
+);
 
 /**
  * Displays the preferred checkout route for the current remaining score.
@@ -47,7 +65,7 @@ interface CheckoutSuggestionProps {
  * which reads as exactly the "springt" complaint this component's history was already trying to
  * fix. max-height/opacity/margin are all plain, universally-interpolated properties.
  */
-const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, personalDoubleBreakdown, active = true }: CheckoutSuggestionProps) => {
+const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, personalDoubleBreakdown, active = true, reserveSpace = false }: CheckoutSuggestionProps) => {
   const { t } = useLanguage();
   const route = active ? getCheckoutSuggestion(remaining) : null;
 
@@ -59,6 +77,36 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, perso
   const showDoubleSpecific = doubleStats != null && doubleStats.stats.attempts > 0;
   const displayRate = showDoubleSpecific ? doubleStats.stats.percentage : personalCheckoutRate;
   const rateTooltip = showDoubleSpecific ? t("game.checkoutRateTooltipDouble") : t("game.checkoutRateTooltip");
+
+  if (reserveSpace) {
+    return (
+      <section
+        aria-live="polite"
+        aria-label={t("game.checkoutToggle")}
+        className={`flex h-12 shrink-0 items-center gap-2 rounded-xl border px-3 transition-colors portrait:short:h-10 compactland:h-10 tablet:h-14 ${
+          route ? "border-primary/40 bg-primary/10" : "border-border bg-card"
+        }`}
+      >
+        <div className="min-w-0 shrink">
+          <p className={`text-xs font-semibold uppercase tracking-widest ${route ? "text-primary" : "text-muted-foreground"}`}>
+            {t("game.checkoutToggle")}
+          </p>
+          {route && displayRate != null && (
+            <p className="truncate text-[10px] leading-tight text-muted-foreground portrait:short:hidden compactland:hidden" title={rateTooltip}>
+              {showDoubleSpecific ? doubleLabel : t("game.rateLabel")} <span className="font-semibold text-foreground">{displayRate.toFixed(0)}%</span>
+            </p>
+          )}
+        </div>
+        {route ? (
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {route.map((dart, i) => <RouteDartChip key={i} dart={dart} large />)}
+          </div>
+        ) : (
+          <span className="ml-auto truncate text-sm text-muted-foreground">{active ? t("game.noCheckoutYet") : "–"}</span>
+        )}
+      </section>
+    );
+  }
 
   return (
     <div className={`overflow-hidden transition-[max-height,opacity,margin] duration-200 ease-out ${route ? "max-h-24 opacity-100 mt-2 mb-2 landscape:mt-1 landscape:mb-1" : "max-h-0 opacity-0 mt-0 mb-0"}`}>
@@ -80,14 +128,7 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, perso
           <div className="flex items-center gap-1.5">
             {route.map((dart, i) => (
               <span key={i} className="flex items-center gap-1.5">
-                <span className={`rounded-lg px-2.5 py-0.5 text-xl font-bold leading-tight ${
-                  dart.startsWith("D") ? "bg-secondary/15 text-secondary" :
-                  dart.startsWith("T") ? "bg-primary/15 text-primary" :
-                  dart === "Bull" ? "bg-accent/15 text-accent" :
-                  "bg-foreground/10 text-foreground"
-                }`}>
-                  {dart}
-                </span>
+                <RouteDartChip dart={dart} large={false} />
                 {i < route.length - 1 && <span className="text-lg text-muted-foreground">→</span>}
               </span>
             ))}

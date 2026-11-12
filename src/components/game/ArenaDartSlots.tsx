@@ -12,7 +12,7 @@ interface ArenaDartSlotsProps {
   darts: ArenaSlotDart[];
   /** Points of this round so far. */
   total: number;
-  /** Round number shown under the total. */
+  /** Shown above the total (e.g. "Round 4"). */
   roundLabel: string;
   /** Checkout route toggle — the same switch the classic scoreboard has in its info line. */
   checkout?: { active: boolean; label: string; onToggle: () => void };
@@ -22,7 +22,7 @@ interface ArenaDartSlotsProps {
 
 /** A bare dart as a placeholder in an empty slot. */
 const DartGlyph = () => (
-  <svg viewBox="0 0 40 40" className="h-7 w-7 opacity-25" aria-hidden>
+  <svg viewBox="0 0 40 40" className="h-6 w-6 opacity-25" aria-hidden>
     <path d="M6 34 L26 14" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     <path d="M26 14 L34 6 M26 14 L30 20 M26 14 L20 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     <path d="M26 14 L36 12 L34 6 Z" fill="currentColor" opacity="0.6" />
@@ -30,16 +30,12 @@ const DartGlyph = () => (
 );
 
 /**
- * The three dart slots of the round on the oche, with the round's total in front: the darts that already landed
- * show their value, the slot that is next pulses, the rest wait with a dart outline. Replaces the row of small
- * chips inside the classic scoreboard card.
+ * The three dart slots of the round on the oche with the round's total next to them: darts that already landed show
+ * their value, the slot that is next is outlined in the accent colour, the rest wait with a dart outline. The same
+ * row sits in the manual and the camera play screen.
  */
 const ArenaDartSlots = ({ darts, total, roundLabel, checkout, onTapSlot }: ArenaDartSlotsProps) => (
   <div className="flex items-stretch gap-2">
-    <div className="flex w-16 tablet:w-24 shrink-0 flex-col items-center justify-center rounded-xl border border-border/60 bg-card/60 py-1.5 portrait:short:py-0.5">
-      <span className="font-display text-2xl tablet:text-4xl leading-none tabular-nums text-foreground">{total}</span>
-      <span className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{roundLabel}</span>
-    </div>
     <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
       {[0, 1, 2].map((i) => {
         const dart = darts[i];
@@ -49,20 +45,20 @@ const ArenaDartSlots = ({ darts, total, roundLabel, checkout, onTapSlot }: Arena
           <Tag
             key={i}
             {...(Tag === "button" ? { type: "button" as const, onClick: onTapSlot } : {})}
-            className={`relative flex h-14 portrait:short:h-10 tablet:h-20 min-w-0 flex-col items-center justify-center rounded-xl border text-center transition-all ${
+            className={`relative flex h-12 min-w-0 flex-col items-center justify-center rounded-xl border bg-card text-center transition-colors portrait:short:h-10 compactland:h-10 tablet:h-16 ${
               dart
                 ? dart.live
-                  ? "border-accent/50 bg-accent/10"
-                  : "border-primary/40 bg-primary/10"
+                  ? "border-accent/60"
+                  : "border-border"
                 : isNext
-                  ? "animate-pulse-glow border-dashed border-primary/60 bg-card/40 text-primary"
-                  : "border-dashed border-border/60 bg-card/30 text-muted-foreground"
+                  ? "border-primary text-primary"
+                  : "border-border text-muted-foreground"
             }`}
           >
             {dart ? (
               <>
-                <span className={`font-display text-xl tablet:text-3xl leading-none ${dart.live ? "text-accent" : "text-foreground"}`}>{dart.label}</span>
-                {dart.label !== String(dart.points) && <span className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">{dart.points}</span>}
+                <span className={`font-display text-2xl font-bold leading-none portrait:short:text-xl tablet:text-3xl ${dart.live ? "text-accent" : "text-foreground"}`}>{dart.label}</span>
+                {dart.label !== String(dart.points) && <span className="text-[10px] leading-none tabular-nums text-muted-foreground">{dart.points}</span>}
               </>
             ) : (
               <DartGlyph />
@@ -71,6 +67,10 @@ const ArenaDartSlots = ({ darts, total, roundLabel, checkout, onTapSlot }: Arena
         );
       })}
     </div>
+    <div className="flex w-[4.5rem] shrink-0 flex-col items-end justify-center tablet:w-24">
+      <span className="max-w-full truncate text-[11px] leading-tight text-muted-foreground tablet:text-xs">{roundLabel}</span>
+      <span className="font-display text-[1.75rem] font-bold leading-none tabular-nums text-foreground portrait:short:text-2xl tablet:text-4xl">{total}</span>
+    </div>
     {checkout && (
       <button
         type="button"
@@ -78,7 +78,7 @@ const ArenaDartSlots = ({ darts, total, roundLabel, checkout, onTapSlot }: Arena
         aria-pressed={checkout.active}
         aria-label={checkout.label}
         title={checkout.label}
-        className={`flex w-11 tablet:w-16 shrink-0 items-center justify-center rounded-xl border transition-colors ${checkout.active ? "border-primary/50 bg-primary/15 text-primary" : "border-border/60 bg-card/30 text-muted-foreground"}`}
+        className={`flex w-11 shrink-0 items-center justify-center rounded-xl border transition-colors tablet:w-16 ${checkout.active ? "border-primary/50 bg-primary/15 text-primary" : "border-border bg-card text-muted-foreground"}`}
       >
         <Target className="h-5 w-5" />
       </button>
