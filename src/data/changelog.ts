@@ -1334,4 +1334,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Düzeltme penceresinde yanlış algılanan bir darti olduğu gibi bırakıp „Yanlış algılandı“ olarak işaretleyebilirsin. Daha sonra eğitim için doğru etiketlenir.",
     },
   },
+  {
+    id: "2026-11-12-redesign",
+    date: "2026-11-12",
+    title: {
+      de: "Neues Aussehen",
+      en: "A fresh new look",
+      fr: "Un nouveau look",
+      pl: "Nowy wygląd",
+      nl: "Een nieuwe look",
+      tr: "Yeni görünüm",
+    },
+    description: {
+      de: "Neue Schrift, ruhigere Flächen und eine neue untere Leiste mit „Spielen“ in der Mitte. Die Startseite zeigt dein offenes Spiel, dein nächstes Turnierspiel und deine Form auf einen Blick. Neu in den Einstellungen unter „Meine Farbe“: das Farbthema „Dartspot“ in Gelb.",
+      en: "New fonts, calmer surfaces and a new bottom bar with “Play” in the middle. The start page shows your open game, your next tournament match and your form at a glance. New under “My color” in the settings: the yellow “Dartspot” theme.",
+      fr: "Nouvelle police, surfaces plus calmes et une nouvelle barre du bas avec « Jouer » au milieu. La page d'accueil montre votre partie en cours, votre prochain match de tournoi et votre forme d'un coup d'œil. Nouveau dans « Ma couleur » des réglages : le thème jaune « Dartspot ».",
+      pl: "Nowa czcionka, spokojniejsze tła i nowy dolny pasek z „Graj” pośrodku. Strona startowa pokazuje otwartą grę, następny mecz turniejowy i twoją formę na pierwszy rzut oka. Nowość w ustawieniach w „Mój kolor”: żółty motyw „Dartspot”.",
+      nl: "Nieuw lettertype, rustigere vlakken en een nieuwe onderbalk met „Spelen” in het midden. De startpagina toont je open spel, je volgende toernooiwedstrijd en je vorm in één oogopslag. Nieuw bij „Mijn kleur” in de instellingen: het gele thema „Dartspot”.",
+      tr: "Yeni yazı tipi, daha sakin yüzeyler ve ortasında „Oyna” olan yeni alt çubuk. Başlangıç sayfası açık oyununu, sıradaki turnuva maçını ve formunu bir bakışta gösteriyor. Ayarlarda „Rengim” altında yeni: sarı „Dartspot” teması.",
+    },
+  },
 ];
