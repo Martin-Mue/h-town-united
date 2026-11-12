@@ -2880,9 +2880,14 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </div>
       )}
 
-      <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
+      <div className="flex shrink-0 items-center gap-2 px-3 py-2">
+        <Button variant="outline" size="icon" onClick={onClose} className="h-11 w-11 shrink-0 rounded-xl bg-transparent" title={t("game.closeCamera")} aria-label={t("game.closeCamera")}>
+          <X className="h-5 w-5" />
+        </Button>
+        <div className="min-w-0 flex-1">
+          <p className="flex min-w-0 items-center gap-2 text-[15px] font-semibold leading-tight text-foreground">
         <span
-          className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+          className={`inline-block h-2 w-2 shrink-0 rounded-full ${
             boardMissing
               ? "bg-destructive animate-pulse"
               : phase === "live"
@@ -2894,21 +2899,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                     : "bg-muted-foreground"
           }`}
         />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-sm leading-tight text-foreground">
-            {playerName ?? "Auto-Scoring"}
-            {remainingScore !== undefined && <span className="ml-2 text-primary">{remainingScore}</span>}
+            <span className="truncate">{status}</span>
           </p>
-          <p className="truncate text-[11px] leading-tight text-muted-foreground">{status}</p>
+          {/* With the score cards below, the second line carries leg/round/starter; without them (training) who throws. */}
+          <p className="truncate text-xs leading-tight text-muted-foreground">
+            {scoreStrip ? scoreStrip.info : `${playerName ?? "Auto-Scoring"}${remainingScore !== undefined ? ` · ${remainingScore}` : ""}`}
+          </p>
         </div>
-        <Button variant="outline" size="sm" className="h-9 gap-1 px-2.5 text-xs" onClick={() => setOverlayHidden(true)} title={t("camera.manualShort")}>
-          <Keyboard className="h-4 w-4" /> <span className="hidden min-[400px]:inline">{t("camera.manualShort")}</span>
+        <Button variant="outline" className="h-11 shrink-0 gap-1.5 rounded-xl bg-card px-3 text-[13px] font-semibold" onClick={() => setOverlayHidden(true)} title={t("camera.manualShort")}>
+          <Keyboard className="h-[18px] w-[18px]" /> {t("camera.manualShort")}
         </Button>
-        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSettingsOpen(true)} title={t("camera.settingsTitle")} aria-label={t("camera.settingsTitle")}>
-          <Settings className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-9 w-9" title={t("game.closeCamera")} aria-label={t("game.closeCamera")}>
-          <X className="h-4 w-4" />
+        <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 rounded-xl bg-transparent text-muted-foreground" onClick={() => setSettingsOpen(true)} title={t("camera.settingsTitle")} aria-label={t("camera.settingsTitle")}>
+          <Settings className="h-5 w-5" />
         </Button>
       </div>
 
@@ -2918,7 +2920,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           {t("camera.tiltWarning").replace("{deg}", String(Math.round(tiltWarning.tiltDeg)))}
         </p>
       )}
-      {scoreStrip && !isLandscape && <CameraScoreStrip {...scoreStrip} />}
+      {scoreStrip && !isLandscape && <CameraScoreStrip {...scoreStrip} checkoutDartsLeft={remainingScore !== undefined ? Math.max(0, dartsRemaining - accumulated.length) : undefined} />}
 
       <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
         <div ref={stageRef} className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto p-2">
@@ -2991,12 +2993,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
 
       <div
-        className={`relative mx-auto shrink-0 overflow-hidden rounded-lg border border-border bg-muted animate-in fade-in duration-300`}
+        className={`relative mx-auto shrink-0 overflow-hidden rounded-xl border border-border bg-muted animate-in fade-in duration-300`}
         style={{
           aspectRatio: videoSize ? `${videoSize.w} / ${videoSize.h}` : "1 / 1",
           width: stageHeight > 0
             ? `min(100%, ${Math.max(120, stageHeight - 16) * (videoSize ? videoSize.w / videoSize.h : 1)}px)`
-            : `min(100%, calc((100dvh - ${isLandscape ? "5.5rem" : "19rem"}) * ${videoSize ? videoSize.w / videoSize.h : 1}))`,
+            : `min(100%, calc((100dvh - ${isLandscape ? "6rem" : "24rem"}) * ${videoSize ? videoSize.w / videoSize.h : 1}))`,
         }}
       >
         <video
@@ -3136,68 +3138,48 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           </div>
         )}
 
-        {/* Video stream stays live and visible here on purpose — only a light translucent hint,
-            not an opaque cover — since this fires while the player answers the "which dart
-            finished it" prompt elsewhere on the page (see the `paused` prop). Tearing the camera
-            down for this used to be handled via `enabled`, which a field report tied directly to
-            the camera going black and staying black afterward. */}
-        {paused && phase === "live" && (
-          <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
-            <span className="rounded-full bg-background/85 px-3 py-1 text-[11px] text-foreground shadow">
-              {t("camera.pausedAnswerAbove")}
-            </span>
-          </div>
-        )}
-
-        {(phase === "starting" || phase === "detecting") && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 px-4 text-center text-xs text-foreground">
-            <Loader2 className="mb-2 h-5 w-5 animate-spin" />
-            {phase === "starting" ? t("camera.starting") : status}
-          </div>
-        )}
-        {phase === "scanning" && (
-          <div className="absolute inset-x-0 top-0 flex items-center justify-center bg-background/70 py-1.5 text-xs text-foreground">
-            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> {t("camera.analyzing")}
-          </div>
-        )}
-        {boardMissing && (phase === "live" || phase === "scanning") && (
-          <div className="absolute inset-x-0 top-0 flex items-center justify-center gap-1.5 bg-destructive/90 py-1.5 text-xs font-medium text-destructive-foreground">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {t("camera.noBoardDetected")}
-          </div>
-        )}
-        {phase === "error" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/85 px-4 text-center text-xs text-foreground">
-            {error}
-          </div>
-        )}
-
+        {/* Everything that used to sit ON the picture (paused / starting / analysing / no board / error / the
+            reposition instruction) now shows in the notice line right below it; only the board outline and the dart
+            markers are drawn over the camera image. The tap layer for repositioning stays, invisible. */}
         {repositioningIndex !== null && accumulated[repositioningIndex] && (
           <div
-            className="absolute inset-0 z-20 cursor-crosshair select-none bg-background/30"
+            className="absolute inset-0 z-20 cursor-crosshair select-none"
             onClick={handleRepositionTap}
-          >
-            {/* The instruction and the way out live ON the image — nothing to scroll to. */}
-            <div className="absolute inset-x-0 top-2 flex items-center justify-center gap-2 px-2">
-              <span className="rounded-full bg-background/90 px-3 py-1 text-[11px] font-medium text-foreground shadow">
-                {t("game.dartCounterLabel")} {repositioningIndex + 1} — {t("camera.tapDartTipNow")}
-              </span>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); cancelReposition(); }}
-                className="rounded-full bg-background/90 p-1.5 text-foreground shadow"
-                aria-label={t("common.cancel")}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+          />
         )}
       </div>
 
 
         </div>
-        <div className="shrink-0 space-y-2 border-t border-border bg-background/95 p-2 landscape:w-[24rem] landscape:overflow-y-auto landscape:border-l landscape:border-t-0">
-      {scoreStrip && isLandscape && <CameraScoreStrip {...scoreStrip} />}
+        <div className="shrink-0 space-y-2 bg-background px-3 pb-3 pt-1 landscape:w-[24rem] landscape:overflow-y-auto landscape:border-l landscape:border-border landscape:pt-2">
+      {scoreStrip && isLandscape && <CameraScoreStrip {...scoreStrip} checkoutDartsLeft={remainingScore !== undefined ? Math.max(0, dartsRemaining - accumulated.length) : undefined} />}
+      {/* Notice line directly below the picture: room for two lines whatever it says, so the picture never jumps when it changes.
+          The most pressing message wins; in a calm live state it is the correction hint. */}
+      <div className="flex min-h-9 items-center justify-center gap-2 text-center text-[13px] leading-tight" role="status">
+        {repositioningIndex !== null && accumulated[repositioningIndex] ? (
+          <>
+            <span className="font-medium text-foreground">{t("game.dartCounterLabel")} {repositioningIndex + 1} — {t("camera.tapDartTipNow")}</span>
+            <button
+              type="button"
+              onClick={() => cancelReposition()}
+              className="shrink-0 rounded-full border border-border p-1 text-foreground"
+              aria-label={t("common.cancel")}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </>
+        ) : boardMissing && (phase === "live" || phase === "scanning") ? (
+          <span className="flex items-center gap-1.5 font-medium text-destructive"><AlertCircle className="h-4 w-4 shrink-0" /> {t("camera.noBoardDetected")}</span>
+        ) : phase === "scanning" ? (
+          <span className="flex items-center gap-1.5 text-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t("camera.analyzing")}</span>
+        ) : phase === "starting" || phase === "detecting" ? (
+          <span className="flex min-w-0 items-center gap-1.5 text-foreground"><Loader2 className="h-4 w-4 shrink-0 animate-spin" /> <span className="truncate">{phase === "starting" ? t("camera.starting") : status}</span></span>
+        ) : paused && phase === "live" ? (
+          <span className="text-foreground">{t("camera.pausedAnswerAbove")}</span>
+        ) : phase === "live" ? (
+          <span className="text-muted-foreground">{t("camera.tapDartHint")}</span>
+        ) : null}
+      </div>
       {/* Board drifted warning, calibration fine-tune controls, and the reposition confirm bar
           all render here, below the video, instead of overlaid on it — depending on zoom/crop
           they could otherwise land right on top of the exact spot the player needs to see (the
@@ -3289,12 +3271,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         </div>
       )}
 
-      {/* live accumulated darts */}
-      <div className={`rounded-xl border p-3 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent ${needsReview ? "border-accent/50" : "border-primary/30"}`}>
-        <div className="flex items-stretch gap-3">
-          {/* One big tile per dart — readable at arm's length; tapping one selects it on the picture
-              (or opens its editor), which is also what stops the hands-free countdown. */}
-          <div className="grid flex-1 grid-cols-3 gap-2">
+      {/* live accumulated darts — one big tile per dart, readable at arm's length; tapping one selects it on the
+          picture (or opens its editor), which is also what stops the hands-free countdown. The round's sum is in the
+          bar below. */}
+      <div className="grid grid-cols-3 gap-2">
             {Array.from({ length: dartsRemaining }).map((_, i) => {
               const d = accumulated[i];
               if (!d) {
@@ -3302,18 +3282,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 // board (or bounced out) leaves nothing for the camera to see.
                 const canAdd = accumulated.length > 0 && i === accumulated.length;
                 return canAdd ? (
-                  <div key={`slot-${i}`} className="grid h-[4.5rem] grid-rows-2 gap-1">
+                  <div key={`slot-${i}`} className="grid h-16 grid-rows-2 gap-1">
                     <button
                       type="button"
                       onClick={addHiddenDart}
-                      className="rounded-md border border-dashed border-primary/50 text-[11px] text-primary hover:bg-primary/10"
+                      className="rounded-lg border border-dashed border-primary text-xs font-semibold text-primary hover:bg-primary/10"
                     >
                       + {t("camera.addDart")}
                     </button>
                     <button
                       type="button"
                       onClick={addMissDart}
-                      className="rounded-md border border-dashed border-border text-[11px] text-muted-foreground hover:bg-muted"
+                      className="rounded-lg border border-dashed border-border text-xs text-muted-foreground hover:bg-muted"
                     >
                       + {t("camera.addMiss")}
                     </button>
@@ -3321,9 +3301,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                 ) : (
                   <div
                     key={`slot-${i}`}
-                    className="flex h-[4.5rem] items-center justify-center rounded-lg border border-dashed border-border/60 text-[11px] text-muted-foreground"
+                    className={`flex h-16 items-center justify-center rounded-xl border border-dashed px-1 text-center text-[13px] ${
+                      i === accumulated.length && (phase === "live" || phase === "scanning") ? "border-primary font-semibold text-primary" : "border-border text-muted-foreground"
+                    }`}
                   >
-                    {t("game.dartCounterLabel")} {i + 1}
+                    {i === accumulated.length && (phase === "live" || phase === "scanning") ? t("camera.detectThrow") : `${t("game.dartCounterLabel")} ${i + 1}`}
                   </div>
                 );
               }
@@ -3334,25 +3316,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                   key={`dart-${i}`}
                   type="button"
                   onClick={() => (d.assumedMiss ? setExpandedReviewIndex(i) : showReview ? setSelectedReviewIndex(selectedReviewIndex === i ? null : i) : openReviewFor(i))}
-                  className={`flex h-[4.5rem] flex-col items-center justify-center rounded-lg border-2 transition-colors ${
-                    d.assumedMiss ? "border-dashed border-muted-foreground/50 bg-muted/20 text-muted-foreground" : miss ? "border-muted bg-muted/40 text-muted-foreground" : "border-primary/60 bg-primary/15 text-primary"
+                  className={`flex h-16 flex-col items-center justify-center rounded-xl border-2 transition-colors ${
+                    d.assumedMiss ? "border-dashed border-muted-foreground/50 bg-muted/20 text-muted-foreground" : miss ? "border-muted bg-muted/40 text-muted-foreground" : "border-primary/60 bg-primary/15 text-foreground"
                   } ${justAddedIndex === i ? "animate-scale-in ring-2 ring-accent" : ""} ${selected ? "ring-2 ring-accent" : ""}`}
                 >
-                  <span className="font-display text-3xl leading-none">{miss ? t("game.miss") : dartLabel(d)}{d.assumedMiss ? "?" : ""}</span>
-                  <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">{d.flaggedWrong && <Flag className="h-3 w-3 text-destructive" />}{d.points}</span>
+                  <span className="font-display text-[1.625rem] font-bold leading-none">{miss ? t("game.miss") : dartLabel(d)}{d.assumedMiss ? "?" : ""}</span>
+                  <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">{d.flaggedWrong && <Flag className="h-3 w-3 text-destructive" />}{t("camera.dartPoints").replace("{n}", String(d.points))}</span>
                 </button>
               );
             })}
-          </div>
-          <div className="flex shrink-0 flex-col items-end justify-center text-right">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              {t("camera.sum")}
-            </div>
-            <div className="font-display text-5xl leading-none text-primary">
-              {roundTotal}
-            </div>
-          </div>
-        </div>
       </div>
 
       {modelProblem && (
@@ -3360,12 +3332,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{t("camera.modelProblem").replace("{reason}", modelProblem)}</span>
         </div>
-      )}
-
-      {accumulated.length === 0 && phase === "live" && !needsReview && !paused && (
-        <Button variant="outline" className="h-11 w-full gap-2 text-sm" onClick={commitMissRound}>
-          {t("camera.missRound")}
-        </Button>
       )}
 
       {error && (
@@ -3418,15 +3384,25 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
             that case, and needsReview is exactly the signal that runPullScan already saw the
             board go empty and isn't expecting more. Without it, a real checkout left this button
             permanently hidden — detected correctly, nothing to tap to confirm it. */}
-        {(accumulated.length >= dartsRemaining || needsReview) && (
+        {(accumulated.length >= dartsRemaining || needsReview) ? (
           <Button
             size="lg"
             onClick={() => commitRound(accumulated)}
-            className={`h-12 flex-1 gap-1.5 text-base font-display uppercase ${needsReview ? "animate-pulse-glow" : ""}`}
+            className={`h-12 flex-1 gap-1.5 rounded-xl text-[17px] font-semibold ${needsReview ? "animate-pulse-glow" : ""}`}
             title={t("camera.commitRoundTitle")}
           >
-            <Check className="h-4 w-4" /> {t("camera.accept")}
+            <Check className="h-4 w-4" /> {t("camera.accept")} · {roundTotal}
             {autoCommitLeft !== null && <span className="tabular-nums">({Math.max(0, autoCommitLeft)})</span>}
+          </Button>
+        ) : (phase === "live" || phase === "scanning") && (
+          // Not a button: while the visit is still being thrown this only shows that it is being recorded and its sum so far.
+          <div className="flex h-12 min-w-0 flex-1 items-center justify-center rounded-xl border border-border bg-card px-3 text-[17px] font-semibold text-muted-foreground">
+            <span className="truncate">{t("camera.visitRunning")} · {roundTotal}</span>
+          </div>
+        )}
+        {accumulated.length === 0 && phase === "live" && !needsReview && !paused && (
+          <Button variant="outline" className="h-12 shrink-0 rounded-xl px-3 text-sm" onClick={commitMissRound} title={t("camera.missRound")}>
+            {t("camera.missRoundShort")}
           </Button>
         )}
       </div>
