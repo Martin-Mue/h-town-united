@@ -43,10 +43,10 @@ const statCell = (
 ) => {
   ctx.textAlign = "center";
   ctx.fillStyle = color;
-  ctx.font = "700 40px Oswald, sans-serif";
+  ctx.font = "700 40px 'Barlow Condensed', Oswald, sans-serif";
   ctx.fillText(value, cx, cy);
   ctx.fillStyle = themeColor("--muted-foreground");
-  ctx.font = "600 15px Oswald, sans-serif";
+  ctx.font = "600 15px 'Barlow Condensed', Oswald, sans-serif";
   ctx.fillText(label.toUpperCase(), cx, cy + 26);
   void w;
 };
@@ -54,7 +54,7 @@ const statCell = (
 /** Draws the card fresh each call onto a new offscreen canvas — cheap enough (one-shot, on
  *  explicit user action) that caching isn't worth the staleness risk if stats change between
  *  shares. Waits on document.fonts.ready first since canvas text doesn't wait for webfonts on its
- *  own — without it, a card generated before the page's own Oswald/Inter fonts finish loading
+ *  own — without it, a card generated before the page's own Barlow fonts finish loading
  *  would silently render in the browser default font instead. */
 export async function drawPlayerCard(data: PlayerCardData): Promise<HTMLCanvasElement> {
   await document.fonts.ready;
@@ -88,7 +88,7 @@ export async function drawPlayerCard(data: PlayerCardData): Promise<HTMLCanvasEl
   // Club name
   ctx.textAlign = "center";
   ctx.fillStyle = muted;
-  ctx.font = "600 20px Oswald, sans-serif";
+  ctx.font = "600 20px 'Barlow Condensed', Oswald, sans-serif";
   ctx.fillText(data.clubName.toUpperCase(), WIDTH / 2, 70);
 
   // Avatar ring + emoji
@@ -111,12 +111,12 @@ export async function drawPlayerCard(data: PlayerCardData): Promise<HTMLCanvasEl
 
   // Name
   ctx.fillStyle = foreground;
-  ctx.font = "700 48px Oswald, sans-serif";
+  ctx.font = "700 48px 'Barlow Condensed', Oswald, sans-serif";
   ctx.fillText(data.playerName, WIDTH / 2, 370);
 
   // Elo pill
   const eloText = `${Math.round(data.eloRating)} ELO`;
-  ctx.font = "700 20px Oswald, sans-serif";
+  ctx.font = "700 20px 'Barlow Condensed', Oswald, sans-serif";
   const eloWidth = ctx.measureText(eloText).width + 48;
   roundRectPath(ctx, WIDTH / 2 - eloWidth / 2, 395, eloWidth, 44, 22);
   ctx.fillStyle = themeColor("--primary", 0.15);

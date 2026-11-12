@@ -283,7 +283,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
   if (!enabled) return null;
 
   return (
-    <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 flex items-center justify-between gap-3">
+    <div className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
         {phase === "live" && <Wifi className="w-5 h-5 text-secondary shrink-0" />}
         {phase === "error" && <WifiOff className="w-5 h-5 text-destructive shrink-0" />}

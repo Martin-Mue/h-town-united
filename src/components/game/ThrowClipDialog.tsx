@@ -45,7 +45,7 @@ const ThrowClipDialog = ({ popup, onClose }: Props) => {
     <Dialog open={!!popup} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-md p-0 overflow-hidden border-primary/30 bg-card">
         <DialogHeader className="p-4 pb-2">
-          <DialogTitle className="flex items-center gap-2 font-display uppercase">
+          <DialogTitle className="flex items-center gap-2 font-display font-bold">
             {isHighlight ? (
               <Sparkles className="h-5 w-5 text-accent" />
             ) : (
@@ -96,7 +96,7 @@ const ThrowClipDialog = ({ popup, onClose }: Props) => {
           </div>
 
           <div className="flex gap-2">
-            <Button asChild className="flex-1 gap-2 font-display uppercase">
+            <Button asChild className="flex-1 gap-2 rounded-xl font-semibold">
               <a href={popup.url} download={filename}>
                 <Download className="h-4 w-4" /> {t("game.save")}
               </a>

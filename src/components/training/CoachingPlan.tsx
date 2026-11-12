@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Sparkles, Play, TrendingUp, Target, Crosshair, Zap, RotateCw, Trophy, Compass } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -245,66 +243,70 @@ const CoachingPlan = ({ onStartDrill }: CoachingPlanProps) => {
   const recommendations = useMemo(() => buildRecommendations(stats, t), [stats, t]);
 
   return (
-    <div className="bg-card border border-primary/20 rounded-xl p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles className="w-4 h-4 text-primary" />
-        <h3 className="font-display uppercase text-sm text-primary">{t("coach.title")}</h3>
-      </div>
+    <section className="flex flex-col gap-3 rounded-[20px] border border-border bg-card p-4">
+      <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-primary">
+        <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> {t("coach.title")}
+      </h2>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-          <Loader2 className="w-4 h-4 animate-spin" /> {t("coach.analyzing")}
+        <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> {t("coach.analyzing")}
         </div>
       ) : (
         <>
           {stats && stats.games > 0 ? (
-            <div className="grid grid-cols-4 gap-2 text-center mb-4">
-              <Stat label={t("stats.games")} value={stats.games.toString()} />
-              <Stat label={t("game.winsLabel")} value={stats.wins.toString()} />
-              <Stat label={t("stats.average")} value={stats.avg.toFixed(1)} />
-              <Stat label={t("training.categoryDoubles")} value={`${Math.round(stats.doubleRate)}%`} />
+            <div className="grid grid-cols-4 gap-2">
+              <CoachStatTile label={t("stats.games")} value={stats.games.toString()} />
+              <CoachStatTile label={t("game.winsLabel")} value={stats.wins.toString()} />
+              <CoachStatTile label={t("stats.average")} value={stats.avg.toFixed(1)} />
+              <CoachStatTile label={t("training.categoryDoubles")} value={`${Math.round(stats.doubleRate)}%`} />
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground mb-3">
-              {t("coach.noDataYet")}
-            </p>
+            <p className="text-[13px] text-muted-foreground">{t("coach.noDataYet")}</p>
           )}
 
-          <div className="space-y-2">
+          <ol className="flex flex-col gap-2">
             {recommendations.map((rec, idx) => (
-              <div key={rec.drillId} className="flex items-center gap-3 bg-muted/40 rounded-lg p-3">
-                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                  <rec.icon className="w-4 h-4" />
-                </div>
+              <li key={rec.drillId} className="flex items-center gap-3 rounded-2xl bg-muted p-3">
+                <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-primary">
+                  <rec.icon className="h-5 w-5" />
+                </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-display uppercase text-muted-foreground">{t("coach.step")} {idx + 1}</span>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 bg-primary/15 text-primary border-transparent">{rec.metric}</Badge>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("coach.step")} {idx + 1}</span>
+                    <span className="rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] font-semibold text-primary">{rec.metric}</span>
                   </div>
-                  <p className="font-semibold text-sm truncate">{rec.title}</p>
-                  <p className="text-xs text-muted-foreground line-clamp-2">{rec.reason}</p>
+                  <p className="truncate text-[15px] font-semibold">{rec.title}</p>
+                  <p className="line-clamp-2 text-[13px] text-muted-foreground">{rec.reason}</p>
                 </div>
-                <Button size="sm" variant="outline" className="gap-1 shrink-0" onClick={() => onStartDrill(rec.drillId)}>
-                  <Play className="w-3 h-3" /> {t("coach.start")}
-                </Button>
-              </div>
+                {/* The first step is the screen's one primary action; the other two stay outlined. */}
+                <button
+                  type="button"
+                  onClick={() => onStartDrill(rec.drillId)}
+                  className={`flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition-transform active:scale-[0.97] ${
+                    idx === 0 ? "bg-primary text-primary-foreground" : "border border-border bg-card text-foreground hover:border-primary/40"
+                  }`}
+                >
+                  <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" /> {t("coach.start")}
+                </button>
+              </li>
             ))}
-          </div>
+          </ol>
 
-          <div className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground">
-            <TrendingUp className="w-3 h-3" />
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <TrendingUp className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             {t("coach.autoUpdateNote")}
-          </div>
+          </p>
         </>
       )}
-    </div>
+    </section>
   );
 };
 
-const Stat = ({ label, value }: { label: string; value: string }) => (
-  <div className="bg-muted/40 border border-border/60 rounded-lg py-2">
-    <p className="font-display text-lg leading-none">{value}</p>
-    <p className="text-[10px] text-muted-foreground mt-1">{label}</p>
+const CoachStatTile = ({ label, value }: { label: string; value: string }) => (
+  <div className="min-w-0 rounded-xl border border-border bg-background px-2 py-2">
+    <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+    <p className="font-display text-2xl font-bold leading-tight tabular-nums">{value}</p>
   </div>
 );
 

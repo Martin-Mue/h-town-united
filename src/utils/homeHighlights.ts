@@ -68,6 +68,14 @@ export interface ResumableGame {
   scores: number[];
   isCricket: boolean;
   activeName: string;
+  /** Index into names/scores of the side whose turn it is (team index in team mode). */
+  activeSide: number;
+  /** "501" / "Cricket" — for the card's subline. */
+  modeLabel: string;
+  /** 1-based number of the leg being played. */
+  legNumber: number;
+  /** Legs won so far, index-aligned with names. */
+  legsWon: number[];
 }
 
 /** What the "continue your game" tile shows for a saved, unfinished game; null when nothing is worth resuming. */
@@ -79,5 +87,15 @@ export function describeResumableGame(game: GameState | null | undefined): Resum
     ? (game.cricket ?? []).map((c) => c.points)
     : game.currentLeg.remaining;
   const activeName = game.players[game.currentPlayerIndex]?.name ?? "";
-  return { names: sides, scores: scores.slice(0, sides.length), isCricket, activeName };
+  const activeSide = game.teams ? game.currentPlayerIndex % game.teams.length : game.currentPlayerIndex;
+  return {
+    names: sides,
+    scores: scores.slice(0, sides.length),
+    isCricket,
+    activeName,
+    activeSide,
+    modeLabel: isCricket ? "Cricket" : String(game.startScore ?? game.mode),
+    legNumber: (game.completedLegs?.length ?? 0) + 1,
+    legsWon: sides.map((_, i) => game.legsWon?.[i] ?? 0),
+  };
 }

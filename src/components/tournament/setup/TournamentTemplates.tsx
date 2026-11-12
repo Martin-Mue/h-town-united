@@ -65,9 +65,9 @@ const TournamentTemplates = ({ current, onApply }: TournamentTemplatesProps) => 
       ) : (
         <div className="flex flex-wrap gap-2">
           {presets.map((preset) => (
-            <div key={preset.id} className="flex items-stretch overflow-hidden rounded-xl border border-primary/40 bg-primary/10">
-              <button type="button" onClick={() => onApply(preset.config)} className="min-w-0 px-3 py-2 text-left transition-colors hover:bg-primary/20">
-                <span className="block truncate font-display text-sm uppercase tracking-wide">{preset.name}</span>
+            <div key={preset.id} className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card">
+              <button type="button" onClick={() => onApply(preset.config)} className="min-h-11 min-w-0 px-3 py-2 text-left transition-colors hover:bg-muted">
+                <span className="block truncate text-sm font-semibold">{preset.name}</span>
                 <span className="block truncate text-[11px] text-muted-foreground">{describe(preset.config, t)}</span>
               </button>
               <button
@@ -75,7 +75,7 @@ const TournamentTemplates = ({ current, onApply }: TournamentTemplatesProps) => 
                 onClick={() => remove(preset.id)}
                 aria-label={t("tournament.templateDelete")}
                 title={t("tournament.templateDelete")}
-                className="flex w-9 shrink-0 items-center justify-center border-l border-primary/30 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
+                className="flex w-11 shrink-0 items-center justify-center border-l border-border text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
               >
                 <X className="h-3.5 w-3.5" />
               </button>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router-dom";
 import { Flame, TrendingUp, Crosshair, PartyPopper } from "lucide-react";
-import { DartGameIcon, DartTrophyIcon, SeasonIcon, StatsIcon, TrainingIcon, ClubIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
+import { DartGameIcon, DartTrophyIcon, SeasonIcon, TrainingIcon, ClubIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlayers } from "@/hooks/usePlayers";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow, type ActivityTranslator } from "@/utils/clubActivity";
@@ -12,13 +12,14 @@ import { LOCALE_BY_LANGUAGE } from "@/i18n/translations";
 import { usePagedList } from "@/hooks/usePagedList";
 import { ListPaginationFooter } from "@/components/ui/list-pagination-footer";
 import { Badge } from "@/components/ui/badge";
-import htuEmblem from "@/assets/club-emblem-color.png";
 import PendingOnlineChallenges from "@/components/home/PendingOnlineChallenges";
 import PendingDoublesLobbies from "@/components/home/PendingDoublesLobbies";
 import LiveOnlineMatches from "@/components/home/LiveOnlineMatches";
 import PendingOnlineDuels from "@/components/home/PendingOnlineDuels";
 import OnlineNowStrip from "@/components/home/OnlineNowStrip";
-import HomeHighlights, { type LiveTournamentInfo, type MyForm } from "@/components/home/HomeHighlights";
+import OpenGameCard from "@/components/home/OpenGameCard";
+import TournamentRows, { type LiveTournamentInfo } from "@/components/home/TournamentRows";
+import FormTiles, { type MyForm } from "@/components/home/FormTiles";
 import { useAuth } from "@/contexts/AuthContext";
 import { loadActiveGameSnapshot } from "@/lib/activeGameSnapshot";
 import { describeResumableGame, findNextTournamentMatch, type TournamentLite } from "@/utils/homeHighlights";
@@ -39,13 +40,12 @@ const EVENT_ICON: Record<ActivityEvent["type"], IconComponent> = {
   match_result: DartTrophyIcon,
 };
 
-const QUICK_ACTIONS: { to: string; labelKey: string; descKey: string; icon: IconComponent }[] = [
-  { to: "/game", labelKey: "home.newGame", descKey: "home.newGameDesc", icon: DartGameIcon },
-  { to: "/tournament", labelKey: "home.tournament", descKey: "home.tournamentDesc", icon: DartTrophyIcon },
-  { to: "/tournaments/series", labelKey: "home.season", descKey: "home.seasonDesc", icon: SeasonIcon },
-  { to: "/statistics", labelKey: "home.statistics", descKey: "home.statisticsDesc", icon: StatsIcon },
-  { to: "/training", labelKey: "home.training", descKey: "home.trainingDesc", icon: TrainingIcon },
-  { to: "/players", labelKey: "home.club", descKey: "home.clubDesc", icon: ClubIcon },
+// Redesign 2026-11: the six big tiles shrank to a chip row with only the areas the bottom bar
+// does not carry itself (Spielen/Turnier/Statistik are one tap away there already).
+const MORE_AREAS: { to: string; labelKey: string; icon: IconComponent }[] = [
+  { to: "/training", labelKey: "home.training", icon: TrainingIcon },
+  { to: "/tournaments/series", labelKey: "home.season", icon: SeasonIcon },
+  { to: "/players", labelKey: "home.club", icon: ClubIcon },
 ];
 
 interface RecentGame {
@@ -69,11 +69,7 @@ interface AnniversaryEntry {
 
 const DashboardPage = () => {
   const { language, t } = useLanguage();
-  const { club, name: clubName, tagline, logoUrl } = useClubBranding();
-  // Until a club uploads its own logo, the hero watermark keeps its ORIGINAL bundled artwork
-  // (a different image from the circular badge below it) so the page stays pixel-identical to
-  // today — only once logo_path is set does it switch to the one uploaded image.
-  const watermarkSrc = club?.logo_path ? logoUrl : htuEmblem;
+  const { name: clubName, tagline } = useClubBranding();
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const [loadingGames, setLoadingGames] = useState(true);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
@@ -100,9 +96,16 @@ const DashboardPage = () => {
   }, []);
   const liveTournaments: LiveTournamentInfo[] = runningTournaments.slice(0, 2).map((x) => ({ id: x.id, name: x.name }));
   const nextMatch = useMemo(() => findNextTournamentMatch(runningTournaments, myPlayer?.name ?? ""), [runningTournaments, myPlayer?.name]);
+  const eloRank = useMemo(() => {
+    if (!myPlayer) return null;
+    const ranked = roster.filter((p) => p.games_played > 0).sort((a, b) => b.elo_rating - a.elo_rating);
+    const index = ranked.findIndex((p) => p.id === myPlayer.id);
+    return index >= 0 ? index + 1 : null;
+  }, [roster, myPlayer]);
   const myForm: MyForm | null = myPlayer && myPlayer.games_played > 0
-    ? { name: myPlayer.name, average: myPlayer.average, elo: myPlayer.elo_rating, wins: myPlayer.games_won, played: myPlayer.games_played, highScore: myPlayer.high_score }
+    ? { average: myPlayer.average, checkoutRate: Number(myPlayer.double_rate) || 0, elo: myPlayer.elo_rating, eloRank, wins: myPlayer.games_won, played: myPlayer.games_played, highScore: myPlayer.high_score }
     : null;
+  const firstName = myPlayer?.name.split(" ")[0] ?? "";
   // Membership anniversaries: joined_year is a manually-entered YEAR only (no day/month), so this
   // can only ever say "N years with the club this year", never pinpoint the exact day — every full
   // year counts (not just round 5/10-year milestones), matching how the feature was requested.
@@ -212,102 +215,57 @@ const DashboardPage = () => {
 
   return (
     <div className="container max-w-6xl py-4 animate-slide-up">
-      {/* Hero, v6 — "grown from the root": the club tree emblem sits large and muted up top
-          with its full canopy visible (that's the recognizable shape — a smaller/blurrier tree
-          read as unrecognizable in earlier passes), and the Darts badge — sharp, saturated —
-          overlaps only the tree's lower trunk area, like it grew out of it. Picked over a
-          concentric layering (badge centered over the tree) specifically because that hid too
-          much of the tree behind the badge to read as a tree at all. */}
-      {/* Shrunk on mobile only (sm:+ unchanged) — the full-size hero pushed Quick Actions and
-          the activity feed below the fold on a phone, the actual majority device here (Design-
-          Sprint Rangliste #9). Every dimension below scales down by the same ~0.66 factor
-          (watermark box/image, badge size, badge's top offset) so the "badge grows out of the
-          tree's lower trunk" composition from the v6 layout comment above holds at the smaller
-          size instead of just cropping it. */}
-      <div className="gradient-hero rounded-2xl p-4 sm:p-6 pt-5 sm:pt-8 mb-3 sm:mb-4 border border-border relative overflow-hidden text-center">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.1),transparent_65%)]" />
-        <div className="relative flex flex-col items-center lg:flex-row lg:justify-center lg:gap-14">
-          <div className="relative mb-1 sm:mb-2 h-[130px] sm:h-[220px] w-full lg:mb-0 lg:h-[190px] lg:w-[240px] lg:shrink-0">
-            <img
-              src={watermarkSrc}
-              alt={t("players.clubEmblemAlt")}
-              className="absolute top-0 left-1/2 -translate-x-1/2 w-[120px] h-[120px] sm:w-[200px] sm:h-[200px] lg:h-[170px] lg:w-[170px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
-            />
-            <div className="absolute left-1/2 -translate-x-1/2 top-[68px] sm:top-[115px] lg:top-[100px] group">
-              <div className="absolute inset-0 rounded-full bg-primary/25 blur-xl scale-125" />
-              <div className="relative w-[60px] h-[60px] sm:w-[102px] sm:h-[102px] lg:h-[88px] lg:w-[88px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-700 group-hover:-rotate-[6deg]">
-                <img
-                  src={logoUrl}
-                  alt={clubName}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-          </div>
-          {/* Optional per-club tagline (DB column, nullable) — this club's is a wordplay on its
-              town name (Heiligenhaus), deliberately not translated since an English rendering
-              would just lose the point of it. Rendered only when a club has set one. */}
-          <div className="lg:text-left">
-          {tagline && (
-            <p className="font-graffiti text-lg sm:text-2xl leading-tight -rotate-1 select-none text-primary drop-shadow-[0_0_14px_hsl(var(--primary)/0.45)]">
-              {tagline}
-            </p>
-          )}
-          <p className="text-[10px] sm:text-xs uppercase tracking-[0.35em] text-muted-foreground font-display mt-1 sm:mt-2">
-            {t("home.tagline")}
-          </p>
-          </div>
-        </div>
+      {/* Redesign 2026-11 (canvas "Start"): no big crest hero any more — greeting, then the open
+          game, the member's own tournament match and form, who is online, and the club feed. */}
+      <header className="mb-4">
+        {tagline && <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground truncate">{tagline}</p>}
+        <h1 className="font-display font-bold text-[28px] leading-tight">
+          {firstName ? t("home.greeting").replace("{name}", firstName) : clubName}
+        </h1>
+      </header>
+
+      <div className="lg:grid lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] lg:gap-8 lg:items-start">
+      <div className="min-w-0 flex flex-col gap-3.5 mb-6">
+        <OpenGameCard resume={resume} />
+        <TournamentRows next={nextMatch} live={liveTournaments} />
+        {myForm && <FormTiles form={myForm} />}
+        <OnlineNowStrip />
+        <PendingOnlineChallenges />
+        <PendingDoublesLobbies />
+        <PendingOnlineDuels />
+        <LiveOnlineMatches />
+        <nav aria-label={t("nav.more")} className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+          {MORE_AREAS.map((area) => (
+            <Link
+              key={area.to}
+              to={area.to}
+              className="shrink-0 h-11 px-4 rounded-xl border border-border bg-card flex items-center gap-2 text-sm font-medium active:scale-95 transition-transform"
+            >
+              <area.icon className="w-4 h-4 text-primary" />
+              {t(area.labelKey)}
+            </Link>
+          ))}
+        </nav>
       </div>
 
-      <OnlineNowStrip />
-      <PendingOnlineChallenges />
-      <PendingDoublesLobbies />
-      <PendingOnlineDuels />
-      <LiveOnlineMatches />
-
-      <HomeHighlights resume={resume} live={liveTournaments} next={nextMatch} form={myForm} />
-
-      {/* Quick action cards — reverted from the "An der Oché" Broadcast-Arena look (Design-Sprint
-          Runde 3 Punkt 2, Richtung A) back to this screen's own normal card language. That look —
-          the fixed-dark broadcast surface + angled corners from PublicTournament.tsx's Beamer view,
-          three brand hues cycling across the six tiles at broadcast saturation — read as louder and
-          more colorful than the rest of the dashboard once it sat between ordinary gradient-card
-          rows (Design-Sprint Runde 4 Rückmeldung). Uniform now: the same gradient-card/border/
-          rounded-xl shell every other card on this page uses, one accent (primary/cyan — this app's
-          "interactive, tap this" role, see index.css's color-semantics header) for every icon
-          instead of a three-way cycle, and theme-aware Tailwind classes instead of hardcoded hsl()
-          so this still works correctly if the app ever gets a light-mode toggle. */}
-      <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("home.quickAccess")}</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        {QUICK_ACTIONS.map((action) => (
-          <Link key={action.to} to={action.to}
-            className="gradient-card border border-border rounded-xl p-4 shadow-elevation-sm hover:border-primary/40 active:scale-95 transition-all group"
-            style={{ transitionTimingFunction: "var(--ease-press)" }}>
-            <action.icon className="w-6 h-6 mb-2 text-primary group-hover:scale-110 group-active:scale-110 transition-transform" />
-            <p className="font-semibold text-sm text-foreground">{t(action.labelKey)}</p>
-            <p className="text-xs text-muted-foreground">{t(action.descKey)}</p>
-          </Link>
-        ))}
-      </div>
-
+      <div className="min-w-0">
       {/* Club activity feed — notable moments (180s, personal bests, win streaks) from the last
           14 days, derived from data that already exists (see clubActivity.ts). Only shown once
           there's something to show — an empty feed would just be noise between the quick
           actions and the always-present recent-games list below. */}
-      {/* Wide screens: feed + anniversaries on the left, recent games on the right (or, with no feed, the games in two columns). */}
-      <div className={hasFeed ? "lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-8 lg:items-start" : ""}>
+      {/* Right column on wide screens, below everything on a phone: feed, anniversaries, recent games. */}
+      <div>
       {hasFeed && <div className="min-w-0">
       {activity.length > 0 && (
         <>
-          <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
-            <Flame className="w-3.5 h-3.5 text-accent" /> {t("home.whatsHappening")}
+          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2 flex items-center gap-1.5">
+            <Flame className="w-3.5 h-3.5 text-accent" /> {t("home.inClub")}
           </h2>
           <div className="space-y-2 mb-2">
             {pagedActivity.visible.map((e) => {
               const Icon = EVENT_ICON[e.type];
               return (
-                <div key={e.id} className="gradient-card border border-border rounded-xl px-4 py-2.5 shadow-elevation-sm flex items-center gap-3">
+                <div key={e.id} className="bg-card border border-border rounded-[14px] px-3.5 py-2.5 flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
                     <Icon className="w-4 h-4" />
                   </div>
@@ -326,12 +284,12 @@ const DashboardPage = () => {
       {/* Membership anniversaries — only shown once there's at least one to celebrate. */}
       {anniversaries.length > 0 && (
         <>
-          <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2 flex items-center gap-1.5">
             <PartyPopper className="w-3.5 h-3.5 text-accent" /> {t("home.anniversaryHeading")}
           </h2>
           <div className="space-y-2 mb-6">
             {anniversaries.map((a) => (
-              <div key={a.id} className="gradient-card border border-border rounded-xl px-4 py-2.5 shadow-elevation-sm flex items-center gap-3">
+              <div key={a.id} className="bg-card border border-border rounded-[14px] px-3.5 py-2.5 flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-accent/15 text-accent flex items-center justify-center shrink-0">
                   <PartyPopper className="w-4 h-4" />
                 </div>
@@ -350,11 +308,11 @@ const DashboardPage = () => {
 
       <div className="min-w-0">
       {/* Recent games feed */}
-      <h2 className="font-display uppercase text-sm text-muted-foreground mb-3">{t("home.recentGames")}</h2>
+      <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">{t("home.recentGames")}</h2>
       {loadingGames ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
       ) : recentGames.length === 0 ? (
-        <Link to="/game" className="block gradient-card border border-border shadow-elevation-sm hover:border-primary/40 active:scale-[0.98] active:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-all" style={{ transitionTimingFunction: "var(--ease-press)" }}>
+        <Link to="/game" className="block bg-card border border-border hover:border-primary/40 active:scale-[0.98] active:border-primary/40 rounded-xl px-4 py-6 text-center text-sm text-muted-foreground transition-all" style={{ transitionTimingFunction: "var(--ease-press)" }}>
           {/* Design Rangliste #15: this was plain text before — reuses DartGameIcon (the same
               hand-drawn dart-in-flight icon as the "Neues Spiel" quick action right above) rather
               than a generic lucide glyph, so the very first impression on an empty dashboard
@@ -363,12 +321,12 @@ const DashboardPage = () => {
           {t("home.noGamesYet")} <span className="text-primary font-medium">{t("home.startFirstGame")}</span>
         </Link>
       ) : (
-        <div className={hasFeed ? "space-y-2" : "space-y-2 md:grid md:grid-cols-2 md:gap-2 md:space-y-0"}>
+        <div className="space-y-2">
           {pagedRecentGames.visible.map((game) => {
             const extra = game.participantNames && game.participantNames.length > 2 ? game.participantNames : null;
             const isExpanded = extra ? expandedGames.has(game.id) : false;
             return (
-              <div key={game.id} className="gradient-card border border-border rounded-xl px-4 py-3 shadow-elevation-sm flex items-center justify-between gap-3">
+              <div key={game.id} className="bg-card border border-border rounded-[14px] px-3.5 py-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <Badge variant="outline" className="text-xs bg-muted px-2 py-0.5 font-mono border-transparent shrink-0">{game.mode}</Badge>
                   {isExpanded && extra ? (
@@ -404,6 +362,8 @@ const DashboardPage = () => {
           <ListPaginationFooter list={pagedRecentGames} />
         </div>
       )}
+      </div>
+      </div>
       </div>
       </div>
 

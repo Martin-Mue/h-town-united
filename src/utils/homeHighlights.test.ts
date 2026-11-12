@@ -44,7 +44,12 @@ describe("describeResumableGame", () => {
   const base = { mode: "501", startScore: 501, bestOfLegs: 1, players: [{ name: "Martin", doubleOut: true, isBot: false }, { name: "Bot", doubleOut: true, isBot: true }], legsWon: [0, 0], completedLegs: [], currentPlayerIndex: 0, isFinished: false, currentLeg: { legNumber: 1, startingPlayerIndex: 0, remaining: [276, 376], throws: [[], []] } } as unknown as GameState;
 
   it("shows names, scores and whose turn it is", () => {
-    expect(describeResumableGame(base)).toEqual({ names: ["Martin", "Bot"], scores: [276, 376], isCricket: false, activeName: "Martin" });
+    expect(describeResumableGame(base)).toEqual({ names: ["Martin", "Bot"], scores: [276, 376], isCricket: false, activeName: "Martin", activeSide: 0, modeLabel: "501", legNumber: 1, legsWon: [0, 0] });
+  });
+
+  it("knows the leg, the legs won and the side on throw", () => {
+    const later = { ...base, currentPlayerIndex: 1, legsWon: [1, 0], completedLegs: [{}] } as unknown as GameState;
+    expect(describeResumableGame(later)).toMatchObject({ activeSide: 1, legNumber: 2, legsWon: [1, 0], activeName: "Bot" });
   });
 
   it("offers nothing for a finished or missing game", () => {

@@ -1,10 +1,17 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from "react";
-import { Dumbbell, Trophy, Play, ArrowLeft, RotateCcw, CheckCircle, Camera, Settings2, PartyPopper, Undo2, Flame, Heart, PiggyBank } from "lucide-react";
+import { Trophy, Play, RotateCcw, CheckCircle, Camera, PartyPopper, Undo2, Flame, Heart, PiggyBank, Clock, Flag, Medal, Target } from "lucide-react";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
-import { Button } from "@/components/ui/button";
 import DartScoreInput from "@/components/game/DartScoreInput";
 import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 import CoachingPlan from "@/components/training/CoachingPlan";
+import DrillListCard from "@/components/training/DrillListCard";
+import DrillDifficultyBadge from "@/components/training/DrillDifficultyBadge";
+import DrillStatTile from "@/components/training/DrillStatTile";
+import TrainingActionButton from "@/components/training/TrainingActionButton";
+import TrainingOptionChip from "@/components/training/TrainingOptionChip";
+import TrainingScreenHeader from "@/components/training/TrainingScreenHeader";
+import TrainingSectionLabel from "@/components/training/TrainingSectionLabel";
+import VisitDartDots from "@/components/training/VisitDartDots";
 // Loaded lazily, same as Game.tsx's own identical import — LiveCamera pulls in onnxruntime-web +
 // vision utilities (~112KB) that cameraEnabled (default false, see below) has no use for on a
 // manual/quick-round drill. Type-only imports are erased at compile time, so they don't defeat
@@ -22,8 +29,6 @@ import { clubHasFeature } from "@/lib/planFeatures";
 import {
   type TrainingDrill,
   TRAINING_DRILLS,
-  DIFFICULTY_COLORS,
-  DIFFICULTY_LABEL_KEY,
   type RecordEntry,
   recordVariant,
   loadRecord,
@@ -85,6 +90,23 @@ const PRESSURE_CHECKOUTS = [32, 40, 16, 36, 24, 8, 20, 50, 64, 80];
 const LEGENDARY_FINISHES = [40, 60, 81, 100, 121, 141, 160, 170];
 
 const BULL_CONTROL_MAX_PLAYERS = 8;
+const BULL_CONTROL_START_POINTS = [101, 201, 301, 501];
+const BOARD_NUMBERS_ASCENDING = Array.from({ length: 20 }, (_, i) => i + 1);
+const BOARD_NUMBERS_DESCENDING = [...BOARD_NUMBERS_ASCENDING].reverse();
+/** Target Grind / Sudden Death / Combo Risk field picker: 20 → 1, then Bull. */
+const TARGET_FIELD_NUMBERS = [...BOARD_NUMBERS_DESCENDING, 25];
+
+/** Setup and play screens fill the space between the app header (~3.6rem) and the bottom nav
+ *  (5rem + safe area on phones, gone from md up) so their main action / score entry can sit at the
+ *  bottom of the screen instead of floating mid-page. */
+const TRAINING_SCREEN_MIN_HEIGHT =
+  "min-h-[calc(100dvh-3.75rem-5rem-env(safe-area-inset-bottom))] md:min-h-[calc(100dvh-3.75rem-1.5rem)]";
+/** Play screen: small uppercase label above the big target number. */
+const DRILL_TARGET_LABEL_CLASS = "mb-1 text-xs uppercase tracking-[0.12em] text-muted-foreground";
+/** Play screen: the big target / remaining number. */
+const DRILL_TARGET_VALUE_CLASS = "font-display text-[56px] font-bold leading-none tabular-nums text-primary";
+/** Play screen: S / D / T progress pills (Shanghai, Shanghai Round the Clock). */
+const DRILL_PROGRESS_PILL_CLASS = "rounded-full border px-3 py-1 font-display text-sm font-bold transition-colors";
 
 /** Every remaining score actually achievable in 3 darts ending on a double — a uniform 2-170
  *  random pick (the previous implementation) hands out 162/163/165/166/168/169 as often as any
@@ -1168,184 +1190,184 @@ const TrainingPage = () => {
         {cameraTarget.sub && <span className="text-xs text-muted-foreground">{cameraTarget.sub}</span>}
       </div>
     ) : undefined;
+    const fieldLabel = (drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20);
+    const toggleCamera = () => {
+      if (!cameraEnabled && !clubHasFeature(club?.plan_tier, "camera")) {
+        toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
+        return;
+      }
+      setCameraEnabled((v) => !v);
+    };
 
     return (
-      <div className="container py-6 animate-slide-up max-w-lg md:max-w-2xl lg:max-w-3xl mx-auto">
-        <Button variant="ghost" onClick={exitDrill} className="mb-4 text-muted-foreground">
-          <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
-        </Button>
+      <div className={`container flex max-w-lg flex-col gap-2 py-2 animate-slide-up md:max-w-2xl lg:max-w-3xl ${TRAINING_SCREEN_MIN_HEIGHT}`}>
+        <TrainingScreenHeader
+          size="compact"
+          onBack={exitDrill}
+          title={selectedDrill.name}
+          subtitle={cameraTarget?.sub}
+          trailing={!drillState.finished && (
+            <>
+              {/* Undo lives up here (not under the pad) so the checkout drills' extra rows still
+                  fit a phone screen without scrolling. */}
+              <button
+                type="button"
+                onClick={undoLastDart}
+                disabled={undoStack.length === 0}
+                aria-label={t("training.undo")}
+                title={t("training.undo")}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-foreground transition-colors disabled:opacity-40"
+              >
+                <Undo2 className="h-[18px] w-[18px]" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={toggleCamera}
+                aria-pressed={cameraEnabled}
+                className={`flex h-11 shrink-0 items-center gap-2 rounded-xl border px-3 text-[13px] font-semibold transition-colors ${
+                  cameraEnabled ? "border-primary bg-primary/15 text-primary" : "border-border bg-card text-foreground"
+                }`}
+              >
+                <Camera className="h-4 w-4" aria-hidden="true" />
+                {cameraEnabled ? t("training.cameraOff") : t("training.cameraScoring")}
+              </button>
+            </>
+          )}
+        />
 
-        <div className="text-center mb-4">
-          <selectedDrill.icon className="w-10 h-10 text-primary mx-auto mb-2" />
-          <h2 className="text-xl font-display uppercase">{selectedDrill.name}</h2>
-        </div>
-
-        {/* Drill finished overlay */}
+        {/* Drill finished — result screen */}
         {drillState.finished && (() => {
           const bobsBusted = selectedDrill.id === "bobs-27" && drillState.remaining <= 0;
           return (
-          <div className="bg-card border border-primary/30 rounded-2xl p-6 text-center mb-4 glow-cyan animate-scale-in">
-            {drillState.shanghaiWin || drillState.rtcWin ? (
-              <PartyPopper className="w-12 h-12 text-accent mx-auto mb-3" />
-            ) : bobsBusted ? (
-              <RotateCcw className="w-12 h-12 text-destructive mx-auto mb-3" />
-            ) : (
-              <CheckCircle className="w-12 h-12 text-secondary mx-auto mb-3" />
-            )}
-            <h3 className="text-2xl font-display uppercase mb-2">
-              {drillState.shanghaiWin ? t("training.shanghaiWin") : drillState.rtcWin ? t("training.roundTheClockWin") : bobsBusted ? t("training.accountEmpty") : selectedDrill.id === "sudden-death" ? t("training.suddenDeathOver") : t("training.doneGeneric")}
-            </h3>
-            {brokeRecord ? (
-              <div className="mb-4 rounded-lg border border-accent bg-accent/15 px-3 py-2 text-accent font-display uppercase text-sm flex items-center justify-center gap-2 animate-pulse-glow">
-                <Trophy className="w-4 h-4" /> {t("training.newPersonalRecord")}
-              </div>
-            ) : currentRecord ? (
-              <p className="text-xs text-muted-foreground mb-4">
-                {t("training.recordLabel")} <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
-              </p>
-            ) : null}
-            {/* Practice streak (see recordPracticeDay's own doc comment) — 2+ only, same "a lone
-                day isn't a streak yet" reasoning as Game.tsx's legStreak momentum badge. */}
-            {streak && streak.current >= 2 && (
-              <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-accent font-display uppercase text-xs flex items-center justify-center gap-1.5">
-                <Flame className="w-3.5 h-3.5" /> {streak.current} {t("training.daysInARow")}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-              {selectedDrill.id === "shanghai" ? (
-                <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
-                  <p className="text-2xl font-display">{drillState.shanghaiScore ?? 0}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {drillState.shanghaiWin ? `${t("training.shanghaiOnNumberRound")} ${drillState.currentTarget}, ${t("tournament.roundLabel")} ${drillState.targetIndex + 1}!` : t("training.scoreAfter20Rounds")}
+            <>
+              <section className="flex flex-col items-center gap-3 rounded-[20px] border border-border bg-card p-5 text-center animate-scale-in">
+                {drillState.shanghaiWin || drillState.rtcWin ? (
+                  <PartyPopper className="h-10 w-10 text-accent" aria-hidden="true" />
+                ) : bobsBusted ? (
+                  <RotateCcw className="h-10 w-10 text-destructive" aria-hidden="true" />
+                ) : (
+                  <CheckCircle className="h-10 w-10 text-secondary" aria-hidden="true" />
+                )}
+                <h2 className="font-display text-[28px] font-bold leading-tight">
+                  {drillState.shanghaiWin ? t("training.shanghaiWin") : drillState.rtcWin ? t("training.roundTheClockWin") : bobsBusted ? t("training.accountEmpty") : selectedDrill.id === "sudden-death" ? t("training.suddenDeathOver") : t("training.doneGeneric")}
+                </h2>
+                {brokeRecord ? (
+                  <p className="flex items-center justify-center gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent">
+                    <Trophy className="h-4 w-4" aria-hidden="true" /> {t("training.newPersonalRecord")}
                   </p>
-                </div>
-              ) : selectedDrill.id === "shanghai-rtc" ? (
-                <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
-                  <p className="text-2xl font-display">{drillState.rtcWin ? t("training.number20") : drillState.currentTarget}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {drillState.rtcWin
+                ) : currentRecord ? (
+                  <p className="text-[13px] text-muted-foreground">
+                    {t("training.recordLabel")} <span className="font-semibold text-foreground tabular-nums">{currentRecord.value}</span> · {currentRecord.label}
+                  </p>
+                ) : null}
+                {/* Practice streak (see recordPracticeDay's own doc comment) — 2+ only, same "a lone
+                    day isn't a streak yet" reasoning as Game.tsx's legStreak momentum badge. */}
+                {streak && streak.current >= 2 && (
+                  <p className="flex items-center justify-center gap-1.5 text-[13px] font-semibold text-accent">
+                    <Flame className="h-4 w-4" aria-hidden="true" /> {streak.current} {t("training.daysInARow")}
+                  </p>
+                )}
+              </section>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                {selectedDrill.id === "shanghai" ? (
+                  <DrillStatTile
+                    className="col-span-2"
+                    value={drillState.shanghaiScore ?? 0}
+                    label={drillState.shanghaiWin ? `${t("training.shanghaiOnNumberRound")} ${drillState.currentTarget}, ${t("tournament.roundLabel")} ${drillState.targetIndex + 1}!` : t("training.scoreAfter20Rounds")}
+                  />
+                ) : selectedDrill.id === "shanghai-rtc" ? (
+                  <DrillStatTile
+                    className="col-span-2"
+                    value={drillState.rtcWin ? t("training.number20") : drillState.currentTarget}
+                    label={drillState.rtcWin
                       ? `${t("training.allNumbersDone")} ${drillState.rtcScore ?? 0}`
                       : `${t("training.roundLimitReachedAtNumber")} ${drillState.currentTarget} · ${t("training.scoreLabel")} ${drillState.rtcScore ?? 0}`}
-                  </p>
-                </div>
-              ) : selectedDrill.id === "free-scoring" ? (
-                <>
-                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
-                    <p className="text-2xl font-display">{drillState.totalPoints ?? 0}</p>
-                    <p className="text-xs text-muted-foreground">{t("training.freeTotalPoints")}</p>
-                  </div>
-                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
-                    <p className="text-2xl font-display">
-                      {drillState.dartsThrown > 0 ? (((drillState.totalPoints ?? 0) / drillState.dartsThrown) * 3).toFixed(1) : "–"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{t("training.avg3Dart")}</p>
-                  </div>
-                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
-                    <p className="text-2xl font-display">{drillState.bestRound ?? 0}</p>
-                    <p className="text-xs text-muted-foreground">{t("training.freeBestRound")}</p>
-                  </div>
-                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
-                    <p className="text-2xl font-display">{drillState.count180 ?? 0}</p>
-                    <p className="text-xs text-muted-foreground">180</p>
-                  </div>
-                </>
-              ) : selectedDrill.id === "halve-it" ? (
-                <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
-                  <p className="text-2xl font-display">{drillState.remaining}</p>
-                  <p className="text-xs text-muted-foreground">{t("training.finalScoreAfter10Rounds")}</p>
-                </div>
-              ) : selectedDrill.id === "bobs-27" ? (
-                <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
-                  <p className="text-2xl font-display">{Math.max(0, drillState.remaining)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {bobsBusted ? `${t("training.bustInRound")} ${drillState.targetIndex + 1}` : t("training.finalScoreAfter20Rounds")}
-                  </p>
-                </div>
-              ) : selectedDrill.id === "bull-control" ? (
-                <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
-                  <p className="text-2xl font-display text-secondary">{drillState.bcWinner ?? "—"}</p>
-                  <p className="text-xs text-muted-foreground mb-2">{t("training.winner")}</p>
-                  <div className="space-y-1 text-left">
-                    {(drillState.bcPlayers ?? []).map((p) => (
-                      <div key={p.name} className="flex items-center justify-between text-xs">
-                        <span className={p.name === drillState.bcWinner ? "text-secondary font-semibold" : ""}>{p.name}</span>
-                        <span className="font-mono">{p.remaining}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : selectedDrill.id === "combo-risk" ? (
-                <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
-                  <p className="text-2xl font-display text-accent">{drillState.bankedPoints ?? 0}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("training.finalBankedLabel")}
-                    {(drillState.pendingPoints ?? 0) > 0 ? ` · ${t("training.lostUnbankedLabel")} ${drillState.pendingPoints}` : ""}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
-                    <p className="text-2xl font-display">{drillState.dartsThrown}</p>
-                    <p className="text-xs text-muted-foreground">{t("training.dartsThrownLabel")}</p>
-                  </div>
-                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
-                    <p className="text-2xl font-display">{drillState.hits}</p>
-                    <p className="text-xs text-muted-foreground">{t("training.hitsLabel")}</p>
-                  </div>
-                </>
-              )}
-              {selectedDrill.id === "target-grind" && (
-                <>
-                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
-                    <p className="text-2xl font-display">
-                      {drillState.dartsThrown > 0 ? Math.round((drillState.hits / drillState.dartsThrown) * 100) : 0}%
-                    </p>
-                    <p className="text-xs text-muted-foreground">{t("stats.hitRate")}</p>
-                  </div>
-                  <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3">
-                    <p className="text-2xl font-display">
-                      {drillState.roundScores.length > 0
+                  />
+                ) : selectedDrill.id === "free-scoring" ? (
+                  <>
+                    <DrillStatTile value={drillState.totalPoints ?? 0} label={t("training.freeTotalPoints")} />
+                    <DrillStatTile
+                      value={drillState.dartsThrown > 0 ? (((drillState.totalPoints ?? 0) / drillState.dartsThrown) * 3).toFixed(1) : "–"}
+                      label={t("training.avg3Dart")}
+                    />
+                    <DrillStatTile value={drillState.bestRound ?? 0} label={t("training.freeBestRound")} />
+                    <DrillStatTile value={drillState.count180 ?? 0} label="180" />
+                  </>
+                ) : selectedDrill.id === "halve-it" ? (
+                  <DrillStatTile className="col-span-2" value={drillState.remaining} label={t("training.finalScoreAfter10Rounds")} />
+                ) : selectedDrill.id === "bobs-27" ? (
+                  <DrillStatTile
+                    className="col-span-2"
+                    value={Math.max(0, drillState.remaining)}
+                    label={bobsBusted ? `${t("training.bustInRound")} ${drillState.targetIndex + 1}` : t("training.finalScoreAfter20Rounds")}
+                  />
+                ) : selectedDrill.id === "bull-control" ? (
+                  <DrillStatTile className="col-span-2" value={drillState.bcWinner ?? "—"} valueClassName="truncate text-secondary" label={t("training.winner")}>
+                    <div className="mt-2 space-y-1">
+                      {(drillState.bcPlayers ?? []).map((p) => (
+                        <div key={p.name} className="flex items-center justify-between text-[13px]">
+                          <span className={`truncate ${p.name === drillState.bcWinner ? "font-semibold text-secondary" : ""}`}>{p.name}</span>
+                          <span className="font-display text-lg font-bold tabular-nums">{p.remaining}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </DrillStatTile>
+                ) : selectedDrill.id === "combo-risk" ? (
+                  <DrillStatTile
+                    className="col-span-2"
+                    value={drillState.bankedPoints ?? 0}
+                    valueClassName="text-secondary"
+                    label={`${t("training.finalBankedLabel")}${(drillState.pendingPoints ?? 0) > 0 ? ` · ${t("training.lostUnbankedLabel")} ${drillState.pendingPoints}` : ""}`}
+                  />
+                ) : (
+                  <>
+                    <DrillStatTile value={drillState.dartsThrown} label={t("training.dartsThrownLabel")} />
+                    <DrillStatTile value={drillState.hits} label={t("training.hitsLabel")} />
+                  </>
+                )}
+                {selectedDrill.id === "target-grind" && (
+                  <>
+                    <DrillStatTile
+                      value={`${drillState.dartsThrown > 0 ? Math.round((drillState.hits / drillState.dartsThrown) * 100) : 0}%`}
+                      label={t("stats.hitRate")}
+                    />
+                    <DrillStatTile
+                      value={drillState.roundScores.length > 0
                         ? Math.round((drillState.roundScores.reduce((a, b) => a + b, 0) / drillState.roundScores.length) * 3)
                         : 0}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{t("training.avg3Dart")}</p>
-                  </div>
-                </>
-              )}
-              {selectedDrill.id === "sudden-death" && (
-                <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 col-span-2">
-                  <p className="text-2xl font-display">
-                    {(drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t("training.livesLabel")}: {drillState.startingLives ?? 3}
-                  </p>
-                </div>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={restartDrill} variant="outline" className="flex-1 gap-1">
-                <RotateCcw className="w-4 h-4" /> {t("training.again")}
-              </Button>
-              <Button onClick={exitDrill} className="flex-1">
-                {t("training.finish")}
-              </Button>
-            </div>
-          </div>
+                      label={t("training.avg3Dart")}
+                    />
+                  </>
+                )}
+                {selectedDrill.id === "sudden-death" && (
+                  <DrillStatTile className="col-span-2" value={fieldLabel} label={`${t("training.livesLabel")}: ${drillState.startingLives ?? 3}`} />
+                )}
+              </div>
+
+              <div className="mt-auto grid grid-cols-2 gap-2.5 pt-2">
+                <TrainingActionButton size="lg" onClick={restartDrill}>
+                  <RotateCcw aria-hidden="true" /> {t("training.again")}
+                </TrainingActionButton>
+                <TrainingActionButton variant="primary" size="lg" onClick={exitDrill}>
+                  {t("training.finish")}
+                </TrainingActionButton>
+              </div>
+            </>
           );
         })()}
 
         {!drillState.finished && (
           <>
-            {/* Drill status info (sticky so it stays visible when the camera is open) */}
-            <div className="sticky top-0 z-30 -mx-4 px-4 pt-2 pb-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/40 mb-3">
-            <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 text-center">
+            {/* Drill status (sticky so it stays visible if a short phone has to scroll) */}
+            <div className="sticky top-0 z-30 bg-background">
+            <div className="rounded-[20px] border border-border bg-card px-4 py-2.5 text-center">
               {/* Target display */}
               {(selectedDrill.id === "around-the-clock" || selectedDrill.id === "ghost-race") && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">{t("training.hitThe")}</p>
-                  <p className="text-5xl font-display text-primary">{drillState.currentTarget}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{drillState.targetIndex + 1} / {drillState.targetList.length}</p>
+                  <p className={DRILL_TARGET_LABEL_CLASS}>{t("training.hitThe")}</p>
+                  <p className={DRILL_TARGET_VALUE_CLASS}>{drillState.currentTarget}</p>
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">{drillState.targetIndex + 1} / {drillState.targetList.length}</p>
                   {selectedDrill.id === "ghost-race" && (() => {
                     // Live pace vs. the player's own personal-best run — approximated from
                     // currentRecord.value (total darts the record run took) scaled by how far
@@ -1353,13 +1375,14 @@ const TrainingPage = () => {
                     // needed. Positive delta = using FEWER darts than the record's pace at this
                     // point (ahead); negative = behind.
                     if (!currentRecord) {
-                      return <p className="text-[11px] text-accent mt-2">{t("training.ghostNoRecordLabel")}</p>;
+                      return <p className="mt-1.5 text-xs text-muted-foreground">{t("training.ghostNoRecordLabel")}</p>;
                     }
                     const expectedDarts = Math.round((currentRecord.value * drillState.targetIndex) / 20);
                     const delta = expectedDarts - drillState.dartsThrown;
                     return (
-                      <p className={`text-[11px] mt-2 font-display ${delta > 0 ? "text-secondary" : delta < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                        🏁 {delta > 0
+                      <p className={`mt-1.5 flex items-center justify-center gap-1 text-[13px] font-semibold ${delta > 0 ? "text-secondary" : delta < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        <Flag className="h-3.5 w-3.5" aria-hidden="true" />
+                        {delta > 0
                           ? `${delta} ${t("training.ghostAheadLabel")}`
                           : delta < 0
                           ? `${Math.abs(delta)} ${t("training.ghostBehindLabel")}`
@@ -1371,99 +1394,96 @@ const TrainingPage = () => {
               )}
               {selectedDrill.id === "doubles-only" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">{t("training.hitDouble")}</p>
-                  <p className="text-5xl font-display text-primary">D{drillState.currentTarget}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{drillState.targetIndex + 1} / {drillState.targetList.length}</p>
+                  <p className={DRILL_TARGET_LABEL_CLASS}>{t("training.hitDouble")}</p>
+                  <p className={DRILL_TARGET_VALUE_CLASS}>D{drillState.currentTarget}</p>
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">{drillState.targetIndex + 1} / {drillState.targetList.length}</p>
                 </div>
               )}
               {isCheckoutDrill && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">{t("training.checkoutLabel")}</p>
-                  <p className="text-5xl font-display text-primary">{drillState.remaining}</p>
+                  <p className={DRILL_TARGET_LABEL_CLASS}>{t("training.checkoutLabel")}</p>
+                  <p className={DRILL_TARGET_VALUE_CLASS}>{drillState.remaining}</p>
                   {selectedDrill.id === "pressure-training" && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="mt-1 text-xs text-muted-foreground tabular-nums">
                       {t("training.checkoutLabel")} {drillState.targetIndex + 1} / {drillState.targetList.length}
                     </p>
                   )}
                   {selectedDrill.id === "random-finish" && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="mt-1 text-xs text-muted-foreground tabular-nums">
                       {t("training.completedOutOf10")} {drillState.hits} / 10
                     </p>
                   )}
                   {selectedDrill.id === "legendary-finishes" && (
-                    <p className="text-xs mt-1 flex items-center justify-center gap-1.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-display ${
-                        drillState.currentTarget >= 141 ? "bg-accent/20 text-accent"
-                          : drillState.currentTarget >= 100 ? "bg-primary/20 text-primary"
-                          : "bg-secondary/20 text-secondary"
+                    <p className="mt-1 flex items-center justify-center gap-1.5 text-xs">
+                      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        drillState.currentTarget >= 141 ? "bg-accent/15 text-accent"
+                          : drillState.currentTarget >= 100 ? "bg-primary/15 text-primary"
+                          : "bg-secondary/15 text-secondary"
                       }`}>
+                        <Medal className="h-3 w-3" aria-hidden="true" />
                         {drillState.currentTarget >= 141 ? t("training.tierGold") : drillState.currentTarget >= 100 ? t("training.tierSilver") : t("training.tierBronze")}
                       </span>
-                      <span className="text-muted-foreground">{t("training.legendLevelLabel")} {drillState.targetIndex + 1}/{drillState.targetList.length}</span>
+                      <span className="text-muted-foreground tabular-nums">{t("training.legendLevelLabel")} {drillState.targetIndex + 1}/{drillState.targetList.length}</span>
                     </p>
                   )}
                 </div>
               )}
               {selectedDrill.id === "combo-risk" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">{t("game.target")}</p>
-                  <p className="text-5xl font-display text-primary">
-                    {(drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20)}
-                  </p>
-                  <div className="flex items-center justify-center gap-4 mt-2">
+                  <p className={DRILL_TARGET_LABEL_CLASS}>{t("game.target")}</p>
+                  <p className={DRILL_TARGET_VALUE_CLASS}>{fieldLabel}</p>
+                  <div className="mt-2 flex items-center justify-center gap-4">
                     <div>
-                      <p className="text-xl font-display text-muted-foreground">{drillState.pendingPoints ?? 0}</p>
-                      <p className="text-[10px] text-muted-foreground">{t("training.pendingLabel")}</p>
+                      <p className="font-display text-2xl font-bold tabular-nums text-muted-foreground">{drillState.pendingPoints ?? 0}</p>
+                      <p className="text-[11px] text-muted-foreground">{t("training.pendingLabel")}</p>
                     </div>
-                    <div className="text-muted-foreground">→</div>
+                    <div className="text-muted-foreground" aria-hidden="true">→</div>
                     <div>
-                      <p className="text-xl font-display text-accent">{drillState.bankedPoints ?? 0}</p>
-                      <p className="text-[10px] text-muted-foreground">{t("training.bankedLabel")}</p>
+                      <p className="font-display text-2xl font-bold tabular-nums text-secondary">{drillState.bankedPoints ?? 0}</p>
+                      <p className="text-[11px] text-muted-foreground">{t("training.bankedLabel")}</p>
                     </div>
                   </div>
                   {(drillState.comboStreak ?? 0) > 0 && (
-                    <p className="text-xs text-secondary mt-1.5">🔥 {drillState.comboStreak}x {t("training.comboLabel")}</p>
+                    <p className="mt-1.5 flex items-center justify-center gap-1 text-xs font-semibold text-secondary">
+                      <Flame className="h-3.5 w-3.5" aria-hidden="true" /> {drillState.comboStreak}x {t("training.comboLabel")}
+                    </p>
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
                     {t("training.dartsUsedOf")} {drillState.dartsThrown} / {(drillState.maxRounds ?? 5) * 3}
                   </p>
                 </div>
               )}
               {selectedDrill.id === "target-grind" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">{t("game.target")}</p>
-                  <p className="text-5xl font-display text-primary">
-                    {(drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className={DRILL_TARGET_LABEL_CLASS}>{t("game.target")}</p>
+                  <p className={DRILL_TARGET_VALUE_CLASS}>{fieldLabel}</p>
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
                     {t("training.hitsLabel")}: {drillState.hits} · {t("tournament.roundLabel")} {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10}
                   </p>
                 </div>
               )}
               {selectedDrill.id === "sudden-death" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">{t("game.target")}</p>
-                  <p className="text-5xl font-display text-primary">
-                    {(drillState.targetMul === 3 ? "T" : drillState.targetMul === 2 ? "D" : "S") + (drillState.targetBase ?? 20)}
-                  </p>
-                  <div className="flex items-center justify-center gap-1 mt-2">
+                  <p className={DRILL_TARGET_LABEL_CLASS}>{t("game.target")}</p>
+                  <p className={DRILL_TARGET_VALUE_CLASS}>{fieldLabel}</p>
+                  <div className="mt-2 flex items-center justify-center gap-1">
                     {Array.from({ length: drillState.startingLives ?? 3 }, (_, i) => (
                       <Heart
                         key={i}
-                        className={`w-5 h-5 ${i < (drillState.livesRemaining ?? 0) ? "text-destructive fill-destructive" : "text-muted-foreground/30"}`}
+                        className={`h-5 w-5 ${i < (drillState.livesRemaining ?? 0) ? "fill-destructive text-destructive" : "text-border"}`}
                       />
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">{t("training.hitsLabel")}: {drillState.hits}</p>
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">{t("training.hitsLabel")}: {drillState.hits}</p>
                 </div>
               )}
               {selectedDrill.id === "big-single-lock" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">
+                  <p className={DRILL_TARGET_LABEL_CLASS}>
                     {t("training.hitSingleRoundOf3")} {drillState.hitsThisRound}/3 {t("training.hitsOf3")}
                   </p>
-                  <p className="text-5xl font-display text-primary">S{drillState.currentTarget}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className={DRILL_TARGET_VALUE_CLASS}>S{drillState.currentTarget}</p>
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
                     {t("training.locked")} {drillState.lockedIndex !== undefined && drillState.lockedIndex >= 0
                       ? `S${drillState.targetList[drillState.lockedIndex]}`
                       : "—"} · {t("training.field")} {drillState.targetIndex + 1} / {drillState.targetList.length}
@@ -1473,66 +1493,66 @@ const TrainingPage = () => {
               )}
               {selectedDrill.id === "random-score" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">{t("training.randomTargetLabel")}</p>
-                  <p className="text-5xl font-display text-primary">{drillState.randomLabel}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className={DRILL_TARGET_LABEL_CLASS}>{t("training.randomTargetLabel")}</p>
+                  <p className={DRILL_TARGET_VALUE_CLASS}>{drillState.randomLabel}</p>
+                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
                     {t("tournament.roundLabel")} {(drillState.roundsPlayed ?? 0) + 1} / {drillState.maxRounds ?? 10} · {t("training.totalHitsLabel")} {drillState.hits}
                   </p>
                 </div>
               )}
               {selectedDrill.id === "shanghai" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Shanghai · {t("tournament.roundLabel")} {drillState.targetIndex + 1} / 20</p>
-                  <p className="text-5xl font-display text-primary">{drillState.currentTarget}</p>
-                  <div className="flex justify-center gap-2 mt-2">
+                  <p className={DRILL_TARGET_LABEL_CLASS}>Shanghai · {t("tournament.roundLabel")} {drillState.targetIndex + 1} / 20</p>
+                  <p className={DRILL_TARGET_VALUE_CLASS}>{drillState.currentTarget}</p>
+                  <div className="mt-2 flex justify-center gap-2">
                     {[1, 2, 3].map((m) => (
-                      <span key={m} className={`text-xs font-display px-2.5 py-1 rounded-full border transition-colors ${
+                      <span key={m} className={`${DRILL_PROGRESS_PILL_CLASS} ${
                         (drillState.shanghaiMultsHit ?? []).includes(m)
-                          ? "bg-secondary/20 border-secondary text-secondary"
+                          ? "border-secondary bg-secondary/15 text-secondary"
                           : "border-border text-muted-foreground"
                       }`}>
                         {m === 1 ? "S" : m === 2 ? "D" : "T"}
                       </span>
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">{t("training.scoreLabel")} <span className="text-foreground font-bold">{drillState.shanghaiScore ?? 0}</span></p>
+                  <p className="mt-2 text-xs text-muted-foreground">{t("training.scoreLabel")} <span className="font-bold text-foreground tabular-nums">{drillState.shanghaiScore ?? 0}</span></p>
                 </div>
               )}
               {selectedDrill.id === "shanghai-rtc" && (() => {
                 const stDone = (drillState.rtcMultsHit ?? []).includes(1) && (drillState.rtcMultsHit ?? []).includes(3);
                 return (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">
+                    <p className={DRILL_TARGET_LABEL_CLASS}>
                       {t("training.numberLabel")} {drillState.targetIndex + 1} / {drillState.targetList.length}
                     </p>
-                    <p className={`text-5xl font-display transition-colors ${rtcFlash ? "text-destructive" : "text-primary"}`}>{drillState.currentTarget}</p>
-                    <div className="flex justify-center gap-2 mt-2">
+                    <p className={`${DRILL_TARGET_VALUE_CLASS} transition-colors ${rtcFlash ? "!text-destructive" : ""}`}>{drillState.currentTarget}</p>
+                    <div className="mt-2 flex justify-center gap-2">
                       {[1, 3].map((m) => (
-                        <span key={m} className={`text-xs font-display px-2.5 py-1 rounded-full border transition-colors ${
+                        <span key={m} className={`${DRILL_PROGRESS_PILL_CLASS} ${
                           (drillState.rtcMultsHit ?? []).includes(m)
-                            ? "bg-secondary/20 border-secondary text-secondary"
+                            ? "border-secondary bg-secondary/15 text-secondary"
                             : "border-border text-muted-foreground"
                         }`}>
                           {m === 1 ? "S" : "T"}
                         </span>
                       ))}
-                      <span className={`text-xs font-display px-2.5 py-1 rounded-full border transition-colors ${
-                        stDone ? "bg-accent/20 border-accent text-accent animate-pulse-glow" : "border-border text-muted-foreground"
+                      <span className={`${DRILL_PROGRESS_PILL_CLASS} ${
+                        stDone ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground"
                       }`}>
                         D
                       </span>
                     </div>
-                    <p className="text-xs mt-2">
+                    <p className="mt-2 text-xs">
                       {rtcFlash ? (
-                        <span className="text-destructive font-bold animate-scale-in">{t("training.missedTryAgain")}</span>
+                        <span className="font-bold text-destructive animate-scale-in">{t("training.missedTryAgain")}</span>
                       ) : stDone ? (
-                        <span className="text-accent font-bold">{t("training.nowDoubleToAdvance")}</span>
+                        <span className="font-bold text-primary">{t("training.nowDoubleToAdvance")}</span>
                       ) : (
                         <span className="text-muted-foreground">{t("training.singleTripleAnyOrder")}</span>
                       )}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {t("training.scoreLabel")} <span className="text-foreground font-bold">{drillState.rtcScore ?? 0}</span>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("training.scoreLabel")} <span className="font-bold text-foreground tabular-nums">{drillState.rtcScore ?? 0}</span>
                       {drillState.maxRounds ? <> · {t("tournament.roundLabel")} {(drillState.roundsPlayed ?? 0) + 1}/{drillState.maxRounds}</> : null}
                     </p>
                   </div>
@@ -1540,57 +1560,57 @@ const TrainingPage = () => {
               })()}
               {selectedDrill.id === "halve-it" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">
+                  <p className={DRILL_TARGET_LABEL_CLASS}>
                     Halve It · {t("tournament.roundLabel")} {drillState.targetIndex + 1} / {HALVE_IT_ROUNDS.length}
                   </p>
-                  <p className="text-4xl font-display text-primary">
+                  <p className="font-display text-5xl font-bold leading-none text-primary">
                     {t(HALVE_IT_ROUNDS[drillState.targetIndex]?.labelKey ?? "—")}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {t("training.scoreStandLabel")} <span className="text-foreground font-bold">{drillState.remaining}</span>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {t("training.scoreStandLabel")} <span className="font-bold text-foreground tabular-nums">{drillState.remaining}</span>
                     {(drillState.hiRoundPoints ?? 0) > 0 && <span className="text-secondary"> (+{drillState.hiRoundPoints})</span>}
                   </p>
                 </div>
               )}
               {selectedDrill.id === "free-scoring" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">
+                  <p className={DRILL_TARGET_LABEL_CLASS}>
                     {t("tournament.roundLabel")} {(drillState.roundsPlayed ?? 0) + 1}{drillState.maxRounds ? ` / ${drillState.maxRounds}` : ""}
                   </p>
-                  <p className="text-5xl font-display text-primary tabular-nums">{drillState.totalPoints ?? 0}</p>
-                  <p className="text-xs text-muted-foreground mt-2">
+                  <p className={DRILL_TARGET_VALUE_CLASS}>{drillState.totalPoints ?? 0}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
                     {t("training.avg3Dart")}{" "}
-                    <span className="text-foreground font-bold">
+                    <span className="font-bold text-foreground tabular-nums">
                       {drillState.dartsThrown > 0 ? (((drillState.totalPoints ?? 0) / drillState.dartsThrown) * 3).toFixed(1) : "–"}
                     </span>
-                    {" · "}{t("training.freeBestRound")} <span className="text-foreground font-bold">{drillState.bestRound ?? 0}</span>
-                    {" · "}{t("training.freeThisRound")} <span className="text-foreground font-bold">{drillState.freeRoundPoints ?? 0}</span>
+                    {" · "}{t("training.freeBestRound")} <span className="font-bold text-foreground tabular-nums">{drillState.bestRound ?? 0}</span>
+                    {" · "}{t("training.freeThisRound")} <span className="font-bold text-foreground tabular-nums">{drillState.freeRoundPoints ?? 0}</span>
                   </p>
                   {!drillState.maxRounds && drillState.dartsThrown > 0 && (
-                    <Button size="sm" variant="outline" className="mt-3" onClick={() => setDrillState((p) => (p ? { ...p, finished: true } : p))}>
+                    <TrainingActionButton size="sm" className="mt-2" onClick={() => setDrillState((p) => (p ? { ...p, finished: true } : p))}>
                       {t("training.endWarmup")}
-                    </Button>
+                    </TrainingActionButton>
                   )}
                 </div>
               )}
               {selectedDrill.id === "bobs-27" && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">
+                  <p className={DRILL_TARGET_LABEL_CLASS}>
                     Bob's 27 · {t("tournament.roundLabel")} {drillState.targetIndex + 1} / {BOBS_27_ROUNDS}
                   </p>
-                  <p className="text-5xl font-display text-primary">D{drillState.targetIndex + 1}</p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {t("training.accountLabel")} <span className={`font-bold ${drillState.remaining <= 6 ? "text-destructive" : "text-foreground"}`}>{drillState.remaining}</span>
+                  <p className={DRILL_TARGET_VALUE_CLASS}>D{drillState.targetIndex + 1}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {t("training.accountLabel")} <span className={`font-bold tabular-nums ${drillState.remaining <= 6 ? "text-destructive" : "text-foreground"}`}>{drillState.remaining}</span>
                     {" · "}{t("training.hitsThisRoundLabel")} {drillState.hitsThisRound}/3
                   </p>
                 </div>
               )}
               {selectedDrill.id === "bull-control" && drillState.bcPlayers && (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <p className="text-xs text-muted-foreground">
-                    {t("training.scoringNumberLabel")} <span className="text-primary font-display">{drillState.bcNumber}</span> · {t("training.licenseVia")} <span className="text-accent font-display">BULL</span>
+                    {t("training.scoringNumberLabel")} <span className="font-display text-sm font-bold text-primary">{drillState.bcNumber}</span> · {t("training.licenseVia")} <span className="font-display text-sm font-bold text-foreground">BULL</span>
                   </p>
-                  <p className="text-3xl font-display">
+                  <p className="font-display text-3xl font-bold">
                     {(drillState.bcScorer ?? -1) === (drillState.bcTurn ?? 0)
                       ? <span className="text-secondary">{t("training.scoringActive")}</span>
                       : <span className="text-muted-foreground">{t("training.hitBullFirst")}</span>}
@@ -1598,45 +1618,36 @@ const TrainingPage = () => {
                   <div className="grid gap-1.5">
                     {drillState.bcPlayers.map((p, i) => (
                       <div key={p.name + i}
-                        className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${
-                          i === (drillState.bcTurn ?? 0) ? "border-primary bg-primary/10" : "border-border bg-background opacity-70"
+                        className={`flex items-center justify-between rounded-xl border px-3 py-1.5 text-sm transition-colors ${
+                          i === (drillState.bcTurn ?? 0) ? "border-primary bg-primary/15" : "border-border bg-background text-muted-foreground"
                         }`}>
-                        <span className="flex items-center gap-2 truncate">
-                          {i === (drillState.bcScorer ?? -1) && <span title={t("training.scoringLicenseTitle")}>🎯</span>}
+                        <span className="flex min-w-0 items-center gap-2 truncate">
+                          {i === (drillState.bcScorer ?? -1) && (
+                            <Target className="h-4 w-4 shrink-0 text-secondary" aria-label={t("training.scoringLicenseTitle")} />
+                          )}
                           {p.name}
                         </span>
-                        <span className="font-display text-xl">{p.remaining}</span>
+                        <span className="font-display text-xl font-bold tabular-nums">{p.remaining}</span>
                       </div>
                     ))}
                   </div>
                   {drillState.bcWinner && (
-                    <p className="text-accent font-display uppercase">🏆 {drillState.bcWinner} {t("training.wins")}</p>
+                    <p className="flex items-center justify-center gap-1.5 font-semibold text-accent">
+                      <Trophy className="h-4 w-4" aria-hidden="true" /> {drillState.bcWinner} {t("training.wins")}
+                    </p>
                   )}
                 </div>
               )}
 
-              {/* Dart counter */}
-              <div className="flex justify-center gap-1 mt-3">
-                {[0, 1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className={`w-3 h-3 rounded-full transition-all ${
-                      i < drillState.dartsThisRound ? "bg-primary" : "bg-muted"
-                    }`}
-                  />
-                ))}
+              <div className="mt-2.5">
+                <VisitDartDots dartsThisRound={drillState.dartsThisRound} dartsThrown={drillState.dartsThrown} />
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                {t("training.dartOfThree")} {drillState.dartsThisRound + 1} / 3 · {t("training.totalShort")} {drillState.dartsThrown}
-              </p>
             </div>
             </div>
 
             {/* Checkout suggestion for finish drills */}
             {isCheckoutDrill && drillState.remaining <= 170 && (
-              <div className="mb-3">
-                <CheckoutSuggestion remaining={drillState.remaining} playerName={t("training.trainingPlayerName")} />
-              </div>
+              <CheckoutSuggestion remaining={drillState.remaining} playerName={t("training.trainingPlayerName")} />
             )}
 
             {/* Live Camera (auto-scoring) — Suspense's fallback only ever shows for the brief
@@ -1655,47 +1666,29 @@ const TrainingPage = () => {
               </Suspense>
             )}
 
-            {/* Score input — quick-round/typed-total/voice only for the 3 checkout-style drills,
-                since those are the only ones where a visit TOTAL (rather than a specific segment)
-                is enough to know what happened. */}
-            <DartScoreInput
-              isDisabled={drillState.finished}
-              onThrow={handleDrillThrow}
-              onQuickRound={isCheckoutDrill || selectedDrill.id === "free-scoring" ? handleQuickRound : undefined}
-              dartsThisRound={drillState.dartsThisRound}
-            />
+            {/* Entry sits at the bottom of the screen, like the manual scoreboard. */}
+            <div className="mt-auto flex flex-col gap-2.5 pt-1">
+              {/* Score input — quick-round/typed-total/voice only for the 3 checkout-style drills,
+                  since those are the only ones where a visit TOTAL (rather than a specific segment)
+                  is enough to know what happened. */}
+              <DartScoreInput
+                isDisabled={drillState.finished}
+                onThrow={handleDrillThrow}
+                onQuickRound={isCheckoutDrill || selectedDrill.id === "free-scoring" ? handleQuickRound : undefined}
+                dartsThisRound={drillState.dartsThisRound}
+              />
 
-            {/* Combo Risk: voluntary cash-out, front and center since it's the whole point of the
-                drill — disabled once there's nothing at risk to protect. */}
-            {selectedDrill.id === "combo-risk" && (
-              <Button
-                variant="secondary"
-                onClick={bankPoints}
-                disabled={drillState.finished || !(drillState.pendingPoints ?? 0)}
-                className="w-full mt-3 gap-2"
-              >
-                <PiggyBank className="w-4 h-4" /> {t("training.bankButton")} ({drillState.pendingPoints ?? 0})
-              </Button>
-            )}
-
-            {/* Undo + Camera toggle */}
-            <div className="flex gap-2 mt-3">
-              <Button variant="outline" onClick={undoLastDart} disabled={undoStack.length === 0} className="flex-1 gap-1">
-                <Undo2 className="w-4 h-4" /> {t("training.undo")}
-              </Button>
-              <Button
-                variant={cameraEnabled ? "default" : "outline"}
-                onClick={() => {
-                  if (!cameraEnabled && !clubHasFeature(club?.plan_tier, "camera")) {
-                    toast({ title: t("plan.cameraGatedTitle"), description: t("plan.cameraGatedDesc") });
-                    return;
-                  }
-                  setCameraEnabled((v) => !v);
-                }}
-                className="flex-1 gap-2"
-              >
-                <Camera className="w-4 h-4" /> {cameraEnabled ? t("training.cameraOff") : t("training.cameraScoring")}
-              </Button>
+              {/* Combo Risk: voluntary cash-out, front and center since it's the whole point of the
+                  drill — disabled once there's nothing at risk to protect. */}
+              {selectedDrill.id === "combo-risk" && (
+                <TrainingActionButton
+                  variant="secondary"
+                  onClick={bankPoints}
+                  disabled={drillState.finished || !(drillState.pendingPoints ?? 0)}
+                >
+                  <PiggyBank aria-hidden="true" /> {t("training.bankButton")} ({drillState.pendingPoints ?? 0})
+                </TrainingActionButton>
+              )}
             </div>
           </>
         )}
@@ -1712,232 +1705,202 @@ const TrainingPage = () => {
     const isShanghaiRtc = selectedDrill.id === "shanghai-rtc";
     const isComboRisk = selectedDrill.id === "combo-risk";
     const bcNames = drillConfig.bcPlayerNames ?? [`${t("stats.player")} 1`, `${t("stats.player")} 2`];
+    const chosenTargetMul = drillConfig.targetMul ?? 3;
     return (
-      <div className="container py-6 animate-slide-up max-w-lg md:max-w-2xl mx-auto">
-        <Button variant="ghost" onClick={() => { setSelectedDrill(null); setDrillConfig({}); }} className="mb-4 text-muted-foreground">
-          <ArrowLeft className="w-4 h-4 mr-1" /> {t("common.back")}
-        </Button>
+      <div className={`container flex max-w-lg flex-col gap-4 py-4 animate-slide-up md:max-w-2xl ${TRAINING_SCREEN_MIN_HEIGHT}`}>
+        <TrainingScreenHeader onBack={() => { setSelectedDrill(null); setDrillConfig({}); }} title={selectedDrill.name} />
 
-        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-6 text-center">
-          <selectedDrill.icon className="w-12 h-12 text-primary mx-auto mb-3" />
-          <h2 className="text-2xl font-display uppercase mb-2">{selectedDrill.name}</h2>
-          <p className="text-muted-foreground text-sm mb-4">{t(selectedDrill.descriptionKey)}</p>
-
-          <div className="flex justify-center gap-3 mb-6">
-            <span className={`text-xs px-2 py-1 rounded-full ${DIFFICULTY_COLORS[selectedDrill.difficulty]}`}>
-              {t(DIFFICULTY_LABEL_KEY[selectedDrill.difficulty])}
-            </span>
-            <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
-              ~{selectedDrill.durationMinutes} {t("training.minutesSuffix")}
-            </span>
+        <section className="flex gap-3 rounded-[20px] border border-border bg-card p-4">
+          <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted text-primary">
+            <selectedDrill.icon className="h-7 w-7" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-muted-foreground">{t(selectedDrill.descriptionKey)}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <DrillDifficultyBadge difficulty={selectedDrill.difficulty} />
+              <span className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" /> ~{selectedDrill.durationMinutes} {t("training.minutesSuffix")}
+              </span>
+            </div>
           </div>
+        </section>
 
-          {currentRecord && (
-            <div className="mb-5">
-              <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
-                <Trophy className="w-3.5 h-3.5 text-accent" /> {t("training.yourRecordLabel")} <span className="text-foreground font-semibold">{currentRecord.value}</span> · {currentRecord.label}
-              </p>
-              {/* Trend, not just the single best — the record alone can't show whether recent
-                  attempts are actually improving. Inverted for "fewer is better" drills (darts-to-
-                  finish etc.) so the line trending up always reads as "getting better", regardless
-                  of which direction the underlying number itself improves in. */}
-              {history.length > 1 && (
-                <div className="mt-3 px-2">
-                  <Sparkline values={history.map((h) => (currentRecord.higherIsBetter ? h.value : -h.value))} height={32} />
-                  <p className="text-[10px] text-muted-foreground mt-1 text-center">{t("training.recentAttemptsLabel")} ({history.length})</p>
-                </div>
-              )}
+        {currentRecord && (
+          <section className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4">
+            <TrainingSectionLabel>
+              <span className="flex items-center gap-1.5">
+                <Trophy className="h-3.5 w-3.5 text-accent" aria-hidden="true" /> {t("training.recordHeading")}
+              </span>
+            </TrainingSectionLabel>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-5xl font-bold leading-none tabular-nums">{currentRecord.value}</span>
+              <span className="text-sm text-muted-foreground">{currentRecord.label}</span>
             </div>
-          )}
+            {/* Trend, not just the single best — the record alone can't show whether recent
+                attempts are actually improving. Inverted for "fewer is better" drills (darts-to-
+                finish etc.) so the line trending up always reads as "getting better", regardless
+                of which direction the underlying number itself improves in. */}
+            {history.length > 1 && (
+              <div>
+                <Sparkline values={history.map((h) => (currentRecord.higherIsBetter ? h.value : -h.value))} height={32} />
+                <p className="mt-1 text-xs text-muted-foreground">{t("training.recentAttemptsLabel")} ({history.length})</p>
+              </div>
+            )}
+          </section>
+        )}
 
-          {isBullControl && (
-            <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
-                <Settings2 className="w-3.5 h-3.5" /> {t("training.settingsHeading")}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">{t("training.startingPoints")}</p>
-                  <select className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm"
-                    value={drillConfig.bcStart ?? 301}
-                    onChange={(e) => setDrillConfig((c) => ({ ...c, bcStart: Number(e.target.value) }))}>
-                    {[101, 201, 301, 501].map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">{t("training.scoringNumber")}</p>
-                  <select className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm"
-                    value={drillConfig.bcNumber ?? 20}
-                    onChange={(e) => setDrillConfig((c) => ({ ...c, bcNumber: Number(e.target.value) }))}>
-                    {[20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">{t("stats.player")} ({bcNames.length})</p>
-                {bcNames.map((n, i) => (
-                  <input key={i} value={n}
-                    onChange={(e) => setDrillConfig((c) => ({
-                      ...c,
-                      bcPlayerNames: (c.bcPlayerNames ?? bcNames).map((v, idx) => idx === i ? e.target.value : v),
-                    }))}
-                    className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm" />
+        {isBullControl && (
+          <>
+            <section className="flex flex-col gap-2">
+              <TrainingSectionLabel>{t("training.startingPoints")}</TrainingSectionLabel>
+              <div className="grid grid-cols-4 gap-2">
+                {BULL_CONTROL_START_POINTS.map((n) => (
+                  <TrainingOptionChip key={n} numeric selected={(drillConfig.bcStart ?? 301) === n} onSelect={() => setDrillConfig((c) => ({ ...c, bcStart: n }))}>
+                    {n}
+                  </TrainingOptionChip>
                 ))}
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" disabled={bcNames.length >= BULL_CONTROL_MAX_PLAYERS}
-                    onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: [...bcNames, `${t("stats.player")} ${bcNames.length + 1}`] }))}>
-                    {t("training.addPlayerShort")}
-                  </Button>
-                  <Button size="sm" variant="ghost" disabled={bcNames.length <= 2}
-                    onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: bcNames.slice(0, -1) }))}>
-                    {t("training.removePlayerShort")}
-                  </Button>
-                </div>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                {t("training.bullControlRules")}
-              </p>
+            </section>
+            <section className="flex flex-col gap-2">
+              <TrainingSectionLabel>{t("training.scoringNumber")}</TrainingSectionLabel>
+              <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+                {BOARD_NUMBERS_DESCENDING.map((n) => (
+                  <TrainingOptionChip key={n} numeric selected={(drillConfig.bcNumber ?? 20) === n} onSelect={() => setDrillConfig((c) => ({ ...c, bcNumber: n }))}>
+                    {n}
+                  </TrainingOptionChip>
+                ))}
+              </div>
+            </section>
+            <section className="flex flex-col gap-2">
+              <TrainingSectionLabel trailing={bcNames.length}>{t("stats.player")}</TrainingSectionLabel>
+              {bcNames.map((n, i) => (
+                <input key={i} value={n}
+                  aria-label={`${t("stats.player")} ${i + 1}`}
+                  onChange={(e) => setDrillConfig((c) => ({
+                    ...c,
+                    bcPlayerNames: (c.bcPlayerNames ?? bcNames).map((v, idx) => idx === i ? e.target.value : v),
+                  }))}
+                  className="h-11 w-full rounded-xl border border-border bg-card px-3 text-[15px] focus:border-primary focus:outline-none" />
+              ))}
+              <div className="grid grid-cols-2 gap-2">
+                <TrainingActionButton size="sm" disabled={bcNames.length >= BULL_CONTROL_MAX_PLAYERS}
+                  onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: [...bcNames, `${t("stats.player")} ${bcNames.length + 1}`] }))}>
+                  {t("training.addPlayerShort")}
+                </TrainingActionButton>
+                <TrainingActionButton size="sm" disabled={bcNames.length <= 2}
+                  onClick={() => setDrillConfig((c) => ({ ...c, bcPlayerNames: bcNames.slice(0, -1) }))}>
+                  {t("training.removePlayerShort")}
+                </TrainingActionButton>
+              </div>
+              <p className="text-[13px] text-muted-foreground">{t("training.bullControlRules")}</p>
+            </section>
+          </>
+        )}
+
+        {isShanghaiRtc && (
+          <section className="flex flex-col gap-2">
+            <TrainingSectionLabel>{t("training.startingNumber")}</TrainingSectionLabel>
+            <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+              {BOARD_NUMBERS_ASCENDING.map((n) => (
+                <TrainingOptionChip key={n} numeric selected={(drillConfig.rtcStart ?? 1) === n} onSelect={() => setDrillConfig((c) => ({ ...c, rtcStart: n }))}>
+                  {n}
+                </TrainingOptionChip>
+              ))}
             </div>
-          )}
+          </section>
+        )}
 
-          {(supportsRoundLimit || isTargetGrind || isSuddenDeath || isComboRisk) && (
-            <div className="mb-5 text-left space-y-4 bg-muted/30 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-xs uppercase text-muted-foreground">
-                <Settings2 className="w-3.5 h-3.5" /> {t("training.settingsHeading")}
-              </div>
-
-              {isShanghaiRtc && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">{t("training.startingNumber")}</p>
-                  <select
-                    className="w-full bg-background border border-border rounded-md px-2 py-1.5 text-sm"
-                    value={drillConfig.rtcStart ?? 1}
-                    onChange={(e) => setDrillConfig((c) => ({ ...c, rtcStart: Number(e.target.value) }))}
+        {(isTargetGrind || isSuddenDeath || isComboRisk) && (
+          <section className="flex flex-col gap-2">
+            <TrainingSectionLabel>{t("training.chooseTargetField")}</TrainingSectionLabel>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                [1, t("training.singleOption")],
+                [2, t("training.doubleOption")],
+                [3, t("training.tripleOption")],
+              ] as const).map(([mul, label]) => (
+                <TrainingOptionChip
+                  key={mul}
+                  selected={chosenTargetMul === mul}
+                  onSelect={() => {
+                    // There's no triple-bull ring — nothing in the app can ever register that
+                    // hit (DartScoreInput's bull buttons only emit multiplier 1/2, and
+                    // LiveCamera explicitly folds 25×3 back to 25×1), so a "Triple Bull"
+                    // session used to run at a guaranteed, unwarned 0% hit rate.
+                    setDrillConfig((c) => ({ ...c, targetMul: mul, targetBase: mul === 3 && c.targetBase === 25 ? 20 : c.targetBase }));
+                  }}
+                >
+                  {label}
+                </TrainingOptionChip>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-11">
+              {TARGET_FIELD_NUMBERS
+                .filter((n) => n !== 25 || chosenTargetMul !== 3)
+                .map((n) => (
+                  <TrainingOptionChip
+                    key={n}
+                    numeric
+                    selected={(drillConfig.targetBase ?? 20) === n}
+                    onSelect={() => setDrillConfig((c) => ({ ...c, targetBase: n }))}
+                    className={n === 25 ? "px-0 text-sm" : "px-0"}
                   >
-                    {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-                      <option key={n} value={n}>{n}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+                    {n === 25 ? t("game.bull") : n}
+                  </TrainingOptionChip>
+                ))}
+            </div>
+          </section>
+        )}
 
-              {(isTargetGrind || isSuddenDeath || isComboRisk) && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">{t("training.chooseTargetField")}</p>
-                  <div className="flex gap-2">
-                    <select
-                      className="flex-1 bg-background border border-border rounded-md px-2 py-1.5 text-sm"
-                      value={drillConfig.targetMul ?? 3}
-                      onChange={(e) => {
-                        const mul = Number(e.target.value);
-                        // There's no triple-bull ring — nothing in the app can ever register that
-                        // hit (DartScoreInput's bull buttons only emit multiplier 1/2, and
-                        // LiveCamera explicitly folds 25×3 back to 25×1), so a "Triple Bull"
-                        // session used to run at a guaranteed, unwarned 0% hit rate.
-                        setDrillConfig((c) => ({ ...c, targetMul: mul, targetBase: mul === 3 && c.targetBase === 25 ? 20 : c.targetBase }));
-                      }}
-                    >
-                      <option value={1}>{t("training.singleOption")}</option>
-                      <option value={2}>{t("training.doubleOption")}</option>
-                      <option value={3}>{t("training.tripleOption")}</option>
-                    </select>
-                    <select
-                      className="flex-1 bg-background border border-border rounded-md px-2 py-1.5 text-sm"
-                      value={drillConfig.targetBase ?? 20}
-                      onChange={(e) => setDrillConfig((c) => ({ ...c, targetBase: Number(e.target.value) }))}
-                    >
-                      {[20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 25]
-                        .filter((n) => n !== 25 || (drillConfig.targetMul ?? 3) !== 3)
-                        .map((n) => (
-                          <option key={n} value={n}>{n === 25 ? t("game.bull") : n}</option>
-                        ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {supportsRoundLimit && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    {t("training.roundsLabel")} {isTargetGrind ? "" : t("training.optionalUnlimitedNote")}
-                  </p>
-                  <div className="flex gap-2 flex-wrap">
-                    {(selectedDrill.id === "free-scoring" ? [3, 5, 10, 15, 20, 30, 50] : [5, 10, 15, 20, 30]).map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setDrillConfig((c) => ({ ...c, maxRounds: n }))}
-                        className={`px-3 py-1 rounded-md text-xs border transition-colors ${
-                          drillConfig.maxRounds === n
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background border-border hover:border-primary/40"
-                        }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                    {!isTargetGrind && (
-                      <button
-                        onClick={() => setDrillConfig((c) => ({ ...c, maxRounds: undefined }))}
-                        className={`px-3 py-1 rounded-md text-xs border transition-colors ${
-                          !drillConfig.maxRounds
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background border-border hover:border-primary/40"
-                        }`}
-                      >
-                        {t("training.endless")}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {isSuddenDeath && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">{t("training.livesLabel")}</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {[1, 2, 3, 5, 10].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setDrillConfig((c) => ({ ...c, startingLives: n }))}
-                        className={`px-3 py-1 rounded-md text-xs border transition-colors ${
-                          (drillConfig.startingLives ?? 3) === n
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background border-border hover:border-primary/40"
-                        }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {isComboRisk && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">{t("training.dartBudgetLabel")}</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {[5, 7, 10, 15].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setDrillConfig((c) => ({ ...c, maxRounds: n }))}
-                        className={`px-3 py-1 rounded-md text-xs border transition-colors ${
-                          (drillConfig.maxRounds ?? 5) === n
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-background border-border hover:border-primary/40"
-                        }`}
-                      >
-                        {n * 3} {t("training.dartsSuffix")}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+        {supportsRoundLimit && (
+          <section className="flex flex-col gap-2">
+            <TrainingSectionLabel>{t("training.roundsLabel")}</TrainingSectionLabel>
+            {!isTargetGrind && <p className="-mt-1 text-[13px] text-muted-foreground">{t("training.optionalUnlimitedNote")}</p>}
+            <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+              {(selectedDrill.id === "free-scoring" ? [3, 5, 10, 15, 20, 30, 50] : [5, 10, 15, 20, 30]).map((n) => (
+                <TrainingOptionChip key={n} numeric selected={drillConfig.maxRounds === n} onSelect={() => setDrillConfig((c) => ({ ...c, maxRounds: n }))}>
+                  {n}
+                </TrainingOptionChip>
+              ))}
+              {!isTargetGrind && (
+                <TrainingOptionChip selected={!drillConfig.maxRounds} onSelect={() => setDrillConfig((c) => ({ ...c, maxRounds: undefined }))}>
+                  {t("training.endless")}
+                </TrainingOptionChip>
               )}
             </div>
-          )}
+          </section>
+        )}
 
-          <Button onClick={() => startDrill(selectedDrill)} className="w-full font-display uppercase text-lg py-6">
-            <Play className="w-5 h-5 mr-2" /> {t("training.startTraining")}
-          </Button>
+        {isSuddenDeath && (
+          <section className="flex flex-col gap-2">
+            <TrainingSectionLabel>{t("training.livesLabel")}</TrainingSectionLabel>
+            <div className="grid grid-cols-5 gap-2">
+              {[1, 2, 3, 5, 10].map((n) => (
+                <TrainingOptionChip key={n} numeric selected={(drillConfig.startingLives ?? 3) === n} onSelect={() => setDrillConfig((c) => ({ ...c, startingLives: n }))}>
+                  {n}
+                </TrainingOptionChip>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {isComboRisk && (
+          <section className="flex flex-col gap-2">
+            <TrainingSectionLabel>{t("training.dartBudgetLabel")}</TrainingSectionLabel>
+            <div className="grid grid-cols-4 gap-2">
+              {[5, 7, 10, 15].map((n) => (
+                <TrainingOptionChip key={n} selected={(drillConfig.maxRounds ?? 5) === n} onSelect={() => setDrillConfig((c) => ({ ...c, maxRounds: n }))}>
+                  {n * 3} {t("training.dartsSuffix")}
+                </TrainingOptionChip>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <div className="mt-auto pt-2">
+          <TrainingActionButton variant="primary" size="lg" className="w-full" onClick={() => startDrill(selectedDrill)}>
+            <Play className="fill-current" aria-hidden="true" /> {t("training.startTraining")}
+          </TrainingActionButton>
         </div>
       </div>
     );
@@ -1945,70 +1908,52 @@ const TrainingPage = () => {
 
   // ─── DRILL LIST VIEW ──────────────────────────────
   return (
-    <div className="container py-6 animate-slide-up">
-      <div className="flex items-center gap-3 mb-6">
-        <Dumbbell className="w-6 h-6 text-primary" />
-        <h2 className="text-2xl font-display uppercase">{t("training.pageTitle")}</h2>
+    <div className="container flex flex-col gap-4 py-5 animate-slide-up">
+      <header className="flex items-center gap-3">
+        <h1 className="min-w-0 flex-1 truncate font-display text-[28px] font-bold leading-tight">{t("training.pageTitle")}</h1>
         {streak && streak.current >= 2 && (
-          <span className="ml-auto flex items-center gap-1 rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs font-display text-accent">
-            <Flame className="w-3.5 h-3.5" /> {streak.current}
+          <span
+            className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-accent/40 bg-accent/10 px-3 font-display text-lg font-bold tabular-nums text-accent"
+            title={`${streak.current} ${t("training.daysInARow")}`}
+            aria-label={`${streak.current} ${t("training.daysInARow")}`}
+          >
+            <Flame className="h-4 w-4" aria-hidden="true" /> {streak.current}
           </span>
         )}
-      </div>
+      </header>
 
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-        {categories.map((cat) => (
-          <button
-            key={cat.key}
-            onClick={() => setFilterCategory(cat.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-              filterCategory === cat.key
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
+      {/* Personal coaching plan first — it's the "what should I train today" answer, the
+          drill catalog below is for browsing. */}
+      <CoachingPlan
+        onStartDrill={(drillId) => {
+          const drill = TRAINING_DRILLS.find((d) => d.id === drillId);
+          if (drill) {
+            setSelectedDrill(drill);
+            startDrill(drill);
+          }
+        }}
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {filteredDrills.map((drill) => (
-          <button
-            key={drill.id}
-            onClick={() => setSelectedDrill(drill)}
-            className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 text-left hover:border-primary/40 transition-all group"
-          >
-            <div className="flex items-start gap-3">
-              <drill.icon className="w-8 h-8 text-primary shrink-0 group-hover:scale-110 transition-transform" />
-              <div className="min-w-0">
-                <p className="font-semibold text-sm mb-1">{drill.name}</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">{t(drill.descriptionKey)}</p>
-                <div className="flex gap-2 mt-2">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${DIFFICULTY_COLORS[drill.difficulty]}`}>
-                    {t(DIFFICULTY_LABEL_KEY[drill.difficulty])}
-                  </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                    {drill.durationMinutes} {t("training.minutesSuffix")}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-6">
-        <CoachingPlan
-          onStartDrill={(drillId) => {
-            const drill = TRAINING_DRILLS.find((d) => d.id === drillId);
-            if (drill) {
-              setSelectedDrill(drill);
-              startDrill(drill);
-            }
-          }}
-        />
-      </div>
+      <section className="flex flex-col gap-2.5">
+        <TrainingSectionLabel trailing={filteredDrills.length}>{t("training.drillsHeading")}</TrainingSectionLabel>
+        <div role="group" aria-label={t("training.drillsHeading")} className="flex gap-2 overflow-x-auto pb-1">
+          {categories.map((cat) => (
+            <TrainingOptionChip
+              key={cat.key}
+              selected={filterCategory === cat.key}
+              onSelect={() => setFilterCategory(cat.key)}
+              className="shrink-0 whitespace-nowrap px-4"
+            >
+              {cat.label}
+            </TrainingOptionChip>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+          {filteredDrills.map((drill) => (
+            <DrillListCard key={drill.id} drill={drill} onSelect={() => setSelectedDrill(drill)} />
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

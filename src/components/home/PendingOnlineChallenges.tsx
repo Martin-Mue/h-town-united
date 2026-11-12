@@ -242,7 +242,7 @@ const PendingOnlineChallenges = () => {
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
         <Wifi className="w-3.5 h-3.5 text-accent" /> {t("home.pendingChallenges")}
       </h2>
-      <div className="space-y-2 mb-6">
+      <div className="space-y-2">
         {activeMatches.map((m) => (
           <Link key={m.id} to={`/game?online=${m.id}`} className="bg-card border border-primary/40 rounded-xl px-4 py-2.5 flex items-center gap-3 hover:border-primary transition-colors">
             <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0 text-base">
@@ -257,7 +257,7 @@ const PendingOnlineChallenges = () => {
           </Link>
         ))}
         {challenges.map((c) => (
-          <div key={c.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl px-4 py-2.5">
+          <div key={c.id} className="bg-card border border-border rounded-2xl px-4 py-2.5">
             {decliningId === c.id ? (
               <div className="flex items-center gap-2">
                 <input

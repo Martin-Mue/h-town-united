@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Trophy } from "lucide-react";
 import type { Match } from "@/utils/tournament";
 import { isPlayable, isRealPlayer, isLiveSnapshotFresh, roundLabelFor, scorekeeperLabel } from "@/utils/tournament";
+import { displayBoardOf } from "@/utils/tournamentBoardControl";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface MobileBracketProps {
@@ -61,7 +62,7 @@ const MobileBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallb
           onClick={() => idx > 0 && pick(rounds[idx - 1])}
           disabled={idx <= 0}
           aria-label={t("pt.prevRound")}
-          className="shrink-0 h-10 w-10 rounded-lg border border-border bg-card flex items-center justify-center disabled:opacity-30"
+          className="shrink-0 h-11 w-11 rounded-xl border border-border bg-card flex items-center justify-center disabled:opacity-30"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -72,7 +73,7 @@ const MobileBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallb
               type="button"
               ref={r === selected ? (el) => el?.scrollIntoView({ block: "nearest", inline: "center" }) : undefined}
               onClick={() => pick(r)}
-              className={`snap-center shrink-0 h-10 px-3 rounded-lg border text-xs font-display uppercase tracking-wide flex items-center gap-1.5 transition-colors ${
+              className={`snap-center shrink-0 h-11 px-3 rounded-xl border text-sm font-semibold flex items-center gap-1.5 transition-colors ${
                 r === selected ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground"
               }`}
             >
@@ -87,18 +88,18 @@ const MobileBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallb
           onClick={() => idx < rounds.length - 1 && pick(rounds[idx + 1])}
           disabled={idx >= rounds.length - 1}
           aria-label={t("pt.nextRound")}
-          className="shrink-0 h-10 w-10 rounded-lg border border-border bg-card flex items-center justify-center disabled:opacity-30"
+          className="shrink-0 h-11 w-11 rounded-xl border border-border bg-card flex items-center justify-center disabled:opacity-30"
         >
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
 
       <div className="flex items-center justify-between mb-2 px-0.5">
-        <h3 className="font-display uppercase text-sm flex items-center gap-2">
+        <h3 className="font-body text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
           {selected === totalRounds && <Trophy className="w-4 h-4 text-accent" />}
           {label(selected)}
         </h3>
-        <span className="text-[11px] text-primary/80 font-mono">
+        <span className="text-xs text-muted-foreground tabular-nums">
           {cfg?.mode || fallbackMode} · FT{Math.ceil((bestOf || 1) / 2)}
         </span>
       </div>
@@ -112,7 +113,7 @@ const MobileBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallb
           return (
             <div
               key={m.id}
-              className={`rounded-xl border bg-card overflow-hidden ${m.winner ? "border-border" : playable ? "border-primary/60 glow-cyan" : "border-border/50"}`}
+              className={`rounded-2xl border bg-card overflow-hidden ${m.winner ? "border-border" : playable ? "border-primary" : "border-border/60"}`}
             >
               {[m.player1, m.player2].map((player, i) => {
                 const real = isRealPlayer(player);
@@ -122,26 +123,26 @@ const MobileBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallb
                   <div
                     key={i}
                     className={`flex items-center justify-between gap-3 px-3 py-2.5 ${i === 0 ? "border-b border-border" : ""} ${
-                      won ? "bg-secondary/15 text-secondary font-semibold" : !real ? "text-muted-foreground/40" : m.winner ? "text-muted-foreground" : ""
+                      won ? "bg-secondary/15 text-secondary" : !real ? "text-muted-foreground/40" : m.winner ? "text-muted-foreground" : ""
                     }`}
                   >
-                    <span className="min-w-0 break-words leading-tight uppercase tracking-wide text-sm">
+                    <span className="min-w-0 break-words leading-tight font-semibold text-[15px]">
                       {player && real ? player : player === "BYE" ? "BYE" : t("tournament.tbdPlaceholder")}
                     </span>
-                    <span className={`shrink-0 font-display text-xl tabular-nums ${liveFresh ? "text-accent" : ""}`}>{score}</span>
+                    <span className={`shrink-0 font-display font-bold text-2xl leading-none tabular-nums ${liveFresh ? "text-secondary" : ""}`}>{score}</span>
                   </div>
                 );
               })}
               {!m.winner && (liveFresh || m.board || keeper) && (
-                <div className="px-3 py-1.5 bg-muted/20 border-t border-border/60 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <div className="px-3 py-1.5 bg-muted border-t border-border flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                   <span className="min-w-0 break-words">{keeper ? `✍️ ${keeper}` : ""}</span>
                   <span className="shrink-0 flex items-center gap-2">
                     {liveFresh && (
-                      <span className="flex items-center gap-1 text-accent">
-                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
+                      <span className="flex items-center gap-1 font-semibold text-secondary">
+                        <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-secondary animate-pulse" /> {t("tournament.live")}
                       </span>
                     )}
-                    {m.board ? <span className="font-mono">{t("camera.board")} {m.board}</span> : null}
+                    {displayBoardOf(m) ? <span className="font-mono">{t("camera.board")} {displayBoardOf(m)}</span> : null}
                   </span>
                 </div>
               )}

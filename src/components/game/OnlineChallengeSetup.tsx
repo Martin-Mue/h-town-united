@@ -192,7 +192,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
       </Button>
       <div className="text-center mb-6">
         <Wifi className="w-10 h-10 text-primary mx-auto mb-2" />
-        <h2 className="text-2xl font-display uppercase">{t("players.playOnline")}</h2>
+        <h1 className="font-display text-[28px] font-bold leading-tight">{t("players.playOnline")}</h1>
       </div>
 
       {challengeable.length === 0 ? (
@@ -205,7 +205,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
                 key={f}
                 type="button"
                 onClick={() => { setFormat(f); if (f === "duel" && mode === "cricket") setMode("501"); }}
-                className={`rounded-lg border px-2 py-2 text-xs font-display uppercase transition-colors ${format === f ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/50"}`}
+                className={`min-h-11 rounded-xl border px-2 py-2 text-sm font-semibold transition-colors ${format === f ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:bg-muted/50"}`}
               >
                 {f === "singles" ? t("players.singlesMode") : f === "doubles" ? t("players.doublesMode") : t("players.duelMode")}
               </button>
@@ -225,11 +225,11 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
                       <span className="flex-1 min-w-0 truncate text-sm">{p.name}{onlineNow.has(p.user_id!) && <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle" title={t("players.onlineNow")} />}</span>
                       <span className="text-[10px] text-muted-foreground shrink-0">{Math.round(p.elo_rating)}</span>
                       <button type="button" onClick={() => togglePartner(p.id)}
-                        className={`rounded-md border px-2 py-1 text-[10px] font-display uppercase shrink-0 ${partnerId === p.id ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground"}`}>
+                        className={`min-h-9 rounded-lg border px-2.5 py-1 text-xs font-semibold shrink-0 ${partnerId === p.id ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground"}`}>
                         {t("players.chooseOnlinePartner")}
                       </button>
                       <button type="button" onClick={() => toggleDoublesOpponent(p.id)}
-                        className={`rounded-md border px-2 py-1 text-[10px] font-display uppercase shrink-0 ${doublesOpponentIds.includes(p.id) ? "border-accent bg-accent/15 text-accent" : "border-border text-muted-foreground"}`}>
+                        className={`min-h-9 rounded-lg border px-2.5 py-1 text-xs font-semibold shrink-0 ${doublesOpponentIds.includes(p.id) ? "border-accent bg-accent/15 text-accent" : "border-border text-muted-foreground"}`}>
                         {t("home.versus")}
                       </button>
                     </div>
@@ -295,7 +295,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
 
           {mode !== "cricket" && (
             <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 space-y-3">
-              <p className="text-xs text-muted-foreground uppercase font-display">{t("players.matchSettings")}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("players.matchSettings")}</p>
               <div className="flex items-center justify-between">
                 <span className="text-sm">{doubleIn ? t("game.doubleIn") : t("game.straightIn")}</span>
                 <Switch checked={doubleIn} onCheckedChange={setDoubleIn} />
@@ -316,7 +316,7 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
                   key={s}
                   type="button"
                   onClick={() => setStarter(s)}
-                  className={`rounded-lg border px-2 py-2 text-xs font-display uppercase transition-colors ${starter === s ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted/50"}`}
+                  className={`min-h-11 rounded-xl border px-2 py-2 text-sm font-semibold transition-colors ${starter === s ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:bg-muted/50"}`}
                 >
                   {s === "challenger" ? t("players.starterChallenger") : s === "opponent" ? t("players.starterOpponent") : s === "random" ? t("players.starterRandom") : t("players.starterBullOff")}
                 </button>
@@ -326,17 +326,17 @@ const OnlineChallengeSetup = ({ onBack }: { onBack: () => void }) => {
           )}
 
           {format === "doubles" ? (
-            <Button className="w-full gap-1.5 font-display uppercase" disabled={!doublesReady || sending} onClick={sendDoublesChallenge}>
+            <Button className="h-[52px] w-full gap-1.5 rounded-[14px] text-base font-semibold" disabled={!doublesReady || sending} onClick={sendDoublesChallenge}>
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
               {t("players.sendDoublesChallenge")}
             </Button>
           ) : format === "duel" ? (
-            <Button className="w-full gap-1.5 font-display uppercase" disabled={!opponentId || sending} onClick={sendDuel}>
+            <Button className="h-[52px] w-full gap-1.5 rounded-[14px] text-base font-semibold" disabled={!opponentId || sending} onClick={sendDuel}>
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
               {t("players.sendDuel")}
             </Button>
           ) : (
-            <Button className="w-full gap-1.5 font-display uppercase" disabled={!opponentId || sending} onClick={sendChallenge}>
+            <Button className="h-[52px] w-full gap-1.5 rounded-[14px] text-base font-semibold" disabled={!opponentId || sending} onClick={sendChallenge}>
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wifi className="w-4 h-4" />}
               {t("players.sendChallenge")}
             </Button>

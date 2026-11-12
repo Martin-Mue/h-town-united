@@ -94,8 +94,8 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
         <div className="flex items-center gap-2">
           <span className="text-2xl">{recap.player.emoji}</span>
           <div>
-            <p className="font-display text-sm uppercase leading-tight">{recap.player.name}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{recap.periodLabel}</p>
+            <p className="font-display text-base font-bold leading-tight">{recap.player.name}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-[0.12em]">{recap.periodLabel}</p>
           </div>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("game.close")}><X className="w-5 h-5" /></Button>
@@ -106,12 +106,12 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
           {statCards.map((s, i) => (
             <div
               key={s.label}
-              className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 text-center animate-scale-in"
+              className="bg-card border border-border rounded-2xl p-4 text-center animate-scale-in"
               style={{ animationDelay: `${i * 60}ms`, animationFillMode: "backwards" }}
             >
               <s.icon className={`w-5 h-5 mx-auto mb-2 ${s.color}`} />
-              <p className={`text-2xl font-display ${s.color}`}>{s.value}</p>
-              <p className="text-[10px] text-muted-foreground uppercase mt-0.5">{s.label}</p>
+              <p className="text-2xl font-display font-bold tabular-nums">{s.value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
               {s.sub && <p className="text-[10px] text-muted-foreground mt-1">{s.sub}</p>}
             </div>
           ))}
@@ -119,10 +119,10 @@ const SeasonRecap = ({ recap, onClose }: SeasonRecapProps) => {
 
         {recap.clips.length > 0 && (
           <div>
-            <h3 className="font-display text-sm uppercase text-muted-foreground mb-2 mt-6">{t("recap.yourHighlights")}</h3>
+            <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("recap.yourHighlights")}</h3>
             <div className="space-y-3">
               {recap.clips.map((clip, i) => (
-                <div key={clip.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl overflow-hidden animate-scale-in" style={{ animationDelay: `${(statCards.length + i) * 60}ms`, animationFillMode: "backwards" }}>
+                <div key={clip.id} className="bg-card border border-border rounded-2xl overflow-hidden animate-scale-in" style={{ animationDelay: `${(statCards.length + i) * 60}ms`, animationFillMode: "backwards" }}>
                   {clipUrls[clip.storage_path] ? (
                     <video src={clipUrls[clip.storage_path]} controls playsInline className="w-full aspect-video bg-black" preload="metadata" />
                   ) : (

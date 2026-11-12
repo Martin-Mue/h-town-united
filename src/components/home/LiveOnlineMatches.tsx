@@ -40,7 +40,7 @@ const LiveOnlineMatches = () => {
       <h2 className="font-display uppercase text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
         <Radio className="w-3.5 h-3.5 text-accent" /> {t("home.liveOnlineMatches")}
       </h2>
-      <div className="space-y-2 mb-6">
+      <div className="space-y-2">
         {rows.map((m) => {
           const g = m.game_state;
           const label = g?.teams?.length ? g.teams.map((tm) => tm.name).join(" – ") : g?.players.map((p) => p.name).join(" – ") ?? "?";

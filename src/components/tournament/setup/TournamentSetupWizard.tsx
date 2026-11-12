@@ -38,7 +38,7 @@ const TournamentSetupWizard = ({ heading, steps, current, onChange, onExit, fina
 
   return (
     <div className="container max-w-3xl animate-slide-up py-6 mx-auto">
-      <Button variant="ghost" onClick={onExit} className="mb-4 text-sm text-muted-foreground">
+      <Button variant="ghost" onClick={onExit} className="mb-3 -ml-2 h-11 text-sm text-muted-foreground">
         <ArrowLeft className="mr-1 h-4 w-4" /> {t("tournament.overview")}
       </Button>
       {heading}
@@ -56,8 +56,8 @@ const TournamentSetupWizard = ({ heading, steps, current, onChange, onExit, fina
                   disabled={i > current}
                   onClick={() => onChange(i)}
                   aria-current={active ? "step" : undefined}
-                  className={`flex h-10 min-w-0 items-center gap-2 rounded-xl border px-3 text-left text-sm font-display uppercase tracking-wide transition-colors ${
-                    active ? "w-full border-primary bg-primary/15 text-primary" : done ? "border-secondary/50 bg-secondary/10 text-secondary" : "border-border bg-muted/20 text-muted-foreground"
+                  className={`flex h-11 min-w-0 items-center gap-2 rounded-xl border px-3 text-left text-sm font-semibold transition-colors ${
+                    active ? "w-full border-primary bg-primary/15 text-primary" : done ? "border-border bg-card text-foreground" : "border-border bg-card text-muted-foreground"
                   } disabled:cursor-default`}
                 >
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${active ? "bg-primary text-primary-foreground" : done ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
@@ -71,7 +71,7 @@ const TournamentSetupWizard = ({ heading, steps, current, onChange, onExit, fina
             );
           })}
         </ol>
-        <p className="mt-2 text-[11px] text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           {t("tournament.wizardStepOf").replace("{n}", String(current + 1)).replace("{m}", String(steps.length))}
         </p>
       </nav>
@@ -79,21 +79,21 @@ const TournamentSetupWizard = ({ heading, steps, current, onChange, onExit, fina
       <div className="space-y-4">{step.content}</div>
 
       <div
-        className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:bottom-0 z-10 -mx-4 mt-6 border-t border-border/60 bg-background/95 px-4 pb-9 pt-3 backdrop-blur-sm md:pb-3"
+        className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-0 z-10 -mx-4 mt-6 border-t border-border/60 bg-background/95 px-4 pb-9 pt-3 backdrop-blur-sm md:pb-3"
       >
         {blocked && (
-          <ul className="mb-2 space-y-0.5 text-xs text-accent" role="status">
+          <ul className="mb-2 space-y-0.5 text-xs text-muted-foreground" role="status">
             {step.issues.map((issue) => <li key={issue}>• {issue}</li>)}
           </ul>
         )}
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => onChange(current - 1)} disabled={current === 0} className="h-12 gap-1.5 px-4">
+          <Button variant="outline" onClick={() => onChange(current - 1)} disabled={current === 0} className="h-[52px] gap-1.5 rounded-[14px] px-4">
             <ArrowLeft className="h-4 w-4" /> {t("common.back")}
           </Button>
           {isLast ? (
             <div className="flex-1">{finalAction}</div>
           ) : (
-            <Button onClick={() => onChange(current + 1)} disabled={blocked} className="h-12 flex-1 gap-2 font-display text-base uppercase tracking-wide">
+            <Button onClick={() => onChange(current + 1)} disabled={blocked} className="h-[52px] flex-1 gap-2 rounded-[14px] text-base font-semibold">
               {t("tournament.wizardNext")} <ArrowRight className="h-4 w-4" />
             </Button>
           )}

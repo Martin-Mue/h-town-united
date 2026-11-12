@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePresetConfig, overlaySlots, describePreset } from "./gamePreset";
+import { normalizePresetConfig, overlaySlots, describePreset, loadLastGameSetup, saveLastGameSetup } from "./gamePreset";
 
 describe("normalizePresetConfig", () => {
   it("falls back to defaults for garbage and clamps numbers", () => {
@@ -25,5 +25,22 @@ describe("overlaySlots / describePreset", () => {
   });
   it("describes the preset in one line", () => {
     expect(describePreset(normalizePresetConfig({ mode: "501", bestOfLegs: 3, numPlayers: 2 }), "First to", "Spieler")).toBe("501 · First to 2 · 2 Spieler");
+  });
+});
+
+describe("last game setup (Wie letztes Mal)", () => {
+  it("stores the last setup per account and reads it back normalized", () => {
+    window.localStorage.clear();
+    const config = normalizePresetConfig({ mode: "301", numPlayers: 3, bestOfLegs: 5, playerNames: ["A", "B", "C"] });
+    saveLastGameSetup("user-1", config);
+    expect(loadLastGameSetup("user-1")).toEqual(config);
+    expect(loadLastGameSetup("user-2")).toBeNull();
+  });
+  it("does nothing without an account and survives broken storage", () => {
+    window.localStorage.clear();
+    saveLastGameSetup(undefined, normalizePresetConfig({}));
+    expect(loadLastGameSetup(undefined)).toBeNull();
+    window.localStorage.setItem("dart-last-game-setup:user-3", "{not json");
+    expect(loadLastGameSetup("user-3")).toBeNull();
   });
 });

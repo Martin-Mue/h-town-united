@@ -16,9 +16,9 @@ const OnlineNowStrip = () => {
   const others = players.filter((p) => p.user_id && p.user_id !== user?.id && onlineNow.has(p.user_id));
 
   return (
-    <div className="mb-6">
-      <h2 className="font-display uppercase text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
-        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" /> {t("home.onlineNowTitle")}
+    <div>
+      <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2 flex items-center gap-1.5">
+        <span className="inline-block w-2 h-2 rounded-full bg-secondary" /> {t("home.onlineNowTitle")}
         <span className="text-xs normal-case text-muted-foreground/70">{others.length > 0 ? `· ${others.length}` : ""}</span>
       </h2>
       {others.length === 0 ? (

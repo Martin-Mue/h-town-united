@@ -109,7 +109,9 @@ const Layout = ({ children }: { children: ReactNode }) => {
           nearest actually-scrolling ancestor, and if this div never becomes that, a `sticky
           top-0` scoreboard inside a page has nothing correct to stick to. */}
       <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overscroll-y-contain">
-        <header className="border-b border-border px-4 py-3 flex items-center justify-between bg-background/80 backdrop-blur-sm relative z-10 shrink-0">
+        {/* Compact header (redesign 2026-11): small logo tile + club name in one 56px row, so
+            page content starts higher; page titles live in the pages themselves. */}
+        <header className="border-b border-border px-4 py-2 flex items-center justify-between gap-2 bg-background/80 backdrop-blur-sm relative z-10 shrink-0">
           {/* min-w-0 on both the link and the text wrapper, plus truncate on the text itself —
               without it, a flex child's default min-width:auto refuses to shrink below its
               content's natural width at all, so once zooming (or a narrow window) left too
@@ -117,14 +119,14 @@ const Layout = ({ children }: { children: ReactNode }) => {
               of shrinking, growing the header much taller and dragging the nav pills into an
               off-looking vertical position alongside it. Truncating with an ellipsis keeps the
               header a single, predictable row at any zoom/width. */}
-          <Link to="/" className="flex items-center gap-3 min-w-0">
+          <Link to="/" className="flex items-center gap-2.5 min-w-0">
             <img
               src={logoUrl}
               alt={clubName}
-              className="w-12 h-12 rounded-xl object-cover border border-primary/30 glow-cyan shrink-0"
+              className="w-10 h-10 rounded-xl object-cover border border-border shrink-0"
             />
             <div className="leading-tight min-w-0">
-              <h1 className="text-lg font-display uppercase tracking-widest text-foreground truncate">
+              <h1 className="text-xs font-body font-semibold uppercase tracking-[0.12em] text-muted-foreground truncate">
                 {clubName}
               </h1>
             </div>
@@ -189,47 +191,37 @@ const Layout = ({ children }: { children: ReactNode }) => {
         </header>
 
         <WhatsNewBanner />
-        <main className="flex-1 pb-20 md:pb-6">{children}</main>
+        {/* Bottom padding = bar height (4.5rem) + the iPhone home-indicator area + a little air. */}
+        <main className="flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">{children}</main>
       </div>
 
+      {/* Redesign 2026-11: flat 72px bar, "Spielen" as a round button sitting IN the bar (not
+          raised above it), active tab = action color + semibold instead of a sliding pill.
+          Height 4.5rem + safe area; TournamentSetupWizard's sticky footer sits right above it. */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-md border-t border-border grid py-2 z-50"
-        style={{ gridTemplateColumns: `repeat(${mobileSlotCount}, minmax(0, 1fr))` }}
+        aria-label={t("nav.main")}
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border grid items-center z-50"
+        style={{
+          gridTemplateColumns: `repeat(${mobileSlotCount}, minmax(0, 1fr))`,
+          height: "calc(4.5rem + env(safe-area-inset-bottom))",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
       >
-        {/* Animated pill under the active tab — a `position:fixed` nav is already its own
-            positioning context, so this absolute pill needs no extra `relative` wrapper. Slides
-            (--ease-spring, a little overshoot) rather than just fading, so switching tabs reads
-            as one continuous motion instead of two independent icon color changes. Also lands
-            under the "Mehr" slot itself (last column) when the active route is one of the items
-            tucked inside the drawer, so the nav never goes fully unhighlighted. */}
-        {mobileActiveIndex >= 0 && coreMobileItems[mobileActiveIndex]?.to !== "/game" && (
-          <div
-            aria-hidden="true"
-            className="absolute top-1 bottom-1 rounded-lg bg-primary/10 pointer-events-none"
-            style={{
-              left: `calc(${mobileActiveIndex} * (100% / ${mobileSlotCount}))`,
-              width: `calc(100% / ${mobileSlotCount})`,
-              transitionProperty: "left",
-              transitionDuration: "380ms",
-              transitionTimingFunction: "var(--ease-spring)",
-            }}
-          />
-        )}
-        {coreMobileItems.map((item) => {
-          const isActive = location.pathname === item.to;
+        {coreMobileItems.map((item, index) => {
+          const isActive = index === mobileActiveIndex;
           if (item.to === "/game") {
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 aria-label={t(item.labelKey)}
-                className="relative flex flex-col items-center min-w-0 active:scale-95 transition-transform"
+                aria-current={isActive ? "page" : undefined}
+                className="flex justify-center min-w-0 active:scale-95 transition-transform"
                 style={{ transitionTimingFunction: "var(--ease-press)" }}
               >
-                <span className={`-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_6px_20px_-4px_hsl(var(--primary)/0.7)] ring-4 ring-card ${isActive ? "glow-cyan" : ""}`}>
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <item.icon className="w-7 h-7" />
                 </span>
-                <span className={`mt-0.5 text-xs truncate max-w-full ${isActive ? "text-primary" : "text-muted-foreground"}`}>{t(item.labelKey)}</span>
               </Link>
             );
           }
@@ -237,12 +229,13 @@ const Layout = ({ children }: { children: ReactNode }) => {
             <Link
               key={item.to}
               to={item.to}
-              className={`relative flex flex-col items-center gap-0.5 px-2 py-1 text-xs transition-colors active:scale-90 min-w-0 ${
-                isActive ? "text-primary" : "text-muted-foreground"
+              aria-current={isActive ? "page" : undefined}
+              className={`flex h-full flex-col items-center justify-center gap-1 px-1 text-xs transition-colors active:scale-90 min-w-0 ${
+                isActive ? "text-primary font-semibold" : "text-muted-foreground"
               }`}
               style={{ transitionTimingFunction: "var(--ease-press)" }}
             >
-              <item.icon className={`w-5 h-5 ${isActive ? "drop-shadow-[0_0_6px_hsl(var(--primary))]" : ""}`} />
+              <item.icon className="w-[22px] h-[22px]" />
               <span className="truncate max-w-full">{t(item.labelKey)}</span>
             </Link>
           );
@@ -254,12 +247,12 @@ const Layout = ({ children }: { children: ReactNode }) => {
           <DrawerTrigger asChild>
             <button
               type="button"
-              className={`relative flex flex-col items-center gap-0.5 px-2 py-1 text-xs transition-colors active:scale-90 min-w-0 ${
-                moreActive ? "text-primary" : "text-muted-foreground"
+              className={`flex h-full flex-col items-center justify-center gap-1 px-1 text-xs transition-colors active:scale-90 min-w-0 ${
+                moreActive ? "text-primary font-semibold" : "text-muted-foreground"
               }`}
               style={{ transitionTimingFunction: "var(--ease-press)" }}
             >
-              <MoreHorizontal className={`w-5 h-5 ${moreActive ? "drop-shadow-[0_0_6px_hsl(var(--primary))]" : ""}`} />
+              <MoreHorizontal className="w-[22px] h-[22px]" />
               <span className="truncate max-w-full">{t("nav.more")}</span>
             </button>
           </DrawerTrigger>

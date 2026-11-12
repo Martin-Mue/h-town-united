@@ -30,6 +30,8 @@ import TournamentSetupWizard from "@/components/tournament/setup/TournamentSetup
 import TournamentTemplates from "@/components/tournament/setup/TournamentTemplates";
 import type { TournamentTemplate } from "@/utils/tournamentTemplate";
 import ManageTabs, { type ManageTab } from "@/components/tournament/manage/ManageTabs";
+import BoardControlPanel from "@/components/tournament/manage/BoardControlPanel";
+import { assignMatchToBoard, setMatchPaused, displayBoardOf } from "@/utils/tournamentBoardControl";
 import { setupStepIssues, allSetupIssues, firstStepWithIssue, SETUP_STEP_ORDER, type SetupState, type SetupStepKey } from "@/utils/tournamentSetupSteps";
 import { clubHasFeature } from "@/lib/planFeatures";
 import { hasLocalActiveGame } from "@/lib/activeGameSnapshot";
@@ -43,6 +45,8 @@ import { enqueueBracketAction } from "@/lib/offlineQueue";
 import { parsePlayers, parseBracket, parseRoundConfigs, parseAttendance, parsePrestartViews, type RoundConfig } from "@/lib/schemas/tournament";
 import MatchmakingDialog from "@/components/players/MatchmakingDialog";
 import TrophyCeremony from "@/components/tournament/TrophyCeremony";
+import TournamentChampionBanner from "@/components/tournament/TournamentChampionBanner";
+import CompetitionHeader from "@/components/competition/CompetitionHeader";
 import ForecastCard from "@/components/tournament/ForecastCard";
 import { useTournamentForecastStats } from "@/hooks/useTournamentForecastStats";
 import { Eyebrow, SectionCard, StatTile } from "@/components/stats/StatPrimitives";
@@ -304,7 +308,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
               </span>
             )}
-            {match.board ? <span className="font-mono">{t("camera.board")} {match.board}</span> : null}
+            {displayBoardOf(match) ? <span className="font-mono">{t("camera.board")} {displayBoardOf(match)}</span> : null}
           </span>
         </div>
       )}
@@ -388,7 +392,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
   return (
     <div className={wrapperClass}>
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/60 bg-background/80 backdrop-blur sticky top-0 z-10">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
           {t("camera.zoom")} {(userZoom * 100).toFixed(0)}%
         </div>
         <div className="flex items-center gap-1">
@@ -486,7 +490,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
               return (
                 <div className={`mb-1 flex items-center gap-1 ${align === "center" ? "justify-center" : align === "right" ? "justify-end" : "justify-start"}`}>
                   <div className={align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"}>
-                    <h3 className="text-xs font-display uppercase text-muted-foreground">{roundLabel(round, totalRounds)}</h3>
+                    <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{roundLabel(round, totalRounds)}</h3>
                     <p className="text-[10px] text-primary/80 font-mono">{roundMode} · FT{Math.ceil(roundBestOf / 2)}</p>
                   </div>
                   {canEditRound && (
@@ -632,7 +636,8 @@ const TournamentPage = () => {
   const [drawSeed, setDrawSeed] = useState(() => Math.floor(Math.random() * 1e9));
   const [boards, setBoards] = useState(2);
   const [livePlayEnabled, setLivePlayEnabled] = useState(true);
-  const [bracketView, setBracketView] = useState<"tree" | "schedule">("tree");
+  /** null = not picked yet: a running tournament opens on the board overview, a finished one on the tree. */
+  const [bracketView, setBracketView] = useState<"boards" | "tree" | "schedule" | null>(null);
   const [editMatch, setEditMatch] = useState<Match | null>(null);
   const [editP1, setEditP1] = useState("");
   const [editP2, setEditP2] = useState("");
@@ -1313,7 +1318,12 @@ const TournamentPage = () => {
       setActiveTournament({ ...activeTournament, bracket, champion, status: champion ? "finished" : activeTournament.status });
       return;
     }
-    const raw = (activeTournament.bracket as Match[]).map((m) => {
+    const koBracket = activeTournament.bracket as Match[];
+    const boardControlPatch =
+      action.type === "setKoPaused" ? setMatchPaused(koBracket, action.matchId, action.paused)
+        : action.type === "assignKoBoard" ? assignMatchToBoard(koBracket, action.matchId, action.board, activeTournament.boards || 2)
+          : null;
+    const raw = boardControlPatch ?? koBracket.map((m) => {
       if (action.type === "setKoWinner" && m.id === action.matchId) {
         return { ...m, winner: action.winner, score1: action.score1 ?? m.score1, score2: action.score2 ?? m.score2 };
       }
@@ -1386,6 +1396,16 @@ const TournamentPage = () => {
   /** Resets a match AND every result that depended on it (cascade via recompute). */
   const resetKoMatch = async (matchId: string) => {
     await runBracketAction({ type: "resetKoMatch", matchId });
+  };
+
+  /** Board control (BoardControlPanel): pause/resume a ready match, or call one to a free board.
+   *  Same CAS write + offline queue as the scoring taps; neither touches pairings or order. */
+  const setKoMatchPaused = async (matchId: string, paused: boolean) => {
+    await runBracketAction({ type: "setKoPaused", matchId, paused });
+  };
+
+  const assignKoMatchToBoard = async (matchId: string, board: number) => {
+    await runBracketAction({ type: "assignKoBoard", matchId, board });
   };
 
   /** Replace the two participants of a first-round match (late changes, no-shows …). */
@@ -2041,44 +2061,46 @@ const TournamentPage = () => {
   if (phase === "list") {
     return (
       <div className="container py-6 animate-slide-up">
-        <div className="flex items-center justify-between flex-wrap gap-y-2 mb-6">
-          <div className="flex items-center gap-3">
-            <Trophy className="w-6 h-6 text-accent" />
-            <h2 className="text-2xl font-display uppercase">{t("tournament.tournaments")}</h2>
-          </div>
+        <CompetitionHeader
+          title={t("tournament.tournaments")}
+          action={(
+            <Button onClick={startNewTournament} className="h-11 gap-1.5 rounded-xl px-3.5 font-semibold">
+              <Plus className="w-4 h-4" /> {t("tournament.newTournament")}
+            </Button>
+          )}
+        >
           <div className="flex items-center flex-wrap gap-2">
             {/* Serien/Liga upgraded from bare text links to real outline Buttons (2026-09-10, on
                 request — "etwas präsenter") — same weight/sizing as every other secondary action
                 next to a primary CTA elsewhere in the app (see League.tsx's own Button asChild
                 pattern), instead of the thin border-only pill styling that made them read as an
                 afterthought next to the solid "Neues Turnier" button. */}
-            <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <Button asChild variant="outline" className="h-11 gap-1.5 rounded-xl">
               <Link to="/tournaments/series">
                 <Layers className="w-3.5 h-3.5" /> {t("tournament.series")}
               </Link>
             </Button>
-            <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <Button asChild variant="outline" className="h-11 gap-1.5 rounded-xl">
               <Link to="/leagues">
                 <Swords className="w-3.5 h-3.5" /> {t("tournament.leagueMode")}
               </Link>
             </Button>
-            <Button size="sm" onClick={startNewTournament} className="gap-1">
-              <Plus className="w-4 h-4" /> {t("tournament.newTournament")}
-            </Button>
           </div>
-        </div>
+        </CompetitionHeader>
 
         {!loading && tournaments.length > 0 && (
-          <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0 mb-4">
+          <div role="group" className="mb-4 grid grid-cols-2 gap-1 rounded-[14px] border border-border bg-card p-1 sm:max-w-sm">
             <button
               onClick={() => setTournamentListTab("active")}
-              className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wide ${tournamentListTab === "active" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              aria-pressed={tournamentListTab === "active"}
+              className={`h-11 rounded-[10px] border px-2 text-sm font-semibold transition-colors ${tournamentListTab === "active" ? "border-primary bg-primary/15 text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             >
               {t("tournament.tabActive")} ({activeTournamentsList.length})
             </button>
             <button
               onClick={() => setTournamentListTab("finished")}
-              className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wide border-l border-border ${tournamentListTab === "finished" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              aria-pressed={tournamentListTab === "finished"}
+              className={`h-11 rounded-[10px] border px-2 text-sm font-semibold transition-colors ${tournamentListTab === "finished" ? "border-primary bg-primary/15 text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             >
               {t("tournament.tabFinished")} ({finishedTournamentsList.length})
             </button>
@@ -2101,8 +2123,8 @@ const TournamentPage = () => {
         ) : (
           <div className="space-y-3">
             {pagedTournaments.visible.map(tourn => (
-              <div key={tourn.id} className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 flex items-center justify-between">
-                <button onClick={() => openTournament(tourn)} className="flex-1 text-left">
+              <div key={tourn.id} className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3.5 py-3 transition-colors hover:border-primary/40">
+                <button onClick={() => openTournament(tourn)} className="min-h-11 min-w-0 flex-1 text-left">
                   <div className="flex items-center gap-3">
                     {/* The dot alone used to be the only status signal — a tiny unlabeled color
                         (worse still for colorblind users) next to a list that spells out the
@@ -2112,11 +2134,11 @@ const TournamentPage = () => {
                         two (a tournament gets its bracket the moment it's created). */}
                     <span className="flex items-center gap-1.5 shrink-0">
                       <span className={`w-1.5 h-1.5 rounded-full ${tourn.status === "active" ? "bg-secondary animate-pulse" : tourn.status === "finished" ? "bg-accent" : "bg-muted-foreground"}`} />
-                      {tourn.status === "active" && <span className="text-[10px] uppercase tracking-wide text-secondary">{t("tournament.live")}</span>}
-                      {tourn.status === "finished" && <span className="text-[10px] uppercase tracking-wide text-accent">{t("pt.finished")}</span>}
+                      {tourn.status === "active" && <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-secondary">{t("tournament.live")}</span>}
+                      {tourn.status === "finished" && <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t("pt.finished")}</span>}
                     </span>
-                    <div>
-                      <p className="font-semibold text-sm">{tourn.name}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-[15px] font-semibold">{tourn.name}</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Badge variant="outline" className="bg-muted text-muted-foreground px-1.5 py-0.5 text-xs font-mono border-transparent">{tourn.mode === "round-robin" ? t("tournament.roundRobin") : "K.O."}</Badge>
                         <span><Users className="w-3 h-3 inline" /> {tourn.players.length}</span>
@@ -2124,10 +2146,10 @@ const TournamentPage = () => {
                       </div>
                     </div>
                   </div>
-                  {tourn.champion && <p className="text-xs text-accent mt-1">🏆 {tourn.champion}</p>}
+                  {tourn.champion && <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><Trophy aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-accent" /> <span className="truncate">{tourn.champion}</span></p>}
                 </button>
                 {!isTournamentUnderway(tourn) && isOwnerOf(tourn) && (
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); editTournament(tourn); }} className="text-xs">
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); editTournament(tourn); }} className="h-11 shrink-0 text-xs">
                     {t("common.edit")}
                   </Button>
                 )}
@@ -2310,12 +2332,12 @@ const TournamentPage = () => {
         {tournamentMode !== "round-robin" && roundConfigs.length > 0 && (() => {
           const differs = roundConfigs.some((c) => c.mode !== gameMode || c.bestOf !== bestOfLegs);
           return (
-            <Collapsible defaultOpen={differs} className="rounded-xl border border-border bg-card/40">
+            <Collapsible defaultOpen={differs} className="rounded-2xl border border-border bg-card">
               <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left">
                 <span className="min-w-0">
-                  <span className="flex flex-wrap items-center gap-2 text-sm font-display uppercase text-muted-foreground">
+                  <span className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                     <Sparkles className="h-3.5 w-3.5" /> {t("tournament.modePerRound")}
-                    {differs && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] normal-case text-accent">{t("tournament.roundsModeCustom")}</span>}
+                    {differs && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] normal-case tracking-normal text-primary">{t("tournament.roundsModeCustom")}</span>}
                   </span>
                   <span className="mt-0.5 block text-[11px] text-muted-foreground">{t("tournament.roundsModeHint")}</span>
                 </span>
@@ -2333,7 +2355,7 @@ const TournamentPage = () => {
                   const label = roundLabelFor(isPrelimSlot ? 0 : idx + 1, total, t);
                   return (
                     <div key={idx} className="grid grid-cols-[80px_1fr_1fr] gap-2 items-center">
-                      <span className="text-xs font-display uppercase text-muted-foreground">{label}</span>
+                      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
                       <Select value={cfg.mode} onValueChange={(v) => setRoundConfigs((prev) => prev.map((c, i) => i === idx ? { ...c, mode: v } : c))}>
                         <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-card border-border">
@@ -2358,10 +2380,10 @@ const TournamentPage = () => {
           );
         })()}
         {tournamentMode !== "round-robin" && (
-          <Collapsible className="rounded-xl border border-border bg-card/40">
+          <Collapsible className="rounded-2xl border border-border bg-card">
             <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left">
               <span className="min-w-0">
-                <span className="flex items-center gap-1.5 text-sm font-display uppercase text-muted-foreground"><Settings2 className="h-3.5 w-3.5" /> {t("tournament.wizardAdvanced")}</span>
+                <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground"><Settings2 className="h-3.5 w-3.5" /> {t("tournament.wizardAdvanced")}</span>
                 <span className="mt-0.5 block text-[11px] text-muted-foreground">{t("tournament.wizardAdvancedHint")}</span>
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
@@ -2566,7 +2588,7 @@ const TournamentPage = () => {
               {drawMode === "manual" ? (
                 <div className="space-y-1">
                   {players.map((p, i) => (
-                    <div key={p} className="flex items-center gap-2 gradient-card border border-border shadow-elevation-sm rounded-lg px-2 py-1.5 text-sm">
+                    <div key={p} className="flex items-center gap-2 bg-card border border-border rounded-lg px-2 py-1.5 text-sm">
                       <span className="w-6 text-center font-mono text-xs text-muted-foreground">{i + 1}</span>
                       <span className="flex-1 truncate">{p}</span>
                       <Button size="icon" variant="ghost" className="h-8 w-8" disabled={i === 0} onClick={() => movePlayer(i, -1)} title={t("tournament.moveUp")} aria-label={`${p} ${t("tournament.moveUpFor")}`}><ArrowUp className="w-3.5 h-3.5" /></Button>
@@ -2582,7 +2604,7 @@ const TournamentPage = () => {
                 <div className="flex flex-wrap gap-2">
                   {players.map(p => (
                     <button key={p} onClick={() => removePlayer(p)}
-                      className="gradient-card border border-border shadow-elevation-sm rounded-lg px-3 py-1 text-sm hover:border-destructive hover:text-destructive transition-colors group">
+                      className="bg-card border border-border rounded-lg px-3 py-1 text-sm hover:border-destructive hover:text-destructive transition-colors group">
                       {p} <span className="text-muted-foreground group-hover:text-destructive ml-1">×</span>
                     </button>
                   ))}
@@ -2648,9 +2670,9 @@ const TournamentPage = () => {
             }
             const tree = recomputeBracket(previewMatches);
             return (
-              <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+              <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-primary">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                     <Network className="w-3.5 h-3.5" /> {t("tournament.bracketPreview")}
                   </div>
                   {drawMode === "random" && (
@@ -2668,7 +2690,7 @@ const TournamentPage = () => {
                       ? { label: t("tournament.preliminaryMatches"), value: seeding.prelimPairs.length }
                       : { label: t("tournament.byes"), value: byes },
                   ].map((s) => (
-                    <div key={s.label} className="gradient-card border border-border shadow-elevation-sm rounded-lg py-2">
+                    <div key={s.label} className="bg-card border border-border rounded-lg py-2">
                       <StatTile value={s.value} label={s.label} tone="primary" />
                     </div>
                   ))}
@@ -2697,18 +2719,18 @@ const TournamentPage = () => {
                       const list = tree.filter((m) => m.round === r).sort((a, b) => a.position - b.position);
                       return (
                         <div key={r} className="flex flex-col justify-around gap-1 min-w-[130px]">
-                          <p className="text-[9px] uppercase tracking-wider text-muted-foreground text-center">
+                          <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground text-center">
                             {roundLabelFor(r, rounds, t)}
                           </p>
                           {list.map((m, i) => (
-                            <div key={m.id} className="gradient-card border border-border shadow-elevation-sm rounded px-1.5 py-1 text-[10px] leading-tight">
+                            <div key={m.id} className="bg-card border border-border rounded px-1.5 py-1 text-[10px] leading-tight">
                               <div className="flex items-center gap-1">
                                 <span className="font-mono text-[8px] text-muted-foreground w-4">{r === 1 ? i + 1 : ""}</span>
-                                <span className={`flex-1 truncate uppercase tracking-wide ${!isRealPlayer(m.player1) ? "text-muted-foreground/40" : ""}`}>{m.player1 || "—"}</span>
+                                <span className={`flex-1 truncate ${!isRealPlayer(m.player1) ? "text-muted-foreground/40" : ""}`}>{m.player1 || "—"}</span>
                               </div>
                               <div className="flex items-center gap-1">
                                 <span className="w-4" />
-                                <span className={`flex-1 truncate uppercase tracking-wide ${!isRealPlayer(m.player2) ? "text-muted-foreground/40" : ""}`}>{m.player2 || "—"}</span>
+                                <span className={`flex-1 truncate ${!isRealPlayer(m.player2) ? "text-muted-foreground/40" : ""}`}>{m.player2 || "—"}</span>
                               </div>
                             </div>
                           ))}
@@ -2730,7 +2752,7 @@ const TournamentPage = () => {
           if (stuck) { setWizardStep(SETUP_STEP_ORDER.indexOf(stuck)); return; }
           startTournament();
         }}
-        className="h-12 w-full font-display text-base uppercase tracking-wide"
+        className="h-[52px] w-full rounded-[14px] text-base font-semibold"
         disabled={players.length < 2 || savingTournament}
       >
         <Play className="mr-2 h-5 w-5" /> {savingTournament ? t("tournament.saving") : editingId ? t("tournament.saveChanges") : t("tournament.startTournament")}
@@ -2740,11 +2762,12 @@ const TournamentPage = () => {
     return (
       <TournamentSetupWizard
         heading={(
-          <div className="relative overflow-hidden mb-5 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-card p-4 shadow-[0_0_30px_hsl(var(--primary)/0.12)]">
-            <div className="flex items-center gap-2 text-accent text-xs uppercase tracking-wider"><Sparkles className="w-4 h-4" /> {t("tournament.bigEventMode")}</div>
-            <h2 className="text-2xl font-display uppercase">{editingId ? t("tournament.editTournamentHeading") : t("tournament.createTournamentHeading")}</h2>
+          <CompetitionHeader
+            kicker={t("tournament.bigEventMode")}
+            title={editingId ? t("tournament.editTournamentHeading") : t("tournament.createTournamentHeading")}
+          >
             <p className="text-sm text-muted-foreground">{t("tournament.upTo64Participants")}</p>
-          </div>
+          </CompetitionHeader>
         )}
         steps={[
           { key: "basics", title: t("tournament.wizardBasics"), icon: Trophy, content: stepBasics, issues: issuesFor("basics") },
@@ -2769,9 +2792,9 @@ const TournamentPage = () => {
   // duplicating the collapsible markup in each branch.
   const highlightsSection = (
     <div className="mb-4">
-      <div className="gradient-card rounded-xl border border-border shadow-elevation-sm overflow-hidden">
-        <button onClick={toggleHighlights} className="w-full flex items-center justify-between px-4 py-3 text-left">
-          <span className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground">
+      <div className="bg-card rounded-2xl border border-border overflow-hidden">
+        <button onClick={toggleHighlights} className="w-full min-h-12 flex items-center justify-between px-4 py-3 text-left">
+          <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
             <Target className="w-4 h-4" /> {t("tournament.tournamentHighlights")}
           </span>
           {showHighlights ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -2793,9 +2816,9 @@ const TournamentPage = () => {
   // highlightsSection above, shared by both the K.O. and round-robin returns.
   const forecastSection = isAdmin ? (
     <div className="mb-4">
-      <div className="gradient-card rounded-xl border border-border shadow-elevation-sm overflow-hidden">
-        <button onClick={() => setShowForecast((v) => !v)} className="w-full flex items-center justify-between px-4 py-3 text-left">
-          <span className="flex items-center gap-2 text-sm font-display uppercase text-muted-foreground">
+      <div className="bg-card rounded-2xl border border-border overflow-hidden">
+        <button onClick={() => setShowForecast((v) => !v)} className="w-full min-h-12 flex items-center justify-between px-4 py-3 text-left">
+          <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
             <Timer className="w-4 h-4" /> {t("tournament.tournamentForecast")}
           </span>
           {showForecast ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -2897,12 +2920,12 @@ const TournamentPage = () => {
         return (
           <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
             <Monitor className="w-10 h-10 text-primary mx-auto mb-3" />
-            <h2 className="text-xl font-display uppercase mb-1">{t("tournament.whichBoard")}</h2>
+            <h1 className="font-display text-[28px] font-bold leading-tight mb-1">{t("tournament.whichBoard")}</h1>
             <p className="text-xs text-muted-foreground mb-6">{t("tournament.whichBoardDesc")}</p>
             <div className="grid grid-cols-2 gap-3">
               {Array.from({ length: boardCount }, (_, i) => i + 1).map((n) => (
                 <button key={n} onClick={() => pickBoard(n)}
-                  className="relative rounded-xl border-2 border-border bg-card py-6 text-2xl font-display hover:border-primary hover:text-primary transition-colors">
+                  className="relative rounded-2xl border border-border bg-card py-6 text-2xl font-display font-bold hover:border-primary hover:text-primary transition-colors">
                   {t("camera.board")} {n}
                   {activeBoards.has(n) && (
                     <span className="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-full bg-secondary/15 text-secondary px-1.5 py-0.5 text-[9px] font-normal normal-case">
@@ -2912,7 +2935,7 @@ const TournamentPage = () => {
                 </button>
               ))}
             </div>
-            <button onClick={exitBoardMode} className="mt-6 text-xs text-muted-foreground hover:text-foreground">
+            <button onClick={exitBoardMode} className="mt-6 min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground">
               ← {t("tournament.overview")}
             </button>
           </div>
@@ -2928,10 +2951,10 @@ const TournamentPage = () => {
         return (
           <div className="container py-10 max-w-sm mx-auto text-center animate-slide-up">
             <Monitor className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-            <h2 className="text-xl font-display uppercase mb-1">{t("tournament.boardGone")}</h2>
+            <h1 className="font-display text-[28px] font-bold leading-tight mb-1">{t("tournament.boardGone")}</h1>
             <p className="text-xs text-muted-foreground mb-6">{t("tournament.boardGoneDesc")}</p>
             <Button onClick={() => setSearchParams({ board: "pick" })}>{t("tournament.pickAnotherBoard")}</Button>
-            <button onClick={exitBoardMode} className="mt-6 block mx-auto text-xs text-muted-foreground hover:text-foreground">
+            <button onClick={exitBoardMode} className="mt-6 block mx-auto min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground">
               ← {t("tournament.overview")}
             </button>
           </div>
@@ -2954,50 +2977,41 @@ const TournamentPage = () => {
       return (
         <div className="container py-8 max-w-sm mx-auto text-center animate-slide-up">
           <div className="flex items-center justify-between mb-6">
-            <button onClick={exitBoardMode} className="text-xs text-muted-foreground hover:text-foreground">← {t("tournament.overview")}</button>
-            <button onClick={() => setSearchParams({ board: "pick" })} className="text-xs text-muted-foreground hover:text-foreground">
+            <button onClick={exitBoardMode} className="min-h-11 text-sm text-muted-foreground hover:text-foreground">← {t("tournament.overview")}</button>
+            <button onClick={() => setSearchParams({ board: "pick" })} className="min-h-11 text-sm text-muted-foreground hover:text-foreground">
               {t("camera.board")} {myBoard} · {t("tournament.changeBoard")}
             </button>
           </div>
           <p className="text-xs text-muted-foreground mb-1 truncate">{activeTournament.name}</p>
-          <h2 className="text-2xl font-display uppercase mb-6">{t("camera.board")} {myBoard}</h2>
+          <h1 className="font-display text-[28px] font-bold leading-tight mb-6">{t("camera.board")} {myBoard}</h1>
 
           {activeTournament.champion ? (
-            <div className="bg-card border-2 border-accent rounded-2xl p-8 glow-gold">
-              <Trophy className="w-8 h-8 text-accent mx-auto mb-2" />
-              <p className="font-display uppercase text-sm">{activeTournament.champion}</p>
-              <p className="text-xs text-muted-foreground mt-1">{t("tournament.championSuffix")}</p>
+            <div className="text-left">
+              <TournamentChampionBanner champion={activeTournament.champion} />
             </div>
           ) : current ? (
-            // "An der Oché" Broadcast-Arena (Design-Sprint Runde 3 Punkt 2, Richtung A): the
-            // board-mode kiosk screen — this IS "standing at the oché about to play", the exact
-            // moment the mockups were about — gets the same fixed-dark broadcast surface as
-            // PublicTournament.tsx's Board-Übersicht, with a broadcast-tag round-label pill in
-            // place of the old plain uppercase caption. The start button underneath is left as a
-            // normal Button (not re-themed) on purpose — it's the one interactive control here
-            // and should keep following the app's own light/dark theme like every other button.
-            <div className="broadcast-panel border-2 border-primary/60 p-6 glow-cyan">
-              <span className="broadcast-tag inline-flex px-3 py-1 rounded-[2px] mb-3">
-                <span className="font-display font-semibold text-[10px] uppercase tracking-wide">{roundLabel(current.match.round, totalRounds)}</span>
-              </span>
-              <p className="text-lg font-display mb-1" style={{ color: "hsl(210 15% 92%)" }}>{current.match.player1}</p>
-              <p className="text-xs mb-1" style={{ color: "hsl(210 15% 55%)" }}>vs.</p>
-              <p className="text-lg font-display mb-4" style={{ color: "hsl(210 15% 92%)" }}>{current.match.player2}</p>
-              <p className="text-xs mb-4" style={{ color: "hsl(210 15% 55%)" }}>
+            // Board-mode kiosk screen ("standing at the oché about to play"): one flat card with
+            // the round label, both names and the one primary start button of this screen.
+            <div className="rounded-2xl border border-primary/40 bg-card p-6">
+              <p className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{roundLabel(current.match.round, totalRounds)}</p>
+              <p className="text-xl font-display font-bold mb-1 break-words">{current.match.player1}</p>
+              <p className="text-xs text-muted-foreground mb-1">vs.</p>
+              <p className="text-xl font-display font-bold mb-4 break-words">{current.match.player2}</p>
+              <p className="text-xs text-muted-foreground mb-4">
                 {resolveRoundMode(current.match.round)} · {t("stats.firstTo")} {Math.ceil(resolveRoundBestOf(current.match.round) / 2)}
               </p>
               {currentStartable ? (
-                <Button onClick={() => startFromBoard(current.match)} className="w-full font-display uppercase text-base py-6 gap-2">
+                <Button onClick={() => startFromBoard(current.match)} className="h-[52px] w-full rounded-[14px] text-base font-semibold gap-2">
                   <Play className="w-5 h-5" /> {t("game.startGame")}
                 </Button>
               ) : (
-                <p className="text-xs rounded-lg px-3 py-2" style={{ color: "hsl(210 15% 55%)", background: "hsl(222 20% 14% / 0.5)", border: "1px solid hsl(222 18% 20%)" }}>
+                <p className="text-xs text-muted-foreground rounded-xl border border-border bg-muted/40 px-3 py-2">
                   {!(activeTournament.live_play_enabled ?? true) ? t("tournament.matchNotLiveDisabled") : t("tournament.matchNotLiveExtern")}
                 </p>
               )}
             </div>
           ) : (
-            <div className="bg-muted/30 border border-border rounded-2xl p-8">
+            <div className="bg-card border border-border rounded-2xl p-8">
               <Loader2 className="w-6 h-6 text-muted-foreground mx-auto mb-3 animate-spin" />
               <p className="text-sm text-muted-foreground">{t("tournament.waitingForNextMatch")}</p>
               {next ? (
@@ -3045,14 +3059,18 @@ const TournamentPage = () => {
                 {t("tournament.liveView")}
               </Button>
             ));
+    const planView = bracketView ?? (activeTournament.champion ? "tree" : "boards");
     const planPanel = (
       <>
         <div className="container mb-2 flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border overflow-x-auto max-w-full">
-            <button onClick={() => setBracketView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${bracketView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+            <button onClick={() => setBracketView("boards")} className={`min-h-[44px] px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${planView === "boards" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+              <Monitor className="w-3.5 h-3.5" /> {t("tournament.boardsHeading")}
+            </button>
+            <button onClick={() => setBracketView("tree")} className={`min-h-[44px] px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${planView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
               <Network className="w-3.5 h-3.5" /> {t("tournament.bracketTreeTab")}
             </button>
-            <button onClick={() => setBracketView("schedule")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${bracketView === "schedule" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+            <button onClick={() => setBracketView("schedule")} className={`min-h-[44px] px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${planView === "schedule" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
               <ListOrdered className="w-3.5 h-3.5" /> {t("tournament.scheduleAndScorekeeper")}
             </button>
           </div>
@@ -3070,7 +3088,7 @@ const TournamentPage = () => {
          *  isLiveSnapshotFresh signal the board-picker's "läuft evtl. schon" hint already uses,
          *  just surfaced persistently here instead of only in that one sub-screen — a cheap,
          *  glanceable sanity check, not a real lock. */}
-        {(() => {
+        {planView !== "boards" && (() => {
           const boardCount = activeTournament.boards || 2;
           const boardSchedule = currentBoardSchedule(matches, boardCount);
           const boards = Array.from({ length: boardCount }, (_, i) => i + 1)
@@ -3102,7 +3120,21 @@ const TournamentPage = () => {
           );
         })()}
 
-        {bracketView === "tree" ? (
+        {planView === "boards" ? (
+          <div className="container">
+            <BoardControlPanel
+              matches={matches}
+              boards={activeTournament.boards || 2}
+              totalRounds={totalRounds}
+              roundLabel={roundLabel}
+              firstToForRound={firstToForRound}
+              canControl={canEditResults}
+              onFinishMatch={setKoWinner}
+              onAssignToBoard={assignKoMatchToBoard}
+              onSetPaused={setKoMatchPaused}
+            />
+          </div>
+        ) : planView === "tree" ? (
           <BracketViewport
             matches={matches}
             totalRounds={totalRounds}
@@ -3133,12 +3165,12 @@ const TournamentPage = () => {
                 return <p className="text-sm text-muted-foreground">{t("tournament.allPlayableMatchesDone")}</p>;
               }
               return slots.map((slot, i) => (
-                <div key={slot} className="gradient-card border border-border shadow-elevation-sm rounded-xl overflow-hidden">
+                <div key={slot} className="bg-card border border-border rounded-2xl overflow-hidden">
                   <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center justify-between">
-                    <h3 className="font-display uppercase text-sm">
+                    <h3 className="font-display font-bold text-base">
                       {roundLabel(open.find(e => e.slot === slot)!.round, totalRounds)}
                     </h3>
-                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                       {i === 0 ? t("tournament.nowOnBoard") : `${t("tournament.playRound")} ${i + 1}`}
                     </span>
                   </div>
@@ -3228,10 +3260,10 @@ const TournamentPage = () => {
           if (done.length === 0) return null;
           return (
             <div className="container mb-6">
-              <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
+              <div className="bg-card border border-border rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Zap className="w-4 h-4 text-accent" />
-                  <h3 className="font-display uppercase text-sm">{t("tournament.liveTickerHeading")}</h3>
+                  <h3 className="font-display font-bold text-base">{t("tournament.liveTickerHeading")}</h3>
                 </div>
                 <ol className="grid md:grid-cols-2 gap-2 text-xs">
                   {done.map(m => (
@@ -3253,9 +3285,9 @@ const TournamentPage = () => {
     );
     const playersPanel = <div className="container">
             {isOwner && (
-              <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
+              <div className="bg-card border border-border rounded-2xl p-4">
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <h3 className="font-display uppercase text-sm flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
+                  <h3 className="font-display font-bold text-base flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
                   <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
                     <button
                       onClick={() => setParticipantSort("alpha")}
@@ -3502,33 +3534,26 @@ const TournamentPage = () => {
 
     return (
       <div className="py-2 animate-slide-up">
-        <div className="container flex items-center justify-between mb-2">
-          <div>
-            <h2 className="text-lg font-display uppercase leading-tight">{activeTournament.name}</h2>
+        <div className="container">
+          <CompetitionHeader
+            onBack={closeTournament}
+            backLabel={t("tournament.overview")}
+            kicker={t("tournament.koSystem")}
+            title={activeTournament.name}
+            action={liveToggle || undefined}
+          >
             <p className="text-xs text-muted-foreground">
-              {t("tournament.koSystem")} · {activeTournament.players.length} {t("game.playersSuffix")} · {activeTournament.game_mode} ·{" "}
+              {activeTournament.players.length} {t("game.playersSuffix")} · {activeTournament.game_mode} ·{" "}
               {activeTournament.best_of_sets
                 ? `${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_sets / 2)} ${t("game.setsSuffix")} (${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_legs / 2)} ${t("game.legsPerSet")})`
                 : `${t("stats.firstTo")} ${Math.ceil(activeTournament.best_of_legs / 2)}`}
             </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {liveToggle}
-            <Button variant="ghost" size="sm" onClick={() => { closeTournament(); }}>
-              ← {t("tournament.overview")}
-            </Button>
-          </div>
+          </CompetitionHeader>
         </div>
 
         {activeTournament.champion && (
           <div className="container mb-2">
-            <div className="bg-card border-2 border-accent rounded-xl px-4 py-2 text-center glow-gold flex items-center justify-center gap-2 flex-wrap">
-              <Trophy className="w-5 h-5 text-accent shrink-0" />
-              <p className="font-display uppercase text-sm">{activeTournament.champion} <span className="text-accent">· {t("tournament.championSuffix")}</span></p>
-              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setCeremonyChampion(activeTournament.champion)}>
-                🏆 {t("tournament.ceremony")}
-              </Button>
-            </div>
+            <TournamentChampionBanner champion={activeTournament.champion} onShowCeremony={() => setCeremonyChampion(activeTournament.champion)} />
           </div>
         )}
 
@@ -3536,13 +3561,10 @@ const TournamentPage = () => {
 
         {editMatch && (
           <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditMatch(null)}>
-            {/* Design-Sprint Runde 5 Rang 2: this is a hand-rolled modal (same fixed-overlay
-                pattern Dialog.tsx uses), so it gets that same elevation-lg + glow-tinted border
-                treatment instead of the plain shadow-elevation-sm every routine inline card here
-                gets -- a floating panel over a blurred backdrop should read as raised further than
-                a card sitting in the normal page flow. */}
-            <div className="gradient-card border border-primary/15 shadow-elevation-lg rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
-              <h3 className="font-display uppercase text-sm">{t("tournament.editMatchHeading")}</h3>
+            {/* Hand-rolled modal (same fixed-overlay pattern Dialog.tsx uses): a flat card that
+                keeps the elevation-lg shadow, so it reads as floating above the blurred page. */}
+            <div className="bg-card border border-border shadow-elevation-lg rounded-2xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-display font-bold text-base">{t("tournament.editMatchHeading")}</h3>
               <p className="text-[11px] text-muted-foreground">{t("tournament.emptyMeansBye")}</p>
               <Input value={editP1} onChange={(e) => setEditP1(e.target.value)} placeholder={t("tournament.player1ByePlaceholder")} className="bg-background border-border" />
               <Input value={editP2} onChange={(e) => setEditP2(e.target.value)} placeholder={t("tournament.player2ByePlaceholder")} className="bg-background border-border" />
@@ -3557,8 +3579,8 @@ const TournamentPage = () => {
         {editingRound !== null && (
           <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur flex items-center justify-center p-4" onClick={() => setEditingRound(null)}>
             {/* Same modal-elevation upgrade as the editMatch dialog above -- see its comment. */}
-            <div className="gradient-card border border-primary/15 shadow-elevation-lg rounded-xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
-              <h3 className="font-display uppercase text-sm">
+            <div className="bg-card border border-border shadow-elevation-lg rounded-2xl p-5 w-full max-w-sm space-y-3" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-display font-bold text-base">
                 {editingRound === 0
                   ? `${t("tournament.preliminaryRoundLabel")} ${t("tournament.editHeadingSuffix")}`
                   : `${t("tournament.editModeForRound")} ${editingRound} ${t("tournament.editHeadingSuffix")}`}
@@ -3658,8 +3680,8 @@ const TournamentPage = () => {
       content: (
         <>
       {/* Standings table */}
-      <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 mb-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
+      <div className="bg-card rounded-2xl border border-border p-4 mb-4">
+        <h3 className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("tournament.standingsTable")}</h3>
         <div className={`grid ${standings.some((s) => s.legsFor + s.legsAgainst > 0) ? "grid-cols-[auto_1fr_repeat(3,34px)_50px_38px_34px]" : "grid-cols-[auto_1fr_repeat(4,40px)]"} gap-x-2 gap-y-1 text-xs`}>
           <span className="text-muted-foreground">#</span>
           <span className="text-muted-foreground">{t("stats.player")}</span>
@@ -3703,9 +3725,9 @@ const TournamentPage = () => {
 
       {/* Upcoming matches */}
       {unplayed.length > 0 && (
-        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4 mb-4">
+        <div className="bg-card rounded-2xl border border-border p-4 mb-4">
           <div className="flex items-center justify-between gap-2 mb-3">
-            <h3 className="font-display text-sm uppercase text-muted-foreground">{t("tournament.upcomingMatches")} ({unplayed.length})</h3>
+            <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("tournament.upcomingMatches")} ({unplayed.length})</h3>
             {canEditResults && (
               <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={reshuffleRrScorekeepers}>
                 <Shuffle className="w-3.5 h-3.5" /> {t("tournament.redrawScorekeepers")}
@@ -3796,8 +3818,8 @@ const TournamentPage = () => {
 
       {/* Played matches */}
       {played.length > 0 && (
-        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.playedMatches")} ({played.length})</h3>
+        <div className="bg-card rounded-2xl border border-border p-4">
+          <h3 className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("tournament.playedMatches")} ({played.length})</h3>
           <div className="space-y-1">
             {pagedRrPlayed.visible.map(m => (
               <div key={m.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
@@ -3837,9 +3859,9 @@ const TournamentPage = () => {
     },
     { key: "players", label: t("tournament.tabPlayers"), icon: Users, hidden: !isOwner, content: <>
       {isOwner && (
-        <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4 mt-4">
+        <div className="bg-card border border-border rounded-2xl p-4 mt-4">
           <div className="flex items-center justify-between gap-2 mb-2">
-            <h3 className="font-display uppercase text-sm flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
+            <h3 className="font-display font-bold text-base flex items-center gap-2"><UserMinus className="w-4 h-4 text-muted-foreground" /> {t("tournament.manageParticipants")}</h3>
             <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
               <button
                 onClick={() => setParticipantSort("alpha")}
@@ -3931,26 +3953,16 @@ const TournamentPage = () => {
 
   return (
     <div className="container py-4 animate-slide-up">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-display uppercase">{activeTournament.name}</h2>
-          <p className="text-xs text-muted-foreground">{t("tournament.roundRobin")} · {activeTournament.players.length} {t("game.playersSuffix")}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { closeTournament(); }}>
-            ← {t("tournament.overview")}
-          </Button>
-        </div>
-      </div>
+      <CompetitionHeader
+        onBack={closeTournament}
+        backLabel={t("tournament.overview")}
+        kicker={`${t("tournament.roundRobin")} · ${activeTournament.players.length} ${t("game.playersSuffix")}`}
+        title={activeTournament.name}
+      />
 
       {activeTournament.champion && (
-        <div className="bg-card border-2 border-accent rounded-xl p-4 text-center glow-gold mb-4">
-          <Trophy className="w-8 h-8 text-accent mx-auto mb-1" />
-          <p className="font-display uppercase text-xl">{activeTournament.champion}</p>
-          <p className="text-accent text-sm font-display uppercase">{t("tournament.championSuffix")}</p>
-          <Button size="sm" variant="ghost" className="mt-2 text-xs" onClick={() => setCeremonyChampion(activeTournament.champion)}>
-            🏆 {t("tournament.showTrophyCeremony")}
-          </Button>
+        <div className="mb-4">
+          <TournamentChampionBanner champion={activeTournament.champion} onShowCeremony={() => setCeremonyChampion(activeTournament.champion)} />
         </div>
       )}
 

@@ -30,6 +30,15 @@ export interface Match {
   feedsRound1Slot?: 1 | 2;
   /** Best-effort live snapshot pushed periodically by a "Spiel starten" live game — spectator-only, never authoritative (the final result always comes through `winner`/`score1`/`score2`). Cleared once the match is decided. */
   live?: LiveSnapshot;
+  /** Organizer paused this ready match (player away, smoke break …): the board auto-assignment
+   *  (currentBoardSchedule) skips it until it's resumed. Only changes WHEN it's played — never
+   *  its pairing or its place in the bracket. Dropped once the match is decided or unplayable. */
+  paused?: boolean;
+  /** Organizer explicitly called this match to this board (tournamentBoardControl.ts's
+   *  assignMatchToBoard), overriding the automatic per-board order. `board` stays the planned
+   *  board from buildSchedule; this is only the live "where is it played right now". Dropped
+   *  once the match is decided or unplayable. */
+  assignedBoard?: number;
 }
 
 export interface LiveSnapshot {
@@ -154,6 +163,16 @@ export function recomputeBracket(input: Match[], activePlayers?: string[]): Matc
       });
     }
   }
+
+  // Pause/board-call flags only describe a READY match's place in the live queue — once it's
+  // decided (or its players changed back to unknown after an upstream reset) they're stale and
+  // must not resurface on whatever pairing lands in this slot later.
+  work.forEach((m) => {
+    if (m.winner || !isPlayable(m)) {
+      delete m.paused;
+      delete m.assignedBoard;
+    }
+  });
 
   return work;
 }
@@ -487,11 +506,18 @@ export function currentBoardSchedule(matches: Match[], boards: number): CurrentB
   const now: BoardScheduleEntry[] = [];
   const onDeck: BoardScheduleEntry[] = [];
   const claimed = new Set<string>();
+  // Organizer overrides (see Match.paused / Match.assignedBoard): a paused match is skipped
+  // entirely, and a match explicitly called to a board takes that board ahead of its automatic
+  // order (and is no longer offered to its planned board). The schedule itself (buildSchedule)
+  // is untouched by either, so pairings, slots and planned boards never move.
+  const calledBoardOf = (m: Match) =>
+    m.assignedBoard !== undefined && m.assignedBoard >= 1 && m.assignedBoard <= b ? m.assignedBoard : undefined;
+  const open = schedule.filter((e) => !e.match.winner && !e.match.paused).sort((a, c) => a.slot - c.slot || a.board - c.board);
 
   for (let board = 1; board <= b; board++) {
-    const openForBoard = schedule
-      .filter((e) => e.board === board && !e.match.winner)
-      .sort((a, c) => a.slot - c.slot);
+    const called = open.filter((e) => calledBoardOf(e.match) === board);
+    const automatic = open.filter((e) => e.board === board && calledBoardOf(e.match) === undefined);
+    const openForBoard = [...called, ...automatic];
     if (openForBoard[0]) { now.push({ board, match: openForBoard[0].match }); claimed.add(openForBoard[0].match.id); }
     if (openForBoard[1]) { onDeck.push({ board, match: openForBoard[1].match }); claimed.add(openForBoard[1].match.id); }
   }
@@ -541,6 +567,10 @@ export type BracketActionPayload =
   | { type: "setKoWinner"; matchId: string; winner: string; score1?: number; score2?: number }
   | { type: "setKoScore"; matchId: string; slot: 1 | 2 }
   | { type: "resetKoMatch"; matchId: string }
+  /** Pause/resume a ready KO match (tournamentBoardControl.ts's setMatchPaused). */
+  | { type: "setKoPaused"; matchId: string; paused: boolean }
+  /** Call a ready KO match to a free board (tournamentBoardControl.ts's assignMatchToBoard). */
+  | { type: "assignKoBoard"; matchId: string; board: number }
   | { type: "setRrWinner"; matchId: string; winner: string; score1?: number; score2?: number }
   | { type: "resetRrMatch"; matchId: string };
 

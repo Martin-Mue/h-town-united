@@ -31,7 +31,7 @@ const QuickResultDialog = ({ player1, player2, firstTo, onSubmit, trigger }: Qui
 
   const side = (name: string, isFirst: boolean) => (
     <div>
-      <p className="text-sm font-display uppercase break-words mb-2">
+      <p className="text-base font-display font-bold break-words mb-2">
         {name} <span className="text-muted-foreground normal-case font-sans text-xs">{t("tournament.quickResultWins")}</span>
       </p>
       <div className="grid grid-cols-4 gap-2">

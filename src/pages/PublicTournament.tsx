@@ -7,6 +7,10 @@ import { computeTournamentHighlights, computeTournamentAverages, computeLegAvera
 import TournamentHighlightsPanel from "@/components/tournament/TournamentHighlightsPanel";
 import MatchPredictionsPanel from "@/components/tournament/MatchPredictionsPanel";
 import MobileBracket from "@/components/tournament/MobileBracket";
+import LivePanel from "@/components/live/LivePanel";
+import LiveSectionLabel from "@/components/live/LiveSectionLabel";
+import LiveDot from "@/components/live/LiveDot";
+import VenueDarkSurface from "@/components/live/VenueDarkSurface";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { splitTeamName } from "@/utils/tournamentTeams";
 import { useMatchPredictions } from "@/hooks/useMatchPredictions";
@@ -63,8 +67,8 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
 
   return (
     <div className="space-y-4">
-      <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
-        <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.standingsTable")}</h3>
+      <LivePanel>
+        <LiveSectionLabel className="mb-3">{t("tournament.standingsTable")}</LiveSectionLabel>
         <div className={`grid ${hasLegData ? "grid-cols-[auto_minmax(0,1fr)_repeat(3,28px)_46px_34px_30px]" : "grid-cols-[auto_minmax(0,1fr)_repeat(4,32px)]"} gap-x-2 gap-y-1 text-xs`}>
           <span className="text-muted-foreground">#</span>
           <span className="text-muted-foreground">{t("stats.player")}</span>
@@ -93,37 +97,37 @@ const RoundRobinLive = ({ matches }: { matches: RoundRobinMatch[] }) => {
                   {s.legsFor - s.legsAgainst > 0 ? "+" : ""}{s.legsFor - s.legsAgainst}
                 </span>
               )}
-              <span className="text-center font-display text-primary">{s.points}</span>
+              <span className="text-center font-display font-bold tabular-nums text-primary">{s.points}</span>
             </div>
           ))}
         </div>
-      </div>
+      </LivePanel>
 
       {unplayed.length > 0 && (
-        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.upcomingMatches")} ({unplayed.length})</h3>
+        <LivePanel>
+          <LiveSectionLabel className="mb-3">{t("tournament.upcomingMatches")} ({unplayed.length})</LiveSectionLabel>
           <div className="space-y-1.5">
             {unplayed.map((m) => (
-              <div key={m.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2 text-sm">
-                <span className="min-w-0 break-words uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {m.player2}</span>
+              <div key={m.id} className="flex items-center justify-between bg-muted rounded-xl px-3 py-2 text-sm font-semibold">
+                <span className="min-w-0 break-words">{m.player1} <span className="text-muted-foreground font-normal">{t("common.vs")}</span> {m.player2}</span>
               </div>
             ))}
           </div>
-        </div>
+        </LivePanel>
       )}
 
       {played.length > 0 && (
-        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-4">
-          <h3 className="font-display text-sm uppercase text-muted-foreground mb-3">{t("tournament.playedMatches")} ({played.length})</h3>
-          <div className="space-y-1">
+        <LivePanel>
+          <LiveSectionLabel className="mb-3">{t("tournament.playedMatches")} ({played.length})</LiveSectionLabel>
+          <div className="divide-y divide-border">
             {played.map((m) => (
-              <div key={m.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
-                <span className="min-w-0 break-words uppercase tracking-wide">{m.player1} <span className="text-muted-foreground normal-case">{t("common.vs")}</span> {m.player2}</span>
-                <span className="text-xs text-secondary font-medium shrink-0 ml-2">{m.winner} ✓</span>
+              <div key={m.id} className="flex items-center justify-between px-1 py-2 text-sm">
+                <span className="min-w-0 break-words">{m.player1} <span className="text-muted-foreground">{t("common.vs")}</span> {m.player2}</span>
+                <span className="text-xs text-secondary font-semibold shrink-0 ml-2">{m.winner} ✓</span>
               </div>
             ))}
           </div>
-        </div>
+        </LivePanel>
       )}
     </div>
   );
@@ -228,33 +232,31 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   }, []);
 
   const renderMatch = (m: Match, side: "left" | "right" | "center", isLast: boolean) => {
-    // `playable` (both players known, no winner yet) used to be the ONLY signal driving both
-    // the glow AND the label "live" — meaning a match nobody had actually started yet, just
-    // waiting for a free board, glowed exactly the same as one being played right now. Playable
-    // still earns the glow (it's genuinely "ready to go" and worth a glance), but the real
-    // in-progress state now gets its own distinct accent pulse + live leg count, same as
-    // Tournament.tsx's own bracket already does for the organizer.
+    // `playable` (both players known, no winner yet) = ready to go: outlined in the club's
+    // action color. Actually being played right now (a fresh live snapshot) is a separate state
+    // with a green live dot + live leg count, same distinction Tournament.tsx's own bracket makes
+    // for the organizer.
     const playable = !m.winner && isPlayable(m);
     const liveFresh = playable && isLiveSnapshotFresh(m.live);
     return (
-      <div key={m.id} className={`bg-card border rounded-xl overflow-hidden relative ${m.winner ? "border-border" : playable ? "border-primary/60 glow-cyan" : "border-border/50"}`}>
+      <div key={m.id} className={`bg-card border rounded-2xl overflow-hidden relative ${m.winner ? "border-border" : playable ? "border-primary" : "border-border/60"}`}>
         {!isLast && side === "left" && <span aria-hidden className="absolute top-1/2 -right-4 w-4 h-px bg-border" />}
         {!isLast && side === "right" && <span aria-hidden className="absolute top-1/2 -left-4 w-4 h-px bg-border" />}
         {[m.player1, m.player2].map((player, idx) => (
-          <div key={idx} className={`${compact ? "px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"} flex items-center justify-between gap-2 ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
-            <span className="truncate uppercase tracking-wide">{player || t("tournament.tbdPlaceholder")}</span>
-            <span className={`font-display ${compact ? "text-sm" : "text-base"} ${liveFresh ? "text-accent" : ""}`}>
+          <div key={idx} className={`${compact ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm"} flex items-center justify-between gap-2 font-semibold ${idx === 0 ? "border-b border-border" : ""} ${m.winner === player ? "bg-secondary/15 text-secondary" : !isRealPlayer(player) ? "text-muted-foreground/40 font-normal" : m.winner ? "text-muted-foreground" : ""}`}>
+            <span className="truncate">{player || t("tournament.tbdPlaceholder")}</span>
+            <span className={`font-display font-bold tabular-nums ${compact ? "text-base" : "text-lg"} leading-none ${liveFresh ? "text-secondary" : ""}`}>
               {liveFresh ? (idx === 0 ? m.live!.legs1 : m.live!.legs2) : (idx === 0 ? m.score1 ?? 0 : m.score2 ?? 0)}
             </span>
           </div>
         ))}
         {!m.winner && (m.scorekeeper || m.scorekeeperRule || m.board || liveFresh) && (
-          <div className={`px-2 py-0.5 border-t border-border/60 bg-muted/20 flex items-center justify-between text-[9px] text-muted-foreground ${compact ? "" : "px-3 py-1 text-[10px]"}`}>
+          <div className={`px-2.5 py-0.5 border-t border-border bg-muted flex items-center justify-between text-[9px] text-muted-foreground ${compact ? "" : "px-3 py-1 text-[10px]"}`}>
             <span className="truncate">✍️ {keeperLabel(m, matches) || "–"}</span>
             <span className="flex items-center gap-2 shrink-0">
               {liveFresh && (
-                <span className="flex items-center gap-1 text-accent">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
+                <span className="flex items-center gap-1 font-semibold text-secondary">
+                  <LiveDot /> {t("tournament.live")}
                 </span>
               )}
               {m.board ? <span className="font-mono">{t("camera.board")} {m.board}</span> : null}
@@ -269,8 +271,8 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
     const cfg = (roundConfigs || [])[round - 1];
     return (
       <div className={`mb-1 ${align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"}`}>
-        <h3 className="text-xs font-display uppercase text-muted-foreground">{roundLabel(round, totalRounds)}</h3>
-        <p className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · FT{Math.ceil((cfg?.bestOf || fallbackBestOf) / 2)}</p>
+        <LiveSectionLabel className={align === "center" ? "justify-center" : align === "right" ? "justify-end" : ""}>{roundLabel(round, totalRounds)}</LiveSectionLabel>
+        <p className="text-[11px] text-muted-foreground tabular-nums">{cfg?.mode || fallbackMode} · FT{Math.ceil((cfg?.bestOf || fallbackBestOf) / 2)}</p>
       </div>
     );
   };
@@ -324,10 +326,8 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
   return (
     <div>
       {prelimMatches.length > 0 && (
-        <div className="mb-3 rounded-xl border border-border bg-card/60 p-3">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
-            {t("tournament.preliminaryRound")}
-          </p>
+        <div className="mb-3 rounded-[20px] border border-border p-3">
+          <LiveSectionLabel className="mb-2">{t("tournament.preliminaryRound")}</LiveSectionLabel>
           <div className="flex flex-wrap gap-2">
             {prelimMatches.map(m => (
               <div key={m.id} className="min-w-[180px] flex-1">{renderMatch(m, "center", true)}</div>
@@ -335,8 +335,8 @@ const LiveBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
           </div>
         </div>
       )}
-      <div className="relative">
-      <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-card/90 backdrop-blur border border-border rounded-lg p-1">
+      <div className="relative rounded-[20px] border border-border overflow-hidden">
+      <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-card border border-border rounded-xl p-1">
         <button onClick={() => setUserZoom(z => Math.max(0.4, +(z - 0.15).toFixed(2)))} title={t("tournament.zoomOut")} aria-label={t("tournament.zoomOut")} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground">
           <ZoomOut className="w-3.5 h-3.5" />
         </button>
@@ -412,13 +412,13 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
         // just noise competing for attention with the round that actually matters right now.
         const notReachedYet = list.length > 0 && list.every(m => !isRealPlayer(m.player1) && !isRealPlayer(m.player2));
         return (
-          <div key={round} className={`bg-card border rounded-xl overflow-hidden ${isActive ? "border-primary/50" : "border-border"}`}>
-            <div className={`px-4 py-2 border-b border-border flex items-center justify-between ${isActive ? "bg-primary/10" : "bg-muted/30"}`}>
-              <h3 className="font-display uppercase text-sm flex items-center gap-2">
-                {isActive && <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />}
+          <div key={round} className={`bg-card border rounded-[20px] overflow-hidden ${isActive ? "border-primary" : "border-border"}`}>
+            <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-2">
+              <LiveSectionLabel className={isActive ? "text-foreground" : ""}>
+                {isActive && <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse shrink-0" />}
                 {roundLabel(round, totalRounds)}
-              </h3>
-              <span className="text-[10px] text-primary/80 font-mono">{cfg?.mode || fallbackMode} · FT{Math.ceil((cfg?.bestOf || fallbackBestOf) / 2)}</span>
+              </LiveSectionLabel>
+              <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{cfg?.mode || fallbackMode} · FT{Math.ceil((cfg?.bestOf || fallbackBestOf) / 2)}</span>
             </div>
             {notReachedYet ? (
               <p className="px-4 py-2.5 text-xs text-muted-foreground">{t("pt.roundNotReachedYet")}</p>
@@ -434,22 +434,22 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
                   // doesn't look like it's already underway.
                   const liveFresh = isLiveSnapshotFresh(m.live);
                   return (
-                    <div key={m.id} className="px-4 py-2.5 flex items-center gap-3 text-sm bg-primary/5">
+                    <div key={m.id} className="px-4 py-2.5 flex items-center gap-3 text-sm font-semibold">
                       {[m.player1, m.player2].map((player, idx) => (
-                        <span key={idx} className={`flex-1 min-w-0 truncate uppercase tracking-wide ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : ""}`}>
+                        <span key={idx} className={`flex-1 min-w-0 truncate ${m.winner === player ? "text-secondary" : !isRealPlayer(player) ? "text-muted-foreground/40 font-normal" : ""}`}>
                           {player || t("tournament.tbdPlaceholder")}
                         </span>
                       ))}
-                      <span className={`shrink-0 font-display text-base tabular-nums ${liveFresh ? "text-accent" : ""}`}>
+                      <span className={`shrink-0 font-display font-bold text-xl leading-none tabular-nums ${liveFresh ? "text-secondary" : ""}`}>
                         {liveFresh ? `${m.live!.legs1}:${m.live!.legs2}` : `${m.score1 ?? 0}:${m.score2 ?? 0}`}
                       </span>
                       {liveFresh && (
-                        <span className="shrink-0 flex items-center gap-1 text-[10px] text-accent">
-                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
+                        <span className="shrink-0 flex items-center gap-1 text-[10px] text-secondary">
+                          <LiveDot /> {t("tournament.live")}
                         </span>
                       )}
                       {m.board ? (
-                        <Badge variant="outline" className="shrink-0 font-mono text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 border-transparent">{t("camera.board")} {m.board}</Badge>
+                        <Badge variant="outline" className="shrink-0 rounded-md text-[10px] font-semibold bg-primary text-primary-foreground px-1.5 py-0.5 border-transparent">{t("camera.board")} {m.board}</Badge>
                       ) : null}
                     </div>
                   );
@@ -459,9 +459,9 @@ const BracketList = ({ matches, totalRounds, roundConfigs, fallbackMode, fallbac
             {otherList.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1 p-1.5">
                 {otherList.map(m => (
-                  <div key={m.id} className="rounded-lg bg-muted/20 px-2 py-1 text-xs min-w-0">
+                  <div key={m.id} className="rounded-xl bg-muted px-2 py-1 text-xs min-w-0">
                     {[m.player1, m.player2].map((player, idx) => (
-                      <p key={idx} className={`truncate uppercase tracking-wide leading-tight ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
+                      <p key={idx} className={`truncate leading-tight ${m.winner === player ? "text-secondary font-semibold" : !isRealPlayer(player) ? "text-muted-foreground/40" : "text-muted-foreground"}`}>
                         {player || t("tournament.tbdPlaceholder")}
                       </p>
                     ))}
@@ -532,9 +532,9 @@ const CheckoutBadges = ({ player1, player2, live }: { player1: string; player2: 
   return (
     <div className="mt-1.5 space-y-1">
       {badges.map((b) => (
-        <p key={b.name} className="text-[clamp(0.6rem,0.95vw,0.75rem)] text-accent flex items-center gap-1.5">
+        <p key={b.name} className="text-[clamp(0.7rem,1.1vw,0.9rem)] text-muted-foreground flex items-center gap-1.5">
           <span className="shrink-0">🎯 {b.name}:</span>
-          <span className="font-mono">{b.route.join(" ")}</span>
+          <span className="font-display font-bold tracking-wide text-primary">{b.route.join(" ")}</span>
         </p>
       ))}
     </div>
@@ -560,14 +560,13 @@ const WaitingSplash = ({ name }: { name: string }) => {
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[180px] h-[180px] sm:w-[220px] sm:h-[220px] object-contain opacity-40 saturate-[0.65] pointer-events-none select-none"
         />
         <div className="absolute left-1/2 -translate-x-1/2 top-[104px] sm:top-[128px]">
-          <div className="absolute inset-0 rounded-full bg-primary/25 blur-xl scale-125" />
-          <div className="relative w-[92px] h-[92px] sm:w-[112px] sm:h-[112px] rounded-full border-2 border-primary/60 glow-cyan overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+          <div className="relative w-[92px] h-[92px] sm:w-[112px] sm:h-[112px] rounded-full border-2 border-primary bg-card overflow-hidden">
             <img src={logoUrl} alt={clubName} className="w-full h-full object-cover" />
           </div>
         </div>
       </div>
-      <h2 className="font-display text-2xl uppercase tracking-widest mb-3">{name}</h2>
-      <p className="text-sm text-muted-foreground flex items-center gap-2">
+      <h2 className="font-display font-bold text-[clamp(1.75rem,4vw,3rem)] leading-tight mb-3">{name}</h2>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-2">
         <Hourglass className="w-4 h-4" /> {t("pt.waitingSubtitle")}
       </p>
     </div>
@@ -596,54 +595,54 @@ const FormatStatusPage = ({
   return (
     <div className="max-w-xl mx-auto py-8 px-4 space-y-5">
       <div className={`grid gap-3 ${checkedIn !== null ? "grid-cols-2" : "grid-cols-1"}`}>
-        <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-5 text-center">
-          <p className="font-display text-4xl text-primary">{tournament.players.length}</p>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mt-1.5">{t("tournament.participants")}</p>
-        </div>
+        <LivePanel className="p-5 text-center">
+          <p className="font-display font-bold tabular-nums text-5xl leading-none">{tournament.players.length}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground mt-2">{t("tournament.participants")}</p>
+        </LivePanel>
         {checkedIn !== null && (
-          <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-5 text-center">
-            <p className="font-display text-4xl text-secondary">{checkedIn} / {tournament.players.length}</p>
-            <p className="text-xs uppercase tracking-widest text-muted-foreground mt-1.5">{t("pt.checkedInLabel")}</p>
-          </div>
+          <LivePanel className="p-5 text-center">
+            <p className="font-display font-bold tabular-nums text-5xl leading-none text-secondary">{checkedIn} / {tournament.players.length}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground mt-2">{t("pt.checkedInLabel")}</p>
+          </LivePanel>
         )}
       </div>
 
       {isKo ? (
-        <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-5">
-          <h3 className="font-display uppercase text-base text-muted-foreground mb-3">{t("pt.formatLabel")}</h3>
-          <ul className="space-y-2.5 text-base">
+        <LivePanel className="p-5">
+          <LiveSectionLabel className="mb-3">{t("pt.formatLabel")}</LiveSectionLabel>
+          <ul className="divide-y divide-border text-base">
             {rounds.map((r) => {
               const cfg = (tournament.round_configs || [])[r === 0 ? totalRounds : r - 1];
               return (
-                <li key={r} className="flex items-center justify-between">
+                <li key={r} className="flex items-center justify-between py-2">
                   <span className="text-muted-foreground">{roundLabel(r, totalRounds)}</span>
-                  <span className="font-mono text-primary">{cfg?.mode || tournament.game_mode} · FT{Math.ceil((cfg?.bestOf || tournament.best_of_legs) / 2)}</span>
+                  <span className="font-semibold tabular-nums">{cfg?.mode || tournament.game_mode} · FT{Math.ceil((cfg?.bestOf || tournament.best_of_legs) / 2)}</span>
                 </li>
               );
             })}
           </ul>
-        </div>
+        </LivePanel>
       ) : (
-        <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-5 flex items-center justify-between text-base">
+        <LivePanel className="p-5 flex items-center justify-between text-base">
           <span className="text-muted-foreground">{t("pt.formatLabel")}</span>
-          <span className="font-mono text-primary">{tournament.game_mode} · FT{Math.ceil(tournament.best_of_legs / 2)}</span>
-        </div>
+          <span className="font-semibold tabular-nums">{tournament.game_mode} · FT{Math.ceil(tournament.best_of_legs / 2)}</span>
+        </LivePanel>
       )}
 
       {/* Sets-Modus (2026-09-09): tournament-wide, so shown once here rather than repeated on
           every per-round line above — null/absent for the overwhelming majority of tournaments,
           which don't use it, so this whole block simply doesn't render for them. */}
       {!!tournament.best_of_sets && (
-        <div className="rounded-xl border border-secondary/30 bg-secondary/5 p-5 flex items-center justify-between text-base">
+        <LivePanel className="p-5 flex items-center justify-between gap-3 text-base">
           <span className="text-muted-foreground">{t("game.setsMode")}</span>
-          <span className="font-mono text-secondary">FT{Math.ceil(tournament.best_of_sets / 2)} {t("game.setsSuffix")} · {t("game.legsPerSet")} FT{Math.ceil(tournament.best_of_legs / 2)}</span>
-        </div>
+          <span className="font-semibold tabular-nums text-right">FT{Math.ceil(tournament.best_of_sets / 2)} {t("game.setsSuffix")} · {t("game.legsPerSet")} FT{Math.ceil(tournament.best_of_legs / 2)}</span>
+        </LivePanel>
       )}
 
       {hasPrelim ? (
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-5 text-base text-center">
+        <LivePanel className="p-5 text-base text-center border-primary">
           {t("tournament.preliminaryRound")}
-        </div>
+        </LivePanel>
       ) : isKo && !started ? (
         <p className="text-sm text-muted-foreground text-center">{t("pt.formatMayStillChange")}</p>
       ) : null}
@@ -667,10 +666,10 @@ const QrInvitePage = ({ url, name }: { url: string; name: string }) => {
 
   return (
     <div className="flex flex-col items-center justify-center text-center py-10 px-4 min-h-[60vh]">
-      <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-1">{name}</p>
-      <h2 className="font-display text-xl uppercase mb-6 flex items-center gap-2"><QrCode className="w-5 h-5" /> {t("pt.qrInviteTitle")}</h2>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-1">{name}</p>
+      <h2 className="font-display font-bold text-[clamp(1.5rem,3vw,2.25rem)] mb-6 flex items-center gap-2"><QrCode className="w-6 h-6 text-primary" /> {t("pt.qrInviteTitle")}</h2>
       {dataUrl ? (
-        <img src={dataUrl} alt={t("pt.qrInviteTitle")} className="rounded-2xl border-4 border-primary/30 bg-white p-3 w-full max-w-[420px]" />
+        <img src={dataUrl} alt={t("pt.qrInviteTitle")} className="rounded-[20px] border border-border bg-white p-3 w-full max-w-[420px]" />
       ) : (
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       )}
@@ -708,7 +707,7 @@ const MyMatchBar = ({ names, myName, onChange, now, onDeck }: {
   const hit = playingNow ?? upNext;
   return (
     <div
-      className={`mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3 py-2 text-sm ${hit ? "border-accent/60 bg-accent/10" : "border-border bg-muted/20"}`}
+      className={`mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border bg-card px-3 py-2 text-sm ${hit ? "border-primary" : "border-border"}`}
       data-testid="my-match-bar"
     >
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -717,7 +716,7 @@ const MyMatchBar = ({ names, myName, onChange, now, onDeck }: {
         <select
           value={myName}
           onChange={(e) => onChange(e.target.value)}
-          className="min-w-0 max-w-[11rem] rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+          className="min-w-0 max-w-[11rem] h-9 rounded-xl border border-border bg-background px-2 text-sm text-foreground"
           aria-label={t("pt.whoAmI")}
         >
           <option value="">{t("pt.whoAmIPick")}</option>
@@ -725,7 +724,7 @@ const MyMatchBar = ({ names, myName, onChange, now, onDeck }: {
         </select>
       </label>
       {myName && (
-        <p className={`min-w-0 flex-1 font-display ${hit ? "text-accent" : "text-muted-foreground"}`}>
+        <p className={`min-w-0 flex-1 font-semibold ${hit ? "text-foreground" : "text-muted-foreground"}`}>
           {playingNow
             ? t("pt.youPlayNow").replace("{board}", String(playingNow.board)).replace("{name}", opponentIn(playingNow))
             : upNext
@@ -737,11 +736,78 @@ const MyMatchBar = ({ names, myName, onChange, now, onDeck }: {
   );
 };
 
+/** One player's line on a venue board card: name left, leg count right in big condensed figures. */
+const BoardPlayerRow = ({ name, legs }: { name: string; legs: number }) => (
+  <div className="flex items-baseline justify-between gap-3 min-w-0">
+    <span className="min-w-0 break-words font-semibold leading-tight text-[clamp(1.25rem,2.6vw,2.1rem)]">{name}</span>
+    <span className="shrink-0 font-display font-bold tabular-nums leading-none text-[clamp(2rem,4.2vw,3.4rem)]">
+      <AnimatedScore value={legs} />
+    </span>
+  </div>
+);
+
+/** The live strip under a board card while someone is scoring the match via "Spiel starten":
+ *  remaining points, average to 170 and checkout routes. */
+const BoardLiveStrip = ({ card }: { card: BoardCard }) => {
+  const { t } = useLanguage();
+  const live = card.live!;
+  return (
+    <div className="broadcast-scorebar mt-3 px-3 py-2 sm:px-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-[clamp(0.7rem,1.1vw,0.9rem)] font-semibold uppercase tracking-[0.12em] text-secondary">
+          <LiveDot /> {t("tournament.live")}
+        </span>
+        <span className="font-display font-bold tabular-nums text-[clamp(1.3rem,2.4vw,1.9rem)]">
+          <AnimatedScore value={live.remaining1 ?? 0} /> <span className="text-muted-foreground">:</span> <AnimatedScore value={live.remaining2 ?? 0} />
+        </span>
+      </div>
+      {(live.averageTo170_1 !== undefined || live.averageTo170_2 !== undefined) && (
+        <div className="mt-1 flex items-center justify-between text-[clamp(0.7rem,1.1vw,0.9rem)] text-muted-foreground">
+          <span>{t("stats.averageTo170")}</span>
+          <span className="font-display font-semibold tabular-nums">{live.averageTo170_1?.toFixed(1) ?? "–"} : {live.averageTo170_2?.toFixed(1) ?? "–"}</span>
+        </div>
+      )}
+      <CheckoutBadges player1={card.player1} player2={card.player2} live={card.live} />
+    </div>
+  );
+};
+
+/** One board on the venue screen: board label, round, both players with their legs, scorekeeper. */
+const BoardOverviewCard = ({ card, totalRounds, mine }: { card: BoardCard; totalRounds: number; mine: boolean }) => {
+  const { t } = useLanguage();
+  return (
+    <div className={`broadcast-panel border p-4 sm:p-5 ${mine ? "border-2 border-accent" : "border-border"}`}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2">
+          <span className="broadcast-tag inline-flex px-2.5 py-1 font-display font-bold uppercase tracking-wide text-[clamp(0.9rem,1.5vw,1.15rem)]">
+            {t("camera.board")} {card.board}
+          </span>
+          {mine && <span className="rounded-md bg-accent px-2 py-1 font-display font-bold uppercase tracking-wide text-accent-foreground text-[clamp(0.75rem,1.2vw,0.95rem)]">{t("pt.you")}</span>}
+        </span>
+        {card.round !== undefined && (
+          <span className="text-right text-[clamp(0.7rem,1.1vw,0.9rem)] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{roundLabelFor(card.round, totalRounds, t)}</span>
+        )}
+      </div>
+      <div className="space-y-1">
+        <BoardPlayerRow name={card.player1} legs={card.score1} />
+        <BoardPlayerRow name={card.player2} legs={card.score2} />
+      </div>
+      {card.scorekeeper !== undefined && (
+        <p className="mt-2 flex items-center gap-1.5 text-[clamp(0.75rem,1.15vw,0.95rem)] text-muted-foreground">
+          <PenLine className="h-3.5 w-3.5 shrink-0" /> {card.scorekeeper || "–"}
+        </p>
+      )}
+      {isLiveSnapshotFresh(card.live) && <BoardLiveStrip card={card} />}
+    </div>
+  );
+};
+
 /**
  * Full-bleed, large-type board grid for TV/projector mirroring at club nights — shows
  * every board's current pairing + last known leg score at a glance from across the room,
  * alongside tablets showing the same view up close. Sizes fluidly via CSS clamp() instead
  * of fixed breakpoints so it stays legible whether mirrored to a 10" tablet or a 65" TV.
+ * Always dark (VenueDarkSurface), in the club's colors.
  */
 const BoardOverview = ({
   now, onDeck, queuedCount, totalRounds, myName = "",
@@ -753,84 +819,35 @@ const BoardOverview = ({
   myName?: string;
 }) => {
   const { t } = useLanguage();
+  const isMine = (c: BoardCard) => entryIsMe(c.player1, myName) || entryIsMe(c.player2, myName);
+  const venueLabel = "flex items-center gap-2 text-[clamp(0.75rem,1.2vw,0.95rem)] font-semibold uppercase tracking-[0.12em] text-muted-foreground";
 
   return (
-    <div className="p-4 sm:p-6 min-h-[60vh]" style={{ background: "hsl(222 30% 5%)", color: "hsl(210 15% 92%)" }}>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-[clamp(0.7rem,1.2vw,0.9rem)] uppercase tracking-[0.3em] flex items-center gap-2" style={{ color: "hsl(185 85% 48%)" }}>
-          <span className="inline-block h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "hsl(185 85% 48%)" }} /> {t("pt.boardOverview")} · {t("tournament.live")}
-        </p>
-      </div>
+    <VenueDarkSurface className="min-h-[60vh] rounded-[20px] p-4 sm:p-6">
+      <p className={`${venueLabel} mb-3`}>
+        <LiveDot /> {t("pt.boardOverview")} · {t("tournament.live")}
+      </p>
 
       {now.length === 0 ? (
-        <div className="text-center py-12" style={{ color: "hsl(210 15% 55%)" }}>
-          <Monitor className="w-[clamp(2.5rem,5vw,4rem)] h-[clamp(2.5rem,5vw,4rem)] mx-auto mb-3 opacity-30" />
+        <div className="py-12 text-center text-muted-foreground">
+          <Monitor className="mx-auto mb-3 h-[clamp(2.5rem,5vw,4rem)] w-[clamp(2.5rem,5vw,4rem)] opacity-40" />
           <p className="text-[clamp(1rem,2vw,1.5rem)]">{t("pt.noOngoingMatches")}</p>
         </div>
       ) : (
-        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 320px), 1fr))` }}>
-          {now.map((c) => {
-            const mine = entryIsMe(c.player1, myName) || entryIsMe(c.player2, myName);
-            return (
-            <div key={c.id} className={`broadcast-panel border-2 p-4 sm:p-6 pl-6 sm:pl-8 ${mine ? "border-accent glow-cyan" : "border-primary/60 glow-cyan"}`}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="flex items-center gap-2">
-                <span className="broadcast-tag inline-flex px-3 py-1 rounded-[2px]">
-                  <span className="font-display font-semibold text-[clamp(0.8rem,1.4vw,1rem)] uppercase tracking-wide">{t("camera.board")} {c.board}</span>
-                </span>
-                {mine && <span className="rounded-[2px] bg-accent px-2 py-1 font-display text-[clamp(0.7rem,1.1vw,0.85rem)] uppercase tracking-wide text-accent-foreground">{t("pt.you")}</span>}
-                </span>
-                {c.round !== undefined && <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest" style={{ color: "hsl(210 15% 55%)" }}>{roundLabelFor(c.round, totalRounds, t)}</span>}
-              </div>
-              <p className="font-display uppercase leading-tight tracking-wide text-[clamp(1.4rem,3.6vw,2.6rem)]">
-                {c.player1}
-                <span className="block text-[clamp(0.8rem,1.6vw,1.1rem)] normal-case my-0.5" style={{ color: "hsl(210 15% 55%)" }}>{t("common.vs")}</span>
-                {c.player2}
-              </p>
-              <div className="broadcast-scorebar flex items-center justify-between mt-3 px-3 sm:px-4 py-2">
-                <span className="font-display font-bold tabular-nums text-[clamp(1.9rem,3.8vw,3.1rem)]" style={{ color: "hsl(185 85% 48%)" }}>
-                  <AnimatedScore value={c.score1} /> <span style={{ color: "hsl(210 15% 45%)" }}>:</span> <AnimatedScore value={c.score2} />
-                </span>
-                {c.scorekeeper !== undefined && (
-                  <span className="text-[clamp(0.7rem,1.1vw,0.9rem)] flex items-center gap-1" style={{ color: "hsl(210 15% 55%)" }}>
-                    <PenLine className="w-3.5 h-3.5" /> {c.scorekeeper || "–"}
-                  </span>
-                )}
-              </div>
-              {isLiveSnapshotFresh(c.live) && (
-                <div className="mt-2 rounded-lg px-2.5 py-1.5" style={{ background: "hsl(45 100% 58% / 0.12)", border: "1px solid hsl(45 100% 58% / 0.4)" }}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest flex items-center gap-1.5" style={{ color: "hsl(45 100% 58%)" }}>
-                      <span className="inline-block h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: "hsl(45 100% 58%)" }} /> {t("tournament.live")}
-                    </span>
-                    <span className="font-display text-[clamp(1rem,1.8vw,1.4rem)]">
-                      <AnimatedScore value={c.live!.remaining1 ?? 0} /> : <AnimatedScore value={c.live!.remaining2 ?? 0} />
-                    </span>
-                  </div>
-                  {(c.live!.averageTo170_1 !== undefined || c.live!.averageTo170_2 !== undefined) && (
-                    <div className="flex items-center justify-between text-[clamp(0.65rem,1vw,0.8rem)] mt-1" style={{ color: "hsl(210 15% 55%)" }}>
-                      <span>{t("stats.averageTo170")}</span>
-                      <span className="font-display tabular-nums">{c.live!.averageTo170_1?.toFixed(1) ?? "–"} : {c.live!.averageTo170_2?.toFixed(1) ?? "–"}</span>
-                    </div>
-                  )}
-                  <CheckoutBadges player1={c.player1} player2={c.player2} live={c.live} />
-                </div>
-              )}
-            </div>
-            );
-          })}
+        <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 320px), 1fr))` }}>
+          {now.map((c) => <BoardOverviewCard key={c.id} card={c} totalRounds={totalRounds} mine={isMine(c)} />)}
         </div>
       )}
 
       {onDeck.length > 0 && (
         <div className="mt-6">
-          <p className="text-[clamp(0.7rem,1.1vw,0.85rem)] uppercase tracking-widest mb-2" style={{ color: "hsl(210 15% 55%)" }}>{t("pt.upNext")}</p>
+          <p className={`${venueLabel} mb-2`}>{t("pt.upNext")}</p>
           <div className="flex flex-wrap gap-2">
             {onDeck.map((c) => (
-              <div key={c.id} className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "hsl(222 25% 11%)", border: entryIsMe(c.player1, myName) || entryIsMe(c.player2, myName) ? "2px solid hsl(var(--accent))" : "1px solid hsl(222 18% 18%)" }}>
-                <Badge variant="outline" className="font-mono text-[clamp(0.65rem,1vw,0.8rem)] px-1.5 py-0.5 shrink-0 border-transparent" style={{ background: "hsl(185 85% 48% / 0.15)", color: "hsl(185 85% 48%)" }}>{t("camera.board")} {c.board}</Badge>
-                <span className="text-[clamp(0.85rem,1.4vw,1.05rem)] uppercase tracking-wide">
-                  {c.player1} <span className="normal-case" style={{ color: "hsl(210 15% 55%)" }}>{t("common.vs")}</span> {c.player2}
+              <div key={c.id} className={`flex min-w-0 max-w-full items-center gap-2 rounded-2xl bg-card px-3 py-2 ${isMine(c) ? "border-2 border-accent" : "border border-border"}`}>
+                <span className="shrink-0 rounded-md bg-primary px-1.5 py-0.5 font-display font-bold uppercase text-primary-foreground text-[clamp(0.75rem,1.1vw,0.9rem)]">{t("camera.board")} {c.board}</span>
+                <span className="min-w-0 break-words font-semibold text-[clamp(0.9rem,1.5vw,1.15rem)]">
+                  {c.player1} <span className="font-normal text-muted-foreground">{t("common.vs")}</span> {c.player2}
                 </span>
               </div>
             ))}
@@ -838,11 +855,11 @@ const BoardOverview = ({
         </div>
       )}
       {queuedCount > 0 && (
-        <p className="mt-3 text-[clamp(0.65rem,1vw,0.8rem)] uppercase tracking-widest" style={{ color: "hsl(210 15% 55%)" }}>
+        <p className={`${venueLabel} mt-3`}>
           +{queuedCount} {t("pt.moreMatchesQueued")}
         </p>
       )}
-    </div>
+    </VenueDarkSurface>
   );
 };
 
@@ -1330,20 +1347,19 @@ const PublicTournamentPage = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-primary/10 via-transparent to-accent/10">
+      <header className="border-b border-border px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <img src={logoUrl} alt="Logo" className="w-12 h-12 rounded-xl object-cover border border-primary/30 shrink-0" />
+          <img src={logoUrl} alt="Logo" className="w-11 h-11 rounded-xl object-cover border border-border bg-muted shrink-0" />
           <div className="min-w-0">
-            <h1 className="font-display text-[clamp(1.1rem,2.4vw,2rem)] uppercase tracking-widest truncate">{t.name}</h1>
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="inline-flex items-center gap-2 shrink-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className={`inline-flex items-center gap-1.5 shrink-0 ${t.champion ? "" : "text-secondary"}`}>
                 {t.champion ? (
                   <>
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground" /> {tr("pt.finished")}
                   </>
                 ) : (
                   <>
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-secondary animate-pulse" /> {tr("tournament.live")}
+                    <LiveDot /> {tr("tournament.live")}
                   </>
                 )}
               </span>
@@ -1353,12 +1369,13 @@ const PublicTournamentPage = () => {
                 {" "}· {boardsCount} {tr("camera.board")}{boardsCount > 1 ? "s" : ""}
               </span>
             </p>
+            <h1 className="font-display font-bold text-[clamp(1.6rem,3vw,2.5rem)] leading-tight break-words">{t.name}</h1>
           </div>
         </div>
         {t.champion && (
-          <div className="text-right shrink-0">
-            <p className="text-[10px] uppercase tracking-widest text-accent">{tr("pt.champion")}</p>
-            <p className="font-display text-xl text-accent">🏆 {t.champion}</p>
+          <div className="rounded-2xl border border-border bg-card px-3 py-2 text-right shrink-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{tr("pt.champion")}</p>
+            <p className="font-display font-bold text-2xl leading-tight"><Trophy aria-hidden className="inline w-5 h-5 -mt-1 mr-1 text-accent" />{t.champion}</p>
           </div>
         )}
       </header>
@@ -1392,7 +1409,7 @@ const PublicTournamentPage = () => {
                   key={tab.key}
                   ref={active ? activeTabRef : undefined}
                   onClick={() => selectView(tab.key)}
-                  className={`px-3 py-2 sm:py-1.5 rounded-full text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${active ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted text-muted-foreground"}`}
+                  className={`h-9 px-3 rounded-xl border text-sm font-medium flex items-center gap-1.5 shrink-0 whitespace-nowrap ${active ? "bg-primary border-primary text-primary-foreground" : "border-border hover:bg-muted text-muted-foreground"}`}
                 >
                   {tab.icon} {tab.label} {isLocked(tab.key) && <Lock className="w-3 h-3" />}
                 </button>
@@ -1402,33 +1419,33 @@ const PublicTournamentPage = () => {
           </div>
           <button
             onClick={toggleAutoRotate}
-            className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 ${autoRotate ? "border-secondary bg-secondary/15 text-secondary" : "border-border hover:bg-muted text-muted-foreground"}`}
+            className={`h-9 px-3 rounded-xl border text-xs font-medium flex items-center gap-1.5 ${autoRotate ? "border-secondary bg-secondary/15 text-secondary" : "border-border hover:bg-muted text-muted-foreground"}`}
             title={tr("pt.autoRotateTooltip")}
           >
             <RefreshCcw className={`w-3.5 h-3.5 ${autoRotate ? "animate-pulse" : ""}`} /> {tr("pt.autoSwitch")}
           </button>
           <button
             onClick={() => setShowRotationSettings((v) => !v)}
-            className={`px-2.5 py-1.5 rounded-lg border text-xs flex items-center gap-1 ${showRotationSettings ? "border-secondary bg-secondary/15 text-secondary" : "border-border hover:bg-muted text-muted-foreground"}`}
+            className={`h-9 px-2.5 rounded-xl border text-xs flex items-center gap-1 ${showRotationSettings ? "border-secondary bg-secondary/15 text-secondary" : "border-border hover:bg-muted text-muted-foreground"}`}
             title={tr("pt.rotationSettingsTooltip")}
             aria-label={tr("pt.rotationSettingsTooltip")}
           >
             <Settings2 className="w-3.5 h-3.5" />
           </button>
-          <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-border" role="group" aria-label={tr("pt.textSize")}>
+          <div className="ml-auto inline-flex h-9 overflow-hidden rounded-xl border border-border" role="group" aria-label={tr("pt.textSize")}>
             <button onClick={() => stepScale(-1)} disabled={scaleIndex === 0} className="px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40" aria-label={tr("pt.textSmaller")}>A−</button>
             <button onClick={() => stepScale(1)} disabled={scaleIndex === UI_SCALES.length - 1} className="border-l border-border px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted disabled:opacity-40" aria-label={tr("pt.textLarger")}>A+</button>
           </div>
           <button
             onClick={() => setCalm(true)}
-            className="px-2.5 py-1.5 rounded-lg border border-border text-xs flex items-center gap-1.5 hover:bg-muted text-muted-foreground"
+            className="h-9 px-2.5 rounded-xl border border-border text-xs font-medium flex items-center gap-1.5 hover:bg-muted text-muted-foreground"
             title={tr("pt.calmTooltip")}
           >
             <EyeOff className="w-3.5 h-3.5" /> {tr("pt.calm")}
           </button>
           <button
             onClick={toggleFullscreen}
-            className="px-2.5 py-1.5 rounded-lg border border-border text-xs flex items-center gap-1.5 hover:bg-muted text-muted-foreground"
+            className="h-9 px-2.5 rounded-xl border border-border text-xs font-medium flex items-center gap-1.5 hover:bg-muted text-muted-foreground"
             title={isFullscreen ? tr("pt.exitFullscreen") : tr("pt.enterFullscreenTv")}
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
@@ -1439,7 +1456,7 @@ const PublicTournamentPage = () => {
            *  app anonymous visitors actually reach. Shares the same LanguageContext/localStorage
            *  key as the rest of the app, just with a compact 2-option control instead of Settings'
            *  full dropdown. */}
-          <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
+          <div className="inline-flex h-9 rounded-xl border border-border overflow-hidden shrink-0">
             <button
               onClick={() => setLanguage("de")}
               className={`px-2.5 py-1.5 text-xs font-medium ${language === "de" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -1455,7 +1472,7 @@ const PublicTournamentPage = () => {
           </div>
         </div>
         {showRotationSettings && !calm && (
-          <div className="mb-2 rounded-xl border border-border gradient-card shadow-elevation-sm p-3 max-w-xl">
+          <div className="mb-2 rounded-[20px] border border-border bg-card p-3 max-w-xl">
             <p className="text-[11px] text-muted-foreground mb-2">{tr("pt.rotationSettingsDesc")}</p>
             <div className="flex flex-wrap gap-2">
               {([
@@ -1470,7 +1487,7 @@ const PublicTournamentPage = () => {
                 <button
                   key={opt.slot}
                   onClick={() => toggleRotationSlot(opt.slot)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs ${rotationSlots[opt.slot] ? "border-secondary bg-secondary/15 text-secondary" : "border-border text-muted-foreground"}`}
+                  className={`flex items-center gap-1.5 h-9 px-2.5 rounded-xl border text-xs ${rotationSlots[opt.slot] ? "border-secondary bg-secondary/15 text-secondary" : "border-border text-muted-foreground"}`}
                 >
                   <span className={`w-4 h-4 rounded border flex items-center justify-center ${rotationSlots[opt.slot] ? "bg-secondary border-secondary" : "border-muted-foreground/40"}`}>
                     {rotationSlots[opt.slot] && <Check className="w-3 h-3 text-secondary-foreground" />}
@@ -1497,30 +1514,30 @@ const PublicTournamentPage = () => {
               rotation has the width to spare, and the highlight table only grows as the
               tournament goes on, so it should use that width rather than stay narrow and squeeze
               a growing row/column count into a fixed small box. */}
-          <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-4">
-            <h3 className="font-display uppercase text-sm mb-3 text-muted-foreground flex items-center gap-2"><Target className="w-4 h-4" /> {tr("pt.highlightsLabel")}</h3>
+          <LivePanel>
+            <LiveSectionLabel className="mb-3"><Target className="w-4 h-4" /> {tr("pt.highlightsLabel")}</LiveSectionLabel>
             {!tournamentHighlights || !tournamentAverages ? (
               <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
             ) : (
               <TournamentHighlightsPanel highlights={tournamentHighlights} averages={tournamentAverages} liveView />
             )}
-          </div>
+          </LivePanel>
         </div>
       ) : view === "participants" ? (
         <div className="px-4 pb-6">
-          <div className="rounded-xl border border-border gradient-card shadow-elevation-sm p-3">
+          <LivePanel className="p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <h3 className="font-display uppercase text-sm text-muted-foreground flex items-center gap-2"><Users className="w-4 h-4" /> {tr("pt.participantsView")}</h3>
-              <div className="inline-flex rounded-lg border border-border overflow-hidden shrink-0">
+              <LiveSectionLabel><Users className="w-4 h-4" /> {tr("pt.participantsView")}</LiveSectionLabel>
+              <div className="inline-flex h-9 rounded-xl border border-border overflow-hidden shrink-0">
                 <button
                   onClick={() => setParticipantSort("alpha")}
-                  className={`px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide ${participantSort === "alpha" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`px-3 text-xs font-semibold uppercase tracking-wide ${participantSort === "alpha" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   A-Z
                 </button>
                 <button
                   onClick={() => setParticipantSort("average")}
-                  className={`px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide border-l border-border ${participantSort === "average" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`px-3 text-xs font-semibold uppercase tracking-wide border-l border-border ${participantSort === "average" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   Ø
                 </button>
@@ -1545,19 +1562,19 @@ const PublicTournamentPage = () => {
                   status === "eliminated" ? "border-l-muted-foreground/30" :
                   status === "active" ? "border-l-secondary" : "border-l-transparent";
                 return (
-                  <div key={p} className={`rounded-lg bg-muted/30 border-l-4 ${borderColor} px-2 py-1.5 min-w-0 ${status === "eliminated" ? "opacity-60" : ""}`}>
-                    <p className="truncate text-xs font-medium">{status === "champion" && "🏆 "}{p}</p>
-                    <p className="font-display text-sm text-primary leading-tight">
+                  <div key={p} className={`rounded-xl bg-muted border-l-4 ${borderColor} px-2.5 py-1.5 min-w-0 ${status === "eliminated" ? "opacity-60" : ""}`}>
+                    <p className="truncate text-sm font-semibold">{status === "champion" && "🏆 "}{p}</p>
+                    <p className="font-display font-bold tabular-nums text-lg leading-tight">
                       {avgRow && avgRow.tournamentAverage > 0 ? `Ø ${avgRow.tournamentAverage.toFixed(1)}` : "–"}
                     </p>
                   </div>
                 );
               })}
             </div>
-          </div>
+          </LivePanel>
         </div>
       ) : view === "boards" ? (
-        <BoardOverview myName={myName} now={boardCardsNow} onDeck={boardCardsOnDeck} queuedCount={boardCardsQueued} totalRounds={totalRounds} />
+        <div className="pb-4"><BoardOverview myName={myName} now={boardCardsNow} onDeck={boardCardsOnDeck} queuedCount={boardCardsQueued} totalRounds={totalRounds} /></div>
       ) : view === "waiting" ? (
         <WaitingSplash name={t.name} />
       ) : view === "format" ? (
@@ -1617,18 +1634,15 @@ const PublicTournamentPage = () => {
          *  list/tree instead, so "who's up next" was scrolled well out of view on first glance. */
         <aside className="flex flex-col gap-4 lg:sticky lg:top-4 self-start order-first lg:order-none">
           {isKo && (
-            <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
+            <LivePanel>
               <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <ListOrdered className="w-4 h-4 text-primary" />
-                  <h3 className="font-display uppercase text-sm">{tr("pt.upNext")}</h3>
-                </div>
-                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  <Monitor className="w-3 h-3" /> {boardsCount}
+                <LiveSectionLabel><ListOrdered className="w-4 h-4" /> {tr("pt.upNext")}</LiveSectionLabel>
+                <span className="text-xs text-muted-foreground flex items-center gap-1 tabular-nums">
+                  <Monitor className="w-3.5 h-3.5" /> {boardsCount}
                 </span>
               </div>
               {onDeck.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   {nowBoards.length === 0 ? tr("pt.noPairingsYet") : tr("pt.allKnownPairingsRunning")}
                 </p>
               ) : (
@@ -1638,51 +1652,48 @@ const PublicTournamentPage = () => {
                 // just the first entry's round, which is only ever wrong once boards drift apart.
                 <ul className="space-y-1.5">
                   {onDeck.map(({ board, match: m }) => (
-                    <li key={m.id} className="flex items-center gap-2 text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">
-                      <Badge variant="outline" className="font-mono text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 shrink-0 border-transparent">
+                    <li key={m.id} className="flex items-center gap-2 text-sm bg-muted rounded-xl px-2.5 py-2">
+                      <Badge variant="outline" className="rounded-md text-[10px] font-semibold bg-primary text-primary-foreground px-1.5 py-0.5 shrink-0 border-transparent">
                         {tr("camera.board")} {board}
                       </Badge>
-                      <span className="truncate uppercase tracking-wide flex-1">
-                        {m.player1} <span className="text-muted-foreground normal-case">{tr("common.vs")}</span> {m.player2}
+                      <span className="truncate font-semibold flex-1">
+                        {m.player1} <span className="text-muted-foreground font-normal">{tr("common.vs")}</span> {m.player2}
                       </span>
-                      <span className="text-[9px] text-muted-foreground normal-case shrink-0">{roundLabel(m.round, totalRounds)}</span>
+                      <span className="text-[11px] text-muted-foreground shrink-0">{roundLabel(m.round, totalRounds)}</span>
                     </li>
                   ))}
                 </ul>
               )}
               {queuedCount > 0 && (
-                <p className="mt-2.5 pt-2 border-t border-border/60 text-[10px] uppercase tracking-widest text-muted-foreground">
+                <p className="mt-2.5 pt-2 border-t border-border text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   +{queuedCount} {tr("pt.moreMatchesQueued")}
                 </p>
               )}
-            </div>
+            </LivePanel>
           )}
 
-          <div className="gradient-card border border-border shadow-elevation-sm rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Zap className="w-5 h-5 text-accent" />
-              <h3 className="font-display uppercase text-base">{tr("pt.liveTicker")}</h3>
-            </div>
+          <LivePanel>
+            <LiveSectionLabel className="mb-3"><Zap className="w-4 h-4" /> {tr("pt.liveTicker")}</LiveSectionLabel>
             {completed.length === 0 ? (
               <p className="text-sm text-muted-foreground">{tr("pt.noCompletedMatches")}</p>
             ) : (
-              <ol className="space-y-2.5">
+              <ol className="divide-y divide-border">
                 {completed.map(m => (
-                  <li key={m.id} className="text-sm border-l-2 border-primary/40 pl-2.5">
-                    <p className="font-display text-base uppercase">
+                  <li key={m.id} className="py-2 first:pt-0 text-sm">
+                    <p className="font-semibold">
                       <span className="text-secondary">{m.winner}</span>
-                      <span className="text-muted-foreground normal-case"> {tr("tournament.beats")} </span>
+                      <span className="text-muted-foreground font-normal"> {tr("tournament.beats")} </span>
                       {m.winner === m.player1 ? m.player2 : m.player1}
                     </p>
-                    <p className="text-muted-foreground">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">{roundLabel(m.round, totalRounds)} · {m.score1 ?? 0}:{m.score2 ?? 0}</p>
                   </li>
                 ))}
               </ol>
             )}
-            <div className="mt-4 pt-3 border-t border-border text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-              <Users className="w-3 h-3" /> {t.players.length} {tr("tournament.participants")}
+            <div className="mt-3 pt-3 border-t border-border text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" /> {t.players.length} {tr("tournament.participants")}
             </div>
-          </div>
+          </LivePanel>
         </aside>
         )}
       </div>
@@ -1694,15 +1705,15 @@ const PublicTournamentPage = () => {
           seen by anyone who'd fullscreened any of the other views. position:fixed keeps its
           normal viewport-relative placement regardless of DOM nesting either way. */}
       {flash && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
-          <div className="rounded-2xl border-2 border-accent bg-card/95 backdrop-blur px-8 py-5 text-center glow-gold shadow-2xl">
-            <p className="text-[11px] uppercase tracking-[0.3em] text-accent mb-1">{tr("pt.resultLabel")} · {roundLabel(flash.round, totalRounds)}</p>
-            <p className="font-display text-3xl uppercase">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-xl animate-slide-up">
+          <div className="rounded-[20px] border border-border bg-card px-6 py-4 text-center shadow-elevation-lg">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-1">{tr("pt.resultLabel")} · {roundLabel(flash.round, totalRounds)}</p>
+            <p className="font-display font-bold text-[clamp(1.5rem,3vw,2.25rem)] leading-tight break-words">
               <span className="text-secondary">{flash.winner}</span>
-              <span className="text-muted-foreground text-lg"> {tr("tournament.beats")} </span>
+              <span className="text-muted-foreground font-medium text-lg"> {tr("tournament.beats")} </span>
               {flash.winner === flash.player1 ? flash.player2 : flash.player1}
             </p>
-            <p className="font-display text-xl text-primary mt-1">{flash.score1 ?? 0} : {flash.score2 ?? 0}</p>
+            <p className="font-display font-bold tabular-nums text-3xl mt-1">{flash.score1 ?? 0} : {flash.score2 ?? 0}</p>
           </div>
         </div>
       )}

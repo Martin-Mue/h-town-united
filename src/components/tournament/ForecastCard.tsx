@@ -34,9 +34,9 @@ const ForecastCard = ({
   );
 
   return (
-    <div className="gradient-card border border-border shadow-elevation-sm rounded-xl overflow-hidden">
+    <div className="bg-card border border-border rounded-2xl overflow-hidden">
       <div className="px-4 py-3 bg-muted/30 border-b border-border flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="font-display uppercase text-sm flex items-center gap-2">
+        <h3 className="font-display font-bold text-base flex items-center gap-2">
           <Trophy className="w-4 h-4 text-primary" /> {tournament.name}
         </h3>
         <span className="text-[10px] uppercase tracking-widest text-muted-foreground">

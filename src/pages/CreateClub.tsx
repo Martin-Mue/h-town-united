@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +8,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Trophy } from "lucide-react";
+import EntryPageShell from "@/components/entry/EntryPageShell";
+import EntryHeader from "@/components/entry/EntryHeader";
+import EntryCard from "@/components/entry/EntryCard";
+import EntryIconTile from "@/components/entry/EntryIconTile";
+import EntryPrimaryButton from "@/components/entry/EntryPrimaryButton";
+import { ENTRY_INPUT_CLASS } from "@/components/entry/entryFieldStyles";
 import { DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 
 /** Reached by any authenticated account with no club membership yet -- see RequireClub in
@@ -55,55 +60,48 @@ const CreateClub = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="gradient-hero rounded-2xl p-6 pt-8 mb-4 border border-border relative overflow-hidden text-center">
-          <div aria-hidden className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.12),transparent_65%)]" />
-          <div className="relative">
-            <div className="w-16 h-16 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4 glow-cyan">
-              <Trophy className="w-8 h-8 text-primary" />
-            </div>
-            <h1 className="text-2xl font-display uppercase">{t("createClub.title")}</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {t("createClub.description")}
-            </p>
-          </div>
-        </div>
+    <EntryPageShell>
+      <EntryHeader
+        mark={<EntryIconTile icon={Trophy} />}
+        title={t("createClub.title")}
+        subtitle={t("createClub.description")}
+      />
 
-        <div className="gradient-card border border-border shadow-elevation-sm rounded-2xl p-6">
+      <EntryCard>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label>{t("createClub.nameLabel")}</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-club-name">{t("createClub.nameLabel")}</Label>
               <Input
+                id="create-club-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("createClub.namePlaceholder")}
-                className="bg-muted border-border"
+                className={ENTRY_INPUT_CLASS}
                 required
               />
             </div>
-            <div>
-              <Label>{t("createClub.taglineLabel")}</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-club-tagline">{t("createClub.taglineLabel")}</Label>
               <Input
+                id="create-club-tagline"
                 value={tagline}
                 onChange={(e) => setTagline(e.target.value)}
                 placeholder={t("createClub.taglinePlaceholder")}
-                className="bg-muted border-border"
+                className={ENTRY_INPUT_CLASS}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={saving || !name.trim()}>
+            <EntryPrimaryButton type="submit" disabled={saving || !name.trim()}>
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {t("createClub.title")}
-            </Button>
+            </EntryPrimaryButton>
           </form>
-          <div className="mt-4 text-center">
-            <button onClick={() => signOut()} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+          <div className="mt-3 text-center">
+            <button onClick={() => signOut()} className="min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground hover:underline">
               {t("header.signOut")}
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+      </EntryCard>
+    </EntryPageShell>
   );
 };
 

@@ -52,6 +52,13 @@ import { Sparkles } from "lucide-react";
 import { Eyebrow, SectionCard, StatTile, TrendBadge, Sparkline, RingStat, RankAvatar, RankBadge, BarRow, TONE_TEXT as TONE_ICON } from "@/components/stats/StatPrimitives";
 import { averageToCheckoutRange, scoringPhaseTotals, combineScoringPhaseTotals, type ScoringPhaseTotals } from "@/utils/averageToCheckoutRange";
 import MatchDetailDialog from "@/components/stats/MatchDetailDialog";
+import StatsPeriodSwitch from "@/components/stats/StatsPeriodSwitch";
+import AverageHeadlineCard from "@/components/stats/AverageHeadlineCard";
+import HeadlineStatTiles, { type HeadlineStatTile } from "@/components/stats/HeadlineStatTiles";
+import {
+  activeStatsPeriod, filterStateForPeriod, previousWindowFor, isInWindow, meanOfGameAverages, averageChange,
+  averagesPerPlayDay, type StatsPeriod, type GameAverageSample,
+} from "@/utils/statsHeadline";
 
 interface GameRecord {
   id: string; mode: string; player1_name: string; player2_name: string;
@@ -1424,6 +1431,79 @@ const StatisticsPage = () => {
   const recentGames = viewScope === "personal" ? personalGames : filteredGames;
   const pagedRecentGames = usePagedList(recentGames);
 
+  // ── Page head: period switch + 3-dart average with trend + headline tiles ──
+  // Whose numbers the head shows: the logged-in member in "Ich", every member in "Verein".
+  const headlinePlayerId = viewScope === "personal" ? myPlayer?.id ?? null : null;
+  const currentSeasonYear = new Date().getFullYear();
+  const activePeriod = activeStatsPeriod(filterTime, filterYear, currentSeasonYear);
+  const selectStatsPeriod = (period: StatsPeriod) => {
+    const next = filterStateForPeriod(period, currentSeasonYear);
+    setFilterTime(next.filterTime);
+    setFilterYear(next.filterYear);
+  };
+
+  // One sample per (member, X01 game): that member's own darts in that game pooled — same
+  // per-game convention as filteredPlayerStats above. Built over every date (not just
+  // filteredGames) so the previous period can be compared too; the mode/player/format filters
+  // still apply, the time filters are applied per side below. Cricket is left out, a 3-dart
+  // average is an X01 number.
+  const headlineAverageSamples = useMemo(() => {
+    const gameById = new Map(games.filter((g) => {
+      if (g.mode === "cricket") return false;
+      if (filterMode !== "all" && g.mode !== filterMode) return false;
+      if (filterPlayerId !== "all" && g.player1_id !== filterPlayerId && g.player2_id !== filterPlayerId) return false;
+      if (filterBestOf !== "all" && Number(g.best_of_legs) !== Number(filterBestOf)) return false;
+      return true;
+    }).map((g) => [g.id, g]));
+    const byPlayerGame = new Map<string, { gameId: string; playedAt: number; throws: DartThrow[] }>();
+    gameLegs.forEach((leg) => {
+      if (!leg.player_id || !Array.isArray(leg.throws) || leg.throws.length === 0) return;
+      if (headlinePlayerId && leg.player_id !== headlinePlayerId) return;
+      const g = gameById.get(leg.game_id);
+      if (!g) return;
+      const key = `${leg.player_id}:${leg.game_id}`;
+      const entry = byPlayerGame.get(key) ?? byPlayerGame.set(key, { gameId: g.id, playedAt: new Date(g.played_at).getTime(), throws: [] }).get(key)!;
+      entry.throws.push(...leg.throws);
+    });
+    return Array.from(byPlayerGame.values()).map((e): GameAverageSample => ({ gameId: e.gameId, playedAt: e.playedAt, average: average(e.throws) }));
+  }, [games, gameLegs, headlinePlayerId, filterMode, filterPlayerId, filterBestOf]);
+
+  const headlineAverage = useMemo(() => {
+    const currentIds = new Set(filteredGames.map((g) => g.id));
+    const current = headlineAverageSamples.filter((s) => currentIds.has(s.gameId));
+    const previous = previousWindowFor(filterTime, filterYear, Date.now());
+    const previousSamples = previous ? headlineAverageSamples.filter((s) => isInWindow(s.playedAt, previous.window)) : [];
+    const currentAverage = meanOfGameAverages(current);
+    return {
+      average: currentAverage,
+      change: averageChange(currentAverage, meanOfGameAverages(previousSamples)),
+      previousKind: previous?.kind ?? null,
+      days: averagesPerPlayDay(current),
+    };
+  }, [headlineAverageSamples, filteredGames, filterTime, filterYear]);
+
+  const headlineTiles = useMemo((): HeadlineStatTile[] => {
+    const checkout = headlinePlayerId
+      ? advancedByPlayer[headlinePlayerId]?.checkout
+      : combineCheckoutStats(Object.values(advancedByPlayer).map((p) => p.checkout));
+    const oneEighties = headlinePlayerId ? player180TotalById[headlinePlayerId] ?? 0 : club180Total;
+    const highestFinish = checkout?.highestCheckout ?? 0;
+    const locale = LOCALE_BY_LANGUAGE[language];
+    const tiles: HeadlineStatTile[] = [
+      { key: "checkout", label: t("stats.headCheckoutRate"), value: checkout && checkout.attempts > 0 ? `${checkout.percentage.toLocaleString(locale, { maximumFractionDigits: 1 })} %` : "–" },
+      { key: "180s", label: t("stats.oneEighties"), value: String(oneEighties), accentIcon: Flame },
+      { key: "highestFinish", label: t("stats.highestCheckout"), value: highestFinish > 0 ? String(highestFinish) : "–", accentIcon: Trophy },
+    ];
+    // A club-wide win rate is always ~50 %, so "Verein" shows the number of games instead.
+    if (headlinePlayerId) {
+      const ownDetail = playerDetailStats?.player.id === headlinePlayerId ? playerDetailStats : null;
+      tiles.push({ key: "winRate", label: t("stats.headWinRate"), value: ownDetail && ownDetail.totalGames > 0 ? `${ownDetail.winRate} %` : "–" });
+    } else {
+      tiles.push({ key: "games", label: t("stats.gamesPlayed"), value: String(clubStats.totalGames) });
+    }
+    return tiles;
+  }, [headlinePlayerId, advancedByPlayer, player180TotalById, club180Total, playerDetailStats, clubStats.totalGames, language, t]);
+
   // Full match-total stat bundle per player (checkout%, 180s, highscore, tier breakdown) for the
   // match-detail dialog's "Gesamt" card, from the same game_legs data via the exact leg-boundary-
   // safe aggregation Game.tsx's own post-match screen uses. Cricket games are skipped — checkout/
@@ -1589,27 +1669,22 @@ const StatisticsPage = () => {
 
   return (
     <div className="container py-6 animate-slide-up">
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center shadow-[0_0_20px_hsl(var(--primary)/0.18)] shrink-0">
-          <BarChart3 className="w-4.5 h-4.5 text-primary" />
-        </div>
-        <h2 className="text-2xl font-display uppercase leading-none">{t("stats.title")}</h2>
-      </div>
+      <h1 className="mb-5 font-display text-[28px] font-bold leading-tight">{t("stats.title")}</h1>
 
       {/* Primary scope switch — the one fixed decision above everything else: club-wide or mine. */}
-      <div className="flex bg-muted rounded-xl p-1 gap-1 mb-4">
+      <div role="group" className="mb-4 grid grid-cols-2 gap-1 rounded-[14px] border border-border bg-card p-1">
         <button onClick={() => setScope("club")}
-          className={`flex-1 text-center py-2.5 rounded-lg font-display text-xs uppercase tracking-wide transition-all ${viewScope === "club" ? "bg-card border border-primary/40 text-primary shadow-[0_0_16px_hsl(var(--primary)/0.15)]" : "text-muted-foreground hover:text-foreground"}`}>
+          aria-pressed={viewScope === "club"} className={`h-11 rounded-[10px] border text-sm font-semibold transition-colors ${viewScope === "club" ? "border-primary bg-primary/15 text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
           {t("nav.club")}
         </button>
         <button onClick={() => setScope("personal")}
-          className={`flex-1 text-center py-2.5 rounded-lg font-display text-xs uppercase tracking-wide transition-all ${viewScope === "personal" ? "bg-card border border-primary/40 text-primary shadow-[0_0_16px_hsl(var(--primary)/0.15)]" : "text-muted-foreground hover:text-foreground"}`}>
+          aria-pressed={viewScope === "personal"} className={`h-11 rounded-[10px] border text-sm font-semibold transition-colors ${viewScope === "personal" ? "border-primary bg-primary/15 text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
           {t("stats.myself")}
         </button>
       </div>
 
       {viewScope === "personal" && !myPlayer && (
-        <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-6 text-center mb-4">
+        <div className="rounded-2xl border border-border bg-card p-6 text-center mb-4">
           <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm text-muted-foreground mb-3">
             {t("stats.noProfileLinked")}
@@ -1620,10 +1695,24 @@ const StatisticsPage = () => {
 
       {(viewScope === "club" || myPlayer) && (
       <>
+      {/* Page head: one main number with its trend, then the headline tiles. The period switch
+          is a shortcut over the filter bar's own time/season filters below. */}
+      <div className="flex flex-col gap-3.5 mb-4">
+        <StatsPeriodSwitch active={activePeriod} onSelect={selectStatsPeriod} />
+        <AverageHeadlineCard
+          subjectLabel={headlinePlayerId && myPlayer ? myPlayer.name : t("nav.club")}
+          average={headlineAverage.average}
+          change={headlineAverage.change}
+          previousKind={headlineAverage.previousKind}
+          days={headlineAverage.days}
+        />
+        <HeadlineStatTiles tiles={headlineTiles} />
+      </div>
+
       {/* Filter bar */}
       <SectionCard className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="flex items-center gap-1.5 text-xs font-display uppercase tracking-wider text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
             <Filter className="w-3.5 h-3.5" /> {t("stats.filter")}
             {filtersActive && (
               <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] text-primary">
@@ -1632,7 +1721,7 @@ const StatisticsPage = () => {
             )}
           </span>
           {filtersActive && (
-            <button onClick={resetFilters} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <button onClick={resetFilters} className="min-h-11 -my-3 px-1 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
               <X className="w-3 h-3" /> {t("stats.reset")}
             </button>
           )}
@@ -1689,7 +1778,7 @@ const StatisticsPage = () => {
         <div className="flex gap-2 overflow-x-auto pb-0.5">
           {tabs.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${activeTab === tab.key ? "bg-primary text-primary-foreground shadow-[0_0_16px_hsl(var(--primary)/0.35)]" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+              aria-pressed={activeTab === tab.key} className={`shrink-0 flex min-h-11 items-center gap-1.5 px-4 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors ${activeTab === tab.key ? "border border-primary bg-primary/15 text-primary" : "border border-border text-muted-foreground hover:text-foreground"}`}>
               <tab.icon className="w-3.5 h-3.5 shrink-0" />{t(tab.labelKey)}
             </button>
           ))}
@@ -1705,7 +1794,7 @@ const StatisticsPage = () => {
             <Button variant="ghost" size="sm" onClick={() => setRankingFocusKey(null)} className="mb-3 -ml-2 h-auto py-1 text-xs text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-4 h-4" /> {t("stats.backToOverview")}
             </Button>
-            <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
               <Trophy className="w-4 h-4" /> {rankingViewMode === "list" ? sortByLabel(rankingFocusKey) : t("stats.leaderboard")}
             </h3>
 
@@ -1716,7 +1805,7 @@ const StatisticsPage = () => {
                 <div className="flex gap-1.5 overflow-x-auto pb-1">
                   {rankingStatKeys.map((key) => (
                     <button key={key} onClick={() => { setSortBy(key); setRankingFocusKey(key); }}
-                      className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${rankingFocusKey === key ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+                      className={`shrink-0 min-h-11 px-3.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${rankingFocusKey === key ? "border border-primary bg-primary/15 text-primary" : "border border-border text-muted-foreground hover:text-foreground"}`}>
                       {sortByLabel(key)}
                     </button>
                   ))}
@@ -1736,8 +1825,8 @@ const StatisticsPage = () => {
                           if (checked) next.delete(key); else next.add(key);
                           return next;
                         })}
-                        className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${checked ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-foreground"}`}>
-                        <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 ${checked ? "border-primary-foreground/70 bg-primary-foreground/20" : "border-muted-foreground/50"}`}>
+                        className={`shrink-0 flex min-h-11 items-center gap-1.5 px-3.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${checked ? "border border-primary bg-primary/15 text-primary" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+                        <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 ${checked ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/50"}`}>
                           {checked && <Check className="w-2.5 h-2.5" />}
                         </span>
                         {sortByLabel(key)}
@@ -1771,7 +1860,7 @@ const StatisticsPage = () => {
                   { mode: "bar" as const, label: t("stats.viewAsBar") },
                 ]).map((opt) => (
                   <button key={opt.mode} onClick={() => setRankingViewMode(opt.mode)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${rankingViewMode === opt.mode ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:text-foreground"}`}>
+                    className={`min-h-11 px-4 rounded-xl text-xs font-semibold transition-colors ${rankingViewMode === opt.mode ? "border border-primary bg-primary/15 text-primary" : "border border-border text-muted-foreground hover:text-foreground"}`}>
                     {opt.label}
                   </button>
                 ))}
@@ -1812,7 +1901,7 @@ const StatisticsPage = () => {
                       <p className="text-sm font-semibold truncate">{p.name}</p>
                       <p className="text-[10px] text-muted-foreground">{p.games_played} {t("stats.games")} · {Math.round(p.elo_rating ?? 1000)} Elo</p>
                     </div>
-                    <span className="font-display text-lg text-primary">{sortValueFor(p)}</span>
+                    <span className="font-display text-lg font-bold tabular-nums text-primary">{sortValueFor(p)}</span>
                   </button>
                 ))}
               </div>
@@ -1869,11 +1958,11 @@ const StatisticsPage = () => {
               { labelKey: "stats.fewestDartsToCheckout", value: bestShortestLeg.val || "-", sub: bestShortestLeg.name, icon: Hash, tone: "destructive" as const, sortKey: "fewest_darts" as const },
             ].map(s => (
               <button key={s.labelKey} onClick={() => { setSortBy(s.sortKey); setRankingFocusKey(s.sortKey); setSelectedBarStats(new Set([s.sortKey])); }}
-                className="shrink-0 w-[132px] sm:w-auto bg-card rounded-xl p-3.5 border border-border text-left hover:border-primary/40 hover:-translate-y-0.5 transition-all">
+                className="shrink-0 w-[132px] sm:w-auto bg-card rounded-2xl p-3.5 border border-border text-left hover:border-primary/40 transition-colors">
                 <s.icon className={`w-4 h-4 mb-2 ${TONE_ICON[s.tone]}`} />
-                <p className="text-xl font-display mb-1">{s.value}</p>
-                <p className="text-[10px] text-muted-foreground">{t(s.labelKey)}</p>
-                <p className="text-[10px] text-primary truncate">{s.sub}</p>
+                <p className="text-[22px] leading-tight font-display font-bold tabular-nums mb-1">{s.value}</p>
+                <p className="text-xs text-muted-foreground">{t(s.labelKey)}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{s.sub}</p>
               </button>
             ))}
           </div>
@@ -1898,16 +1987,16 @@ const StatisticsPage = () => {
             <SectionCard className="mb-6">
               <Eyebrow icon={Crosshair}>{t("stats.tripleAnalysis")}</Eyebrow>
               <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="text-2xl font-display text-destructive">{trebleStats.treblelessRate.toFixed(1)}%</p>
+                <div className="rounded-xl border border-border p-3">
+                  <p className="text-2xl font-display font-bold tabular-nums text-destructive">{trebleStats.treblelessRate.toFixed(1)}%</p>
                   <p className="text-[10px] text-muted-foreground">{t("stats.treblelessVisits")}</p>
                 </div>
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="text-2xl font-display">{trebleStats.trebleless}</p>
+                <div className="rounded-xl border border-border p-3">
+                  <p className="text-2xl font-display font-bold tabular-nums">{trebleStats.trebleless}</p>
                   <p className="text-[10px] text-muted-foreground">{t("stats.of")} {trebleStats.visits} {t("stats.visits")}</p>
                 </div>
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="text-2xl font-display text-secondary">{trebleStats.triples}</p>
+                <div className="rounded-xl border border-border p-3">
+                  <p className="text-2xl font-display font-bold tabular-nums text-secondary">{trebleStats.triples}</p>
                   <p className="text-[10px] text-muted-foreground">{t("stats.triplesTotal")}</p>
                 </div>
               </div>
@@ -1965,7 +2054,7 @@ const StatisticsPage = () => {
           {/* Leaderboard */}
           <SectionCard>
             <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-              <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
+              <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 <Trophy className="w-4 h-4" /> {t("stats.leaderboard")}{filterYear !== "all" ? ` · ${t("stats.season")} ${filterYear}` : filtersActive ? ` · ${t("stats.filtered")}` : ""}
               </h3>
               <div className="flex items-center gap-1.5">
@@ -2020,7 +2109,7 @@ const StatisticsPage = () => {
                         <p className="text-sm font-semibold truncate">{p.name}</p>
                         <p className="text-[10px] text-muted-foreground">{p.games_played} {t("stats.games")} · {winRate}% · {Math.round(p.elo_rating ?? 1000)} Elo</p>
                       </div>
-                      <span className="font-display text-lg text-primary">{sortVal}</span>
+                      <span className="font-display text-lg font-bold tabular-nums text-primary">{sortVal}</span>
                     </button>
                   );
                 })}
@@ -2056,11 +2145,11 @@ const StatisticsPage = () => {
                   with it at the same visual weight. */}
               <SectionCard glow="primary" className="mb-4">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-14 h-14 rounded-full bg-primary/15 border-2 border-primary/50 flex items-center justify-center shrink-0 shadow-[0_0_20px_hsl(var(--primary)/0.25)]">
+                  <div className="w-14 h-14 rounded-full bg-muted border border-border flex items-center justify-center shrink-0">
                     <span className="text-2xl">{playerDetailStats.player.emoji}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-display uppercase leading-tight">{playerDetailStats.player.name}</h3>
+                    <h3 className="text-xl font-display font-bold leading-tight break-words">{playerDetailStats.player.name}</h3>
                     <p className="text-xs text-muted-foreground mt-0.5">{playerDetailStats.totalGames} {t("stats.games")} · {playerDetailStats.winRate}% {t("recap.winRateSuffix")} · {Math.round(playerDetailStats.player.elo_rating ?? 1000)} Elo</p>
                   </div>
                   {playerSeasonRecap && (
@@ -2073,9 +2162,9 @@ const StatisticsPage = () => {
                   </Button>
                 </div>
 
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{t("stats.average")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("stats.average")}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <p className="font-display text-4xl leading-none">{playerDetailStats.totalGames > 0 ? playerDetailStats.average.toFixed(1) : "–"}</p>
+                  <p className="font-display text-[44px] font-bold tabular-nums leading-none">{playerDetailStats.totalGames > 0 ? playerDetailStats.average.toFixed(1) : "–"}</p>
                   {/* Form-Trend: recent-N vs. lifetime average, TrendBadge already existed as a
                       primitive (StatPrimitives.tsx) but was never actually wired up anywhere in
                       this file — see recentFormDelta's own doc comment above for why it's null
@@ -2107,18 +2196,18 @@ const StatisticsPage = () => {
               {/* Einfach/Profi-Umschalter — siehe statsDetailMode-Kommentar oben. Direkt unter dem
                   Header, damit sofort klar ist, dass hier mehr Tiefe wartet, statt sie unauffällig
                   zwischen den Karten zu verstecken. */}
-              <div className="flex bg-muted rounded-full p-1 mb-4">
+              <div role="group" className="mb-4 grid grid-cols-2 gap-1 rounded-[14px] border border-border bg-card p-1">
                 <button
                   type="button"
                   onClick={() => setStatsDetailModePersist("simple")}
-                  className={`flex-1 text-center py-1.5 rounded-full text-xs font-bold transition-all ${statsDetailMode === "simple" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}
+                  aria-pressed={statsDetailMode === "simple"} className={`h-11 rounded-[10px] border text-sm font-semibold transition-colors ${statsDetailMode === "simple" ? "border-primary bg-primary/15 text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
                 >
                   {t("stats.simpleMode")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setStatsDetailModePersist("pro")}
-                  className={`flex-1 text-center py-1.5 rounded-full text-xs font-bold transition-all ${statsDetailMode === "pro" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}
+                  aria-pressed={statsDetailMode === "pro"} className={`h-11 rounded-[10px] border text-sm font-semibold transition-colors ${statsDetailMode === "pro" ? "border-primary bg-primary/15 text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
                 >
                   {t("stats.proMode")}
                 </button>
@@ -2132,7 +2221,7 @@ const StatisticsPage = () => {
               {(player180Total > 0 || playerDetailStats.player.user_id === session?.user?.id) && (
                 <SectionCard glow="accent" className="mb-4">
                   <Eyebrow icon={Target} tone="accent">{t("stats.oneEighties")}</Eyebrow>
-                  <p className="font-display text-4xl text-accent -mt-2">{player180Total}</p>
+                  <p className="font-display text-4xl font-bold tabular-nums -mt-1">{player180Total}</p>
                   {player180Breakdown.length > 0 && (
                     <div className="mt-2 space-y-0.5">
                       {player180Breakdown.map((y) => (
@@ -2156,9 +2245,9 @@ const StatisticsPage = () => {
               {/* Achievements */}
               {playerAchievements.length > 0 && (
                 <SectionCard className="mb-4">
-                  <h3 className="font-display text-sm uppercase mb-3 text-muted-foreground flex items-center gap-2">
+                  <h3 className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                     <Award className="w-4 h-4" /> {t("stats.achievements")}
-                    <span className="text-[10px] normal-case text-muted-foreground/70">
+                    <span className="text-[10px] normal-case tracking-normal text-muted-foreground/70">
                       ({playerAchievements.filter((a) => a.unlocked).length}/{playerAchievements.length})
                     </span>
                   </h3>
@@ -2212,7 +2301,7 @@ const StatisticsPage = () => {
                     {pagedTop20LegAverages.visible.map((entry, i) => (
                       <div key={i} className="flex items-center justify-between gap-2 text-xs px-2 py-1 rounded bg-muted/30">
                         <span className="shrink-0 font-bold text-muted-foreground w-5">{i + 1}.</span>
-                        <span className="shrink-0 font-display font-semibold text-primary">{entry.avg.toFixed(1)}</span>
+                        <span className="shrink-0 font-display font-bold tabular-nums text-primary">{entry.avg.toFixed(1)}</span>
                         <Badge variant="outline" className="shrink-0 font-mono text-[10px] px-1.5 py-0">{entry.mode}</Badge>
                         <span className="shrink-0 text-muted-foreground">{entry.darts} Darts</span>
                         <span className="min-w-0 flex-1 truncate text-muted-foreground text-right">{entry.date}</span>
@@ -2308,7 +2397,7 @@ const StatisticsPage = () => {
               {statsDetailMode === "pro" && playerScoringBreakdown && (
                 <SectionCard className="mb-4">
                   <button onClick={() => setShowFieldBreakdown(!showFieldBreakdown)} className="w-full flex items-center justify-between gap-2 text-left">
-                    <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
+                    <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                       <Crosshair className="w-4 h-4" /> {t("game.fieldBreakdown")}
                     </h3>
                     {showFieldBreakdown ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
@@ -2372,7 +2461,7 @@ const StatisticsPage = () => {
                   yet) instead of "no camera games yet". */}
               {statsDetailMode === "pro" && (
                 <SectionCard className="mb-4">
-                  <h3 className="font-display text-sm uppercase mb-1 text-muted-foreground flex items-center gap-2">
+                  <h3 className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                     <Crosshair className="w-4 h-4" /> {t("stats.throwHeatmap")}
                   </h3>
                   {totalZoneThrows > 0 ? (
@@ -2477,9 +2566,9 @@ const StatisticsPage = () => {
               {(() => {
                 const isOwnProfile = !!myPlayer && selectedPlayerId === myPlayer.id;
                 const favoriteCard = playerDetailStats.favoriteOpponent && (
-                  <div className="bg-card rounded-xl border border-secondary/30 p-3 text-center">
+                  <div className="bg-card rounded-2xl border border-border p-3 text-center">
                     <p className="text-xs text-muted-foreground mb-1">🎯 {t("stats.favoriteOpponent")}</p>
-                    <p className="text-lg font-display text-secondary truncate">{playerDetailStats.favoriteOpponent.name}</p>
+                    <p className="text-lg font-display font-bold text-secondary truncate">{playerDetailStats.favoriteOpponent.name}</p>
                     <p className="text-[10px] text-muted-foreground">{playerDetailStats.favoriteOpponent.wins}W-{playerDetailStats.favoriteOpponent.losses}L {t("stats.recordAgainstThem")}</p>
                   </div>
                 );
@@ -2491,17 +2580,17 @@ const StatisticsPage = () => {
                 if (!playerDetailStats.nemesis && !favoriteCard) return null;
                 return (
                   <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="bg-card rounded-xl border border-destructive/30 p-3 text-center">
+                    <div className="bg-card rounded-2xl border border-border p-3 text-center">
                       <p className="text-xs text-muted-foreground mb-1">😈 {t("stats.nemesis")}</p>
                       {playerDetailStats.nemesis ? (
                         <>
-                          <p className="text-lg font-display text-destructive truncate">{playerDetailStats.nemesis.name}</p>
+                          <p className="text-lg font-display font-bold text-destructive truncate">{playerDetailStats.nemesis.name}</p>
                           <p className="text-[10px] text-muted-foreground">{playerDetailStats.nemesis.wins}W-{playerDetailStats.nemesis.losses}L {t("stats.recordAgainstThem")}</p>
                         </>
                       ) : <p className="text-xs text-muted-foreground">{t("stats.noDataYet")}</p>}
                     </div>
                     {favoriteCard || (
-                      <div className="bg-card rounded-xl border border-secondary/30 p-3 text-center">
+                      <div className="bg-card rounded-2xl border border-border p-3 text-center">
                         <p className="text-xs text-muted-foreground mb-1">🎯 {t("stats.favoriteOpponent")}</p>
                         <p className="text-xs text-muted-foreground">{t("stats.noDataYet")}</p>
                       </div>
@@ -2568,14 +2657,14 @@ const StatisticsPage = () => {
               {h2hRecords && (
                 <>
                   {h2hRecords.h2hGames > 0 && (
-                    <div className="bg-muted/30 rounded-lg p-4 mb-4">
+                    <div className="rounded-2xl border border-border bg-card p-4 mb-4">
                       <p className="text-xs text-muted-foreground mb-3 text-center">{h2hRecords.h2hGames} {t("stats.directDuels")}</p>
                       <div className="flex items-center justify-center gap-6 mb-3">
                         <div className="flex flex-col items-center gap-1.5">
                           <RankAvatar emoji={h2hRecords.p1.emoji} size={44} />
                           <p className="text-[11px] font-semibold truncate max-w-[90px]">{h2hRecords.p1.name}</p>
                         </div>
-                        <p className="text-3xl font-display text-primary">{h2hRecords.p1Wins}<span className="text-muted-foreground mx-1.5">:</span><span className="text-secondary">{h2hRecords.p2Wins}</span></p>
+                        <p className="text-3xl font-display font-bold tabular-nums text-primary">{h2hRecords.p1Wins}<span className="text-muted-foreground mx-1.5">:</span><span className="text-secondary">{h2hRecords.p2Wins}</span></p>
                         <div className="flex flex-col items-center gap-1.5">
                           <RankAvatar emoji={h2hRecords.p2.emoji} size={44} />
                           <p className="text-[11px] font-semibold truncate max-w-[90px]">{h2hRecords.p2.name}</p>
@@ -2647,7 +2736,7 @@ const StatisticsPage = () => {
                 <button
                   key={g.id}
                   onClick={() => setDetailGame(g)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/60 bg-muted/20 text-left hover:bg-muted/40 hover:border-primary/30 transition-colors"
+                  className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl border border-border bg-card text-left hover:border-primary/40 transition-colors"
                 >
                   <Badge variant="outline" className="text-xs bg-muted text-foreground px-2 py-0.5 font-mono shrink-0 border-transparent">{g.mode}</Badge>
                   <div className="min-w-0 flex-1 space-y-0.5">
@@ -2667,7 +2756,7 @@ const StatisticsPage = () => {
                     })}
                   </div>
                   <div className="flex flex-col items-center shrink-0 px-2 border-l border-border/60">
-                    <span className="font-display text-xl leading-none tabular-nums">{g.player1_legs_won}:{g.player2_legs_won}</span>
+                    <span className="font-display text-xl font-bold leading-none tabular-nums">{g.player1_legs_won}:{g.player2_legs_won}</span>
                     <span className="text-[10px] text-muted-foreground mt-1">
                       {new Date(g.played_at).toLocaleDateString(LOCALE_BY_LANGUAGE[language], { day: "2-digit", month: "2-digit" })}
                     </span>
@@ -2694,7 +2783,7 @@ const StatisticsPage = () => {
       {activeTab === "highlights" && (
         <SectionCard>
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-            <h3 className="font-display text-sm uppercase text-muted-foreground flex items-center gap-2">
+            <h3 className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
               <Video className="w-4 h-4" /> {t("stats.highlightClips")}
             </h3>
             {viewScope === "club" && highlightClips.length > 0 && (
@@ -2738,11 +2827,11 @@ const StatisticsPage = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {pagedClips.visible.map((clip) => (
-                <div key={clip.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
+                <div key={clip.id} className="rounded-2xl border border-border bg-card overflow-hidden">
                   <video src={clipSignedUrls[clip.storage_path]} controls playsInline className="w-full aspect-video bg-black" preload="metadata" />
                   <div className="p-2.5">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-display uppercase truncate">{clip.player_name}</span>
+                      <span className="text-sm font-semibold truncate">{clip.player_name}</span>
                       <Badge variant="outline" className="text-[10px] bg-accent/15 text-accent px-2 py-0.5 shrink-0 ml-1 border-transparent">{clipKindLabel(clip.kind)}</Badge>
                     </div>
                     {clipGameLabel(clip) && (
@@ -2789,8 +2878,8 @@ const StatisticsPage = () => {
         <SectionCard>
           <Eyebrow icon={Dumbbell}>{t("stats.trainingRecordsHeading")}</Eyebrow>
           {trainingStreak && trainingStreak.current >= 2 && (
-            <div className="mb-4 w-fit mx-auto rounded-lg border border-accent/40 bg-accent/10 px-3 py-1.5 text-accent font-display uppercase text-xs flex items-center justify-center gap-1.5">
-              <Flame className="w-3.5 h-3.5" /> {trainingStreak.current} {t("training.daysInARow")}
+            <div className="mb-4 w-fit mx-auto rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold flex items-center justify-center gap-1.5">
+              <Flame aria-hidden="true" className="w-4 h-4 text-accent" /> {trainingStreak.current} {t("training.daysInARow")}
             </div>
           )}
           {trainedDrills.length === 0 ? (
@@ -2802,10 +2891,10 @@ const StatisticsPage = () => {
           ) : (
             <div className="space-y-3">
               {trainedDrills.map((drill) => (
-                <div key={drill.id} className="rounded-lg bg-muted/30 p-3">
+                <div key={drill.id} className="rounded-2xl border border-border bg-card p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <drill.icon className="w-4 h-4 text-primary shrink-0" />
-                    <span className="text-sm font-display uppercase truncate">{drill.name}</span>
+                    <span className="text-sm font-semibold truncate">{drill.name}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full ml-auto shrink-0 ${DIFFICULTY_COLORS[drill.difficulty]}`}>
                       {t(DIFFICULTY_LABEL_KEY[drill.difficulty])}
                     </span>
