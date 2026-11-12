@@ -218,10 +218,17 @@ const DashboardPage = () => {
       {/* Redesign 2026-11 (canvas "Start"): no big crest hero any more — greeting, then the open
           game, the member's own tournament match and form, who is online, and the club feed. */}
       <header className="mb-4">
-        {tagline && <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground truncate">{tagline}</p>}
         <h1 className="font-display font-bold text-[28px] leading-tight">
           {firstName ? t("home.greeting").replace("{name}", firstName) : clubName}
         </h1>
+        {/* The club motto keeps its own voice (graffiti font, club color, slight tilt) — members
+            asked for it back after the redesign shrank it to a grey label. Not translated: it is
+            the club's own wording. */}
+        {tagline && (
+          <p className="mt-1 font-graffiti text-lg sm:text-2xl leading-tight -rotate-1 origin-left select-none text-primary">
+            {tagline}
+          </p>
+        )}
       </header>
 
       <div className="lg:grid lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] lg:gap-8 lg:items-start">
