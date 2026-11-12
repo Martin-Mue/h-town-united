@@ -42,6 +42,7 @@ import { logDetectionLook, detectionLogCount, exportDetectionLog, clearDetection
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
 import { selectNewDarts, keepSupportedDarts, visitDartCapacity, KNOWN_DART_RADIUS } from "@/utils/newDartSelection";
+import { trackSteadyHits, selectSteadyNewDarts, type SteadyHit } from "@/utils/steadyHits";
 import { prepareWireFit, refineTapsToWires, findBoardTaps, WIRE_FIT_CONFIDENT } from "@/utils/boardWireFit";
 import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
@@ -281,6 +282,17 @@ const RELOCATE_REFOUND_RADIUS = 0.015;
 const RELOCATE_MAX_DISTANCE = 0.09;
 const RELOCATE_MIN_SCORE = 0.6;
 const HELD_REFERENCE_MAX_LOOKS = 6;
+/** The empty-board reference is only renewed from a calm picture: below this share of changed cells against the last
+ *  reference (a hand in view changes 0.13-0.78), or unchanged since the previous look (lighting really changed). A
+ *  reference taken with a hand in it made every later look differ by 30-80 % and blocked real darts (log 2026-11-12). */
+const BASELINE_REFRESH_MAX_CHANGE = 0.1;
+const BASELINE_REFRESH_STABLE_SHARE = 0.03;
+/** A dart that was already in the board at round start only hides a detection on a spot that looks the same as in the
+ *  empty-board picture; with fresh change there (below: share of changed cells around it) it is a new dart. */
+const BASELINE_SPOT_CHANGED = 0.06;
+/** Detections farther than this from the bull (board radius, 1 = outer double = 170 mm; the surround ends at ~1.33)
+ *  are not on the board at all — e.g. the steady 0.17-0.29 ghost in the picture corner (log 2026-11-12). */
+const OFF_BOARD_RADIUS = 1.4;
 /**
  * A look whose picture changed this much since the last stable one, without a new dart, is a hand or arm reaching in
  * (log 2026-10-27: hand looks 0.13-0.58, dart landings 0.01-0.05). Such a frame must not become the round's review /
@@ -544,6 +556,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // when it sits right next to the earlier ones (see utils/changeMask.ts).
   const lastStableModelFrameRef = useRef<ImageData | null>(null);
   const heldReferenceLooksRef = useRef(0);
+  /** Confident hits and how many looks in a row they stayed on their spot (see utils/steadyHits.ts). */
+  const steadyHitsRef = useRef<SteadyHit[]>([]);
   // Landings waiting for the model, oldest first. The model needs a few seconds on a phone and darts are
   // thrown faster than that, so landings are queued and judged one after the other — each against ITS
   // OWN before/after frames. (A single "busy" flag used to make the second and third dart of a round
@@ -773,6 +787,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     preRemovalModelFrameRef.current = null;
     lastStableModelFrameRef.current = null;
     heldReferenceLooksRef.current = 0;
+    steadyHitsRef.current = [];
     landingQueueRef.current = [];
     emptyModelFrameRef.current = null;
     baselineDartsRef.current = null;
@@ -1925,8 +1940,8 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // A rest with the picture unchanged since the last look (a flicker, a nudge) needs no detection — on a phone
       // every detection costs seconds of a frozen screen.
       const lastLook = lastEvaluatedFrameRef.current;
+      const sinceLastLook = lastLook ? buildChangeMap(lastLook, frame) : null;
       if (lastLook) {
-        const sinceLastLook = buildChangeMap(lastLook, frame);
         if (sinceLastLook && sinceLastLook.share < UNCHANGED_FRAME_SHARE && emptyLooksRef.current === 0) {
           const seenNow = Math.min(3, accumulatedRef.current.length);
           setStatus(
@@ -1954,11 +1969,23 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setModelProblem(null);
       lastEvaluatedFrameRef.current = frame;
       const baselineDarts = baselineDartsRef.current;
+      const emptyFrame = emptyModelFrameRef.current;
+      const vsEmptyMap = emptyFrame && baselineDarts.length > 0 ? buildChangeMap(emptyFrame, frame) : null;
+      const vsEmptyUsable = vsEmptyMap && vsEmptyMap.share < GLOBAL_CHANGE_SHARE_MAX ? vsEmptyMap : null;
+      // Scenery or a dart left in the board from before the round: only where the spot still looks as in the empty picture.
+      // (The old "clearly more confident" rule alone could not work with v11, which scores real darts 0.85-0.93 everywhere.)
+      const hiddenByBaseline = (d: DetectedDart) =>
+        baselineDarts.some((b) => Math.hypot(b.x - (d.x ?? 0), b.y - (d.y ?? 0)) < KNOWN_DART_RADIUS_FOR_BASELINE) &&
+        (vsEmptyUsable
+          ? changedShareNear(vsEmptyUsable, d.x ?? 0, d.y ?? 0) < BASELINE_SPOT_CHANGED
+          : baselineDarts.some((b) => Math.hypot(b.x - (d.x ?? 0), b.y - (d.y ?? 0)) < KNOWN_DART_RADIUS_FOR_BASELINE && d.confidence < b.confidence + BASELINE_BEATEN_BY));
       const present = refineWithCalibration(
         result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
       )
-        .filter((d) => !baselineDarts.some((b) => Math.hypot(b.x - (d.x ?? 0), b.y - (d.y ?? 0)) < KNOWN_DART_RADIUS_FOR_BASELINE && d.confidence < b.confidence + BASELINE_BEATEN_BY))
+        .filter((d) => typeof d.boardU !== "number" || typeof d.boardV !== "number" || Math.hypot(d.boardU, d.boardV) <= OFF_BOARD_RADIUS)
+        .filter((d) => !hiddenByBaseline(d))
         .filter((d) => !dismissedRef.current.some((g) => Math.hypot(g.x - (d.x ?? 0), g.y - (d.y ?? 0)) < DISMISSED_DART_RADIUS));
+      steadyHitsRef.current = trackSteadyHits(steadyHitsRef.current, present);
 
       const before = lastStableModelFrameRef.current;
       const known = accumulatedRef.current;
@@ -1971,7 +1998,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // model finds then is the hand or a dart being pulled, never a new dart (2026-11-02: three phantoms at 0.32-0.49 right
       // before the board went empty).
       const handChange = !!changeMap && changeMap.share > ADD_MAX_CHANGE_SHARE;
-      const added = handChange ? [] : selectNewDarts(known, present, support, visitCapacity(known) - known.length, { straightenedFrame: !!rectMapping() });
+      // ...unless a confident hit has sat on the same spot for several looks: then the board is at rest and the reference is
+      // the stale one (taken with a hand in view) — a dart does not move, a hand does.
+      const added = handChange
+        ? selectSteadyNewDarts(known, present, steadyHitsRef.current, visitCapacity(known) - known.length, KNOWN_DART_RADIUS)
+        : selectNewDarts(known, present, support, visitCapacity(known) - known.length, { straightenedFrame: !!rectMapping() });
       if (accumulatedRef.current !== known) return; // the round was committed/discarded meanwhile
       {
         const MM_PER_FRAME = 170 / 0.377;
@@ -2017,8 +2048,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         unexplainedLooksRef.current = 0;
         setScanFailed(false);
         evaluatedFineRef.current = pendingFineRef.current; // an empty board is a fully explained picture
-        emptyLooksRef.current = 0;
-        onBoardEmptyMoment(sig);
+        const calm =
+          !changeMap || changeMap.share <= BASELINE_REFRESH_MAX_CHANGE || (!!sinceLastLook && sinceLastLook.share < BASELINE_REFRESH_STABLE_SHARE);
+        // not calm: look again at the next rest even if the picture did not change — that look is "stable since the last" and renews the reference
+        emptyLooksRef.current = calm ? 0 : 1;
+        onBoardEmptyMoment(sig, calm ? frame : null);
         return;
       }
 
@@ -2102,8 +2136,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     }
   };
 
-  /** The model sees no (new) dart: either nothing was thrown yet, or the darts were just pulled. */
-  const onBoardEmptyMoment = (sig: number[]) => {
+  /** The model sees no (new) dart: either nothing was thrown yet, or the darts were just pulled.
+   *  `calmFrame` is the evaluated picture when it is fit to become the new empty-board reference, null when a hand was
+   *  still in view — then the old reference stays and the next calm look renews it. */
+  const onBoardEmptyMoment = (sig: number[], calmFrame: ImageData | null) => {
     const endedClipSeq = restartClipSegment();
     const finishedRound = accumulatedRef.current.length > 0 && !!preRemovalImageDataRef.current && !needsReviewRef.current;
     if (finishedRound && performance.now() - lastScanAtRef.current > SCAN_COOLDOWN_MS) {
@@ -2112,11 +2148,15 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       void runPullScan();
       return;
     }
-    // idle: refresh the empty-board baseline (lighting drifts over a session)
-    emptyBoardSigRef.current = sig;
-    emptyImageDataRef.current = grabImageData();
-    lastStableModelFrameRef.current = grabModelFrame();
-    emptyModelFrameRef.current = lastStableModelFrameRef.current;
+    // idle: refresh the empty-board baseline (lighting drifts over a session) — from the picture the model just judged
+    // empty, not a fresh grab seconds later (the player may be reaching in or throwing by then), and only when it is calm
+    if (calmFrame) {
+      emptyBoardSigRef.current = sig;
+      emptyImageDataRef.current = grabImageData();
+      lastStableModelFrameRef.current = calmFrame;
+      emptyModelFrameRef.current = calmFrame;
+      steadyHitsRef.current = [];
+    }
     peakPresentRef.current = 0;
     preRemovalFrameDirtyRef.current = false;
     setStatus(t("camera.boardEmptyThrowFirst"));
