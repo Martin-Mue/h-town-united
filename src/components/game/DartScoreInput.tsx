@@ -22,6 +22,41 @@ export type DartInputMode = "single" | "quick" | "total";
 
 const MODE_LABEL_KEY: Record<DartInputMode, string> = { single: "game.modeSingle", quick: "game.modeQuick", total: "game.modeTotal" };
 
+/** "card": a self-contained card sized by its content (training drills, warm-up, the camera view's manual fallback).
+ *  "fill": no card frame, and the number/quick grids stretch to whatever height the parent gives them — the manual
+ *  play screen hands the pad all the space left under the scoreboard, so it fits a small Android, an iPhone with
+ *  Safari's toolbars, landscape and a tablet without scrolling. */
+export type DartPadLayout = "card" | "fill";
+
+const PAD_CLASSES: Record<DartPadLayout, { root: string; modeRow: string; numberGrid: string; numberCell: string; singleKey: string; multiplierRow: string; multiplierKey: string; specialRow: string; specialKey: string; quickGrid: string; quickKey: string }> = {
+  card: {
+    root: "gradient-card rounded-xl border border-border shadow-elevation-sm p-3 portrait:short:p-2 tablet:p-4 compactland:p-2",
+    modeRow: "mb-2.5 portrait:short:mb-1.5 compactland:mb-1.5",
+    numberGrid: "grid grid-cols-5 compactland:grid-cols-10 gap-1 tablet:gap-2 compactland:gap-1.5 mb-2 tablet:mb-3 portrait:short:mb-1.5",
+    numberCell: "rounded-xl overflow-hidden border border-border/60",
+    singleKey: "w-full py-1.5 portrait:short:py-1 tablet:py-2.5 compactland:py-2 text-base tablet:text-2xl compactland:text-xl",
+    multiplierRow: "grid grid-cols-2 gap-px bg-border/60",
+    multiplierKey: "py-2 portrait:short:py-1.5 tablet:py-2.5 compactland:py-2 text-xs tablet:text-base compactland:text-sm",
+    specialRow: "flex gap-1.5 compactland:gap-2",
+    specialKey: "px-2 py-2 portrait:short:px-1 portrait:short:py-1 portrait:short:text-xs tablet:py-3 tablet:text-lg compactland:py-2 text-sm compactland:text-base",
+    quickGrid: "grid grid-cols-5 compactland:grid-cols-11 gap-1.5",
+    quickKey: "py-3 compactland:py-4 text-sm compactland:text-base",
+  },
+  fill: {
+    root: "flex h-full min-h-0 flex-col",
+    modeRow: "mb-2 shrink-0 portrait:short:mb-1.5 compactland:mb-1.5",
+    numberGrid: "grid min-h-[10.5rem] flex-1 grid-cols-5 grid-rows-4 gap-1.5 mb-1.5 portrait:short:gap-1 compactland:min-h-[6.5rem] compactland:grid-cols-10 compactland:grid-rows-2 tablet:gap-2 tablet:mb-2",
+    numberCell: "flex min-h-0 flex-col overflow-hidden rounded-xl border border-border",
+    singleKey: "min-h-0 flex-[3] font-display text-2xl tablet:text-4xl compactland:text-xl",
+    multiplierRow: "grid min-h-0 flex-[2] grid-cols-2 gap-px bg-border",
+    multiplierKey: "min-h-0 text-xs tablet:text-lg compactland:text-xs",
+    specialRow: "flex shrink-0 gap-1.5 tablet:gap-2",
+    specialKey: "h-11 px-1 text-sm portrait:short:h-10 compactland:h-9 tablet:h-14 tablet:text-lg",
+    quickGrid: "grid min-h-[10rem] flex-1 grid-cols-5 grid-rows-5 gap-1.5 compactland:min-h-[6rem] compactland:grid-cols-11 compactland:grid-rows-2 tablet:gap-2",
+    quickKey: "min-h-0 font-display text-lg tablet:text-2xl compactland:text-base",
+  },
+};
+
 interface DartScoreInputProps {
   isDisabled: boolean;
   /** Submits one dart. */
@@ -41,6 +76,8 @@ interface DartScoreInputProps {
    *  a visit; default 0 so callers that don't track this (e.g. Training.tsx drills) are
    *  unaffected. */
   dartsThisRound?: number;
+  /** See DartPadLayout; defaults to the self-contained card. */
+  layout?: DartPadLayout;
 }
 
 /**
@@ -57,8 +94,9 @@ interface DartScoreInputProps {
  * want different tradeoffs between speed and per-dart detail, and the same scorekeeper may want to
  * switch mid-game (e.g. per-dart while it's close, typed totals once a leg is a formality).
  */
-const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onInputModeChange, dartsThisRound = 0 }: DartScoreInputProps) => {
+const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onInputModeChange, dartsThisRound = 0, layout = "card" }: DartScoreInputProps) => {
   const { t, language } = useLanguage();
+  const pad = PAD_CLASSES[layout];
   const [localMode, setLocalMode] = useState<DartInputMode>("single");
   const [totalText, setTotalText] = useState("");
   const mode = inputMode ?? localMode;
@@ -82,7 +120,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
   };
 
   return (
-    <div className="gradient-card rounded-xl border border-border shadow-elevation-sm p-3 portrait:short:p-2 tablet:p-4 compactland:p-2">
+    <div className={pad.root}>
       {/* Mode switch — always visible, not tucked behind a collapse toggle, since the whole point
           is being able to change tack at any moment mid-game without hunting for the control. The
           voice-scoring trigger sits in the same row (an alternate way to reach the SAME
@@ -94,7 +132,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
           corrupt a real leg. While a visit is half-thrown the locked tabs are dimmed (tooltip
           explains why), which is the whole signal the old always-reserved note line gave. */}
       {onQuickRound && (
-        <div className="flex items-stretch gap-1 mb-2.5 portrait:short:mb-1.5 compactland:mb-1.5 p-0.5 rounded-lg bg-muted/50">
+        <div className={`flex items-stretch gap-1 p-0.5 rounded-lg bg-muted/50 ${pad.modeRow}`}>
           <div className="grid grid-cols-3 gap-1 flex-1">
             {(["single", "quick", "total"] as const).map((m) => {
               const locked = midVisit && m !== "single";
@@ -167,23 +205,23 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
               see Game.tsx's playing-phase layout), and 2 rows is what actually leaves enough of
               that height for the mode tabs, special-targets row, and undo/cam/sound to all stay
               on screen without scrolling, not just a cosmetic rearrangement. */}
-          <div className="grid grid-cols-5 compactland:grid-cols-10 gap-1 tablet:gap-2 compactland:gap-1.5 mb-2 tablet:mb-3 portrait:short:mb-1.5">
+          <div className={pad.numberGrid}>
             {BOARD_NUMBERS.map((v) => (
-              <div key={v} className="rounded-xl overflow-hidden border border-border/60">
+              <div key={v} className={pad.numberCell}>
                 <button
                   onClick={() => onThrow(v, 1)}
                   disabled={isDisabled}
                   title={`${t("game.simple")} ${v}`}
-                  className="w-full py-1.5 portrait:short:py-1 tablet:py-2.5 compactland:py-2 text-base tablet:text-2xl compactland:text-xl font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+                  className={`${pad.singleKey} font-bold bg-muted text-foreground transition-all hover:bg-muted/70 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40`}
                 >
                   {v}
                 </button>
-                <div className="grid grid-cols-2 gap-px bg-border/60">
+                <div className={pad.multiplierRow}>
                   <button
                     onClick={() => onThrow(v, 3)}
                     disabled={isDisabled}
                     title={`${t("game.triple")} ${v}`}
-                    className="py-2 portrait:short:py-1.5 tablet:py-2.5 compactland:py-2 text-xs tablet:text-base compactland:text-sm font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40"
+                    className={`${pad.multiplierKey} font-bold bg-primary/15 text-primary transition-all hover:bg-primary/30 active:scale-95 active:bg-primary active:text-primary-foreground disabled:opacity-40`}
                   >
                     T
                   </button>
@@ -191,7 +229,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
                     onClick={() => onThrow(v, 2)}
                     disabled={isDisabled}
                     title={`${t("game.double")} ${v}`}
-                    className="py-2 portrait:short:py-1.5 tablet:py-2.5 compactland:py-2 text-xs tablet:text-base compactland:text-sm font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40"
+                    className={`${pad.multiplierKey} font-bold bg-secondary/15 text-secondary transition-all hover:bg-secondary/30 active:scale-95 active:bg-secondary active:text-secondary-foreground disabled:opacity-40`}
                   >
                     D
                   </button>
@@ -208,7 +246,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
               already uses, and cricket's own targetNumber/hitsToAdd math already special-cased
               baseValue===50 to behave identically to 25×2 — so this doesn't change cricket scoring,
               it just makes that special-case dead code (points: 25*2=50, targetNumber: 25 either way). */}
-          <div className="flex gap-1.5 compactland:gap-2">
+          <div className={pad.specialRow}>
             {[
               { value: 0, mul: 1 as const, label: t("game.miss") },
               { value: 25, mul: 1 as const, label: `${t("game.bull")} (25)` },
@@ -218,7 +256,7 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
                 key={target.label}
                 onClick={() => onThrow(target.value, target.mul)}
                 disabled={isDisabled}
-                className="flex-1 px-2 py-2 portrait:short:px-1 portrait:short:py-1 portrait:short:text-xs tablet:py-3 tablet:text-lg compactland:py-2 rounded-lg text-sm compactland:text-base whitespace-nowrap font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40"
+                className={`flex-1 ${pad.specialKey} rounded-lg whitespace-nowrap font-bold transition-all bg-accent/15 text-accent hover:bg-accent/25 active:scale-95 disabled:opacity-40`}
               >
                 {target.label}
               </button>
@@ -230,13 +268,13 @@ const DartScoreInput = memo(({ isDisabled, onThrow, onQuickRound, inputMode, onI
       {effectiveMode === "quick" && onQuickRound && (
         // compactland:grid-cols-11 — same "wide, not tall" reasoning as the single-dart grid above:
         // 22 values fit exactly 2 rows at 11 columns instead of ~4 rows at 6.
-        <div className="grid grid-cols-5 compactland:grid-cols-11 gap-1.5">
+        <div className={pad.quickGrid}>
           {QUICK_ROUNDS.map((v) => (
             <button
               key={v}
               onClick={() => onQuickRound(v)}
               disabled={isDisabled}
-              className="py-3 compactland:py-4 rounded-lg text-sm compactland:text-base font-bold bg-secondary/20 text-foreground hover:bg-secondary/40 active:scale-95 transition-all disabled:opacity-40"
+              className={`${pad.quickKey} rounded-lg font-bold bg-secondary/20 text-foreground hover:bg-secondary/40 active:scale-95 transition-all disabled:opacity-40`}
             >
               {v}
             </button>
