@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router-dom";
-import { Flame, TrendingUp, Crosshair, PartyPopper } from "lucide-react";
-import { DartGameIcon, DartTrophyIcon, SeasonIcon, TrainingIcon, ClubIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
+import { Flame, TrendingUp, Crosshair, PartyPopper, Swords } from "lucide-react";
+import { DartGameIcon, DartTrophyIcon, SeasonIcon, StatsIcon, TrainingIcon, ClubIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlayers } from "@/hooks/usePlayers";
 import { computeClubActivity, type ActivityEvent, type ActivityLegRow, type ActivityTranslator } from "@/utils/clubActivity";
@@ -40,11 +40,14 @@ const EVENT_ICON: Record<ActivityEvent["type"], IconComponent> = {
   match_result: DartTrophyIcon,
 };
 
-// Redesign 2026-11: the six big tiles shrank to a chip row with only the areas the bottom bar
-// does not carry itself (Spielen/Turnier/Statistik are one tap away there already).
-const MORE_AREAS: { to: string; labelKey: string; icon: IconComponent }[] = [
-  { to: "/training", labelKey: "home.training", icon: TrainingIcon },
+// Redesign 2026-11: the six big tiles became compact link buttons. All areas are listed (also the
+// ones in the bottom bar) — members look for "Turnier" here, and Liga has no other shortcut.
+const AREA_LINKS: { to: string; labelKey: string; icon: IconComponent }[] = [
+  { to: "/tournament", labelKey: "home.tournament", icon: DartTrophyIcon },
+  { to: "/leagues", labelKey: "tournament.leagueMode", icon: Swords },
   { to: "/tournaments/series", labelKey: "home.season", icon: SeasonIcon },
+  { to: "/training", labelKey: "home.training", icon: TrainingIcon },
+  { to: "/statistics", labelKey: "home.statistics", icon: StatsIcon },
   { to: "/players", labelKey: "home.club", icon: ClubIcon },
 ];
 
@@ -241,15 +244,15 @@ const DashboardPage = () => {
         <PendingDoublesLobbies />
         <PendingOnlineDuels />
         <LiveOnlineMatches />
-        <nav aria-label={t("nav.more")} className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
-          {MORE_AREAS.map((area) => (
+        <nav aria-label={t("nav.more")} className="grid grid-cols-3 gap-2">
+          {AREA_LINKS.map((area) => (
             <Link
               key={area.to}
               to={area.to}
-              className="shrink-0 h-11 px-4 rounded-xl border border-border bg-card flex items-center gap-2 text-sm font-medium active:scale-95 transition-transform"
+              className="min-w-0 h-11 px-2 rounded-xl border border-border bg-card flex items-center justify-center gap-1.5 text-sm font-medium active:scale-95 transition-transform"
             >
-              <area.icon className="w-4 h-4 text-primary" />
-              {t(area.labelKey)}
+              <area.icon className="w-4 h-4 shrink-0 text-primary" />
+              <span className="truncate">{t(area.labelKey)}</span>
             </Link>
           ))}
         </nav>
