@@ -30,6 +30,8 @@ import TournamentSetupWizard from "@/components/tournament/setup/TournamentSetup
 import TournamentTemplates from "@/components/tournament/setup/TournamentTemplates";
 import type { TournamentTemplate } from "@/utils/tournamentTemplate";
 import ManageTabs, { type ManageTab } from "@/components/tournament/manage/ManageTabs";
+import BoardControlPanel from "@/components/tournament/manage/BoardControlPanel";
+import { assignMatchToBoard, setMatchPaused, displayBoardOf } from "@/utils/tournamentBoardControl";
 import { setupStepIssues, allSetupIssues, firstStepWithIssue, SETUP_STEP_ORDER, type SetupState, type SetupStepKey } from "@/utils/tournamentSetupSteps";
 import { clubHasFeature } from "@/lib/planFeatures";
 import { hasLocalActiveGame } from "@/lib/activeGameSnapshot";
@@ -304,7 +306,7 @@ const BracketViewport = ({ matches, totalRounds, activeTournament, roundLabel, s
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
               </span>
             )}
-            {match.board ? <span className="font-mono">{t("camera.board")} {match.board}</span> : null}
+            {displayBoardOf(match) ? <span className="font-mono">{t("camera.board")} {displayBoardOf(match)}</span> : null}
           </span>
         </div>
       )}
@@ -632,7 +634,8 @@ const TournamentPage = () => {
   const [drawSeed, setDrawSeed] = useState(() => Math.floor(Math.random() * 1e9));
   const [boards, setBoards] = useState(2);
   const [livePlayEnabled, setLivePlayEnabled] = useState(true);
-  const [bracketView, setBracketView] = useState<"tree" | "schedule">("tree");
+  /** null = not picked yet: a running tournament opens on the board overview, a finished one on the tree. */
+  const [bracketView, setBracketView] = useState<"boards" | "tree" | "schedule" | null>(null);
   const [editMatch, setEditMatch] = useState<Match | null>(null);
   const [editP1, setEditP1] = useState("");
   const [editP2, setEditP2] = useState("");
@@ -1313,7 +1316,12 @@ const TournamentPage = () => {
       setActiveTournament({ ...activeTournament, bracket, champion, status: champion ? "finished" : activeTournament.status });
       return;
     }
-    const raw = (activeTournament.bracket as Match[]).map((m) => {
+    const koBracket = activeTournament.bracket as Match[];
+    const boardControlPatch =
+      action.type === "setKoPaused" ? setMatchPaused(koBracket, action.matchId, action.paused)
+        : action.type === "assignKoBoard" ? assignMatchToBoard(koBracket, action.matchId, action.board, activeTournament.boards || 2)
+          : null;
+    const raw = boardControlPatch ?? koBracket.map((m) => {
       if (action.type === "setKoWinner" && m.id === action.matchId) {
         return { ...m, winner: action.winner, score1: action.score1 ?? m.score1, score2: action.score2 ?? m.score2 };
       }
@@ -1386,6 +1394,16 @@ const TournamentPage = () => {
   /** Resets a match AND every result that depended on it (cascade via recompute). */
   const resetKoMatch = async (matchId: string) => {
     await runBracketAction({ type: "resetKoMatch", matchId });
+  };
+
+  /** Board control (BoardControlPanel): pause/resume a ready match, or call one to a free board.
+   *  Same CAS write + offline queue as the scoring taps; neither touches pairings or order. */
+  const setKoMatchPaused = async (matchId: string, paused: boolean) => {
+    await runBracketAction({ type: "setKoPaused", matchId, paused });
+  };
+
+  const assignKoMatchToBoard = async (matchId: string, board: number) => {
+    await runBracketAction({ type: "assignKoBoard", matchId, board });
   };
 
   /** Replace the two participants of a first-round match (late changes, no-shows …). */
@@ -3045,14 +3063,18 @@ const TournamentPage = () => {
                 {t("tournament.liveView")}
               </Button>
             ));
+    const planView = bracketView ?? (activeTournament.champion ? "tree" : "boards");
     const planPanel = (
       <>
         <div className="container mb-2 flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-border overflow-x-auto max-w-full">
-            <button onClick={() => setBracketView("tree")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${bracketView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+            <button onClick={() => setBracketView("boards")} className={`min-h-[44px] px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${planView === "boards" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+              <Monitor className="w-3.5 h-3.5" /> {t("tournament.boardsHeading")}
+            </button>
+            <button onClick={() => setBracketView("tree")} className={`min-h-[44px] px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${planView === "tree" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
               <Network className="w-3.5 h-3.5" /> {t("tournament.bracketTreeTab")}
             </button>
-            <button onClick={() => setBracketView("schedule")} className={`px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${bracketView === "schedule" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+            <button onClick={() => setBracketView("schedule")} className={`min-h-[44px] px-3 py-1.5 text-xs flex items-center gap-1 shrink-0 whitespace-nowrap ${planView === "schedule" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
               <ListOrdered className="w-3.5 h-3.5" /> {t("tournament.scheduleAndScorekeeper")}
             </button>
           </div>
@@ -3070,7 +3092,7 @@ const TournamentPage = () => {
          *  isLiveSnapshotFresh signal the board-picker's "läuft evtl. schon" hint already uses,
          *  just surfaced persistently here instead of only in that one sub-screen — a cheap,
          *  glanceable sanity check, not a real lock. */}
-        {(() => {
+        {planView !== "boards" && (() => {
           const boardCount = activeTournament.boards || 2;
           const boardSchedule = currentBoardSchedule(matches, boardCount);
           const boards = Array.from({ length: boardCount }, (_, i) => i + 1)
@@ -3102,7 +3124,21 @@ const TournamentPage = () => {
           );
         })()}
 
-        {bracketView === "tree" ? (
+        {planView === "boards" ? (
+          <div className="container">
+            <BoardControlPanel
+              matches={matches}
+              boards={activeTournament.boards || 2}
+              totalRounds={totalRounds}
+              roundLabel={roundLabel}
+              firstToForRound={firstToForRound}
+              canControl={canEditResults}
+              onFinishMatch={setKoWinner}
+              onAssignToBoard={assignKoMatchToBoard}
+              onSetPaused={setKoMatchPaused}
+            />
+          </div>
+        ) : planView === "tree" ? (
           <BracketViewport
             matches={matches}
             totalRounds={totalRounds}

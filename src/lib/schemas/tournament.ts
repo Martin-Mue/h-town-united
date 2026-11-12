@@ -57,6 +57,8 @@ const matchSchema = z
     feedsRound1Position: z.number().optional(),
     feedsRound1Slot: z.union([z.literal(1), z.literal(2)]).optional(),
     live: liveSnapshotSchema.optional(),
+    paused: z.boolean().optional(),
+    assignedBoard: z.number().optional(),
   })
   .passthrough();
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Trophy } from "lucide-react";
 import type { Match } from "@/utils/tournament";
 import { isPlayable, isRealPlayer, isLiveSnapshotFresh, roundLabelFor, scorekeeperLabel } from "@/utils/tournament";
+import { displayBoardOf } from "@/utils/tournamentBoardControl";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface MobileBracketProps {
@@ -141,7 +142,7 @@ const MobileBracket = ({ matches, totalRounds, roundConfigs, fallbackMode, fallb
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" /> {t("tournament.live")}
                       </span>
                     )}
-                    {m.board ? <span className="font-mono">{t("camera.board")} {m.board}</span> : null}
+                    {displayBoardOf(m) ? <span className="font-mono">{t("camera.board")} {displayBoardOf(m)}</span> : null}
                   </span>
                 </div>
               )}

@@ -18,6 +18,7 @@ import {
   isPlayable,
 } from "@/utils/tournament";
 import { parsePlayers, parseBracket, parseRoundConfigs } from "@/lib/schemas/tournament";
+import { assignMatchToBoard, setMatchPaused } from "@/utils/tournamentBoardControl";
 
 export interface MatchResultInput {
   winnerName: string;
@@ -202,10 +203,10 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
  *  here specifically because a queued offline tap can replay well after another board already
  *  declared the same match's winner). setKoScore/resetKoMatch always apply directly, same as
  *  before this change — only the winner-declaring action needed the idempotency guard. */
-function applyActionToKoBracket(
+export function applyActionToKoBracket(
   bracket: Match[],
   action: BracketActionPayload,
-  ctx: { roundConfigs?: { bestOf: number }[]; defaultBestOf: number }
+  ctx: { roundConfigs?: { bestOf: number }[]; defaultBestOf: number; boards: number }
 ): Match[] | null {
   switch (action.type) {
     case "setKoWinner": {
@@ -231,6 +232,13 @@ function applyActionToKoBracket(
     }
     case "resetKoMatch":
       return bracket.map((x) => (x.id === action.matchId ? { ...x, winner: undefined, score1: undefined, score2: undefined } : { ...x }));
+    // Organizer board control — re-validated against the FRESH bracket here (a queued offline
+    // tap may replay after the board got busy or the match got decided), so a stale tap becomes
+    // a no-op instead of double-booking a board.
+    case "setKoPaused":
+      return setMatchPaused(bracket, action.matchId, action.paused);
+    case "assignKoBoard":
+      return assignMatchToBoard(bracket, action.matchId, action.board, ctx.boards);
     default:
       return null;
   }
@@ -317,6 +325,7 @@ export async function applyBracketAction(tournamentId: string, action: BracketAc
     const rawPatched = applyActionToKoBracket(freshBracket, action, {
       roundConfigs: parseRoundConfigs(tournament.round_configs, `tournament ${tournamentId} (applyBracketAction)`),
       defaultBestOf: tournament.best_of_legs || 1,
+      boards: tournament.boards || 2,
     });
     if (!rawPatched) return { bracket: freshBracket, champion: tournament.champion, status: tournament.status, newlyPlayable: [] };
     const recomputed = recomputeBracket(rawPatched, activePlayers);
