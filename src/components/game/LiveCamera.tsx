@@ -616,6 +616,12 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   // panel (right for "camera access denied", wrong here — the user needs to actually SEE the
   // live image to realize it's not pointed at the board and redirect it).
   const [boardMissing, setBoardMissing] = useState(false);
+  // The camera started with a saved calibration, but the picture shows no board there (it points at a desk, a wall,
+  // the wrong board). Until the board is found nothing is watched: otherwise that picture would become the "empty
+  // board" every later look is compared with.
+  const [boardUnseen, setBoardUnseenState] = useState(false);
+  const boardUnseenRef = useRef(false);
+  const setBoardUnseen = (unseen: boolean) => { boardUnseenRef.current = unseen; setBoardUnseenState(unseen); };
   const [scanFailed, setScanFailed] = useState(false);
   // Darts the last committed visit held. The game reported the next visit with exactly that many darts already thrown
   // (2026-11-02: after a 2-dart visit the camera offered ONE dart slot, after a 1-dart visit two; full visits reset
@@ -1498,8 +1504,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // wires again before the first throw, silently.
       const settled = snapTapsToWires(calib.taps);
       if (settled) applyCalibrationTaps(settled, calib.source ?? "manual", calib.confirmed ?? true, false);
+      setBoardUnseen(!settled);
       setPhase("live");
-      setStatus(t("camera.readyThrowFirst"));
+      setStatus(t(settled ? "camera.readyThrowFirst" : "camera.noBoardDetected"));
       // The saved calibration was found on the wires again (the usual start of a session): same confirmation as a fresh one.
       if (settled) playCalibrationSuccessSound();
     }
@@ -1529,6 +1536,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     // how often a real dart near the double ring falls outside the captured frame entirely.
     const size = clamp(Math.max(w, h) * 1.18, MIN_ANALYSIS_SIZE, 0.98);
     setCalib((prev) => ({ ...prev, x: cx, y: cy, size, taps: next, source, confirmed }));
+    setBoardUnseen(false);
     // Show the D20/D3/D11/D6 check by default right after (re)calibrating instead of requiring
     // an extra manual tap to verify — the whole point of that overlay is catching a bad
     // calibration immediately, so it should be the default view of a fresh one, not opt-in.
@@ -1611,7 +1619,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // The board is no longer where the calibration says (the phone was knocked or moved far). A near fit can fail for
       // one tick (a hand in the picture), so only after two failures in a row is the whole picture searched.
       refitMissesRef.current += 1;
-      if (boardMissing || refitMissesRef.current >= 2) {
+      if (boardMissing || boardUnseenRef.current || refitMissesRef.current >= 2) {
         const found = findBoardTaps(prepared, 1200);
         if (found && found.quality >= (dartsOnBoard ? CALIB_REFINE_MIN_QUALITY_WITH_DARTS : CALIB_REFINE_MIN_QUALITY)) fitted = found.taps;
       }
@@ -1619,10 +1627,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (!fitted) return;
     refitMissesRef.current = 0;
     const moved = moveOf(fitted);
+    const firstSight = boardUnseenRef.current;
+    if (firstSight) {
+      setBoardUnseen(false);
+      setStatus(t("camera.boardReacquired"));
+      playCalibrationSuccessSound();
+    }
     // Darts in the board colour the rings a little, so then only a real displacement is worth acting on; an empty
     // board gets every small correction. (Dart positions are board-relative in the straightened picture, so a
     // correct refit does not move them.)
-    if (moved < (dartsOnBoard ? CALIB_REFINE_MIN_MOVE_WITH_DARTS : CALIB_REFINE_MIN_MOVE)) return;
+    if (!firstSight && moved < (dartsOnBoard ? CALIB_REFINE_MIN_MOVE_WITH_DARTS : CALIB_REFINE_MIN_MOVE)) return;
     applyCalibrationTaps(fitted, calib.source ?? "manual", calib.confirmed ?? true, false);
     refitsThisRoundRef.current += 1;
     // A correction the player could notice (about 1.5 mm and up) gets a soft cue; tiny drift stays silent and the cue
@@ -1643,7 +1657,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       baselineDartsRef.current = dartsOnBoard ? [] : null;
       if (dartsOnBoard) preRemovalModelFrameRef.current = fresh;
     }
-    if (boardMissing || moved > 0.2) {
+    if (boardMissing || firstSight || moved > 0.2) {
       // the picture moved so much that the motion reference is meaningless: start the motion tracking afresh
       boardMissingStreakRef.current = 0;
       setBoardMissing(false);
@@ -2238,6 +2252,20 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const stillMomentRef = useRef(handleStillMoment);
   stillMomentRef.current = handleStillMoment;
 
+  /** Looks at the board right now, on the player's tap, instead of waiting for the picture to change and settle. */
+  const lookNow = () => {
+    if (phase !== "live" || paused || boardMissing || boardUnseenRef.current) return;
+    if (scanLockRef.current || stillMomentBusyRef.current) return;
+    const sig = buildSignature();
+    if (!sig) return;
+    // forget the last look, or an unchanged picture would be skipped without running the detection
+    lastEvaluatedFrameRef.current = null;
+    changeSeenRef.current = false;
+    stableSigRef.current = sig;
+    pendingFineRef.current = latestFineRef.current;
+    void stillMomentRef.current(sig, false);
+  };
+
   // ─── watcher loop ──────────────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -2260,6 +2288,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       stillThresholdRef.current = stillBelow;
       const still = m < stillBelow;
       stillFramesRef.current = still ? stillFramesRef.current + 1 : 0;
+
+      // No board in the picture yet (see boardUnseen): nothing to watch, and above all nothing to take as "empty board".
+      if (boardUnseenRef.current) return;
 
       // First frame ever → just snapshot the reference and wait
       if (!stableSigRef.current) {
@@ -2845,8 +2876,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
 
   const panel = (
     <div
-      className={`fixed inset-0 z-[70] flex flex-col bg-background ${overlayHidden ? "invisible pointer-events-none" : ""}`}
-      style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
+      // No text selection in here: taps and long presses (the magnifier) made the phone offer "copy" all the time.
+      className={`fixed inset-0 z-[70] flex flex-col bg-background select-none [&_input]:select-text [&_textarea]:select-text ${overlayHidden ? "invisible pointer-events-none" : ""}`}
+      style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)", WebkitTouchCallout: "none" }}
+      onContextMenu={(e) => e.preventDefault()}
     >
       {/* UX-Audit Befund #2, Option A (Vollbild-Gate, einmalig): blocks the whole panel until
           answered once; camera preview may already be initializing underneath (a separate OS
@@ -2888,7 +2921,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           <p className="flex min-w-0 items-center gap-2 text-[15px] font-semibold leading-tight text-foreground">
         <span
           className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-            boardMissing
+            boardMissing || boardUnseen
               ? "bg-destructive animate-pulse"
               : phase === "live"
                 ? "bg-secondary animate-pulse-glow"
@@ -3168,8 +3201,16 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               <X className="h-4 w-4" />
             </button>
           </>
-        ) : boardMissing && (phase === "live" || phase === "scanning") ? (
-          <span className="flex items-center gap-1.5 font-medium text-destructive"><AlertCircle className="h-4 w-4 shrink-0" /> {t("camera.noBoardDetected")}</span>
+        ) : (boardMissing || boardUnseen) && (phase === "live" || phase === "scanning") ? (
+          <span className="flex min-w-0 items-center gap-1.5 font-medium text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0" /> <span className="min-w-0">{t("camera.noBoardDetected")}</span>
+            {/* The check looks for the red and green rings; a board in other colours never passes it, so the saved calibration can be used as it is. */}
+            {boardUnseen && (
+              <button type="button" onClick={() => { setBoardUnseen(false); setStatus(t("camera.readyThrowFirst")); }} className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-foreground">
+                {t("camera.useAnyway")}
+              </button>
+            )}
+          </span>
         ) : phase === "scanning" ? (
           <span className="flex items-center gap-1.5 text-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t("camera.analyzing")}</span>
         ) : phase === "starting" || phase === "detecting" ? (
@@ -3298,14 +3339,23 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
                       + {t("camera.addMiss")}
                     </button>
                   </div>
+                ) : i === accumulated.length && (phase === "live" || phase === "scanning") ? (
+                  // Looks like a button, so it is one: a tap looks at the board right away.
+                  <button
+                    key={`slot-${i}`}
+                    type="button"
+                    onClick={lookNow}
+                    disabled={phase !== "live" || boardMissing || boardUnseen}
+                    className="flex h-16 items-center justify-center rounded-xl border border-dashed border-primary px-1 text-center text-[13px] font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+                  >
+                    {t("camera.detectThrow")}
+                  </button>
                 ) : (
                   <div
                     key={`slot-${i}`}
-                    className={`flex h-16 items-center justify-center rounded-xl border border-dashed px-1 text-center text-[13px] ${
-                      i === accumulated.length && (phase === "live" || phase === "scanning") ? "border-primary font-semibold text-primary" : "border-border text-muted-foreground"
-                    }`}
+                    className="flex h-16 items-center justify-center rounded-xl border border-dashed border-border px-1 text-center text-[13px] text-muted-foreground"
                   >
-                    {i === accumulated.length && (phase === "live" || phase === "scanning") ? t("camera.detectThrow") : `${t("game.dartCounterLabel")} ${i + 1}`}
+                    {`${t("game.dartCounterLabel")} ${i + 1}`}
                   </div>
                 );
               }

@@ -3100,7 +3100,7 @@ const GamePage = () => {
     // Android system chrome, Layout's own nav was drawn on top of it the whole time. This screen
     // is meant to fully replace the app chrome while a game is live, so it needs to outrank that
     // nav bar outright rather than share its z-50.
-    <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-slide-up overflow-hidden">
+    <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-slide-up overflow-hidden select-none [&_input]:select-text [&_textarea]:select-text" style={{ WebkitTouchCallout: "none" }}>
       {confettiKey !== null && <ConfettiBurst triggerKey={confettiKey} />}
       {legWonBanner && (
         <div className="pointer-events-none fixed inset-x-0 top-16 z-[75] flex justify-center px-4" role="status">
