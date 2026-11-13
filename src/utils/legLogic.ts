@@ -134,6 +134,29 @@ export function applyCricketDart(myState: CricketPlayerState, others: CricketPla
 }
 
 /**
+ * Cricket is won by whoever has closed every number while no one else has more points.
+ * `myState` is the thrower's state right after their dart, `others` everyone else's.
+ */
+export function isCricketWon(myState: CricketPlayerState, others: CricketPlayerState[], cricketNumbers: readonly number[]): boolean {
+  const allClosed = cricketNumbers.every((num) => (myState.marks[num] || 0) >= 3);
+  return allClosed && others.every((o) => myState.points >= o.points);
+}
+
+/**
+ * The fields that end a Cricket game for `winnerIndex` (a score-slot index, like `legsWon`).
+ * Counts the game as one won leg, so the saved ranking and winner point at the real winner
+ * instead of whoever sits first in the player list.
+ */
+export function cricketWinFields(game: GameState, winnerIndex: number, throwerIndex: number): Pick<GameState, "isFinished" | "winnerName" | "winnerIndex" | "legsWon"> {
+  return {
+    isFinished: true,
+    winnerName: game.teams ? game.teams[winnerIndex].name : game.players[throwerIndex].name,
+    winnerIndex,
+    legsWon: game.legsWon.map((won, i) => (i === winnerIndex ? won + 1 : won)),
+  };
+}
+
+/**
  * Rebuilds Cricket marks/points from scratch by replaying a leg's throws in true chronological
  * order. Needed because — unlike X01's `remaining`, a simple running total that reverses cleanly
  * with `+= removed.points` — Cricket scoring is order-dependent ACROSS players: whether a hit

@@ -122,7 +122,7 @@ import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
 import { createLegState, createCricketState } from "@/utils/gameStateFactory";
-import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricketNumbers, wouldWinMatch } from "@/utils/legLogic";
+import { applyLegWin, applyCricketDart, isCricketWon, cricketWinFields, replayCricketState, generateRandomCricketNumbers, wouldWinMatch } from "@/utils/legLogic";
 import { resolveRoundCap, type RoundCapOutcome } from "@/utils/roundCap";
 import { saveGameRecord } from "@/lib/gameSync";
 import { enqueueGameSave, enqueueMatchResult, enqueueLeagueFixtureResult } from "@/lib/offlineQueue";
@@ -1094,7 +1094,8 @@ const GamePage = () => {
     // starter further back in the list.
     const starter = teamMode ? (effectiveStarterIndex % 2 === 0 ? 0 : 1) : Math.min(effectiveStarterIndex, n - 1);
     const newGame: GameState = {
-      mode, startScore, bestOfLegs, players,
+      // Cricket is a single game: the legs setting is hidden for it and must not leak in.
+      mode, startScore, bestOfLegs: mode === "cricket" ? 1 : bestOfLegs, players,
       legsWon: Array(scoreSlots).fill(0),
       currentLeg: createLegState(1, startScore, starter, players, teams), completedLegs: [],
       currentPlayerIndex: starter, isFinished: false,
@@ -1488,13 +1489,9 @@ const GamePage = () => {
 
       const updated: GameState = { ...prev, currentLeg: updatedLeg, cricket };
 
-      const allClosed = cricketNumbers.every((num) => (myState.marks[num] || 0) >= 3);
-      const hasHighestPoints = others.every(o => myState.points >= o.points);
-      if (allClosed && hasHighestPoints) {
+      if (isCricketWon(myState, others, cricketNumbers as readonly number[])) {
         updatedLeg.winnerIndex = teamIdx;
-        updated.isFinished = true;
-        updated.winnerName = prev.teams ? prev.teams[teamIdx].name : prev.players[idx].name;
-        updated.winnerIndex = teamIdx;
+        Object.assign(updated, cricketWinFields(prev, teamIdx, idx));
       } else if (newDartsThisRound >= 3) {
         updated.currentPlayerIndex = (idx + 1) % n;
       }
@@ -1648,13 +1645,9 @@ const GamePage = () => {
         const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
         applyCricketDart(myState, others, cricketNumbers as readonly number[], targetNumber, d.baseValue, d.multiplier);
         curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], dart];
-        const allClosed = cricketNumbers.every((num) => (myState.marks[num] || 0) >= 3);
-        const hasHighestPoints = others.every(o => myState.points >= o.points);
-        if (allClosed && hasHighestPoints) {
+        if (isCricketWon(myState, others, cricketNumbers as readonly number[])) {
           curGame.currentLeg.winnerIndex = teamIdx;
-          curGame.isFinished = true;
-          curGame.winnerName = curGame.teams ? curGame.teams[teamIdx].name : curGame.players[idx].name;
-          curGame.winnerIndex = teamIdx;
+          Object.assign(curGame, cricketWinFields(curGame, teamIdx, idx));
           checkedOut = true;
         }
         curDarts += 1;

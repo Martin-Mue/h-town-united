@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricketNumbers, wouldWinMatch } from "./legLogic";
+import { applyLegWin, applyCricketDart, replayCricketState, generateRandomCricketNumbers, wouldWinMatch, isCricketWon, cricketWinFields } from "./legLogic";
 import { createLegState, createCricketState } from "./gameStateFactory";
 import type { GameState, LegState, PlayerSlot, CricketPlayerState, DartThrow } from "@/types/game";
 
@@ -270,5 +270,25 @@ describe("generateRandomCricketNumbers", () => {
         expect(n).toBeLessThanOrEqual(20);
       }
     }
+  });
+});
+
+describe("Cricket win", () => {
+  const numbers = [20, 19, 18, 17, 16, 15, 25];
+  const closed = (points: number): CricketPlayerState => ({ marks: Object.fromEntries(numbers.map((n) => [n, 3])), points });
+
+  it("needs every number closed and no one ahead on points", () => {
+    expect(isCricketWon(closed(40), [createCricketState(numbers), createCricketState(numbers)], numbers)).toBe(true);
+    expect(isCricketWon(closed(40), [{ ...createCricketState(numbers), points: 60 }], numbers)).toBe(false);
+    expect(isCricketWon({ ...closed(40), marks: { ...closed(40).marks, 25: 2 } }, [createCricketState(numbers)], numbers)).toBe(false);
+  });
+
+  it("credits the third player with the win, so the saved ranking puts them first", () => {
+    const game = makeMatch(3, 1);
+    const fields = cricketWinFields(game, 2, 2);
+    expect(fields.legsWon).toEqual([0, 0, 1]);
+    expect(fields.winnerIndex).toBe(2);
+    expect(fields.winnerName).toBe("P3");
+    expect(fields.isFinished).toBe(true);
   });
 });
