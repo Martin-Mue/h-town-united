@@ -1375,6 +1375,26 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
   },
   {
+    id: "2026-11-13-party-games",
+    date: "2026-11-13",
+    title: {
+      de: "Neu: Party-Spiele für die ganze Runde",
+      en: "New: party games for the whole group",
+      fr: "Nouveau : jeux de soirée pour tout le groupe",
+      pl: "Nowość: gry imprezowe dla całej ekipy",
+      nl: "Nieuw: partyspellen voor de hele groep",
+      tr: "Yeni: tüm grup için parti oyunları",
+    },
+    description: {
+      de: "Killer, Shanghai, Halve-It und Around the Clock für 2 bis 8 Spieler, zu finden auf der Startseite unter „Party-Spiele“. Die Spiele zählen nicht in Statistik und Elo.",
+      en: "Killer, Shanghai, Halve-It and Around the Clock for 2 to 8 players, on the start page under “Party games”. They do not count for statistics or Elo.",
+      fr: "Killer, Shanghai, Halve-It et Tour de l'horloge pour 2 à 8 joueurs, sur la page d'accueil sous « Jeux de soirée ». Ils ne comptent ni pour les statistiques ni pour l'Elo.",
+      pl: "Killer, Shanghai, Halve-It i Dookoła zegara dla 2 do 8 graczy, na stronie startowej pod „Gry imprezowe”. Nie liczą się do statystyk ani Elo.",
+      nl: "Killer, Shanghai, Halve-It en Rond de klok voor 2 tot 8 spelers, op de startpagina onder “Partyspellen”. Ze tellen niet mee voor statistieken en Elo.",
+      tr: "2 ila 8 oyuncu için Killer, Shanghai, Halve-It ve Saat turu, başlangıç sayfasında “Parti oyunları” altında. İstatistiklere ve Elo'ya sayılmaz.",
+    },
+  },
+  {
     id: "2026-11-13-take-back-last-dart",
     date: "2026-11-13",
     title: {

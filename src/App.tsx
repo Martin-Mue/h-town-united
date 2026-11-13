@@ -52,6 +52,7 @@ const Game = lazyWithReload(() => import("./pages/Game"));
 const OnlineWatch = lazyWithReload(() => import("./pages/OnlineWatch"));
 const Tournament = lazyWithReload(() => import("./pages/Tournament"));
 const Training = lazyWithReload(() => import("./pages/Training"));
+const PartyGame = lazyWithReload(() => import("./pages/PartyGame"));
 const Statistics = lazyWithReload(() => import("./pages/Statistics"));
 const NotFound = lazyWithReload(() => import("./pages/NotFound"));
 const ResetPassword = lazyWithReload(() => import("./pages/ResetPassword"));
@@ -141,6 +142,7 @@ const App = () => (
                           <Route path="/leagues" element={<League />} />
                           <Route path="/leagues/:id" element={<League />} />
                           <Route path="/training" element={<Training />} />
+                          <Route path="/party" element={<PartyGame />} />
                           <Route path="/statistics" element={<Statistics />} />
                           <Route path="/admin" element={<Admin />} />
                           <Route path="/settings" element={<Settings />} />

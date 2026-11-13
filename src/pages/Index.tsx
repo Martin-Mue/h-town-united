@@ -47,6 +47,7 @@ const AREA_LINKS: { to: string; labelKey: string; icon: IconComponent }[] = [
   { to: "/leagues", labelKey: "tournament.leagueMode", icon: Swords },
   { to: "/tournaments/series", labelKey: "home.season", icon: SeasonIcon },
   { to: "/training", labelKey: "home.training", icon: TrainingIcon },
+  { to: "/party", labelKey: "home.party", icon: PartyPopper },
   { to: "/statistics", labelKey: "home.statistics", icon: StatsIcon },
   { to: "/players", labelKey: "home.club", icon: ClubIcon },
 ];
