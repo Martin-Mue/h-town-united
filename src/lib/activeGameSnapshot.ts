@@ -22,6 +22,8 @@ export interface ActiveGameSnapshot {
   dartsThisRound: number;
   turnStartRemaining: number;
   tournamentLink: TournamentLink | null;
+  /** The id this game is saved under. Optional: snapshots written before it existed have none. */
+  pendingGameId?: string;
   /** Optional so an old snapshot (written before Autodarts existed) still deserializes as "not
    *  scoring via Autodarts" rather than being rejected outright -- a reload mid-camera-scored or
    *  mid-manual game never had either field to begin with, and should stay that way, not suddenly

@@ -178,19 +178,24 @@ const GamePage = () => {
   const [phase, setPhase] = useState<"setup" | "warmup" | "walkon" | "stats" | "playing" | "postGame">(() =>
     initialSnapshot ? "playing" : "setup"
   );
-  const [mode, setMode] = useState<GameMode>("501");
-  const [bestOfLegs, setBestOfLegs] = useState(3);
+  // A restored game brings its setup back with it. Without this, a rematch after a reload started a default
+  // 501 for two unnamed players, whatever had been played before.
+  const restoredGame = initialSnapshot?.game ?? null;
+  const restoredPerPlayer = <T,>(pick: (p: PlayerSlot) => T | undefined, fallback: (slot: number) => T): T[] =>
+    Array.from({ length: MAX_PLAYERS }, (_, i) => (restoredGame?.players[i] ? pick(restoredGame.players[i]) ?? fallback(i) : fallback(i)));
+  const [mode, setMode] = useState<GameMode>(() => restoredGame?.mode ?? "501");
+  const [bestOfLegs, setBestOfLegs] = useState(() => (restoredGame && restoredGame.mode !== "cricket" ? restoredGame.bestOfLegs : 3));
   // Sets-Modus (Runde 5): "Best of X Sätze, je Satz Best of Y Legs" — the standard professional
   // darts match structure, layered on top of the plain leg race above rather than replacing it
   // (bestOfLegs becomes "legs per set" the moment this is on; see GameState.setsMode's own doc
   // comment). Off by default — a flat best-of-legs match is still the common case for casual play.
-  const [setsEnabled, setSetsEnabled] = useState(false);
-  const [bestOfSets, setBestOfSets] = useState(3);
-  const [maxRoundsX01, setMaxRoundsX01] = useState<number>(0); // 0 = unlimited
-  const [customStartScore, setCustomStartScore] = useState(501);
-  const [numPlayers, setNumPlayers] = useState(2);
+  const [setsEnabled, setSetsEnabled] = useState(() => !!restoredGame?.setsMode);
+  const [bestOfSets, setBestOfSets] = useState(() => restoredGame?.setsMode?.bestOfSets ?? 3);
+  const [maxRoundsX01, setMaxRoundsX01] = useState<number>(() => restoredGame?.maxRoundsX01 ?? 0); // 0 = unlimited
+  const [customStartScore, setCustomStartScore] = useState(() => restoredGame?.startScore ?? 501);
+  const [numPlayers, setNumPlayers] = useState(() => restoredGame?.players.length ?? 2);
   const [customCricket, setCustomCricket] = useState(false);
-  const [teamMode, setTeamMode] = useState(false);
+  const [teamMode, setTeamMode] = useState(() => !!restoredGame?.teams);
   // Toggle shown on the plain (not tournament/league-linked) setup screen — "online" swaps the
   // whole form for OnlineChallengeSetup (challenge a real club member, synced two-device play)
   // instead of the usual local player-name entry. Not persisted; always starts on "local".
@@ -217,8 +222,8 @@ const GamePage = () => {
   /** Online: the bull-off result card was shown on this device and acknowledged. */
   const [bullOffSeen, setBullOffSeen] = useState(false);
   const [bullOffAcked, setBullOffAcked] = useState(false);
-  const [teamNames, setTeamNames] = useState<[string, string]>(["Team 1", "Team 2"]);
-  const [playerNames, setPlayerNames] = useState<string[]>([...DEFAULT_NAMES]);
+  const [teamNames, setTeamNames] = useState<[string, string]>(() => (restoredGame?.teams ? [restoredGame.teams[0].name, restoredGame.teams[1].name] : ["Team 1", "Team 2"]));
+  const [playerNames, setPlayerNames] = useState<string[]>(() => restoredPerPlayer((p) => (p.isBot ? undefined : p.name), (i) => DEFAULT_NAMES[i]));
   // "PIN pro Spieler": which roster slot is waiting on a PIN, and for which club member — see
   // the roster-picker button in the setup form and submitPinPrompt below. Verification is fully
   // client-side against that player's stored hash+salt (@/lib/playerPin), so it works offline.
@@ -226,16 +231,16 @@ const GamePage = () => {
   const [pinPromptValue, setPinPromptValue] = useState("");
   const [pinPromptError, setPinPromptError] = useState(false);
   const [pinPromptChecking, setPinPromptChecking] = useState(false);
-  const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(Array(MAX_PLAYERS).fill(true));
-  const [playerDoubleIn, setPlayerDoubleIn] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
+  const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(() => restoredPerPlayer((p) => p.doubleOut, () => true));
+  const [playerDoubleIn, setPlayerDoubleIn] = useState<boolean[]>(() => restoredPerPlayer((p) => p.doubleIn, () => false));
   const [playerHandicap, setPlayerHandicap] = useState<number[]>(Array(MAX_PLAYERS).fill(0));
   const [warmupEnabled, setWarmupEnabled] = useState(false);
   const [warmupSeconds, setWarmupSeconds] = useState(60);
   const [warmupRemaining, setWarmupRemaining] = useState(0);
   const [warmupDarts, setWarmupDarts] = useState(0);
   const [warmupTotal, setWarmupTotal] = useState(0);
-  const [playerIsBot, setPlayerIsBot] = useState<boolean[]>(Array(MAX_PLAYERS).fill(false));
-  const [playerBotLevel, setPlayerBotLevel] = useState<BotLevel[]>(Array(MAX_PLAYERS).fill("medium"));
+  const [playerIsBot, setPlayerIsBot] = useState<boolean[]>(() => restoredPerPlayer((p) => p.isBot, () => false));
+  const [playerBotLevel, setPlayerBotLevel] = useState<BotLevel[]>(() => restoredPerPlayer((p) => p.botLevel, () => "medium"));
   const [soundEnabled, setSoundEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
     const raw = window.localStorage.getItem(SOUND_PREF_KEY);
@@ -413,7 +418,7 @@ const GamePage = () => {
   // job, not this snapshot's.
   useEffect(() => {
     if (phase === "playing" && game && !game.isFinished) {
-      saveActiveGameSnapshot({ game, dartsThisRound, turnStartRemaining, tournamentLink: tournamentLinkRef.current, autodartsEnabled, autodartsBoardNumber, autodartsMatchId, autodartsLastCommittedTurnId });
+      saveActiveGameSnapshot({ game, dartsThisRound, turnStartRemaining, tournamentLink: tournamentLinkRef.current, pendingGameId: pendingGameIdRef.current, autodartsEnabled, autodartsBoardNumber, autodartsMatchId, autodartsLastCommittedTurnId });
     }
     // dartsThisRound/turnStartRemaining included deliberately — without them a snapshot taken
     // mid-visit (after game changed but before either was re-derived) could be saved with stale
@@ -549,7 +554,9 @@ const GamePage = () => {
   const [confirmCancelGame, setConfirmCancelGame] = useState(false);
   // Generated up front (before the game row exists) so highlight clips captured
   // mid-game can already reference the game they'll end up saved under.
-  const pendingGameIdRef = useRef<string>(crypto.randomUUID());
+  // The id travels with the snapshot: a game restored after a reload keeps the id it may already have been
+  // saved under, so saving it again cannot create a second copy.
+  const pendingGameIdRef = useRef<string>(initialSnapshot?.pendingGameId ?? crypto.randomUUID());
 
   // --- Online-match sync (see the onlineMatch = useOnlineMatch(...) call further up) ---
   // True once this device has applied the online match's state at least once — gates the
