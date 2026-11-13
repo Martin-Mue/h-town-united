@@ -3033,7 +3033,7 @@ const GamePage = () => {
       {checkoutSuggestionEnabled && !isCricket && (
         <CheckoutSuggestion
           reserveSpace
-          active={checkoutHintActive}
+          active={checkoutHintActive} dartsLeft={3 - dartsThisRound}
           remaining={currentRemaining} playerName={currentPlayerName}
           personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
           personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
@@ -3319,7 +3319,7 @@ const GamePage = () => {
                 `{condition && <CheckoutSuggestion/>}` wrapping caused the "scoreboard jumps"
                 complaint on every turn change, not just on remaining-score changes. */}
             <CheckoutSuggestion
-              active={checkoutHintActive}
+              active={checkoutHintActive} dartsLeft={3 - dartsThisRound}
               remaining={currentRemaining} playerName={currentPlayerName}
               personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
               personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}

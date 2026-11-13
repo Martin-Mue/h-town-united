@@ -1374,4 +1374,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Hızlı giriş artık her zaman doğru toplamı kaydediyor (170, 134 olarak sayılıyordu) ve yazılan checkout checkout sayılıyor. Kamerayla yapılan checkout'tan sonra bitiş ekranı yeniden görünüyor. Kamera artık tahta olmayan yerde tahta bildirmiyor ve “Atışı algıla” artık gerçek bir düğme. Cricket üç ve daha fazla oyuncuda doğru kazananı kaydediyor.",
     },
   },
+  {
+    id: "2026-11-13-checkout-advice",
+    date: "2026-11-13",
+    title: {
+      de: "Checkout-Vorschlag denkt mit",
+      en: "Smarter checkout suggestion",
+      fr: "Suggestion de checkout plus maligne",
+      pl: "Mądrzejsza podpowiedź checkoutu",
+      nl: "Slimmere checkout-suggestie",
+      tr: "Daha akıllı checkout önerisi",
+    },
+    description: {
+      de: "Der Vorschlag passt sich an die Darts an, die du noch in der Hand hast. Geht kein Finish mehr, zeigt er mit dem letzten Dart, was du dir stellen kannst (z. B. T20 → 40). Wo es geht, endet der Weg auf deinem besten Doppel.",
+      en: "The suggestion now fits the darts you still hold. If no finish is left, it shows what to leave with your last dart (e.g. T20 → 40). Where possible, the route ends on your best double.",
+      fr: "La suggestion s'adapte aux fléchettes qu'il te reste en main. S'il n'y a plus de finish, elle montre quoi laisser avec la dernière fléchette (p. ex. T20 → 40). Quand c'est possible, la route se termine sur ton meilleur double.",
+      pl: "Podpowiedź dopasowuje się do lotek, które masz jeszcze w ręce. Gdy nie da się już skończyć, pokazuje, co zostawić ostatnią lotką (np. T20 → 40). Gdzie to możliwe, droga kończy się na twoim najlepszym doublu.",
+      nl: "De suggestie past zich aan de darts aan die je nog in je hand hebt. Is er geen finish meer, dan toont ze wat je met je laatste dart kunt laten staan (bijv. T20 → 40). Waar mogelijk eindigt de route op je beste dubbel.",
+      tr: "Öneri artık elinde kalan dartlara göre uyarlanıyor. Bitiriş kalmadıysa son dartla ne bırakabileceğini gösteriyor (ör. T20 → 40). Mümkün olan yerde yol en iyi çiftinde bitiyor.",
+    },
+  },
 ];

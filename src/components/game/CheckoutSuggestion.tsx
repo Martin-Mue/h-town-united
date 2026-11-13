@@ -1,4 +1,4 @@
-import { getCheckoutSuggestion } from "@/utils/checkoutTable";
+import { checkoutAdvice, bestDouble } from "@/utils/checkoutRoute";
 import { directDoubleLabel, type CheckoutDoubleBreakdown } from "@/utils/dartStats";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -35,6 +35,9 @@ interface CheckoutSuggestionProps {
    *  card open and closed: the space is always there, so nothing below it moves, and when there is no route the
    *  strip says so. Off by default, so the camera view and the training drills keep the collapsing card. */
   reserveSpace?: boolean;
+  /** Darts the player still holds this visit (1-3). The route never needs more than these; with the last dart and
+   *  no finish left it becomes a set-up shot ("T20 → 40"). Three when not given. */
+  dartsLeft?: number;
 }
 
 /** One dart of the route as a chip, tinted by what it aims at (treble / double / bull). */
@@ -65,9 +68,13 @@ const RouteDartChip = ({ dart, large }: { dart: string; large: boolean }) => (
  * which reads as exactly the "springt" complaint this component's history was already trying to
  * fix. max-height/opacity/margin are all plain, universally-interpolated properties.
  */
-const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, personalDoubleBreakdown, active = true, reserveSpace = false }: CheckoutSuggestionProps) => {
+const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, personalDoubleBreakdown, active = true, reserveSpace = false, dartsLeft = 3 }: CheckoutSuggestionProps) => {
   const { t } = useLanguage();
-  const route = active ? getCheckoutSuggestion(remaining) : null;
+  // Ends on the double this player hits best where the route allows it (needs a few recorded attempts to count).
+  const advice = active ? checkoutAdvice(remaining, { dartsLeft, preferredDouble: bestDouble(personalDoubleBreakdown) }) : null;
+  const route = advice?.darts ?? null;
+  /** What a set-up shot leaves for the next visit, shown after the dart: "T20 → 40". */
+  const leaves = advice?.leaves;
 
   // Round 3 Rang 16: prefer the rate for THIS exact double when we actually have it (a direct
   // remainder with recorded attempts) — falls back to the general overall rate otherwise, so a
@@ -100,6 +107,7 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, perso
         {route ? (
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {route.map((dart, i) => <RouteDartChip key={i} dart={dart} large />)}
+            {leaves !== undefined && <span className="font-display text-lg font-bold tabular-nums text-muted-foreground">→ {leaves}</span>}
           </div>
         ) : (
           <span className="ml-auto truncate text-sm text-muted-foreground">{active ? t("game.noCheckoutYet") : "–"}</span>
@@ -132,6 +140,7 @@ const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, perso
                 {i < route.length - 1 && <span className="text-lg text-muted-foreground">→</span>}
               </span>
             ))}
+            {leaves !== undefined && <span className="font-display text-lg font-bold tabular-nums text-muted-foreground">→ {leaves}</span>}
             <span className="text-sm text-muted-foreground ml-auto tabular-nums">{remaining}</span>
           </div>
         </div>
