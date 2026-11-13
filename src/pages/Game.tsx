@@ -156,6 +156,8 @@ const AUTOSTART_DELAY_MS = 5000;
 export const MAX_PLAYERS = 8;
 /** Every undo step holds a copy of the whole game, so only the latest ones are kept (a long match grew without limit). */
 const UNDO_STEPS_KEPT = 60;
+/** How long the end screen offers to take back the last dart before the game is saved. */
+const FINISH_UNDO_MS = 8000;
 
 // createLegState/createCricketState moved to utils/gameStateFactory.ts (imported above) so the
 // online-match accept flow can build a real starting leg without duplicating this logic.
@@ -2412,9 +2414,38 @@ const GamePage = () => {
     // effect's comment above for why they're listed at all despite that).
   }, [game, gameSaved, session, clubId, toast, t, tournamentLinkRef, leagueLinkRef, onlineMatchId]);
 
+  // A mistyped last dart must be correctable. So a finished game is not saved at once: for a few seconds the end
+  // screen offers "take back the last dart". After that, or as soon as the player moves on (rematch, new game,
+  // leaving the page), it is saved as before. Online games save at once: the other device saves the same match.
+  const [finishUndoOpen, setFinishUndoOpen] = useState(false);
+  const [finishHoldOver, setFinishHoldOver] = useState(false);
+  const canTakeBackFinish = undoStack.length > 0 && !onlineMatchId;
   useEffect(() => {
-    if (game?.isFinished && !gameSaved && session?.user?.id && !duelId) saveGame();
-  }, [game?.isFinished, gameSaved, session?.user?.id, saveGame, duelId]);
+    if (!game?.isFinished) { setFinishUndoOpen(false); setFinishHoldOver(false); return; }
+    if (gameSaved || !session?.user?.id || duelId) { setFinishUndoOpen(false); return; }
+    if (!canTakeBackFinish || finishHoldOver) { setFinishUndoOpen(false); saveGame(); return; }
+    setFinishUndoOpen(true);
+    const id = window.setTimeout(() => setFinishHoldOver(true), FINISH_UNDO_MS);
+    return () => window.clearTimeout(id);
+  }, [game?.isFinished, gameSaved, session?.user?.id, saveGame, duelId, canTakeBackFinish, finishHoldOver]);
+  // Leaving during those seconds by any other way (browser back, closing the app) must not lose the game either.
+  const pendingFinishSaveRef = useRef<(() => void) | null>(null);
+  pendingFinishSaveRef.current = finishUndoOpen ? () => void saveGame() : null;
+  useEffect(() => {
+    const saveNow = () => pendingFinishSaveRef.current?.();
+    window.addEventListener("pagehide", saveNow);
+    return () => {
+      window.removeEventListener("pagehide", saveNow);
+      saveNow();
+    };
+  }, []);
+  /** Saves a finished game that is still waiting for a possible take-back, then runs `next` (rematch, new game, leave). */
+  const saveThenLeave = async (next: () => void) => {
+    setFinishUndoOpen(false);
+    setFinishHoldOver(true);
+    if (game?.isFinished && !gameSaved && session?.user?.id && !duelId) await saveGame();
+    next();
+  };
 
   // Cricket match-win announcement — X01 already announces its own win inline (checkout +
   // hype happen together there); cricket finishes on a mark, not a "checkout" moment, so it
@@ -3231,9 +3262,11 @@ const GamePage = () => {
             tournamentLinkName={tournamentLinkName}
             tournamentLinkRef={tournamentLinkRef}
             leagueLinkRef={leagueLinkRef}
-            startRematch={onlineMatchId ? requestOnlineRematch : startRematch}
+            startRematch={onlineMatchId ? requestOnlineRematch : () => void saveThenLeave(startRematch)}
             resetGame={resetGame}
             navigate={navigate}
+            saveThenLeave={saveThenLeave}
+            onTakeBackLastDart={finishUndoOpen ? undoLastDart : undefined}
           />
         </div>
       )}

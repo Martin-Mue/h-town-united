@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction, MutableRefObject } from "react";
 import type { NavigateFunction } from "react-router-dom";
-import { Trophy, Share2, RotateCcw } from "lucide-react";
+import { Trophy, Share2, RotateCcw, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AiMatchReport from "@/components/game/AiMatchReport";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -34,6 +34,10 @@ interface GamePostGameProps {
   startRematch: () => void;
   resetGame: () => void;
   navigate: NavigateFunction;
+  /** Saves the game if that is still pending, then runs the action that leaves this screen. */
+  saveThenLeave: (next: () => void) => Promise<void>;
+  /** Set for the first seconds after the last dart: takes it back and returns to the game. */
+  onTakeBackLastDart?: () => void;
 }
 
 /**
@@ -47,7 +51,7 @@ interface GamePostGameProps {
 const GamePostGame = ({
   game, postGameStats, statFor, selectedLegTab, setSelectedLegTab, showDetailedStats, setShowDetailedStats,
   visibleSegmentRows, gameSaved, queuedOffline, pendingGameIdRef, sharingResult, shareResult,
-  tournamentLinkName, tournamentLinkRef, leagueLinkRef, startRematch, resetGame, navigate,
+  tournamentLinkName, tournamentLinkRef, leagueLinkRef, startRematch, resetGame, navigate, saveThenLeave, onTakeBackLastDart,
 }: GamePostGameProps) => {
   const { t } = useLanguage();
   return (
@@ -57,6 +61,11 @@ const GamePostGame = ({
       </span>
       <h2 className="text-[32px] leading-tight font-display font-bold break-words">{game.winnerName}</h2>
       <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground mt-1 mb-3">{t("game.wins")}</p>
+      {onTakeBackLastDart && (
+        <Button variant="outline" size="sm" onClick={onTakeBackLastDart} className="mb-3 gap-1.5">
+          <Undo2 className="h-4 w-4" /> {t("game.takeBackLastDart")}
+        </Button>
+      )}
       {/* Sets-Modus: the match was actually decided by sets, not by the final set's leg
           score alone — leading with setsWon (and naming the final set's own leg score
           underneath, in parentheses, for anyone who wants the detail) avoids the final
@@ -259,19 +268,21 @@ const GamePostGame = ({
           <Button
             onClick={() => {
               const link = tournamentLinkRef.current;
-              if (!link) { navigate("/tournament"); return; }
-              navigate(link.board ? `/tournament/${link.tournamentId}?board=${link.board}` : `/tournament/${link.tournamentId}`);
+              void saveThenLeave(() => {
+                if (!link) { navigate("/tournament"); return; }
+                navigate(link.board ? `/tournament/${link.tournamentId}?board=${link.board}` : `/tournament/${link.tournamentId}`);
+              });
             }}
             className="h-[52px] flex-1 rounded-[14px] text-base font-semibold"
           >
             {t("game.backToTournament")}
           </Button>
         ) : leagueLinkRef.current ? (
-          <Button onClick={() => navigate(`/leagues/${leagueLinkRef.current!.leagueId}`)} className="h-[52px] flex-1 rounded-[14px] text-base font-semibold">
+          <Button onClick={() => void saveThenLeave(() => navigate(`/leagues/${leagueLinkRef.current!.leagueId}`))} className="h-[52px] flex-1 rounded-[14px] text-base font-semibold">
             {t("game.backToLeague")}
           </Button>
         ) : (
-          <Button onClick={() => { resetGame(); navigate("/game"); }} className="h-[52px] flex-1 rounded-[14px] text-base font-semibold">{t("home.newGame")}</Button>
+          <Button onClick={() => void saveThenLeave(() => { resetGame(); navigate("/game"); })} className="h-[52px] flex-1 rounded-[14px] text-base font-semibold">{t("home.newGame")}</Button>
         )}
       </div>
       {gameSaved && (

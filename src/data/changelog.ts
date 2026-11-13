@@ -1375,6 +1375,26 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
   },
   {
+    id: "2026-11-13-take-back-last-dart",
+    date: "2026-11-13",
+    title: {
+      de: "Letzten Wurf auch nach Spielende zurücknehmen",
+      en: "Take back the last dart, even after the game ended",
+      fr: "Reprendre la dernière fléchette, même après la fin",
+      pl: "Cofnij ostatni rzut także po zakończeniu gry",
+      nl: "Laatste worp terugnemen, ook na het einde",
+      tr: "Oyun bittikten sonra da son atışı geri al",
+    },
+    description: {
+      de: "Vertippt beim Siegdart? Auf der Endansicht kannst du ihn ein paar Sekunden lang zurücknehmen. Erst danach wird das Spiel gespeichert.",
+      en: "Mistyped the winning dart? The end screen lets you take it back for a few seconds. Only then is the game saved.",
+      fr: "Erreur sur la fléchette gagnante ? L'écran de fin permet de la reprendre pendant quelques secondes. La partie n'est enregistrée qu'ensuite.",
+      pl: "Pomyłka przy zwycięskiej lotce? Na ekranie końcowym możesz ją cofnąć przez kilka sekund. Dopiero potem gra jest zapisywana.",
+      nl: "Verkeerd getikt bij de winnende dart? Op het eindscherm kun je hem een paar seconden terugnemen. Pas daarna wordt het spel opgeslagen.",
+      tr: "Kazanan dartı yanlış mı girdin? Bitiş ekranında birkaç saniye boyunca geri alabilirsin. Oyun ancak ondan sonra kaydedilir.",
+    },
+  },
+  {
     id: "2026-11-13-checkout-advice",
     date: "2026-11-13",
     title: {
