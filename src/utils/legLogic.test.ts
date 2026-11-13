@@ -292,3 +292,34 @@ describe("Cricket win", () => {
     expect(fields.isFinished).toBe(true);
   });
 });
+
+describe("Cut-Throat Cricket", () => {
+  const numbers = [20, 19, 18, 17, 16, 15, 25];
+  const fresh = (): CricketPlayerState => createCricketState(numbers);
+
+  it("gives the points to every opponent who has the number still open", () => {
+    const me = fresh();
+    const open = fresh();
+    const closed: CricketPlayerState = { ...fresh(), marks: { ...fresh().marks, 20: 3 } };
+    applyCricketDart(me, [open, closed], numbers, 20, 20, 3, true); // closes the 20
+    applyCricketDart(me, [open, closed], numbers, 20, 20, 2, true); // two scoring hits
+    expect(me.points).toBe(0);
+    expect(open.points).toBe(40);
+    expect(closed.points).toBe(0);
+  });
+
+  it("is won with every number closed and nobody on fewer points", () => {
+    const allClosed = (points: number): CricketPlayerState => ({ marks: Object.fromEntries(numbers.map((n) => [n, 3])), points });
+    expect(isCricketWon(allClosed(20), [{ ...fresh(), points: 60 }], numbers, true)).toBe(true);
+    expect(isCricketWon(allClosed(60), [{ ...fresh(), points: 20 }], numbers, true)).toBe(false);
+    // the same position in normal Cricket is decided the other way round
+    expect(isCricketWon(allClosed(60), [{ ...fresh(), points: 20 }], numbers)).toBe(true);
+  });
+
+  it("replays a leg with the same rule", () => {
+    const t20: DartThrow = { baseValue: 20, multiplier: 3, points: 60 };
+    const cricket = replayCricketState([[t20, t20], []], 0, undefined, numbers, true);
+    expect(cricket[0].points).toBe(0);
+    expect(cricket[1].points).toBe(60);
+  });
+});

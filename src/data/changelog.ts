@@ -1375,6 +1375,26 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
   },
   {
+    id: "2026-11-13-cut-throat",
+    date: "2026-11-13",
+    title: {
+      de: "Cricket: Cut-Throat",
+      en: "Cricket: Cut-Throat",
+      fr: "Cricket : Cut-Throat",
+      pl: "Cricket: Cut-Throat",
+      nl: "Cricket: Cut-Throat",
+      tr: "Cricket: Cut-Throat",
+    },
+    description: {
+      de: "Neue Variante unter „Mehr Optionen“: Punkte gehen an alle Gegner, die die Zahl noch offen haben, und die wenigsten Punkte gewinnen. Macht vor allem zu dritt oder viert Spaß.",
+      en: "A new variant under “More options”: points go to every opponent who still has the number open, and the lowest score wins. Most fun with three or four players.",
+      fr: "Nouvelle variante sous « Plus d'options » : les points vont à tous les adversaires qui ont encore le numéro ouvert, et le score le plus bas gagne. Idéal à trois ou quatre.",
+      pl: "Nowy wariant w „Więcej opcji”: punkty trafiają do wszystkich przeciwników z otwartą liczbą, a wygrywa najniższy wynik. Najlepiej we trzech lub czterech.",
+      nl: "Nieuwe variant onder “Meer opties”: punten gaan naar elke tegenstander die het getal nog open heeft, en de laagste score wint. Het leukst met drie of vier spelers.",
+      tr: "“Daha fazla seçenek” altında yeni varyant: puanlar sayıyı hâlâ açık tutan tüm rakiplere gider ve en düşük puan kazanır. En çok üç veya dört kişiyle eğlenceli.",
+    },
+  },
+  {
     id: "2026-11-13-party-games",
     date: "2026-11-13",
     title: {

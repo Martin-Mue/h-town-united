@@ -199,6 +199,7 @@ const GamePage = () => {
   const [customStartScore, setCustomStartScore] = useState(() => restoredGame?.startScore ?? 501);
   const [numPlayers, setNumPlayers] = useState(() => restoredGame?.players.length ?? 2);
   const [customCricket, setCustomCricket] = useState(false);
+  const [cricketCutThroat, setCricketCutThroat] = useState(() => !!restoredGame?.cricketCutThroat);
   const [teamMode, setTeamMode] = useState(() => !!restoredGame?.teams);
   // Toggle shown on the plain (not tournament/league-linked) setup screen — "online" swaps the
   // whole form for OnlineChallengeSetup (challenge a real club member, synced two-device play)
@@ -1130,6 +1131,7 @@ const GamePage = () => {
     if (mode === "cricket") {
       const cricketNumbers = customCricket ? generateRandomCricketNumbers() : [...CRICKET_NUMBERS];
       newGame.cricketNumbers = cricketNumbers;
+      if (cricketCutThroat) newGame.cricketCutThroat = true;
       newGame.cricket = Array.from({ length: scoreSlots }, () => createCricketState(cricketNumbers));
     }
     setGame(newGame);
@@ -1502,14 +1504,14 @@ const GamePage = () => {
       const myState = cricket[teamIdx];
       const others = cricket.filter((_, j) => j !== teamIdx);
 
-      applyCricketDart(myState, others, cricketNumbers as readonly number[], targetNumber, baseValue, mul);
+      applyCricketDart(myState, others, cricketNumbers as readonly number[], targetNumber, baseValue, mul, !!prev.cricketCutThroat);
 
       const updatedLeg: LegState = { ...prev.currentLeg, throws: prev.currentLeg.throws.map(t => [...t]) };
       updatedLeg.throws[idx] = [...updatedLeg.throws[idx], dart];
 
       const updated: GameState = { ...prev, currentLeg: updatedLeg, cricket };
 
-      if (isCricketWon(myState, others, cricketNumbers as readonly number[])) {
+      if (isCricketWon(myState, others, cricketNumbers as readonly number[], !!prev.cricketCutThroat)) {
         updatedLeg.winnerIndex = teamIdx;
         Object.assign(updated, cricketWinFields(prev, teamIdx, idx));
       } else if (newDartsThisRound >= 3) {
@@ -1663,9 +1665,9 @@ const GamePage = () => {
         const myState = curGame.cricket![teamIdx];
         const others = curGame.cricket!.filter((_, j) => j !== teamIdx);
         const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
-        applyCricketDart(myState, others, cricketNumbers as readonly number[], targetNumber, d.baseValue, d.multiplier);
+        applyCricketDart(myState, others, cricketNumbers as readonly number[], targetNumber, d.baseValue, d.multiplier, !!curGame.cricketCutThroat);
         curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], dart];
-        if (isCricketWon(myState, others, cricketNumbers as readonly number[])) {
+        if (isCricketWon(myState, others, cricketNumbers as readonly number[], !!curGame.cricketCutThroat)) {
           curGame.currentLeg.winnerIndex = teamIdx;
           Object.assign(curGame, cricketWinFields(curGame, teamIdx, idx));
           checkedOut = true;
@@ -1932,7 +1934,7 @@ const GamePage = () => {
         // correctly. Replay the whole leg from scratch instead — see replayCricketState's own
         // comment for why this is a correctness requirement, not just thoroughness (it already
         // knows to skip a hole rather than treat it as a real dart).
-        const cricket = replayCricketState(updatedLeg.throws, prev.currentLeg.startingPlayerIndex, prev.teams, prev.cricketNumbers ?? CRICKET_NUMBERS);
+        const cricket = replayCricketState(updatedLeg.throws, prev.currentLeg.startingPlayerIndex, prev.teams, prev.cricketNumbers ?? CRICKET_NUMBERS, !!prev.cricketCutThroat);
         return { ...prev, currentLeg: updatedLeg, cricket };
       }
       updatedLeg.remaining[teamIndexFor(prev.teams, playerIdx)] += removed.points;
@@ -1976,7 +1978,7 @@ const GamePage = () => {
         updatedLeg.throws[playerIdx] = newThrows;
         // Cricket marks/points can't be patched incrementally — see deleteThrow's own comment
         // on replayCricketState just above.
-        const cricket = replayCricketState(updatedLeg.throws, prev.currentLeg.startingPlayerIndex, prev.teams, prev.cricketNumbers ?? CRICKET_NUMBERS);
+        const cricket = replayCricketState(updatedLeg.throws, prev.currentLeg.startingPlayerIndex, prev.teams, prev.cricketNumbers ?? CRICKET_NUMBERS, !!prev.cricketCutThroat);
         return { ...prev, currentLeg: updatedLeg, cricket };
       });
       setEditingChipIdx(null);
@@ -2589,6 +2591,8 @@ const GamePage = () => {
         showAdvancedSetup={showAdvancedSetup}
         revealAdvancedSetup={revealAdvancedSetup}
         customCricket={customCricket}
+        cricketCutThroat={cricketCutThroat}
+        setCricketCutThroat={setCricketCutThroat}
         setCustomCricket={setCustomCricket}
         maxRoundsX01={maxRoundsX01}
         setMaxRoundsX01={setMaxRoundsX01}
@@ -2842,7 +2846,7 @@ const GamePage = () => {
   const cameraLivePoints = cameraEnabled ? pendingLiveDarts.reduce((s, d) => s + d.points, 0) : 0;
   const cameraStartSlot = teamIndexFor(game.teams, game.currentLeg.startingPlayerIndex);
   const cameraBestScore = isCricket
-    ? Math.max(...cameraScoreSource.map((c) => c.cricketPoints))
+    ? (game.cricketCutThroat ? Math.min : Math.max)(...cameraScoreSource.map((c) => c.cricketPoints))
     : Math.min(...cameraScoreSource.map((c) => c.remaining));
   const cameraScoreCards: CameraScoreCard[] = cameraScoreSource.map((c) => {
     const score = isCricket ? c.cricketPoints : c.isActive ? Math.max(0, c.remaining - cameraLivePoints) : c.remaining;

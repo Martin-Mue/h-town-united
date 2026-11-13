@@ -12,6 +12,8 @@ interface FormatOptionsProps {
   onCheckoutSuggestionChange: (on: boolean) => void;
   customCricket: boolean;
   onCustomCricketChange: (on: boolean) => void;
+  cricketCutThroat: boolean;
+  onCricketCutThroatChange: (on: boolean) => void;
   maxRoundsX01: number;
   onMaxRoundsChange: (rounds: number) => void;
 }
@@ -19,12 +21,15 @@ interface FormatOptionsProps {
 /** Sets mode, checkout suggestions, round limit (X01) and custom numbers (Cricket). */
 const FormatOptions = ({
   mode, isTournamentMatch, setsEnabled, onSetsEnabledChange, checkoutSuggestionEnabled, onCheckoutSuggestionChange,
-  customCricket, onCustomCricketChange, maxRoundsX01, onMaxRoundsChange,
+  customCricket, onCustomCricketChange, cricketCutThroat, onCricketCutThroatChange, maxRoundsX01, onMaxRoundsChange,
 }: FormatOptionsProps) => {
   const { t } = useLanguage();
   if (mode === "cricket") {
     return (
-      <SettingToggleRow id="custom-cricket" label={t("game.customCricket")} description={t("game.customCricketDesc")} checked={customCricket} onCheckedChange={onCustomCricketChange} />
+      <>
+        <SettingToggleRow id="custom-cricket" label={t("game.customCricket")} description={t("game.customCricketDesc")} checked={customCricket} onCheckedChange={onCustomCricketChange} />
+        <SettingToggleRow id="cut-throat-cricket" label={t("game.cutThroat")} description={t("game.cutThroatDesc")} checked={cricketCutThroat} onCheckedChange={onCricketCutThroatChange} />
+      </>
     );
   }
   return (

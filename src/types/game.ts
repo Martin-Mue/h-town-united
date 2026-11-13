@@ -95,6 +95,9 @@ export interface GameState {
   cricket?: CricketPlayerState[];
   /** Cricket target numbers actually in play this game. Defaults to CRICKET_NUMBERS; set to a fresh random set when Custom Cricket is enabled. */
   cricketNumbers?: readonly number[];
+  /** Cut-Throat Cricket: points scored on a closed number go to every opponent who has it still open, and the
+   *  LOWEST score wins. Absent = normal Cricket. */
+  cricketCutThroat?: boolean;
   /**
    * Team mode: players are grouped into exactly 2 teams, interleaved in `players` as
    * [TeamA-1, TeamB-1, TeamA-2, TeamB-2, ...] so the existing per-player round-robin turn

@@ -120,7 +120,7 @@ export function wouldWinMatch(game: GameState, winnerIndex: number): boolean {
  * a camera-detected round, and replaying a whole leg from scratch after a mid-leg delete —
  * previously reimplemented identically at each site.
  */
-export function applyCricketDart(myState: CricketPlayerState, others: CricketPlayerState[], cricketNumbers: readonly number[], targetNumber: number, baseValue: number, multiplier: number): void {
+export function applyCricketDart(myState: CricketPlayerState, others: CricketPlayerState[], cricketNumbers: readonly number[], targetNumber: number, baseValue: number, multiplier: number, cutThroat = false): void {
   if (!cricketNumbers.includes(targetNumber) || targetNumber === 0) return;
   const hitsToAdd = baseValue === 50 ? 2 : multiplier;
   const currentMarks = myState.marks[targetNumber] || 0;
@@ -129,17 +129,23 @@ export function applyCricketDart(myState: CricketPlayerState, others: CricketPla
   const stillOpenForSomeoneElse = others.some((o) => (o.marks[targetNumber] || 0) < 3);
   if (newMarks > 3 && stillOpenForSomeoneElse) {
     const scorableHits = newMarks - Math.max(currentMarks, 3);
-    myState.points += targetNumber * scorableHits;
+    // Cut-Throat turns the scoring round: the points are a penalty for everyone who has the number still open.
+    if (cutThroat) {
+      for (const other of others) if ((other.marks[targetNumber] || 0) < 3) other.points += targetNumber * scorableHits;
+    } else {
+      myState.points += targetNumber * scorableHits;
+    }
   }
 }
 
 /**
- * Cricket is won by whoever has closed every number while no one else has more points.
+ * Cricket is won by whoever has closed every number while no one else has more points (Cut-Throat: fewer).
  * `myState` is the thrower's state right after their dart, `others` everyone else's.
  */
-export function isCricketWon(myState: CricketPlayerState, others: CricketPlayerState[], cricketNumbers: readonly number[]): boolean {
+export function isCricketWon(myState: CricketPlayerState, others: CricketPlayerState[], cricketNumbers: readonly number[], cutThroat = false): boolean {
   const allClosed = cricketNumbers.every((num) => (myState.marks[num] || 0) >= 3);
-  return allClosed && others.every((o) => myState.points >= o.points);
+  // In Cut-Throat points are penalties, so nobody may have fewer.
+  return allClosed && others.every((o) => (cutThroat ? myState.points <= o.points : myState.points >= o.points));
 }
 
 /**
@@ -177,7 +183,8 @@ export function replayCricketState(
   throwsByPlayer: DartThrow[][],
   startingPlayerIndex: number,
   teams: TeamSlot[] | undefined,
-  cricketNumbers: readonly number[]
+  cricketNumbers: readonly number[],
+  cutThroat = false,
 ): CricketPlayerState[] {
   const n = throwsByPlayer.length;
   const scoreSlots = teams?.length ?? n;
@@ -205,7 +212,7 @@ export function replayCricketState(
       if (isHoleThrow(d)) continue;
       const others = cricket.filter((_, j) => j !== teamIdx);
       const targetNumber = d.baseValue === 50 ? 25 : d.baseValue;
-      applyCricketDart(myState, others, cricketNumbers, targetNumber, d.baseValue, d.multiplier);
+      applyCricketDart(myState, others, cricketNumbers, targetNumber, d.baseValue, d.multiplier, cutThroat);
     }
     cursors[active] += take;
     active = (active + 1) % n;

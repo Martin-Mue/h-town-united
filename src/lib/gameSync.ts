@@ -67,7 +67,7 @@ export async function saveGameRecord(
   // just before scoring — a human placing behind a bot still ranks #1 among the humans, since
   // Elo only ever measures human-vs-human standing, same as the old isWinner-only model did.
   const eloTiebreak = (i: number) =>
-    game.mode === "cricket" ? -(game.cricket?.[i]?.points ?? 0) : (game.currentLeg.remaining[i] ?? Infinity);
+    game.mode === "cricket" ? (game.cricketCutThroat ? 1 : -1) * (game.cricket?.[i]?.points ?? 0) : (game.currentLeg.remaining[i] ?? Infinity);
   let eloDeltas: Record<string, number> = {};
   if (game.teams) {
     // Team games: reduce each team to one virtual participant (see computeTeamEloDeltas) whose

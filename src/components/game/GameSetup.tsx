@@ -65,6 +65,8 @@ interface GameSetupProps {
   showAdvancedSetup: boolean;
   revealAdvancedSetup: () => void;
   customCricket: boolean;
+  cricketCutThroat: boolean;
+  setCricketCutThroat: Dispatch<SetStateAction<boolean>>;
   setCustomCricket: Dispatch<SetStateAction<boolean>>;
   maxRoundsX01: number;
   setMaxRoundsX01: Dispatch<SetStateAction<number>>;
@@ -148,7 +150,7 @@ const GameSetup = (props: GameSetupProps) => {
     mode, setMode, customStartScore, setCustomStartScore, teamMode, setTeamMode, numPlayers, setNumPlayers,
     teamNames, setTeamNames, bestOfLegs, setBestOfLegs, setsEnabled, setSetsEnabled, bestOfSets, setBestOfSets,
     checkoutSuggestionEnabled, setCheckoutSuggestionEnabled,
-    customCricket, setCustomCricket, maxRoundsX01, setMaxRoundsX01,
+    customCricket, setCustomCricket, cricketCutThroat, setCricketCutThroat, maxRoundsX01, setMaxRoundsX01,
     playerNames, setPlayerNames, dbPlayers, playerIsBot, setPlayerIsBot, playerBotLevel, setPlayerBotLevel,
     playerGhostTarget, setPlayerGhostTarget, playerDoubleIn, setPlayerDoubleIn, playerDoubleOut, setPlayerDoubleOut,
     playerHandicap, setPlayerHandicap, botDisplayName, getStartScore,
@@ -352,6 +354,8 @@ const GameSetup = (props: GameSetupProps) => {
             checkoutSuggestionEnabled={checkoutSuggestionEnabled}
             onCheckoutSuggestionChange={setCheckoutSuggestionEnabled}
             customCricket={customCricket}
+            cricketCutThroat={cricketCutThroat}
+            onCricketCutThroatChange={setCricketCutThroat}
             onCustomCricketChange={setCustomCricket}
             maxRoundsX01={maxRoundsX01}
             onMaxRoundsChange={setMaxRoundsX01}
