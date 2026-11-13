@@ -1141,12 +1141,13 @@ const GamePage = () => {
       newGame.cricket = Array.from({ length: scoreSlots }, () => createCricketState(cricketNumbers));
     }
     setGame(newGame);
-    // Bull-off instead of the manual starter pick: only for a plain local game with two human
-    // contenders (two players, or the first member of each team), never for a rematch (the loser of
-    // the last bull-off already alternates via starterOverride) or tournament/league matches.
+    // Bull-off instead of the manual starter pick: for two human contenders (two players, or the first member of each
+    // team), never for a rematch (the loser of the last bull-off already alternates via starterOverride). Tournament
+    // and league matches bull off too: it only decides who throws first, the players keep their slots, so the result
+    // still goes to the right side of the pairing.
     const contendersHuman = !players[0]?.isBot && !players[1]?.isBot;
     const twoSides = teams ? true : n === 2;
-    setBullOffPending(bullOffEnabled && starterOverride === undefined && contendersHuman && twoSides && !tournamentLinkRef.current && !leagueLinkRef.current);
+    setBullOffPending(bullOffEnabled && starterOverride === undefined && contendersHuman && twoSides);
     void loadWalkonH2H(players, teams);
     void loadGhostSequences(players, startScore, teams);
     setDartsThisRound(0);

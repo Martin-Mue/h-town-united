@@ -1395,6 +1395,26 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
   },
   {
+    id: "2026-11-14-bull-off-tournament",
+    date: "2026-11-14",
+    title: {
+      de: "Ausbullen auch im Turnier und in der Liga",
+      en: "Bull-off in tournaments and leagues too",
+      fr: "Bull-off aussi en tournoi et en ligue",
+      pl: "Rzut do bulla także w turnieju i lidze",
+      nl: "Uitbullen ook in toernooi en competitie",
+      tr: "Turnuvada ve ligde de bull atışı",
+    },
+    description: {
+      de: "Ist „Ausbullen vor dem Spiel“ eingeschaltet, wird jetzt auch bei Turnier- und Ligaspielen ausgebullt, wer beginnt. Im Gruppenmodus trägst du Ergebnisse jetzt über einen Knopf ein, der Sieger ergibt sich aus den Legs, und die Live-Ansicht hat einen Reiter „Tabelle“.",
+      en: "With “Bull-off before the game” switched on, tournament and league matches now bull off for who starts. In group mode results are entered with one button, the winner follows from the legs, and the live view has a “Standings” tab.",
+      fr: "Avec « Bull-off avant la partie » activé, les matchs de tournoi et de ligue font aussi le bull-off pour savoir qui commence. En mode poules, un seul bouton pour saisir le résultat, le vainqueur découle des legs, et la vue en direct a un onglet « Classement ».",
+      pl: "Gdy włączony jest „Rzut do bulla przed grą”, także mecze turniejowe i ligowe ustalają w ten sposób, kto zaczyna. W trybie grupowym wynik wpisujesz jednym przyciskiem, zwycięzca wynika z legów, a widok na żywo ma zakładkę „Tabela”.",
+      nl: "Met “Uitbullen vóór het spel” aan wordt nu ook bij toernooi- en competitiewedstrijden uitgebuld wie begint. In de groepsfase voer je de uitslag in met één knop, de winnaar volgt uit de legs, en de live-weergave heeft een tabblad “Stand”.",
+      tr: "“Oyundan önce bull atışı” açıkken artık turnuva ve lig maçlarında da kimin başlayacağı bull atışıyla belirlenir. Grup modunda sonuç tek düğmeyle girilir, kazanan leglerden çıkar ve canlı görünümde “Puan durumu” sekmesi var.",
+    },
+  },
+  {
     id: "2026-11-13-cut-throat",
     date: "2026-11-13",
     title: {
