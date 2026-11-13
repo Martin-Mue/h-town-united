@@ -45,9 +45,7 @@ const AutodartsLiveScore = lazy(() => import("@/components/game/AutodartsLiveSco
 import type { AutodartsLiveScoreHandle } from "@/components/game/AutodartsLiveScore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
-import OnlineChallengeSetup from "@/components/game/OnlineChallengeSetup";
 import ConfettiBurst from "@/components/ConfettiBurst";
-import AiMatchReport from "@/components/game/AiMatchReport";
 import type { GameMode, GameState, LegState, DartThrow, CricketPlayerState, PlayerSlot, TeamSlot, BotLevel } from "@/types/game";
 import { CRICKET_NUMBERS } from "@/types/game";
 import { supabase } from "@/integrations/supabase/client";
@@ -155,6 +153,8 @@ const STATS_DURATION_MS = 4500;
  *  match, not just skipping a cosmetic intro; "Bearbeiten" cancels it at any point. */
 const AUTOSTART_DELAY_MS = 5000;
 export const MAX_PLAYERS = 8;
+/** Every undo step holds a copy of the whole game, so only the latest ones are kept (a long match grew without limit). */
+const UNDO_STEPS_KEPT = 60;
 
 // createLegState/createCricketState moved to utils/gameStateFactory.ts (imported above) so the
 // online-match accept flow can build a real starting leg without duplicating this logic.
@@ -1240,7 +1240,7 @@ const GamePage = () => {
   /** Save undo snapshot before each throw */
   const saveUndo = () => {
     if (!game) return;
-    setUndoStack(prev => [...prev, { game: JSON.parse(JSON.stringify(game)), dartsThisRound, turnStartRemaining }]);
+    setUndoStack(prev => [...prev.slice(-(UNDO_STEPS_KEPT - 1)), { game: JSON.parse(JSON.stringify(game)), dartsThisRound, turnStartRemaining }]);
   };
 
   /** Undo the last dart throw */
@@ -1630,7 +1630,7 @@ const GamePage = () => {
       }
     }
 
-    setUndoStack(prev => [...prev, {
+    setUndoStack(prev => [...prev.slice(-(UNDO_STEPS_KEPT - 1)), {
       game: JSON.parse(JSON.stringify(game)),
       dartsThisRound,
       turnStartRemaining,

@@ -84,7 +84,17 @@ let sessionPromise: Promise<ort.InferenceSession> | null = null;
 
 function getSession(): Promise<ort.InferenceSession> {
   if (!sessionPromise) {
-    sessionPromise = ort.InferenceSession.create(MODEL_URL, { executionProviders: ["wasm"] });
+    sessionPromise = ort.InferenceSession.create(MODEL_URL, { executionProviders: ["wasm"] }).then(async (created) => {
+      // The first run of a fresh session is several times slower than the later ones (the runtime sets itself up).
+      // Paying that once here, while the camera is still starting, keeps the first dart of the evening from waiting.
+      try {
+        const blank = new ort.Tensor("float32", new Float32Array(3 * MODEL_INPUT_SIZE * MODEL_INPUT_SIZE), [1, 3, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE]);
+        await created.run({ [created.inputNames[0]]: blank });
+      } catch (err) {
+        console.warn("[dartModel] warm-up run failed", err);
+      }
+      return created;
+    });
   }
   return sessionPromise;
 }

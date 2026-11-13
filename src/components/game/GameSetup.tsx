@@ -1,5 +1,6 @@
-import { useRef, type Dispatch, type SetStateAction, type MutableRefObject } from "react";
-import OnlineChallengeSetup from "@/components/game/OnlineChallengeSetup";
+import { lazy, Suspense, useRef, type Dispatch, type SetStateAction, type MutableRefObject } from "react";
+// Only needed by members who challenge someone online: loaded when that tab is opened.
+const OnlineChallengeSetup = lazy(() => import("@/components/game/OnlineChallengeSetup"));
 import GamePresets from "@/components/game/GamePresets";
 import BoardModeStartCard from "@/components/game/setup/BoardModeStartCard";
 import RepeatLastGameButton from "@/components/game/setup/RepeatLastGameButton";
@@ -219,7 +220,7 @@ const GameSetup = (props: GameSetupProps) => {
   // "Online spielen" replaces this whole form with a challenge-a-member screen — only for a casual game; a
   // tournament/league match's opponent and mode are already fixed by the bracket/fixture.
   if (setupMode === "online" && isCasualGame) {
-    return <OnlineChallengeSetup onBack={() => setSetupMode("local")} />;
+    return <Suspense fallback={null}><OnlineChallengeSetup onBack={() => setSetupMode("local")} /></Suspense>;
   }
 
   const slotLabel = (slot: number) => (playerIsBot[slot] ? botDisplayName(slot) : (playerNames[slot]?.trim() || `${t("stats.player")} ${slot + 1}`));

@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
-import { NetworkFirst, NetworkOnly } from "workbox-strategies";
+import { CacheFirst, NetworkFirst, NetworkOnly } from "workbox-strategies";
 import { clientsClaim } from "workbox-core";
 // Relative import, not the "@/" alias -- vite-plugin-pwa's injectManifest strategy bundles this
 // file through its own separate Rollup step, which isn't guaranteed to carry vite.config.ts's
@@ -29,6 +29,25 @@ registerRoute(new NavigationRoute(new NetworkFirst({ cacheName: "pages" })));
 // only so this file can also handle Web Push (see below), which generateSW mode can't do.
 precacheAndRoute(self.__WB_MANIFEST);
 registerRoute(({ url }) => url.hostname.endsWith(".supabase.co"), new NetworkOnly());
+
+// The dart detection model (about 12 MB) and its runtime are not part of the app shell: most members never open
+// the camera. Whoever does keeps them from then on, so the camera also starts on weak venue wifi or offline.
+// The model's address carries its version; when a new one arrives, the old copy is thrown out.
+registerRoute(
+  ({ url }) => url.origin === self.location.origin && (url.pathname.startsWith("/models/") || url.pathname.startsWith("/ort/")),
+  new CacheFirst({
+    cacheName: "dart-detection",
+    plugins: [{
+      cacheDidUpdate: async ({ cacheName, request }) => {
+        const cache = await caches.open(cacheName);
+        const path = new URL(request.url).pathname;
+        for (const key of await cache.keys()) {
+          if (new URL(key.url).pathname === path && key.url !== request.url) await cache.delete(key);
+        }
+      },
+    }],
+  }),
+);
 
 self.skipWaiting();
 clientsClaim();
