@@ -90,6 +90,7 @@ import {
 import { splitVisitTotal } from "@/utils/quickRoundSplit";
 import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
 import { clampCustomStart } from "@/utils/customStart";
+import { liveWinChance } from "@/utils/liveWinChance";
 
 /** Bot personas with their target 3-dart average range. `nameKey` (not a literal string) since
  *  this is a module-level constant with no access to the language context — resolved via t() at
@@ -2859,11 +2860,18 @@ const GamePage = () => {
       legAvg: isCricket ? "–" : calculateAverage(c.throws).toFixed(1), matchAvg: isCricket ? "–" : calculateAverage(c.matchThrows).toFixed(1),
     };
   });
+  // "Anna 62 %": who is likelier to win, estimated from this match so far (see liveWinChance for when it applies).
+  // Shown once both players have had a visit, so it never reacts to a single dart.
+  const bothHadAVisit = game.completedLegs.length > 0 || game.currentLeg.throws.every((thrown) => thrown.length >= 3);
+  const winChance = bothHadAVisit ? liveWinChance(game) : null;
+  const winChanceLabel = winChance === null ? null
+    : `${game.players[winChance >= 0.5 ? 0 : 1].name} ${Math.round(Math.max(winChance, 1 - winChance) * 100)} %`;
   const cameraScoreInfo = [
     game.setsMode ? `${t("game.set")} ${(game.setsWon ?? []).reduce((s, v) => s + v, 0) + 1}` : null,
     game.bestOfLegs > 1 ? `${t("game.leg")} ${game.currentLeg.legNumber}` : null,
     `${t("game.roundLabel")} ${Math.floor(currentThrows.length / 3) + 1}`,
     `${game.players[game.currentLeg.startingPlayerIndex].name} ${t("game.startsFirst")}`,
+    winChanceLabel,
   ].filter(Boolean).join(" · ");
 
   /** One entry per scoreboard side (a team in team mode, else a player) — both the classic and the arena scoreboard read this. */
@@ -2923,6 +2931,7 @@ const GamePage = () => {
       game.bestOfLegs > 1 ? `L${game.currentLeg.legNumber}` : null,
       game.bestOfLegs > 1 ? `FT${Math.ceil(game.bestOfLegs / 2)}` : null,
     ].filter(Boolean).join(" · ") || null,
+    winChanceLabel,
   ].filter(Boolean).join(" | ");
   const arenaSlotDarts: ArenaSlotDart[] = [
     ...currentRoundScores.map((d) => ({ label: dartLabel(d), points: d.points })),

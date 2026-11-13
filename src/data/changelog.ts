@@ -1375,6 +1375,26 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
   },
   {
+    id: "2026-11-13-live-win-chance",
+    date: "2026-11-13",
+    title: {
+      de: "Siegchance live im Spiel",
+      en: "Live win chance during the game",
+      fr: "Chance de victoire en direct",
+      pl: "Szansa na wygraną na żywo",
+      nl: "Winkans live tijdens het spel",
+      tr: "Oyun sırasında canlı kazanma şansı",
+    },
+    description: {
+      de: "In der Kopfzeile steht bei 501/301 zu zweit, wer gerade vorne liegt und mit wie viel Prozent – geschätzt aus dem bisherigen Spielverlauf.",
+      en: "In two-player 501/301 the header shows who is ahead and by what percentage, estimated from the match so far.",
+      fr: "En 501/301 à deux, l'en-tête indique qui mène et avec quel pourcentage, estimé d'après le match en cours.",
+      pl: "W 501/301 we dwóch nagłówek pokazuje, kto prowadzi i z jakim procentem, na podstawie dotychczasowego przebiegu meczu.",
+      nl: "Bij 501/301 met twee spelers toont de kopregel wie voor ligt en met welk percentage, geschat op basis van de wedstrijd tot nu toe.",
+      tr: "İki kişilik 501/301'de başlık, kimin önde olduğunu ve yüzdesini maçın gidişatına göre tahmin ederek gösterir.",
+    },
+  },
+  {
     id: "2026-11-13-cut-throat",
     date: "2026-11-13",
     title: {
