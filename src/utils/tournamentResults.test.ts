@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { manualResultsFor, manualTournamentResults, type TournamentForStats } from "./tournamentResults";
+import { manualResultsFor, manualTournamentResults, resultFromLegs, type TournamentForStats } from "./tournamentResults";
 
 const ko = (bracket: unknown[]): TournamentForStats => ({ id: "t1", name: "Oktober", mode: "ko", created_at: "2026-10-10T16:00:00Z", bracket });
 
@@ -39,5 +39,18 @@ describe("manualResultsFor", () => {
     expect(manualResultsFor(results, "Ben")[0]).toMatchObject({ opponent: "Cara & Dan", won: false });
     expect(manualResultsFor(results, "Dan")[0]).toMatchObject({ opponent: "Anna & Ben", won: true });
     expect(manualResultsFor(results, "Nobody")).toEqual([]);
+  });
+});
+
+describe("resultFromLegs", () => {
+  it("names whoever has more legs as the winner, whichever side that is", () => {
+    expect(resultFromLegs("Anna", "Ben", "3", "1")).toEqual({ winner: "Anna", score1: 3, score2: 1 });
+    expect(resultFromLegs("Anna", "Ben", "0", "2")).toEqual({ winner: "Ben", score1: 0, score2: 2 });
+  });
+  it("is null for a level score, an empty field or anything that is not a whole number", () => {
+    expect(resultFromLegs("Anna", "Ben", "2", "2")).toBeNull();
+    expect(resultFromLegs("Anna", "Ben", "", "2")).toBeNull();
+    expect(resultFromLegs("Anna", "Ben", "1.5", "2")).toBeNull();
+    expect(resultFromLegs("Anna", "Ben", "-1", "2")).toBeNull();
   });
 });

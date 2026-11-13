@@ -49,6 +49,16 @@ export function manualTournamentResults(tournaments: TournamentForStats[], saved
   return out;
 }
 
+/**
+ * Reads the two leg fields of the result dialog. The winner is whoever has more legs, so nobody has to say first
+ * who won. Null while a field is empty or not a whole number, and for a level score (a match has a winner).
+ */
+export function resultFromLegs(player1: string, player2: string, legs1: string, legs2: string): { winner: string; score1: number; score2: number } | null {
+  const [score1, score2] = [legs1, legs2].map((text) => (text.trim() === "" ? NaN : Number(text)));
+  if (!Number.isInteger(score1) || !Number.isInteger(score2) || score1 < 0 || score2 < 0 || score1 === score2) return null;
+  return { winner: score1 > score2 ? player1 : player2, score1, score2 };
+}
+
 const isSide = (entry: string, name: string): boolean => entry === name || splitTeamName(entry).includes(name);
 
 /** One player's view of the manual results: who the opponent was and whether they won. Doubles teams count for each member. */

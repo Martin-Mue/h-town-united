@@ -95,6 +95,7 @@ import {
   buildSeeding,
 } from "@/utils/bracketSeeding";
 import { isTeamName, splitTeamName, pairIntoTeams, dissolveTeams, type PairingStrategy } from "@/utils/tournamentTeams";
+import { resultFromLegs } from "@/utils/tournamentResults";
 
 /** Shared with tournamentMatchSync.ts's recordMatchResult/applyBracketAction — a defensive bound
  *  on how many times persistBracket re-fetches and retries against a concurrent write before
@@ -1926,27 +1927,25 @@ const TournamentPage = () => {
     await runBracketAction({ type: "setRrWinner", matchId, winner, score1, score2 });
   };
 
-  /** Manual round-robin result entry: tapping a player's "✓" opens a small dialog for the legs
-   *  (player1 : player2) instead of recording a bare winner — the legs feed the standings'
-   *  leg-difference column. "Ohne Ergebnis" keeps the old winner-only behaviour. */
-  const [rrResultEntry, setRrResultEntry] = useState<{ matchId: string; winner: string; player1: string; player2: string } | null>(null);
+  /** Manual round-robin result entry: one "enter result" button per match opens a small dialog with the legs of
+   *  both players. Whoever has more legs is the winner, so the winner is never chosen beforehand (it used to be,
+   *  and legs that put the other player ahead could then not be saved: the dialog had to be opened a second time
+   *  from the other name). Without legs, the winner is picked in the dialog itself. */
+  const [rrResultEntry, setRrResultEntry] = useState<{ matchId: string; player1: string; player2: string } | null>(null);
   const [rrLegsText, setRrLegsText] = useState<[string, string]>(["", ""]);
-  const openRrResultEntry = (m: RoundRobinMatch, winner: string) => {
+  const openRrResultEntry = (m: RoundRobinMatch) => {
     setRrLegsText(["", ""]);
-    setRrResultEntry({ matchId: m.id, winner, player1: m.player1, player2: m.player2 });
+    setRrResultEntry({ matchId: m.id, player1: m.player1, player2: m.player2 });
   };
-  const rrLegsParsed = (() => {
-    if (!rrResultEntry) return null;
-    const [a, b] = rrLegsText.map((v) => (v.trim() === "" ? NaN : Number(v)));
-    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0) return null;
-    const winnerLegs = rrResultEntry.winner === rrResultEntry.player1 ? a : b;
-    const loserLegs = rrResultEntry.winner === rrResultEntry.player1 ? b : a;
-    return winnerLegs > loserLegs ? { score1: a, score2: b } : null;
-  })();
-  const submitRrResultEntry = (withScore: boolean) => {
+  const rrLegsParsed = rrResultEntry ? resultFromLegs(rrResultEntry.player1, rrResultEntry.player2, rrLegsText[0], rrLegsText[1]) : null;
+  const submitRrLegs = () => {
+    if (!rrResultEntry || !rrLegsParsed) return;
+    void setRrWinner(rrResultEntry.matchId, rrLegsParsed.winner, rrLegsParsed.score1, rrLegsParsed.score2);
+    setRrResultEntry(null);
+  };
+  const submitRrWinnerOnly = (winner: string) => {
     if (!rrResultEntry) return;
-    if (withScore && !rrLegsParsed) return;
-    void setRrWinner(rrResultEntry.matchId, rrResultEntry.winner, withScore ? rrLegsParsed!.score1 : undefined, withScore ? rrLegsParsed!.score2 : undefined);
+    void setRrWinner(rrResultEntry.matchId, winner);
     setRrResultEntry(null);
   };
 
@@ -3816,11 +3815,8 @@ const TournamentPage = () => {
                     )}
                     {canEditResults && (
                       <>
-                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => openRrResultEntry(m, m.player1)}>
-                          {m.player1} ✓
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-xs h-7 px-2" onClick={() => openRrResultEntry(m, m.player2)}>
-                          {m.player2} ✓
+                        <Button size="sm" variant="outline" className="text-xs h-9 px-2" onClick={() => openRrResultEntry(m)}>
+                          {t("tournament.enterResultTitle")}
                         </Button>
                       </>
                     )}
@@ -3988,7 +3984,7 @@ const TournamentPage = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>{t("tournament.enterResultTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {rrResultEntry?.player1} vs. {rrResultEntry?.player2} · {t("tournament.enterResultWinner")}: {rrResultEntry?.winner}
+              {rrResultEntry?.player1} vs. {rrResultEntry?.player2} · {t("tournament.enterResultLegsHint")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="grid grid-cols-2 gap-3">
@@ -4005,13 +4001,24 @@ const TournamentPage = () => {
               </label>
             ))}
           </div>
-          {rrLegsText.some((v) => v.trim() !== "") && !rrLegsParsed && (
+          {rrLegsParsed ? (
+            <p className="text-sm font-medium text-primary">{t("tournament.enterResultWinner")}: {rrLegsParsed.winner}</p>
+          ) : rrLegsText.every((v) => v.trim() !== "") ? (
             <p className="text-xs text-destructive">{t("tournament.enterResultInvalid")}</p>
-          )}
+          ) : null}
+          <div className="space-y-1.5 border-t border-border pt-3">
+            <p className="text-xs text-muted-foreground">{t("tournament.enterResultWithoutScore")}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[rrResultEntry?.player1, rrResultEntry?.player2].map((name, idx) => (
+                <Button key={idx} variant="outline" size="sm" className="min-w-0" onClick={() => name && submitRrWinnerOnly(name)}>
+                  <span className="truncate">{name}</span>&nbsp;✓
+                </Button>
+              ))}
+            </div>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <Button variant="outline" onClick={() => submitRrResultEntry(false)}>{t("tournament.enterResultWithoutScore")}</Button>
-            <Button onClick={() => submitRrResultEntry(true)} disabled={!rrLegsParsed}>{t("tournament.enterResultSave")}</Button>
+            <Button onClick={submitRrLegs} disabled={!rrLegsParsed}>{t("tournament.enterResultSave")}</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
