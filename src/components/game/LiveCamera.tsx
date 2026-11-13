@@ -361,13 +361,6 @@ const SCAN_COOLDOWN_MS = 3200;
 // much less reliable raw segment guess instead of the deterministic calibration math),
 // the round is shown for manual review (Übernehmen/Verwerfen) instead of auto-committing.
 const AUTO_COMMIT_CONFIDENCE = 0.6;
-// Cloud-vision fallback (2026-09-10): when the on-device model AND the motion-diff heuristic
-// BOTH come up completely empty, that's the clearest possible "uncertain" signal — rather than
-// dropping straight to full manual entry, one Gemini vision call (analyze-dartboard) gets a shot
-// at the same frame before giving up. Never blocks indefinitely: aborted after this long so a
-// slow/hanging network call can't leave the "scanning" spinner stuck — falls straight through to
-// the existing manual-entry path exactly as if Gemini had failed outright.
-const GEMINI_FALLBACK_TIMEOUT_MS = 9000;
 const EMPTY_BOARD_DELTA = 0.022;
 const DART_POSITION_MATCH = 0.09;
 // A genuine "something changed" event (a dart landing, a hand reaching in) sits around
@@ -521,13 +514,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const [modelReady, setModelReady] = useState(false);
   /** Set while the model cannot be used (not loaded / failed to run): the fallback detection runs, and the player is told. */
   const [modelProblem, setModelProblem] = useState<string | null>(null);
-  const [lastDetectionSource, setLastDetectionSource] = useState<"model" | "diff" | "gemini" | null>(null);
-  // Background Gemini second opinion (2026-09-10) — unlike lastDetectionSource="gemini" above
-  // (Gemini as the ONLY source, when the local pipeline found nothing at all), this is Gemini
-  // running alongside an already-shown local result, purely as a "does the cloud read this
-  // differently?" cross-check. Never blocks or replaces anything on its own — see
-  // checkGeminiSecondOpinion's own doc comment for why it only ever offers a suggestion.
-  const [geminiSuggestion, setGeminiSuggestion] = useState<DetectedDart[] | null>(null);
+  const [lastDetectionSource, setLastDetectionSource] = useState<"model" | "diff" | null>(null);
   const [autoCommitEnabled, setAutoCommitEnabledState] = useState<boolean>(() => loadAutoCommitEnabled());
   const setAutoCommitEnabled = (enabled: boolean) => {
     if (typeof window !== "undefined") window.localStorage.setItem(AUTO_COMMIT_KEY, enabled ? "on" : "off");
@@ -1287,85 +1274,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     if (!ctx) return null;
     ctx.putImageData(img, 0, 0);
     return canvas.toDataURL("image/jpeg", quality);
-  };
-
-  /** Cloud-vision fallback for when the on-device pipeline (trained model + motion-diff) found
-   *  NOTHING at all — see GEMINI_FALLBACK_TIMEOUT_MS's own doc comment for why this only fires in
-   *  that specific case. Deliberately mirrors how the local model's raw output is treated just
-   *  above (candidateDarts = refineWithCalibration(modelResult.darts.map(...))): Gemini's own
-   *  segment/multiplier guess is discarded on purpose and only its x/y tip estimate is kept, then
-   *  run through the SAME calibrated-geometry scoring every other detection source uses — keeps
-   *  this fallback indistinguishable from any other detection source to all the downstream code
-   *  (review UI, training-sample upload, etc.). Never throws — any failure (no session, network
-   *  error, bad response, timeout) just resolves to null so the caller falls through to today's
-   *  "no darts detected, please enter manually" behavior exactly as before this existed. */
-  const tryGeminiFallback = async (frame: ImageData | null): Promise<DetectedDart[] | null> => {
-    if (!frame || !session?.access_token) return null;
-    const imageBase64 = imageDataToBase64(frame);
-    if (!imageBase64) return null;
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), GEMINI_FALLBACK_TIMEOUT_MS);
-    try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-dartboard`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ imageBase64, detectBoard: false }),
-        signal: controller.signal,
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data || !Array.isArray(data.darts) || data.darts.length === 0) return null;
-      type GeminiDart = { x?: unknown; y?: unknown; confidence?: unknown };
-      const raw = (data.darts as GeminiDart[])
-        .filter((d) => typeof d.x === "number" && typeof d.y === "number")
-        .map((d) => ({
-          baseValue: 0,
-          multiplier: 1 as const,
-          points: 0,
-          confidence: typeof d.confidence === "number" ? clamp(d.confidence, 0, 1) : 0.5,
-          ...cropPointToFrameXY(d.x as number, d.y as number),
-        }))
-        // Keep at most as many darts as this visit could actually hold — Gemini has no notion of
-        // throwsSeenRef, so cap+sort-by-confidence guards against an over-eager extra detection.
-        .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, Math.max(1, throwsSeenRef.current || dartsRemaining));
-      if (raw.length === 0) return null;
-      return refineWithCalibration(raw);
-    } catch {
-      return null;
-    } finally {
-      window.clearTimeout(timeout);
-    }
-  };
-
-  /** Unordered "which darts, how scored" fingerprint — used only to decide whether two readings
-   *  of the same visit actually disagree, never for display. Position isn't part of the key on
-   *  purpose: two sources landing on the same segment/multiplier via slightly different tip pixels
-   *  still count as agreeing. */
-  const dartMultisetKey = (darts: DetectedDart[]) => darts.map(dartKey).sort().join(",");
-
-  /** Background cross-check (2026-09-10): fires once per visit, right alongside the local
-   *  detection result that's already on screen — NEVER awaited by the caller, so it adds zero
-   *  wait time to a round that already showed a result (this is what Martin actually asked for:
-   *  most rounds already need some manual correction today, and a several-second wait on every
-   *  single one to maybe get a better first guess would be a worse trade than what it fixes).
-   *  When Gemini's reading of the same frame comes back — a second or few later — it's compared
-   *  against whatever's CURRENTLY in the review list (accumulatedRef.current, not a stale
-   *  snapshot, since the player may already be mid-correction by the time this resolves). Only
-   *  disagreement is surfaced (see dartMultisetKey) — silent agreement would just be visual noise
-   *  on the common case where the local model already got it right. Purely a suggestion: nothing
-   *  is applied automatically, review still ends the same way it always has, via the player's own
-   *  Übernehmen tap. Guarded on the round still being open for review (needsReviewRef.current) so
-   *  a suggestion can't resurrect itself after the round's already been committed or discarded. */
-  const checkGeminiSecondOpinion = async (frame: ImageData | null) => {
-    const result = await tryGeminiFallback(frame);
-    if (!result || result.length === 0) return;
-    if (!needsReviewRef.current) return;
-    if (dartMultisetKey(result) === dartMultisetKey(accumulatedRef.current)) return;
-    setGeminiSuggestion(result);
   };
 
   /** Everything needed to turn this sample's calibration into corner labels later, written at
@@ -2430,7 +2338,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       lastScanAtRef.current = performance.now();
       setError(null);
       setScanFailed(false);
-      setGeminiSuggestion(null);
       playScanStartSound();
       if (trainingDataEnabled && emptyImageDataRef.current && preRemovalImageDataRef.current && !preRemovalFrameDirtyRef.current) {
         pendingTrainingCaptureRef.current = { before: emptyImageDataRef.current, after: preRemovalImageDataRef.current, modelAfter: preRemovalModelFrameRef.current, frame: preRemovalFrameKindRef.current };
@@ -2450,11 +2357,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       setStatus(`${t("camera.pleaseCheck")} ${alreadyIdentified.map(dartLabel).join(", ")}`);
       setPhase("live");
       scanLockRef.current = false;
-      // Fire-and-forget — see checkGeminiSecondOpinion's own doc comment for why this never
-      // delays anything already on screen. The ImageData reference is read as the argument
-      // RIGHT NOW (synchronous, before the ref is cleared on the next line) — the async call
-      // itself only resolves later, well after this function has already returned.
-      void checkGeminiSecondOpinion(preRemovalImageDataRef.current);
       preRemovalImageDataRef.current = null;
       preRemovalModelFrameRef.current = null;
       return;
@@ -2468,7 +2370,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     lastScanAtRef.current = performance.now();
     setError(null);
     setScanFailed(false);
-    setGeminiSuggestion(null);
     playScanStartSound();
     setStatus(t("camera.detectingDarts"));
 
@@ -2536,24 +2437,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       if (candidateDarts.length === 0) {
         // Diagnostic only — helps tell "genuinely nothing found" apart from
         // "found darts but they got filtered out" when this happens in the field.
-        console.warn("[LiveCamera] scan found 0 darts, trying Gemini cloud fallback");
-        setStatus(t("camera.tryingCloudFallback"));
-        const geminiDarts = await tryGeminiFallback(preRemovalImageDataRef.current);
-        if (geminiDarts && geminiDarts.length > 0) {
-          setLastDetectionSource("gemini");
-          setLastConfidence(geminiDarts.reduce((s, d) => s + d.confidence, 0) / geminiDarts.length);
-          setAccumulated(geminiDarts);
-          geminiDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
-          // Same stance as every other detection source here — never auto-commit, always make
-          // the player confirm/correct first (doubly true for a source with zero real-world
-          // track record yet).
-          setNeedsReview(true);
-          setStatus(`${t("camera.pleaseCheck")} ${geminiDarts.map(dartLabel).join(", ")}`);
-        } else {
-          console.warn("[LiveCamera] scan found 0 darts, Gemini fallback also found nothing");
-          setStatus(t("camera.noDartsDetectedManual"));
-          setScanFailed(true);
-        }
+        console.warn("[LiveCamera] scan found 0 darts");
+        setStatus(t("camera.noDartsDetectedManual"));
+        setScanFailed(true);
       } else {
         setAccumulated(markDetected(candidateDarts));
         candidateDarts.forEach((_, i) => setTimeout(() => playDartDetectedSound(i), 90 * i));
@@ -2562,10 +2448,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         // scoring the wrong player and advancing the turn.
         setNeedsReview(true);
         setStatus(`${t("camera.pleaseCheck")} ${candidateDarts.map(dartLabel).join(", ")}`);
-        // Background cross-check — see checkGeminiSecondOpinion's own doc comment. Fires
-        // alongside the result just shown above, never awaited, so this round's review starts
-        // exactly as fast as it always has.
-        void checkGeminiSecondOpinion(preRemovalImageDataRef.current);
       }
       setPhase("live");
     } catch (err: unknown) {
@@ -2605,7 +2487,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     setError(null);
     setScanFailed(false);
     setNeedsReview(false);
-    setGeminiSuggestion(null);
     const sig = buildSignature();
     if (sig) emptyBoardSigRef.current = sig;
     resetLoop();
@@ -2622,7 +2503,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
     removedDetectionsRef.current = [];
     setExpandedReviewIndex(null);
     setError(null);
-    setGeminiSuggestion(null);
     const sig = buildSignature();
     if (sig) emptyBoardSigRef.current = sig;
     resetLoop();
@@ -2706,18 +2586,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       next[i] = d;
       return next;
     });
-  };
-
-  /** Takes over the background Gemini cross-check's reading into the same editable review list
-   *  everything else here goes through — the player still taps the normal Übernehmen button
-   *  afterward, and can still adjust/reposition individual darts first exactly as with any other
-   *  source. Not a commit on its own. */
-  const applyGeminiSuggestion = () => {
-    if (!geminiSuggestion) return;
-    setAccumulated(geminiSuggestion);
-    setLastDetectionSource("gemini");
-    setLastConfidence(geminiSuggestion.reduce((s, d) => s + d.confidence, 0) / geminiSuggestion.length);
-    setGeminiSuggestion(null);
   };
 
   /**
@@ -3291,24 +3159,6 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
               {t("camera.autoCommitStop")}
             </Button>
           )}
-        </div>
-      )}
-
-      {/* Background Gemini cross-check (2026-09-10) — only ever appears when the cloud reading
-          actually disagrees with what's already shown above (see checkGeminiSecondOpinion), and
-          only ever offers, never applies on its own. Dismissing just hides it; nothing about the
-          current review list changes either way. */}
-      {geminiSuggestion && (
-        <div className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-[11px] text-primary flex items-center justify-between gap-2 flex-wrap animate-in fade-in slide-in-from-bottom-1 duration-300">
-          <span>{t("camera.geminiSuggests")} {geminiSuggestion.map(dartLabel).join(", ")}</span>
-          <div className="flex gap-1.5 shrink-0">
-            <Button size="sm" variant="secondary" className="h-7 gap-1 px-2 text-[10px]" onClick={applyGeminiSuggestion}>
-              <Check className="h-3 w-3" /> {t("camera.accept")}
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setGeminiSuggestion(null)} title={t("camera.dismiss")}>
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
         </div>
       )}
 
