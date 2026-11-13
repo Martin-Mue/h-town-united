@@ -1,4 +1,5 @@
 import { CHECKOUT_ROUTES } from "./checkoutTable";
+import { finishRoute } from "./checkoutRoute";
 
 /** One dart of a visit that was entered as a total ("Schnell" grid, typed total, voice). */
 export interface SplitDart {
@@ -12,6 +13,8 @@ export interface SplitVisitOptions {
   remaining?: number;
   /** The player has to finish on a double. */
   doubleOut?: boolean;
+  /** Master Out: the player has to finish on a double or a treble (takes precedence over `doubleOut`). */
+  masterOut?: boolean;
   /** Double-in is still open: the split has to contain a double, or the visit would score nothing. */
   needsDouble?: boolean;
 }
@@ -75,15 +78,16 @@ function mostEvenPointValues(total: number, needsDouble: boolean): [number, numb
  *
  * The darts are made up (nobody knows what was really thrown), but they have to be correct where
  * the rules look at them: a total that finishes a double-out leg ends on a double (taken from the
- * checkout table, so it may be fewer than three darts), and a visit that has to get a player in
+ * checkout table, so it may be fewer than three darts), one that finishes a Master Out leg ends on a double or treble, and a visit that has to get a player in
  * under double-in contains a double. Returns null for a total no three darts can make.
  */
 export function splitVisitTotal(total: number, options: SplitVisitOptions = {}): SplitDart[] | null {
-  const { remaining, doubleOut = false, needsDouble = false } = options;
+  const { remaining, doubleOut = false, masterOut = false, needsDouble = false } = options;
   if (!Number.isInteger(total) || total < 0 || total > 180) return null;
 
-  if (doubleOut && !needsDouble && remaining === total) {
-    const route = CHECKOUT_ROUTES[total];
+  if ((doubleOut || masterOut) && !needsDouble && remaining === total) {
+    // Master Out: the same route the checkout suggestion shows, so it may end on a treble (60 = T20, 180 = 3x T20).
+    const route = masterOut ? finishRoute(total, "master") : CHECKOUT_ROUTES[total];
     if (route) return route.map(dartFromRouteLabel);
   }
 

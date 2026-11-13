@@ -1,5 +1,6 @@
 import { checkoutAdvice, bestDouble } from "@/utils/checkoutRoute";
 import { directDoubleLabel, type CheckoutDoubleBreakdown } from "@/utils/dartStats";
+import type { OutRule } from "@/utils/x01Rules";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface CheckoutSuggestionProps {
@@ -38,6 +39,8 @@ interface CheckoutSuggestionProps {
   /** Darts the player still holds this visit (1-3). The route never needs more than these; with the last dart and
    *  no finish left it becomes a set-up shot ("T20 → 40"). Three when not given. */
   dartsLeft?: number;
+  /** "master": the route may end on a treble where that is shorter (60 = T20). Double Out when not given. */
+  outRule?: OutRule;
 }
 
 /** One dart of the route as a chip, tinted by what it aims at (treble / double / bull). */
@@ -68,10 +71,10 @@ const RouteDartChip = ({ dart, large }: { dart: string; large: boolean }) => (
  * which reads as exactly the "springt" complaint this component's history was already trying to
  * fix. max-height/opacity/margin are all plain, universally-interpolated properties.
  */
-const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, personalDoubleBreakdown, active = true, reserveSpace = false, dartsLeft = 3 }: CheckoutSuggestionProps) => {
+const CheckoutSuggestion = ({ remaining, playerName, personalCheckoutRate, personalDoubleBreakdown, active = true, reserveSpace = false, dartsLeft = 3, outRule = "double" }: CheckoutSuggestionProps) => {
   const { t } = useLanguage();
   // Ends on the double this player hits best where the route allows it (needs a few recorded attempts to count).
-  const advice = active ? checkoutAdvice(remaining, { dartsLeft, preferredDouble: bestDouble(personalDoubleBreakdown) }) : null;
+  const advice = active ? checkoutAdvice(remaining, { dartsLeft, outRule, preferredDouble: bestDouble(personalDoubleBreakdown) }) : null;
   const route = advice?.darts ?? null;
   /** What a set-up shot leaves for the next visit, shown after the dart: "T20 → 40". */
   const leaves = advice?.leaves;

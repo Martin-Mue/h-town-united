@@ -30,6 +30,9 @@ export interface PlayerSlot {
   name: string;
   /** Double-out required to finish a leg (X01 only). Default true. */
   doubleOut: boolean;
+  /** Master Out (X01 only): the leg may be finished on a double or a treble. Set together with doubleOut = true,
+   *  so anything that only reads doubleOut still knows a single cannot finish. Read it through outRuleOf(). */
+  masterOut?: boolean;
   /** Double-in required to start scoring in a leg (X01 only). Darts before the opening double don't count. Default false (straight in). */
   doubleIn?: boolean;
   isBot: boolean;

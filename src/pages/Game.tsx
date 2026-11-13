@@ -68,7 +68,7 @@ import { useLeagueLink } from "@/hooks/useLeagueLink";
 import { useOnlineMatch } from "@/hooks/useOnlineMatch";
 import { liveAveragesTo170 } from "@/utils/liveAverageTo170";
 import { computePostGameStats } from "@/utils/postGameStats";
-import { isBustThrow, isQualifyingDouble as qualifyingDouble, resolveX01Visit, pointsFor, dartLabel } from "@/utils/x01Rules";
+import { isBustThrowForRule, isQualifyingDouble as qualifyingDouble, resolveX01Visit, resolveX01VisitForRule, pointsFor, dartLabel, outRuleOf, restrictsFinish, outRuleShortLabel } from "@/utils/x01Rules";
 import { bustVisitThrows } from "@/utils/bustVisit";
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
 import {
@@ -238,6 +238,8 @@ const GamePage = () => {
   const [pinPromptError, setPinPromptError] = useState(false);
   const [pinPromptChecking, setPinPromptChecking] = useState(false);
   const [playerDoubleOut, setPlayerDoubleOut] = useState<boolean[]>(() => restoredPerPlayer((p) => p.doubleOut, () => true));
+  // Master Out (finish on a double or treble) rides on top of doubleOut — see outRuleOf in utils/x01Rules.ts.
+  const [playerMasterOut, setPlayerMasterOut] = useState<boolean[]>(() => restoredPerPlayer((p) => p.masterOut, () => false));
   const [playerDoubleIn, setPlayerDoubleIn] = useState<boolean[]>(() => restoredPerPlayer((p) => p.doubleIn, () => false));
   const [playerHandicap, setPlayerHandicap] = useState<number[]>(Array(MAX_PLAYERS).fill(0));
   const [warmupEnabled, setWarmupEnabled] = useState(false);
@@ -1099,12 +1101,15 @@ const GamePage = () => {
     const n = numPlayers;
     // Autodarts can only score a two-player X01 game. If it was switched on and the setup changed afterwards,
     // the hidden switch must not take the manual pad and the camera away in the game.
-    if (autodartsEnabled && (teamMode || n !== 2 || (mode !== "501" && mode !== "301"))) setAutodartsEnabled(false);
+    // Its lobby is started as single or double out only, so a Master Out game is scored by hand or camera as well.
+    const anyMasterOut = mode !== "cricket" && playerMasterOut.slice(0, n).some(Boolean);
+    if (autodartsEnabled && (teamMode || n !== 2 || (mode !== "501" && mode !== "301") || anyMasterOut)) setAutodartsEnabled(false);
     const players: PlayerSlot[] = Array.from({ length: n }, (_, i) => ({
       name: playerIsBot[i]
         ? botDisplayName(i)
         : (playerNames[i]?.trim() || `Spieler ${i + 1}`),
-      doubleOut: playerDoubleOut[i] ?? true,
+      doubleOut: playerMasterOut[i] ? true : (playerDoubleOut[i] ?? true),
+      ...(playerMasterOut[i] && mode !== "cricket" ? { masterOut: true } : {}),
       doubleIn: playerDoubleIn[i] ?? false,
       isBot: mode === "cricket" ? playerIsBot[i] : playerIsBot[i],
       botLevel: playerBotLevel[i] ?? "medium",
@@ -1319,8 +1324,7 @@ const GamePage = () => {
     const dart: DartThrow = { baseValue, multiplier: mul, points: effectivePoints };
     const newRemaining = remaining - effectivePoints;
 
-    const activeDoubleOut = game.players[idx].doubleOut ?? true;
-    const isBust = !stillWaitingForDoubleIn && isBustThrow(remaining, effectivePoints, activeDoubleOut, isQualifyingDouble);
+    const isBust = !stillWaitingForDoubleIn && isBustThrowForRule(remaining, effectivePoints, mul, outRuleOf(game.players[idx]));
 
     if (isBust) {
       if (soundEnabled) playBustSound();
@@ -1603,7 +1607,7 @@ const GamePage = () => {
     // touching any game state or the undo stack, so a still-ambiguous round doesn't push a no-op
     // undo entry.
     let x01Outcome: ReturnType<typeof resolveX01Visit> | null = null;
-    let x01VisitDarts: { points: number; isDouble: boolean }[] = [];
+    let x01VisitDarts: { points: number; multiplier: number }[] = [];
     let x01JustGotIn = false;
     if (game.mode !== "cricket") {
       const teamIdx = teamIndexFor(game.teams, startIdx);
@@ -1611,7 +1615,6 @@ const GamePage = () => {
       const remaining = game.currentLeg.remaining[teamIdx];
       const requiresDoubleIn = player.doubleIn ?? false;
       const alreadyStartedScoring = game.currentLeg.startedScoring?.[teamIdx] ?? true;
-      const activeDoubleOut = player.doubleOut ?? true;
       // Simplification: with double-in still pending, if ANY dart this visit is a qualifying
       // double, treat the player as in for the WHOLE visit (every dart counts at face value)
       // rather than working out exactly which dart got them in — same "vision can't see order"
@@ -1623,9 +1626,10 @@ const GamePage = () => {
       const stillNotIn = requiresDoubleIn && !alreadyStartedScoring && !hasQualifyingDartThisVisit;
       x01VisitDarts = dartsToApply.map((d) => {
         const points = pointsFor(d.baseValue, d.multiplier);
-        return { points: stillNotIn ? 0 : points, isDouble: d.multiplier === 2 };
+        return { points: stillNotIn ? 0 : points, multiplier: d.multiplier };
       });
-      x01Outcome = forced ?? resolveX01Visit(remaining, activeDoubleOut, x01VisitDarts);
+      // Under Master Out a treble may be the last dart too, so it is offered in the "which dart was last" prompt.
+      x01Outcome = forced ?? resolveX01VisitForRule(remaining, outRuleOf(player), x01VisitDarts);
       if (x01Outcome.kind === "ambiguous") {
         if (autoResolveAmbiguousAsCheckout) {
           x01Outcome = { kind: "checkout" };
@@ -1989,23 +1993,22 @@ const GamePage = () => {
     const n = game.players.length;
     const teamIdx = teamIndexFor(game.teams, playerIdx);
     const currentRemaining = remainingRef.current[teamIdx] ?? game.currentLeg.remaining[teamIdx];
-    const doubleOut = game.players[playerIdx].doubleOut ?? true;
+    const outRule = outRuleOf(game.players[playerIdx]);
     // Reframed as "what if this exact slot had originally been thrown as newBase/newMultiplier" —
     // reconstructs the remaining as it stood right before this dart (undo just this one dart's
     // points), then reuses isBustThrow itself rather than re-deriving its bust conditions here.
     const remainingBeforeThisDart = currentRemaining + oldDart.points;
     const newRemaining = remainingBeforeThisDart - newPoints;
-    const isDouble = qualifyingDouble(newMultiplier);
     // Only the dart thrown last can finish the leg. An earlier dart was followed by others, so after the
     // correction a score must be left that those could still be thrown at (the remaining score only ever
     // falls, so if the result is playable now it was playable at every point in between).
     const isLastDartThrown = throwIndex === game.currentLeg.throws[playerIdx].length - 1
       && (playerIdx === game.currentPlayerIndex || (game.currentPlayerIndex === (playerIdx + 1) % n && dartsThisRound === 0));
-    const leavesNoScore = !isLastDartThrown && newRemaining < (doubleOut ? 2 : 1);
-    if (leavesNoScore || isBustThrow(remainingBeforeThisDart, newPoints, doubleOut, isDouble)) {
+    const leavesNoScore = !isLastDartThrown && newRemaining < (restrictsFinish(outRule) ? 2 : 1);
+    if (leavesNoScore || isBustThrowForRule(remainingBeforeThisDart, newPoints, newMultiplier, outRule)) {
       toast({
         title: t("game.invalidValue"),
-        description: newRemaining < 0 ? t("game.wouldMakeNegative") : t("game.checkoutMustEndDouble"),
+        description: newRemaining < 0 ? t("game.wouldMakeNegative") : outRule === "master" ? t("game.checkoutMustEndDoubleOrTreble") : t("game.checkoutMustEndDouble"),
         variant: "destructive",
       });
       return;
@@ -2053,6 +2056,7 @@ const GamePage = () => {
     const split = splitVisitTotal(total, {
       remaining: game.currentLeg.remaining[teamIdx],
       doubleOut: player.doubleOut ?? true,
+      masterOut: outRuleOf(player) === "master",
       needsDouble: (player.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[teamIdx] ?? true),
     });
     if (!split) return;
@@ -2242,7 +2246,7 @@ const GamePage = () => {
         let plan = botPlanRef.current;
         if (!plan || plan.key.split("-")[0] !== String(idx) || plan.key.split("-")[1] !== String(game.currentLeg.legNumber) || dartsThisRound === 0) {
           const mustDoubleIn = (player.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[teamIdx] ?? true);
-          const visit = simulateBotVisit(game.currentLeg.remaining[teamIdx], player.doubleOut ?? true, botConfig, mustDoubleIn);
+          const visit = simulateBotVisit(game.currentLeg.remaining[teamIdx], outRuleOf(player), botConfig, mustDoubleIn);
           plan = { key: `${idx}-${game.currentLeg.legNumber}`, darts: visit.darts, applied: 0 };
           botPlanRef.current = plan;
         }
@@ -2610,6 +2614,8 @@ const GamePage = () => {
         setPlayerDoubleIn={setPlayerDoubleIn}
         playerDoubleOut={playerDoubleOut}
         setPlayerDoubleOut={setPlayerDoubleOut}
+        playerMasterOut={playerMasterOut}
+        setPlayerMasterOut={setPlayerMasterOut}
         playerHandicap={playerHandicap}
         setPlayerHandicap={setPlayerHandicap}
         botDisplayName={botDisplayName}
@@ -2745,7 +2751,8 @@ const GamePage = () => {
   const scoreLabels = game.teams ? game.teams.map((tm) => tm.name) : game.players.map((p) => p.name);
   const awaitingDoubleIn = !isCricket && (currentPlayer?.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[activeTeamIdx] ?? true);
   // One rule for both play layouts (the arena layout once ignored the setting and showed hints in tournament matches).
-  const checkoutHintActive = checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true);
+  const currentOutRule = outRuleOf(currentPlayer);
+  const checkoutHintActive = checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && restrictsFinish(currentOutRule);
 
   const doubleInBanner = awaitingDoubleIn ? (
     <div className="mb-3 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-center text-xs text-accent font-display uppercase tracking-wide">
@@ -2925,7 +2932,7 @@ const GamePage = () => {
   // "501 | DO | S1 · L2 · FT3" — what is being played, at a glance, in the slim header.
   const arenaTitle = [
     isCricket ? "Cricket" : String(game.startScore),
-    isCricket ? null : (currentPlayer?.doubleOut ?? true) ? "DO" : "SO",
+    isCricket ? null : outRuleShortLabel(currentOutRule),
     [
       game.setsMode ? `S${(game.setsWon ?? []).reduce((s, v) => s + v, 0) + 1}` : null,
       game.bestOfLegs > 1 ? `L${game.currentLeg.legNumber}` : null,
@@ -2939,7 +2946,7 @@ const GamePage = () => {
   ].slice(0, 3);
   const arenaActiveExtra = (
     <>
-      {!isCricket && !(currentPlayer?.doubleOut ?? true) && <p className="text-[10px] text-muted-foreground">({t("game.singleOut")})</p>}
+      {!isCricket && currentOutRule !== "double" && <p className="text-[10px] text-muted-foreground">({currentOutRule === "master" ? t("game.masterOut") : t("game.singleOut")})</p>}
       {game && !currentPlayer?.isBot && ghostSequences[currentIdx] && (() => {
         const teamIdx = teamIndexFor(game.teams, currentIdx);
         const cmp = compareToGhost(game.currentLeg.throws[currentIdx]?.length ?? 0, game.currentLeg.remaining[teamIdx], ghostSequences[currentIdx]!);
@@ -3078,7 +3085,7 @@ const GamePage = () => {
       {checkoutSuggestionEnabled && !isCricket && (
         <CheckoutSuggestion
           reserveSpace
-          active={checkoutHintActive} dartsLeft={3 - dartsThisRound}
+          active={checkoutHintActive} dartsLeft={3 - dartsThisRound} outRule={currentOutRule}
           remaining={currentRemaining} playerName={currentPlayerName}
           personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
           personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
@@ -3366,7 +3373,7 @@ const GamePage = () => {
                 `{condition && <CheckoutSuggestion/>}` wrapping caused the "scoreboard jumps"
                 complaint on every turn change, not just on remaining-score changes. */}
             <CheckoutSuggestion
-              active={checkoutHintActive} dartsLeft={3 - dartsThisRound}
+              active={checkoutHintActive} dartsLeft={3 - dartsThisRound} outRule={currentOutRule}
               remaining={currentRemaining} playerName={currentPlayerName}
               personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
               personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
@@ -3394,6 +3401,7 @@ const GamePage = () => {
                       info: cameraScoreInfo,
                       showLegs: game.bestOfLegs > 1,
                       showSets: !!game.setsMode,
+                      checkoutOutRule: currentOutRule,
                       labels: { legAvg: t("game.legAvgShort"), matchAvg: t("game.matchAvgShort"), leading: t("game.leadingShort"), starts: t("game.startsFirst"), legs: t("game.legsSuffix"), sets: t("game.setsSuffix") },
                     }}
                     onRequestManualEntry={() => setShowManualInput(true)}

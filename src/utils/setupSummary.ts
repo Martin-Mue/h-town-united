@@ -16,6 +16,7 @@ export interface SetupSummaryInput {
 export interface SetupSummaryLabels {
   doubleOut: string;
   singleOut: string;
+  masterOut: string;
   firstTo: string;
   legs: string;
   sets: string;
@@ -23,13 +24,13 @@ export interface SetupSummaryLabels {
 }
 
 /**
- * The recap line above "Spiel starten", e.g. "501 · Double Out · First to 3 Legs · 2 Spieler · Manuell".
+ * The recap line above "Spiel starten", e.g. "501 · Double Out · First to 3 Legs · 2 Spieler · Manuell" (or "Single Out" / "Master Out").
  * Cricket has no out rule or leg distance on this screen; a mixed per-player out rule is left out.
  */
 export function describeSetupSummary(s: SetupSummaryInput, l: SetupSummaryLabels): string {
   const x01 = s.mode !== "cricket";
   const parts: string[] = [s.mode === "custom" ? String(s.customStartScore) : s.mode === "cricket" ? "Cricket" : s.mode];
-  if (x01 && s.checkoutRule !== "mixed") parts.push(s.checkoutRule === "double" ? l.doubleOut : l.singleOut);
+  if (x01 && s.checkoutRule !== "mixed") parts.push(s.checkoutRule === "master" ? l.masterOut : s.checkoutRule === "double" ? l.doubleOut : l.singleOut);
   if (x01) {
     parts.push(s.setsEnabled
       ? `${l.firstTo} ${Math.ceil(s.bestOfSets / 2)} ${l.sets}`

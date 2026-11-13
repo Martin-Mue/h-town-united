@@ -1,3 +1,5 @@
+import { outRuleOf, type OutRule } from "./x01Rules";
+
 /**
  * Pure helpers for the new-game screen's player lineup. The setup keeps one entry per player slot in
  * parallel arrays (names, bot flags, levels, …), each MAX_PLAYERS long; only the first `numPlayers`
@@ -53,14 +55,23 @@ export function starterAfterRemoval(starterIndex: number, removedSlot: number, n
   return Math.min(starterIndex, Math.max(0, numPlayersBefore - 2));
 }
 
-export type CheckoutRule = "double" | "single" | "mixed";
+export type CheckoutRule = OutRule | "mixed";
+
+/** The out rule of one setup slot: the Master Out flag wins over the double-out switch. */
+export function slotOutRule(doubleOut: boolean[], masterOut: boolean[], slot: number): OutRule {
+  return outRuleOf({ doubleOut: doubleOut[slot], masterOut: masterOut[slot] });
+}
+
+/** The two setup values a slot holds for an out rule (Master Out is stored together with double-out on). */
+export function outRuleFlags(rule: OutRule): { doubleOut: boolean; masterOut: boolean } {
+  return { doubleOut: rule !== "single", masterOut: rule === "master" };
+}
 
 /** The out rule shared by every active slot, or "mixed" when players were set differently. */
-export function sharedCheckoutRule(doubleOut: boolean[], numPlayers: number): CheckoutRule {
-  const active = doubleOut.slice(0, numPlayers).map((v) => v ?? true);
-  if (active.every(Boolean)) return "double";
-  if (active.every((v) => !v)) return "single";
-  return "mixed";
+export function sharedCheckoutRule(doubleOut: boolean[], numPlayers: number, masterOut: boolean[] = []): CheckoutRule {
+  const active = Array.from({ length: Math.min(numPlayers, doubleOut.length) }, (_, slot) => slotOutRule(doubleOut, masterOut, slot));
+  if (active.length === 0) return "double";
+  return active.every((rule) => rule === active[0]) ? active[0] : "mixed";
 }
 
 /** bestOfLegs is stored as "best of"; the screen talks in "first to". */

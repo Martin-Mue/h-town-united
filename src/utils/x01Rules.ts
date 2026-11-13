@@ -5,6 +5,35 @@ export function isQualifyingDouble(multiplier: number): boolean {
   return multiplier === 2;
 }
 
+/** How an X01 leg may be finished: on any dart, on a double, or on a double or treble (Master Out). */
+export type OutRule = "single" | "double" | "master";
+
+/**
+ * The out rule of a player. `doubleOut` is the field every saved game, preset and online match already has;
+ * Master Out rides on top of it as the optional `masterOut` flag (stored together with doubleOut = true, so
+ * code that only knows doubleOut still treats the player as "cannot finish on a single").
+ */
+export function outRuleOf(player: { doubleOut?: boolean; masterOut?: boolean } | null | undefined): OutRule {
+  if (player?.masterOut) return "master";
+  return (player?.doubleOut ?? true) ? "double" : "single";
+}
+
+/** Double Out and Master Out both need a particular last dart, and both bust on a remaining score of 1. */
+export function restrictsFinish(rule: OutRule): boolean {
+  return rule !== "single";
+}
+
+/** May a dart with this multiplier be the last dart of a leg? The bullseye is a double (multiplier 2). */
+export function isFinishingDart(multiplier: number, rule: OutRule): boolean {
+  if (rule === "single") return true;
+  return multiplier === 2 || (rule === "master" && multiplier === 3);
+}
+
+/** Short header label: "SO", "DO", "MO". */
+export function outRuleShortLabel(rule: OutRule): string {
+  return rule === "master" ? "MO" : rule === "double" ? "DO" : "SO";
+}
+
 /**
  * Points scored by one dart. baseValue 25 + multiplier 3 ("triple bull") isn't a real dartboard
  * outcome — there's no triple ring in the bull — so it scores 0 rather than the nonsensical 75;
@@ -61,6 +90,9 @@ export function highlightKindLabel(kind: string, points: number | undefined, poi
  *  - landing on exactly 1 only busts under double-out (single-out can finish a 1 next visit)
  *  - landing on exactly 0 without finishing on a qualifying double busts, but only when
  *    double-out is actually required
+ *
+ * Master Out uses the same two parameters: pass `doubleOut` = true (the finish is restricted, 1 is a bust)
+ * and `isDouble` = "this dart may finish" (a double or a treble). isBustThrowForRule below does that.
  */
 export function isBustThrow(remaining: number, points: number, doubleOut: boolean, isDouble: boolean): boolean {
   const newRemaining = remaining - points;
@@ -70,9 +102,20 @@ export function isBustThrow(remaining: number, points: number, doubleOut: boolea
   return false;
 }
 
+/** isBustThrow for one of the three out rules: the dart's multiplier decides whether it may finish. */
+export function isBustThrowForRule(remaining: number, points: number, multiplier: number, rule: OutRule): boolean {
+  return isBustThrow(remaining, points, restrictsFinish(rule), isFinishingDart(multiplier, rule));
+}
+
 export interface VisitDart {
   points: number;
+  /** This dart may be the last dart of a leg: a double under Double Out, a double or treble under Master Out. */
   isDouble: boolean;
+}
+
+/** resolveX01Visit for one of the three out rules: under Master Out a treble may be the last dart as well. */
+export function resolveX01VisitForRule(remaining: number, rule: OutRule, darts: { points: number; multiplier: number }[]): VisitOutcome {
+  return resolveX01Visit(remaining, restrictsFinish(rule), darts.map((d) => ({ points: d.points, isDouble: isFinishingDart(d.multiplier, rule) })));
 }
 
 export type VisitOutcome =
@@ -83,7 +126,7 @@ export type VisitOutcome =
    *  genuine mix of doubles and non-doubles — see the doc comment below for why this specific
    *  case can't be resolved automatically. `doubleIndexes` are the indexes (into the `darts` array
    *  passed in) of the darts that COULD legally have been the finisher, for a caller to offer as
-   *  choices. */
+   *  choices (under Master Out these include trebles). */
   | { kind: "ambiguous"; doubleIndexes: number[] };
 
 /**

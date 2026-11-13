@@ -114,3 +114,46 @@ describe("elite/legendary miss realism (Round 3 Rang 11)", () => {
     expect(threeDartAverage("legendary", 4000)).toBeLessThan(101);
   });
 });
+
+describe("simulateBotVisit finishes legally under every out rule", () => {
+  const rules = ["single", "double", "master"] as const;
+  const mayFinish = (multiplier: number, rule: (typeof rules)[number]) =>
+    rule === "single" || multiplier === 2 || (rule === "master" && multiplier === 3);
+
+  it("a checkout ends on a legal last dart and adds up to the score; a visit never leaves 1 under double or master out", () => {
+    for (const rule of rules) {
+      for (const remaining of [2, 3, 20, 32, 40, 57, 60, 61, 100, 120, 159, 170, 180]) {
+        for (let run = 0; run < 150; run++) {
+          const res = simulateBotVisit(remaining, rule, "legendary");
+          const scored = res.darts.reduce((s, d) => s + d.points, 0);
+          if (res.checkedOut) {
+            expect(scored, `${rule} ${remaining}`).toBe(remaining);
+            expect(mayFinish(res.darts[res.darts.length - 1].multiplier, rule), `${rule} ${remaining}`).toBe(true);
+          } else if (res.bustedOnDartIndex === null) {
+            expect(remaining - scored, `${rule} ${remaining}`).toBeGreaterThanOrEqual(rule === "single" ? 1 : 2);
+          }
+        }
+      }
+    }
+  });
+
+  it("master out: can finish 60 with one treble and 180 with three, which double out cannot", () => {
+    let trebleFinish = false;
+    let maximumFinish = false;
+    for (let run = 0; run < 3000 && !(trebleFinish && maximumFinish); run++) {
+      const sixty = simulateBotVisit(60, "master", "legendary");
+      if (sixty.checkedOut && sixty.darts.length === 1 && sixty.darts[0].multiplier === 3) trebleFinish = true;
+      if (simulateBotVisit(180, "master", "legendary").checkedOut) maximumFinish = true;
+    }
+    expect(trebleFinish).toBe(true);
+    expect(maximumFinish).toBe(true);
+    for (let run = 0; run < 300; run++) expect(simulateBotVisit(180, "double", "legendary").checkedOut).toBe(false);
+  });
+
+  it("still takes the old boolean: true is double out, false is single out", () => {
+    for (let run = 0; run < 300; run++) {
+      const res = simulateBotVisit(60, true, "legendary");
+      if (res.checkedOut) expect(res.darts[res.darts.length - 1].multiplier).toBe(2);
+    }
+  });
+});

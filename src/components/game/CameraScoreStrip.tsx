@@ -1,5 +1,7 @@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
+import { finishRoute } from "@/utils/checkoutRoute";
+import type { OutRule } from "@/utils/x01Rules";
 
 export interface CameraScoreCard {
   key: number;
@@ -27,6 +29,8 @@ interface CameraScoreStripProps {
   labels: { legAvg: string; matchAvg: string; leading: string; starts: string; legs: string; sets: string };
   /** Darts still to throw in this visit, for the checkout strip. Absent = no checkout strip (Cricket, training). */
   checkoutDartsLeft?: number;
+  /** Out rule of the player on the oche. "master" shows a route that may end on a treble. */
+  checkoutOutRule?: OutRule;
 }
 
 /**
@@ -34,11 +38,12 @@ interface CameraScoreStripProps {
  * accent colour) plus, in X01, the checkout route for the score left — kept short so the picture keeps its height.
  * The full play screen is hidden behind the camera, and a player must not have to close it to see their own score.
  */
-const CameraScoreStrip = ({ cards, showLegs, showSets, labels, checkoutDartsLeft }: CameraScoreStripProps) => {
+const CameraScoreStrip = ({ cards, showLegs, showSets, labels, checkoutDartsLeft, checkoutOutRule }: CameraScoreStripProps) => {
   const { t } = useLanguage();
   const many = cards.length > 2;
   const active = cards.find((c) => c.isActive);
-  const route = checkoutDartsLeft !== undefined && active ? getCheckoutSuggestion(active.score) : null;
+  const route = checkoutDartsLeft === undefined || !active ? null
+    : checkoutOutRule === "master" ? finishRoute(active.score, "master", Math.max(1, checkoutDartsLeft)) : getCheckoutSuggestion(active.score);
   const finish = route && route.length <= (checkoutDartsLeft ?? 0) ? route : null;
   return (
     <div className="shrink-0 space-y-2 bg-background px-3 pb-2">

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { describeSetupSummary, type SetupSummaryInput } from "./setupSummary";
 
-const labels = { doubleOut: "Double Out", singleOut: "Single Out", firstTo: "First to", legs: "Legs", sets: "Sätze", players: "Spieler" };
+const labels = { doubleOut: "Double Out", singleOut: "Single Out", masterOut: "Master Out", firstTo: "First to", legs: "Legs", sets: "Sätze", players: "Spieler" };
 const base: SetupSummaryInput = {
   mode: "501", customStartScore: 501, checkoutRule: "double", bestOfLegs: 5, setsEnabled: false, bestOfSets: 3,
   numPlayers: 2, teamMode: false, inputLabel: "Manuell",
@@ -10,6 +10,10 @@ const base: SetupSummaryInput = {
 describe("describeSetupSummary", () => {
   it("describes a plain X01 game", () => {
     expect(describeSetupSummary(base, labels)).toBe("501 · Double Out · First to 3 Legs · 2 Spieler · Manuell");
+  });
+  it("names each of the three out rules", () => {
+    expect(describeSetupSummary({ ...base, checkoutRule: "single" }, labels)).toBe("501 · Single Out · First to 3 Legs · 2 Spieler · Manuell");
+    expect(describeSetupSummary({ ...base, checkoutRule: "master" }, labels)).toBe("501 · Master Out · First to 3 Legs · 2 Spieler · Manuell");
   });
   it("uses sets, the custom start score and leaves out a mixed out rule", () => {
     expect(describeSetupSummary({ ...base, mode: "custom", customStartScore: 701, checkoutRule: "mixed", setsEnabled: true }, labels))

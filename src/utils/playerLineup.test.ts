@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bestOfFromFirstTo, effectiveStarterSlot, firstFreeSlot, firstToFromBestOf, isPlaceholderName, removeSlotAt,
-  sharedCheckoutRule, slotOfMember, starterAfterRemoval, throwOrderBySlot,
+  sharedCheckoutRule, slotOutRule, outRuleFlags, slotOfMember, starterAfterRemoval, throwOrderBySlot,
 } from "./playerLineup";
 
 describe("throwOrderBySlot", () => {
@@ -57,6 +57,20 @@ describe("format helpers", () => {
     expect(sharedCheckoutRule([true, true, false], 2)).toBe("double");
     expect(sharedCheckoutRule([false, false, true], 2)).toBe("single");
     expect(sharedCheckoutRule([true, false], 2)).toBe("mixed");
+  });
+  it("reads Master Out as its own shared rule", () => {
+    expect(sharedCheckoutRule([true, true], 2, [true, true])).toBe("master");
+    expect(sharedCheckoutRule([true, true], 2, [true, false])).toBe("mixed");
+    expect(sharedCheckoutRule([true, true, true], 2, [false, false, true])).toBe("double");
+    expect(sharedCheckoutRule([false, false], 2, [false, false])).toBe("single");
+  });
+  it("converts a slot to its out rule and back", () => {
+    expect(slotOutRule([true, false, true], [false, false, true], 0)).toBe("double");
+    expect(slotOutRule([true, false, true], [false, false, true], 1)).toBe("single");
+    expect(slotOutRule([true, false, true], [false, false, true], 2)).toBe("master");
+    expect(outRuleFlags("single")).toEqual({ doubleOut: false, masterOut: false });
+    expect(outRuleFlags("double")).toEqual({ doubleOut: true, masterOut: false });
+    expect(outRuleFlags("master")).toEqual({ doubleOut: true, masterOut: true });
   });
   it("converts between best of and first to", () => {
     expect(firstToFromBestOf(5)).toBe(3);

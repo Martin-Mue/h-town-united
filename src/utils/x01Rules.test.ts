@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isBustThrow, isQualifyingDouble, resolveX01Visit, type VisitDart } from "./x01Rules";
+import { isBustThrow, isBustThrowForRule, isFinishingDart, isQualifyingDouble, outRuleOf, outRuleShortLabel, resolveX01Visit, resolveX01VisitForRule, type VisitDart } from "./x01Rules";
 
 describe("isQualifyingDouble", () => {
   it("is true only for multiplier 2 (includes bullseye)", () => {
@@ -96,5 +96,84 @@ describe("resolveX01Visit — order-independent camera-round resolution", () => 
     const result = resolveX01Visit(100, true, [d(40, true), d(20), d(40, true)]);
     expect(result.kind).toBe("ambiguous");
     if (result.kind === "ambiguous") expect(result.doubleIndexes).toEqual([0, 2]);
+  });
+});
+
+describe("out rules: single, double, master", () => {
+  it("reads the rule from a player, old players without masterOut included", () => {
+    expect(outRuleOf({ doubleOut: true })).toBe("double");
+    expect(outRuleOf({ doubleOut: false })).toBe("single");
+    expect(outRuleOf({})).toBe("double");
+    expect(outRuleOf(undefined)).toBe("double");
+    expect(outRuleOf({ doubleOut: true, masterOut: true })).toBe("master");
+    expect(outRuleOf({ doubleOut: true, masterOut: false })).toBe("double");
+  });
+
+  it("knows which dart may finish under each rule", () => {
+    expect([1, 2, 3].map((m) => isFinishingDart(m, "single"))).toEqual([true, true, true]);
+    expect([1, 2, 3].map((m) => isFinishingDart(m, "double"))).toEqual([false, true, false]);
+    expect([1, 2, 3].map((m) => isFinishingDart(m, "master"))).toEqual([false, true, true]);
+  });
+
+  it("labels the rule for the header", () => {
+    expect((["single", "double", "master"] as const).map(outRuleShortLabel)).toEqual(["SO", "DO", "MO"]);
+  });
+
+  describe("isBustThrowForRule", () => {
+    it("single out: any dart finishes, 1 may be left", () => {
+      expect(isBustThrowForRule(20, 20, 1, "single")).toBe(false);
+      expect(isBustThrowForRule(21, 20, 1, "single")).toBe(false);
+      expect(isBustThrowForRule(20, 21, 1, "single")).toBe(true);
+    });
+    it("double out: only a double finishes, leaving 1 busts", () => {
+      expect(isBustThrowForRule(40, 40, 2, "double")).toBe(false);
+      expect(isBustThrowForRule(50, 50, 2, "double")).toBe(false); // bullseye
+      expect(isBustThrowForRule(60, 60, 3, "double")).toBe(true);
+      expect(isBustThrowForRule(20, 20, 1, "double")).toBe(true);
+      expect(isBustThrowForRule(21, 20, 1, "double")).toBe(true);
+    });
+    it("master out: a double or a treble finishes, a single does not, leaving 1 busts", () => {
+      expect(isBustThrowForRule(60, 60, 3, "master")).toBe(false);
+      expect(isBustThrowForRule(3, 3, 3, "master")).toBe(false); // T1
+      expect(isBustThrowForRule(2, 2, 2, "master")).toBe(false); // D1
+      expect(isBustThrowForRule(50, 50, 2, "master")).toBe(false); // bullseye
+      expect(isBustThrowForRule(20, 20, 1, "master")).toBe(true);
+      expect(isBustThrowForRule(25, 25, 1, "master")).toBe(true); // single bull
+      expect(isBustThrowForRule(21, 20, 1, "master")).toBe(true); // leaves 1
+      expect(isBustThrowForRule(61, 60, 3, "master")).toBe(true); // leaves 1
+      expect(isBustThrowForRule(62, 60, 3, "master")).toBe(false); // leaves 2
+      expect(isBustThrowForRule(40, 60, 3, "master")).toBe(true); // overshoot
+    });
+  });
+
+  describe("resolveX01VisitForRule (camera visit, order unknown)", () => {
+    const s = (points: number) => ({ points, multiplier: 1 });
+    const dbl = (points: number) => ({ points, multiplier: 2 });
+    const t = (points: number) => ({ points, multiplier: 3 });
+
+    it("single out: reaching the score is a checkout whatever the darts were", () => {
+      expect(resolveX01VisitForRule(80, "single", [s(20), t(60)])).toEqual({ kind: "checkout" });
+      expect(resolveX01VisitForRule(21, "single", [s(20)])).toEqual({ kind: "continue" });
+    });
+    it("double out: a lone treble on the score is a bust, a treble and a double is ambiguous on the double only", () => {
+      expect(resolveX01VisitForRule(60, "double", [t(60)])).toEqual({ kind: "bust" });
+      expect(resolveX01VisitForRule(100, "double", [t(60), dbl(40)])).toEqual({ kind: "ambiguous", doubleIndexes: [1] });
+      expect(resolveX01VisitForRule(40, "double", [dbl(40)])).toEqual({ kind: "checkout" });
+    });
+    it("master out: a lone treble finishes, trebles and doubles together finish in any order", () => {
+      expect(resolveX01VisitForRule(60, "master", [t(60)])).toEqual({ kind: "checkout" });
+      expect(resolveX01VisitForRule(100, "master", [t(60), dbl(40)])).toEqual({ kind: "checkout" });
+      expect(resolveX01VisitForRule(180, "master", [t(60), t(60), t(60)])).toEqual({ kind: "checkout" });
+    });
+    it("master out: singles only cannot finish, a mix asks which dart was last", () => {
+      expect(resolveX01VisitForRule(40, "master", [s(20), s(20)])).toEqual({ kind: "bust" });
+      expect(resolveX01VisitForRule(80, "master", [s(20), t(60)])).toEqual({ kind: "ambiguous", doubleIndexes: [1] });
+      expect(resolveX01VisitForRule(120, "master", [dbl(40), s(20), t(60)])).toEqual({ kind: "ambiguous", doubleIndexes: [0, 2] });
+    });
+    it("master out: leaving 1 or overshooting busts, falling short continues", () => {
+      expect(resolveX01VisitForRule(61, "master", [t(60)])).toEqual({ kind: "bust" });
+      expect(resolveX01VisitForRule(50, "master", [t(60)])).toEqual({ kind: "bust" });
+      expect(resolveX01VisitForRule(170, "master", [t(60), t(60)])).toEqual({ kind: "continue" });
+    });
   });
 });

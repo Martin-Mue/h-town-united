@@ -35,6 +35,8 @@ export interface PlayerLineupSectionProps {
   setPlayerDoubleIn: Setter<boolean[]>;
   playerDoubleOut: boolean[];
   setPlayerDoubleOut: Setter<boolean[]>;
+  playerMasterOut: boolean[];
+  setPlayerMasterOut: Setter<boolean[]>;
   setPlayerHandicap: Setter<number[]>;
   botDisplayName: (slot: number) => string;
   starterIndex: number;
@@ -55,7 +57,7 @@ const PlayerLineupSection = (props: PlayerLineupSectionProps) => {
     mode, teamMode, teamNames, numPlayers, setNumPlayers, locked, dbPlayers,
     playerNames, setPlayerNames, playerIsBot, setPlayerIsBot, playerBotLevel, setPlayerBotLevel,
     playerGhostTarget, setPlayerGhostTarget, playerDoubleIn, setPlayerDoubleIn, playerDoubleOut, setPlayerDoubleOut,
-    setPlayerHandicap, botDisplayName, starterIndex, setStarterIndex, bullOffEnabled, requestPin,
+    playerMasterOut, setPlayerMasterOut, setPlayerHandicap, botDisplayName, starterIndex, setStarterIndex, bullOffEnabled, requestPin,
   } = props;
   const { t } = useLanguage();
 
@@ -76,6 +78,7 @@ const PlayerLineupSection = (props: PlayerLineupSectionProps) => {
     setPlayerGhostTarget(setAt<"off" | "own-pb">(slot, "off"));
     setPlayerDoubleIn(setAt(slot, playerDoubleIn[0] ?? false));
     setPlayerDoubleOut(setAt(slot, playerDoubleOut[0] ?? true));
+    setPlayerMasterOut(setAt(slot, playerMasterOut[0] ?? false));
     setPlayerHandicap(setAt(slot, 0));
     setNumPlayers(numPlayers + 1);
     return slot;
@@ -88,6 +91,7 @@ const PlayerLineupSection = (props: PlayerLineupSectionProps) => {
     setPlayerGhostTarget((prev) => removeSlotAt<"off" | "own-pb">(prev, slot, "off"));
     setPlayerDoubleIn((prev) => removeSlotAt(prev, slot, false));
     setPlayerDoubleOut((prev) => removeSlotAt(prev, slot, true));
+    setPlayerMasterOut((prev) => removeSlotAt(prev, slot, false));
     setPlayerHandicap((prev) => removeSlotAt(prev, slot, 0));
     setStarterIndex(starterAfterRemoval(starterIndex, slot, numPlayers));
     setNumPlayers(numPlayers - 1);
