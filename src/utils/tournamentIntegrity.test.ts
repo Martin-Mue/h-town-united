@@ -93,3 +93,13 @@ describe("calcStandings", () => {
     expect(table.map((s) => s.name).sort()).toEqual(["A", "B", "C"]);
   });
 });
+
+describe("walkover after a withdrawal", () => {
+  it("is marked, so it does not count as a played match, and the mark goes when the match is reset", () => {
+    const bracket: Match[] = [{ id: "r1-0", round: 1, position: 0, player1: "A", player2: "B" }];
+    const afterWithdrawal = recomputeBracket(bracket, ["A"]);
+    expect(afterWithdrawal[0]).toMatchObject({ winner: "A", walkover: true });
+    const reset = recomputeBracket([{ ...afterWithdrawal[0], winner: undefined }], ["A", "B"]);
+    expect(reset[0].walkover).toBeUndefined();
+  });
+});

@@ -929,7 +929,8 @@ const TournamentPage = () => {
   }, [effectiveSize, tournamentMode, gameMode, bestOfLegs, players.length]);
 
   const addPlayers = (names: string[]) => {
-    const cleaned = names.map((name) => name.trim()).filter(Boolean);
+    // "BYE" is what an empty bracket slot is called: a participant of that name would be treated as one.
+    const cleaned = names.map((name) => name.trim()).filter((name) => name && name.toUpperCase() !== BYE);
     // Read off the closure's own `players` (already how effectiveSize etc. read it elsewhere in
     // this component) rather than only inside the updater — needed here specifically to know
     // what actually landed for the toast below, not just to compute the new list.
@@ -971,7 +972,13 @@ const TournamentPage = () => {
   const fillGuestPlayers = () => {
     const target = targetSize === "auto" ? nextPowerOfTwo(Math.max(players.length, 2)) : Number(targetSize);
     const needed = Math.max(0, target - players.length);
-    addPlayers(Array.from({ length: needed }, (_, i) => `Gast ${String(players.length + i + 1).padStart(2, "0")}`));
+    // Numbers that are still free: after a guest was removed, counting on from the list length reused a taken name.
+    const guests: string[] = [];
+    for (let n = 1; guests.length < needed; n++) {
+      const name = `Gast ${String(n).padStart(2, "0")}`;
+      if (!players.includes(name)) guests.push(name);
+    }
+    addPlayers(guests);
   };
 
   const removePlayer = (name: string) => setPlayers(players.filter(p => p !== name));

@@ -30,6 +30,8 @@ export interface Match {
   feedsRound1Slot?: 1 | 2;
   /** Best-effort live snapshot pushed periodically by a "Spiel starten" live game — spectator-only, never authoritative (the final result always comes through `winner`/`score1`/`score2`). Cleared once the match is decided. */
   live?: LiveSnapshot;
+  /** The winner advanced because the opponent withdrew: nobody played, so it is not a result for the statistics. */
+  walkover?: boolean;
   /** Organizer paused this ready match (player away, smoke break …): the board auto-assignment
    *  (currentBoardSchedule) skips it until it's resumed. Only changes WHEN it's played — never
    *  its pairing or its place in the bracket. Dropped once the match is decided or unplayable. */
@@ -99,6 +101,7 @@ export function recomputeBracket(input: Match[], activePlayers?: string[]): Matc
     const p2Gone = isWithdrawn(m.player2);
     if (p1Gone && !p2Gone) m.winner = m.player2;
     else if (p2Gone && !p1Gone) m.winner = m.player1;
+    if (m.winner) m.walkover = true;
   };
 
   // Preliminary round (round 0): a small play-in stage for non-power-of-two player
@@ -187,6 +190,7 @@ export function recomputeBracket(input: Match[], activePlayers?: string[]): Matc
       delete m.paused;
       delete m.assignedBoard;
     }
+    if (!m.winner) delete m.walkover;
   });
 
   return work;

@@ -40,7 +40,8 @@ export function manualTournamentResults(tournaments: TournamentForStats[], saved
       continue;
     }
     for (const m of t.bracket as Match[]) {
-      if (!isPlayable(m) || !isRealPlayer(m.winner)) continue;
+      // a walkover after a withdrawal was never played
+      if (!isPlayable(m) || !isRealPlayer(m.winner) || m.walkover) continue;
       const key = `${t.id}:${m.id}`;
       if (!savedMatchKeys.has(key)) out.push({ key, tournamentName: t.name, date: t.created_at, player1: m.player1!, player2: m.player2!, winner: m.winner! });
     }

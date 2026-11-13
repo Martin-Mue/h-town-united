@@ -218,7 +218,7 @@ export function applyActionToKoBracket(
       const m = bracket.find((x) => x.id === action.matchId);
       if (!m || m.winner) return null;
       return bracket.map((x) => (x.id === action.matchId
-        ? { ...x, winner: action.winner, score1: action.score1 ?? x.score1, score2: action.score2 ?? x.score2 }
+        ? { ...x, winner: action.winner, score1: action.score1 ?? x.score1, score2: action.score2 ?? x.score2, walkover: undefined }
         : { ...x }));
     }
     case "setKoScore": {
