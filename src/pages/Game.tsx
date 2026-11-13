@@ -1250,6 +1250,27 @@ const GamePage = () => {
     if (soundEnabled) playThrowSound();
   };
 
+  /** What the players see and hear when a leg is won on the manual pad: by a checkout, or by the round limit
+   *  (then the winner need not be the player who just threw). Also points the next visit at the next leg. */
+  const announceLegWon = (legWinner: number, throwerName: string) => {
+    if (!game) return;
+    const nextStarter = (game.currentLeg.startingPlayerIndex + 1) % game.players.length;
+    const matchWon = wouldWinMatch(game, legWinner);
+    setDartsThisRound(0);
+    setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
+    flashScore(legWinner);
+    triggerConfetti();
+    if (soundEnabled) setTimeout(() => (matchWon ? playVictorySound() : playCheckoutSound()), matchWon ? 200 : 100);
+    if (speechEnabled) {
+      const winnerName = game.teams ? game.teams[legWinner].name : game.players[legWinner].name;
+      const { parts } = buildRoundAnnouncement({
+        roundTotal: 0, activePlayerName: throwerName, nextPlayerName: game.players[nextStarter].name,
+        isCricket: false, checkedOut: true, busted: false, matchWon, winnerName: matchWon ? winnerName : undefined,
+      });
+      window.setTimeout(() => speakSequence(parts), matchWon ? 300 : 200);
+    }
+  };
+
   const handleX01Throw = (overrideBase?: number, overrideMul?: 1 | 2 | 3) => {
     if (!game || game.isFinished) return;
     saveUndo();
@@ -1293,11 +1314,23 @@ const GamePage = () => {
         const visitStart = updatedLeg.throws[idx].length - (newDartsThisRound - 1);
         updatedLeg.throws[idx] = [...updatedLeg.throws[idx].slice(0, visitStart), ...bustVisitThrows([...updatedLeg.throws[idx].slice(visitStart), dart])];
         const nextIdx = (idx + 1) % n;
-        return { ...prev, currentLeg: updatedLeg, currentPlayerIndex: nextIdx };
+        const next: GameState = { ...prev, currentLeg: updatedLeg, currentPlayerIndex: nextIdx };
+        // A bust is a full round too: if it was the last one of a round-limited leg, the leg ends here.
+        const cap = resolveRoundCap(prev.maxRoundsX01, updatedLeg.throws.map((t) => Math.ceil(t.length / 3)), updatedLeg.remaining, prev.teams);
+        return cap?.kind === "winner" ? applyLegWin(next, prev, updatedLeg, cap.legWinner) : next;
       });
+      // The same check for what to show, from the values this bust leaves behind (the visit is filled up to three darts).
+      const visitsAfterBust = game.players.map((_, i) => Math.ceil((i === idx ? game.currentLeg.throws[i].length - (newDartsThisRound - 1) + 3 : game.currentLeg.throws[i].length) / 3));
+      const remainingAfterBust = game.currentLeg.remaining.map((r, si) => (si === teamIdx ? turnStartRemaining : r));
+      const bustCap = resolveRoundCap(game.maxRoundsX01, visitsAfterBust, remainingAfterBust, game.teams);
+      if (bustCap?.kind === "winner") {
+        announceLegWon(bustCap.legWinner, game.teams ? game.teams[bustCap.legWinner].name : game.players[bustCap.legWinner].name);
+        return;
+      }
       setDartsThisRound(0);
       setTurnStartRemaining(game.currentLeg.remaining[teamIndexFor(game.teams, (idx + 1) % n)]);
       flashScore(teamIdx);
+      if (bustCap?.kind === "tied") setPendingTiebreak({ tiedIndexes: bustCap.tiedIndexes });
       if (soundEnabled) setTimeout(() => playTurnSwitchSound(), 300);
       if (speechEnabled) {
         const { parts } = buildRoundAnnouncement({
@@ -1330,19 +1363,8 @@ const GamePage = () => {
       if (newDartsThisRound >= 3) {
         const nextIdx = (idx + 1) % n;
         const next: GameState = { ...prev, currentLeg: updatedLeg, currentPlayerIndex: nextIdx };
-        const cap = prev.maxRoundsX01;
-        if (cap && cap > 0) {
-          const rounds = prev.players.map((_, i) => Math.ceil(updatedLeg.throws[i].length / 3));
-          const scoreSlotRounds = updatedLeg.remaining.map((_, si) => Math.max(...rounds.filter((_, i) => teamIndexFor(prev.teams, i) === si)));
-          if (scoreSlotRounds.every(r => r >= cap)) {
-            const minRemaining = Math.min(...updatedLeg.remaining);
-            const winners = updatedLeg.remaining.reduce<number[]>((acc, r, i) => (r === minRemaining ? [...acc, i] : acc), []);
-            if (winners.length === 1) {
-              return applyLegWin(next, prev, updatedLeg, winners[0]);
-            }
-          }
-        }
-        return next;
+        const cap = resolveRoundCap(prev.maxRoundsX01, prev.players.map((_, i) => Math.ceil(updatedLeg.throws[i].length / 3)), updatedLeg.remaining, prev.teams);
+        return cap?.kind === "winner" ? applyLegWin(next, prev, updatedLeg, cap.legWinner) : next;
       }
 
       return { ...prev, currentLeg: updatedLeg };
@@ -1363,51 +1385,15 @@ const GamePage = () => {
     }
 
     if (newRemaining === 0) {
-      setDartsThisRound(0);
-      const nextStarter = (game.currentLeg.startingPlayerIndex + 1) % n;
-      setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
-      flashScore(teamIdx);
-      const matchWon = wouldWinMatch(game, teamIdx);
-      triggerConfetti();
-      if (soundEnabled) {
-        if (matchWon) {
-          setTimeout(() => playVictorySound(), 200);
-        } else {
-          setTimeout(() => playCheckoutSound(), 100);
-        }
-      }
-      if (speechEnabled) {
-        const winnerName = game.teams ? game.teams[teamIdx].name : game.players[idx].name;
-        const { parts } = buildRoundAnnouncement({
-          roundTotal: 0, activePlayerName: game.players[idx].name, nextPlayerName: game.players[nextStarter].name,
-          isCricket: false, checkedOut: true, busted: false, matchWon, winnerName: matchWon ? winnerName : undefined,
-        });
-        window.setTimeout(() => speakSequence(parts), matchWon ? 300 : 200);
-      }
+      announceLegWon(teamIdx, game.players[idx].name);
     } else if (capOutcome?.kind === "winner") {
       // Leg (or match) decided by the round cap with a single lowest-remaining winner — the same
       // "leg won" side effects a normal checkout gets above, just keyed to the cap's winner
       // instead of whoever happened to throw the dart that reached the cap (rarely the same
       // player: the cap resolves for everyone at once, on whichever throw happens to complete it).
+      // The next leg is opened by the player after this leg's starter, whoever won it.
       const legWinner = capOutcome.legWinner;
-      setDartsThisRound(0);
-      const matchWon = wouldWinMatch(game, legWinner);
-      const nextStarter = (legWinner + 1) % n;
-      setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
-      flashScore(legWinner);
-      triggerConfetti();
-      if (soundEnabled) {
-        if (matchWon) setTimeout(() => playVictorySound(), 200);
-        else setTimeout(() => playCheckoutSound(), 100);
-      }
-      if (speechEnabled) {
-        const winnerName = game.teams ? game.teams[legWinner].name : game.players[legWinner].name;
-        const { parts } = buildRoundAnnouncement({
-          roundTotal: 0, activePlayerName: winnerName, nextPlayerName: game.players[nextStarter].name,
-          isCricket: false, checkedOut: true, busted: false, matchWon, winnerName: matchWon ? winnerName : undefined,
-        });
-        window.setTimeout(() => speakSequence(parts), matchWon ? 300 : 200);
-      }
+      announceLegWon(legWinner, game.teams ? game.teams[legWinner].name : game.players[legWinner].name);
     } else if (newDartsThisRound >= 3) {
       const roundThrows = game.currentLeg.throws[idx].slice(-2);
       const roundTotal = roundThrows.reduce((s, t) => s + t.points, 0) + effectivePoints;
@@ -1448,6 +1434,9 @@ const GamePage = () => {
       return applyLegWin(prev, prev, prev.currentLeg, winnerIndex);
     });
     setDartsThisRound(0);
+    // The visit after this belongs to the next leg's starter: without this a bust there fell back to a score of the old leg.
+    const nextStarter = (game.currentLeg.startingPlayerIndex + 1) % game.players.length;
+    setTurnStartRemaining(effectiveStartScore(game.startScore, game.players, nextStarter, game.teams));
     flashScore(winnerIndex);
     triggerConfetti();
     toast({ title: t("game.bulledOutTitle"), description: `${winnerName} ${t("game.winsLegViaBullOff")}` });
@@ -1761,7 +1750,7 @@ const GamePage = () => {
     // Same "give the player something to actually see" fix as the manual-entry bust path —
     // the camera flow used to rely on playBustSound()/TTS alone too.
     if (busted) {
-      setBustCard({ name: game.players[startIdx].name, darts: dartsToApply.map((d) => ({ baseValue: d.baseValue, multiplier: d.multiplier })), staysAt: curStart });
+      setBustCard({ name: game.players[startIdx].name, darts: dartsToApply.map((d) => ({ baseValue: d.baseValue, multiplier: d.multiplier })), staysAt: curGame.currentLeg.remaining[teamIndexFor(curGame.teams, startIdx)] });
     }
 
     if (speechEnabled) {
