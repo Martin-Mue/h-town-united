@@ -204,6 +204,33 @@ export function keepSupportedDarts<T extends DartCandidate>(known: T[], detectio
   });
 }
 
+/** Around a dart's tip, compared with the empty board: below this share of changed cells the spot is bare again. */
+export const BARE_SPOT_SHARE = 0.1;
+export const BARE_SPOT_RADIUS = 0.02;
+
+/**
+ * Which of the known darts are no longer in the board: the picture shows no dart near their spot AND the spot looks
+ * like the empty board again. A dart that is merely hidden behind a later one still has that dart's barrel over its
+ * spot, so it does not count. Such a dart was knocked out or fell out: it was thrown, but scores nothing.
+ *
+ * @param changedVsEmptyAt share of changed cells around a point compared with the empty board
+ * @returns the indexes into `known`
+ */
+export function fallenOutDarts(
+  known: { x?: number; y?: number }[],
+  detections: { x?: number; y?: number }[],
+  changedVsEmptyAt: (x: number, y: number, radius: number) => number,
+): number[] {
+  const gone: number[] = [];
+  known.forEach((k, i) => {
+    const { x, y } = k;
+    if (typeof x !== "number" || typeof y !== "number") return;
+    const seen = detections.some((d) => typeof d.x === "number" && typeof d.y === "number" && Math.hypot(d.x - x, d.y - y) < SAME_DART_RADIUS);
+    if (!seen && changedVsEmptyAt(x, y, BARE_SPOT_RADIUS) < BARE_SPOT_SHARE) gone.push(i);
+  });
+  return gone;
+}
+
 /** How many darts the visit currently on the board can legally hold: the full remaining budget
  *  (dartsRemaining) unless one of the darts already detected ended the visit — a checkout
  *  (remaining hits exactly 0) or a bust (remaining would go negative). Both end the visit no

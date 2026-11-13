@@ -1,8 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { selectNewDart, selectNewDarts, keepSupportedDarts } from "./newDartSelection";
+import { selectNewDart, selectNewDarts, keepSupportedDarts, fallenOutDarts } from "./newDartSelection";
 
 // A change map stand-in: changed pixels exist only around (0.6, 0.4).
 const support = (x: number, y: number) => (Math.hypot(x - 0.6, y - 0.4) < 0.04 ? 0.6 : 0);
+
+describe("fallenOutDarts", () => {
+  const known = [{ x: 0.5, y: 0.5 }, { x: 0.6, y: 0.4 }];
+  it("reports a dart whose spot is bare again and that no detection shows", () => {
+    expect(fallenOutDarts(known, [{ x: 0.6, y: 0.4 }], () => 0)).toEqual([0]);
+  });
+  it("keeps a dart that is hidden behind another one (its spot still differs from the empty board)", () => {
+    expect(fallenOutDarts(known, [{ x: 0.6, y: 0.4 }], () => 0.6)).toEqual([]);
+  });
+  it("keeps a dart that is still detected", () => {
+    expect(fallenOutDarts(known, [{ x: 0.51, y: 0.5 }, { x: 0.6, y: 0.4 }], () => 0)).toEqual([]);
+  });
+  it("ignores darts without a position", () => {
+    expect(fallenOutDarts([{}], [], () => 0)).toEqual([]);
+  });
+});
 
 describe("selectNewDart", () => {
   it("picks the candidate on changed pixels, ignoring re-detected old darts", () => {

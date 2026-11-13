@@ -41,7 +41,7 @@ import { looksLikeUndetectedDarts, UNEXPLAINED_LOOKS_BEFORE_HINT, UNEXPLAINED_LO
 import { logDetectionLook, detectionLogCount, exportDetectionLog, clearDetectionLog, roundForLog, type LoggedCandidate } from "@/utils/detectionLog";
 import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
-import { selectNewDarts, keepSupportedDarts, visitDartCapacity, KNOWN_DART_RADIUS } from "@/utils/newDartSelection";
+import { selectNewDarts, keepSupportedDarts, fallenOutDarts, visitDartCapacity, KNOWN_DART_RADIUS } from "@/utils/newDartSelection";
 import { trackSteadyHits, selectSteadyNewDarts, type SteadyHit } from "@/utils/steadyHits";
 import { relocationTargets } from "@/utils/dartRelocation";
 import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
@@ -1832,11 +1832,17 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       result.darts.map((d) => ({ baseValue: 0, multiplier: 1 as const, points: 0, confidence: d.confidence, x: d.x, y: d.y }))
     ).filter((d) => !dismissedRef.current.some((g) => Math.hypot(g.x - (d.x ?? 0), g.y - (d.y ?? 0)) < DISMISSED_DART_RADIUS));
     const before = accumulatedRef.current;
-    const kept = keepSupportedDarts(before, found);
-    const keptSpots = occupiedSpots(kept);
     const baseline = emptyModelFrameRef.current;
     const map = baseline ? buildChangeMap(baseline, frame) : null;
     const usable = map && map.share < GLOBAL_CHANGE_SHARE_MAX ? map : null;
+    // A dart that a later one knocked out of the board was thrown but scores nothing: it becomes a "missed?" slot the
+    // player confirms in the review, instead of silently keeping the score of the spot it left.
+    const supported = keepSupportedDarts(before, found);
+    const fallen = usable ? fallenOutDarts(supported, found, (x, y, radius) => changedShareNear(usable, x, y, radius)) : [];
+    const kept = fallen.length === 0
+      ? supported
+      : supported.map((d, i) => (fallen.includes(i) && d.detected && !d.snapped ? { baseValue: 0, multiplier: 1 as const, points: 0, confidence: 1, assumedMiss: true } : d));
+    const keptSpots = occupiedSpots(kept);
     // Without a usable comparison picture only confident detections may add anything.
     // Compared with the EMPTY board every pixel of a dart is "fresh", so the change check cannot tell the barrel or flight
     // of a dart that is already known from a new dart. Anything close to a known dart therefore needs a confident hit.
@@ -1844,7 +1850,7 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       (d) => d.confidence >= FINAL_PASS_NEAR_KNOWN_SCORE || !keptSpots.some((k) => Math.hypot((k.x ?? 0) - (d.x ?? 0), (k.y ?? 0) - (d.y ?? 0)) < FINAL_PASS_NEAR_KNOWN_DISTANCE),
     ).filter((d) => !keptSpots.some((k) => Math.hypot((k.x ?? 0) - (d.x ?? 0), (k.y ?? 0) - (d.y ?? 0)) < FINAL_PASS_SAME_DART_DISTANCE));
     const added = selectNewDarts(keptSpots, eligible, usable ? (x, y) => changedShareNear(usable, x, y) : null, visitCapacity(kept) - kept.length);
-    if (added.length === 0 && kept.length === before.length) return;
+    if (added.length === 0 && kept.length === before.length && fallen.length === 0) return;
     if (accumulatedRef.current !== before) return;
     const next = [...kept, ...markDetected(added)];
     accumulatedRef.current = next;
