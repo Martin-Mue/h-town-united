@@ -43,6 +43,7 @@ import DartReviewFrame from "@/components/game/DartReviewFrame";
 import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
 import { selectNewDarts, keepSupportedDarts, visitDartCapacity, KNOWN_DART_RADIUS } from "@/utils/newDartSelection";
 import { trackSteadyHits, selectSteadyNewDarts, type SteadyHit } from "@/utils/steadyHits";
+import { relocationTargets } from "@/utils/dartRelocation";
 import { prepareWireFit, refineTapsToWires, findBoardTaps, WIRE_FIT_CONFIDENT } from "@/utils/boardWireFit";
 import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
@@ -280,10 +281,6 @@ const GLOBAL_CHANGE_SHARE_MAX = 0.5;
 const ADD_MAX_CHANGE_SHARE = 0.25;
 /** A hit this confident that no look took is kept comparable: the reference picture stays put for up to this many looks. */
 const UNEXPLAINED_HIT_SCORE = 0.5;
-/** A known model dart that the look no longer finds within this distance (frame fraction, ~7 mm) may have been placed off its resting spot. */
-const RELOCATE_REFOUND_RADIUS = 0.015;
-const RELOCATE_MAX_DISTANCE = 0.09;
-const RELOCATE_MIN_SCORE = 0.6;
 const HELD_REFERENCE_MAX_LOOKS = 6;
 /** The empty-board reference is only renewed from a calm picture: below this share of changed cells against the last
  *  reference (a hand in view changes 0.13-0.78), or unchanged since the previous look (lighting really changed). A
@@ -2119,20 +2116,23 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
       // bull, then a steady 0.89 hit 28 mm away, and the later hit was read as "a dart next to it" — or nothing at all). When a
       // look no longer finds a model dart where it was put, but finds a confident hit close to it that no other dart explains,
       // that hit is the same dart: move it there. Darts the player corrected by hand stay where they are.
+      // A second dart landing right next to the first gives the same picture, so the decision (and when it must NOT be
+      // taken) lives in relocationTargets.
       if (added.length === 0) {
-        let moved = false;
-        const relocated = known.map((k) => {
-          if (!k.detected || k.snapped || k.baseValue !== k.detected.baseValue || k.multiplier !== k.detected.multiplier || typeof k.x !== "number" || typeof k.y !== "number") return k;
-          const stillThere = present.some((d) => Math.hypot((d.x ?? 9) - (k.x as number), (d.y ?? 9) - (k.y as number)) < RELOCATE_REFOUND_RADIUS);
-          if (stillThere) return k;
-          const hit = present
-            .filter((d) => d.confidence >= RELOCATE_MIN_SCORE && Math.hypot((d.x ?? 9) - (k.x as number), (d.y ?? 9) - (k.y as number)) < RELOCATE_MAX_DISTANCE)
-            .filter((d) => !known.some((o) => o !== k && typeof o.x === "number" && typeof o.y === "number" && Math.hypot((d.x ?? 9) - o.x, (d.y ?? 9) - o.y) < KNOWN_DART_RADIUS))
-            .sort((a, b) => b.confidence - a.confidence)[0];
-          if (!hit) return k;
-          moved = true;
-          return markDetected([hit])[0];
-        });
+        const emptyForSpots = emptyModelFrameRef.current;
+        const vsEmptyForSpots = vsEmptyMap ?? (emptyForSpots ? buildChangeMap(emptyForSpots, frame) : null);
+        const targets = relocationTargets(
+          known,
+          (k) => !!k.detected && !k.snapped && k.baseValue === k.detected.baseValue && k.multiplier === k.detected.multiplier,
+          present,
+          {
+            handInPicture: handChange,
+            slotsLeft: visitCapacity(known) - known.length,
+            changedVsEmptyAt: vsEmptyForSpots && vsEmptyForSpots.share < GLOBAL_CHANGE_SHARE_MAX ? (x, y, radius) => changedShareNear(vsEmptyForSpots, x, y, radius) : null,
+          },
+        );
+        const moved = targets.some(Boolean);
+        const relocated = known.map((k, i) => (targets[i] ? markDetected([targets[i] as DetectedDart])[0] : k));
         if (moved) {
           accumulatedRef.current = relocated;
           setAccumulated(relocated);
