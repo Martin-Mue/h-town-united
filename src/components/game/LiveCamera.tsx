@@ -44,6 +44,7 @@ import { buildChangeMap, changedShareNear } from "@/utils/changeMask";
 import { selectNewDarts, keepSupportedDarts, visitDartCapacity, KNOWN_DART_RADIUS } from "@/utils/newDartSelection";
 import { trackSteadyHits, selectSteadyNewDarts, type SteadyHit } from "@/utils/steadyHits";
 import { relocationTargets } from "@/utils/dartRelocation";
+import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
 import { prepareWireFit, refineTapsToWires, findBoardTaps, WIRE_FIT_CONFIDENT } from "@/utils/boardWireFit";
 import { canonicalPointForChoice, type ScoreChoice } from "@/utils/dartCorrection";
 import {
@@ -685,8 +686,18 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   const syncVideoSize = () => {
     const v = videoRef.current;
     if (!v || !v.videoWidth || !v.videoHeight) return;
-    setVideoSize((prev) => (prev && prev.w === v.videoWidth && prev.h === v.videoHeight ? prev : { w: v.videoWidth, h: v.videoHeight }));
+    const prev = lastVideoSizeRef.current;
+    if (prev && prev.w === v.videoWidth && prev.h === v.videoHeight) return;
+    // The phone was turned: the picture is now upright instead of lying (or the other way round) and the
+    // calibration, stored as shares of the old picture, points somewhere else. Search the board afresh.
+    if (prev && (prev.w > prev.h) !== (v.videoWidth > v.videoHeight)) setBoardUnseen(true);
+    lastVideoSizeRef.current = { w: v.videoWidth, h: v.videoHeight };
+    setVideoSize(lastVideoSizeRef.current);
   };
+  const lastVideoSizeRef = useRef<{ w: number; h: number } | null>(null);
+  /** Counts up to start the camera again after it stopped by itself (see the lifecycle effect below). */
+  const [cameraRestart, setCameraRestart] = useState(0);
+  useScreenWakeLock(enabled);
   // UX-Audit Befund #1 (Kamera-Review): Löschen/Verwerfen lösten bisher sofort aus, ohne
   // Rückfrage — anders als überall sonst in der App, wo destruktive Aktionen bestätigt werden
   // (siehe Players.tsx confirmDeleteId, Tournament.tsx Match-Reset). Dieselbe Absicherung jetzt
@@ -934,6 +945,9 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
         }
+        // The system can take the camera away (another app, a phone call, the page in the background for long).
+        // Without this the picture just froze and "no board" was all the player saw.
+        stream.getVideoTracks()[0]?.addEventListener("ended", () => { if (!cancelled) setCameraRestart((n) => n + 1); });
         // Device labels are only populated once permission has been granted — this is the
         // first point they're available, letting the "Kamera" picker show real names instead
         // of blank entries when a machine has more than one camera attached (multi-board rigs).
@@ -964,15 +978,24 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         setPhase("error");
       }
     })();
+    // Back in the foreground: a paused picture is started again, a camera that is gone is opened again.
+    const onVisible = () => {
+      if (cancelled || document.visibilityState !== "visible") return;
+      const track = streamRef.current?.getVideoTracks()[0];
+      if (!track || track.readyState === "ended") setCameraRestart((n) => n + 1);
+      else if (videoRef.current?.paused) void videoRef.current.play().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
       stopClipRecorder();
       lastClipRef.current = null;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, selectedDeviceId, activeBoard]);
+  }, [enabled, selectedDeviceId, activeBoard, cameraRestart]);
 
   // ─── helpers ────────────────────────────────────────────────────────
   // Thin wrappers around the pure functions in @/utils/cameraGeometry — this component's job is

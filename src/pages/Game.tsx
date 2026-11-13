@@ -90,6 +90,7 @@ import {
   type CheckoutDoubleBreakdown,
 } from "@/utils/dartStats";
 import { splitVisitTotal } from "@/utils/quickRoundSplit";
+import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
 
 /** Bot personas with their target 3-dart average range. `nameKey` (not a literal string) since
  *  this is a module-level constant with no access to the language context — resolved via t() at
@@ -471,6 +472,8 @@ const GamePage = () => {
   // the bot-auto-play effect below force-closes for bot turns. Lets the camera come back on its
   // own once play returns to a human, instead of the player having to re-tap "Cam" every turn.
   const cameraWantedRef = useRef(false);
+  // The scoring device stands at the board and is touched only now and then: keep its screen on during a game.
+  useScreenWakeLock(phase === "playing" && !!game && !game.isFinished);
   // Shared between LiveCamera and AutodartsLiveScore's onPendingChange -- the two are mutually
   // exclusive per game (see autodartsEnabled), so one "in-progress visit" preview slot is enough.
   const [pendingLiveDarts, setPendingLiveDarts] = useState<DetectedDart[]>([]);
