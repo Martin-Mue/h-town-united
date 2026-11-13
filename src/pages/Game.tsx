@@ -3103,7 +3103,7 @@ const GamePage = () => {
     <div className="fixed inset-0 z-[60] bg-background flex flex-col animate-slide-up overflow-hidden">
       {confettiKey !== null && <ConfettiBurst triggerKey={confettiKey} />}
       {legWonBanner && (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-[65] flex justify-center px-4" role="status">
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-[75] flex justify-center px-4" role="status">
           <div className="animate-slide-up w-full max-w-sm overflow-hidden rounded-2xl border border-primary/50 bg-card shadow-elevation-lg">
             <div className="flex items-center justify-center gap-2 px-4 py-3">
               <Trophy className="h-5 w-5 shrink-0 text-accent" />
@@ -3127,7 +3127,7 @@ const GamePage = () => {
         </div>
       )}
       {bustCard && (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-[65] flex justify-center px-4" role="alert">
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-[75] flex justify-center px-4" role="alert">
           <div className="animate-slide-up w-full max-w-sm overflow-hidden rounded-2xl border border-destructive/60 bg-card shadow-elevation-lg">
             <div className="px-4 pt-3 text-center">
               <p className="font-display text-lg font-bold text-destructive">{t("game.bustTitle")}</p>
@@ -3221,7 +3221,9 @@ const GamePage = () => {
         }}
       />
 
-      {cameraEnabled ? (
+      {/* Not once the match is decided: the camera fills the screen above everything else and
+          would hide the end-of-game screen. It comes back by itself for a rematch. */}
+      {cameraEnabled && !game.isFinished ? (
         <>
           <GameControlBar
             title={arenaTitle}
