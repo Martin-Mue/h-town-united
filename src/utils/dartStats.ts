@@ -319,7 +319,10 @@ export function checkoutDoubleBreakdown(throws: DartThrow[], startingScore: numb
     const bucket = label ? (byLabel[label] ||= { attempts: 0, hits: 0 }) : null;
     if (bucket) bucket.attempts++;
     remaining -= v.reduce((s, t) => s + t.points, 0);
-    if (bucket && remaining === 0) bucket.hits++;
+    // A hit on this double only when the leg really ended on a double: under Master Out (or Single Out) the
+    // same score can be finished with a treble or a single (36 = T12), which is no double hit.
+    const finishedOnDouble = v.length > 0 && v[v.length - 1].multiplier === 2;
+    if (bucket && remaining === 0 && finishedOnDouble) bucket.hits++;
   }
   return Object.entries(byLabel)
     .map(([label, b]) => ({ label, stats: toBucketStats(b.attempts, b.hits) }))

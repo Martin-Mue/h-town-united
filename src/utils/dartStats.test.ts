@@ -4,7 +4,7 @@ import {
   combineScoreTiers, combineSegmentCounts, first9Average,
   computeLegStatBundle, combineStatBundles, type DartThrow,
   checkoutRangeBreakdown, combineCheckoutRangeBreakdowns,
-  checkoutDoubleBreakdown, combineCheckoutDoubleBreakdowns,
+  checkoutDoubleBreakdown, computeCheckoutStats, combineCheckoutDoubleBreakdowns,
 } from "./dartStats";
 
 describe("isAchievableVisitTotal", () => {
@@ -221,6 +221,14 @@ describe("checkoutRangeBreakdown / checkoutDoubleBreakdown (granular checkout%)"
     expect(checkoutDoubleBreakdown(legB, 40)).toEqual([{ label: "D20", stats: { attempts: 2, hits: 1, percentage: 50 } }]);
     // Same shape, still in the 2-40 range bucket.
     expect(checkoutRangeBreakdown(legB, 40).find((b) => b.label === "2-40")!.stats).toEqual({ attempts: 2, hits: 1, percentage: 50 });
+  });
+
+  it("does not count a treble finish (Master Out) or a single finish as a hit on the double", () => {
+    // 36 left: finished with T12 under Master Out. An attempt at D18, but no D18 hit.
+    expect(checkoutDoubleBreakdown(throwsOf([d(12, 3)]), 36)).toEqual([{ label: "D18", stats: { attempts: 1, hits: 0, percentage: 0 } }]);
+    expect(checkoutDoubleBreakdown(throwsOf([d(18, 2)]), 36)).toEqual([{ label: "D18", stats: { attempts: 1, hits: 1, percentage: 100 } }]);
+    // The checkout itself still counts as a checkout.
+    expect(computeCheckoutStats(throwsOf([d(12, 3)]), 36)).toMatchObject({ attempts: 1, hits: 1, highestCheckout: 36 });
   });
 
   it("attributes remaining=50 to Bull, not to a numbered double", () => {

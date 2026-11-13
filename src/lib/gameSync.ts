@@ -3,6 +3,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
+import { outRuleOf } from "@/utils/x01Rules";
 import { computeEloDeltas, computeTeamEloDeltas, type EloParticipant, type EloTeam } from "@/utils/elo";
 import {
   average as calculateAverage,
@@ -130,6 +131,8 @@ export async function saveGameRecord(
     return {
       name: game.players[idx].name,
       player_id: playerMatch?.id || null,
+      // "single" | "double" | "master": the games table has no column for the out rule, so it rides along here.
+      ...(game.mode === "cricket" ? {} : { outRule: outRuleOf(game.players[idx]) }),
       visits: visits.length,
       trebleless,
       treblelessRate: visits.length ? Math.round((trebleless / visits.length) * 1000) / 10 : 0,
