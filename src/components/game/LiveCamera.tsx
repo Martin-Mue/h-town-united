@@ -2717,6 +2717,10 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
   };
 
   const roundTotal = accumulated.reduce((s, d) => s + d.points, 0);
+  // The review picture shows only darts that have a place on the board, not the "missed?" slots. Its markers are
+  // numbered along that shorter list, so every tap on one is translated back to the dart's place in the visit
+  // (otherwise, with a "missed?" slot before it, the tap edited the wrong dart).
+  const picturedDartIndexes = accumulated.map((d, i) => (d.assumedMiss ? -1 : i)).filter((i) => i >= 0);
 
   // Tracking-health ring: green once calibrated and the live-tracked board center hasn't
   // drifted far from where it was calibrated, amber if it's drifted enough that a recalibration
@@ -2841,11 +2845,11 @@ const LiveCamera = forwardRef<LiveCameraHandle, LiveCameraProps>(({
         <DartReviewFrame
           maxSide={`calc(100dvh - ${isLandscape ? "9rem" : "17rem"})`}
           imageUrl={reviewFrame.url}
-          darts={accumulated.filter((d) => !d.assumedMiss).map((d) => ({ x: d.x ?? 0.5, y: d.y ?? 0.5, baseValue: d.baseValue, multiplier: d.multiplier }))}
-          selectedIndex={selectedReviewIndex}
-          onSelect={setSelectedReviewIndex}
-          onMove={moveDartTo}
-          onChoose={applyDartChoice}
+          darts={picturedDartIndexes.map((i) => accumulated[i]).map((d) => ({ x: d.x ?? 0.5, y: d.y ?? 0.5, baseValue: d.baseValue, multiplier: d.multiplier }))}
+          selectedIndex={selectedReviewIndex !== null && picturedDartIndexes.includes(selectedReviewIndex) ? picturedDartIndexes.indexOf(selectedReviewIndex) : null}
+          onSelect={(i) => setSelectedReviewIndex(i === null ? null : picturedDartIndexes[i] ?? null)}
+          onMove={(i, x, y) => { if (picturedDartIndexes[i] !== undefined) moveDartTo(picturedDartIndexes[i], x, y); }}
+          onChoose={(i, choice) => { if (picturedDartIndexes[i] !== undefined) applyDartChoice(picturedDartIndexes[i], choice); }}
           labels={{
             hintPick: t("camera.reviewHintPick"),
             hintMove: t("camera.reviewHintMove"),
