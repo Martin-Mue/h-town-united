@@ -50,6 +50,11 @@ export interface OnlineMatchRow {
  *  waiting for the DB round-trip). Broadcast is a latency shortcut only: `submit_online_throw`
  *  (the actual persisted write, with server-side turn validation) is the real source of truth,
  *  and the next postgres_changes UPDATE naturally reconciles anything broadcast alone missed. */
+/** Tells two boards of one match apart by how far the game has got: legs played, darts per player, whose turn. */
+export function gameProgressMark(state: Pick<GameState, "completedLegs" | "currentLeg" | "currentPlayerIndex" | "isFinished">): string {
+  return [state.completedLegs.length, state.currentLeg.throws.map((t) => t.length).join(","), state.currentPlayerIndex, state.isFinished ? 1 : 0].join(":");
+}
+
 export function useOnlineMatch(matchId: string | undefined, userId: string | undefined) {
   const [row, setRow] = useState<OnlineMatchRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +63,9 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
   // Seat of this account in a doubles match (== index into GameState.players); null for 1:1.
   const [mySlot, setMySlot] = useState<number | null>(null);
   const [reaction, setReaction] = useState<(OnlineReaction & { at: number }) | null>(null);
+  /** Marks of the boards this device sent last (see gameProgressMark), newest last. */
+  const sentMarksRef = useRef<string[]>([]);
+  const sendQueueRef = useRef<Promise<void>>(Promise.resolve());
   // Re-evaluated every 5 s so the idle-based substitute/abort offers appear without any new event.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -89,7 +97,16 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "online_matches", filter: `id=eq.${matchId}` },
-        (payload) => { if (!cancelled) setRow(payload.new as unknown as OnlineMatchRow); }
+        (payload) => {
+          if (cancelled) return;
+          const incoming = payload.new as unknown as OnlineMatchRow;
+          // The database confirms each of my own darts a moment later. If I have thrown again since, that
+          // confirmation shows an older board: keep my newer one, take everything else from the row.
+          const mark = incoming.game_state ? gameProgressMark(incoming.game_state) : null;
+          const sent = sentMarksRef.current;
+          const staleEcho = mark !== null && sent.length > 0 && sent[sent.length - 1] !== mark && sent.includes(mark);
+          setRow((prev) => (staleEcho && prev ? { ...incoming, game_state: prev.game_state } : incoming));
+        }
       )
       .on("broadcast", { event: "throw" }, (payload) => {
         if (cancelled) return;
@@ -170,18 +187,25 @@ export function useOnlineMatch(matchId: string | undefined, userId: string | und
   const sendThrow = useCallback(async (newGameState: GameState, dartsThisRound: number, turnStartRemaining: number) => {
     if (!matchId) return;
     const merged: OnlineGameState = { ...newGameState, dartsThisRound, turnStartRemaining };
+    sentMarksRef.current = [...sentMarksRef.current.slice(-11), gameProgressMark(newGameState)];
     // Broadcast first — pure latency shortcut, best-effort, never awaited/blocking.
     void channelRef.current?.send({ type: "broadcast", event: "throw", payload: { game_state: merged } });
     // The actual persisted write. Server-side rejects this if it wasn't really the caller's turn
     // in the PREVIOUS stored state — see the RPC's own doc comment for why that's the one thing
     // this can't just trust the client on.
-    const { error } = await supabase.rpc("submit_online_throw", {
-      _match_id: matchId,
-      _new_game_state: newGameState as unknown as Json,
-      _new_darts_this_round: dartsThisRound,
-      _new_turn_start_remaining: turnStartRemaining,
+    // One write at a time, in the order the darts were thrown: two quick darts sent side by side could reach the
+    // server the wrong way round and leave the older board stored.
+    const write = sendQueueRef.current.catch(() => undefined).then(async () => {
+      const { error } = await supabase.rpc("submit_online_throw", {
+        _match_id: matchId,
+        _new_game_state: newGameState as unknown as Json,
+        _new_darts_this_round: dartsThisRound,
+        _new_turn_start_remaining: turnStartRemaining,
+      });
+      if (error) throw error;
     });
-    if (error) throw error;
+    sendQueueRef.current = write;
+    await write;
   }, [matchId]);
 
   const sendReaction = useCallback((emoji: string, from: string) => {

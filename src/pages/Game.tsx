@@ -1242,11 +1242,19 @@ const GamePage = () => {
     if (pendingCheckoutChoice || pendingTiebreak) return;
     if (botTimerRef.current) { clearTimeout(botTimerRef.current); botTimerRef.current = null; }
     botPlanRef.current = null;
-    const last = undoStack[undoStack.length - 1];
+    // Stepping back onto a bot's turn would only make the bot throw again a second later. Go back to the last
+    // moment a person was at the board instead: that takes the bot's darts and the person's last dart back.
+    let steps = 1;
+    while (steps < undoStack.length) {
+      const snapshot = undoStack[undoStack.length - steps].game;
+      if (!snapshot.players[snapshot.currentPlayerIndex]?.isBot) break;
+      steps++;
+    }
+    const last = undoStack[undoStack.length - steps];
     setGame(last.game);
     setDartsThisRound(last.dartsThisRound);
     setTurnStartRemaining(last.turnStartRemaining);
-    setUndoStack(prev => prev.slice(0, -1));
+    setUndoStack(prev => prev.slice(0, -steps));
     if (soundEnabled) playThrowSound();
   };
 
@@ -1350,7 +1358,8 @@ const GamePage = () => {
       const updatedLeg: LegState = { ...prev.currentLeg, remaining: [...prev.currentLeg.remaining], throws: prev.currentLeg.throws.map(t => [...t]) };
       updatedLeg.remaining[teamIdx] = newRemaining;
       updatedLeg.throws[idx] = [...updatedLeg.throws[idx], dart];
-      if (justGotIn) {
+      // In a team, a partner who plays without double-in opens the score for the team as well.
+      if (justGotIn || (!requiresDoubleIn && !alreadyStartedScoring && effectivePoints > 0)) {
         updatedLeg.startedScoring = (updatedLeg.startedScoring ?? prev.players.map(() => true)).map((v, i) => i === teamIdx ? true : v);
       }
 
@@ -1594,7 +1603,7 @@ const GamePage = () => {
       // points at most, never flips a match outcome), so this stays a documented approximation
       // instead of a second disambiguation prompt.
       const hasQualifyingDartThisVisit = dartsToApply.some((d) => d.multiplier === 2);
-      x01JustGotIn = requiresDoubleIn && !alreadyStartedScoring && hasQualifyingDartThisVisit;
+      x01JustGotIn = !alreadyStartedScoring && (requiresDoubleIn ? hasQualifyingDartThisVisit : dartsToApply.some((d) => d.points > 0));
       const stillNotIn = requiresDoubleIn && !alreadyStartedScoring && !hasQualifyingDartThisVisit;
       x01VisitDarts = dartsToApply.map((d) => {
         const points = pointsFor(d.baseValue, d.multiplier);
