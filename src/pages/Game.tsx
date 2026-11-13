@@ -1863,12 +1863,23 @@ const GamePage = () => {
     }
   };
 
+  /** A correction to a dart of an earlier visit changes the score the current visit started from. Without this a
+   *  later bust fell back to the score from before the correction. `pointsGivenBack` is what the correction adds
+   *  to the remaining score (negative when the corrected dart scores more than before). */
+  const shiftTurnStartForPastDart = (playerIdx: number, throwIndex: number, pointsGivenBack: number) => {
+    if (!game || game.mode === "cricket" || pointsGivenBack === 0) return;
+    const sameScore = teamIndexFor(game.teams, playerIdx) === teamIndexFor(game.teams, game.currentPlayerIndex);
+    const inOpenVisit = playerIdx === game.currentPlayerIndex && throwIndex >= game.currentLeg.throws[playerIdx].length - dartsThisRound;
+    if (sameScore && !inOpenVisit) setTurnStartRemaining((start) => start + pointsGivenBack);
+  };
+
   const deleteThrow = (playerIdx: number, throwIndex: number) => {
     // Correcting a dart mid-visit invalidates any bot plan already cached for the CURRENT round
     // (its darts/cursor were computed against the pre-correction throws/remaining) — same reason
     // undoLastDart clears this. The corrector is only reachable on a human's own turn, but this
     // costs nothing and means no future call site can reintroduce the desync bug this once was.
     botPlanRef.current = null;
+    shiftTurnStartForPastDart(playerIdx, throwIndex, game?.currentLeg.throws[playerIdx]?.[throwIndex]?.points ?? 0);
     // A correction is a mutation to `game` like any other — pushing it onto the SAME undo stack a
     // real throw uses means the corrector dialog's own Undo button (and the main toolbar one) can
     // step back a correction exactly like any other action, rather than corrections being a
@@ -1960,7 +1971,13 @@ const GamePage = () => {
     const remainingBeforeThisDart = currentRemaining + oldDart.points;
     const newRemaining = remainingBeforeThisDart - newPoints;
     const isDouble = qualifyingDouble(newMultiplier);
-    if (isBustThrow(remainingBeforeThisDart, newPoints, doubleOut, isDouble)) {
+    // Only the dart thrown last can finish the leg. An earlier dart was followed by others, so after the
+    // correction a score must be left that those could still be thrown at (the remaining score only ever
+    // falls, so if the result is playable now it was playable at every point in between).
+    const isLastDartThrown = throwIndex === game.currentLeg.throws[playerIdx].length - 1
+      && (playerIdx === game.currentPlayerIndex || (game.currentPlayerIndex === (playerIdx + 1) % n && dartsThisRound === 0));
+    const leavesNoScore = !isLastDartThrown && newRemaining < (doubleOut ? 2 : 1);
+    if (leavesNoScore || isBustThrow(remainingBeforeThisDart, newPoints, doubleOut, isDouble)) {
       toast({
         title: t("game.invalidValue"),
         description: newRemaining < 0 ? t("game.wouldMakeNegative") : t("game.checkoutMustEndDouble"),
@@ -1972,6 +1989,7 @@ const GamePage = () => {
     // Only pushed once the edit is confirmed valid — an edit the bust-check just rejected never
     // touched `game` at all, so it has nothing to undo and shouldn't cost an undo-stack entry.
     saveUndo();
+    shiftTurnStartForPastDart(playerIdx, throwIndex, oldDart.points - newPoints);
     remainingRef.current[teamIdx] = newRemaining;
     setGame((prev) => {
       if (!prev) return prev;
