@@ -1354,4 +1354,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Yeni yazı tipi, daha sakin yüzeyler ve ortasında „Oyna” olan yeni alt çubuk. Başlangıç sayfası açık oyununu, sıradaki turnuva maçını ve formunu bir bakışta gösteriyor. Ayarlarda „Rengim” altında yeni: sarı „Dartspot” teması.",
     },
   },
+  {
+    id: "2026-11-13-game-fixes",
+    date: "2026-11-13",
+    title: {
+      de: "Viele Korrekturen im Spiel und an der Kamera",
+      en: "Many fixes in the game and the camera",
+      fr: "Nombreuses corrections dans le jeu et la caméra",
+      pl: "Wiele poprawek w grze i kamerze",
+      nl: "Veel verbeteringen in het spel en de camera",
+      tr: "Oyunda ve kamerada birçok düzeltme",
+    },
+    description: {
+      de: "Schnell-Eingabe bucht jetzt immer die richtige Summe (170 wurde als 134 gezählt) und ein eingetipptes Checkout zählt als Checkout. Nach einem Checkout mit Kamera erscheint wieder die Endansicht. Die Kamera meldet kein Board mehr, wo keines ist, und „Wurf erkennen“ ist jetzt ein echter Knopf. Cricket speichert ab drei Spielern den richtigen Sieger.",
+      en: "Quick entry now always books the right total (170 was counted as 134) and a typed checkout counts as a checkout. The end screen is back after a checkout scored by camera. The camera no longer reports a board where there is none, and “Detect throw” is now a real button. Cricket saves the right winner with three or more players.",
+      fr: "La saisie rapide enregistre désormais toujours le bon total (170 était compté comme 134) et un checkout saisi compte comme checkout. L'écran de fin réapparaît après un checkout détecté par la caméra. La caméra ne signale plus de cible là où il n'y en a pas, et « Détecter le lancer » est maintenant un vrai bouton. Le Cricket enregistre le bon vainqueur à partir de trois joueurs.",
+      pl: "Szybkie wpisywanie zawsze zapisuje teraz właściwą sumę (170 liczono jako 134), a wpisany checkout liczy się jako checkout. Po checkoucie z kamerą znów pojawia się ekran końcowy. Kamera nie zgłasza już tarczy tam, gdzie jej nie ma, a „Wykryj rzut” to teraz prawdziwy przycisk. Cricket zapisuje właściwego zwycięzcę przy trzech i więcej graczach.",
+      nl: "Snelle invoer boekt nu altijd het juiste totaal (170 werd als 134 geteld) en een ingetypte checkout telt als checkout. Na een checkout met de camera verschijnt het eindscherm weer. De camera meldt geen bord meer waar er geen is, en “Worp herkennen” is nu een echte knop. Cricket slaat vanaf drie spelers de juiste winnaar op.",
+      tr: "Hızlı giriş artık her zaman doğru toplamı kaydediyor (170, 134 olarak sayılıyordu) ve yazılan checkout checkout sayılıyor. Kamerayla yapılan checkout'tan sonra bitiş ekranı yeniden görünüyor. Kamera artık tahta olmayan yerde tahta bildirmiyor ve “Atışı algıla” artık gerçek bir düğme. Cricket üç ve daha fazla oyuncuda doğru kazananı kaydediyor.",
+    },
+  },
 ];
