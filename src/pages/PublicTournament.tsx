@@ -1336,7 +1336,10 @@ const PublicTournamentPage = () => {
     ...(isKo ? [
       { key: "tree" as ViewKey, icon: <Network className="w-3.5 h-3.5" />, label: tr("tournament.bracketTreeTab") },
       { key: "list" as ViewKey, icon: <Rows3 className="w-3.5 h-3.5" />, label: tr("pt.roundList") },
-    ] : []),
+    ] : [
+      // Group mode: the table. It used to have no tab, so once another page was picked it could not be reached again.
+      { key: "list" as ViewKey, icon: <ListOrdered className="w-3.5 h-3.5" />, label: tr("pt.standings") },
+    ]),
     { key: "participants", icon: <Users className="w-3.5 h-3.5" />, label: tr("pt.participantsView") },
     { key: "highlights", icon: <Target className="w-3.5 h-3.5" />, label: tr("pt.highlightsLabel") },
     { key: "waiting", icon: <Hourglass className="w-3.5 h-3.5" />, label: tr("pt.waitingTab") },
@@ -1403,7 +1406,8 @@ const PublicTournamentPage = () => {
            *  button always, at any width, instead of hiding most of them off-screen. */}
           <div className="flex w-max gap-1.5 sm:w-auto sm:max-w-full sm:flex-wrap">
             {viewTabs.map((tab) => {
-              const active = view === tab.key && !autoRotate;
+              // in group mode "tree" and "list" both show the table, so either marks its tab
+              const active = (view === tab.key || (!isKo && tab.key === "list" && view === "tree")) && !autoRotate;
               return (
                 <button
                   key={tab.key}
