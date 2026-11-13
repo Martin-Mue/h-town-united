@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { splitVisitTotal } from "./quickRoundSplit";
 import { isAchievableVisitTotal } from "./dartStats";
 import { CHECKOUT_ROUTES } from "./checkoutTable";
-import { resolveX01Visit } from "./x01Rules";
+import { resolveX01Visit, resolveX01VisitForRule } from "./x01Rules";
 
 const sum = (darts: { points: number }[]) => darts.reduce((s, d) => s + d.points, 0);
 
@@ -65,5 +65,34 @@ describe("splitVisitTotal", () => {
     expect(splitVisitTotal(-1)).toBeNull();
     expect(splitVisitTotal(181)).toBeNull();
     expect(splitVisitTotal(12.5)).toBeNull();
+  });
+});
+
+describe("splitVisitTotal under Master Out", () => {
+  it("ends every finishing total on a double or treble, so it counts as a checkout", () => {
+    for (let remaining = 2; remaining <= 180; remaining++) {
+      const darts = splitVisitTotal(remaining, { remaining, doubleOut: true, masterOut: true });
+      if (!darts) continue;
+      const outcome = resolveX01VisitForRule(remaining, "master", darts);
+      if (outcome.kind === "bust") continue; // totals no three darts can finish (checked below)
+      expect(sum(darts), `finish ${remaining}`).toBe(remaining);
+      expect([2, 3], `finish ${remaining}`).toContain(darts[darts.length - 1].multiplier);
+    }
+  });
+
+  it("finishes 60 on T20, 180 on three T20 and the double-out bogey 159", () => {
+    expect(splitVisitTotal(60, { remaining: 60, masterOut: true })).toEqual([{ baseValue: 20, multiplier: 3, points: 60 }]);
+    expect(splitVisitTotal(180, { remaining: 180, masterOut: true })!.map((d) => d.multiplier)).toEqual([3, 3, 3]);
+    const bogey = splitVisitTotal(159, { remaining: 159, masterOut: true })!;
+    expect(resolveX01VisitForRule(159, "master", bogey).kind).toBe("checkout");
+  });
+
+  it("every total that three darts can score finishes legally", () => {
+    for (let remaining = 2; remaining <= 180; remaining++) {
+      const plain = splitVisitTotal(remaining);
+      if (!plain) continue; // not a possible visit total
+      const darts = splitVisitTotal(remaining, { remaining, masterOut: true })!;
+      expect(resolveX01VisitForRule(remaining, "master", darts).kind, `finish ${remaining}`).not.toBe("bust");
+    }
   });
 });

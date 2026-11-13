@@ -1,6 +1,7 @@
 import type { BotLevel, DartThrow } from "@/types/game";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
-import { isBustThrow, pointsFor } from "@/utils/x01Rules";
+import { finishRoute } from "@/utils/checkoutRoute";
+import { isBustThrowForRule, pointsFor, type OutRule } from "@/utils/x01Rules";
 
 /**
  * Bot tuning, retuned 2026-09-21 after a real report that "The Machine" (hard) played
@@ -271,8 +272,9 @@ export interface BotVisitResult {
   checkedOut: boolean;
 }
 
-export function simulateBotVisit(remaining: number, doubleOut: boolean, level: BotLevel | LevelConfig, mustDoubleIn = false): BotVisitResult {
+export function simulateBotVisit(remaining: number, outRuleOrDoubleOut: boolean | OutRule, level: BotLevel | LevelConfig, mustDoubleIn = false): BotVisitResult {
   const cfg = typeof level === "string" ? LEVEL_CONFIG[level] : level;
+  const outRule: OutRule = typeof outRuleOrDoubleOut === "string" ? outRuleOrDoubleOut : outRuleOrDoubleOut ? "double" : "single";
   const darts: DartThrow[] = [];
   let rem = remaining;
   let gotIn = !mustDoubleIn;
@@ -285,8 +287,9 @@ export function simulateBotVisit(remaining: number, doubleOut: boolean, level: B
       // Not in yet: every dart aims at a double until one lands, ignoring normal checkout strategy.
       targetBase = rem <= 40 && rem % 2 === 0 && rem > 0 ? rem / 2 : 20;
       targetMultiplier = 2;
-    } else if (rem <= 170) {
-      const route = getCheckoutSuggestion(rem);
+    } else if (rem <= (outRule === "master" ? 180 : 170)) {
+      // Master Out: the shortest finish, which may end on a treble (60 = T20) and reaches up to 180.
+      const route = outRule === "master" ? finishRoute(rem, "master") : getCheckoutSuggestion(rem);
       if (route && route.length > 0) {
         const seg = parseRouteSegment(route[0]);
         targetBase = seg.baseValue;
@@ -309,7 +312,7 @@ export function simulateBotVisit(remaining: number, doubleOut: boolean, level: B
       gotIn = true;
     }
 
-    const isBust = isBustThrow(rem, dart.points, doubleOut, dart.multiplier === 2);
+    const isBust = isBustThrowForRule(rem, dart.points, dart.multiplier, outRule);
 
     if (isBust) return { darts, bustedOnDartIndex: i, checkedOut: false };
 
