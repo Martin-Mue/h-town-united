@@ -2245,6 +2245,9 @@ const GamePage = () => {
     // the wrong number to put on a tournament bracket. game.setsWon (never reset mid-match, see
     // GameState.setsMode's own doc comment) is the real match score whenever it's present.
     const legsOrSetsWon = game.setsMode && game.setsWon ? game.setsWon : game.legsWon;
+    // Legs won over the whole match. With sets, game.legsWon holds only the last set, and the player with more legs
+    // need not be the winner, so the league gets the real leg totals and the winner from the match itself.
+    const matchLegsWon = [0, 1].map((slot) => [...game.completedLegs, game.currentLeg].filter((leg) => leg.winnerIndex === slot).length);
     const tournamentScore1 = linkPlayer1IsGameSlot0 ? legsOrSetsWon[0] : legsOrSetsWon[1];
     const tournamentScore2 = linkPlayer1IsGameSlot0 ? legsOrSetsWon[1] : legsOrSetsWon[0];
     try {
@@ -2285,10 +2288,10 @@ const GamePage = () => {
         // GameState.players[0]/[1] only line up 1:1 with the fixture's own player1/player2 when
         // player1IsGameSlot0 — true unconditionally for local play, but an online-played fixture
         // can have it flipped (see the resolution effect that sets this ref for that case).
-        const fixtureP1Legs = leagueLink.player1IsGameSlot0 ? game.legsWon[0] : game.legsWon[1];
-        const fixtureP2Legs = leagueLink.player1IsGameSlot0 ? game.legsWon[1] : game.legsWon[0];
+        const fixtureP1Legs = matchLegsWon[leagueLink.player1IsGameSlot0 ? 0 : 1];
+        const fixtureP2Legs = matchLegsWon[leagueLink.player1IsGameSlot0 ? 1 : 0];
         const leagueResult = {
-          winnerId: fixtureP1Legs > fixtureP2Legs ? leagueLink.player1Id : leagueLink.player2Id,
+          winnerId: winnerSlot0 === leagueLink.player1IsGameSlot0 ? leagueLink.player1Id : leagueLink.player2Id,
           player1LegsWon: fixtureP1Legs,
           player2LegsWon: fixtureP2Legs,
           gameId: pendingGameIdRef.current,
@@ -2332,12 +2335,12 @@ const GamePage = () => {
       // it outright rather than queuing it like every other write-back here does.
       const leagueLinkForQueue = leagueLinkRef.current;
       if (leagueLinkForQueue) {
-        const fixtureP1Legs = leagueLinkForQueue.player1IsGameSlot0 ? game.legsWon[0] : game.legsWon[1];
-        const fixtureP2Legs = leagueLinkForQueue.player1IsGameSlot0 ? game.legsWon[1] : game.legsWon[0];
+        const fixtureP1Legs = matchLegsWon[leagueLinkForQueue.player1IsGameSlot0 ? 0 : 1];
+        const fixtureP2Legs = matchLegsWon[leagueLinkForQueue.player1IsGameSlot0 ? 1 : 0];
         await enqueueLeagueFixtureResult({
           id: `${pendingGameIdRef.current}-league`,
           fixtureId: leagueLinkForQueue.fixtureId,
-          winnerId: fixtureP1Legs > fixtureP2Legs ? leagueLinkForQueue.player1Id : leagueLinkForQueue.player2Id,
+          winnerId: winnerSlot0 === leagueLinkForQueue.player1IsGameSlot0 ? leagueLinkForQueue.player1Id : leagueLinkForQueue.player2Id,
           player1LegsWon: fixtureP1Legs,
           player2LegsWon: fixtureP2Legs,
           gameId: pendingGameIdRef.current,
@@ -2667,6 +2670,8 @@ const GamePage = () => {
   const currentThrows = game.currentLeg.throws[activeIdx];
   const scoreLabels = game.teams ? game.teams.map((tm) => tm.name) : game.players.map((p) => p.name);
   const awaitingDoubleIn = !isCricket && (currentPlayer?.doubleIn ?? false) && !(game.currentLeg.startedScoring?.[activeTeamIdx] ?? true);
+  // One rule for both play layouts (the arena layout once ignored the setting and showed hints in tournament matches).
+  const checkoutHintActive = checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true);
 
   const doubleInBanner = awaitingDoubleIn ? (
     <div className="mb-3 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-center text-xs text-accent font-display uppercase tracking-wide">
@@ -2991,7 +2996,7 @@ const GamePage = () => {
       {checkoutSuggestionEnabled && !isCricket && (
         <CheckoutSuggestion
           reserveSpace
-          active={!currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
+          active={checkoutHintActive}
           remaining={currentRemaining} playerName={currentPlayerName}
           personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
           personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
@@ -3277,7 +3282,7 @@ const GamePage = () => {
                 `{condition && <CheckoutSuggestion/>}` wrapping caused the "scoreboard jumps"
                 complaint on every turn change, not just on remaining-score changes. */}
             <CheckoutSuggestion
-              active={checkoutSuggestionEnabled && !isCricket && !currentPlayer?.isBot && !awaitingDoubleIn && (currentPlayer?.doubleOut ?? true)}
+              active={checkoutHintActive}
               remaining={currentRemaining} playerName={currentPlayerName}
               personalCheckoutRate={checkoutRates[currentPlayerName] ?? null}
               personalDoubleBreakdown={checkoutDoubleRates[currentPlayerName] ?? null}
