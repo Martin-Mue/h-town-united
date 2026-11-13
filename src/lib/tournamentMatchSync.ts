@@ -16,6 +16,7 @@ import {
   resolveMatchUserIds,
   buildMatchReadyPush,
   isPlayable,
+  resultWinnerFor,
 } from "@/utils/tournament";
 import { parsePlayers, parseBracket, parseRoundConfigs } from "@/lib/schemas/tournament";
 import { assignMatchToBoard, setMatchPaused } from "@/utils/tournamentBoardControl";
@@ -141,9 +142,11 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
       // close together, or a manual correction landing first) — don't clobber a real result with
       // whatever this call happened to compute. Not an error to retry: the underlying game row is
       // saved regardless (see the caller), only this specific bracket write-back is a no-op.
-      if (rrBracket.find((m) => m.id === matchId)?.played) return;
+      const rrMatch = rrBracket.find((m) => m.id === matchId);
+      if (!rrMatch || rrMatch.played) return;
+      const rrWinner = resultWinnerFor(rrMatch, result);
       const raw = rrBracket.map((m) =>
-        m.id === matchId ? { ...m, winner: result.winnerName, score1: result.score1, score2: result.score2, played: true, live: undefined } : m
+        m.id === matchId ? { ...m, winner: rrWinner, score1: result.score1, score2: result.score2, played: true, live: undefined } : m
       );
       // Board/scorekeeper toolkit (Round 3, Rang 1): a finished match frees up its board and its
       // scorekeeper slot, same as recomputeBracket+assignScorekeepers does for KO just below --
@@ -168,9 +171,11 @@ export async function recordMatchResult(tournamentId: string, matchId: string, r
     // Same reasoning as the round-robin branch above — already decided by another write, skip
     // rather than overwrite (and never throw here: the caller queues a thrown error for retry,
     // which would just fail identically forever once a match is genuinely already decided).
-    if (koBracket.find((m) => m.id === matchId)?.winner) return;
+    const koMatch = koBracket.find((m) => m.id === matchId);
+    if (!koMatch || koMatch.winner) return;
+    const koWinner = resultWinnerFor(koMatch, result);
     const raw = koBracket.map((m) =>
-      m.id === matchId ? { ...m, winner: result.winnerName, score1: result.score1, score2: result.score2, live: undefined } : m
+      m.id === matchId ? { ...m, winner: koWinner, score1: result.score1, score2: result.score2, live: undefined } : m
     );
     const activePlayers = parsePlayers(tournament.players, `tournament ${tournamentId} (recordMatchResult)`);
     const recomputed = recomputeBracket(raw, activePlayers);
@@ -218,7 +223,7 @@ export function applyActionToKoBracket(
     }
     case "setKoScore": {
       const m = bracket.find((x) => x.id === action.matchId);
-      if (!m || !isPlayable(m)) return null;
+      if (!m || !isPlayable(m) || m.winner) return null;
       const cfg = (ctx.roundConfigs || [])[m.round - 1];
       const bestOf = cfg?.bestOf || ctx.defaultBestOf || 1;
       const legsToWin = Math.ceil(bestOf / 2);

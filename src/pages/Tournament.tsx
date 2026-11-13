@@ -1133,9 +1133,9 @@ const TournamentPage = () => {
         best_of_legs: bestOfLegs,
         best_of_sets: setsEnabled ? bestOfSets : null,
         players: players as unknown as Json,
-        bracket: bracket as unknown as Json,
-        status: sameRoster ? (editingSource!.status || "active") : "active",
-        champion: sameRoster ? (editingSource!.champion ?? null) : null,
+        // With the same players the bracket is left alone entirely: writing back the copy from when "edit" was
+        // opened would undo every result that came in since (a board finishing its match in the meantime).
+        ...(sameRoster ? {} : { bracket: bracket as unknown as Json, status: "active", champion: null }),
         series_id: seriesId === "none" ? null : seriesId,
         round_configs: roundConfigs as unknown as Json,
         boards,
@@ -1178,7 +1178,7 @@ const TournamentPage = () => {
 
     const bracket = tournamentMode === "round-robin" ? generateRoundRobin(players) : generateKoBracket(players);
     const insertPayload: Database["public"]["Tables"]["tournaments"]["Insert"] = {
-      name: tournamentName || "Großevent",
+      name: tournamentName || t("tournament.bigEvent"),
       mode: tournamentMode,
       game_mode: gameMode,
       best_of_legs: bestOfLegs,
@@ -1310,7 +1310,7 @@ const TournamentPage = () => {
     if (activeTournament.mode === "round-robin") {
       const bracket = (activeTournament.bracket as RoundRobinMatch[]).map((m) => {
         if (action.type === "setRrWinner" && m.id === action.matchId) return { ...m, winner: action.winner, score1: action.score1, score2: action.score2, played: true };
-        if (action.type === "resetRrMatch" && m.id === action.matchId) return { ...m, winner: undefined, played: false };
+        if (action.type === "resetRrMatch" && m.id === action.matchId) return { ...m, winner: undefined, score1: undefined, score2: undefined, played: false };
         return m;
       });
       const allPlayed = bracket.every((m) => m.played);
@@ -1327,7 +1327,7 @@ const TournamentPage = () => {
       if (action.type === "setKoWinner" && m.id === action.matchId) {
         return { ...m, winner: action.winner, score1: action.score1 ?? m.score1, score2: action.score2 ?? m.score2 };
       }
-      if (action.type === "setKoScore" && m.id === action.matchId) {
+      if (action.type === "setKoScore" && m.id === action.matchId && !m.winner) {
         const cfg = (activeTournament.round_configs || [])[m.round - 1];
         const bestOf = cfg?.bestOf || activeTournament.best_of_legs || 1;
         const legsToWin = Math.ceil(bestOf / 2);
@@ -1420,7 +1420,7 @@ const TournamentPage = () => {
       );
       const preview = patch(activeTournament.bracket as Match[]);
       const nextPlayers = Array.from(new Set(
-        preview.filter(m => m.round === 1).flatMap(m => [m.player1, m.player2]).filter(isRealPlayer) as string[]
+        preview.filter(m => m.round <= 1).flatMap(m => [m.player1, m.player2]).filter(isRealPlayer) as string[]
       ));
       const { error } = await supabase.from("tournaments").update({ players: nextPlayers as unknown as Json }).eq("id", activeTournament.id);
       if (error) {
@@ -1478,36 +1478,46 @@ const TournamentPage = () => {
     }
     setAddingParticipant(true);
     try {
-      const { data: freshRow } = await supabase.from("tournaments").select("bracket, players").eq("id", activeTournament.id).single();
-      const freshBracket = freshRow
-        ? (parseBracket(freshRow.bracket, `tournament ${activeTournament.id} (addParticipant)`) as Match[])
-        : (activeTournament.bracket as Match[]);
-      const freshPlayers = freshRow
-        ? parsePlayers(freshRow.players, `tournament ${activeTournament.id} (addParticipant)`)
-        : activeTournament.players;
-      const filled = fillByeSlot(freshBracket, trimmed);
-      if (!filled) {
-        toast({ title: t("common.error"), description: t("tournament.noOpenSlotForNewPlayer"), variant: "destructive" });
+      // Same guarded write as every other bracket change: if a result from a board lands between reading and
+      // writing, this attempt writes nothing and starts again from the bracket as it then is.
+      for (let attempt = 0; attempt < BRACKET_WRITE_MAX_ATTEMPTS; attempt++) {
+        const { data: freshRow } = await supabase.from("tournaments").select("bracket, players, updated_at").eq("id", activeTournament.id).single();
+        const freshBracket = freshRow
+          ? (parseBracket(freshRow.bracket, `tournament ${activeTournament.id} (addParticipant)`) as Match[])
+          : (activeTournament.bracket as Match[]);
+        const freshPlayers = freshRow
+          ? parsePlayers(freshRow.players, `tournament ${activeTournament.id} (addParticipant)`)
+          : activeTournament.players;
+        const filled = fillByeSlot(freshBracket, trimmed);
+        if (!filled) {
+          toast({ title: t("common.error"), description: t("tournament.noOpenSlotForNewPlayer"), variant: "destructive" });
+          return;
+        }
+        const nextPlayers = [...freshPlayers, trimmed];
+        const recomputed = recomputeBracket(filled, nextPlayers);
+        const withKeepers = assignScorekeepers(recomputed, nextPlayers, { boards: activeTournament.boards || 2, keepExisting: true });
+        const champion = bracketChampion(withKeepers);
+        const baseQuery = supabase.from("tournaments").update({
+          players: nextPlayers as unknown as Json,
+          bracket: withKeepers as unknown as Json,
+          champion,
+          status: champion ? "finished" : "active",
+        }).eq("id", activeTournament.id);
+        const { data: updated, error } = freshRow?.updated_at
+          ? await baseQuery.eq("updated_at", freshRow.updated_at).select("id")
+          : await baseQuery.select("id");
+        if (error) {
+          toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+          return;
+        }
+        if (!updated || updated.length === 0) continue;
+        newlyPlayableMatches(freshBracket, withKeepers).forEach(notifyMatchReady);
+        setActiveTournament({ ...activeTournament, players: nextPlayers, bracket: withKeepers, champion, status: champion ? "finished" : "active" });
+        setNewParticipantName("");
+        toast({ title: `${trimmed} ${t("tournament.addedToBracket")}`, description: t("tournament.addedToBracketDesc") });
         return;
       }
-      const nextPlayers = [...freshPlayers, trimmed];
-      const recomputed = recomputeBracket(filled, nextPlayers);
-      const withKeepers = assignScorekeepers(recomputed, nextPlayers, { boards: activeTournament.boards || 2, keepExisting: true });
-      const champion = bracketChampion(withKeepers);
-      const { error } = await supabase.from("tournaments").update({
-        players: nextPlayers as unknown as Json,
-        bracket: withKeepers as unknown as Json,
-        champion,
-        status: champion ? "finished" : "active",
-      }).eq("id", activeTournament.id);
-      if (error) {
-        toast({ title: t("common.error"), description: error.message, variant: "destructive" });
-        return;
-      }
-      newlyPlayableMatches(freshBracket, withKeepers).forEach(notifyMatchReady);
-      setActiveTournament({ ...activeTournament, players: nextPlayers, bracket: withKeepers, champion, status: champion ? "finished" : "active" });
-      setNewParticipantName("");
-      toast({ title: `${trimmed} ${t("tournament.addedToBracket")}`, description: t("tournament.addedToBracketDesc") });
+      toast({ title: t("common.error"), description: t("tournament.bracketWriteConflict") });
     } finally {
       setAddingParticipant(false);
     }

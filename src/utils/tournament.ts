@@ -74,6 +74,20 @@ export function recomputeBracket(input: Match[], activePlayers?: string[]): Matc
   if (work.length === 0) return work;
   const totalRounds = totalRoundsOf(work);
 
+  // A result belongs to the two players who played it. When an earlier match is reset or decided differently, a
+  // later match can get a new opponent while its old winner is still one of its two players: without this check
+  // that old result stood, and the winner went on without ever playing the new opponent.
+  const pairingBefore = new Map(input.map((m) => [m.id, { player1: m.player1, player2: m.player2 }]));
+  const dropResultIfPairingChanged = (m: Match) => {
+    const before = pairingBefore.get(m.id);
+    if (!before || (before.player1 === m.player1 && before.player2 === m.player2)) return;
+    if (m.winner === undefined && m.score1 === undefined && m.score2 === undefined && !m.live) return;
+    m.winner = undefined;
+    m.score1 = undefined;
+    m.score2 = undefined;
+    m.live = undefined;
+  };
+
   // A player who withdrew mid-tournament (removed from `activePlayers`) may already be sitting
   // in a later-round slot they were propagated into before withdrawing. Their PAST results stay
   // untouched (history stays intact) — but once their next opponent's slot is known, award that
@@ -125,6 +139,7 @@ export function recomputeBracket(input: Match[], activePlayers?: string[]): Matc
     const rm = work.filter((m) => m.round === r).sort((a, b) => a.position - b.position);
 
     rm.forEach((m) => {
+      dropResultIfPairingChanged(m);
       // invalidate stale results
       if (m.winner && m.winner !== m.player1 && m.winner !== m.player2) {
         m.winner = undefined;
@@ -219,10 +234,16 @@ export const isPlayable = (m: Match) => isRealPlayer(m.player1) && isRealPlayer(
  * should tell the admin a full re-draw is needed rather than silently doing nothing.
  */
 export function fillByeSlot(matches: Match[], playerName: string): Match[] | null {
+  // The player who got the bye has moved on to round 2. Once that round-2 match is under way or decided, taking the
+  // bye away would wipe a match that was really played, so such a slot is no longer free.
+  const nextMatchStarted = (m: Match) => {
+    const next = matches.find((x) => x.round === 2 && x.position === Math.floor(m.position / 2));
+    return !!next && (!!next.winner || !!next.score1 || !!next.score2 || isLiveSnapshotFresh(next.live));
+  };
   const target = matches
     .filter((m) => m.round === 1)
     .sort((a, b) => a.position - b.position)
-    .find((m) => m.player1 === BYE || m.player2 === BYE);
+    .find((m) => (m.player1 === BYE || m.player2 === BYE) && !nextMatchStarted(m));
   if (!target) return null;
   return matches.map((m) => {
     if (m.id !== target.id) return m;
@@ -236,6 +257,23 @@ export function fillByeSlot(matches: Match[], playerName: string): Match[] | nul
       score2: undefined,
     };
   });
+}
+
+/**
+ * Who a reported result really names as the winner of this pairing. Normally that is the reported name. If the name
+ * fits neither player (the game was played under a slightly different name), the leg score decides; with no usable
+ * score there is no safe answer and the result is refused instead of being stored against the wrong player.
+ */
+export function resultWinnerFor(
+  match: { player1?: string; player2?: string },
+  result: { winnerName: string; score1?: number; score2?: number },
+): string {
+  if (result.winnerName === match.player1 || result.winnerName === match.player2) return result.winnerName;
+  const { score1, score2 } = result;
+  if (score1 !== undefined && score2 !== undefined && score1 !== score2 && match.player1 && match.player2) {
+    return score1 > score2 ? match.player1 : match.player2;
+  }
+  throw new Error(`Result names "${result.winnerName}", who is not in the match ${match.player1} vs. ${match.player2}`);
 }
 
 /** Which of a match's two players have a linked account, resolved from any roster-shaped list
@@ -596,7 +634,8 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
     [m.player1, m.player2].forEach((p) => {
       if (!map[p]) map[p] = { name: p, played: 0, won: 0, lost: 0, points: 0, legsFor: 0, legsAgainst: 0 };
     });
-    if (m.played && m.winner) {
+    // A winner who is neither of the two players (a renamed player, a bad write) must not take the whole table down.
+    if (m.played && m.winner && (m.winner === m.player1 || m.winner === m.player2)) {
       map[m.player1].played++;
       map[m.player2].played++;
       map[m.winner].won++;
@@ -624,7 +663,7 @@ export function calcStandings(matches: RoundRobinMatch[]): RoundRobinStanding[] 
     const h2hPoints: Record<string, number> = {};
     group.forEach((s) => (h2hPoints[s.name] = 0));
     matches.forEach((m) => {
-      if (m.played && m.winner && names.has(m.player1) && names.has(m.player2)) {
+      if (m.played && m.winner && names.has(m.player1) && names.has(m.player2) && names.has(m.winner)) {
         h2hPoints[m.winner] += 2;
       }
     });
