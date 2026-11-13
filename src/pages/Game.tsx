@@ -89,6 +89,7 @@ import {
 } from "@/utils/dartStats";
 import { splitVisitTotal } from "@/utils/quickRoundSplit";
 import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
+import { clampCustomStart } from "@/utils/customStart";
 
 /** Bot personas with their target 3-dart average range. `nameKey` (not a literal string) since
  *  this is a module-level constant with no access to the language context — resolved via t() at
@@ -978,7 +979,7 @@ const GamePage = () => {
 
   const getStartScore = (): number => {
     if (mode === "cricket") return 0;
-    if (mode === "custom") return customStartScore;
+    if (mode === "custom") return clampCustomStart(customStartScore);
     return parseInt(mode);
   };
 
