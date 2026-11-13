@@ -1414,4 +1414,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Öneri artık elinde kalan dartlara göre uyarlanıyor. Bitiriş kalmadıysa son dartla ne bırakabileceğini gösteriyor (ör. T20 → 40). Mümkün olan yerde yol en iyi çiftinde bitiyor.",
     },
   },
+  {
+    id: "2026-11-13-master-out",
+    date: "2026-11-13",
+    title: {
+      de: "Master Out als dritte Checkout-Regel",
+      en: "Master Out as a third checkout rule",
+      fr: "Master Out, troisième règle de fin",
+      pl: "Master Out jako trzecia zasada kończenia",
+      nl: "Master Out als derde uitgooiregel",
+      tr: "Üçüncü bitiriş kuralı: Master Out",
+    },
+    description: {
+      de: "Neben Double Out und Single Out gibt es jetzt Master Out: Das Leg endet auf einem Doppel oder einem Triple. Wählbar beim Spielstart für alle oder pro Spieler. Der Checkout-Vorschlag zeigt den kürzeren Weg (60 = T20), und die Bots halten sich daran. Online-Spiele bleiben bei Double oder Single Out.",
+      en: "Next to Double Out and Single Out there is now Master Out: the leg ends on a double or a treble. Pick it at game start for everyone or per player. The checkout suggestion shows the shorter route (60 = T20), and the bots play by it. Online games stay on Double or Single Out.",
+      fr: "En plus de Double Out et Single Out, il y a maintenant Master Out : la manche se termine sur un double ou un triple. À choisir au départ pour tous ou par joueur. La suggestion de checkout montre la route la plus courte (60 = T20) et les bots la respectent. Les parties en ligne restent en Double ou Single Out.",
+      pl: "Obok Double Out i Single Out jest teraz Master Out: lega kończy się na double'u albo triple'u. Do wyboru przy starcie gry dla wszystkich lub dla każdego gracza osobno. Podpowiedź checkoutu pokazuje krótszą drogę (60 = T20), a boty grają zgodnie z tą zasadą. Gry online pozostają przy Double lub Single Out.",
+      nl: "Naast Double Out en Single Out is er nu Master Out: de leg eindigt op een dubbel of een triple. Te kiezen bij de start voor iedereen of per speler. De checkout-suggestie toont de kortere route (60 = T20) en de bots houden zich eraan. Online spellen blijven bij Double of Single Out.",
+      tr: "Double Out ve Single Out'un yanına Master Out geldi: leg bir çift veya üçlü ile biter. Oyun başında herkes için ya da oyuncu başına seçilebilir. Checkout önerisi daha kısa yolu gösterir (60 = T20), botlar da buna uyar. Çevrimiçi oyunlar Double veya Single Out olarak kalır.",
+    },
+  },
 ];

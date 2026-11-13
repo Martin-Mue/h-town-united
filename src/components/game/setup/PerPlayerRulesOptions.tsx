@@ -1,5 +1,12 @@
 import { Switch } from "@/components/ui/switch";
 import { useLanguage } from "@/contexts/LanguageContext";
+import type { OutRule } from "@/utils/x01Rules";
+
+const OUT_RULES: { rule: OutRule; labelKey: string }[] = [
+  { rule: "double", labelKey: "game.doubleOut" },
+  { rule: "single", labelKey: "game.singleOut" },
+  { rule: "master", labelKey: "game.masterOut" },
+];
 
 interface PerPlayerRulesOptionsProps {
   numPlayers: number;
@@ -7,16 +14,17 @@ interface PerPlayerRulesOptionsProps {
   slotLabel: (slot: number) => string;
   playerDoubleIn: boolean[];
   onDoubleInChange: (slot: number, on: boolean) => void;
-  playerDoubleOut: boolean[];
-  onDoubleOutChange: (slot: number, on: boolean) => void;
+  /** The out rule of each slot (single, double or master). */
+  playerOutRule: OutRule[];
+  onOutRuleChange: (slot: number, rule: OutRule) => void;
   playerHandicap: number[];
   onHandicapChange: (slot: number, points: number) => void;
   startScore: number;
 }
 
-/** X01 only: double-in, double-out and handicap for each player separately (handicap not in team mode). */
+/** X01 only: double-in, the out rule (single, double or master) and handicap for each player separately (handicap not in team mode). */
 const PerPlayerRulesOptions = ({
-  numPlayers, teamMode, slotLabel, playerDoubleIn, onDoubleInChange, playerDoubleOut, onDoubleOutChange,
+  numPlayers, teamMode, slotLabel, playerDoubleIn, onDoubleInChange, playerOutRule, onOutRuleChange,
   playerHandicap, onHandicapChange, startScore,
 }: PerPlayerRulesOptionsProps) => {
   const { t } = useLanguage();
@@ -29,9 +37,20 @@ const PerPlayerRulesOptions = ({
             <span className="text-xs text-muted-foreground">{playerDoubleIn[slot] ? t("game.doubleIn") : t("game.straightIn")}</span>
             <Switch checked={!!playerDoubleIn[slot]} aria-label={`${slotLabel(slot)}: ${t("game.doubleIn")}`} onCheckedChange={(v) => onDoubleInChange(slot, v)} />
           </div>
-          <div className="flex min-h-[32px] items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">{playerDoubleOut[slot] ? t("game.doubleOut") : t("game.singleOut")}</span>
-            <Switch checked={!!playerDoubleOut[slot]} aria-label={`${slotLabel(slot)}: ${t("game.doubleOut")}`} onCheckedChange={(v) => onDoubleOutChange(slot, v)} />
+          <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={`${slotLabel(slot)}: ${t("game.setupCheckout")}`}>
+            {OUT_RULES.map(({ rule, labelKey }) => (
+              <button
+                key={rule}
+                type="button"
+                aria-pressed={playerOutRule[slot] === rule}
+                onClick={() => onOutRuleChange(slot, rule)}
+                className={`min-h-[40px] min-w-0 rounded-lg border px-1 text-xs font-semibold transition-colors ${
+                  playerOutRule[slot] === rule ? "border-primary bg-primary/15 text-primary" : "border-border bg-card text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {t(labelKey)}
+              </button>
+            ))}
           </div>
           {!teamMode && (
             <div className="flex items-center justify-between gap-2">

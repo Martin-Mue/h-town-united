@@ -19,6 +19,8 @@ export interface GamePresetConfig {
   playerBotLevel: BotLevel[];
   playerDoubleIn: boolean[];
   playerDoubleOut: boolean[];
+  /** Master Out per slot, as long as playerDoubleOut (a preset saved before Master Out existed reads as all false). */
+  playerMasterOut: boolean[];
   playerHandicap: number[];
 }
 
@@ -38,6 +40,8 @@ const list = <T,>(v: unknown, count: number, ok: (x: unknown) => x is T): T[] =>
 export function normalizePresetConfig(raw: unknown): GamePresetConfig {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const numPlayers = num(r.numPlayers, 2, 1, 8);
+  const playerDoubleOut = list(r.playerDoubleOut, numPlayers, (x): x is boolean => typeof x === "boolean");
+  const savedMasterOut = Array.isArray(r.playerMasterOut) ? r.playerMasterOut : [];
   return {
     mode: MODES.includes(r.mode as GameMode) ? (r.mode as GameMode) : "501",
     customStartScore: num(r.customStartScore, 501, 2, 9999),
@@ -55,7 +59,9 @@ export function normalizePresetConfig(raw: unknown): GamePresetConfig {
     playerIsBot: list(r.playerIsBot, numPlayers, (x): x is boolean => typeof x === "boolean"),
     playerBotLevel: list(r.playerBotLevel, numPlayers, (x): x is BotLevel => BOT_LEVELS.includes(x as BotLevel)),
     playerDoubleIn: list(r.playerDoubleIn, numPlayers, (x): x is boolean => typeof x === "boolean"),
-    playerDoubleOut: list(r.playerDoubleOut, numPlayers, (x): x is boolean => typeof x === "boolean"),
+    playerDoubleOut,
+    // One entry per saved out rule, so applying an old preset also switches Master Out off again.
+    playerMasterOut: playerDoubleOut.map((doubleOut, slot) => doubleOut && savedMasterOut[slot] === true),
     playerHandicap: list(r.playerHandicap, numPlayers, (x): x is number => typeof x === "number" && Number.isFinite(x)),
   };
 }

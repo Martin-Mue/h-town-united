@@ -17,6 +17,13 @@ describe("normalizePresetConfig", () => {
     expect(c.playerNames).toEqual(["A", "B"]);
     expect(c.playerDoubleOut).toEqual([true, false]);
   });
+
+  it("reads Master Out per slot; an older preset without it is plain double or single out", () => {
+    expect(normalizePresetConfig({ numPlayers: 2, playerDoubleOut: [true, false] }).playerMasterOut).toEqual([false, false]);
+    expect(normalizePresetConfig({ numPlayers: 2, playerDoubleOut: [true, true], playerMasterOut: [true, false] }).playerMasterOut).toEqual([true, false]);
+    // never Master Out on a single-out slot, and garbage is ignored
+    expect(normalizePresetConfig({ numPlayers: 2, playerDoubleOut: [false, true], playerMasterOut: [true, "yes"] }).playerMasterOut).toEqual([false, false]);
+  });
 });
 
 describe("overlaySlots / describePreset", () => {

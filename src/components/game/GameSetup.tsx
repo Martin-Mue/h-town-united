@@ -28,7 +28,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { clubHasFeature } from "@/lib/planFeatures";
 import { overlaySlots, saveLastGameSetup, type GamePresetConfig } from "@/utils/gamePreset";
-import { sharedCheckoutRule } from "@/utils/playerLineup";
+import { sharedCheckoutRule, slotOutRule, outRuleFlags } from "@/utils/playerLineup";
+import type { OutRule } from "@/utils/x01Rules";
 import { describeSetupSummary } from "@/utils/setupSummary";
 
 interface GameSetupProps {
@@ -83,6 +84,9 @@ interface GameSetupProps {
   setPlayerDoubleIn: Dispatch<SetStateAction<boolean[]>>;
   playerDoubleOut: boolean[];
   setPlayerDoubleOut: Dispatch<SetStateAction<boolean[]>>;
+  /** Master Out per slot; goes together with playerDoubleOut = true (see outRuleFlags in utils/playerLineup.ts). */
+  playerMasterOut: boolean[];
+  setPlayerMasterOut: Dispatch<SetStateAction<boolean[]>>;
   playerHandicap: number[];
   setPlayerHandicap: Dispatch<SetStateAction<number[]>>;
   botDisplayName: (i: number) => string;
@@ -151,7 +155,7 @@ const GameSetup = (props: GameSetupProps) => {
     customCricket, setCustomCricket, maxRoundsX01, setMaxRoundsX01,
     playerNames, setPlayerNames, dbPlayers, playerIsBot, setPlayerIsBot, playerBotLevel, setPlayerBotLevel,
     playerGhostTarget, setPlayerGhostTarget, playerDoubleIn, setPlayerDoubleIn, playerDoubleOut, setPlayerDoubleOut,
-    playerHandicap, setPlayerHandicap, botDisplayName, getStartScore,
+    playerMasterOut, setPlayerMasterOut, playerHandicap, setPlayerHandicap, botDisplayName, getStartScore,
     pinPrompt, setPinPrompt, pinPromptValue, setPinPromptValue, pinPromptError, setPinPromptError,
     pinPromptChecking, submitPinPrompt,
     soundEnabled, setSoundEnabled, speechEnabled, callerVoice, changeCallerVoice,
@@ -202,7 +206,7 @@ const GameSetup = (props: GameSetupProps) => {
     maxRoundsX01, customCricket, warmupEnabled, walkonEnabled,
     playerNames: playerNames.slice(0, numPlayers), playerIsBot: playerIsBot.slice(0, numPlayers),
     playerBotLevel: playerBotLevel.slice(0, numPlayers), playerDoubleIn: playerDoubleIn.slice(0, numPlayers),
-    playerDoubleOut: playerDoubleOut.slice(0, numPlayers), playerHandicap: playerHandicap.slice(0, numPlayers),
+    playerDoubleOut: playerDoubleOut.slice(0, numPlayers), playerMasterOut: playerMasterOut.slice(0, numPlayers), playerHandicap: playerHandicap.slice(0, numPlayers),
   };
   const applyPreset = (p: GamePresetConfig) => {
     setMode(p.mode); setCustomStartScore(p.customStartScore); setTeamMode(p.teamMode); setNumPlayers(p.numPlayers);
@@ -214,6 +218,7 @@ const GameSetup = (props: GameSetupProps) => {
     setPlayerBotLevel((prev) => overlaySlots(prev, p.playerBotLevel));
     setPlayerDoubleIn((prev) => overlaySlots(prev, p.playerDoubleIn));
     setPlayerDoubleOut((prev) => overlaySlots(prev, p.playerDoubleOut));
+    setPlayerMasterOut((prev) => overlaySlots(prev, p.playerMasterOut));
     setPlayerHandicap((prev) => overlaySlots(prev, p.playerHandicap));
   };
 
@@ -226,11 +231,18 @@ const GameSetup = (props: GameSetupProps) => {
   const slotLabel = (slot: number) => (playerIsBot[slot] ? botDisplayName(slot) : (playerNames[slot]?.trim() || `${t("stats.player")} ${slot + 1}`));
   const hasBot = playerIsBot.slice(0, numPlayers).some(Boolean);
   const bullOffPossible = (teamMode || numPlayers === 2) && !playerIsBot[0] && !playerIsBot[1];
-  const checkoutRule = sharedCheckoutRule(playerDoubleOut, numPlayers);
+  const checkoutRule = sharedCheckoutRule(playerDoubleOut, numPlayers, playerMasterOut);
+  const anyMasterOut = mode !== "cricket" && playerMasterOut.slice(0, numPlayers).some(Boolean);
+  /** Sets the out rule of one slot, or of every slot when no slot is given. */
+  const setOutRule = (rule: OutRule, slot?: number) => {
+    const { doubleOut, masterOut } = outRuleFlags(rule);
+    setPlayerDoubleOut((prev) => prev.map((v, i) => (slot === undefined || i === slot ? doubleOut : v)));
+    setPlayerMasterOut((prev) => prev.map((v, i) => (slot === undefined || i === slot ? masterOut : v)));
+  };
 
   // Autodarts only where a Free Game lobby can represent the match today (see AutodartsLiveScore.tsx: X01, no teams,
-  // exactly 2 players). Its on/off flag stays separate from the camera, which is toggled during the game.
-  const autodartsOffered = autodartsAvailable && autodartsBoards.length > 0 && !teamMode && numPlayers === 2 && (mode === "501" || mode === "301");
+  // exactly 2 players, single or double out). Its on/off flag stays separate from the camera, which is toggled during the game.
+  const autodartsOffered = autodartsAvailable && autodartsBoards.length > 0 && !teamMode && numPlayers === 2 && (mode === "501" || mode === "301") && !anyMasterOut;
   const enableAutodarts = (on: boolean) => {
     setAutodartsEnabled(on);
     if (on && autodartsBoardNumber === null) {
@@ -248,7 +260,7 @@ const GameSetup = (props: GameSetupProps) => {
 
   const summary = describeSetupSummary(
     { mode, customStartScore, checkoutRule, bestOfLegs, setsEnabled, bestOfSets, numPlayers, teamMode, inputLabel },
-    { doubleOut: t("game.doubleOut"), singleOut: t("game.singleOut"), firstTo: t("stats.firstTo"), legs: t("game.legsWord"), sets: t("game.setsWord"), players: t("game.playersSuffix") },
+    { doubleOut: t("game.doubleOut"), singleOut: t("game.singleOut"), masterOut: t("game.masterOut"), firstTo: t("stats.firstTo"), legs: t("game.legsWord"), sets: t("game.setsWord"), players: t("game.playersSuffix") },
   );
 
   const closePinPrompt = () => { setPinPrompt(null); setPinPromptValue(""); setPinPromptError(false); };
@@ -284,7 +296,7 @@ const GameSetup = (props: GameSetupProps) => {
 
       {mode !== "cricket" && (
         <>
-          <CheckoutRulePicker rule={checkoutRule} onRuleChange={(on) => setPlayerDoubleOut((prev) => prev.map(() => on))} />
+          <CheckoutRulePicker rule={checkoutRule} onRuleChange={(rule) => setOutRule(rule)} />
           <MatchDistanceCard
             bestOfLegs={bestOfLegs}
             onBestOfLegsChange={setBestOfLegs}
@@ -316,6 +328,8 @@ const GameSetup = (props: GameSetupProps) => {
         setPlayerDoubleIn={setPlayerDoubleIn}
         playerDoubleOut={playerDoubleOut}
         setPlayerDoubleOut={setPlayerDoubleOut}
+        playerMasterOut={playerMasterOut}
+        setPlayerMasterOut={setPlayerMasterOut}
         setPlayerHandicap={setPlayerHandicap}
         botDisplayName={botDisplayName}
         starterIndex={starterIndex}
@@ -366,8 +380,8 @@ const GameSetup = (props: GameSetupProps) => {
               slotLabel={slotLabel}
               playerDoubleIn={playerDoubleIn}
               onDoubleInChange={(slot, on) => setPlayerDoubleIn((prev) => prev.map((v, i) => (i === slot ? on : v)))}
-              playerDoubleOut={playerDoubleOut}
-              onDoubleOutChange={(slot, on) => setPlayerDoubleOut((prev) => prev.map((v, i) => (i === slot ? on : v)))}
+              playerOutRule={Array.from({ length: numPlayers }, (_, slot) => slotOutRule(playerDoubleOut, playerMasterOut, slot))}
+              onOutRuleChange={(slot, rule) => setOutRule(rule, slot)}
               playerHandicap={playerHandicap}
               onHandicapChange={(slot, points) => setPlayerHandicap((prev) => prev.map((v, i) => (i === slot ? points : v)))}
               startScore={getStartScore()}
