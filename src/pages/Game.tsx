@@ -293,6 +293,12 @@ const GamePage = () => {
   // Ghost mode offers (a named dart-count benchmark option used to exist alongside it, removed
   // 2026-08-23: one less choice to make, Ghost now always just means "beat yourself").
   const [playerGhostTarget, setPlayerGhostTarget] = useState<("off" | "own-pb")[]>(Array(MAX_PLAYERS).fill("off"));
+  // The ghost only exists in a plain X01 game. A ghost picked before switching to teams or Cricket stays stored
+  // (so switching back brings it back) but must not play there.
+  const activeGhostTarget = useMemo(
+    () => (teamMode || mode === "cricket" ? playerGhostTarget.map(() => "off" as const) : playerGhostTarget),
+    [teamMode, mode, playerGhostTarget],
+  );
   // Index-aligned with players — each entry is what THAT player is racing against (their live
   // pace compared to it turn by turn), not what they themselves embody. For a Geist-bot's human
   // opponent, this is the bot's target sequence; the bot's own slot stays null (no comparison
@@ -970,7 +976,7 @@ const GamePage = () => {
    *  wherever a bot's name would otherwise appear (setup preview, in-game scoreboard, saved
    *  game record). */
   const botDisplayName = (i: number): string => {
-    if (playerGhostTarget[i] !== "off") return `👻 ${t("game.ghostRecord")}`;
+    if (activeGhostTarget[i] !== "off") return `👻 ${t("game.ghostRecord")}`;
     return t(BOT_PROFILES[playerBotLevel[i] ?? "medium"].nameKey);
   };
 
@@ -1020,7 +1026,7 @@ const GamePage = () => {
   // picker's 4th option) — its target sequence gets assigned to the HUMAN players' slots (they're
   // the ones with a turn-based indicator to show it against), not the bot's own slot.
   const loadGhostSequences = async (players: PlayerSlot[], startScore: number, teams?: TeamSlot[]) => {
-    const ghostBotIdx = players.findIndex((p, i) => p.isBot && playerGhostTarget[i] !== "off");
+    const ghostBotIdx = players.findIndex((p, i) => p.isBot && activeGhostTarget[i] !== "off");
     if (ghostBotIdx === -1 || teams || mode === "cricket") {
       setGhostSequences(players.map(() => null));
       return;
@@ -1076,6 +1082,9 @@ const GamePage = () => {
     trackUsage(starterOverride === undefined ? "game_local_start" : "game_local_rematch");
     const startScore = getStartScore();
     const n = numPlayers;
+    // Autodarts can only score a two-player X01 game. If it was switched on and the setup changed afterwards,
+    // the hidden switch must not take the manual pad and the camera away in the game.
+    if (autodartsEnabled && (teamMode || n !== 2 || (mode !== "501" && mode !== "301"))) setAutodartsEnabled(false);
     const players: PlayerSlot[] = Array.from({ length: n }, (_, i) => ({
       name: playerIsBot[i]
         ? botDisplayName(i)
@@ -2157,8 +2166,8 @@ const GamePage = () => {
     // overall skill level that feels roughly right for the target. See configForAverage's own
     // doc comment for why this tradeoff was made over exact reconstruction.
     let botConfig: BotLevel | LevelConfig = level;
-    if (mode !== "cricket" && playerGhostTarget[idx] !== "off") {
-      const target = playerGhostTarget[idx];
+    if (activeGhostTarget[idx] !== "off") {
+      const target = activeGhostTarget[idx];
       let avgPerRound: number | null = null;
       if (typeof target === "number") {
         avgPerRound = (game.startScore / target) * 3;
@@ -2219,7 +2228,7 @@ const GamePage = () => {
     // resolved (the opponent's own-record lookup, specifically), it must re-run once that
     // resolves so botConfig gets computed from the real sequence length instead of null.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.currentPlayerIndex, game?.currentLeg.legNumber, dartsThisRound, game?.isFinished, phase, pendingTiebreak, playerGhostTarget, ghostSequences]);
+  }, [game?.currentPlayerIndex, game?.currentLeg.legNumber, dartsThisRound, game?.isFinished, phase, pendingTiebreak, activeGhostTarget, ghostSequences]);
 
   // useCallback with an honest dependency list (rather than a plain function) so the triggering
   // effect below can depend on this directly instead of needing its own eslint-disable — the

@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction, MutableRefObject } from "react";
+import { useRef, type Dispatch, type SetStateAction, type MutableRefObject } from "react";
 import OnlineChallengeSetup from "@/components/game/OnlineChallengeSetup";
 import GamePresets from "@/components/game/GamePresets";
 import BoardModeStartCard from "@/components/game/setup/BoardModeStartCard";
@@ -159,6 +159,21 @@ const GameSetup = (props: GameSetupProps) => {
     autodartsAvailable, autodartsBoards, autodartsEnabled, setAutodartsEnabled, autodartsBoardNumber, setAutodartsBoardNumber,
   } = props;
   const { t } = useLanguage();
+  // How many players were set before teams were switched on, to go back to when they are switched off again.
+  const playersBeforeTeamsRef = useRef<number | null>(null);
+  const changeTeamMode = (on: boolean) => {
+    setTeamMode(on);
+    if (on) {
+      playersBeforeTeamsRef.current = numPlayers;
+      if (numPlayers < 4 || numPlayers % 2 !== 0) setNumPlayers(4);
+      return;
+    }
+    const restored = playersBeforeTeamsRef.current ?? numPlayers;
+    playersBeforeTeamsRef.current = null;
+    setNumPlayers(restored);
+    // with teams the starter is a team (0 or 1); as a player index it must still exist
+    if (starterIndex >= restored) setStarterIndex(0);
+  };
 
   // Mode/team-mode/player-count/best-of are exactly the fields the tournament bracket already fixed for this match —
   // editing them here would silently desync this game from the bracket entry it reports back to. Everything the
@@ -323,7 +338,7 @@ const GameSetup = (props: GameSetupProps) => {
         <MoreOptionsGroup title={t("game.setupFormatSection")}>
           <TeamModeOptions
             teamMode={teamMode}
-            onTeamModeChange={(on) => { setTeamMode(on); if (on && (numPlayers < 4 || numPlayers % 2 !== 0)) setNumPlayers(4); }}
+            onTeamModeChange={changeTeamMode}
             teamNames={teamNames}
             onTeamNamesChange={setTeamNames}
             locked={isTournamentMatch}
