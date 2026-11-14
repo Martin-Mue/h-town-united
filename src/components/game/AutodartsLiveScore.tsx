@@ -59,9 +59,11 @@ interface AutodartsLiveScoreProps {
   onTurnCommitted?: (turnId: string) => void;
 }
 
-const POLL_INTERVAL_MS = 1750;
-// ~10s of consecutive failures before surfacing an error state / offering manual entry.
-const MAX_CONSECUTIVE_FAILURES = 6;
+// ~1 s (user choice 2026-11-14): each tick returns the previous tick's Autodarts answer, so this sets the delay
+// between a dart landing and it showing up. Polls only on this board's own turns and with the app in front.
+const POLL_INTERVAL_MS = 1000;
+// ~10 s of consecutive failures before surfacing an error state / offering manual entry.
+const MAX_CONSECUTIVE_FAILURES = 10;
 
 type Phase = "connecting" | "live" | "error";
 
