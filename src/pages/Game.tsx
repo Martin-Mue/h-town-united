@@ -3125,13 +3125,13 @@ const GamePage = () => {
           {!isCricket && !botBoardShown && (
             <SimulatedBoard darts={ownDartsOnBoard} className="mx-auto hidden aspect-square w-full max-w-[16rem] landscape:tablet:block" />
           )}
-          {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
-            <ErrorBoundary label="Autodarts">
+          {autodartsEnabled && autodartsBoardNumber !== null && (
+            <div className={currentPlayer?.isBot ? "hidden" : undefined}><ErrorBoundary label="Autodarts">
               <Suspense fallback={<div className="flex justify-center py-2"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
                 <AutodartsLiveScore
                   ref={autodartsLiveScoreRef}
                   enabled={phase === "playing"}
-                  paused={!!pendingCheckoutChoice || !!pendingTiebreak}
+                  paused={!!pendingCheckoutChoice || !!pendingTiebreak || !!currentPlayer?.isBot}
                   onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsMatchId(null); setAutodartsLastCommittedTurnId(null); }}
                   onRoundCommit={submitDetectedRound}
                   onPendingChange={setPendingLiveDarts}
@@ -3150,7 +3150,7 @@ const GamePage = () => {
                   }}
                 />
               </Suspense>
-            </ErrorBoundary>
+            </ErrorBoundary></div>
           )}
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-3 pb-2 pt-0.5 portrait:short:pb-1.5 tablet:px-6 tablet:pt-1 landscape:pl-1.5 landscape:pt-2">
@@ -3411,16 +3411,16 @@ const GamePage = () => {
               </ErrorBoundary>
             )}
 
-            {autodartsEnabled && autodartsBoardNumber !== null && !currentPlayer?.isBot && (
+            {autodartsEnabled && autodartsBoardNumber !== null && (
               // Sibling to the LiveCamera block above, never both at once (mutually exclusive via
               // autodartsEnabled) — same ErrorBoundary/Suspense safety net, same reasoning: a
               // connection problem here only takes down this card, manual entry stays available.
-              <ErrorBoundary label="Autodarts">
+              <div className={currentPlayer?.isBot ? "hidden" : undefined}><ErrorBoundary label="Autodarts">
                 <Suspense fallback={<div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
                   <AutodartsLiveScore
                     ref={autodartsLiveScoreRef}
                     enabled={phase === "playing"}
-                    paused={!!pendingCheckoutChoice || !!pendingTiebreak}
+                    paused={!!pendingCheckoutChoice || !!pendingTiebreak || !!currentPlayer?.isBot}
                     onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsMatchId(null); setAutodartsLastCommittedTurnId(null); }}
                     onRoundCommit={submitDetectedRound}
                     onPendingChange={setPendingLiveDarts}
@@ -3443,7 +3443,7 @@ const GamePage = () => {
                     }}
                   />
                 </Suspense>
-              </ErrorBoundary>
+              </ErrorBoundary></div>
             )}
 
             {cricketBoard}

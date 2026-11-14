@@ -77,6 +77,11 @@ export async function finishMatch(boardNumber: number, matchId: string): Promise
 export async function getMatchState(boardNumber: number, matchId: string): Promise<unknown> {
   const { data, error } = await supabase.rpc("autodarts_poll_match", { p_board_number: boardNumber, p_match_id: matchId });
   if (error) throw new Error(error.message);
+  // The RPC reports a failed Autodarts call as {status:"error"} instead of raising (a raise would
+  // roll back its own bookkeeping) -- surface it as a failure so the consecutive-failure fallback
+  // to manual entry still kicks in.
+  const result = data as { status?: string; message?: string } | null;
+  if (result?.status === "error") throw new Error(result.message || "Autodarts: Spielstand-Abfrage fehlgeschlagen");
   return data;
 }
 
