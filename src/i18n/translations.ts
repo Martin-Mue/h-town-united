@@ -687,14 +687,6 @@ export const translations: Record<string, Record<Language, string>> = {
 
   // MatchReflection.tsx — post-match mini reflection card (winner overlay, Game.tsx). Private to
   // the player who wrote it; never shown to anyone else.
-  // AiMatchReport.tsx — opt-in KI-Spielbericht (AI match recap), winner overlay (Game.tsx), right
-  // above MatchReflection. Unlike the reflection above, this is NOT private — also folded into
-  // the PNG share card (shareResultImage.ts) once generated.
-  "aiReport.title": { de: "KI-Spielbericht", en: "AI match report", fr: "Rapport de match IA", pl: "Raport meczowy AI", nl: "AI-wedstrijdverslag", tr: "Yapay zekâ maç raporu" },
-  "aiReport.generateBtn": { de: "KI-Spielbericht generieren", en: "Generate AI report", fr: "Générer le rapport IA", pl: "Wygeneruj raport AI", nl: "AI-verslag genereren", tr: "Yapay zekâ raporu oluştur" },
-  "aiReport.generating": { de: "Schreibt …", en: "Writing …", fr: "Rédaction…", pl: "Piszę…", nl: "Aan het schrijven…", tr: "Yazılıyor…" },
-  "aiReport.generateFailed": { de: "Spielbericht konnte nicht erstellt werden — bitte später erneut versuchen.", en: "Couldn't generate the report right now — please try again later.", fr: "Impossible de générer le rapport pour le moment — merci de réessayer plus tard.", pl: "Nie udało się wygenerować raportu — spróbuj ponownie później.", nl: "Kon het verslag nu niet genereren — probeer het later opnieuw.", tr: "Rapor şu anda oluşturulamadı — lütfen daha sonra tekrar dene." },
-  "aiReport.aiGeneratedTag": { de: "KI-generiert", en: "AI-generated", fr: "Généré par IA", pl: "Wygenerowane przez AI", nl: "AI-gegenereerd", tr: "Yapay zekâ ile oluşturuldu" },
 
   // CheckoutSuggestion.tsx
   // Round 3 Rang 16: this tooltip previously claimed "in diesem Score-Bereich" / "in this score

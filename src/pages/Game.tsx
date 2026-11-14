@@ -2091,17 +2091,6 @@ const GamePage = () => {
     if (!game || !postGameStats || sharingResult) return;
     setSharingResult(true);
     try {
-      // KI-Spielbericht (2026-09-09): folded into the share card when one's already been
-      // generated — a fresh read rather than threading AiMatchReport's own state up through
-      // props, since it's cheap (single-row, single-column, primary-key select) and this is the
-      // one other place that needs it. Silently omitted (not an error) when nobody generated one
-      // for this match, or the game isn't durably saved yet (queuedOffline) — the share card
-      // works exactly as it always did without it either way.
-      let aiReport: string | undefined;
-      if (gameSaved && !queuedOffline) {
-        const { data } = await supabase.from("games").select("ai_report").eq("id", pendingGameIdRef.current).maybeSingle();
-        aiReport = data?.ai_report ?? undefined;
-      }
       await shareOrDownloadResultImage(
         {
           clubName,
@@ -2109,7 +2098,6 @@ const GamePage = () => {
           winnerName: game.winnerName ?? "?",
           bestOfLegs: game.bestOfLegs,
           players: postGameStats.map((p) => ({ name: p.name, average: p.overall.average, highscore: p.overall.highscore, s180: p.overall.s180, legs: p.legs })),
-          aiReport,
         },
         `ergebnis-${new Date().toISOString().slice(0, 10)}.png`
       );

@@ -1,8 +1,7 @@
 /**
  * Live-KI-Kommentator (2026-09-10) — client-side caller for the live-commentary edge function.
- * Same plain `fetch` pattern matchReport.ts's generateMatchReport uses for generate-match-report,
- * for the same reason: consistent with how this app already calls its other AI-backed edge
- * functions, rather than `supabase.functions.invoke`. Deliberately swallows ALL failures into
+ * Plain `fetch`, consistent with how this app calls its other AI-backed edge functions, rather
+ * than `supabase.functions.invoke`. Deliberately swallows ALL failures into
  * `null` instead of throwing — see Game.tsx's call site: this is optional color commentary layered
  * on top of the normal round announcement, and a network hiccup or an exhausted AI quota should
  * never interrupt or error out an actual game in progress.

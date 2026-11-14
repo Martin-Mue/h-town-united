@@ -2,7 +2,6 @@ import type { Dispatch, SetStateAction, MutableRefObject } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { Trophy, Share2, RotateCcw, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import AiMatchReport from "@/components/game/AiMatchReport";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { GameState } from "@/types/game";
 import type { computePostGameStats } from "@/utils/postGameStats";
@@ -251,7 +250,6 @@ const GamePostGame = ({
       {/* KI-Spielbericht (2026-09-09) — only once the game is actually persisted server-side,
           since gameId is a foreign key into `games` (the private post-match reflection that
           used to sit here too was removed 2026-09-10 — see MatchReflection.tsx, now unused). */}
-      {gameSaved && !queuedOffline && <AiMatchReport gameId={pendingGameIdRef.current} />}
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={shareResult} disabled={sharingResult} className="h-[52px] rounded-[14px] gap-1.5 shrink-0">
