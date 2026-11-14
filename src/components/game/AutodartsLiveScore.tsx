@@ -111,7 +111,8 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
 
   const pollTick = async () => {
     const sessionId = sessionIdRef.current;
-    if (pausedRef.current || !sessionId || pollInFlightRef.current) return;
+    // Every tick is a database call (and an Autodarts request), so none while the app is in the background.
+    if (pausedRef.current || !sessionId || pollInFlightRef.current || document.hidden) return;
     pollInFlightRef.current = true;
     try {
       const raw = await pollAutodartsSession(sessionId);
