@@ -9,20 +9,21 @@ const state = (over: Partial<AutodartsPollState>): AutodartsPollState => ({
 });
 
 describe("decideAutodartsTurn", () => {
-  it("shows darts as pending until the third one, then commits once", () => {
-    const one = decideAutodartsTurn(state({ currentTurnThrows: [dart(20)] }), null, null);
-    expect(one.commits).toEqual([]);
-    expect(one.pending).toHaveLength(1);
-    const three = decideAutodartsTurn(state({ currentTurnThrows: [dart(20), dart(20), dart(7)] }), one.seen, null);
-    expect(three.commits).toHaveLength(1);
-    expect(three.pending).toEqual([]);
-    const again = decideAutodartsTurn(state({ currentTurnThrows: [dart(20), dart(20), dart(7)] }), three.seen, "t1");
+  it("keeps three darts pending until they are pulled, then commits once", () => {
+    const three = decideAutodartsTurn(state({ currentTurnThrows: [dart(20), dart(20), dart(7)] }), null, null);
+    expect(three.commits).toEqual([]);
+    expect(three.pending).toHaveLength(3);
+    const pulled = decideAutodartsTurn(state({ currentTurnId: "t2", currentTurnThrows: [] }), three.seen, null);
+    expect(pulled.commits).toEqual([{ turnId: "t1", throws: [dart(20), dart(20), dart(7)], busted: false }]);
+    const again = decideAutodartsTurn(state({ currentTurnId: "t2", currentTurnThrows: [] }), pulled.seen, "t1");
     expect(again.commits).toEqual([]);
   });
 
-  it("commits a bust right away", () => {
-    const d = decideAutodartsTurn(state({ currentTurnThrows: [dart(20, 3)], currentTurnBusted: true }), null, null);
-    expect(d.commits).toEqual([{ turnId: "t1", throws: [dart(20, 3)], busted: true }]);
+  it("a bust also waits for the takeout and keeps its bust flag", () => {
+    const bust = decideAutodartsTurn(state({ currentTurnThrows: [dart(20, 3)], currentTurnBusted: true }), null, null);
+    expect(bust.commits).toEqual([]);
+    const pulled = decideAutodartsTurn(state({ currentTurnId: "t2" }), bust.seen, null);
+    expect(pulled.commits).toEqual([{ turnId: "t1", throws: [dart(20, 3)], busted: true }]);
   });
 
   it("commits a checkout with fewer than three darts", () => {

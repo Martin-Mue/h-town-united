@@ -21,10 +21,11 @@ export interface AutodartsTurnDecision {
  * Decides which Autodarts visits to commit, from one poll of GET /gs/v0/matches/{id}/state.
  *
  * Seen live (2026-11-14): /state only ever carries the CURRENT turn, and Autodarts only marks a turn
- * finished at takeout -- the very moment it replaces it with the next one. Waiting for "finished"
- * therefore never fires. Instead a visit is committed as soon as it is complete on the board (three
- * darts, a bust, or the leg/match won), and as a safety net when a new turn id shows up while the
- * previous one (last seen with darts) was never committed.
+ * finished at takeout -- the very moment it replaces it with the next one, so "finished" itself is
+ * hardly ever seen. A visit is therefore committed when the darts are pulled: a new turn id shows up
+ * while the previous one (last seen with darts) was never committed. Until then its darts stay a
+ * pending preview -- so a bot only starts throwing once the board is clear (user wish 2026-11-14).
+ * A won leg/match is committed right away: there is no next turn to wait for.
  */
 export function decideAutodartsTurn(
   state: AutodartsPollState,
@@ -42,7 +43,7 @@ export function decideAutodartsTurn(
   if (!state.currentTurnId) return { commits, pending: [], seen: null };
 
   const current: SeenAutodartsTurn = { turnId: state.currentTurnId, throws: state.currentTurnThrows, busted: state.currentTurnBusted };
-  const complete = current.throws.length >= 3 || current.busted || state.legFinished || state.matchFinished || state.currentTurnFinished;
+  const complete = state.legFinished || state.matchFinished || state.currentTurnFinished;
   if (current.turnId !== committed && current.throws.length > 0 && complete) {
     commits.push({ turnId: current.turnId, throws: current.throws, busted: current.busted });
     return { commits, pending: [], seen: current };
