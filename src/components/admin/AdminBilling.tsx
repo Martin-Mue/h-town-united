@@ -108,7 +108,7 @@ const AdminBilling = () => {
       {isPilot ? (
         <p className="text-xs text-muted-foreground mb-4">
           Ihr testet DartSpot im Pilot{pilotEnd ? <> bis einschließlich <strong className="text-foreground">{pilotEnd}</strong></> : null}: alle Funktionen sind freigeschaltet
-          (Kamera-Scoring, große Turniere, KI-Kommentar, Autodarts). Danach gilt wieder der Trial-Umfang, außer ihr wechselt in den Paid-Plan.
+          (Kamera-Scoring, große Turniere, Autodarts). Danach gilt wieder der Trial-Umfang, außer ihr wechselt in den Paid-Plan.
         </p>
       ) : (
         <ul className="text-xs text-muted-foreground space-y-1 mb-4 list-disc list-inside">

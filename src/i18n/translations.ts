@@ -634,7 +634,6 @@ export const translations: Record<string, Record<Language, string>> = {
   "game.doneWith": { de: "Fertig mit", en: "Done with", fr: "Terminé avec", pl: "Gotowe z", nl: "Klaar met", tr: "Bitirdi:" },
   "game.noFinishBust": { de: "Kein Finish – überworfen", en: "No finish – bust", fr: "Pas de finish – bust", pl: "Brak zakończenia – przerzut", nl: "Geen finish – overgooid", tr: "Bitiriş yok – iptal" },
   "game.manualEntry": { de: "Manuelle Eingabe", en: "Manual entry", fr: "Saisie manuelle", pl: "Ręczne wprowadzanie", nl: "Handmatige invoer", tr: "Manuel giriş" },
-  "game.aiCommentaryToggle": { de: "KI-Kommentator", en: "AI commentator", fr: "Commentateur IA", pl: "Komentator AI", nl: "AI-commentator", tr: "Yapay zeka yorumcusu" },
   "game.toggleManualEntry": { de: "Manuelle Eingabe ein-/ausblenden", en: "Show/hide manual entry", fr: "Afficher/masquer la saisie manuelle", pl: "Pokaż/ukryj ręczne wprowadzanie", nl: "Handmatige invoer tonen/verbergen", tr: "Manuel girişi göster/gizle" },
   "game.closeCamera": { de: "Kamera schließen", en: "Close camera", fr: "Fermer la caméra", pl: "Zamknij kamerę", nl: "Camera sluiten", tr: "Kamerayı kapat" },
   "game.camOff": { de: "Cam aus", en: "Cam off", fr: "Caméra off", pl: "Kamera wył.", nl: "Cam uit", tr: "Kam kapalı" },

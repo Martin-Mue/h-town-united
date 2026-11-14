@@ -121,7 +121,6 @@ import { speakSequence, speakText, buildRoundAnnouncement, getCallerVoice, setCa
 import { shareOrDownloadResultImage } from "@/utils/shareResultImage";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { clubHasFeature } from "@/lib/planFeatures";
-import { fetchLiveCommentary, getAiCommentaryEnabled, setAiCommentaryEnabled as persistAiCommentaryEnabled, type CommentaryEvent } from "@/lib/aiCommentary";
 import { Eyebrow, SectionCard } from "@/components/stats/StatPrimitives";
 import { teamIndexFor } from "@/utils/teamUtils";
 import { effectiveStartScore } from "@/utils/handicap";
@@ -265,14 +264,6 @@ const GamePage = () => {
   const changeCallerVoice = (v: CallerVoice) => {
     setCallerVoice(v);
     setCallerVoiceState(v);
-  };
-  // Live-KI-Kommentator (2026-09-10) — personal opt-in on top of the club's plan-tier gate (see
-  // the toggle button's own comment further down for why both checks exist).
-  const [aiCommentaryEnabled, setAiCommentaryEnabledState] = useState(() => getAiCommentaryEnabled());
-  const toggleAiCommentary = () => {
-    const next = !aiCommentaryEnabled;
-    persistAiCommentaryEnabled(next);
-    setAiCommentaryEnabledState(next);
   };
   const [walkonEnabled, setWalkonEnabled] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -1805,35 +1796,6 @@ const GamePage = () => {
         busted, matchWon: curGame.isFinished, winnerName: curGame.winnerName,
       });
       window.setTimeout(() => speakSequence(parts), 160);
-    }
-
-    // Live-KI-Kommentator (2026-09-10) — deliberately sparse: only fires for a genuinely
-    // noteworthy moment (bust, leg/match win, 180, ton-plus), never for a routine sub-100 round,
-    // both to keep the feature feeling like real color commentary rather than narrating every
-    // dart, and to bound the AI-call volume over a full evening of camera-scored legs. Fully
-    // non-blocking and fire-and-forget: fetchLiveCommentary() never throws (see its own doc
-    // comment), and the resulting line — once it arrives, a network round-trip later — is spoken
-    // with interrupt:false so it queues in behind whatever the normal caller is still saying
-    // rather than talking over it.
-    if (aiCommentaryEnabled && clubHasFeature(club?.plan_tier, "ai-commentary") && session?.access_token) {
-      const aiEvent: CommentaryEvent | null =
-        busted ? "bust" :
-        checkedOut && curGame.isFinished ? "match_win" :
-        checkedOut ? "leg_win" :
-        roundTotal === 180 ? "180" :
-        roundTotal > 100 ? "ton_plus" :
-        null;
-      if (aiEvent) {
-        const activePlayerName = game.players[startIdx].name;
-        const nextPlayerName = curGame.players[curGame.currentPlayerIndex].name;
-        const remaining = curGame.mode === "cricket" ? undefined : curGame.currentLeg.remaining[teamIndexFor(curGame.teams, startIdx)];
-        fetchLiveCommentary({
-          event: aiEvent, playerName: activePlayerName, opponentName: nextPlayerName,
-          roundTotal, remaining, mode: curGame.mode, accessToken: session.access_token,
-        }).then((line) => {
-          if (line) window.setTimeout(() => speakText(line, { interrupt: false }), 900);
-        });
-      }
     }
 
     if (!busted && (checkedOut || roundTotal === 180)) triggerConfetti();
@@ -3377,7 +3339,6 @@ const GamePage = () => {
             soundEnabled={soundEnabled}
             onToggleSound={() => setSoundEnabled(!soundEnabled)}
             onCancelGame={() => setConfirmCancelGame(true)}
-            aiCommentary={clubHasFeature(club?.plan_tier, "ai-commentary") ? { enabled: aiCommentaryEnabled, onToggle: toggleAiCommentary } : undefined}
             onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
           />
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Camera, Keyboard, Volume2, VolumeX, RotateCcw, MoreHorizontal, Sparkles, Edit2, ChevronLeft } from "lucide-react";
+import { Camera, Keyboard, Volume2, VolumeX, RotateCcw, MoreHorizontal, Edit2, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Drawer, DrawerContent, DrawerTitle, DrawerClose } from "@/components/ui/drawer";
@@ -19,8 +19,6 @@ interface GameControlBarProps {
   soundEnabled: boolean;
   onToggleSound: () => void;
   onCancelGame: () => void;
-  /** Only passed while the live commentator is actually offered (camera on + plan includes it). */
-  aiCommentary?: { enabled: boolean; onToggle: () => void };
   /** Undefined while correcting isn't allowed (bot turn, online match). */
   onOpenCorrector?: () => void;
 }
@@ -28,9 +26,9 @@ interface GameControlBarProps {
 /**
  * The play screen's slim title bar: back (= cancel the game), what is being played, sound, the scoring-source
  * switch and "⋯". Undo, correcting and "next player" live in the action bar at the bottom of the screen
- * (ArenaActionBar); everything else (commentator, correction, cancel) is also in the sheet behind "⋯".
+ * (ArenaActionBar); everything else (correction, cancel) is also in the sheet behind "⋯".
  */
-const GameControlBar = ({ title, scoring, soundEnabled, onToggleSound, onCancelGame, aiCommentary, onOpenCorrector }: GameControlBarProps) => {
+const GameControlBar = ({ title, scoring, soundEnabled, onToggleSound, onCancelGame, onOpenCorrector }: GameControlBarProps) => {
   const { t } = useLanguage();
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -86,13 +84,6 @@ const GameControlBar = ({ title, scoring, soundEnabled, onToggleSound, onCancelG
               </span>
               <Switch checked={soundEnabled} tabIndex={-1} className="pointer-events-none" />
             </button>
-
-            {aiCommentary && (
-              <button type="button" className={rowClass} onClick={aiCommentary.onToggle}>
-                <span className="flex items-center gap-2"><Sparkles className="w-4 h-4" /> {t("game.aiCommentaryToggle")}</span>
-                <Switch checked={aiCommentary.enabled} tabIndex={-1} className="pointer-events-none" />
-              </button>
-            )}
 
             {onOpenCorrector && (
               <DrawerClose asChild>

@@ -1,6 +1,6 @@
 /** Feature keys gated by a club's plan_tier. Kept to exactly the features that actually have a
  *  real call site — no speculative stub entries for features nobody gates yet. */
-export type PlanFeature = "camera" | "largeTournaments" | "ai-commentary" | "autodarts";
+export type PlanFeature = "camera" | "largeTournaments" | "autodarts";
 
 /** `free_locked` (H-Town, permanently exempt), `paid` and `pilot` (everything, until its end date -
  *  an expired pilot already arrives here as `trial`, see ClubBrandingContext) get everything; `trial` (the default for

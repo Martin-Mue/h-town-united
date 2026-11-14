@@ -62,7 +62,7 @@ const AdminClubs = () => {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Pilotvereine bekommen bis zum Enddatum alle Funktionen (Kamera, große Turniere, KI-Kommentar, Autodarts). Danach gelten wieder
+        Pilotvereine bekommen bis zum Enddatum alle Funktionen (Kamera, große Turniere, Autodarts). Danach gelten wieder
         die Trial-Grenzen. Bezahlte und dauerhaft freie Vereine bleiben unberührt.
       </p>
       {clubs.map((c) => {
