@@ -1,3 +1,5 @@
+import type { AutodartsSessionRef, AutodartsSource } from "@/lib/autodartsClient";
+import type { AutodartsPlayerLogins } from "@/lib/autodartsLegPlayers";
 import type { GameState } from "@/types/game";
 
 export interface TournamentLink {
@@ -43,8 +45,14 @@ export interface ActiveGameSnapshot {
    *  and re-commit whatever turn was already scored into `game` before the reload as if it were
    *  brand new (no lastCommittedTurnId to compare against). See AutodartsLiveScore.tsx's
    *  initialMatchId/initialLastCommittedTurnId props, which these feed directly. */
+  /** Legacy (before per-leg sessions): ignored on restore. */
   autodartsMatchId?: string | null;
   autodartsLastCommittedTurnId?: string | null;
+  /** Own linked account or a club board; autodartsBoardNumber is the pre-2026-11-14 form of a board source. */
+  autodartsSource?: AutodartsSource | null;
+  /** This leg's open Autodarts session, so a reload resumes it instead of opening a second lobby. */
+  autodartsSession?: AutodartsSessionRef | null;
+  autodartsPlayerLogins?: AutodartsPlayerLogins;
 }
 
 /**

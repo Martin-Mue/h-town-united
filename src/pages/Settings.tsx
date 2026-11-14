@@ -22,6 +22,9 @@ import SegmentedControl from "@/components/settings/SegmentedControl";
 import PersonalThemePicker from "@/components/settings/PersonalThemePicker";
 import GameDefaultsSection from "@/components/settings/GameDefaultsSection";
 import GuidesTab from "@/components/settings/GuidesTab";
+import AutodartsAccountSection from "@/components/settings/AutodartsAccountSection";
+import { useClubBranding } from "@/contexts/ClubBrandingContext";
+import { clubHasFeature } from "@/lib/planFeatures";
 import { generatePinSalt, hashPin, isValidPinFormat } from "@/lib/playerPin";
 
 const LANGUAGE_LABEL_KEY: Record<Language, string> = {
@@ -61,6 +64,8 @@ const SettingsPage = () => {
   const queryClient = useQueryClient();
   const { data: dbPlayers = [] } = usePlayers();
   const myPlayer = dbPlayers.find((p) => p.user_id === user?.id);
+  const { club } = useClubBranding();
+  const autodartsAvailable = clubHasFeature(club?.plan_tier, "autodarts");
 
   const [impressum, setImpressum] = useState<ImpressumRow | null>(null);
   const [editing, setEditing] = useState(false);
@@ -215,6 +220,8 @@ const SettingsPage = () => {
           }
         />
       </SettingsSection>
+
+      {autodartsAvailable && <AutodartsAccountSection />}
 
       {/* "PIN pro Spieler": only meaningful once you have a linked profile at all — a bare
           account with no players row (not yet created one, see Players.tsx) has nothing to

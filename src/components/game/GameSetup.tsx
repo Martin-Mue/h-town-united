@@ -30,6 +30,8 @@ import { clubHasFeature } from "@/lib/planFeatures";
 import { overlaySlots, saveLastGameSetup, type GamePresetConfig } from "@/utils/gamePreset";
 import { sharedCheckoutRule, slotOutRule, outRuleFlags } from "@/utils/playerLineup";
 import type { OutRule } from "@/utils/x01Rules";
+import type { AutodartsSource, AutodartsSources } from "@/lib/autodartsClient";
+import type { AutodartsPlayerLogins } from "@/lib/autodartsLegPlayers";
 import { describeSetupSummary } from "@/utils/setupSummary";
 
 interface GameSetupProps {
@@ -132,11 +134,13 @@ interface GameSetupProps {
   // Free Game lobby is a real action against Autodarts' own platform for the whole match, not a
   // per-turn option), so it's fixed once at setup instead of living next to the "Cam" button.
   autodartsAvailable: boolean;
-  autodartsBoards: { id: string; boardNumber: number; label: string | null; status: string }[];
+  autodartsSources: AutodartsSources;
   autodartsEnabled: boolean;
   setAutodartsEnabled: Dispatch<SetStateAction<boolean>>;
-  autodartsBoardNumber: number | null;
-  setAutodartsBoardNumber: Dispatch<SetStateAction<number | null>>;
+  autodartsSource: AutodartsSource | null;
+  setAutodartsSource: Dispatch<SetStateAction<AutodartsSource | null>>;
+  autodartsPlayerLogins: AutodartsPlayerLogins;
+  setAutodartsPlayerLogins: Dispatch<SetStateAction<AutodartsPlayerLogins>>;
 }
 
 /**
@@ -163,7 +167,8 @@ const GameSetup = (props: GameSetupProps) => {
     soundEnabled, setSoundEnabled, speechEnabled, callerVoice, changeCallerVoice,
     starterIndex, setStarterIndex, bullOffEnabled, setBullOffEnabled, warmupEnabled, setWarmupEnabled, warmupSeconds, setWarmupSeconds,
     walkonEnabled, setWalkonEnabled, setupMode, setSetupMode,
-    autodartsAvailable, autodartsBoards, autodartsEnabled, setAutodartsEnabled, autodartsBoardNumber, setAutodartsBoardNumber,
+    autodartsAvailable, autodartsSources, autodartsEnabled, setAutodartsEnabled, autodartsSource, setAutodartsSource,
+    autodartsPlayerLogins, setAutodartsPlayerLogins,
   } = props;
   const { t } = useLanguage();
   // How many players were set before teams were switched on, to go back to when they are switched off again.
@@ -242,16 +247,25 @@ const GameSetup = (props: GameSetupProps) => {
     setPlayerMasterOut((prev) => prev.map((v, i) => (slot === undefined || i === slot ? masterOut : v)));
   };
 
-  // Autodarts only where a Free Game lobby can represent the match today (see AutodartsLiveScore.tsx: X01, no teams,
-  // exactly 2 players, single or double out). Its on/off flag stays separate from the camera, which is toggled during the game.
-  const autodartsOffered = autodartsAvailable && autodartsBoards.length > 0 && !teamMode && numPlayers === 2 && (mode === "501" || mode === "301") && !anyMasterOut;
+  // Autodarts only where an Autodarts X01 lobby can represent the match: no teams, 301/501, single or double out,
+  // straight in, and one start score for everyone who throws at the board (one lobby = one baseScore). Bots are fine
+  // -- they are simply left out of the lobby. Its on/off flag stays separate from the camera, which is toggled in the game.
+  const humanSlots = Array.from({ length: numPlayers }, (_, i) => i).filter((i) => !playerIsBot[i]);
+  const humanHandicaps = new Set(humanSlots.map((i) => playerHandicap[i] ?? 0));
+  const autodartsSourceOptions = [
+    ...(autodartsSources.account?.status === "connected" ? [{ kind: "account" } as AutodartsSource] : []),
+    ...autodartsSources.clubBoards.filter((b) => b.status === "connected").map((b) => ({ kind: "board", boardNumber: b.boardNumber }) as AutodartsSource),
+  ];
+  const autodartsOffered = autodartsAvailable && autodartsSourceOptions.length > 0 && !teamMode && (mode === "501" || mode === "301")
+    && !anyMasterOut && humanSlots.length > 0 && humanSlots.length <= 6 && humanSlots.every((i) => !playerDoubleIn[i]) && humanHandicaps.size <= 1;
   const enableAutodarts = (on: boolean) => {
     setAutodartsEnabled(on);
-    if (on && autodartsBoardNumber === null) {
-      const firstConnected = autodartsBoards.find((b) => b.status === "connected") ?? autodartsBoards[0];
-      if (firstConnected) setAutodartsBoardNumber(firstConnected.boardNumber);
-    }
+    if (on && !autodartsSource) setAutodartsSource(autodartsSourceOptions[0] ?? null);
   };
+  const myMemberName = dbPlayers.find((p) => p.user_id === session?.user?.id)?.name;
+  const autodartsHostSlot = autodartsSource?.kind === "account" && myMemberName
+    ? humanSlots.find((i) => (playerNames[i] ?? "").trim() === myMemberName) ?? null
+    : null;
   const inputLabel = autodartsOffered && autodartsEnabled ? "Autodarts" : t("game.inputManual");
 
   const starterChoices = (teamMode ? [0, 1] : Array.from({ length: numPlayers }, (_, i) => i)).map((i) => ({
@@ -342,12 +356,17 @@ const GameSetup = (props: GameSetupProps) => {
 
       <InputMethodPicker
         autodartsOffered={autodartsOffered}
-        autodartsBlockedByBot={hasBot}
         autodartsEnabled={autodartsEnabled}
         onAutodartsEnabledChange={enableAutodarts}
-        boards={autodartsBoards}
-        boardNumber={autodartsBoardNumber}
-        onBoardNumberChange={setAutodartsBoardNumber}
+        sources={autodartsSources}
+        source={autodartsSource}
+        onSourceChange={setAutodartsSource}
+        humans={humanSlots.map((i) => ({ slot: i, name: slotLabel(i) }))}
+        hostSlot={autodartsHostSlot}
+        logins={autodartsPlayerLogins}
+        onLoginsChange={setAutodartsPlayerLogins}
+        hasBot={hasBot}
+        showLinkHint={autodartsAvailable && !autodartsSources.account}
         cameraAvailable={clubHasFeature(club?.plan_tier, "camera")}
       />
 

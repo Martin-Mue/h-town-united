@@ -42,7 +42,10 @@ import CheckoutSuggestion from "@/components/game/CheckoutSuggestion";
 const LiveCamera = lazy(() => import("@/components/game/LiveCamera"));
 import type { DetectedDart, LiveCameraHandle } from "@/components/game/LiveCamera";
 const AutodartsLiveScore = lazy(() => import("@/components/game/AutodartsLiveScore"));
+const VoiceChatControl = lazy(() => import("@/components/game/VoiceChatControl"));
 import type { AutodartsLiveScoreHandle } from "@/components/game/AutodartsLiveScore";
+import { loadAutodartsSources, type AutodartsSessionRef, type AutodartsSource, type AutodartsSources } from "@/lib/autodartsClient";
+import { buildAutodartsLegPlayers, type AutodartsPlayerLogins } from "@/lib/autodartsLegPlayers";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import ThrowClipDialog, { type ThrowClipPopup } from "@/components/game/ThrowClipDialog";
 import ConfettiBurst from "@/components/ConfettiBurst";
@@ -411,14 +414,18 @@ const GamePage = () => {
   // a reload mid-Autodarts-scored game silently lands back in "playing" with Autodarts off and no
   // error, indistinguishable from it never having been enabled at all.
   const [autodartsEnabled, setAutodartsEnabled] = useState(() => initialSnapshot?.autodartsEnabled ?? false);
-  const [autodartsBoardNumber, setAutodartsBoardNumber] = useState<number | null>(() => initialSnapshot?.autodartsBoardNumber ?? null);
+  const [autodartsSource, setAutodartsSource] = useState<AutodartsSource | null>(() =>
+    initialSnapshot?.autodartsSource
+    ?? (initialSnapshot?.autodartsBoardNumber != null ? { kind: "board", boardNumber: initialSnapshot.autodartsBoardNumber } : null));
+  // Fellow players' confirmed Autodarts logins for this match, per player slot (see InputMethodPicker).
+  const [autodartsPlayerLogins, setAutodartsPlayerLogins] = useState<AutodartsPlayerLogins>(() => initialSnapshot?.autodartsPlayerLogins ?? {});
   // Mirrors AutodartsLiveScore's own internal matchIdRef/lastCommittedTurnIdRef out here purely so
   // the snapshot below can carry them across a reload -- Game.tsx itself never reads these for
   // anything else (AutodartsLiveScore already tracks a turn it started polling against on its own).
   // Fed back in as initialMatchId/initialLastCommittedTurnId on the next mount; see that component's
   // and activeGameSnapshot.ts's own doc comments for the duplicate-lobby/re-committed-turn bug this
   // closes.
-  const [autodartsMatchId, setAutodartsMatchId] = useState<string | null>(() => initialSnapshot?.autodartsMatchId ?? null);
+  const [autodartsSession, setAutodartsSession] = useState<AutodartsSessionRef | null>(() => initialSnapshot?.autodartsSession ?? null);
   const [autodartsLastCommittedTurnId, setAutodartsLastCommittedTurnId] = useState<string | null>(() => initialSnapshot?.autodartsLastCommittedTurnId ?? null);
   // Mirror the in-progress game to localStorage on every change — see loadActiveGameSnapshot's
   // doc comment. Cleared once the leg is decided (below) or on an explicit new-game reset
@@ -426,17 +433,17 @@ const GamePage = () => {
   // job, not this snapshot's.
   useEffect(() => {
     if (phase === "playing" && game && !game.isFinished) {
-      saveActiveGameSnapshot({ game, dartsThisRound, turnStartRemaining, tournamentLink: tournamentLinkRef.current, pendingGameId: pendingGameIdRef.current, autodartsEnabled, autodartsBoardNumber, autodartsMatchId, autodartsLastCommittedTurnId });
+      saveActiveGameSnapshot({ game, dartsThisRound, turnStartRemaining, tournamentLink: tournamentLinkRef.current, pendingGameId: pendingGameIdRef.current, autodartsEnabled, autodartsSource, autodartsSession, autodartsLastCommittedTurnId, autodartsPlayerLogins });
     }
     // dartsThisRound/turnStartRemaining included deliberately — without them a snapshot taken
     // mid-visit (after game changed but before either was re-derived) could be saved with stale
     // values. tournamentLinkRef's own identity never changes (a ref, now returned from
     // useTournamentLink instead of a bare useRef() call, but still just a ref) — listed only to
     // satisfy the lint rule, which can no longer see that stability across the hook boundary.
-    // autodartsEnabled/autodartsBoardNumber/autodartsMatchId/autodartsLastCommittedTurnId included
+    // autodartsEnabled/autodartsSource/autodartsSession/autodartsLastCommittedTurnId/autodartsPlayerLogins included
     // for the same reason as dartsThisRound above -- see activeGameSnapshot.ts's own doc comments
     // on the silent-reload bugs these close.
-  }, [game, phase, dartsThisRound, turnStartRemaining, tournamentLinkRef, autodartsEnabled, autodartsBoardNumber, autodartsMatchId, autodartsLastCommittedTurnId]);
+  }, [game, phase, dartsThisRound, turnStartRemaining, tournamentLinkRef, autodartsEnabled, autodartsSource, autodartsSession, autodartsLastCommittedTurnId, autodartsPlayerLogins]);
   // Board-mode auto-start: a board-linked match counts down to starting itself instead of
   // waiting for a tap on "Spiel starten" — "Bearbeiten" (below) cancels it for the rare case
   // something (handicap, warmup, ...) needs adjusting first. Not persisted in the crash-recovery
@@ -498,23 +505,21 @@ const GamePage = () => {
   const [pendingTiebreak, setPendingTiebreak] = useState<{ tiedIndexes: number[] } | null>(null);
   const liveCameraRef = useRef<LiveCameraHandle>(null);
   const autodartsLiveScoreRef = useRef<AutodartsLiveScoreHandle>(null);
-  const [autodartsBoards, setAutodartsBoards] = useState<{ id: string; boardNumber: number; label: string | null; status: string }[]>([]);
+  const [autodartsSources, setAutodartsSources] = useState<AutodartsSources>({ account: null, clubBoards: [] });
   const autodartsAvailable = clubHasFeature(club?.plan_tier, "autodarts");
-  // Loaded once per club for GameSetup's board picker -- non-sensitive columns only (see the
-  // autodarts_boards migration's grants), same as any other per-club setup data fetched here.
+  // What this member can score with: their own linked Autodarts account (Settings) and the club's boards.
+  // Loaded once, and again on every return to the setup, so a board linked in the Settings meanwhile shows up.
+  const autodartsSourcesLoadedRef = useRef(false);
   useEffect(() => {
-    if (!clubId || !autodartsAvailable) { setAutodartsBoards([]); return; }
+    if (!clubId || !autodartsAvailable) { setAutodartsSources({ account: null, clubBoards: [] }); return; }
+    if (phase !== "setup" && autodartsSourcesLoadedRef.current) return;
+    autodartsSourcesLoadedRef.current = true;
     let cancelled = false;
-    supabase
-      .from("autodarts_boards")
-      .select("id, board_number, label, status")
-      .eq("club_id", clubId)
-      .then(({ data }) => {
-        if (cancelled) return;
-        setAutodartsBoards((data ?? []).map((b) => ({ id: b.id, boardNumber: b.board_number, label: b.label, status: b.status })));
-      });
+    loadAutodartsSources()
+      .then((sources) => { if (!cancelled) setAutodartsSources(sources); })
+      .catch((e) => console.warn("Autodarts sources unavailable", e));
     return () => { cancelled = true; };
-  }, [clubId, autodartsAvailable]);
+  }, [clubId, autodartsAvailable, phase]);
   const [clipPopup, setClipPopup] = useState<ThrowClipPopup | null>(null);
   const [confettiKey, setConfettiKey] = useState<number | null>(null);
   /** 180s and checkouts get a quick confetti burst — the same falling-piece look as the
@@ -857,9 +862,9 @@ const GamePage = () => {
   useEffect(() => {
     const boardNumber = tournamentLinkRef.current?.board;
     if (!boardNumber) return;
-    const match = autodartsBoards.find((b) => b.boardNumber === boardNumber && b.status === "connected");
-    if (match) { setAutodartsEnabled(true); setAutodartsBoardNumber(match.boardNumber); }
-  }, [tournamentLinkRef, autodartsBoards]);
+    const match = autodartsSources.clubBoards.find((b) => b.boardNumber === boardNumber && b.status === "connected");
+    if (match) { setAutodartsEnabled(true); setAutodartsSource({ kind: "board", boardNumber: match.boardNumber }); }
+  }, [tournamentLinkRef, autodartsSources]);
 
   // Pushes a lightweight "score right now" snapshot to the tournament's public live view while
   // a tournament-linked match is being played — debounced so it fires a couple seconds after
@@ -1099,11 +1104,15 @@ const GamePage = () => {
     trackUsage(starterOverride === undefined ? "game_local_start" : "game_local_rematch");
     const startScore = getStartScore();
     const n = numPlayers;
-    // Autodarts can only score a two-player X01 game. If it was switched on and the setup changed afterwards,
-    // the hidden switch must not take the manual pad and the camera away in the game.
-    // Its lobby is started as single or double out only, so a Master Out game is scored by hand or camera as well.
+    // Autodarts only scores what one X01 lobby can represent (same rules as GameSetup's autodartsOffered). If it was
+    // switched on and the setup changed afterwards, the hidden switch must not take the manual pad and camera away.
     const anyMasterOut = mode !== "cricket" && playerMasterOut.slice(0, n).some(Boolean);
-    if (autodartsEnabled && (teamMode || n !== 2 || (mode !== "501" && mode !== "301") || anyMasterOut)) setAutodartsEnabled(false);
+    const humanSlots = Array.from({ length: n }, (_, i) => i).filter((i) => !playerIsBot[i]);
+    const autodartsFits = !teamMode && (mode === "501" || mode === "301") && !anyMasterOut && humanSlots.length > 0 && humanSlots.length <= 6
+      && humanSlots.every((i) => !playerDoubleIn[i]) && new Set(humanSlots.map((i) => playerHandicap[i] ?? 0)).size <= 1 && !!autodartsSource;
+    if (autodartsEnabled && !autodartsFits) setAutodartsEnabled(false);
+    setAutodartsSession(null);
+    setAutodartsLastCommittedTurnId(null);
     const players: PlayerSlot[] = Array.from({ length: n }, (_, i) => ({
       name: playerIsBot[i]
         ? botDisplayName(i)
@@ -2647,11 +2656,13 @@ const GamePage = () => {
         setupMode={setupMode}
         setSetupMode={setSetupMode}
         autodartsAvailable={autodartsAvailable}
-        autodartsBoards={autodartsBoards}
+        autodartsSources={autodartsSources}
         autodartsEnabled={autodartsEnabled}
         setAutodartsEnabled={setAutodartsEnabled}
-        autodartsBoardNumber={autodartsBoardNumber}
-        setAutodartsBoardNumber={setAutodartsBoardNumber}
+        autodartsSource={autodartsSource}
+        setAutodartsSource={setAutodartsSource}
+        autodartsPlayerLogins={autodartsPlayerLogins}
+        setAutodartsPlayerLogins={setAutodartsPlayerLogins}
       />
     );
   }
@@ -2912,6 +2923,50 @@ const GamePage = () => {
   // ─── ARENA LAYOUT ──────────────────────────────────
   // The newer play screen: diagonal scoreboard, dart slots, bottom action bar, a drawn board while a bot throws.
   // Everything here only re-arranges what the classic screen already computes — no scoring logic of its own.
+  // Autodarts (see AutodartsLiveScore.tsx): one card for both play layouts. It stays mounted (hidden + paused) during
+  // a bot's turn -- unmounting it closed the Autodarts match. One Autodarts lobby per Dartspot leg: legKey changes
+  // with every new leg, and the lobby gets that leg's throwing order. In online play only this device's own player
+  // throws at this device's board, so the lobby holds just them and polling pauses during the opponent's turn.
+  const autodartsOnlySlot = onlineMatchId ? onlineMatch.mySlot ?? null : null;
+  const myMemberName = dbPlayers.find((p) => p.user_id === session?.user?.id)?.name;
+  const autodartsHostSlot = autodartsSource?.kind !== "account" ? null
+    : autodartsOnlySlot != null ? autodartsOnlySlot
+    : (() => { const i = game.players.findIndex((p) => !p.isBot && p.name === myMemberName); return i >= 0 ? i : null; })();
+  const autodartsLegPlayers = autodartsEnabled && autodartsSource
+    ? buildAutodartsLegPlayers(game.players, game.currentLeg.startingPlayerIndex, { hostSlot: autodartsHostSlot, logins: autodartsPlayerLogins, onlySlot: autodartsOnlySlot })
+    : [];
+  const autodartsFirstHuman = game.players.find((p, i) => !p.isBot && (autodartsOnlySlot == null || i === autodartsOnlySlot));
+  const autodartsCard = autodartsEnabled && autodartsSource && autodartsLegPlayers.length > 0 ? (
+    <div className={currentPlayer?.isBot ? "hidden" : undefined}>
+      <ErrorBoundary label="Autodarts">
+        <Suspense fallback={<div className="flex justify-center py-2"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
+          <AutodartsLiveScore
+            ref={autodartsLiveScoreRef}
+            enabled={phase === "playing" && !game.isFinished}
+            paused={!!pendingCheckoutChoice || !!pendingTiebreak || !!currentPlayer?.isBot || (!!onlineMatchId && !onlineMatch.isMyTurn)}
+            onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsSession(null); setAutodartsLastCommittedTurnId(null); }}
+            onRoundCommit={submitDetectedRound}
+            onPendingChange={setPendingLiveDarts}
+            playerName={currentPlayerName}
+            onRequestManualEntry={() => setShowManualInput(true)}
+            source={autodartsSource}
+            legKey={`${pendingGameIdRef.current ?? "game"}:${game.completedLegs.length}:${game.currentLeg.legNumber}`}
+            legPlayers={autodartsLegPlayers}
+            legConfig={{
+              // One start score and out rule per lobby: GameSetup only offers Autodarts when everyone at the board
+              // shares them, so the first human's stand in for all.
+              baseScore: game.startScore - (autodartsFirstHuman?.handicap ?? 0),
+              doubleOut: autodartsFirstHuman?.doubleOut ?? true,
+            }}
+            initialSession={autodartsSession}
+            initialLastCommittedTurnId={autodartsLastCommittedTurnId}
+            onSessionChange={setAutodartsSession}
+            onTurnCommitted={setAutodartsLastCommittedTurnId}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
+  ) : null;
   const arenaLivePoints = cameraEnabled || autodartsEnabled ? pendingLiveDarts.reduce((s, d) => s + d.points, 0) : 0;
   const arenaCards: ArenaScoreCard[] = scoreboardCardList.map((card) => {
     const showPreview = card.isActive && arenaLivePoints > 0 && !isCricket;
@@ -2966,6 +3021,16 @@ const GamePage = () => {
   const REACTIONS = ["👏", "🔥", "😅", "🎯", "👍", "GG"];
   const myOnlineName = game.players[onlineMatch.mySlot ?? (onlineMatch.row?.player1_user_id === session?.user?.id ? 0 : 1)]?.name ?? "?";
   const onlineTurnName = game.players[game.currentPlayerIndex]?.name ?? "";
+  // Online: each player scores on their OWN board with their OWN linked Autodarts account (Settings), toggled here.
+  const toggleOnlineAutodarts = () => {
+    if (autodartsEnabled) { setAutodartsEnabled(false); setAutodartsSession(null); setPendingLiveDarts([]); return; }
+    if (autodartsSources.account?.status !== "connected") {
+      toast({ title: t("autodarts.onlineNeedsAccount") });
+      return;
+    }
+    setAutodartsSource({ kind: "account" });
+    setAutodartsEnabled(true);
+  };
   const onlineBar = onlineMatchId && !game.isFinished ? (
     <div className="fixed inset-x-0 top-14 z-40 flex flex-col items-center gap-1.5 px-3 pointer-events-none">
       <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-full border border-border bg-card/95 px-2.5 py-1 text-[11px] shadow-elevation-sm backdrop-blur">
@@ -2975,6 +3040,25 @@ const GamePage = () => {
             : onlineMatch.isMyTurn ? t("game.yourTurn") : t("game.onlineWaitingFor").replace("{name}", onlineTurnName)}
         </span>
         <button type="button" onClick={() => setReactionTrayOpen((o) => !o)} aria-label="Reaktion" className="px-1.5 text-base leading-none">😀</button>
+        <Suspense fallback={null}>
+          <VoiceChatControl
+            matchId={onlineMatchId}
+            userId={session?.user?.id}
+            myName={myOnlineName}
+            opponentName={game.players.find((_, i) => i !== (onlineMatch.mySlot ?? -1))?.name ?? ""}
+          />
+        </Suspense>
+        {autodartsAvailable && game.mode !== "cricket" && (
+          <button
+            type="button"
+            onClick={toggleOnlineAutodarts}
+            aria-pressed={autodartsEnabled}
+            title={autodartsSources.account?.status === "connected" ? t("autodarts.onlineHint") : t("autodarts.onlineNeedsAccount")}
+            className={`flex h-7 items-center gap-1 rounded-full border px-2 leading-none ${autodartsEnabled ? "border-primary bg-primary/15 font-semibold text-primary" : "border-border"}`}
+          >
+            🎯 {t("autodarts.onlineButton")}
+          </button>
+        )}
         <a href={`https://meet.jit.si/dartspot-${onlineMatchId}`} target="_blank" rel="noopener noreferrer" aria-label={t("game.onlineVideoCall")} title={t("game.onlineVideoCall")} className="px-1.5 text-base leading-none">📹</a>
         {onlineMatch.canAbortIdle && (
           <button type="button" onClick={async () => { if (await onlineMatch.abortIdle()) { toast({ title: t("game.onlineAborted") }); navigate("/"); } }} className="rounded-full border border-destructive/40 px-2 py-0.5 text-destructive">
@@ -3125,33 +3209,7 @@ const GamePage = () => {
           {!isCricket && !botBoardShown && (
             <SimulatedBoard darts={ownDartsOnBoard} className="mx-auto hidden aspect-square w-full max-w-[16rem] landscape:tablet:block" />
           )}
-          {autodartsEnabled && autodartsBoardNumber !== null && (
-            <div className={currentPlayer?.isBot ? "hidden" : undefined}><ErrorBoundary label="Autodarts">
-              <Suspense fallback={<div className="flex justify-center py-2"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
-                <AutodartsLiveScore
-                  ref={autodartsLiveScoreRef}
-                  enabled={phase === "playing"}
-                  paused={!!pendingCheckoutChoice || !!pendingTiebreak || !!currentPlayer?.isBot}
-                  onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsMatchId(null); setAutodartsLastCommittedTurnId(null); }}
-                  onRoundCommit={submitDetectedRound}
-                  onPendingChange={setPendingLiveDarts}
-                  dartsRemaining={Math.max(1, 3 - dartsThisRound)}
-                  playerName={currentPlayerName}
-                  onRequestManualEntry={() => setShowManualInput(true)}
-                  boardNumber={autodartsBoardNumber}
-                  initialMatchId={autodartsMatchId}
-                  initialLastCommittedTurnId={autodartsLastCommittedTurnId}
-                  onMatchIdChange={setAutodartsMatchId}
-                  onTurnCommitted={setAutodartsLastCommittedTurnId}
-                  gameConfig={{
-                    baseScore: game.startScore === 301 ? 301 : 501,
-                    doubleOut: game.players[0]?.doubleOut ?? true,
-                    legs: game.bestOfLegs,
-                  }}
-                />
-              </Suspense>
-            </ErrorBoundary></div>
-          )}
+          {autodartsCard}
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-3 pb-2 pt-0.5 portrait:short:pb-1.5 tablet:px-6 tablet:pt-1 landscape:pl-1.5 landscape:pt-2">
           {botBoardShown ? (
@@ -3411,40 +3469,7 @@ const GamePage = () => {
               </ErrorBoundary>
             )}
 
-            {autodartsEnabled && autodartsBoardNumber !== null && (
-              // Sibling to the LiveCamera block above, never both at once (mutually exclusive via
-              // autodartsEnabled) — same ErrorBoundary/Suspense safety net, same reasoning: a
-              // connection problem here only takes down this card, manual entry stays available.
-              <div className={currentPlayer?.isBot ? "hidden" : undefined}><ErrorBoundary label="Autodarts">
-                <Suspense fallback={<div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>}>
-                  <AutodartsLiveScore
-                    ref={autodartsLiveScoreRef}
-                    enabled={phase === "playing"}
-                    paused={!!pendingCheckoutChoice || !!pendingTiebreak || !!currentPlayer?.isBot}
-                    onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsMatchId(null); setAutodartsLastCommittedTurnId(null); }}
-                    onRoundCommit={submitDetectedRound}
-                    onPendingChange={setPendingLiveDarts}
-                    dartsRemaining={Math.max(1, 3 - dartsThisRound)}
-                    playerName={currentPlayerName}
-                    onRequestManualEntry={() => setShowManualInput(true)}
-                    boardNumber={autodartsBoardNumber}
-                    initialMatchId={autodartsMatchId}
-                    initialLastCommittedTurnId={autodartsLastCommittedTurnId}
-                    onMatchIdChange={setAutodartsMatchId}
-                    onTurnCommitted={setAutodartsLastCommittedTurnId}
-                    gameConfig={{
-                      baseScore: game.startScore === 301 ? 301 : 501,
-                      // Match-wide even though doubleOut is technically per-player in Dartspot's
-                      // own model (asymmetric house rules) -- GameSetup only offers Autodarts for
-                      // exactly 2 non-team players, and Autodarts' own lobby has one outMode for
-                      // the whole match, so player 1's setting stands in for both.
-                      doubleOut: game.players[0]?.doubleOut ?? true,
-                      legs: game.bestOfLegs,
-                    }}
-                  />
-                </Suspense>
-              </ErrorBoundary></div>
-            )}
+            {autodartsCard}
 
             {cricketBoard}
 

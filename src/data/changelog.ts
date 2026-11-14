@@ -1514,4 +1514,24 @@ export const CHANGELOG: ChangelogEntry[] = [
       tr: "Double Out ve Single Out'un yanına Master Out geldi: leg bir çift veya üçlü ile biter. Oyun başında herkes için ya da oyuncu başına seçilebilir. Checkout önerisi daha kısa yolu gösterir (60 = T20), botlar da buna uyar. Çevrimiçi oyunlar Double veya Single Out olarak kalır.",
     },
   },
+  {
+    id: "2026-11-14-autodarts-for-everyone",
+    date: "2026-11-14",
+    title: {
+      de: "Autodarts für alle + Sprachchat online",
+      en: "Autodarts for everyone + online voice chat",
+      fr: "Autodarts pour tous + chat vocal en ligne",
+      pl: "Autodarts dla wszystkich + czat głosowy online",
+      nl: "Autodarts voor iedereen + spraakchat online",
+      tr: "Herkes için Autodarts + çevrimiçi sesli sohbet",
+    },
+    description: {
+      de: "Verknüpfe in den Einstellungen dein eigenes Autodarts-Konto und spiel mit deinem Board – auch gegen Bots und online. Mitspieler bestätigen ihr eigenes Login, sonst spielen sie als Gast. Online gibt es jetzt einen Sprachchat direkt im Spiel.",
+      en: "Link your own Autodarts account in the settings and play with your board – also against bots and online. Fellow players confirm their own login, otherwise they play as a guest. Online matches now have a voice chat built in.",
+      fr: "Liez votre propre compte Autodarts dans les réglages et jouez avec votre cible – aussi contre des bots et en ligne. Les autres joueurs confirment leur propre connexion, sinon ils jouent en invité. Les matchs en ligne ont désormais un chat vocal intégré.",
+      pl: "Połącz własne konto Autodarts w ustawieniach i graj na swojej tarczy – także z botami i online. Współgracze potwierdzają własne logowanie, inaczej grają jako goście. Mecze online mają teraz wbudowany czat głosowy.",
+      nl: "Koppel je eigen Autodarts-account in de instellingen en speel met je bord – ook tegen bots en online. Medespelers bevestigen hun eigen login, anders spelen ze als gast. Online wedstrijden hebben nu een ingebouwde spraakchat.",
+      tr: "Ayarlardan kendi Autodarts hesabını bağla ve tahtanla oyna – botlara karşı ve çevrimiçi de. Diğer oyuncular kendi girişlerini onaylar, yoksa misafir olarak oynar. Çevrimiçi maçlarda artık yerleşik sesli sohbet var.",
+    },
+  },
 ];

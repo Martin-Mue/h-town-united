@@ -2041,6 +2041,52 @@ export type Database = {
         Args: { p_board_number: number }
         Returns: Json
       }
+      autodarts_account_link: {
+        Args: { p_email: string; p_password: string }
+        Returns: Json
+      }
+      autodarts_account_reload_boards: { Args: never; Returns: Json }
+      autodarts_account_set_board: {
+        Args: { p_board_id: string }
+        Returns: undefined
+      }
+      autodarts_account_status: { Args: never; Returns: Json }
+      autodarts_account_unlink: { Args: never; Returns: undefined }
+      autodarts_my_sources: { Args: never; Returns: Json }
+      autodarts_player_login_remove: {
+        Args: { p_login_id: string }
+        Returns: undefined
+      }
+      autodarts_player_login_start: {
+        Args: { p_email: string; p_password: string }
+        Returns: string
+      }
+      autodarts_player_login_status: {
+        Args: { p_login_id: string }
+        Returns: Json
+      }
+      autodarts_session_finish: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      autodarts_session_poll: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
+      autodarts_session_start: {
+        Args: {
+          p_base_score: number
+          p_board_number: number | null
+          p_double_out: boolean
+          p_host_kind: string
+          p_players: Json
+        }
+        Returns: string
+      }
+      autodarts_session_step: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
       autodarts_check_start_match_status: {
         Args: { p_board_number: number }
         Returns: Json

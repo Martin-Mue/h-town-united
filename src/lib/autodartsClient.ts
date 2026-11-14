@@ -1,8 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { DetectedDart } from "@/components/game/LiveCamera";
+import type { Json } from "@/integrations/supabase/types";
 
 /**
- * Client-side callers for the autodarts_start_match/autodarts_poll_match/autodarts_finish_match
+ * Client-side callers for the autodarts_session_..., autodarts_account_... and autodarts_player_login_...
  * Postgres RPCs (see the matching migration) -- NOT direct calls to Autodarts' own API. A live CORS
  * probe (2026-09-15, from this app's own deployed origin) confirmed api.autodarts.com restricts
  * every endpoint -- not just the login one -- to Origin/Referer https://play.autodarts.com, so a
@@ -17,72 +18,206 @@ import type { DetectedDart } from "@/components/game/LiveCamera";
  * confidence level per field).
  */
 
-export interface AutodartsGameConfig {
-  baseScore: 301 | 501;
+/** Where the throws come from: the caller's own linked Autodarts account (Settings) or a club
+ *  board an admin connected (Admin > Autodarts). */
+export type AutodartsSource = { kind: "account" } | { kind: "board"; boardNumber: number };
+
+/** One player of an Autodarts lobby, in throwing order. "host" = the owner of the source account
+ *  (stats land in their Autodarts account), "login" = a fellow player who confirmed their own
+ *  Autodarts login for this match, "guest" = scored on the same board under a plain name. */
+export type AutodartsLobbyPlayer =
+  | { kind: "host"; name: string }
+  | { kind: "guest"; name: string }
+  | { kind: "login"; name: string; login_id: string };
+
+export interface AutodartsLegConfig {
+  baseScore: number;
   doubleOut: boolean;
-  legs: number;
 }
 
-/** Starts a private single-player "Free Game" lobby with the given X01 settings and immediately
- *  starts it, server-side. autodarts_start_match itself only ENQUEUES the first step and returns
- *  right away -- it can't synchronously wait on pg_net's background worker from within its own
- *  transaction (that request would be invisible to the worker until the transaction commits, so
- *  polling for it inside the same call can never succeed -- confirmed against pg_net's own
- *  documented behavior, and the actual root cause of a full day of mysterious "Status timeout"
- *  failures across every endpoint this integration touches). Real progress happens via repeated
- *  calls to autodarts_check_start_match_status, exactly the same enqueue-then-poll-separately
- *  pattern autodarts_connect_board/autodarts_check_connect_status already used correctly. */
-export async function createFreeGameLobby(boardNumber: number, config: AutodartsGameConfig): Promise<{ matchId: string }> {
-  const { error: startError } = await supabase.rpc("autodarts_start_match", {
-    p_board_number: boardNumber,
+/** The open Autodarts session of one Dartspot leg (kept in the crash-recovery snapshot). */
+export interface AutodartsSessionRef {
+  sessionId: string;
+  legKey: string;
+}
+
+export interface AutodartsSessionInfo {
+  sessionId: string;
+  matchId: string;
+  boardName: string | null;
+  warnings: string[];
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Starts one Autodarts lobby for one Dartspot leg and waits until it is live. The server only
+ * enqueues each Autodarts call (pg_net can't see a request before the enqueuing transaction
+ * commits), so this drives autodarts_session_step about once a second: tokens -> lobby -> boards ->
+ * players -> start. One lobby per leg keeps Autodarts' own remaining score and starter order in
+ * line with Dartspot even when a bot or a remote online opponent wins a leg.
+ */
+export async function startAutodartsSession(
+  source: AutodartsSource,
+  config: AutodartsLegConfig,
+  players: AutodartsLobbyPlayer[],
+  isCancelled: () => boolean = () => false,
+): Promise<AutodartsSessionInfo> {
+  const { data: sessionId, error } = await supabase.rpc("autodarts_session_start", {
+    p_host_kind: source.kind,
+    p_board_number: source.kind === "board" ? source.boardNumber : null,
     p_base_score: config.baseScore,
     p_double_out: config.doubleOut,
-    p_legs: config.legs,
+    p_players: players as unknown as Json,
   });
-  if (startError) throw new Error(startError.message);
-
-  // Each real step (token refresh, lobby create, device lookup, lobby start) is its own pg_net
-  // round-trip, resolved on a separate poll tick -- a handful of quick steps land well inside this
-  // window in practice, but a slow Autodarts response on any one step can still eat several ticks.
-  for (let attempt = 0; attempt < 40; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const { data, error } = await supabase.rpc("autodarts_check_start_match_status", { p_board_number: boardNumber });
-    if (error) throw new Error(error.message);
-    const result = data as { status?: string; matchId?: string; message?: string; step?: string } | null;
-    if (result?.status === "connected") {
-      if (!result.matchId) throw new Error("Autodarts: Lobby-Erstellung lieferte keine Match-ID");
-      return { matchId: result.matchId };
-    }
-    if (result?.status === "error") {
-      console.warn("autodartsClient.createFreeGameLobby: server-reported failure", result);
-      throw new Error(result.message || "Autodarts: Lobby-Erstellung fehlgeschlagen");
-    }
-    // status === "pending" -- still working through the steps, keep polling.
-  }
-  throw new Error("Autodarts: Lobby-Erstellung dauert ungewöhnlich lange");
-}
-
-/** Best-effort, never-throws teardown -- closing the remote lobby is a courtesy so it doesn't sit
- *  open forever, not something a finished/abandoned local game should ever wait on or fail over.
- *  The RPC itself already swallows its own failures; this wraps the call too in case the RPC
- *  invocation itself (network hiccup to Supabase, say) fails. */
-export async function finishMatch(boardNumber: number, matchId: string): Promise<void> {
-  try {
-    await supabase.rpc("autodarts_finish_match", { p_board_number: boardNumber, p_match_id: matchId });
-  } catch (e) {
-    console.warn("autodartsClient.finishMatch failed (non-fatal)", e);
-  }
-}
-
-export async function getMatchState(boardNumber: number, matchId: string): Promise<unknown> {
-  const { data, error } = await supabase.rpc("autodarts_poll_match", { p_board_number: boardNumber, p_match_id: matchId });
   if (error) throw new Error(error.message);
-  // The RPC reports a failed Autodarts call as {status:"error"} instead of raising (a raise would
-  // roll back its own bookkeeping) -- surface it as a failure so the consecutive-failure fallback
-  // to manual entry still kicks in.
+  if (!sessionId) throw new Error("Autodarts: Sitzung konnte nicht angelegt werden");
+
+  for (let attempt = 0; attempt < 60; attempt++) {
+    await wait(attempt === 0 ? 300 : 1000);
+    if (isCancelled()) {
+      void finishAutodartsSession(sessionId);
+      throw new Error("cancelled");
+    }
+    const { data, error: stepError } = await supabase.rpc("autodarts_session_step", { p_session_id: sessionId });
+    if (stepError) throw new Error(stepError.message);
+    const result = data as { status?: string; matchId?: string; message?: string; boardName?: string; warnings?: string[] } | null;
+    if (result?.status === "live" && result.matchId) {
+      return { sessionId, matchId: result.matchId, boardName: result.boardName ?? null, warnings: result.warnings ?? [] };
+    }
+    if (result?.status === "error" || result?.status === "finished") {
+      throw new Error(result.message || "Autodarts: Spielstart fehlgeschlagen");
+    }
+  }
+  void finishAutodartsSession(sessionId);
+  throw new Error("Autodarts: Spielstart dauert ungewöhnlich lange");
+}
+
+/** Best-effort, never throws: closes the Autodarts match/lobby so it doesn't stay open. */
+export async function finishAutodartsSession(sessionId: string): Promise<void> {
+  try {
+    await supabase.rpc("autodarts_session_finish", { p_session_id: sessionId });
+  } catch (e) {
+    console.warn("autodartsClient.finishAutodartsSession failed (non-fatal)", e);
+  }
+}
+
+/** One poll tick: the previous tick's /gs/v0/matches/{id} body, or {status:"pending"}. A failed
+ *  Autodarts call comes back as {status:"error"} (the RPC never raises, so its own bookkeeping isn't
+ *  rolled back) and is turned into a throw here, so the consecutive-failure fallback still works. */
+export async function pollAutodartsSession(sessionId: string): Promise<unknown> {
+  const { data, error } = await supabase.rpc("autodarts_session_poll", { p_session_id: sessionId });
+  if (error) throw new Error(error.message);
   const result = data as { status?: string; message?: string } | null;
   if (result?.status === "error") throw new Error(result.message || "Autodarts: Spielstand-Abfrage fehlgeschlagen");
   return data;
+}
+
+// --- Own account (Settings) -------------------------------------------------------------------
+
+export interface AutodartsDevice {
+  id: string;
+  name: string;
+  type: string | null;
+  connected: boolean;
+}
+
+export interface AutodartsAccountState {
+  status: "disconnected" | "connecting" | "connected" | "error";
+  loading: boolean;
+  email: string | null;
+  username: string | null;
+  boards: AutodartsDevice[];
+  boardsUpdatedAt: string | null;
+  defaultBoardId: string | null;
+  lastError: string | null;
+}
+
+export async function loadAutodartsAccount(): Promise<AutodartsAccountState> {
+  const { data, error } = await supabase.rpc("autodarts_account_status");
+  if (error) throw new Error(error.message);
+  const d = (data ?? {}) as Partial<AutodartsAccountState>;
+  return {
+    status: d.status ?? "disconnected",
+    loading: !!d.loading,
+    email: d.email ?? null,
+    username: d.username ?? null,
+    boards: Array.isArray(d.boards) ? d.boards : [],
+    boardsUpdatedAt: d.boardsUpdatedAt ?? null,
+    defaultBoardId: d.defaultBoardId ?? null,
+    lastError: d.lastError ?? null,
+  };
+}
+
+/** Polls autodarts_account_status until nothing is pending any more (login, token refresh, board list). */
+export async function waitForAutodartsAccount(isCancelled: () => boolean = () => false): Promise<AutodartsAccountState> {
+  let state = await loadAutodartsAccount();
+  for (let attempt = 0; attempt < 40 && state.loading && !isCancelled(); attempt++) {
+    await wait(1000);
+    state = await loadAutodartsAccount();
+  }
+  return state;
+}
+
+export async function linkAutodartsAccount(email: string, password: string): Promise<void> {
+  const { error } = await supabase.rpc("autodarts_account_link", { p_email: email, p_password: password });
+  if (error) throw new Error(error.message);
+}
+
+export async function reloadAutodartsBoards(): Promise<void> {
+  const { error } = await supabase.rpc("autodarts_account_reload_boards");
+  if (error) throw new Error(error.message);
+}
+
+export async function setAutodartsDefaultBoard(boardId: string): Promise<void> {
+  const { error } = await supabase.rpc("autodarts_account_set_board", { p_board_id: boardId });
+  if (error) throw new Error(error.message);
+}
+
+export async function unlinkAutodartsAccount(): Promise<void> {
+  const { error } = await supabase.rpc("autodarts_account_unlink");
+  if (error) throw new Error(error.message);
+}
+
+// --- Sources for the game setup ---------------------------------------------------------------
+
+export interface AutodartsSources {
+  account: { status: string; username: string | null; boardName: string | null } | null;
+  clubBoards: { id: string; boardNumber: number; label: string | null; status: string }[];
+}
+
+export async function loadAutodartsSources(): Promise<AutodartsSources> {
+  const { data, error } = await supabase.rpc("autodarts_my_sources");
+  if (error) throw new Error(error.message);
+  const d = (data ?? {}) as Partial<AutodartsSources>;
+  return { account: d.account ?? null, clubBoards: Array.isArray(d.clubBoards) ? d.clubBoards : [] };
+}
+
+// --- A fellow player confirms their own login for one match -----------------------------------
+
+/** Logs a fellow player into Autodarts on this device for one match (12 h). Only the refresh token
+ *  is kept server-side, never the password. Resolves with the login id once Autodarts accepted it. */
+export async function confirmAutodartsPlayerLogin(email: string, password: string): Promise<{ loginId: string; username: string | null }> {
+  const { data: loginId, error } = await supabase.rpc("autodarts_player_login_start", { p_email: email, p_password: password });
+  if (error) throw new Error(error.message);
+  if (!loginId) throw new Error("Autodarts-Login fehlgeschlagen");
+  for (let attempt = 0; attempt < 40; attempt++) {
+    await wait(1000);
+    const { data, error: statusError } = await supabase.rpc("autodarts_player_login_status", { p_login_id: loginId });
+    if (statusError) throw new Error(statusError.message);
+    const r = data as { status?: string; username?: string | null; lastError?: string | null } | null;
+    if (r?.status === "connected") return { loginId, username: r.username ?? null };
+    if (r?.status === "error" || r?.status === "expired") throw new Error(r.lastError || "Autodarts-Login fehlgeschlagen");
+  }
+  throw new Error("Autodarts antwortet nicht -- bitte erneut versuchen");
+}
+
+export async function removeAutodartsPlayerLogin(loginId: string): Promise<void> {
+  try {
+    await supabase.rpc("autodarts_player_login_remove", { p_login_id: loginId });
+  } catch {
+    // best-effort; it expires after 12 h anyway
+  }
 }
 
 export interface AutodartsPollState {
