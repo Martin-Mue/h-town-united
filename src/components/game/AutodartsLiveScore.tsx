@@ -13,6 +13,7 @@ import {
   type AutodartsSource,
 } from "@/lib/autodartsClient";
 import type { DetectedDart } from "@/components/game/LiveCamera";
+import { decideAutodartsTurn, type SeenAutodartsTurn } from "@/lib/autodartsTurnTracker";
 
 /** Sibling to LiveCamera.tsx for Autodarts boards: same external contract
  *  (onRoundCommit/onPendingChange/enabled/onClose/playerName/onRequestManualEntry/paused), so
@@ -84,6 +85,8 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
   // Autodarts' own stable turns[].id of the turn already committed, so a turn still showing as
   // finished on the next poll or two is never committed twice.
   const lastCommittedTurnIdRef = useRef<string | null>(null);
+  // The current Autodarts turn as of the previous poll (see decideAutodartsTurn).
+  const lastSeenTurnRef = useRef<SeenAutodartsTurn | null>(null);
   const consecutiveFailuresRef = useRef(0);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pausedRef = useRef(paused);
@@ -122,27 +125,17 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
       setPhase("live");
       setErrorMessage(null);
 
-      // A bust reported by Autodarts is unambiguous (it saw the real throw order). Checkouts still
-      // go through Game.tsx's own prompt as the safe default.
-      const forced = parsed.currentTurnBusted ? ({ kind: "bust" } as const) : undefined;
-      const commitIfNew = () => {
-        if (parsed.currentTurnId && parsed.currentTurnId !== lastCommittedTurnIdRef.current && parsed.currentTurnThrows.length > 0) {
-          callbacksRef.current.onRoundCommit(parsed.currentTurnThrows, forced);
-          lastCommittedTurnIdRef.current = parsed.currentTurnId;
-          callbacksRef.current.onTurnCommitted?.(parsed.currentTurnId);
-        }
-      };
-
-      if (parsed.matchFinished || parsed.legFinished) {
-        commitIfNew();
-        return; // Dartspot moves to the next leg -> legKey changes -> new lobby
+      const decision = decideAutodartsTurn(parsed, lastSeenTurnRef.current, lastCommittedTurnIdRef.current);
+      lastSeenTurnRef.current = decision.seen;
+      for (const visit of decision.commits) {
+        // A bust reported by Autodarts is unambiguous (it saw the real throw order). Checkouts still
+        // go through Game.tsx's own prompt as the safe default.
+        callbacksRef.current.onRoundCommit(visit.throws, visit.busted ? { kind: "bust" } : undefined);
+        lastCommittedTurnIdRef.current = visit.turnId;
+        callbacksRef.current.onTurnCommitted?.(visit.turnId);
       }
-      if (!parsed.currentTurnId) return; // lobby live, no turn under way yet
-      if (parsed.currentTurnFinished) {
-        commitIfNew();
-      } else {
-        callbacksRef.current.onPendingChange?.(parsed.currentTurnThrows);
-      }
+      callbacksRef.current.onPendingChange?.(decision.pending);
+      // Leg/match won: Dartspot moves to the next leg -> legKey changes -> new lobby.
     } catch (e) {
       consecutiveFailuresRef.current += 1;
       console.warn("AutodartsLiveScore: poll failed", e);
@@ -173,6 +166,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         resumeCheckedRef.current = true;
         if (resume) {
           sessionIdRef.current = resume.sessionId;
+          lastSeenTurnRef.current = null;
           lastCommittedTurnIdRef.current = setup.initialLastCommittedTurnId ?? null;
         } else {
           const info = await startAutodartsSession(setup.source, setup.legConfig, setup.legPlayers, () => cancelled);
@@ -181,6 +175,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
             return;
           }
           sessionIdRef.current = info.sessionId;
+          lastSeenTurnRef.current = null;
           lastCommittedTurnIdRef.current = null;
           setBoardName(info.boardName);
           setWarning(info.warnings[0] ?? null);

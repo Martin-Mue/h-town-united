@@ -259,14 +259,15 @@ export interface AutodartsPollState {
  * bullseye as number 50 instead, this is the one place to fix — everything downstream already
  * expects the 25-with-multiplier shape.
  */
-function mapSegmentToDetectedDart(segment: { number?: number; multiplier?: number } | undefined): DetectedDart {
-  const baseValue = typeof segment?.number === "number" ? segment.number : 0;
+export function mapSegmentToDetectedDart(segment: { number?: number; multiplier?: number; bed?: string } | undefined): DetectedDart {
+  // A miss next to the board comes as bed "Outside" with multiplier 0 -- its "number" is just the
+  // nearest segment, so it must count as 0, never as a single of that number.
   const rawMultiplier = typeof segment?.multiplier === "number" ? segment.multiplier : 1;
+  if (!segment || rawMultiplier === 0 || segment.bed === "Outside") return { baseValue: 0, multiplier: 1, points: 0, confidence: 1 };
+  const baseValue = typeof segment.number === "number" ? segment.number : 0;
   const multiplier = (rawMultiplier === 2 || rawMultiplier === 3 ? rawMultiplier : 1) as 1 | 2 | 3;
-  // points is recomputed by Game.tsx's submitDetectedRound via pointsFor() and never trusted from
-  // the dart itself (confirmed in LiveCamera's own contract) — 0 here is a deliberate placeholder,
-  // not a guess that needs to be "right".
-  return { baseValue, multiplier, points: 0, confidence: 1 };
+  // Points for the live preview; Game.tsx's submitDetectedRound recomputes them via pointsFor() anyway.
+  return { baseValue, multiplier, points: baseValue * multiplier, confidence: 1 };
 }
 
 const ZERO_DATE_PREFIX = "0001-01-01";
@@ -285,7 +286,7 @@ export function parseAutodartsState(raw: unknown): AutodartsPollState {
     const s = (raw ?? {}) as Record<string, unknown>;
     const turns = Array.isArray(s.turns) ? (s.turns as Record<string, unknown>[]) : [];
     const lastTurn = turns[turns.length - 1] as Record<string, unknown> | undefined;
-    const throwsRaw = Array.isArray(lastTurn?.throws) ? (lastTurn!.throws as { segment?: { number?: number; multiplier?: number } }[]) : [];
+    const throwsRaw = Array.isArray(lastTurn?.throws) ? (lastTurn!.throws as { segment?: { number?: number; multiplier?: number; bed?: string } }[]) : [];
     return {
       currentTurnId: typeof lastTurn?.id === "string" ? (lastTurn.id as string) : null,
       currentPlayerIndex: typeof s.player === "number" ? s.player : null,
