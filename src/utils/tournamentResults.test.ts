@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { manualResultsFor, manualTournamentResults, resultFromLegs, type TournamentForStats } from "./tournamentResults";
+import { manualRecordFor, manualResultsFor, manualTournamentResults, resultFromLegs, type TournamentForStats } from "./tournamentResults";
 
 const ko = (bracket: unknown[]): TournamentForStats => ({ id: "t1", name: "Oktober", mode: "ko", created_at: "2026-10-10T16:00:00Z", bracket });
 
@@ -52,5 +52,20 @@ describe("resultFromLegs", () => {
     expect(resultFromLegs("Anna", "Ben", "", "2")).toBeNull();
     expect(resultFromLegs("Anna", "Ben", "1.5", "2")).toBeNull();
     expect(resultFromLegs("Anna", "Ben", "-1", "2")).toBeNull();
+  });
+});
+
+describe("manualRecordFor", () => {
+  const results = [
+    { key: "t1:a", tournamentName: "Nov", date: "2026-11-13T18:00:00Z", player1: "Anna", player2: "Ben", winner: "Anna" },
+    { key: "t1:b", tournamentName: "Nov", date: "2026-11-13T18:00:00Z", player1: "Ben", player2: "Anna", winner: "Ben" },
+    { key: "t0:c", tournamentName: "Okt", date: "2025-10-10T18:00:00Z", player1: "Anna & Cara", player2: "Ben & Dirk", winner: "Anna & Cara" },
+  ];
+  it("counts played and won, doubles teams for each member", () => {
+    expect(manualRecordFor(results, "Anna")).toEqual({ played: 3, won: 2 });
+    expect(manualRecordFor(results, "Cara")).toEqual({ played: 1, won: 1 });
+  });
+  it("applies the date filter", () => {
+    expect(manualRecordFor(results, "Anna", (d) => d.startsWith("2026"))).toEqual({ played: 2, won: 1 });
   });
 });

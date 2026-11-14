@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { manualResultsFor, manualTournamentResults, type TournamentForStats } from "@/utils/tournamentResults";
+import { manualRecordFor, manualResultsFor, manualTournamentResults, type TournamentForStats } from "@/utils/tournamentResults";
 import { BarChart3, Trophy, Target, TrendingUp, Users, Flame, Calendar, Crosshair, Zap, Hash, Award, Percent, Filter, X, ChevronDown, ChevronUp, ChevronRight, Video, Trash2, Download, FileText, ArrowLeft, Check, Share2, Dumbbell } from "lucide-react";
 import { TRAINING_DRILLS, loadAllRecords, loadStreak, DIFFICULTY_COLORS, DIFFICULTY_LABEL_KEY, type StoredRecordEntry, type StreakState } from "@/lib/trainingRecords";
 import { DartGameIcon, DartLoaderIcon as Loader2 } from "@/components/icons/DartIcons";
@@ -288,6 +288,31 @@ const StatisticsPage = () => {
     games.forEach((g) => { if (g.tournament_id && g.match_id) saved.add(`${g.tournament_id}:${g.match_id}`); });
     return manualTournamentResults(statsTournaments, saved);
   }, [games, statsTournaments]);
+
+  // The same hand-entered results, as games played / won per player for the rankings and the overview (they used to
+  // count in the player profile only). Same rule as there: they have no darts behind them, so they never touch an
+  // average; and mode / best-of / player filters cannot be applied to them, so those filters leave them out.
+  const manualRecordById = useMemo(() => {
+    const result: Record<string, { played: number; won: number }> = {};
+    if (filterMode !== "all" || filterBestOf !== "all" || filterPlayerId !== "all") return result;
+    const cutoff = timeFilterCutoff(filterTime);
+    const keep = (date: string) => {
+      const time = new Date(date).getTime();
+      return (cutoff === 0 || time >= cutoff) && (filterYear === "all" || new Date(date).getFullYear() === Number(filterYear));
+    };
+    for (const p of players) {
+      const record = manualRecordFor(manualResults, p.name, keep);
+      if (record.played > 0) result[p.id] = record;
+    }
+    return result;
+  }, [manualResults, players, filterTime, filterYear, filterMode, filterBestOf, filterPlayerId]);
+  const withManualRecord = <T extends { id: string; games_played: number; games_won: number }>(p: T): T => {
+    const record = manualRecordById[p.id];
+    return record ? { ...p, games_played: p.games_played + record.played, games_won: p.games_won + record.won } : p;
+  };
+  const playersWithManual = useMemo(() => players.map(withManualRecord),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [players, manualRecordById]);
 
   const availableModes = useMemo(() => {
     const s = new Set<string>();
@@ -644,7 +669,7 @@ const StatisticsPage = () => {
     const avgOfAverages = activePlayers.length > 0 ? activePlayers.reduce((s, p) => s + Number(p.average), 0) / activePlayers.length : 0;
     const bestAvg = players.reduce((best, p) => Number(p.average) > best.val ? { name: p.name, val: Number(p.average), emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const bestHighscore = players.reduce((best, p) => p.high_score > best.val ? { name: p.name, val: p.high_score, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
-    const mostGames = players.reduce((best, p) => p.games_played > best.val ? { name: p.name, val: p.games_played, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
+    const mostGames = playersWithManual.reduce((best, p) => p.games_played > best.val ? { name: p.name, val: p.games_played, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const totalDarts = filteredGames.reduce((s, g) => s + g.player1_total_throws + g.player2_total_throws, 0);
     // playerGameAveragesById is keyed by game_legs.player_id, which — unlike a freely typed
     // "Spieler 1"/"Spieler 2" guest name — is only ever set for a matched roster member, so
@@ -653,10 +678,10 @@ const StatisticsPage = () => {
       const p = players.find((pl) => pl.id === id);
       return p && val > best.val ? { name: p.name, val } : best;
     }, { name: "-", val: 0 });
-    const mostWins = players.reduce((best, p) => p.games_won > best.val ? { name: p.name, val: p.games_won, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
+    const mostWins = playersWithManual.reduce((best, p) => p.games_won > best.val ? { name: p.name, val: p.games_won, emoji: p.emoji } : best, { name: "-", val: 0, emoji: "" });
     const onlineGames = filteredGames.reduce((s, g) => s + (g.played_online ? 1 : 0), 0);
     return { totalGames, totalPlayers, avgOfAverages, bestAvg, bestHighscore, mostGames, totalDarts, highestGameAvg, mostWins, onlineGames, localGames: totalGames - onlineGames };
-  }, [filteredGames, players, playerBestGameAvgById]);
+  }, [filteredGames, players, playersWithManual, playerBestGameAvgById]);
 
   // 180s across the WHOLE club (every player, camera-tracked + manually backfilled), scoped to
   // whatever filter is active — same filteredGames convention every other club stat above
@@ -752,7 +777,16 @@ const StatisticsPage = () => {
   const leaderboard = useMemo(() => {
     // Any active filter (season, time range, mode, ...) switches the leaderboard from
     // lifetime totals to stats recomputed for just the filtered games.
-    const source = filtersActive ? Object.values(filteredPlayerStats) : players;
+    // Players whose only results in the filter window were entered by hand still get a row (no average).
+    const filteredWithManual = (() => {
+      const rows = Object.values(filteredPlayerStats).map(withManualRecord);
+      for (const p of players) {
+        if (filteredPlayerStats[p.id] || !manualRecordById[p.id]) continue;
+        rows.push(withManualRecord({ id: p.id, name: p.name, emoji: p.emoji || "🎯", games_played: 0, games_won: 0, average: 0, high_score: 0, double_rate: 0, elo_rating: p.elo_rating } as PlayerStats));
+      }
+      return rows;
+    })();
+    const source = filtersActive ? filteredWithManual : playersWithManual;
     return [...source].sort((a, b) => {
       if (sortBy === "average") return Number(b.average) - Number(a.average);
       if (sortBy === "games_won") return b.games_won - a.games_won;
@@ -782,7 +816,8 @@ const StatisticsPage = () => {
       }
       return (b.elo_rating ?? 1000) - (a.elo_rating ?? 1000); // sortBy === "elo", the last remaining case
     });
-  }, [players, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive, player180TotalById, cricketByPlayer, playerBestGameAvgById, playerShortestLegById, playerBestLegAvgById, leaguePointsByPlayer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [players, playersWithManual, manualRecordById, sortBy, advancedByPlayer, filteredPlayerStats, filtersActive, player180TotalById, cricketByPlayer, playerBestGameAvgById, playerShortestLegById, playerBestLegAvgById, leaguePointsByPlayer]);
 
   const pagedLeaderboard = usePagedList(leaderboard);
 
@@ -1109,7 +1144,7 @@ const StatisticsPage = () => {
     const top20LegAverages = legAverages.slice(0, 20);
 
     return { player, average: overallAverage, highScore, winRate, wins, averageTrend, currentStreak, bestStreak, recentForm, recentFormDelta, bestGameAvg, worstGameAvg, opponents, nemesis, favoriteOpponent, totalGames, top20LegAverages };
-  }, [selectedPlayerId, filteredGames, gameLegs, players, language, manualResults, filterTime, filterYear, filterMode, filterBestOf, filterPlayerId]);
+  }, [selectedPlayerId, filteredGames, gameLegs, players, language, t, manualResults, filterTime, filterYear, filterMode, filterBestOf, filterPlayerId]);
 
   const pagedRecentForm = usePagedList(playerDetailStats?.recentForm ?? []);
   const pagedTop20LegAverages = usePagedList(playerDetailStats?.top20LegAverages ?? []);

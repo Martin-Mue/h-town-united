@@ -59,6 +59,12 @@ export function resultFromLegs(player1: string, player2: string, legs1: string, 
   return { winner: score1 > score2 ? player1 : player2, score1, score2 };
 }
 
+/** How many hand-entered results a player has and how many of them were wins, after `keep` (a time filter, say). */
+export function manualRecordFor(results: ManualTournamentResult[], playerName: string, keep: (date: string) => boolean = () => true): { played: number; won: number } {
+  const mine = manualResultsFor(results, playerName).filter((r) => keep(r.date));
+  return { played: mine.length, won: mine.filter((r) => r.won).length };
+}
+
 const isSide = (entry: string, name: string): boolean => entry === name || splitTeamName(entry).includes(name);
 
 /** One player's view of the manual results: who the opponent was and whether they won. Doubles teams count for each member. */
