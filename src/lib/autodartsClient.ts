@@ -230,6 +230,9 @@ export interface AutodartsBoardState {
 }
 
 export interface AutodartsPollState {
+  /** false when this poll carried no match state at all (the server's {status:"pending"} while Autodarts
+   *  had not answered yet) -- then nothing about the turn may be concluded from it. */
+  hasMatchState: boolean;
   /** Board state, only present on polls that asked for it (see pollAutodartsSession's withBoard). */
   board: AutodartsBoardState | null;
   /** Confirmed live field `turns[last].id` — a stable per-turn identifier. AutodartsLiveScore keys
@@ -301,6 +304,7 @@ export function parseAutodartsState(raw: unknown): AutodartsPollState {
     const b = s._board as { status?: unknown; numThrows?: unknown } | undefined;
     const board = b && typeof b.status === "string" ? { status: b.status, numThrows: typeof b.numThrows === "number" ? b.numThrows : 0 } : null;
     return {
+      hasMatchState: Array.isArray(s.turns),
       board,
       currentTurnId: typeof lastTurn?.id === "string" ? (lastTurn.id as string) : null,
       currentPlayerIndex: typeof s.player === "number" ? s.player : null,
@@ -314,6 +318,7 @@ export function parseAutodartsState(raw: unknown): AutodartsPollState {
   } catch (e) {
     console.warn("autodartsClient.parseAutodartsState: unexpected shape", e);
     return {
+      hasMatchState: false,
       board: null,
       currentTurnId: null,
       currentPlayerIndex: null,

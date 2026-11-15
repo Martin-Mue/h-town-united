@@ -4,7 +4,7 @@ import { mapSegmentToDetectedDart, type AutodartsPollState } from "./autodartsCl
 
 const dart = (baseValue: number, multiplier: 1 | 2 | 3 = 1) => ({ baseValue, multiplier, points: baseValue * multiplier, confidence: 1 });
 const state = (over: Partial<AutodartsPollState>): AutodartsPollState => ({
-  board: null, currentTurnId: "t1", currentPlayerIndex: 0, gameScores: [501], legFinished: false, matchFinished: false,
+  hasMatchState: true, board: null, currentTurnId: "t1", currentPlayerIndex: 0, gameScores: [501], legFinished: false, matchFinished: false,
   currentTurnThrows: [], currentTurnBusted: false, currentTurnFinished: false, ...over,
 });
 const held = (over: Partial<HeldAutodartsVisit> = {}): HeldAutodartsVisit => ({
@@ -37,6 +37,18 @@ describe("decideAutodartsTurn", () => {
     const d = decideAutodartsTurn(state({ currentTurnId: "t2" }), seen, null);
     expect(d.finished).toEqual([seen]);
     expect(decideAutodartsTurn(state({ currentTurnId: "t2" }), seen, "t1").finished).toEqual([]);
+  });
+});
+
+describe("decideAutodartsTurn with a poll that carried no match state", () => {
+  it("keeps the open visit as it is instead of taking it over early", () => {
+    const two = decideAutodartsTurn(state({ currentTurnThrows: [dart(20), dart(20)] }), null, null);
+    const empty = decideAutodartsTurn(state({ hasMatchState: false, currentTurnId: null }), two.seen, null);
+    expect(empty.finished).toEqual([]);
+    expect(empty.pending).toHaveLength(2);
+    expect(empty.seen).toEqual(two.seen);
+    const three = decideAutodartsTurn(state({ currentTurnThrows: [dart(20), dart(20), dart(1)] }), empty.seen, null);
+    expect(three.finished).toEqual([{ turnId: "t1", throws: [dart(20), dart(20), dart(1)], busted: false }]);
   });
 });
 

@@ -43,6 +43,14 @@ export function decideAutodartsTurn(
   previous: SeenAutodartsTurn | null,
   lastHandledTurnId: string | null,
 ): AutodartsTurnDecision {
+  // A poll without match state ({status:"pending"}: Autodarts had not answered yet) says nothing about the
+  // turn. Reading it as "the turn is gone" took over visits with only the darts seen so far and lost the
+  // rest (seen live 2026-11-15: 23 Autodarts visits, 22 in Dartspot, checkouts then out of step).
+  if (!state.hasMatchState) {
+    const open = !!previous && previous.turnId !== lastHandledTurnId;
+    return { finished: [], pending: open ? previous!.throws : [], pendingBusted: open && previous!.busted, seen: previous };
+  }
+
   const finished: SeenAutodartsTurn[] = [];
   let handled = lastHandledTurnId;
 
