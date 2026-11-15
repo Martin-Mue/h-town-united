@@ -8,7 +8,7 @@ const state = (over: Partial<AutodartsPollState>): AutodartsPollState => ({
   currentTurnThrows: [], currentTurnBusted: false, currentTurnFinished: false, ...over,
 });
 const held = (over: Partial<HeldAutodartsVisit> = {}): HeldAutodartsVisit => ({
-  turnId: "t1", throws: [dart(20), dart(20), dart(20)], busted: false, edited: false, heldAt: 0, ...over,
+  turnId: "t1", throws: [dart(20), dart(20), dart(20)], busted: false, won: false, edited: false, heldAt: 0, ...over,
 });
 
 describe("decideAutodartsTurn", () => {
@@ -25,15 +25,21 @@ describe("decideAutodartsTurn", () => {
 
   it("a bust finishes the visit right away and is reported as such", () => {
     const d = decideAutodartsTurn(state({ currentTurnThrows: [dart(20, 3)], currentTurnBusted: true }), null, null);
-    expect(d.finished).toEqual([{ turnId: "t1", throws: [dart(20, 3)], busted: true }]);
+    expect(d.finished).toEqual([{ turnId: "t1", throws: [dart(20, 3)], busted: true, won: false }]);
   });
 
-  it("a checkout with fewer than three darts finishes the visit", () => {
-    expect(decideAutodartsTurn(state({ currentTurnThrows: [dart(16, 2)], legFinished: true }), null, null).finished).toHaveLength(1);
+  it("a checkout with fewer than three darts finishes the visit and keeps Autodarts' win signal", () => {
+    const d = decideAutodartsTurn(state({ currentTurnThrows: [dart(16, 2)], legFinished: true }), null, null);
+    expect(d.finished).toEqual([{ turnId: "t1", throws: [dart(16, 2)], busted: false, won: true }]);
   });
 
-  it("safety net: a new turn id finishes the previous turn last seen with darts", () => {
-    const seen = { turnId: "t1", throws: [dart(20), dart(5)], busted: false };
+  it("a match win is kept even when the same turn is also marked busted", () => {
+    const d = decideAutodartsTurn(state({ currentTurnThrows: [dart(20, 3), dart(20, 2)], currentTurnBusted: true, matchFinished: true }), null, null);
+    expect(d.finished[0]).toMatchObject({ busted: true, won: true });
+  });
+
+  it("safety net: a new turn id finishes the previous turn and preserves its win signal", () => {
+    const seen = { turnId: "t1", throws: [dart(20), dart(5)], busted: false, won: true };
     const d = decideAutodartsTurn(state({ currentTurnId: "t2" }), seen, null);
     expect(d.finished).toEqual([seen]);
     expect(decideAutodartsTurn(state({ currentTurnId: "t2" }), seen, "t1").finished).toEqual([]);
@@ -48,7 +54,7 @@ describe("decideAutodartsTurn with a poll that carried no match state", () => {
     expect(empty.pending).toHaveLength(2);
     expect(empty.seen).toEqual(two.seen);
     const three = decideAutodartsTurn(state({ currentTurnThrows: [dart(20), dart(20), dart(1)] }), empty.seen, null);
-    expect(three.finished).toEqual([{ turnId: "t1", throws: [dart(20), dart(20), dart(1)], busted: false }]);
+    expect(three.finished).toEqual([{ turnId: "t1", throws: [dart(20), dart(20), dart(1)], busted: false, won: false }]);
   });
 });
 
@@ -63,7 +69,7 @@ describe("shouldReleaseHeldVisit", () => {
     expect(shouldReleaseHeldVisit(held(), { status: "Throw", numThrows: 0 }, null, 500)).toBe(false);
   });
   it("goes in when the player already throws the next visit", () => {
-    expect(shouldReleaseHeldVisit(held(), { status: "Throw", numThrows: 1 }, { turnId: "t2", throws: [dart(5)], busted: false }, 3_000)).toBe(true);
+    expect(shouldReleaseHeldVisit(held(), { status: "Throw", numThrows: 1 }, { turnId: "t2", throws: [dart(5)], busted: false, won: false }, 3_000)).toBe(true);
   });
   it("without a usable board state, after the fallback time", () => {
     expect(shouldReleaseHeldVisit(held(), null, null, HELD_VISIT_FALLBACK_MS - 1)).toBe(false);

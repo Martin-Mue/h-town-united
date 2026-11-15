@@ -131,8 +131,12 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
     if (!visit) return;
     setHeldVisit(null);
     callbacksRef.current.onPendingChange?.([], false);
-    // Checkouts go through Game.tsx's own prompt as the safe default.
-    callbacksRef.current.onRoundCommit(visit.throws, visit.busted && !visit.edited ? { kind: "bust" } : undefined);
+    const forced = visit.won && !visit.busted && !visit.edited && visit.throws.length > 0
+      ? { kind: "checkout" as const, finisherIndex: visit.throws.length - 1 }
+      : visit.busted && !visit.edited
+        ? { kind: "bust" as const }
+        : undefined;
+    callbacksRef.current.onRoundCommit(visit.throws, forced);
     callbacksRef.current.onTurnCommitted?.(visit.turnId);
   };
 
@@ -155,7 +159,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         // A visit finished while an older one still waits: the older one's darts are surely out by now.
         if (heldRef.current) commitHeld();
         lastCommittedTurnIdRef.current = visit.turnId; // handled: never picked up twice
-        setHeldVisit({ turnId: visit.turnId, throws: visit.throws, busted: visit.busted, edited: false, heldAt: Date.now() });
+        setHeldVisit({ turnId: visit.turnId, throws: visit.throws, busted: visit.busted, won: visit.won, edited: false, heldAt: Date.now() });
       }
       if (heldRef.current && shouldReleaseHeldVisit(heldRef.current, parsed.board, decision.seen, Date.now())) commitHeld();
       const waiting = heldRef.current;

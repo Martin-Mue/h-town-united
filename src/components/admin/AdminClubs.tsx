@@ -33,15 +33,18 @@ const AdminClubs = () => {
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // Platform-owner RPCs are intentionally absent from the generated member-facing types.
+    // @ts-expect-error -- see comment above
     const { data, error } = await supabase.rpc("platform_clubs");
     if (error) { toast({ title: "Vereine konnten nicht geladen werden", description: error.message, variant: "destructive" }); setClubs([]); return; }
-    setClubs((data ?? []) as ClubRowData[]);
+    setClubs((data ?? []) as unknown as ClubRowData[]);
   }, [toast]);
   useEffect(() => { void load(); }, [load]);
 
   const startPilot = async (c: ClubRowData) => {
     const until = dates[c.id] || inDays(90);
     setBusy(c.id);
+    // @ts-expect-error -- platform-owner RPC, absent from generated member-facing types
     const { error } = await supabase.rpc("set_club_pilot", { _club: c.id, _until: until });
     setBusy(null);
     if (error) { toast({ title: "Pilot konnte nicht gesetzt werden", description: error.message, variant: "destructive" }); return; }
@@ -50,6 +53,7 @@ const AdminClubs = () => {
   };
   const endPilot = async (c: ClubRowData) => {
     setBusy(c.id);
+    // @ts-expect-error -- platform-owner RPC, absent from generated member-facing types
     const { error } = await supabase.rpc("end_club_pilot", { _club: c.id });
     setBusy(null);
     if (error) { toast({ title: "Pilot konnte nicht beendet werden", description: error.message, variant: "destructive" }); return; }

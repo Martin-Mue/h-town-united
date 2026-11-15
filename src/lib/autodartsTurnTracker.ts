@@ -6,6 +6,8 @@ export interface SeenAutodartsTurn {
   turnId: string;
   throws: DetectedDart[];
   busted: boolean;
+  /** Autodarts' own leg/match win signal for this exact turn. */
+  won: boolean;
 }
 
 /** A finished visit that waits until its darts are pulled before it goes into the Dartspot game. */
@@ -14,6 +16,8 @@ export interface HeldAutodartsVisit {
   throws: DetectedDart[];
   /** Autodarts' own bust flag. Ignored once the player edited a dart -- Dartspot then decides itself. */
   busted: boolean;
+  /** Autodarts' own leg/match win signal. Ignored once the player edited a dart. */
+  won: boolean;
   edited: boolean;
   /** Date.now() when the visit was finished. */
   heldAt: number;
@@ -61,7 +65,12 @@ export function decideAutodartsTurn(
 
   if (!state.currentTurnId) return { finished, pending: [], pendingBusted: false, seen: null };
 
-  const current: SeenAutodartsTurn = { turnId: state.currentTurnId, throws: state.currentTurnThrows, busted: state.currentTurnBusted };
+  const current: SeenAutodartsTurn = {
+    turnId: state.currentTurnId,
+    throws: state.currentTurnThrows,
+    busted: state.currentTurnBusted,
+    won: state.legFinished || state.matchFinished,
+  };
   const complete = current.throws.length >= 3 || current.busted || state.legFinished || state.matchFinished || state.currentTurnFinished;
   if (current.turnId !== handled && current.throws.length > 0 && complete) {
     finished.push(current);
