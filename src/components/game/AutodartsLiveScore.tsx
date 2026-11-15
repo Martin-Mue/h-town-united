@@ -13,7 +13,9 @@ import {
   type AutodartsSource,
 } from "@/lib/autodartsClient";
 import type { DetectedDart } from "@/components/game/LiveCamera";
-import { decideAutodartsTurn, type SeenAutodartsTurn } from "@/lib/autodartsTurnTracker";
+import { decideAutodartsTurn, shouldReleaseHeldVisit, type HeldAutodartsVisit, type SeenAutodartsTurn } from "@/lib/autodartsTurnTracker";
+import AutodartsVisitReview from "@/components/game/AutodartsVisitReview";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 /** Sibling to LiveCamera.tsx for Autodarts boards: same external contract
  *  (onRoundCommit/onPendingChange/enabled/onClose/playerName/onRequestManualEntry/paused), so
@@ -37,7 +39,8 @@ interface AutodartsLiveScoreProps {
     darts: DetectedDart[],
     forced?: { kind: "checkout"; finisherIndex: number } | { kind: "bust" },
   ) => void;
-  onPendingChange?: (darts: DetectedDart[]) => void;
+  /** Darts of the visit not yet in the game; busted = Autodarts already reported a bust for them. */
+  onPendingChange?: (darts: DetectedDart[], busted: boolean) => void;
   enabled: boolean;
   onClose: () => void;
   playerName?: string;
@@ -78,6 +81,14 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [boardName, setBoardName] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const { t } = useLanguage();
+  // A finished visit waiting until its darts are pulled (correctable until then), see shouldReleaseHeldVisit.
+  const [held, setHeld] = useState<HeldAutodartsVisit | null>(null);
+  const heldRef = useRef<HeldAutodartsVisit | null>(null);
+  const setHeldVisit = (visit: HeldAutodartsVisit | null) => {
+    heldRef.current = visit;
+    setHeld(visit);
+  };
 
   const sessionIdRef = useRef<string | null>(null);
   const resumeCheckedRef = useRef(false);
@@ -114,13 +125,24 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
     }
   };
 
+  /** Hands the held visit to the game. Autodarts' bust flag only counts while nobody corrected a dart. */
+  const commitHeld = () => {
+    const visit = heldRef.current;
+    if (!visit) return;
+    setHeldVisit(null);
+    callbacksRef.current.onPendingChange?.([], false);
+    // Checkouts go through Game.tsx's own prompt as the safe default.
+    callbacksRef.current.onRoundCommit(visit.throws, visit.busted && !visit.edited ? { kind: "bust" } : undefined);
+    callbacksRef.current.onTurnCommitted?.(visit.turnId);
+  };
+
   const pollTick = async () => {
     const sessionId = sessionIdRef.current;
     // Every tick is a database call (and an Autodarts request), so none while the app is in the background.
     if (pausedRef.current || !sessionId || pollInFlightRef.current || document.hidden) return;
     pollInFlightRef.current = true;
     try {
-      const raw = await pollAutodartsSession(sessionId);
+      const raw = await pollAutodartsSession(sessionId, !!heldRef.current);
       if (sessionIdRef.current !== sessionId) return; // a new leg started meanwhile
       const parsed = parseAutodartsState(raw);
       consecutiveFailuresRef.current = 0;
@@ -129,14 +151,18 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
 
       const decision = decideAutodartsTurn(parsed, lastSeenTurnRef.current, lastCommittedTurnIdRef.current);
       lastSeenTurnRef.current = decision.seen;
-      for (const visit of decision.commits) {
-        // A bust reported by Autodarts is unambiguous (it saw the real throw order). Checkouts still
-        // go through Game.tsx's own prompt as the safe default.
-        callbacksRef.current.onRoundCommit(visit.throws, visit.busted ? { kind: "bust" } : undefined);
-        lastCommittedTurnIdRef.current = visit.turnId;
-        callbacksRef.current.onTurnCommitted?.(visit.turnId);
+      for (const visit of decision.finished) {
+        // A visit finished while an older one still waits: the older one's darts are surely out by now.
+        if (heldRef.current) commitHeld();
+        lastCommittedTurnIdRef.current = visit.turnId; // handled: never picked up twice
+        setHeldVisit({ turnId: visit.turnId, throws: visit.throws, busted: visit.busted, edited: false, heldAt: Date.now() });
       }
-      callbacksRef.current.onPendingChange?.(decision.pending);
+      if (heldRef.current && shouldReleaseHeldVisit(heldRef.current, parsed.board, decision.seen, Date.now())) commitHeld();
+      const waiting = heldRef.current;
+      callbacksRef.current.onPendingChange?.(
+        waiting ? waiting.throws : decision.pending,
+        waiting ? waiting.busted && !waiting.edited : decision.pendingBusted,
+      );
       // Leg/match won: Dartspot moves to the next leg -> legKey changes -> new lobby.
     } catch (e) {
       consecutiveFailuresRef.current += 1;
@@ -169,6 +195,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         if (resume) {
           sessionIdRef.current = resume.sessionId;
           lastSeenTurnRef.current = null;
+          setHeldVisit(null);
           lastCommittedTurnIdRef.current = setup.initialLastCommittedTurnId ?? null;
         } else {
           const info = await startAutodartsSession(setup.source, setup.legConfig, setup.legPlayers, () => cancelled);
@@ -178,6 +205,7 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
           }
           sessionIdRef.current = info.sessionId;
           lastSeenTurnRef.current = null;
+          setHeldVisit(null);
           lastCommittedTurnIdRef.current = null;
           setBoardName(info.boardName);
           setWarning(info.warnings[0] ?? null);
@@ -208,15 +236,18 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         sessionIdRef.current = null;
         callbacksRef.current.onSessionChange?.(null);
       }
-      callbacksRef.current.onPendingChange?.([]);
+      setHeldVisit(null);
+      callbacksRef.current.onPendingChange?.([], false);
     };
     // Only a new leg, a new source or enabled toggling starts a new Autodarts lobby (setup is read via legSetupRef).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, legKey, currentSourceKey]);
 
   if (!enabled) return null;
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-4 flex items-center justify-between gap-3">
+    <div className="bg-card border border-border rounded-2xl p-4">
+    <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
         {phase === "live" && <Wifi className="w-5 h-5 text-secondary shrink-0" />}
         {phase === "error" && <WifiOff className="w-5 h-5 text-destructive shrink-0" />}
@@ -243,6 +274,19 @@ const AutodartsLiveScore = forwardRef<AutodartsLiveScoreHandle, AutodartsLiveSco
         >
           <Keyboard className="w-4 h-4" /> Manuell
         </Button>
+      )}
+    </div>
+      {held && (
+        <AutodartsVisitReview
+          darts={held.throws}
+          busted={held.busted && !held.edited}
+          onChange={(throws) => {
+            const next = { ...held, throws, edited: true };
+            setHeldVisit(next);
+            callbacksRef.current.onPendingChange?.(throws, false);
+          }}
+          onConfirm={commitHeld}
+        />
       )}
     </div>
   );

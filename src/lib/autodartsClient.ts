@@ -105,8 +105,9 @@ export async function finishAutodartsSession(sessionId: string): Promise<void> {
 /** One poll tick: the previous tick's /gs/v0/matches/{id} body, or {status:"pending"}. A failed
  *  Autodarts call comes back as {status:"error"} (the RPC never raises, so its own bookkeeping isn't
  *  rolled back) and is turned into a throw here, so the consecutive-failure fallback still works. */
-export async function pollAutodartsSession(sessionId: string): Promise<unknown> {
-  const { data, error } = await supabase.rpc("autodarts_session_poll", { p_session_id: sessionId });
+/** withBoard: also fetch the board state (darts in the board, takeout) -- only needed while a visit waits for its takeout. */
+export async function pollAutodartsSession(sessionId: string, withBoard = false): Promise<unknown> {
+  const { data, error } = await supabase.rpc("autodarts_session_poll", { p_session_id: sessionId, p_with_board: withBoard });
   if (error) throw new Error(error.message);
   const result = data as { status?: string; message?: string } | null;
   if (result?.status === "error") throw new Error(result.message || "Autodarts: Spielstand-Abfrage fehlgeschlagen");
@@ -220,7 +221,17 @@ export async function removeAutodartsPlayerLogin(loginId: string): Promise<void>
   }
 }
 
+/** Autodarts board manager state (GET /bs/v0/boards -> state), passed through by autodarts_session_poll as "_board". */
+export interface AutodartsBoardState {
+  /** Throw | Takeout | Takeout in progress | Stopped | Starting | ... */
+  status: string;
+  /** Darts currently in the board. */
+  numThrows: number;
+}
+
 export interface AutodartsPollState {
+  /** Board state, only present on polls that asked for it (see pollAutodartsSession's withBoard). */
+  board: AutodartsBoardState | null;
   /** Confirmed live field `turns[last].id` — a stable per-turn identifier. AutodartsLiveScore keys
    *  its "have I already committed this turn" tracking off THIS, not off player index or throw
    *  count, since turn identity is the one thing that can't be ambiguous across polls. */
@@ -287,7 +298,10 @@ export function parseAutodartsState(raw: unknown): AutodartsPollState {
     const turns = Array.isArray(s.turns) ? (s.turns as Record<string, unknown>[]) : [];
     const lastTurn = turns[turns.length - 1] as Record<string, unknown> | undefined;
     const throwsRaw = Array.isArray(lastTurn?.throws) ? (lastTurn!.throws as { segment?: { number?: number; multiplier?: number; bed?: string } }[]) : [];
+    const b = s._board as { status?: unknown; numThrows?: unknown } | undefined;
+    const board = b && typeof b.status === "string" ? { status: b.status, numThrows: typeof b.numThrows === "number" ? b.numThrows : 0 } : null;
     return {
+      board,
       currentTurnId: typeof lastTurn?.id === "string" ? (lastTurn.id as string) : null,
       currentPlayerIndex: typeof s.player === "number" ? s.player : null,
       gameScores: Array.isArray(s.gameScores) ? (s.gameScores as unknown[]).filter((n): n is number => typeof n === "number") : [],
@@ -300,6 +314,7 @@ export function parseAutodartsState(raw: unknown): AutodartsPollState {
   } catch (e) {
     console.warn("autodartsClient.parseAutodartsState: unexpected shape", e);
     return {
+      board: null,
       currentTurnId: null,
       currentPlayerIndex: null,
       gameScores: [],

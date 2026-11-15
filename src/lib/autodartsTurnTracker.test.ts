@@ -1,53 +1,67 @@
 import { describe, it, expect } from "vitest";
-import { decideAutodartsTurn } from "./autodartsTurnTracker";
-import type { AutodartsPollState } from "./autodartsClient";
+import { decideAutodartsTurn, shouldReleaseHeldVisit, HELD_VISIT_FALLBACK_MS, type HeldAutodartsVisit } from "./autodartsTurnTracker";
+import { mapSegmentToDetectedDart, type AutodartsPollState } from "./autodartsClient";
 
-const dart = (baseValue: number, multiplier: 1 | 2 | 3 = 1) => ({ baseValue, multiplier, points: 0, confidence: 1 });
+const dart = (baseValue: number, multiplier: 1 | 2 | 3 = 1) => ({ baseValue, multiplier, points: baseValue * multiplier, confidence: 1 });
 const state = (over: Partial<AutodartsPollState>): AutodartsPollState => ({
-  currentTurnId: "t1", currentPlayerIndex: 0, gameScores: [501], legFinished: false, matchFinished: false,
+  board: null, currentTurnId: "t1", currentPlayerIndex: 0, gameScores: [501], legFinished: false, matchFinished: false,
   currentTurnThrows: [], currentTurnBusted: false, currentTurnFinished: false, ...over,
+});
+const held = (over: Partial<HeldAutodartsVisit> = {}): HeldAutodartsVisit => ({
+  turnId: "t1", throws: [dart(20), dart(20), dart(20)], busted: false, edited: false, heldAt: 0, ...over,
 });
 
 describe("decideAutodartsTurn", () => {
-  it("keeps three darts pending until they are pulled, then commits once", () => {
-    const three = decideAutodartsTurn(state({ currentTurnThrows: [dart(20), dart(20), dart(7)] }), null, null);
-    expect(three.commits).toEqual([]);
-    expect(three.pending).toHaveLength(3);
-    const pulled = decideAutodartsTurn(state({ currentTurnId: "t2", currentTurnThrows: [] }), three.seen, null);
-    expect(pulled.commits).toEqual([{ turnId: "t1", throws: [dart(20), dart(20), dart(7)], busted: false }]);
-    const again = decideAutodartsTurn(state({ currentTurnId: "t2", currentTurnThrows: [] }), pulled.seen, "t1");
-    expect(again.commits).toEqual([]);
+  it("open darts are pending, the third dart finishes the visit once", () => {
+    const one = decideAutodartsTurn(state({ currentTurnThrows: [dart(20)] }), null, null);
+    expect(one.finished).toEqual([]);
+    expect(one.pending).toHaveLength(1);
+    const three = decideAutodartsTurn(state({ currentTurnThrows: [dart(20), dart(20), dart(7)] }), one.seen, null);
+    expect(three.finished).toHaveLength(1);
+    expect(three.pending).toEqual([]);
+    const again = decideAutodartsTurn(state({ currentTurnThrows: [dart(20), dart(20), dart(7)] }), three.seen, "t1");
+    expect(again.finished).toEqual([]);
   });
 
-  it("a bust also waits for the takeout and keeps its bust flag", () => {
-    const bust = decideAutodartsTurn(state({ currentTurnThrows: [dart(20, 3)], currentTurnBusted: true }), null, null);
-    expect(bust.commits).toEqual([]);
-    const pulled = decideAutodartsTurn(state({ currentTurnId: "t2" }), bust.seen, null);
-    expect(pulled.commits).toEqual([{ turnId: "t1", throws: [dart(20, 3)], busted: true }]);
+  it("a bust finishes the visit right away and is reported as such", () => {
+    const d = decideAutodartsTurn(state({ currentTurnThrows: [dart(20, 3)], currentTurnBusted: true }), null, null);
+    expect(d.finished).toEqual([{ turnId: "t1", throws: [dart(20, 3)], busted: true }]);
   });
 
-  it("commits a checkout with fewer than three darts", () => {
-    const d = decideAutodartsTurn(state({ currentTurnThrows: [dart(16, 2)], legFinished: true }), null, null);
-    expect(d.commits).toHaveLength(1);
+  it("a checkout with fewer than three darts finishes the visit", () => {
+    expect(decideAutodartsTurn(state({ currentTurnThrows: [dart(16, 2)], legFinished: true }), null, null).finished).toHaveLength(1);
   });
 
-  it("safety net: a new turn id commits the previous turn last seen with darts", () => {
+  it("safety net: a new turn id finishes the previous turn last seen with darts", () => {
     const seen = { turnId: "t1", throws: [dart(20), dart(5)], busted: false };
-    const d = decideAutodartsTurn(state({ currentTurnId: "t2", currentTurnThrows: [] }), seen, null);
-    expect(d.commits).toEqual([{ turnId: "t1", throws: seen.throws, busted: false }]);
-  });
-
-  it("never re-commits a turn that was already committed", () => {
-    const seen = { turnId: "t1", throws: [dart(20), dart(20), dart(20)], busted: false };
-    const d = decideAutodartsTurn(state({ currentTurnId: "t2" }), seen, "t1");
-    expect(d.commits).toEqual([]);
+    const d = decideAutodartsTurn(state({ currentTurnId: "t2" }), seen, null);
+    expect(d.finished).toEqual([seen]);
+    expect(decideAutodartsTurn(state({ currentTurnId: "t2" }), seen, "t1").finished).toEqual([]);
   });
 });
 
-import { mapSegmentToDetectedDart } from "./autodartsClient";
+describe("shouldReleaseHeldVisit", () => {
+  it("waits while darts are in the board or the takeout runs", () => {
+    expect(shouldReleaseHeldVisit(held(), { status: "Throw", numThrows: 3 }, null, 5_000)).toBe(false);
+    expect(shouldReleaseHeldVisit(held(), { status: "Takeout", numThrows: 0 }, null, 5_000)).toBe(false);
+    expect(shouldReleaseHeldVisit(held(), { status: "Takeout in progress", numThrows: 0 }, null, 5_000)).toBe(false);
+  });
+  it("goes into the game once the board is clear again (not in the first moments)", () => {
+    expect(shouldReleaseHeldVisit(held(), { status: "Throw", numThrows: 0 }, null, 5_000)).toBe(true);
+    expect(shouldReleaseHeldVisit(held(), { status: "Throw", numThrows: 0 }, null, 500)).toBe(false);
+  });
+  it("goes in when the player already throws the next visit", () => {
+    expect(shouldReleaseHeldVisit(held(), { status: "Throw", numThrows: 1 }, { turnId: "t2", throws: [dart(5)], busted: false }, 3_000)).toBe(true);
+  });
+  it("without a usable board state, after the fallback time", () => {
+    expect(shouldReleaseHeldVisit(held(), null, null, HELD_VISIT_FALLBACK_MS - 1)).toBe(false);
+    expect(shouldReleaseHeldVisit(held(), { status: "Stopped", numThrows: 0 }, null, HELD_VISIT_FALLBACK_MS)).toBe(true);
+  });
+});
+
 describe("mapSegmentToDetectedDart", () => {
   it("scores real Autodarts segments", () => {
-    expect(mapSegmentToDetectedDart({ name: "S20", number: 20, bed: "SingleInner", multiplier: 1 } as never)).toMatchObject({ baseValue: 20, multiplier: 1, points: 20 });
+    expect(mapSegmentToDetectedDart({ number: 20, bed: "SingleInner", multiplier: 1 })).toMatchObject({ baseValue: 20, multiplier: 1, points: 20 });
     expect(mapSegmentToDetectedDart({ number: 20, bed: "Triple", multiplier: 3 })).toMatchObject({ points: 60 });
     expect(mapSegmentToDetectedDart({ number: 25, bed: "Double", multiplier: 2 })).toMatchObject({ baseValue: 25, multiplier: 2, points: 50 });
   });

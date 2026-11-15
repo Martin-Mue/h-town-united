@@ -482,6 +482,8 @@ const GamePage = () => {
   // Shared between LiveCamera and AutodartsLiveScore's onPendingChange -- the two are mutually
   // exclusive per game (see autodartsEnabled), so one "in-progress visit" preview slot is enough.
   const [pendingLiveDarts, setPendingLiveDarts] = useState<DetectedDart[]>([]);
+  // Autodarts already reported the pending darts as a bust (see AutodartsLiveScore.onPendingChange).
+  const [pendingLiveBust, setPendingLiveBust] = useState(false);
   // Set when a camera-detected round's total lands exactly on a finish under double-out AND the
   // visit mixes at least one double with at least one non-double dart — genuinely ambiguous from
   // a single end-of-visit photo (see resolveX01Visit's doc comment): it could be a valid checkout
@@ -1771,6 +1773,7 @@ const GamePage = () => {
     setDartsThisRound(curDarts);
     setTurnStartRemaining(curStart);
     setPendingLiveDarts([]);
+    setPendingLiveBust(false);
     flashScore(teamIndexFor(curGame.teams, startIdx));
     // Cap reached but tied on lowest remaining — same bull-off prompt handleX01Throw raises,
     // doesn't block the normal player-advance above (matches its behavior: the tie is a
@@ -2896,7 +2899,7 @@ const GamePage = () => {
             paused={!!pendingCheckoutChoice || !!pendingTiebreak || !!currentPlayer?.isBot || (!!onlineMatchId && !onlineMatch.isMyTurn)}
             onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsSession(null); setAutodartsLastCommittedTurnId(null); }}
             onRoundCommit={submitDetectedRound}
-            onPendingChange={setPendingLiveDarts}
+            onPendingChange={(darts, busted) => { setPendingLiveDarts(darts); setPendingLiveBust(busted); }}
             playerName={currentPlayerName}
             onRequestManualEntry={() => setShowManualInput(true)}
             source={autodartsSource}
@@ -2920,15 +2923,19 @@ const GamePage = () => {
   const arenaLivePoints = cameraEnabled || autodartsEnabled ? pendingLiveDarts.reduce((s, d) => s + d.points, 0) : 0;
   const arenaCards: ArenaScoreCard[] = scoreboardCardList.map((card) => {
     const showPreview = card.isActive && arenaLivePoints > 0 && !isCricket;
+    // A live visit that would bust keeps the score as it is and says so, instead of counting down to 0.
+    const previewLeft = card.remaining - arenaLivePoints;
+    const previewBust = card.isActive && !isCricket && (cameraEnabled || autodartsEnabled) && pendingLiveDarts.length > 0
+      && ((autodartsEnabled && pendingLiveBust) || previewLeft < 0 || (previewLeft === 1 && currentOutRule !== "single"));
     return {
       key: card.key, name: card.label, subLabel: card.subLabel, isBot: card.isBot, isActive: card.isActive,
       startedLeg: card.key === cameraStartSlot,
-      score: isCricket ? card.cricketPoints : showPreview ? Math.max(0, card.remaining - arenaLivePoints) : card.remaining,
-      scoreNote: showPreview ? `(${card.remaining} − ${arenaLivePoints} live)` : undefined,
+      score: isCricket ? card.cricketPoints : previewBust ? card.remaining : showPreview ? previewLeft : card.remaining,
+      scoreNote: previewBust ? "BUST" : showPreview ? `(${card.remaining} − ${arenaLivePoints} live)` : undefined,
       legsWon: card.legsWon, setsWon: card.setsWon,
       legAvg: card.avg.toFixed(1), matchAvg: card.matchAvg.toFixed(1), lastVisit: card.lastVisit === null ? "–" : String(card.lastVisit),
       p180: card.p180, streak: legStreak?.slot === card.key ? legStreak.count : undefined,
-      throwing: card.isActive && card.isBot && botThinking, flashing: scoreFlash?.slot === card.key, preview: showPreview,
+      throwing: card.isActive && card.isBot && botThinking, flashing: scoreFlash?.slot === card.key, preview: showPreview && !previewBust,
     };
   });
   const arenaLabels = {

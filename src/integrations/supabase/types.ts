@@ -2070,7 +2070,7 @@ export type Database = {
         Returns: undefined
       }
       autodarts_session_poll: {
-        Args: { p_session_id: string }
+        Args: { p_session_id: string; p_with_board?: boolean }
         Returns: Json
       }
       autodarts_session_start: {

@@ -1,5 +1,5 @@
 import type { DetectedDart } from "@/components/game/LiveCamera";
-import type { AutodartsPollState } from "@/lib/autodartsClient";
+import type { AutodartsBoardState, AutodartsPollState } from "@/lib/autodartsClient";
 
 /** The current Autodarts turn as last seen by a poll. */
 export interface SeenAutodartsTurn {
@@ -8,45 +8,83 @@ export interface SeenAutodartsTurn {
   busted: boolean;
 }
 
+/** A finished visit that waits until its darts are pulled before it goes into the Dartspot game. */
+export interface HeldAutodartsVisit {
+  turnId: string;
+  throws: DetectedDart[];
+  /** Autodarts' own bust flag. Ignored once the player edited a dart -- Dartspot then decides itself. */
+  busted: boolean;
+  edited: boolean;
+  /** Date.now() when the visit was finished. */
+  heldAt: number;
+}
+
 export interface AutodartsTurnDecision {
-  /** Visits to hand to Dartspot, oldest first (at most two: a turn missed between polls, then the current one). */
-  commits: { turnId: string; throws: DetectedDart[]; busted: boolean }[];
-  /** Darts of the still-open current turn, for the live preview (empty once committed). */
+  /** Visits that are finished on the board, oldest first (at most two: a turn missed between polls, then the current one). */
+  finished: SeenAutodartsTurn[];
+  /** Darts of the still-open current turn, for the live preview. */
   pending: DetectedDart[];
+  pendingBusted: boolean;
   /** What to remember for the next poll. */
   seen: SeenAutodartsTurn | null;
 }
 
 /**
- * Decides which Autodarts visits to commit, from one poll of GET /gs/v0/matches/{id}/state.
+ * Finds the visits that are finished on the board, from one poll of GET /gs/v0/matches/{id}/state.
  *
- * Seen live (2026-11-14): /state only ever carries the CURRENT turn, and Autodarts only marks a turn
- * finished at takeout -- the very moment it replaces it with the next one, so "finished" itself is
- * hardly ever seen. A visit is therefore committed when the darts are pulled: a new turn id shows up
- * while the previous one (last seen with darts) was never committed. Until then its darts stay a
- * pending preview -- so a bot only starts throwing once the board is clear (user wish 2026-11-14).
- * A won leg/match is committed right away: there is no next turn to wait for.
+ * Seen live (2026-11-14/15): /state only ever carries the CURRENT turn, and Autodarts moves on to the next
+ * turn by itself ~3-4 s after the third dart (right after the first dart of a bust) -- darts still in the
+ * board. A visit is therefore finished as soon as it is complete on the board (three darts, a bust, the
+ * leg/match won), and as a safety net when a new turn id shows up while the previous one (last seen with
+ * darts) was never handled. When it actually goes into the game is up to shouldReleaseHeldVisit.
  */
 export function decideAutodartsTurn(
   state: AutodartsPollState,
   previous: SeenAutodartsTurn | null,
-  lastCommittedTurnId: string | null,
+  lastHandledTurnId: string | null,
 ): AutodartsTurnDecision {
-  const commits: AutodartsTurnDecision["commits"] = [];
-  let committed = lastCommittedTurnId;
+  const finished: SeenAutodartsTurn[] = [];
+  let handled = lastHandledTurnId;
 
-  if (previous && previous.turnId !== state.currentTurnId && previous.turnId !== committed && previous.throws.length > 0) {
-    commits.push({ turnId: previous.turnId, throws: previous.throws, busted: previous.busted });
-    committed = previous.turnId;
+  if (previous && previous.turnId !== state.currentTurnId && previous.turnId !== handled && previous.throws.length > 0) {
+    finished.push(previous);
+    handled = previous.turnId;
   }
 
-  if (!state.currentTurnId) return { commits, pending: [], seen: null };
+  if (!state.currentTurnId) return { finished, pending: [], pendingBusted: false, seen: null };
 
   const current: SeenAutodartsTurn = { turnId: state.currentTurnId, throws: state.currentTurnThrows, busted: state.currentTurnBusted };
-  const complete = state.legFinished || state.matchFinished || state.currentTurnFinished;
-  if (current.turnId !== committed && current.throws.length > 0 && complete) {
-    commits.push({ turnId: current.turnId, throws: current.throws, busted: current.busted });
-    return { commits, pending: [], seen: current };
+  const complete = current.throws.length >= 3 || current.busted || state.legFinished || state.matchFinished || state.currentTurnFinished;
+  if (current.turnId !== handled && current.throws.length > 0 && complete) {
+    finished.push(current);
+    return { finished, pending: [], pendingBusted: false, seen: current };
   }
-  return { commits, pending: current.turnId === committed ? [] : current.throws, seen: current };
+  const open = current.turnId !== handled;
+  return { finished, pending: open ? current.throws : [], pendingBusted: open && current.busted, seen: current };
+}
+
+/** Without a usable board state, a held visit goes into the game after this long anyway. */
+export const HELD_VISIT_FALLBACK_MS = 20_000;
+
+const MIN_HOLD_MS = 2_000;
+const BOARD_RUNNING = new Set(["Throw", "Takeout", "Takeout in progress"]);
+
+/**
+ * Whether a held visit can go into the game now (user wish 2026-11-15: only once the darts are pulled, so
+ * there is time to correct it and a bot does not start while the darts are still in the board):
+ *  - the board is back to "Throw" with no darts in it (Autodarts' board manager: Throw -> Takeout ->
+ *    Takeout in progress -> Throw), or
+ *  - the next Autodarts turn already has darts (the player is throwing again), or
+ *  - the board reports nothing usable (offline, stopped, no answer) for HELD_VISIT_FALLBACK_MS.
+ */
+export function shouldReleaseHeldVisit(
+  held: HeldAutodartsVisit,
+  board: AutodartsBoardState | null,
+  current: SeenAutodartsTurn | null,
+  now: number,
+): boolean {
+  if (current && current.turnId !== held.turnId && current.throws.length > 0) return true;
+  // The first board answer after holding can still be from just before the last dart landed -- give it a moment.
+  if (board && BOARD_RUNNING.has(board.status)) return board.status === "Throw" && board.numThrows === 0 && now - held.heldAt >= MIN_HOLD_MS;
+  return now - held.heldAt >= HELD_VISIT_FALLBACK_MS;
 }
