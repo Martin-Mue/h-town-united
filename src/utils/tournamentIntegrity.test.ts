@@ -103,3 +103,15 @@ describe("walkover after a withdrawal", () => {
     expect(reset[0].walkover).toBeUndefined();
   });
 });
+
+describe("a replayed +1 leg", () => {
+  const ready = (): Match[] => [{ id: "r1-0", round: 1, position: 0, player1: "A", player2: "B", score1: 1, score2: 0 }];
+  it("adds the leg when the score is still the one the tap was made on", () => {
+    const next = applyActionToKoBracket(ready(), { type: "setKoScore", matchId: "r1-0", slot: 2, from: { score1: 1, score2: 0 } }, { defaultBestOf: 5, boards: 1 })!;
+    expect(next[0]).toMatchObject({ score1: 1, score2: 1 });
+  });
+  it("is a no-op when the leg was already counted", () => {
+    const counted: Match[] = [{ ...ready()[0], score2: 1 }];
+    expect(applyActionToKoBracket(counted, { type: "setKoScore", matchId: "r1-0", slot: 2, from: { score1: 1, score2: 0 } }, { defaultBestOf: 5, boards: 1 })).toBeNull();
+  });
+});

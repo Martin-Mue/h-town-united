@@ -1398,7 +1398,8 @@ const TournamentPage = () => {
   };
 
   const setKoScore = async (matchId: string, slot: 1 | 2) => {
-    await runBracketAction({ type: "setKoScore", matchId, slot });
+    const current = (activeTournament?.bracket as Match[] | undefined)?.find((m) => m.id === matchId);
+    await runBracketAction({ type: "setKoScore", matchId, slot, from: { score1: current?.score1 || 0, score2: current?.score2 || 0 } });
   };
 
   /** Resets a match AND every result that depended on it (cascade via recompute). */

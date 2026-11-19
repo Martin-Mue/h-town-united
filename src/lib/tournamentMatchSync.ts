@@ -224,6 +224,7 @@ export function applyActionToKoBracket(
     case "setKoScore": {
       const m = bracket.find((x) => x.id === action.matchId);
       if (!m || !isPlayable(m) || m.winner) return null;
+      if (action.from && ((m.score1 || 0) !== action.from.score1 || (m.score2 || 0) !== action.from.score2)) return null;
       const cfg = (ctx.roundConfigs || [])[m.round - 1];
       const bestOf = cfg?.bestOf || ctx.defaultBestOf || 1;
       const legsToWin = Math.ceil(bestOf / 2);

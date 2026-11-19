@@ -607,7 +607,9 @@ export interface RoundRobinMatch {
  *  looked at tap time. */
 export type BracketActionPayload =
   | { type: "setKoWinner"; matchId: string; winner: string; score1?: number; score2?: number }
-  | { type: "setKoScore"; matchId: string; slot: 1 | 2 }
+  /** `from`: the leg score the tap was made on. A replay (offline queue, a response lost on the way back) whose score
+   *  has already moved on is then a no-op instead of a second leg. Absent on taps queued by older app versions. */
+  | { type: "setKoScore"; matchId: string; slot: 1 | 2; from?: { score1: number; score2: number } }
   | { type: "resetKoMatch"; matchId: string }
   /** Pause/resume a ready KO match (tournamentBoardControl.ts's setMatchPaused). */
   | { type: "setKoPaused"; matchId: string; paused: boolean }
