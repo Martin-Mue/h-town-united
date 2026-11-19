@@ -67,7 +67,7 @@ export function useLeagueLink({ searchParams, setPlayerNames, setTeamMode, setNu
     setTeamMode(false);
     setNumPlayers(2);
 
-    const qMode = searchParams.get("mode");
+    const qMode = searchParams.get("mode")?.toLowerCase();
     if (qMode === "501" || qMode === "301" || qMode === "cricket") setMode(qMode);
 
     const qBestOf = parseInt(searchParams.get("bestOf") || "", 10);

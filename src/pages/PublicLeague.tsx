@@ -146,7 +146,7 @@ const PublicLeaguePage = () => {
         </div>
         <h1 className="text-[clamp(1.75rem,4vw,2.5rem)] font-display font-bold leading-tight mb-1 break-words">{league.name}</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          {league.game_mode} · {t("stats.firstTo")} {Math.ceil(league.best_of_legs / 2)} · {league.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")}
+          {league.game_mode.toLowerCase() === "cricket" ? "Cricket" : league.game_mode} · {t("stats.firstTo")} {Math.ceil(league.best_of_legs / 2)} · {league.format === "double" ? t("league.doubleRoundLabel") : t("league.singleRoundLabel")}
         </p>
 
         <LivePanel className="mb-4">

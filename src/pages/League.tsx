@@ -261,11 +261,14 @@ const LeaguePage = () => {
     return next;
   });
 
+  /** Leagues created before 2026-11-19 stored Cricket as "Cricket"; the game screen and the online tables only know "cricket". */
+  const leagueGameMode = (l: { game_mode: string }) => l.game_mode.toLowerCase() as "501" | "301" | "cricket";
+
   const startEditLeague = (l: LeagueRow) => {
     setName(l.name);
     setFormat(l.format);
     setResultMode(l.result_mode);
-    setGameMode(l.game_mode);
+    setGameMode(leagueGameMode(l));
     setBestOfLegs(l.best_of_legs);
     setSelectedParticipants(new Set(l.participant_ids));
     setEditingLeagueId(l.id);
@@ -511,7 +514,7 @@ const LeaguePage = () => {
     if (!p1 || !p2 || !activeLeague) return;
     const params = new URLSearchParams({
       lid: activeLeague.id, fid: f.id, p1id: p1.id, p2id: p2.id,
-      p1: p1.name, p2: p2.name, mode: activeLeague.game_mode, bestOf: String(activeLeague.best_of_legs),
+      p1: p1.name, p2: p2.name, mode: leagueGameMode(activeLeague), bestOf: String(activeLeague.best_of_legs),
     });
     navigate(`/game?${params.toString()}`);
   };
@@ -543,11 +546,11 @@ const LeaguePage = () => {
       const { data: created, error } = await supabase.from("online_matches").insert({
         club_id: clubId, source_type: "league", source_id: f.id,
         created_by: myUserId, player1_user_id: myUserId, player2_user_id: opponentUserId,
-        mode: activeLeague!.game_mode as "501" | "301" | "cricket", best_of_legs: activeLeague!.best_of_legs,
+        mode: leagueGameMode(activeLeague!), best_of_legs: activeLeague!.best_of_legs,
       }).select("id").single();
       if (error) throw error;
       const myName = myUserId === p1.user_id ? p1.name : p2.name;
-      notifyChallengeCreated(opponentUserId, myName, activeLeague!.game_mode as "501" | "301" | "cricket");
+      notifyChallengeCreated(opponentUserId, myName, leagueGameMode(activeLeague!));
       navigate(`/game?online=${created.id}`);
     } catch (err: unknown) {
       toast({ title: t("common.error"), description: err instanceof Error ? err.message : t("league.startOnlineFailedGeneric"), variant: "destructive" });
@@ -834,7 +837,7 @@ const LeaguePage = () => {
           backTo="/leagues"
           backLabel={t("league.allLeaguesLink")}
           kicker={[
-            activeLeague.game_mode,
+            leagueGameMode(activeLeague) === "cricket" ? "Cricket" : activeLeague.game_mode,
             `${activeLeague.participant_ids.length} ${t("league.participantsSuffix")}`,
             `${t("league.seasonLabel")} ${activeLeague.season_number}`,
             isSeasonLiga ? activeLeague.division_name ?? `${t("league.divisionLabel")} ${activeLeague.division_level}` : null,
@@ -944,7 +947,7 @@ const LeaguePage = () => {
             <section className="space-y-4 rounded-2xl border border-border bg-card p-4">
               <ChoiceChips
                 label={t("league.gameModeLabel")}
-                options={[{ value: "501", label: "501" }, { value: "301", label: "301" }, { value: "Cricket", label: "Cricket" }]}
+                options={[{ value: "501", label: "501" }, { value: "301", label: "301" }, { value: "cricket", label: "Cricket" }]}
                 value={gameMode}
                 onChange={setGameMode}
               />
