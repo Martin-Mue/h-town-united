@@ -1392,7 +1392,9 @@ const StatisticsPage = () => {
       // winner_name only ever names the winning side's ONE representative, so compare against
       // that side's own representative name instead of p1/p2's own name.
       const p1Won = isTeam ? g.winner_name === (p1Side === 0 ? g.player1_name : g.player2_name) : g.winner_id === compareP1;
-      if (p1Won) p1Wins++; else p2Wins++;
+      const p2Won = isTeam ? g.winner_name === (p2Side === 0 ? g.player1_name : g.player2_name) : g.winner_id === compareP2;
+      // A game with a third player that neither of the two won counts for the averages above, not as a win for either.
+      if (p1Won) p1Wins++; else if (p2Won) p2Wins++;
     });
     // Direct duels decided by hand in a tournament bracket (no saved game, so no darts and no average): they still count
     // for the score between the two. Mode / best-of / player filters cannot be applied to them and leave them out.
