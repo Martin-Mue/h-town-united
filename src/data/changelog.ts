@@ -1395,6 +1395,26 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
   },
   {
+    id: "2026-11-19-fixes",
+    date: "2026-11-19",
+    title: {
+      de: "Korrekturen: Cricket-Liga, Statistik, Abmelden",
+      en: "Fixes: Cricket leagues, statistics, signing out",
+      fr: "Corrections : ligue Cricket, statistiques, déconnexion",
+      pl: "Poprawki: liga Cricket, statystyki, wylogowanie",
+      nl: "Verbeteringen: Cricket-competitie, statistieken, afmelden",
+      tr: "Düzeltmeler: Cricket ligi, istatistikler, çıkış",
+    },
+    description: {
+      de: "Cricket-Ligen starten jetzt wirklich Cricket und lassen sich online spielen. Von Hand eingetragene Turnierergebnisse zählen in Ranglisten mit. Ein App-Update lädt die Seite nicht mehr mitten im Turnierspiel neu. Nach dem Abmelden sieht die nächste Person am Gerät keine fremden Daten und bekommt keine fremden Benachrichtigungen mehr.",
+      en: "Cricket leagues now really start Cricket and can be played online. Hand-entered tournament results count in the rankings. An app update no longer reloads the page in the middle of a tournament match. After signing out, the next person on the device no longer sees someone else's data or gets their notifications.",
+      fr: "Les ligues Cricket lancent maintenant vraiment du Cricket et se jouent en ligne. Les résultats de tournoi saisis à la main comptent dans les classements. Une mise à jour ne recharge plus la page en plein match de tournoi. Après déconnexion, la personne suivante sur l'appareil ne voit plus les données d'un autre et ne reçoit plus ses notifications.",
+      pl: "Ligi Cricket naprawdę uruchamiają teraz Cricket i można w nie grać online. Ręcznie wpisane wyniki turniejów liczą się w rankingach. Aktualizacja aplikacji nie przeładowuje już strony w trakcie meczu turniejowego. Po wylogowaniu kolejna osoba na urządzeniu nie widzi cudzych danych ani nie dostaje cudzych powiadomień.",
+      nl: "Cricket-competities starten nu echt Cricket en zijn online te spelen. Handmatig ingevoerde toernooiuitslagen tellen mee in de ranglijsten. Een app-update herlaadt de pagina niet meer midden in een toernooiwedstrijd. Na afmelden ziet de volgende persoon op het apparaat geen gegevens of meldingen van een ander meer.",
+      tr: "Cricket ligleri artık gerçekten Cricket başlatıyor ve çevrimiçi oynanabiliyor. Elle girilen turnuva sonuçları sıralamalarda sayılıyor. Uygulama güncellemesi turnuva maçının ortasında sayfayı artık yeniden yüklemiyor. Çıkış yaptıktan sonra cihazdaki sonraki kişi başkasının verilerini görmüyor ve bildirimlerini almıyor.",
+    },
+  },
+  {
     id: "2026-11-14-bull-off-tournament",
     date: "2026-11-14",
     title: {
