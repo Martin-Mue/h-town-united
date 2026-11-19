@@ -144,7 +144,8 @@ export function hasLocalActiveGame(tournamentId: string, matchId: string): boole
 export function saveActiveGameSnapshot(snapshot: ActiveGameSnapshot) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(activeGameKey(), JSON.stringify(snapshot));
+    // savedAt lets the app-update check (main.tsx) tell a game in progress from one left behind days ago.
+    window.localStorage.setItem(activeGameKey(), JSON.stringify({ ...snapshot, savedAt: Date.now() }));
   } catch {
     /* storage full/unavailable — not fatal, just no crash-recovery this session */
   }

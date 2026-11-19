@@ -7,7 +7,34 @@ import { toast } from "@/hooks/use-toast";
 // main.tsx runs before React (and everything it pulls in) is set up, and this is genuinely just
 // one string, not worth restructuring Game.tsx's module boundary over.
 const ACTIVE_GAME_KEY = "dartcam-active-game-v1";
-const hasActiveGame = () => !!window.localStorage.getItem(ACTIVE_GAME_KEY);
+const ACTIVE_GAME_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+/** A game still being played on this device. Tournament and duel games are stored under their own keys
+ *  ("…:tid:mid", "…:duel:id", see activeGameSnapshot.ts), so every key with this prefix counts; a stored game
+ *  that is already decided does not hold the update back. */
+const hasActiveGame = () => {
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key || !key.startsWith(ACTIVE_GAME_KEY)) continue;
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        const game = parsed && typeof parsed === "object" && "game" in parsed ? parsed.game : parsed;
+        if (game?.isFinished) continue;
+        // A game left behind (a tournament abandoned on this device) must not hold every later update back.
+        // Older copies have no time stamp: only the plain key counts for them, as before.
+        const savedAt = typeof parsed?.savedAt === "number" ? parsed.savedAt : null;
+        if (savedAt === null ? key === ACTIVE_GAME_KEY : Date.now() - savedAt < ACTIVE_GAME_MAX_AGE_MS) return true;
+      } catch {
+        if (key === ACTIVE_GAME_KEY) return true; // unreadable: better to wait than to reload into a lost game
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+};
 
 // Registers the service worker and — the part the plugin's default auto-injected script
 // doesn't do — reloads the page once a *newer* worker actually takes over an already-controlled
