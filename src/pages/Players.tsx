@@ -19,6 +19,8 @@ import { useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { queryClient } from "@/lib/queryClient";
+import { PLAYERS_QUERY_KEY } from "@/hooks/usePlayers";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useClubBranding } from "@/contexts/ClubBrandingContext";
 import { useOnlineUserIds } from "@/lib/clubPresence";
@@ -229,12 +231,17 @@ const PlayersPage = () => {
     // "removed" apart from "no-op that's about to reappear on the next fetch."
     const { data: deletedRows, error } = await supabase.from("players").delete().eq("id", player.id).select("id");
     if (error) {
-      toast({ title: t("players.errorTitle"), description: error.message, variant: "destructive" });
+      // 23503: the player is still referenced (league fixtures). The raw database text is English and says nothing
+      // about what to do, so name the way out instead.
+      const description = error.code === "23503" ? t("players.deleteBlockedByHistory") : error.message;
+      toast({ title: t("players.errorTitle"), description, variant: "destructive" });
     } else if (!deletedRows || deletedRows.length === 0) {
       toast({ title: t("players.errorTitle"), description: t("players.deleteNotPermitted"), variant: "destructive" });
     } else {
       toast({ title: t("players.memberRemoved"), description: `${player.name} ${t("players.memberRemovedDesc")}` });
       setPlayers((prev) => prev.filter((p) => p.id !== player.id));
+      // the shared roster (start page, game setup, …) must drop the player now, not after its 60 s cache time
+      void queryClient.invalidateQueries({ queryKey: PLAYERS_QUERY_KEY });
       // Avatar/AI-portrait uploads live under their own playerId-prefixed folder, unrelated to
       // the row itself — list rather than guess exact filenames (extension varies jpg/png).
       const { data: files } = await supabase.storage.from("player-avatars").list(player.id);
