@@ -222,10 +222,40 @@ export async function saveGameRecord(
     insertedGameId = insertedGame?.id ?? null;
   }
 
+  if (!insertedGameId) return;
+
+  // Legs, the stat rollup, wins and Elo in one server call, under a lock on the game row and each exactly once — see
+  // 20261124120000_save_game_legs_and_results_atomically.sql. Two devices saving the same online game, a retry after a
+  // lost response or a replay from the offline queue can no longer add legs, wins or Elo twice, and a failure halfway
+  // no longer leaves some players updated and others not.
+  const legRowsForServer = allLegs.flatMap((leg) =>
+    game.players.map((p, i) => ({
+      leg_number: leg.legNumber,
+      player_index: i,
+      player_name: p.name,
+      player_id: findDbPlayer(p.name)?.id ?? null,
+      starting_score: effectiveStartScore(game.startScore, game.players, i, game.teams),
+      throws: leg.throws[i] ?? [],
+      won: leg.winnerIndex === teamIndexFor(game.teams, i),
+    }))
+  );
+  const resultsForServer = game.players.flatMap((p, i) => {
+    const match = p.isBot ? undefined : findDbPlayer(p.name);
+    return match ? [{ player_id: match.id, won: game.winnerIndex === teamIndexFor(game.teams, i), elo_delta: eloDeltas[match.id] ?? 0 }] : [];
+  });
+  const { error: atomicErr } = await supabase.rpc("save_game_legs_and_results" as never, {
+    p_game_id: insertedGameId,
+    p_legs: legRowsForServer as unknown as Json,
+    p_results: resultsForServer as unknown as Json,
+  } as never);
+  if (!atomicErr) return;
+  // Until the migration is applied the function does not exist: save the old way below. Any other error is real.
+  if (atomicErr.code !== "PGRST202" && atomicErr.code !== "42883") throw atomicErr;
+
   // Same reasoning for game_legs: only insert if none exist yet for this game. If they do,
   // this is (at earliest) a retry that got past the legs step before failing.
   let legsAlreadyExisted = false;
-  if (insertedGameId) {
+  {
     const { count } = await supabase.from("game_legs").select("id", { count: "exact", head: true }).eq("game_id", insertedGameId);
     legsAlreadyExisted = !!count && count > 0;
     if (!legsAlreadyExisted) {
@@ -264,7 +294,7 @@ export async function saveGameRecord(
   // function did) would mean any transient failure AFTER game_legs already committed (a dropped
   // response, this RPC erroring, ...) permanently loses that game's stat rollup: the retry would
   // find legs already there and return before ever reaching this call again.
-  if (insertedGameId) {
+  {
     const { error: statsErr } = await supabase.rpc("apply_game_player_stats", { p_game_id: insertedGameId });
     if (statsErr) throw statsErr;
   }
