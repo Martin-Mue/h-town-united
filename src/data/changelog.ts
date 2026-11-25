@@ -1395,6 +1395,26 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
   },
   {
+    id: "2026-11-25-training-bots-camera",
+    date: "2026-11-25",
+    title: {
+      de: "Trainingsrekorde im Konto, echtere Bots, Trefferbild",
+      en: "Training records in your account, more realistic bots, hit map",
+      fr: "Records d'entraînement dans le compte, bots plus réalistes, carte des impacts",
+      pl: "Rekordy treningowe na koncie, bardziej realistyczne boty, mapa trafień",
+      nl: "Trainingsrecords in je account, echtere bots, trefferkaart",
+      tr: "Hesapta antrenman rekorları, daha gerçekçi botlar, isabet haritası",
+    },
+    description: {
+      de: "Deine Trainingsrekorde und deine Trainingsserie gehören jetzt zu deinem Konto und sind auch auf einem neuen Handy da. Bots zielen jetzt wie echte Spieler und streuen um ihr Ziel. Nach jeder Kamera-Aufnahme zeigt ein kleines Board, wo die Darts saßen. Die Kamera bleibt beim Erkennen flüssig bedienbar, und mit Autodarts wird ein Checkout wieder zuverlässig erkannt.",
+      en: "Your training records and streak now belong to your account and come with you to a new phone. Bots now aim like real players and scatter around their target. After every camera visit a small board shows where the darts landed. The camera stays smooth while it detects, and Autodarts checkouts are recognised reliably again.",
+      fr: "Tes records et ta série d'entraînement appartiennent maintenant à ton compte et te suivent sur un nouveau téléphone. Les bots visent comme de vrais joueurs et se dispersent autour de leur cible. Après chaque volée filmée, une petite cible montre où sont les fléchettes. La caméra reste fluide pendant la détection, et les checkouts avec Autodarts sont de nouveau bien reconnus.",
+      pl: "Twoje rekordy i seria treningowa należą teraz do konta i są dostępne także na nowym telefonie. Boty celują jak prawdziwi gracze i rozrzucają wokół celu. Po każdej kolejce z kamery mała tarcza pokazuje, gdzie trafiły lotki. Kamera działa płynnie podczas rozpoznawania, a checkouty z Autodarts znów są niezawodnie rozpoznawane.",
+      nl: "Je trainingsrecords en reeks horen nu bij je account en gaan mee naar een nieuwe telefoon. Bots mikken nu als echte spelers en spreiden rond hun doel. Na elke camerabeurt toont een klein bord waar de darts zaten. De camera blijft soepel tijdens het herkennen, en checkouts met Autodarts worden weer betrouwbaar herkend.",
+      tr: "Antrenman rekorların ve serin artık hesabına ait ve yeni telefonda da yanında. Botlar artık gerçek oyuncular gibi nişan alıyor ve hedeflerinin etrafına dağılıyor. Her kamera atışından sonra küçük bir tahta dartların nereye isabet ettiğini gösteriyor. Kamera algılama sırasında akıcı kalıyor ve Autodarts ile checkout'lar yeniden güvenilir şekilde tanınıyor.",
+    },
+  },
+  {
     id: "2026-11-19-fixes",
     date: "2026-11-19",
     title: {
