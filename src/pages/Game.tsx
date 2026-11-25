@@ -3097,19 +3097,23 @@ const GamePage = () => {
     );
   })() : null;
 
+  // The round's three dart slots: one piece for the camera view and the manual screen alike, so they cannot drift apart.
+  const roundDartSlots = (
+    <ArenaDartSlots
+      darts={arenaSlotDarts}
+      total={currentRoundTotal + arenaLivePoints}
+      roundLabel={`${t("game.roundLabel")} ${Math.floor(currentThrows.length / 3) + 1}`}
+      checkout={isCricket ? undefined : { active: checkoutSuggestionEnabled, label: t("game.checkoutToggle"), onToggle: () => setCheckoutSuggestionEnabled(!checkoutSuggestionEnabled) }}
+      onTapSlot={currentPlayer?.isBot || onlineMatchId ? undefined : () => setCorrectorOpen(true)}
+    />
+  );
   const arenaTop = (
     <div className="space-y-2">
       {arenaOnlineBanner}
       <ArenaScoreboard cards={arenaCards} showLegs={game.bestOfLegs > 1} showSets={!!game.setsMode} isCricket={isCricket} labels={arenaLabels} activeExtra={arenaActiveExtra} />
       {cameraEnabled && hitMapCard}
       {doubleInBanner}
-      <ArenaDartSlots
-        darts={arenaSlotDarts}
-        total={currentRoundTotal + arenaLivePoints}
-        roundLabel={`${t("game.roundLabel")} ${Math.floor(currentThrows.length / 3) + 1}`}
-        checkout={isCricket ? undefined : { active: checkoutSuggestionEnabled, label: t("game.checkoutToggle"), onToggle: () => setCheckoutSuggestionEnabled(!checkoutSuggestionEnabled) }}
-        onTapSlot={currentPlayer?.isBot || onlineMatchId ? undefined : () => setCorrectorOpen(true)}
-      />
+      {roundDartSlots}
     </div>
   );
   // "Which dart finished it?" for a visit whose darts came without their throw order. Shown in the camera view and in
@@ -3161,10 +3165,12 @@ const GamePage = () => {
     step();
   };
   const arenaPadDisabled = game.isFinished || !!currentPlayer?.isBot || !!pendingTiebreak || !!pendingCheckoutChoice || (!!onlineMatchId && !onlineMatch.isMyTurn);
-  const arenaActionBarCamera = (
+  /** The bottom action bar of both views. "Next player" only where darts are typed: the camera and Autodarts end a visit themselves. */
+  const actionBar = (withNextPlayer: boolean) => (
     <ArenaActionBar
       onUndo={undoLastDart} undoDisabled={arenaUndoDisabled} undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined} undoLabel={t("game.undo")}
-      onCorrect={arenaCorrect} correctLabel={t("game.correctThrowsTitle")} nextPlayerLabel={t("game.nextPlayer")}
+      onCorrect={arenaCorrect} correctLabel={t("game.correctThrowsTitle")}
+      onNextPlayer={withNextPlayer ? skipRestOfRound : undefined} nextPlayerDisabled={arenaPadDisabled} nextPlayerLabel={t("game.nextPlayer")}
     />
   );
   // The bot's darts have no picture, only a field — each is drawn somewhere inside it. They stay on the board
@@ -3199,13 +3205,7 @@ const GamePage = () => {
         activeExtra={arenaActiveExtra}
       />
       {doubleInBanner}
-      <ArenaDartSlots
-        darts={arenaSlotDarts}
-        total={currentRoundTotal + arenaLivePoints}
-        roundLabel={`${t("game.roundLabel")} ${Math.floor(currentThrows.length / 3) + 1}`}
-        checkout={isCricket ? undefined : { active: checkoutSuggestionEnabled, label: t("game.checkoutToggle"), onToggle: () => setCheckoutSuggestionEnabled(!checkoutSuggestionEnabled) }}
-        onTapSlot={currentPlayer?.isBot || onlineMatchId ? undefined : () => setCorrectorOpen(true)}
-      />
+      {roundDartSlots}
       {/* Fixed-height strip while the checkout switch is on: the route appears in place, nothing below it moves. */}
       {checkoutSuggestionEnabled && !isCricket && (
         <CheckoutSuggestion
@@ -3266,11 +3266,7 @@ const GamePage = () => {
           )}
         </div>
       </div>
-      <ArenaActionBar
-        onUndo={undoLastDart} undoDisabled={arenaUndoDisabled} undoTitle={onlineMatchId ? t("game.undoDisabledOnline") : undefined} undoLabel={t("game.undo")}
-        onCorrect={arenaCorrect} correctLabel={t("game.correctThrowsTitle")}
-        onNextPlayer={autodartsEnabled ? undefined : skipRestOfRound} nextPlayerDisabled={arenaPadDisabled} nextPlayerLabel={t("game.nextPlayer")}
-      />
+      {actionBar(!autodartsEnabled)}
     </>
   );
 
@@ -3522,7 +3518,7 @@ const GamePage = () => {
               onOpenCorrector={currentPlayer?.isBot || !!onlineMatchId ? undefined : () => setCorrectorOpen(true)}
             />
           </div>
-          {arenaActionBarCamera}
+          {actionBar(false)}
         </>
       ) : arenaManualScreen}
 
