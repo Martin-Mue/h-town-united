@@ -1,0 +1,2930 @@
+[
+ {
+  "id": "a920aaf4-afa4-4cca-a9e7-087a67eabc5e",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "71caafe8-b144-4917-99e9-3c7309032f66",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.7575,
+    "y": 0.72875,
+    "boardU": 0.683023872679045,
+    "boardV": 0.606763925729443,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 15,
+    "multiplier": 1
+   },
+   {
+    "x": 0.79625,
+    "y": 0.54375,
+    "boardU": 0.7858090185676393,
+    "boardV": 0.11604774535809007,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 6,
+    "multiplier": 1
+   },
+   {
+    "x": 0.77875,
+    "y": 0.54625,
+    "boardU": 0.7393899204244033,
+    "boardV": 0.12267904509283824,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 10,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 15,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 6,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 10,
+    "multiplier": 1
+   }
+  ],
+  "notes": "second dart tip next to the 6/10 wire had no label"
+ },
+ {
+  "id": "3b8de04b-12e3-45ab-a644-1aa643dd751e",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.45375,
+    "y": 0.75125,
+    "boardU": -0.12267904509283824,
+    "boardV": 0.6664456233421749,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "x": 0.3375,
+    "y": 0.80125,
+    "boardU": -0.4310344827586206,
+    "boardV": 0.7990716180371353,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 7,
+    "multiplier": 1
+   },
+   {
+    "x": 0.585,
+    "y": 0.86125,
+    "boardU": 0.22546419098143228,
+    "boardV": 0.9582228116710875,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 17,
+    "multiplier": 2
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 17,
+    "multiplier": 2
+   }
+  ],
+  "notes": "label 2 sat on the barrel end, needle tip further down-left"
+ },
+ {
+  "id": "8ef2c369-7a0e-40c5-9b39-653b3e552063",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.54625,
+    "y": 0.47,
+    "boardU": 0.12267904509283824,
+    "boardV": -0.0795755968169762,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 4,
+    "multiplier": 1
+   },
+   {
+    "x": 0.56125,
+    "y": 0.51875,
+    "boardU": 0.16246684350132634,
+    "boardV": 0.049734748010610196,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 10,
+    "multiplier": 1
+   },
+   {
+    "x": 0.47125,
+    "y": 0.4825,
+    "boardU": -0.07625994694960211,
+    "boardV": -0.046419098143236116,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 4,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 10,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on the flights, label 2 short of the needle; tips re-measured"
+ },
+ {
+  "id": "358e55df-d5c9-4e2c-a892-f513860ce706",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46875,
+    "y": 0.855,
+    "boardU": -0.08289124668435013,
+    "boardV": 0.9416445623342174,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "x": 0.42375,
+    "y": 0.78625,
+    "boardU": -0.2022546419098143,
+    "boardV": 0.7592838196286472,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "x": 0.44125,
+    "y": 0.72125,
+    "boardU": -0.15583554376657832,
+    "boardV": 0.5868700265251988,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 1 short of the needle, tip just above the double ring"
+ },
+ {
+  "id": "4d5b8ad7-8d2f-4c0c-b590-6745a4a5d6d9",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46625,
+    "y": 0.33125,
+    "boardU": -0.08952254641909815,
+    "boardV": -0.44761273209549074,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.55875,
+    "y": 0.375,
+    "boardU": 0.15583554376657816,
+    "boardV": -0.33156498673740054,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on the barrel of the dart whose tip is label 2; third dart's tip hidden behind the flights"
+ },
+ {
+  "id": "e68fb336-150f-414b-b67e-235bc14427c3",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.26,
+    "y": 0.395,
+    "boardU": -0.636604774535809,
+    "boardV": -0.2785145888594164,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 14,
+    "multiplier": 1
+   },
+   {
+    "x": 0.49625,
+    "y": 0.38,
+    "boardU": -0.009946949602121951,
+    "boardV": -0.3183023872679045,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.625,
+    "y": 0.3175,
+    "boardU": 0.33156498673740054,
+    "boardV": -0.48408488063660476,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 18,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 14,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 18,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 2 sat on the flight of the dart whose tip is label 3; tip of the dart from above (S20 area) had no label"
+ },
+ {
+  "id": "1a1ac3ff-ead6-4cf7-a5fe-06dce083d201",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "bfa97fb4-f52f-4fb5-b1e8-3bcdac11afc9",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 17,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 2
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "d428bfff-a57f-4e02-a03d-a4cd0f723794",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "cee72759-b354-45d5-b553-448365239ce7",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.53875,
+    "y": 0.29125,
+    "boardU": 0.10278514588859404,
+    "boardV": -0.5537135278514589,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4575,
+    "y": 0.28125,
+    "boardU": -0.11273209549071614,
+    "boardV": -0.580238726790451,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "x": 0.4875,
+    "y": 0.46,
+    "boardU": -0.033156498673740084,
+    "boardV": -0.10610079575596812,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 ~7 px below the needle tip"
+ },
+ {
+  "id": "5635265c-c36f-4cda-a6c1-6387f1ddb676",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "b99b5715-9261-410a-8521-aebc040207ed",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "34dbe1c2-b4a3-4f5c-9ec7-e9426a20c58e",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.50375,
+    "y": 0.3925,
+    "boardU": 0.009946949602122099,
+    "boardV": -0.2851458885941644,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.475,
+    "y": 0.36625,
+    "boardU": -0.06631299734748017,
+    "boardV": -0.3547745358090185,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 sat on the flights (third tip hidden)"
+ },
+ {
+  "id": "fcd58d07-4a2f-45d9-80f8-8db64bc28a6b",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 18,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "c1e76e46-c9a1-440d-b1c7-ca4c7f92b31b",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.56625,
+    "y": 0.24875,
+    "boardU": 0.17572944297082235,
+    "boardV": -0.6664456233421749,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5825,
+    "y": 0.2575,
+    "boardU": 0.2188328912466844,
+    "boardV": -0.643236074270557,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the letter D of the club name; label 1 sat on the barrel; second tip next to label 2 had no label"
+ },
+ {
+  "id": "185a8c4c-304a-452d-b990-a59adaffe037",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.45125,
+    "y": 0.58375,
+    "boardU": -0.12931034482758624,
+    "boardV": 0.22214854111405832,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "notes": "three darts stacked in one line: labels 1 and 2 sat on shafts, label 3 on the club name; the front dart's needle ends below-left of the bull, the other two tips are hidden"
+ },
+ {
+  "id": "016bf816-18e2-462d-b581-74939bd453b7",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.48875,
+    "y": 0.35625,
+    "boardU": -0.029840848806366,
+    "boardV": -0.3812997347480106,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.42875,
+    "y": 0.3425,
+    "boardU": -0.18899204244031825,
+    "boardV": -0.41777188328912457,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on the barrel of the dart whose tip is label 2; label 2 ~13 px short of the needle"
+ },
+ {
+  "id": "c63fe4e9-3f66-42a5-a69b-9f1568ba3f39",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "7055be64-d2b6-4016-a4ff-ed687a06f93a",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 9,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "0a15e320-5f52-47d3-98ad-63a3f3e68be3",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 18,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "5315dbaf-1857-4aad-a0ea-47c4233d4ab7",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4575,
+    "y": 0.2775,
+    "boardU": -0.11273209549071614,
+    "boardV": -0.5901856763925729,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "x": 0.4575,
+    "y": 0.6,
+    "boardU": -0.11273209549071614,
+    "boardV": 0.26525198938992034,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 short of the needle, which ends in the green treble of the 5"
+ },
+ {
+  "id": "6ebd11bc-7ecd-444f-bb8c-9514e8fb1c6a",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.48,
+    "y": 0.6725,
+    "boardU": -0.05305039787798413,
+    "boardV": 0.4575596816976127,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4825,
+    "y": 0.7425,
+    "boardU": -0.046419098143236116,
+    "boardV": 0.6432360742705572,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "x": 0.6025,
+    "y": 0.74875,
+    "boardU": 0.2718832891246685,
+    "boardV": 0.6598143236074271,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 17,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 17,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 was the club name; tips of the other two darts (above the double ring and in the 17) had no label"
+ },
+ {
+  "id": "4ccb4341-b027-44cc-8027-c9075831e661",
+  "status": "rejected",
+  "notes": "side camera at zoom 1, picture not straightened and no dart on the board; both labels invented"
+ },
+ {
+  "id": "97854f26-6064-433a-8757-8ac58e7bd06a",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.19375,
+    "y": 0.62125,
+    "boardU": -0.8123342175066314,
+    "boardV": 0.3216180371352784,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 8,
+    "multiplier": 1
+   },
+   {
+    "x": 0.80875,
+    "y": 0.3825,
+    "boardU": 0.8189655172413792,
+    "boardV": -0.3116710875331565,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 13,
+    "multiplier": 1
+   },
+   {
+    "x": 0.28625,
+    "y": 0.69,
+    "boardU": -0.5669761273209549,
+    "boardV": 0.5039787798408487,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 16,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 8,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 13,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 16,
+    "multiplier": 1
+   }
+  ],
+  "notes": "third dart (left, segment 11) had no label"
+ },
+ {
+  "id": "d957d36c-703d-467b-b17b-28cb64b15739",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 18,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 12,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "b09dc347-17c1-479e-8521-402391895761",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 8,
+    "multiplier": 2
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "bbafd952-aeb4-4376-b8d5-64502a3b6529",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4525,
+    "y": 0.24375,
+    "boardU": -0.12599469496021218,
+    "boardV": -0.679708222811671,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.54,
+    "y": 0.28,
+    "boardU": 0.10610079575596826,
+    "boardV": -0.5835543766578248,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 2 ~16 px below the needle, which ends inside the green treble of the 1"
+ },
+ {
+  "id": "ed1e633a-105e-4f79-b74a-ae10a355c368",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5475,
+    "y": 0.285,
+    "boardU": 0.12599469496021218,
+    "boardV": -0.570291777188329,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 3
+   },
+   {
+    "x": 0.51625,
+    "y": 0.36,
+    "boardU": 0.04310344827586203,
+    "boardV": -0.37135278514588865,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4325,
+    "y": 0.25,
+    "boardU": -0.1790450928381963,
+    "boardV": -0.6631299734748011,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 sat on the barrel of the dart whose tip is label 1; label 2 sat on the barrel end; left dart (single 5) had no label"
+ },
+ {
+  "id": "fb9e00f7-7d19-44f4-a24e-c1fb3a31b402",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.42875,
+    "y": 0.35875,
+    "boardU": -0.18899204244031825,
+    "boardV": -0.3746684350132626,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.6025,
+    "y": 0.54125,
+    "boardU": 0.2718832891246685,
+    "boardV": 0.1094164456233422,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 10,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 10,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on the barrel of the dart whose tip is label 2 (the second top dart's tip is hidden behind it); label 2 ~9 px short of the needle"
+ },
+ {
+  "id": "783e98e3-b8c2-49e9-84d7-dc81a81c23b2",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.48625,
+    "y": 0.5525,
+    "boardU": -0.03647214854111402,
+    "boardV": 0.1392572944297082,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "x": 0.60625,
+    "y": 0.52375,
+    "boardU": 0.2818302387267903,
+    "boardV": 0.06299734748010623,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 10,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4925,
+    "y": 0.57375,
+    "boardU": -0.01989389920424405,
+    "boardV": 0.19562334217506627,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 3,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 10,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name; the second dart by the bull (needle ending in the 3) had no label"
+ },
+ {
+  "id": "4f4e4a7d-9f7e-4fd9-a816-333df33aaf48",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4475,
+    "y": 0.73,
+    "boardU": -0.1392572944297082,
+    "boardV": 0.6100795755968169,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 3
+   },
+   {
+    "x": 0.4525,
+    "y": 0.73,
+    "boardU": -0.12599469496021218,
+    "boardV": 0.6100795755968169,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 3
+   },
+   {
+    "x": 0.4975,
+    "y": 0.74,
+    "boardU": -0.006631299734748016,
+    "boardV": 0.636604774535809,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 3,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 19,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   }
+  ],
+  "notes": "two darts side by side in the treble 19, only one was labelled"
+ },
+ {
+  "id": "890f2001-8011-420d-9f02-47f9cd3c2855",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4525,
+    "y": 0.7825,
+    "boardU": -0.12599469496021218,
+    "boardV": 0.7493368700265252,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "x": 0.40875,
+    "y": 0.5875,
+    "boardU": -0.24204244031830238,
+    "boardV": 0.23209549071618044,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 16,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 16,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on the barrel; the needle runs through the treble and ends in the single 19 below"
+ },
+ {
+  "id": "a7fd0553-706e-4a90-bdc6-70057106ea9a",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "a7044885-8e7e-4745-b003-87f9ec53dcc1",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46875,
+    "y": 0.24375,
+    "boardU": -0.08289124668435013,
+    "boardV": -0.679708222811671,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5125,
+    "y": 0.2225,
+    "boardU": 0.03315649867373994,
+    "boardV": -0.7360742705570291,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 ~8 px short of the needle; label 3 was a duplicate of label 2"
+ },
+ {
+  "id": "a4b4602f-7edd-469b-8808-fff61b2934ef",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.51,
+    "y": 0.47375,
+    "boardU": 0.026525198938992064,
+    "boardV": -0.0696286472148541,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 25,
+    "multiplier": 1
+   },
+   {
+    "x": 0.52375,
+    "y": 0.40375,
+    "boardU": 0.06299734748010623,
+    "boardV": -0.2553050397877984,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name"
+ },
+ {
+  "id": "f765564b-4155-45a6-8b42-eb724627bd2c",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.42625,
+    "y": 0.2125,
+    "boardU": -0.19562334217506627,
+    "boardV": -0.7625994694960212,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.45875,
+    "y": 0.3325,
+    "boardU": -0.1094164456233422,
+    "boardV": -0.44429708222811665,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.515,
+    "y": 0.4825,
+    "boardU": 0.0397877984084881,
+    "boardV": -0.046419098143236116,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 ~11 px short of the needle; label 3 was the club name; third dart's tip in the outer bull had no label"
+ },
+ {
+  "id": "6b540859-3738-4361-8e0d-15ac1bdffd68",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.51,
+    "y": 0.27,
+    "boardU": 0.026525198938992064,
+    "boardV": -0.6100795755968169,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 1 ~5 px below the needle end; label 2 was the club name"
+ },
+ {
+  "id": "727a39d7-d120-470a-9978-27a13eb6f285",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 18,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "5e7f2a9b-af7b-49bd-978e-f5ba5d02e7de",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "bad3e5a0-fa0c-4b3b-86d1-8be06e863ca2",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4675,
+    "y": 0.53,
+    "boardU": -0.08620689655172406,
+    "boardV": 0.0795755968169762,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 16,
+    "multiplier": 1
+   },
+   {
+    "x": 0.415,
+    "y": 0.51375,
+    "boardU": -0.22546419098143242,
+    "boardV": 0.03647214854111416,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 8,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4125,
+    "y": 0.49875,
+    "boardU": -0.23209549071618044,
+    "boardV": -0.0033156498673739348,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 11,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 16,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 8,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 11,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name; two needles end side by side left of the bull, only one was labelled"
+ },
+ {
+  "id": "cb2defcc-bbfe-4dc5-a4e4-c13f8665e4f8",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "fa54d077-cf5c-42b6-a807-94a8b671f660",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.51875,
+    "y": 0.27375,
+    "boardU": 0.049734748010610196,
+    "boardV": -0.600132625994695,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "x": 0.51625,
+    "y": 0.37625,
+    "boardU": 0.04310344827586203,
+    "boardV": -0.3282493368700266,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name; label 2 sat on the 1/20 wire, the needle crosses it and ends in the single 20"
+ },
+ {
+  "id": "ee694865-d525-4136-a623-4ecb120e336c",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "85d43b60-8b3f-42c6-8481-e4630ecb6c78",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 2
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "305b1374-3750-45bc-9ff9-637b49e2bfe4",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 4,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 15,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "135a2a1c-14d8-4144-a028-60147baf1086",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.6325,
+    "y": 0.7775,
+    "boardU": 0.3514588859416444,
+    "boardV": 0.7360742705570291,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 17,
+    "multiplier": 1
+   },
+   {
+    "x": 0.405,
+    "y": 0.345,
+    "boardU": -0.25198938992042436,
+    "boardV": -0.4111405835543767,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 12,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5625,
+    "y": 0.28625,
+    "boardU": 0.16578249336870027,
+    "boardV": -0.5669761273209549,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 17,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 12,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 2 ~11 px left of the needle end"
+ },
+ {
+  "id": "80bdef33-bf43-4449-b54e-0d582553b5c3",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 9,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "2e51aa9a-c7ae-4ed2-80ae-3e36fdc877a4",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 2
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "6b68c743-b281-4ccb-bb1e-cd189840670a",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 3
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "c6d46ed4-5a99-4fdc-850f-2cc4dc94e86e",
+  "status": "rejected",
+  "notes": "no dart in the board (only a blurred dart in flight at the bottom); label 1 sat on a wire"
+ },
+ {
+  "id": "6adc0a88-be73-4d8e-9b5c-1da6c2193378",
+  "status": "rejected",
+  "notes": "camera at zoom 1, picture not straightened (other board, tilted view); label at the bull is not a dart tip"
+ },
+ {
+  "id": "b28f4bf6-e69a-4ba6-bf91-d2b5fbbe2d9c",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 14,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "a98b04af-c40a-435e-8576-a0a340dd0895",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 14,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "acc2ebe3-bedf-47d9-90c3-c236e03cee16",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.53,
+    "y": 0.2,
+    "boardU": 0.0795755968169762,
+    "boardV": -0.7957559681697612,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.3825,
+    "y": 0.2025,
+    "boardU": -0.3116710875331565,
+    "boardV": -0.7891246684350133,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.43375,
+    "y": 0.3325,
+    "boardU": -0.1757294429708222,
+    "boardV": -0.44429708222811665,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on empty black ~28 px from the needle, which ends higher up next to the front dart's barrel"
+ },
+ {
+  "id": "3c81af63-7c97-4457-a518-9ccb0ad583ba",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "94aef12b-481a-4ace-9fea-80837681010b",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "61dfca94-edc8-4379-897d-a60e880b1023",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.48,
+    "y": 0.4,
+    "boardU": -0.05305039787798413,
+    "boardV": -0.26525198938992034,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.46375,
+    "y": 0.2225,
+    "boardU": -0.09615384615384616,
+    "boardV": -0.7360742705570291,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.455,
+    "y": 0.26,
+    "boardU": -0.11936339522546414,
+    "boardV": -0.636604774535809,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on the 20/5 wire, the needle crosses it and ends in the single 5; label 2 ~10 px right of the needle end"
+ },
+ {
+  "id": "1c4b808a-009b-4fe3-9dde-81044f662843",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.545,
+    "y": 0.3525,
+    "boardU": 0.1193633952254643,
+    "boardV": -0.39124668435013266,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "x": 0.525,
+    "y": 0.1825,
+    "boardU": 0.06631299734748017,
+    "boardV": -0.8421750663129973,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.49625,
+    "y": 0.2725,
+    "boardU": -0.009946949602121951,
+    "boardV": -0.603448275862069,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 2 ~7 px below the needle end"
+ },
+ {
+  "id": "2ab08a22-f747-4dc5-817a-1953c11295be",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.485,
+    "y": 0.3475,
+    "boardU": -0.0397877984084881,
+    "boardV": -0.4045092838196287,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.43125,
+    "y": 0.20375,
+    "boardU": -0.18236074270557023,
+    "boardV": -0.7858090185676393,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.375,
+    "y": 0.735,
+    "boardU": -0.33156498673740054,
+    "boardV": 0.623342175066313,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 sat on the barrel at the treble; the needle runs on through it and ends in the single below"
+ },
+ {
+  "id": "0bff2eb1-f5a9-4940-9bf0-8a51773b227b",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.49625,
+    "y": 0.46375,
+    "boardU": -0.009946949602121951,
+    "boardV": -0.09615384615384616,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.55625,
+    "y": 0.51375,
+    "boardU": 0.1492042440318303,
+    "boardV": 0.03647214854111416,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 10,
+    "multiplier": 1
+   },
+   {
+    "x": 0.42,
+    "y": 0.37375,
+    "boardU": -0.21220159151193638,
+    "boardV": -0.33488063660477446,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 12,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 10,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 12,
+    "multiplier": 1
+   }
+  ],
+  "notes": "third dart (needle ending in the single 12) had no label"
+ },
+ {
+  "id": "b1c7bb9a-fbf8-46c3-92cd-9de06b89bc25",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "77c5e51c-c1de-4a32-a2ec-d4906f37bf01",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4525,
+    "y": 0.2375,
+    "boardU": -0.12599469496021218,
+    "boardV": -0.6962864721485411,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4575,
+    "y": 0.295,
+    "boardU": -0.11273209549071614,
+    "boardV": -0.5437665782493369,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.41,
+    "y": 0.69,
+    "boardU": -0.23872679045092846,
+    "boardV": 0.5039787798408487,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 (Miss) sat on the flights; the second top dart runs through the red treble and ends just below it with no label"
+ },
+ {
+  "id": "7fc8687c-506e-4037-b0bf-1871da0a0c31",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "c37eeacf-76dc-42ec-89e2-ebffe4b071d0",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "743f198f-7898-4faa-823b-0d6e0ff0adbf",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.49,
+    "y": 0.27,
+    "boardU": -0.026525198938992064,
+    "boardV": -0.6100795755968169,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "x": 0.52,
+    "y": 0.33875,
+    "boardU": 0.05305039787798413,
+    "boardV": -0.4277188328912467,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name; label 2 sat on the 1/20 wire, the needle crosses it and ends in the single 20"
+ },
+ {
+  "id": "ad8fed6b-e1cd-484c-a7e3-9658e27cb04d",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.52375,
+    "y": 0.39125,
+    "boardU": 0.06299734748010623,
+    "boardV": -0.2884615384615385,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4875,
+    "y": 0.24,
+    "boardU": -0.033156498673740084,
+    "boardV": -0.6896551724137931,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4225,
+    "y": 0.2075,
+    "boardU": -0.20557029177718836,
+    "boardV": -0.7758620689655172,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 sat on the flights of the dart whose tip is label 1; the top-left dart (single 5) had no label"
+ },
+ {
+  "id": "dc5c97bd-4848-4b56-8f9f-2ca351ee56b2",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4475,
+    "y": 0.21875,
+    "boardU": -0.1392572944297082,
+    "boardV": -0.7460212201591512,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.6275,
+    "y": 0.3475,
+    "boardU": 0.3381962864721484,
+    "boardV": -0.4045092838196287,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 18,
+    "multiplier": 1
+   },
+   {
+    "x": 0.37375,
+    "y": 0.2125,
+    "boardU": -0.33488063660477446,
+    "boardV": -0.7625994694960212,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 18,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 ~10 px short of the needle"
+ },
+ {
+  "id": "38b8c0c5-956a-4977-9090-0fe0f0d5ca45",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5175,
+    "y": 0.275,
+    "boardU": 0.04641909814323597,
+    "boardV": -0.5968169761273209,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "x": 0.4625,
+    "y": 0.30875,
+    "boardU": -0.0994694960212201,
+    "boardV": -0.5072944297082227,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.47875,
+    "y": 0.52375,
+    "boardU": -0.05636604774535807,
+    "boardV": 0.06299734748010623,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 sat on the barrel over the bullseye; the needle crosses it and ends in the outer bull"
+ },
+ {
+  "id": "1e55a40c-6a09-465c-aa51-564d3780dda0",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.44875,
+    "y": 0.33625,
+    "boardU": -0.13594164456233426,
+    "boardV": -0.4343501326259947,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.465,
+    "y": 0.43875,
+    "boardU": -0.09283819628647208,
+    "boardV": -0.16246684350132634,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 12,
+    "multiplier": 1
+   },
+   {
+    "x": 0.41625,
+    "y": 0.76,
+    "boardU": -0.22214854111405832,
+    "boardV": 0.6896551724137931,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 12,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 sat on the barrel, needle ~22 px further down-left"
+ },
+ {
+  "id": "e13df4bb-fae9-4d4a-961c-ef1904f5bde2",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 18,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "37f962f1-adc4-4560-bbbf-7da3edee0dfa",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "89cb5591-37d8-4b99-b529-1cf868705022",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 12,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "408640d6-0b46-4de7-97ac-4e827a2182b6",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 17,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "36b3b465-a332-4c4c-90e8-abb79b2e001e",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 12,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 10,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "7129603d-f5be-4030-b6d5-f3a074081290",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4475,
+    "y": 0.26625,
+    "boardU": -0.1392572944297082,
+    "boardV": -0.620026525198939,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4575,
+    "y": 0.2625,
+    "boardU": -0.11273209549071614,
+    "boardV": -0.629973474801061,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.51875,
+    "y": 0.24125,
+    "boardU": 0.049734748010610196,
+    "boardV": -0.6863395225464192,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "two needles end side by side at the treble of the 5, only one was labelled"
+ },
+ {
+  "id": "1b1a3333-04c9-495f-bb2b-c1283f11869c",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4575,
+    "y": 0.68875,
+    "boardU": -0.11273209549071614,
+    "boardV": 0.5006631299734747,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "x": 0.45125,
+    "y": 0.71625,
+    "boardU": -0.12931034482758624,
+    "boardV": 0.5736074270557031,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 3
+   },
+   {
+    "x": 0.48625,
+    "y": 0.75,
+    "boardU": -0.03647214854111402,
+    "boardV": 0.6631299734748011,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 3,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   }
+  ],
+  "notes": "third dart, whose needle ends at the upper edge of the green treble, had no label"
+ },
+ {
+  "id": "4887376d-f668-4cad-be43-c928c6d58149",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 9,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "a3c85f3e-7263-4230-94ad-62e490f160f7",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "2ee34f3f-7aa2-41b8-93b5-deffe43a0a92",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "aefc4b17-8709-4ce9-b4dc-faab7bbc5e5a",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 12,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "6e8741b7-f19e-4734-a0dc-440a6750036b",
+  "status": "needs_review",
+  "notes": "three darts stacked in the treble 20, needles blurred and overlapping; only one label, the other tips cannot be placed reliably"
+ },
+ {
+  "id": "e6f04470-0b2b-4df0-a297-179b60458bcf",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "a1d10479-3b9d-4255-806a-1c2e72885cf9",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 18,
+    "multiplier": 3
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "fdfcd637-200c-4f49-8e6f-386ac024a845",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.44875,
+    "y": 0.2825,
+    "boardU": -0.13594164456233426,
+    "boardV": -0.576923076923077,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "x": 0.4725,
+    "y": 0.43375,
+    "boardU": -0.07294429708222819,
+    "boardV": -0.1757294429708222,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.47,
+    "y": 0.28125,
+    "boardU": -0.0795755968169762,
+    "boardV": -0.580238726790451,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 3 was the club name; the second dart from the top flight ends in the red treble of the 20 next to label 1 and had no label"
+ },
+ {
+  "id": "cfa3fc50-569e-46fc-8cd2-65e6c8bce6a5",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "47ef666c-0c50-43b4-9d3b-ed2ab598fe48",
+  "status": "needs_review",
+  "notes": "third dart's needle ends right at the edge of the green treble of the 5 and had no label; whether it is in the treble or the single cannot be told reliably"
+ },
+ {
+  "id": "26eebb3d-3679-4048-9d74-c67a58dccd33",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46625,
+    "y": 0.3475,
+    "boardU": -0.08952254641909815,
+    "boardV": -0.4045092838196287,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.435,
+    "y": 0.2625,
+    "boardU": -0.1724137931034483,
+    "boardV": -0.629973474801061,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.41875,
+    "y": 0.655,
+    "boardU": -0.2155172413793103,
+    "boardV": 0.4111405835543767,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 sat on the barrel, needle ends ~28 px further down-left"
+ },
+ {
+  "id": "5c054b69-5d5c-4fab-860a-77e5622ec419",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "c1364c4a-0f34-41aa-b1c9-e867dea76818",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46375,
+    "y": 0.20125,
+    "boardU": -0.09615384615384616,
+    "boardV": -0.7924403183023871,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.485,
+    "y": 0.1725,
+    "boardU": -0.0397877984084881,
+    "boardV": -0.8687002652519894,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5025,
+    "y": 0.245,
+    "boardU": 0.0066312997347478695,
+    "boardV": -0.6763925729442971,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on empty board (no dart there); label 2 sat on a barrel; all three darts are in the single 20 and their needle ends were re-measured"
+ },
+ {
+  "id": "6839ba70-64a1-400f-a3dd-c2c265049990",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 2
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "9abab93a-732c-4bd6-8cbb-48982b684a5c",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "22106210-15d3-4f8f-a593-0aa034b20ad0",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "4d731da4-5cec-46c2-a8fa-23071cc273e9",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "68d3993f-ff2f-411d-a093-97fae79a080e",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "8aa01e83-70d9-44fd-be3c-5bc31b7f9338",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 10,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "330d4c9e-6647-4c37-ab75-bf92e7e39ea0",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46125,
+    "y": 0.275,
+    "boardU": -0.10278514588859418,
+    "boardV": -0.5968169761273209,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "x": 0.515,
+    "y": 0.3075,
+    "boardU": 0.0397877984084881,
+    "boardV": -0.5106100795755968,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.51875,
+    "y": 0.33625,
+    "boardU": 0.049734748010610196,
+    "boardV": -0.4343501326259947,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "third dart (front, needle ending in the single 20 below label 2) had no label"
+ },
+ {
+  "id": "62f34aea-0817-426f-959e-763306a0714d",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 15,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "2786cebb-7b9b-4d62-996c-dc363e5a834f",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 16,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "830d003b-7109-4470-a50e-dd5c70bc4f1d",
+  "status": "needs_review",
+  "notes": "third dart at the top had no label; its needle ends right on the 5/20 wire at the outer edge of the double, so the field cannot be told; label 1 is ~10 px short of the needle (584,591)"
+ }
+]
