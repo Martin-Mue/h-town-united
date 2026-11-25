@@ -94,6 +94,8 @@ import { splitVisitTotal } from "@/utils/quickRoundSplit";
 import { useScreenWakeLock } from "@/hooks/useScreenWakeLock";
 import { clampCustomStart } from "@/utils/customStart";
 import { liveWinChance } from "@/utils/liveWinChance";
+import { visitSpreadMm } from "@/utils/visitHitMap";
+import { computeAimBias, describeAimTip } from "@/utils/aimBias";
 
 /** Bot personas with their target 3-dart average range. `nameKey` (not a literal string) since
  *  this is a module-level constant with no access to the language context — resolved via t() at
@@ -491,6 +493,8 @@ const GamePage = () => {
   // detected set can tell those apart. Blocks further camera scanning (see the `enabled` prop
   // below) until the player says which dart actually finished it.
   const [pendingCheckoutChoice, setPendingCheckoutChoice] = useState<{ darts: DetectedDart[]; doubleIndexes: number[] } | null>(null);
+  /** The last visit the camera saw, for the small hit map in the camera view. */
+  const [lastCameraVisit, setLastCameraVisit] = useState<{ playerIndex: number; legNumber: number; darts: { u: number; v: number; label: string }[] } | null>(null);
   // Set when a leg hits its maxRoundsX01 cap tied on lowest remaining — there's no rule to break
   // that automatically, so ask who won the bull-off instead of leaving the leg stuck (see
   // handleX01Throw's cap-check and resolveTiebreak). tiedIndexes are score-slot indexes (team
@@ -1656,6 +1660,15 @@ const GamePage = () => {
       dartsThisRound,
       turnStartRemaining,
     }]);
+
+    const positioned = dartsToApply.filter((d) => typeof d.boardU === "number" && typeof d.boardV === "number");
+    if (cameraEnabled && positioned.length > 0) {
+      setLastCameraVisit({
+        playerIndex: startIdx,
+        legNumber: game.currentLeg.legNumber,
+        darts: positioned.map((d) => ({ u: d.boardU as number, v: d.boardV as number, label: dartLabel(d) })),
+      });
+    }
 
     const curGame: GameState = JSON.parse(JSON.stringify(game));
     let curDarts = dartsThisRound;
@@ -3065,10 +3078,30 @@ const GamePage = () => {
       )}
     </div>
   ) : null;
+  // Small hit map after a camera visit: where the darts really landed, how close together, and (once the camera has seen
+  // enough of this player's darts in this match) which way they tend to drift. Only for the current leg.
+  const hitMapVisit = lastCameraVisit && lastCameraVisit.legNumber === game.currentLeg.legNumber ? lastCameraVisit : null;
+  const hitMapCard = hitMapVisit ? (() => {
+    const spread = visitSpreadMm(hitMapVisit.darts.map((d) => ({ boardU: d.u, boardV: d.v })));
+    const matchDarts = [...game.completedLegs, game.currentLeg].flatMap((leg) => leg.throws[hitMapVisit.playerIndex] ?? []);
+    const tendency = computeAimBias(matchDarts);
+    return (
+      <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-2">
+        <SimulatedBoard darts={hitMapVisit.darts.map((d, i, all) => ({ u: d.u, v: d.v, fresh: i === all.length - 1 }))} className="h-20 w-20 shrink-0" />
+        <div className="min-w-0 text-xs">
+          <p className="truncate font-semibold">{game.players[hitMapVisit.playerIndex]?.name} · {hitMapVisit.darts.map((d) => d.label).join(" ")}</p>
+          {spread !== null && <p className="text-muted-foreground">{t("game.hitMapSpread").replace("{mm}", String(Math.round(spread)))}</p>}
+          {tendency && <p className="text-muted-foreground">{describeAimTip(tendency, t)}</p>}
+        </div>
+      </div>
+    );
+  })() : null;
+
   const arenaTop = (
     <div className="space-y-2">
       {arenaOnlineBanner}
       <ArenaScoreboard cards={arenaCards} showLegs={game.bestOfLegs > 1} showSets={!!game.setsMode} isCricket={isCricket} labels={arenaLabels} activeExtra={arenaActiveExtra} />
+      {cameraEnabled && hitMapCard}
       {doubleInBanner}
       <ArenaDartSlots
         darts={arenaSlotDarts}
