@@ -10,6 +10,8 @@
  *  Training.tsx now imports everything below from here instead of defining it locally, so there is
  *  exactly one source of truth either way. */
 import { Target, RotateCw, Crosshair, Zap, Trophy, Lock, Shuffle, PartyPopper, Divide, ListOrdered, Route, Heart, Medal, Gauge, PiggyBank } from "lucide-react";
+import { readTraining, trainingKeys, writeTraining } from "./trainingStorage";
+import { HISTORY_LIMIT } from "./trainingProgressMerge";
 
 /** Training drill definition */
 export interface TrainingDrill {
@@ -267,21 +269,15 @@ export function recordVariant(drillId: string, ctx: { maxRounds?: number; rtcSta
 }
 
 const RECORD_KEY_PREFIX = "training-record-";
+// Stored per signed-in account on this device and mirrored to the account (see trainingStorage.ts).
 const recordKey = (drillId: string, variant?: string) => `${RECORD_KEY_PREFIX}${drillId}${variant ? `:${variant}` : ""}`;
 
 export function loadRecord(drillId: string, variant?: string): RecordEntry | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(recordKey(drillId, variant));
-    return raw ? (JSON.parse(raw) as RecordEntry) : null;
-  } catch {
-    return null;
-  }
+  return readTraining<RecordEntry>(recordKey(drillId, variant));
 }
 
 export function saveRecord(drillId: string, entry: RecordEntry, variant?: string) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(recordKey(drillId, variant), JSON.stringify(entry));
+  writeTraining(recordKey(drillId, variant), entry);
 }
 
 /** One drill's stored personal best, plus which drill/variant it belongs to — `recordKey` above
@@ -296,15 +292,11 @@ export interface StoredRecordEntry extends RecordEntry {
  *  which specific variants) actually have a saved result, since nothing else tracks that list.
  *  Used by the "Meine Rekorde"-style overview in Statistics.tsx's personal-scope Training tab. */
 export function loadAllRecords(): StoredRecordEntry[] {
-  if (typeof window === "undefined") return [];
   const out: StoredRecordEntry[] = [];
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const key = window.localStorage.key(i);
-    if (!key || !key.startsWith(RECORD_KEY_PREFIX)) continue;
+  for (const key of trainingKeys(RECORD_KEY_PREFIX)) {
     try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) continue;
-      const entry = JSON.parse(raw) as RecordEntry;
+      const entry = readTraining<RecordEntry>(key);
+      if (!entry) continue;
       const rest = key.slice(RECORD_KEY_PREFIX.length);
       // A variant string can itself contain ":" (e.g. Target Grind's "3x20:10"), so only the
       // FIRST colon separates drillId from variant — a plain split(":") would wrongly chop a
@@ -331,17 +323,11 @@ export interface HistoryEntry {
   achievedAt: string;
 }
 
-const HISTORY_LIMIT = 15;
+
 const historyKey = (drillId: string, variant?: string) => `training-history-${drillId}${variant ? `:${variant}` : ""}`;
 
 export function loadHistory(drillId: string, variant?: string): HistoryEntry[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(historyKey(drillId, variant));
-    return raw ? (JSON.parse(raw) as HistoryEntry[]) : [];
-  } catch {
-    return [];
-  }
+  return readTraining<HistoryEntry[]>(historyKey(drillId, variant)) ?? [];
 }
 
 /** Appends one attempt, oldest-first, capped to the most recent HISTORY_LIMIT — an unbounded log
@@ -349,7 +335,7 @@ export function loadHistory(drillId: string, variant?: string): HistoryEntry[] {
  *  caller can set state from the same value it just persisted. */
 export function pushHistoryEntry(drillId: string, entry: HistoryEntry, variant?: string): HistoryEntry[] {
   const next = [...loadHistory(drillId, variant), entry].slice(-HISTORY_LIMIT);
-  if (typeof window !== "undefined") window.localStorage.setItem(historyKey(drillId, variant), JSON.stringify(next));
+  writeTraining(historyKey(drillId, variant), next);
   return next;
 }
 
@@ -367,13 +353,7 @@ const todayLocal = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 export function loadStreak(): StreakState | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(STREAK_KEY);
-    return raw ? (JSON.parse(raw) as StreakState) : null;
-  } catch {
-    return null;
-  }
+  return readTraining<StreakState>(STREAK_KEY);
 }
 /** Call once per genuinely completed drill run (same gate as pushHistoryEntry — see its call
  *  site). A second completed run later the SAME day is a no-op (already counted); a gap of
@@ -393,6 +373,6 @@ export function recordPracticeDay(): StreakState {
     const current = prev?.lastDate === yStr ? prev.current + 1 : 1;
     next = { current, best: Math.max(current, prev?.best ?? 0), lastDate: today };
   }
-  if (typeof window !== "undefined") window.localStorage.setItem(STREAK_KEY, JSON.stringify(next));
+  writeTraining(STREAK_KEY, next);
   return next;
 }

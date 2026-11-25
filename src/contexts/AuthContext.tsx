@@ -3,6 +3,7 @@ import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { queryClient } from "@/lib/queryClient";
 import { unsubscribeFromPush } from "@/lib/push";
+import { setTrainingScope, syncTrainingProgress } from "@/lib/trainingStorage";
 
 interface AuthContextType {
   session: Session | null;
@@ -26,6 +27,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Data cached for one account (roster, statistics, …) must not show for the next one on the same device.
   const cachedForUserRef = useRef<string | null | undefined>(undefined);
   const userId = session?.user?.id ?? null;
+  // Training records are kept per account (see trainingStorage.ts): point them at this account before anything reads them,
+  // then merge this device's copy with the account's.
+  setTrainingScope(loading ? null : userId);
+  useEffect(() => {
+    if (!loading && userId) void syncTrainingProgress(userId);
+  }, [userId, loading]);
   useEffect(() => {
     if (loading) return;
     if (cachedForUserRef.current !== undefined && cachedForUserRef.current !== userId) queryClient.clear();
