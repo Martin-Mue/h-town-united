@@ -104,7 +104,68 @@ function getSession(): Promise<ort.InferenceSession> {
  *  needs to be sure the model is actually ready (e.g. before attempting auto-calibration) can
  *  just await this again instead of polling. Resolves false (never throws) if the model can't be
  *  loaded, so callers can fall back. */
+// ─── the model in a Web Worker (2026-11-25) ─────────────────────────────────────────────────────────
+// Turning a frame into the model's input and running the model took the main thread for the whole detection, so the
+// camera picture and every tap froze meanwhile. Both now run in dartModel.worker.ts. A device where the worker cannot
+// start or cannot load the model falls back to running here, exactly as before.
+
+type WorkerReply = { id: number; ok: boolean; dims?: readonly number[]; data?: Float32Array; error?: string };
+let modelWorker: Worker | null | undefined; // undefined: not tried yet, null: not usable on this device
+let workerReady: Promise<boolean> | null = null;
+let nextRequestId = 1;
+const pendingRequests = new Map<number, (reply: WorkerReply) => void>();
+
+function askWorker(worker: Worker, message: Record<string, unknown>, transfer: Transferable[] = []): Promise<WorkerReply> {
+  const id = nextRequestId++;
+  return new Promise((resolve) => {
+    pendingRequests.set(id, resolve);
+    worker.postMessage({ ...message, id }, transfer);
+  });
+}
+
+function giveUpOnWorker(reason: string) {
+  console.warn("[dartModel] worker not usable, running the model on the page:", reason);
+  modelWorker?.terminate();
+  modelWorker = null;
+  workerReady = null;
+  for (const resolve of pendingRequests.values()) resolve({ id: 0, ok: false, error: reason });
+  pendingRequests.clear();
+}
+
+/** The worker with the model loaded, or null when this device has to run the model on the page. */
+async function readyWorker(): Promise<Worker | null> {
+  if (modelWorker === null) return null;
+  if (modelWorker === undefined) {
+    try {
+      modelWorker = new Worker(new URL("./dartModel.worker.ts", import.meta.url), { type: "module" });
+      modelWorker.onmessage = (event: MessageEvent<WorkerReply>) => {
+        const resolve = pendingRequests.get(event.data.id);
+        if (!resolve) return;
+        pendingRequests.delete(event.data.id);
+        resolve(event.data);
+      };
+      modelWorker.onerror = (event) => giveUpOnWorker(event.message || "worker error");
+    } catch (err) {
+      giveUpOnWorker(describeError(err));
+      return null;
+    }
+  }
+  const worker = modelWorker;
+  if (!workerReady) {
+    workerReady = askWorker(worker, { type: "load", modelUrl: new URL(MODEL_URL, window.location.href).href, inputSize: MODEL_INPUT_SIZE })
+      .then((reply) => {
+        if (!reply.ok) giveUpOnWorker(reply.error ?? "model did not load in the worker");
+        return reply.ok;
+      });
+  }
+  return (await workerReady) && modelWorker === worker ? worker : null;
+}
+
 export async function preloadDartModel(): Promise<boolean> {
+  if (await readyWorker()) {
+    modelDiagnostics.loadError = null;
+    return true;
+  }
   try {
     await getSession();
     modelDiagnostics.loadError = null;
@@ -241,6 +302,25 @@ function toTensor(img: ImageData): ort.Tensor {
 }
 
 async function runModel(frame: ImageData): Promise<DecodedOutput | null> {
+  const worker = await readyWorker();
+  if (worker) {
+    const startedAt = performance.now();
+    // a copy: the caller keeps using the frame (reference pictures), so its buffer must not be handed over
+    const rgba = new Uint8ClampedArray(frame.data);
+    const reply = await askWorker(worker, { type: "run", width: frame.width, height: frame.height, rgba }, [rgba.buffer]);
+    if (reply.ok && reply.dims && reply.data) {
+      modelDiagnostics.lastRunMs = Math.round(performance.now() - startedAt);
+      modelDiagnostics.runs += 1;
+      modelDiagnostics.inferenceError = null;
+      return decodeOutput({ dims: reply.dims, data: reply.data });
+    }
+    if (modelWorker !== null) {
+      // the worker is fine but this run failed: report it like a failed run on the page
+      modelDiagnostics.inferenceError = reply.error ?? "inference failed";
+      return null;
+    }
+    // the worker was given up meanwhile: run this frame on the page
+  }
   let session: ort.InferenceSession;
   try {
     session = await getSession();
