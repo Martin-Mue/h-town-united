@@ -1713,6 +1713,16 @@ const GamePage = () => {
         }));
         curGame.currentLeg.throws[idx] = [...curGame.currentLeg.throws[idx], ...dartThrows];
         curGame.currentLeg.remaining[teamIdx] = curGame.currentLeg.remaining[teamIdx] - roundTotal;
+        if (outcome.kind === "checkout" && forced?.kind === "checkout") {
+          if (curGame.currentLeg.remaining[teamIdx] !== 0) {
+            console.warn("Autodarts checkout: Dartspot remaining differs from Autodarts", {
+              playerIndex: idx,
+              dartspotRemaining: curGame.currentLeg.remaining[teamIdx],
+              roundTotal,
+            });
+          }
+          curGame.currentLeg.remaining[teamIdx] = 0;
+        }
         if (x01JustGotIn) {
           curGame.currentLeg.startedScoring = (curGame.currentLeg.startedScoring ?? curGame.players.map(() => true)).map((v, i) => i === teamIdx ? true : v);
         }

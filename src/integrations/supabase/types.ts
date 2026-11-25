@@ -14,6 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
+      autodarts_accounts: {
+        Row: {
+          access_token: string | null
+          access_token_expires_at: string | null
+          autodarts_email: string | null
+          autodarts_user_id: string | null
+          autodarts_username: string | null
+          boards: Json
+          boards_updated_at: string | null
+          club_id: string
+          created_at: string
+          default_board_id: string | null
+          last_error: string | null
+          pending_request_at: string | null
+          pending_request_id: number | null
+          pending_request_kind: string | null
+          refresh_token_ciphertext: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          autodarts_email?: string | null
+          autodarts_user_id?: string | null
+          autodarts_username?: string | null
+          boards?: Json
+          boards_updated_at?: string | null
+          club_id: string
+          created_at?: string
+          default_board_id?: string | null
+          last_error?: string | null
+          pending_request_at?: string | null
+          pending_request_id?: number | null
+          pending_request_kind?: string | null
+          refresh_token_ciphertext?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          autodarts_email?: string | null
+          autodarts_user_id?: string | null
+          autodarts_username?: string | null
+          boards?: Json
+          boards_updated_at?: string | null
+          club_id?: string
+          created_at?: string
+          default_board_id?: string | null
+          last_error?: string | null
+          pending_request_at?: string | null
+          pending_request_id?: number | null
+          pending_request_kind?: string | null
+          refresh_token_ciphertext?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autodarts_accounts_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autodarts_accounts_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       autodarts_boards: {
         Row: {
           access_token: string | null
@@ -103,6 +181,174 @@ export type Database = {
           },
           {
             foreignKeyName: "autodarts_boards_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      autodarts_player_logins: {
+        Row: {
+          access_token: string | null
+          access_token_expires_at: string | null
+          autodarts_email: string
+          autodarts_user_id: string | null
+          autodarts_username: string | null
+          club_id: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          last_error: string | null
+          pending_request_id: number | null
+          pending_request_kind: string | null
+          refresh_token_ciphertext: string | null
+          status: string
+        }
+        Insert: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          autodarts_email: string
+          autodarts_user_id?: string | null
+          autodarts_username?: string | null
+          club_id: string
+          created_at?: string
+          created_by: string
+          expires_at?: string
+          id?: string
+          last_error?: string | null
+          pending_request_id?: number | null
+          pending_request_kind?: string | null
+          refresh_token_ciphertext?: string | null
+          status?: string
+        }
+        Update: {
+          access_token?: string | null
+          access_token_expires_at?: string | null
+          autodarts_email?: string
+          autodarts_user_id?: string | null
+          autodarts_username?: string | null
+          club_id?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          last_error?: string | null
+          pending_request_id?: number | null
+          pending_request_kind?: string | null
+          refresh_token_ciphertext?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autodarts_player_logins_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autodarts_player_logins_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      autodarts_sessions: {
+        Row: {
+          autodarts_board_id: string | null
+          autodarts_board_name: string | null
+          base_score: number
+          club_id: string
+          created_at: string
+          created_by: string
+          double_out: boolean
+          host_kind: string
+          host_ref: string
+          id: string
+          last_error: string | null
+          lobby_id: string | null
+          pending_board_at: string | null
+          pending_board_request_id: number | null
+          pending_poll_at: string | null
+          pending_poll_kind: string | null
+          pending_poll_request_id: number | null
+          pending_request_at: string | null
+          pending_request_id: number | null
+          players: Json
+          status: string
+          step: string
+          step_data: Json
+          updated_at: string
+          warnings: Json
+        }
+        Insert: {
+          autodarts_board_id?: string | null
+          autodarts_board_name?: string | null
+          base_score: number
+          club_id: string
+          created_at?: string
+          created_by: string
+          double_out?: boolean
+          host_kind: string
+          host_ref: string
+          id?: string
+          last_error?: string | null
+          lobby_id?: string | null
+          pending_board_at?: string | null
+          pending_board_request_id?: number | null
+          pending_poll_at?: string | null
+          pending_poll_kind?: string | null
+          pending_poll_request_id?: number | null
+          pending_request_at?: string | null
+          pending_request_id?: number | null
+          players: Json
+          status?: string
+          step?: string
+          step_data?: Json
+          updated_at?: string
+          warnings?: Json
+        }
+        Update: {
+          autodarts_board_id?: string | null
+          autodarts_board_name?: string | null
+          base_score?: number
+          club_id?: string
+          created_at?: string
+          created_by?: string
+          double_out?: boolean
+          host_kind?: string
+          host_ref?: string
+          id?: string
+          last_error?: string | null
+          lobby_id?: string | null
+          pending_board_at?: string | null
+          pending_board_request_id?: number | null
+          pending_poll_at?: string | null
+          pending_poll_kind?: string | null
+          pending_poll_request_id?: number | null
+          pending_request_at?: string | null
+          pending_request_id?: number | null
+          players?: Json
+          status?: string
+          step?: string
+          step_data?: Json
+          updated_at?: string
+          warnings?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autodarts_sessions_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autodarts_sessions_club_id_fkey"
             columns: ["club_id"]
             isOneToOne: false
             referencedRelation: "clubs_public"
@@ -218,7 +464,6 @@ export type Database = {
           id: string
           logo_path: string | null
           name: string
-          pilot_until: string | null
           plan_status: string
           plan_tier: string
           stripe_customer_id: string | null
@@ -232,7 +477,6 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name: string
-          pilot_until?: string | null
           plan_status?: string
           plan_tier?: string
           stripe_customer_id?: string | null
@@ -246,7 +490,6 @@ export type Database = {
           id?: string
           logo_path?: string | null
           name?: string
-          pilot_until?: string | null
           plan_status?: string
           plan_tier?: string
           stripe_customer_id?: string | null
@@ -1311,6 +1554,18 @@ export type Database = {
           },
         ]
       }
+      platform_owners: {
+        Row: {
+          user_id: string
+        }
+        Insert: {
+          user_id: string
+        }
+        Update: {
+          user_id?: string
+        }
+        Relationships: []
+      }
       players: {
         Row: {
           ai_portrait_url: string | null
@@ -1669,6 +1924,126 @@ export type Database = {
         }
         Relationships: []
       }
+      usage_active: {
+        Row: {
+          club_id: string
+          day: string
+          user_hash: string
+        }
+        Insert: {
+          club_id: string
+          day: string
+          user_hash: string
+        }
+        Update: {
+          club_id?: string
+          day?: string
+          user_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_active_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_active_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_daily: {
+        Row: {
+          club_id: string
+          day: string
+          events: number
+          feature: string
+        }
+        Insert: {
+          club_id: string
+          day: string
+          events?: number
+          feature: string
+        }
+        Update: {
+          club_id?: string
+          day?: string
+          events?: number
+          feature?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_daily_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_daily_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_secret: {
+        Row: {
+          id: boolean
+          secret: string
+        }
+        Insert: {
+          id?: boolean
+          secret?: string
+        }
+        Update: {
+          id?: boolean
+          secret?: string
+        }
+        Relationships: []
+      }
+      usage_weekly: {
+        Row: {
+          active_users: number
+          club_id: string
+          repeat_users: number
+          week_start: string
+        }
+        Insert: {
+          active_users: number
+          club_id: string
+          repeat_users: number
+          week_start: string
+        }
+        Update: {
+          active_users?: number
+          club_id?: string
+          repeat_users?: number
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_weekly_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_weekly_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           club_id: string
@@ -1866,6 +2241,27 @@ export type Database = {
       }
     }
     Functions: {
+      _ad_board_list: { Args: { p_response: Json }; Returns: Json }
+      _ad_cached_token: {
+        Args: { p_kind: string; p_ref: string }
+        Returns: string
+      }
+      _ad_caller_club: { Args: never; Returns: string }
+      _ad_enqueue_refresh: {
+        Args: { p_kind: string; p_ref: string }
+        Returns: number
+      }
+      _ad_headers: { Args: { p_access_token?: string }; Returns: Json }
+      _ad_json: { Args: { p_content: string }; Returns: Json }
+      _ad_passphrase: { Args: never; Returns: string }
+      _ad_request_lost: {
+        Args: { p_request_id: number; p_since: string }
+        Returns: boolean
+      }
+      _ad_store_tokens: {
+        Args: { p_kind: string; p_ref: string; p_response: Json }
+        Returns: string
+      }
       _autodarts_cached_token: {
         Args: { p_board_id: string; p_club_id: string }
         Returns: string
@@ -1894,43 +2290,6 @@ export type Database = {
       }
       abort_idle_online_match: { Args: { _match_id: string }; Returns: boolean }
       accept_club_invite: { Args: { _token: string }; Returns: string }
-      submit_online_bulloff: {
-        Args: { _distance_mm: number; _match_id: string }
-        Returns: Json
-      }
-      is_platform_owner: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      track_usage: {
-        Args: { _feature: string }
-        Returns: undefined
-      }
-      usage_overview: {
-        Args: { _club?: string; _days?: number }
-        Returns: Json
-      }
-      end_club_pilot: {
-        Args: { _club: string }
-        Returns: undefined
-      }
-      platform_clubs: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          active_7d: number
-          created_at: string
-          id: string
-          members: number
-          name: string
-          pilot_until: string | null
-          plan_tier: string
-          players: number
-        }[]
-      }
-      set_club_pilot: {
-        Args: { _club: string; _until: string }
-        Returns: undefined
-      }
       accept_online_match: {
         Args: { _initial_game_state: Json; _match_id: string }
         Returns: undefined
@@ -2037,10 +2396,6 @@ export type Database = {
         Args: { p_game_id: string }
         Returns: undefined
       }
-      autodarts_check_connect_status: {
-        Args: { p_board_number: number }
-        Returns: Json
-      }
       autodarts_account_link: {
         Args: { p_email: string; p_password: string }
         Returns: Json
@@ -2052,39 +2407,8 @@ export type Database = {
       }
       autodarts_account_status: { Args: never; Returns: Json }
       autodarts_account_unlink: { Args: never; Returns: undefined }
-      autodarts_my_sources: { Args: never; Returns: Json }
-      autodarts_player_login_remove: {
-        Args: { p_login_id: string }
-        Returns: undefined
-      }
-      autodarts_player_login_start: {
-        Args: { p_email: string; p_password: string }
-        Returns: string
-      }
-      autodarts_player_login_status: {
-        Args: { p_login_id: string }
-        Returns: Json
-      }
-      autodarts_session_finish: {
-        Args: { p_session_id: string }
-        Returns: undefined
-      }
-      autodarts_session_poll: {
-        Args: { p_session_id: string; p_with_board?: boolean }
-        Returns: Json
-      }
-      autodarts_session_start: {
-        Args: {
-          p_base_score: number
-          p_board_number: number | null
-          p_double_out: boolean
-          p_host_kind: string
-          p_players: Json
-        }
-        Returns: string
-      }
-      autodarts_session_step: {
-        Args: { p_session_id: string }
+      autodarts_check_connect_status: {
+        Args: { p_board_number: number }
         Returns: Json
       }
       autodarts_check_start_match_status: {
@@ -2108,6 +2432,19 @@ export type Database = {
         Args: { p_board_number: number; p_match_id: string }
         Returns: undefined
       }
+      autodarts_my_sources: { Args: never; Returns: Json }
+      autodarts_player_login_remove: {
+        Args: { p_login_id: string }
+        Returns: undefined
+      }
+      autodarts_player_login_start: {
+        Args: { p_email: string; p_password: string }
+        Returns: string
+      }
+      autodarts_player_login_status: {
+        Args: { p_login_id: string }
+        Returns: Json
+      }
       autodarts_poll_match: {
         Args: { p_board_number: number; p_match_id: string }
         Returns: Json
@@ -2116,6 +2453,25 @@ export type Database = {
         Args: { p_board_number: number }
         Returns: Json
       }
+      autodarts_session_finish: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      autodarts_session_poll: {
+        Args: { p_session_id: string; p_with_board?: boolean }
+        Returns: Json
+      }
+      autodarts_session_start: {
+        Args: {
+          p_base_score: number
+          p_board_number: number
+          p_double_out: boolean
+          p_host_kind: string
+          p_players: Json
+        }
+        Returns: string
+      }
+      autodarts_session_step: { Args: { p_session_id: string }; Returns: Json }
       autodarts_start_match: {
         Args: {
           p_base_score: number
@@ -2234,6 +2590,7 @@ export type Database = {
         Returns: boolean
       }
       is_online_match_member: { Args: { _match_id: string }; Returns: boolean }
+      is_platform_owner: { Args: never; Returns: boolean }
       merge_players: {
         Args: { p_keep: string; p_remove: string }
         Returns: Json
@@ -2325,6 +2682,10 @@ export type Database = {
         Args: { p_pin_hash: string; p_pin_salt: string; p_player_id: string }
         Returns: undefined
       }
+      submit_online_bulloff: {
+        Args: { _distance_mm: number; _match_id: string }
+        Returns: Json
+      }
       submit_online_duel_result: {
         Args: { _average: number; _darts: number; _id: string }
         Returns: string
@@ -2339,9 +2700,15 @@ export type Database = {
         Returns: undefined
       }
       take_open_challenge: { Args: { _id: string }; Returns: string }
+      track_usage: { Args: { _feature: string }; Returns: undefined }
       update_match_live_snapshot: {
         Args: { p_match_id: string; p_snapshot: Json; p_tournament_id: string }
         Returns: undefined
+      }
+      usage_housekeeping: { Args: never; Returns: undefined }
+      usage_overview: {
+        Args: { _club?: string; _days?: number }
+        Returns: Json
       }
     }
     Enums: {
