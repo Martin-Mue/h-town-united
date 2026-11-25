@@ -7,17 +7,6 @@ import { configForAverage, rollConfigForLevel, simulateBotVisit, BOT_LEVEL_RANGE
  *  sample of simulateDart's aimed-triple branch specifically. */
 const HUGE_REMAINING = 100000;
 
-/** Fraction of darts across many visits at `level` that scored exactly 0 — the genuine complete
- *  misses, as opposed to a near-miss single that still landed on the board. */
-function zeroDartRate(level: "easy" | "elite" | "legendary", visits = 4000): number {
-  let zero = 0, total = 0;
-  for (let i = 0; i < visits; i++) {
-    const { darts } = simulateBotVisit(HUGE_REMAINING, true, level);
-    for (const d of darts) { total++; if (d.points === 0) zero++; }
-  }
-  return zero / total;
-}
-
 describe("configForAverage", () => {
   it("picks progressively more accurate configs as the target average rises", () => {
     // Each step up should never be a LESS accurate bot than the step before it — the whole
@@ -30,11 +19,10 @@ describe("configForAverage", () => {
     }
   });
 
-  it("clamps to the top anchor once the target exceeds what any bot offers", () => {
-    // The ladder deliberately tops out well below nine-dart-leg pace now (nobody needs a club
-    // bot that strong) — a target far beyond the top anchor just gets the top anchor's config,
-    // same as one right at it, rather than anything sharper.
-    expect(configForAverage(300)).toEqual(configForAverage(101));
+  it("aims more tightly the higher the target average, and stops tightening beyond the top of the table", () => {
+    expect(configForAverage(40).aimSigmaMm!).toBeGreaterThan(configForAverage(60).aimSigmaMm!);
+    expect(configForAverage(60).aimSigmaMm!).toBeGreaterThan(configForAverage(90).aimSigmaMm!);
+    expect(configForAverage(300).aimSigmaMm).toEqual(configForAverage(200).aimSigmaMm);
   });
 });
 
@@ -72,46 +60,52 @@ describe("rollConfigForLevel", () => {
   });
 });
 
-describe("elite/legendary miss realism (Round 3 Rang 11)", () => {
-  it("still lets easy whiff completely at its full, undiluted miss rate", () => {
-    // easy has no missNeighborChance at all — this is the pre-Rang-11 control case, confirming
-    // the harness itself reads a believable rate before trusting it on elite/legendary below.
-    const rate = zeroDartRate("easy");
-    expect(rate).toBeGreaterThan(0.25);
-    expect(rate).toBeLessThan(0.35);
-  });
-
-  it("elite and legendary complete-miss far less often than their raw `miss` probability, because most of it now lands on a neighboring single instead of scoring zero", () => {
-    // Elite/legendary's raw miss fields (0.113 / 0.084 as of the 2026-09-21 retune) still mean
-    // mostly a near-miss single rather than a true zero, same as the original Round-3-Rang-11
-    // change this test guards — see LEVEL_CONFIG's own doc comment.
-    const eliteRate = zeroDartRate("elite");
-    const legendaryRate = zeroDartRate("legendary");
-    expect(eliteRate).toBeGreaterThan(0);
-    expect(eliteRate).toBeLessThan(0.09);
-    expect(legendaryRate).toBeGreaterThan(0);
-    expect(legendaryRate).toBeLessThan(0.06);
-    // A sharper bot should still whiff the board outright less often than a merely-elite one.
-    expect(legendaryRate).toBeLessThan(eliteRate);
-  });
-
-  it("keeps elite/legendary's own measured 3-dart average close to its documented anchor", () => {
-    // Regression guard for LEVEL_CONFIG drifting apart from the scoring-only anchors documented
-    // at the top of this file (~76.6 elite, ~98.1 legendary as of the 2026-09-21 retune) — this is
-    // the SCORING-ONLY average (HUGE_REMAINING, no checkout phase), not the lower real-full-leg
-    // average that retune was actually about; see that same doc comment for why they differ.
-    function threeDartAverage(level: "elite" | "legendary", visits: number): number {
-      let points = 0, darts = 0;
-      for (let i = 0; i < visits; i++) {
-        const res = simulateBotVisit(HUGE_REMAINING, true, level);
-        for (const d of res.darts) { points += d.points; darts++; }
-      }
-      return (points / darts) * 3;
+/** Real 3-dart average over whole legs of 501 double out (checkout play and busts included). */
+function fullLegAverage(avg: number, legs: number): number {
+  const cfg = configForAverage(avg);
+  let points = 0, darts = 0;
+  for (let leg = 0; leg < legs; leg++) {
+    let rem = 501;
+    for (let visit = 0; visit < 200 && rem > 0; visit++) {
+      const res = simulateBotVisit(rem, true, cfg);
+      darts += res.darts.length;
+      if (res.bustedOnDartIndex !== null) continue;
+      const scored = res.darts.reduce((sum, d) => sum + d.points, 0);
+      points += scored;
+      rem -= scored;
     }
-    expect(threeDartAverage("elite", 4000)).toBeGreaterThan(73);
-    expect(threeDartAverage("elite", 4000)).toBeLessThan(80);
-    expect(threeDartAverage("legendary", 4000)).toBeGreaterThan(94);
-    expect(threeDartAverage("legendary", 4000)).toBeLessThan(101);
+  }
+  return (points / darts) * 3;
+}
+
+describe("aimed throws (2026-11-25)", () => {
+  it("each level's middle plays close to that average over whole legs", () => {
+    for (const level of Object.keys(BOT_LEVEL_RANGES) as (keyof typeof BOT_LEVEL_RANGES)[]) {
+      const [min, max] = BOT_LEVEL_RANGES[level];
+      const middle = (min + max) / 2;
+      const real = fullLegAverage(middle, 400);
+      expect(real, level).toBeGreaterThan(middle - 4);
+      expect(real, level).toBeLessThan(middle + 4);
+    }
+  });
+
+  it("a dart aimed at T20 that misses lands around it (20, 1, 5), not anywhere on the board", () => {
+    let near = 0, total = 0;
+    for (let i = 0; i < 3000; i++) {
+      for (const d of simulateBotVisit(HUGE_REMAINING, true, configForAverage(55)).darts) {
+        total++;
+        if (d.baseValue === 20 || d.baseValue === 1 || d.baseValue === 5) near++;
+      }
+    }
+    expect(near / total).toBeGreaterThan(0.8);
+  });
+
+  it("every bot dart carries where it landed, so the drawn board shows it there", () => {
+    const { darts } = simulateBotVisit(HUGE_REMAINING, true, "medium");
+    for (const d of darts) {
+      expect(typeof d.boardU).toBe("number");
+      expect(typeof d.boardV).toBe("number");
+    }
   });
 });
 

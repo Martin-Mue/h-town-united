@@ -2,6 +2,7 @@ import type { BotLevel, DartThrow } from "@/types/game";
 import { getCheckoutSuggestion } from "@/utils/checkoutTable";
 import { finishRoute } from "@/utils/checkoutRoute";
 import { isBustThrowForRule, pointsFor, type OutRule } from "@/utils/x01Rules";
+import { spreadForAverage, throwAimedDart } from "@/utils/botAim";
 
 /**
  * Bot tuning, retuned 2026-09-21 after a real report that "The Machine" (hard) played
@@ -61,6 +62,10 @@ export interface LevelConfig {
    *  alongside this for elite/legendary so the measured 3-dart averages below are unchanged —
    *  see this file's own botsim tuning notes if re-deriving. */
   missNeighborChance?: number;
+  /** 2026-11-25: the bot aims at a point and lands around it with this spread (mm, standard deviation per axis);
+   *  the board's geometry then decides the field (see botAim.ts). Set for every bot now; the probabilities above
+   *  stay only as the fallback for a config built without it. */
+  aimSigmaMm?: number;
 }
 
 const LEVEL_CONFIG: Record<BotLevel, LevelConfig> = {
@@ -134,6 +139,10 @@ function lerpConfig(lo: LevelConfig, hi: LevelConfig, t: number): LevelConfig {
  *  target actually lands close to where it should instead of snapping to whichever fixed tier
  *  happens to be nearest. */
 export function configForAverage(avgPerRound: number): LevelConfig {
+  return { ...probabilityConfigForAverage(avgPerRound), aimSigmaMm: spreadForAverage(avgPerRound) };
+}
+
+function probabilityConfigForAverage(avgPerRound: number): LevelConfig {
   if (avgPerRound <= TIER_ANCHORS[0].avg) return TIER_ANCHORS[0].cfg;
   const last = TIER_ANCHORS[TIER_ANCHORS.length - 1];
   if (avgPerRound >= last.avg) return last.cfg;
@@ -146,6 +155,12 @@ export function configForAverage(avgPerRound: number): LevelConfig {
   }
   return last.cfg; // unreachable — satisfies the type checker
 }
+
+/** A named level's fixed config (used where no per-leg roll exists, e.g. Cricket): the spread for the middle of its range. */
+const levelConfig = (level: BotLevel): LevelConfig => {
+  const [min, max] = BOT_LEVEL_RANGES[level];
+  return { ...LEVEL_CONFIG[level], aimSigmaMm: spreadForAverage((min + max) / 2) };
+};
 
 /** Result of a per-leg roll — `avg` is the target this leg's config was built for (feed it back in
  *  as the next leg's `previousAvg` to keep the walk continuous; see rollConfigForLevel). */
@@ -206,6 +221,7 @@ const miss = (): DartThrow => ({ baseValue: 0, multiplier: 1, points: 0 });
 
 /** Simulate one dart aimed at a given base/multiplier target. */
 function simulateDart(targetBase: number, targetMultiplier: 1 | 2 | 3, cfg: LevelConfig): DartThrow {
+  if (cfg.aimSigmaMm !== undefined) return throwAimedDart(targetBase, targetMultiplier, cfg.aimSigmaMm, rand);
   // Aiming at a double / bullseye (checkout attempt)
   if (targetMultiplier === 2) {
     if (rand() < cfg.doubleHitChance) {
@@ -273,7 +289,7 @@ export interface BotVisitResult {
 }
 
 export function simulateBotVisit(remaining: number, outRuleOrDoubleOut: boolean | OutRule, level: BotLevel | LevelConfig, mustDoubleIn = false): BotVisitResult {
-  const cfg = typeof level === "string" ? LEVEL_CONFIG[level] : level;
+  const cfg = typeof level === "string" ? levelConfig(level) : level;
   const outRule: OutRule = typeof outRuleOrDoubleOut === "string" ? outRuleOrDoubleOut : outRuleOrDoubleOut ? "double" : "single";
   const darts: DartThrow[] = [];
   let rem = remaining;
@@ -335,7 +351,8 @@ export function simulateBotCricketDart(
     ? openMine.reduce((best, n) => (n > best ? n : best), openMine[0])
     : numbers.filter((n) => (oppMarks[n] || 0) < 3).reduce((best, n) => (n > best ? n : best), numbers[numbers.length - 1]);
 
-  const cfg = LEVEL_CONFIG[level];
+  const cfg = levelConfig(level);
+  if (cfg.aimSigmaMm !== undefined) return throwAimedDart(target, target === 25 ? 2 : 3, cfg.aimSigmaMm, rand);
   if (rand() > 1 - cfg.miss) return miss();
   const tripleRoll = rand();
   if (target !== 25 && tripleRoll < cfg.aimedTriple) {
