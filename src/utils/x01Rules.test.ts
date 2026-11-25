@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isBustThrow, isBustThrowForRule, isFinishingDart, isQualifyingDouble, outRuleOf, outRuleShortLabel, resolveX01Visit, resolveX01VisitForRule, type VisitDart } from "./x01Rules";
+import { settleOrderedVisit } from "./x01Rules";
 
 describe("isQualifyingDouble", () => {
   it("is true only for multiplier 2 (includes bullseye)", () => {
@@ -175,5 +176,19 @@ describe("out rules: single, double, master", () => {
       expect(resolveX01VisitForRule(50, "master", [t(60)])).toEqual({ kind: "bust" });
       expect(resolveX01VisitForRule(170, "master", [t(60), t(60)])).toEqual({ kind: "continue" });
     });
+  });
+});
+
+describe("settleOrderedVisit", () => {
+  it("checks out when the last scoring dart may finish", () => {
+    // T20, D20 on 100: the double was last
+    expect(settleOrderedVisit([{ points: 60 }, { points: 40 }], [1])).toEqual({ kind: "checkout", finisherIndex: 1 });
+  });
+  it("busts when the last scoring dart may not finish", () => {
+    // D20, T20 on 100: the treble was last
+    expect(settleOrderedVisit([{ points: 40 }, { points: 60 }], [0])).toEqual({ kind: "bust" });
+  });
+  it("ignores trailing misses", () => {
+    expect(settleOrderedVisit([{ points: 60 }, { points: 40 }, { points: 0 }], [1])).toEqual({ kind: "checkout", finisherIndex: 1 });
   });
 });

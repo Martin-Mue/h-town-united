@@ -118,6 +118,17 @@ export function resolveX01VisitForRule(remaining: number, rule: OutRule, darts: 
   return resolveX01Visit(remaining, restrictsFinish(rule), darts.map((d) => ({ points: d.points, isDouble: isFinishingDart(d.multiplier, rule) })));
 }
 
+/**
+ * For darts that come in the order they were thrown (Autodarts): settles an "ambiguous" visit that resolveX01Visit
+ * could not decide from the unordered darts. The visit ends with its last scoring dart, so that dart decides: a
+ * checkout when it may finish (a double, under Master Out also a treble), otherwise a bust.
+ */
+export function settleOrderedVisit(darts: { points: number }[], finishingIndexes: number[]): { kind: "checkout"; finisherIndex: number } | { kind: "bust" } {
+  let last = -1;
+  darts.forEach((d, i) => { if (d.points > 0) last = i; });
+  return last >= 0 && finishingIndexes.includes(last) ? { kind: "checkout", finisherIndex: last } : { kind: "bust" };
+}
+
 export type VisitOutcome =
   | { kind: "continue" }
   | { kind: "bust" }

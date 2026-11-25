@@ -71,7 +71,7 @@ import { useLeagueLink } from "@/hooks/useLeagueLink";
 import { useOnlineMatch } from "@/hooks/useOnlineMatch";
 import { liveAveragesTo170 } from "@/utils/liveAverageTo170";
 import { computePostGameStats } from "@/utils/postGameStats";
-import { isBustThrowForRule, isQualifyingDouble as qualifyingDouble, resolveX01Visit, resolveX01VisitForRule, pointsFor, dartLabel, outRuleOf, restrictsFinish, outRuleShortLabel } from "@/utils/x01Rules";
+import { isBustThrowForRule, isQualifyingDouble as qualifyingDouble, resolveX01Visit, resolveX01VisitForRule, settleOrderedVisit, pointsFor, dartLabel, outRuleOf, restrictsFinish, outRuleShortLabel } from "@/utils/x01Rules";
 import { bustVisitThrows } from "@/utils/bustVisit";
 import { simulateBotVisit, simulateBotCricketDart, configForAverage, rollConfigForLevel, BOT_LEVEL_RANGES, type LevelConfig } from "@/utils/botPlayer";
 import {
@@ -1595,6 +1595,9 @@ const GamePage = () => {
     // typed a total that matches remaining exactly, so trust that as a deliberate, valid checkout
     // instead of surfacing the disambiguation prompt built for genuine (camera-sourced) ambiguity.
     autoResolveAmbiguousAsCheckout = false,
+    // Autodarts reports the darts in the order they were thrown, so the last one decides a finish and nobody has to be
+    // asked which dart was last (that prompt only showed in the camera view: with Autodarts the game silently waited).
+    dartsInThrowOrder = false,
   ) => {
     if (!game || game.isFinished || darts.length === 0) return;
     if (currentPlayer?.isBot) return; // bots never use the camera
@@ -1636,6 +1639,11 @@ const GamePage = () => {
       if (x01Outcome.kind === "ambiguous") {
         if (autoResolveAmbiguousAsCheckout) {
           x01Outcome = { kind: "checkout" };
+        } else if (dartsInThrowOrder) {
+          const settled = settleOrderedVisit(x01VisitDarts, x01Outcome.doubleIndexes);
+          // `forced` keeps the finishing dart last in the recorded history (see below)
+          forced = settled;
+          x01Outcome = settled;
         } else {
           setPendingCheckoutChoice({ darts: dartsToApply, doubleIndexes: x01Outcome.doubleIndexes });
           return;
@@ -2908,7 +2916,7 @@ const GamePage = () => {
             enabled={phase === "playing" && !game.isFinished}
             paused={!!pendingCheckoutChoice || !!pendingTiebreak || !!currentPlayer?.isBot || (!!onlineMatchId && !onlineMatch.isMyTurn)}
             onClose={() => { setAutodartsEnabled(false); setPendingLiveDarts([]); setAutodartsSession(null); setAutodartsLastCommittedTurnId(null); }}
-            onRoundCommit={submitDetectedRound}
+            onRoundCommit={(darts, forced) => submitDetectedRound(darts, forced, false, true)}
             onPendingChange={(darts, busted) => { setPendingLiveDarts(darts); setPendingLiveBust(busted); }}
             playerName={currentPlayerName}
             onRequestManualEntry={() => setShowManualInput(true)}
@@ -3071,6 +3079,38 @@ const GamePage = () => {
       />
     </div>
   );
+  // "Which dart finished it?" for a visit whose darts came without their throw order. Shown in the camera view and in
+  // the normal play screen (it used to exist in the camera view only, so elsewhere the game waited for an answer
+  // nobody could give).
+  const checkoutChoicePrompt = pendingCheckoutChoice ? (
+    <div className="mb-3 rounded-2xl border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
+      <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.possibleFinishDetected")}</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {t("game.whichDartWasLast")}
+      </p>
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+        {pendingCheckoutChoice.darts.map((t, idx) => (
+          <Badge key={idx} variant="outline" className={`px-1.5 py-0.5 text-[10px] font-display ${
+            pendingCheckoutChoice.doubleIndexes.includes(idx)
+              ? "bg-accent/20 text-accent border-accent/40"
+              : "bg-muted text-muted-foreground border-border"
+          }`}>
+            {dartLabel(t)}
+          </Badge>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+        {pendingCheckoutChoice.doubleIndexes.map((idx) => (
+          <Button key={idx} size="sm" onClick={() => resolveCheckoutChoice(idx)} className="gap-1">
+            {t("game.doneWith")} {dartLabel(pendingCheckoutChoice.darts[idx])}
+          </Button>
+        ))}
+        <Button size="sm" variant="outline" onClick={() => resolveCheckoutChoice("bust")}>
+          {t("game.noFinishBust")}
+        </Button>
+      </div>
+    </div>
+  ) : null;
   const arenaUndoDisabled = undoStack.length === 0 || !!pendingCheckoutChoice || !!pendingTiebreak || !!onlineMatchId;
   const arenaCorrect = currentPlayer?.isBot || onlineMatchId ? undefined : () => setCorrectorOpen(true);
   /** Hands the oche over: every dart still to throw in this round counts as a miss, one after the other so each runs through the normal throw logic. */
@@ -3317,6 +3357,7 @@ const GamePage = () => {
         </div>
       )}
 
+      {!cameraEnabled && checkoutChoicePrompt && <div className="mx-4">{checkoutChoicePrompt}</div>}
       {pendingTiebreak && (
         <div className="mx-4 mb-3 rounded-2xl border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
           <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.tiebreakReached")}</p>
@@ -3364,35 +3405,7 @@ const GamePage = () => {
               while the camera is open, only this one region does. */}
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 pb-3" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
             <div className="pt-3 pb-2">{arenaTop}</div>
-            {pendingCheckoutChoice && (
-              <div className="mb-3 rounded-2xl border-2 border-accent bg-accent/10 p-3 text-center animate-pulse-glow">
-                <p className="font-display text-sm uppercase tracking-wide text-accent">{t("game.possibleFinishDetected")}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("game.whichDartWasLast")}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
-                  {pendingCheckoutChoice.darts.map((t, idx) => (
-                    <Badge key={idx} variant="outline" className={`px-1.5 py-0.5 text-[10px] font-display ${
-                      pendingCheckoutChoice.doubleIndexes.includes(idx)
-                        ? "bg-accent/20 text-accent border-accent/40"
-                        : "bg-muted text-muted-foreground border-border"
-                    }`}>
-                      {dartLabel(t)}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-                  {pendingCheckoutChoice.doubleIndexes.map((idx) => (
-                    <Button key={idx} size="sm" onClick={() => resolveCheckoutChoice(idx)} className="gap-1">
-                      {t("game.doneWith")} {dartLabel(pendingCheckoutChoice.darts[idx])}
-                    </Button>
-                  ))}
-                  <Button size="sm" variant="outline" onClick={() => resolveCheckoutChoice("bust")}>
-                    {t("game.noFinishBust")}
-                  </Button>
-                </div>
-              </div>
-            )}
+            {checkoutChoicePrompt}
             {/* Screen-Audit Richtung 1 (reservierte Status-Zone): always mounted now, gate passed
                 in as `active` — see CheckoutSuggestion's own doc comment for why the old
                 `{condition && <CheckoutSuggestion/>}` wrapping caused the "scoreboard jumps"
