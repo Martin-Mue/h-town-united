@@ -1,0 +1,1729 @@
+[
+ {
+  "id": "47ef666c-0c50-43b4-9d3b-ed2ab598fe48",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5138687896728515,
+    "y": 0.3424044036865234,
+    "boardU": 0.036787240511542335,
+    "boardV": -0.418025454412405,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.6082605123519897,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4152041244506836,
+    "y": 0.2614567565917969,
+    "boardU": -0.22492274681516292,
+    "boardV": -0.6327406986954996,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.9016897678375244,
+    "multiplier": 1
+   },
+   {
+    "x": 0.44125,
+    "y": 0.28125,
+    "boardU": -0.15583554376657832,
+    "boardV": -0.580238726790451,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   }
+  ],
+  "notes": "third dart added at the upper edge of the treble 5, field from geometry"
+ },
+ {
+  "id": "830d003b-7109-4470-a50e-dd5c70bc4f1d",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.73,
+    "y": 0.73875,
+    "boardU": 0.6100795755968169,
+    "boardV": 0.633289124668435,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 2,
+    "multiplier": 1
+   },
+   {
+    "x": 0.14069095611572266,
+    "y": 0.4180197525024414,
+    "boardU": -0.9530743869609477,
+    "boardV": -0.21745423739405556,
+    "snapped": false,
+    "baseValue": 14,
+    "confidence": 0.8023576736450195,
+    "multiplier": 2
+   },
+   {
+    "x": 0.44375,
+    "y": 0.1225,
+    "boardU": -0.1492042440318303,
+    "boardV": -1.0013262599469497,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 2,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 14,
+    "multiplier": 2
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 moved onto the needle end; top dart added on the 5/20 corner of the double, field from geometry"
+ },
+ {
+  "id": "45db9324-9281-4631-bba1-85142d7cad7a",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.45938156127929686,
+    "y": 0.28016923904418944,
+    "boardU": -0.10774121676579107,
+    "boardV": -0.5831054667262886,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.41677534580230713,
+    "multiplier": 3
+   },
+   {
+    "x": 0.49125,
+    "y": 0.27875,
+    "boardU": -0.023209549071617985,
+    "boardV": -0.5868700265251989,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "second dart added at the lower edge of the treble 20, field from geometry"
+ },
+ {
+  "id": "3e791aa4-9dfb-4eb1-952c-32adb93a8523",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.8117722320556641,
+    "y": 0.6996916198730468,
+    "boardU": 0.8269820478930083,
+    "boardV": 0.5296859943582153,
+    "snapped": false,
+    "baseValue": 15,
+    "confidence": 0.8644300699234009,
+    "multiplier": 2
+   },
+   {
+    "x": 0.20151565551757813,
+    "y": 0.33960350036621095,
+    "boardU": -0.791735661757087,
+    "boardV": -0.42545490619042126,
+    "snapped": false,
+    "baseValue": 9,
+    "confidence": 0.8717020750045776,
+    "multiplier": 1
+   },
+   {
+    "x": 0.15375,
+    "y": 0.67875,
+    "boardU": -0.9184350132625995,
+    "boardV": 0.47413793103448265,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 15,
+    "multiplier": 2
+   },
+   {
+    "baseValue": 9,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 needle ends just outside the double 8: miss"
+ },
+ {
+  "id": "0fba679f-927b-430d-aab7-0d2d978c6729",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5000829696655273,
+    "y": 0.2789813232421875,
+    "boardU": 0.00022007868840169772,
+    "boardV": -0.5862564370233758,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.9020068645477295,
+    "multiplier": 3
+   },
+   {
+    "x": 0.5275,
+    "y": 0.28125,
+    "boardU": 0.07294429708222804,
+    "boardV": -0.580238726790451,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "second dart added at the lower edge of the treble 20, field from geometry"
+ },
+ {
+  "id": "15575d1e-541c-4250-a1a6-559a4bb13590",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.44125,
+    "y": 0.3225,
+    "boardU": -0.15583554376657832,
+    "boardV": -0.4708222811671087,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.50875,
+    "y": 0.27625,
+    "boardU": 0.02320954907161813,
+    "boardV": -0.593501326259947,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 2 sat on the barrel, label 3 on the same dart; needle ends set, field of the right one from geometry"
+ },
+ {
+  "id": "e33a5fd3-4cd4-4788-975a-19993f007a98",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5178443145751953,
+    "y": 0.30861749649047854,
+    "boardU": 0.04733239940370104,
+    "boardV": -0.5076458979032402,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.5273573994636536,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 was the club name; label 1 kept, the other tips are hidden behind the front dart"
+ },
+ {
+  "id": "70a93868-9e65-4a40-aeec-15ba8d167106",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5458686065673828,
+    "y": 0.30698238372802733,
+    "boardU": 0.12166739142541871,
+    "boardV": -0.5119830670344098,
+    "snapped": false,
+    "baseValue": 1,
+    "confidence": 0.8520247340202332,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 sat on the barrel of the second dart, whose tip is hidden"
+ },
+ {
+  "id": "c235352d-b0e3-4c5e-9532-5268d9ea2eab",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.6916535949707031,
+    "y": 0.6575144958496094,
+    "boardU": 0.5083649733970906,
+    "boardV": 0.41781033381859184,
+    "snapped": false,
+    "baseValue": 15,
+    "confidence": 0.730398416519165,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4789991760253906,
+    "y": 0.2837532615661621,
+    "boardU": -0.05570510338092652,
+    "boardV": -0.573598775686573,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.3007473349571228,
+    "multiplier": 1
+   },
+   {
+    "x": 0.75875,
+    "y": 0.49125,
+    "boardU": 0.6863395225464192,
+    "boardV": -0.023209549071617985,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 6,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 15,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 6,
+    "multiplier": 1
+   }
+  ],
+  "notes": "right dart (single 6) added; label 2 field from geometry"
+ },
+ {
+  "id": "404e0d6f-e5da-44bf-927f-0aea5dc091c3",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5182906341552734,
+    "y": 0.31180810928344727,
+    "boardU": 0.04851627096889506,
+    "boardV": -0.4991827339961608,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.4035116732120514,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4375,
+    "y": 0.265,
+    "boardU": -0.16578249336870027,
+    "boardV": -0.623342175066313,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "left dart added at the upper edge of the treble 5, field from geometry; third tip hidden"
+ },
+ {
+  "id": "b94fbfaa-5684-4a08-b7e8-606cc0e99cea",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.49375,
+    "y": 0.2825,
+    "boardU": -0.01657824933686997,
+    "boardV": -0.576923076923077,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on the flight, label 2 was the club name; the needle ends in the black just below the treble 20"
+ },
+ {
+  "id": "1369b103-b9f8-4a5f-b039-0ac0a00f4259",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4149290084838867,
+    "y": 0.23926713943481445,
+    "boardU": -0.22565249739022122,
+    "boardV": -0.6915990996424018,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.6181901693344116,
+    "multiplier": 1
+   },
+   {
+    "x": 0.47625,
+    "y": 0.2325,
+    "boardU": -0.06299734748010609,
+    "boardV": -0.709549071618037,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.52125,
+    "y": 0.2725,
+    "boardU": 0.05636604774535807,
+    "boardV": -0.603448275862069,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "two darts in the 20 added, fields from geometry"
+ },
+ {
+  "id": "1e61d57f-0fd2-491b-bdaf-a571b263848c",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.57625,
+    "y": 0.2675,
+    "boardU": 0.20225464190981443,
+    "boardV": -0.616710875331565,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "x": 0.49742534637451175,
+    "y": 0.2915234375,
+    "boardU": -0.006829319961506525,
+    "boardV": -0.5529882294429718,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.8660928010940552,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 moved onto the needle end at the edge of the treble 1, field from geometry"
+ },
+ {
+  "id": "04aec5a5-f418-49db-93a1-43ffd4d83929",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5686699295043945,
+    "y": 0.43720359802246095,
+    "boardU": 0.18214835412306205,
+    "boardV": -0.16656870551071376,
+    "snapped": false,
+    "baseValue": 4,
+    "confidence": 0.7494274377822876,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4116502380371094,
+    "y": 0.3019093132019043,
+    "boardU": -0.23434950122782697,
+    "boardV": -0.525439487528106,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.7768412232398987,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 4,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 on the needle end at the lower edge of the treble 5, field from geometry"
+ },
+ {
+  "id": "8f03d775-d5b5-496b-a421-83bf7d124738",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5664229583740235,
+    "y": 0.7036921691894531,
+    "boardU": 0.17618821849873656,
+    "boardV": 0.5402975310065069,
+    "snapped": false,
+    "baseValue": 17,
+    "confidence": 0.8430647850036621,
+    "multiplier": 1
+   },
+   {
+    "x": 0.6403131103515625,
+    "y": 0.4452774810791016,
+    "boardU": 0.37218331658239445,
+    "boardV": -0.14515257008195914,
+    "snapped": false,
+    "baseValue": 13,
+    "confidence": 0.9011235237121582,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5857595062255859,
+    "y": 0.6482637786865234,
+    "boardU": 0.2274787963543397,
+    "boardV": 0.3932726225106724,
+    "snapped": false,
+    "baseValue": 2,
+    "confidence": 0.9220781326293945,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 17,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 13,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 2,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 on the needle end at the edge of the treble 17, field from geometry"
+ },
+ {
+  "id": "09e2a6c1-98c0-4691-97bc-a67f8b29deb1",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.42517044067382814,
+    "y": 0.23286685943603516,
+    "boardU": -0.19848689476438186,
+    "boardV": -0.708575969665689,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.8780761361122131,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5358550262451172,
+    "y": 0.29029273986816406,
+    "boardU": 0.09510617041145093,
+    "boardV": -0.55625267939479,
+    "snapped": false,
+    "baseValue": 1,
+    "confidence": 0.8048465251922607,
+    "multiplier": 1
+   },
+   {
+    "x": 0.441495361328125,
+    "y": 0.33381458282470705,
+    "boardU": -0.15518471796253347,
+    "boardV": -0.44081012513340206,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.9132383465766907,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 on the needle end at the treble 20/1 corner, field from geometry"
+ },
+ {
+  "id": "0867796d-f37c-4c30-ad23-b60bcddb72bf",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4872123718261719,
+    "y": 0.27258083343505857,
+    "boardU": -0.03391943812686477,
+    "boardV": -0.6032338635674842,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.8511192798614502,
+    "multiplier": 3
+   },
+   {
+    "x": 0.50875,
+    "y": 0.24,
+    "boardU": 0.02320954907161813,
+    "boardV": -0.6896551724137931,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 sat on empty black; the needle next to it ends at 407,192; third tip hidden"
+ },
+ {
+  "id": "0671b2a5-c553-401e-8661-460fb6814c71",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5063977813720704,
+    "y": 0.3502702331542969,
+    "boardU": 0.01697024236623428,
+    "boardV": -0.3971611852671172,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.8912841081619263,
+    "multiplier": 1
+   },
+   {
+    "x": 0.515,
+    "y": 0.1775,
+    "boardU": 0.0397877984084881,
+    "boardV": -0.8554376657824934,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.462943115234375,
+    "y": 0.3037301254272461,
+    "boardU": -0.09829412404675042,
+    "boardV": -0.5206097468773317,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.8987390995025635,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 sat on empty black; the needle above it ends at 412,142; label 3 kept on its needle end, field from geometry"
+ },
+ {
+  "id": "16c58ff8-28b2-4fa9-9ec0-ad8dc96017bb",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.50875,
+    "y": 0.18875,
+    "boardU": 0.02320954907161813,
+    "boardV": -0.8255968169761274,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.49223979949951174,
+    "y": 0.33216888427734376,
+    "boardU": -0.020584086208191493,
+    "boardV": -0.4451753732696454,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.8406169414520264,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "labels 1 and 2 sat on empty black; the faint needle ends at 407,151; third tip not visible"
+ },
+ {
+  "id": "27d771d0-87af-4c73-9d67-6c26054ddd45",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4675,
+    "y": 0.69625,
+    "boardU": -0.08620689655172406,
+    "boardV": 0.520557029177719,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4429456329345703,
+    "y": 0.8275694274902343,
+    "boardU": -0.15133784367488004,
+    "boardV": 0.8688844230510193,
+    "snapped": false,
+    "baseValue": 19,
+    "confidence": 0.7746285200119019,
+    "multiplier": 1
+   },
+   {
+    "x": 0.40375,
+    "y": 0.685,
+    "boardU": -0.2553050397877984,
+    "boardV": 0.49071618037135295,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   }
+  ],
+  "notes": "needle ends re-measured; fields from geometry"
+ },
+ {
+  "id": "bd326769-7577-407c-b148-b4315ae8b537",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.49375,
+    "y": 0.28875,
+    "boardU": -0.01657824933686997,
+    "boardV": -0.5603448275862069,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5346121215820312,
+    "y": 0.30021675109863283,
+    "boardU": 0.0918093410663958,
+    "boardV": -0.529929042178693,
+    "snapped": false,
+    "baseValue": 1,
+    "confidence": 0.9008665680885315,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 moved onto the needle end; label 2 field from geometry"
+ },
+ {
+  "id": "f117c3b2-5852-4428-990f-8a6b042fa24a",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.6960991668701172,
+    "y": 0.5268892669677734,
+    "boardU": 0.5201569413000456,
+    "boardV": 0.07132431556438602,
+    "snapped": false,
+    "baseValue": 6,
+    "confidence": 0.8110705614089966,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4825912857055664,
+    "y": 0.1924810791015625,
+    "boardU": -0.04617696099319239,
+    "boardV": -0.8157000554335212,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.8795034289360046,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5875,
+    "y": 0.72125,
+    "boardU": 0.23209549071618044,
+    "boardV": 0.5868700265251988,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 17,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 6,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 17,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 3 sits on the green treble of the 17 (stored as single)"
+ },
+ {
+  "id": "6100d795-9ac8-4586-858b-0887518fef44",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.47875,
+    "y": 0.2925,
+    "boardU": -0.05636604774535807,
+    "boardV": -0.5503978779840849,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "needle ends in the black just below the treble: single 20"
+ },
+ {
+  "id": "6d22824f-ee90-4694-8738-0b6a8a758b4a",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.45375,
+    "y": 0.30625,
+    "boardU": -0.12267904509283824,
+    "boardV": -0.5139257294429708,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.47375,
+    "y": 0.79125,
+    "boardU": -0.0696286472148541,
+    "boardV": 0.7725464190981433,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "x": 0.505,
+    "y": 0.88625,
+    "boardU": 0.013262599469496032,
+    "boardV": 1.0245358090185677,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "labels 1 and 2 moved onto the needle ends (single 5, single 3); label 3 ends just outside the double 3: miss"
+ },
+ {
+  "id": "a12bfb22-44cd-4f1d-b080-b42222af833a",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.44875,
+    "y": 0.26125,
+    "boardU": -0.13594164456233426,
+    "boardV": -0.633289124668435,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.485,
+    "y": 0.25875,
+    "boardU": -0.0397877984084881,
+    "boardV": -0.6399204244031831,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on empty board, label 2 on the barrels; two needle ends at the top edge of the treble set, fields from geometry; third tip hidden"
+ },
+ {
+  "id": "73159cb4-b588-406b-b954-701d82b63297",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4823681640625,
+    "y": 0.27492059707641603,
+    "boardU": -0.04676879559018571,
+    "boardV": -0.5970275939617619,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.9139832258224487,
+    "multiplier": 3
+   },
+   {
+    "x": 0.5275,
+    "y": 0.2975,
+    "boardU": 0.07294429708222804,
+    "boardV": -0.5371352785145889,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 needle ends in the black just below the treble left of the 20/1 wire: single 20"
+ },
+ {
+  "id": "7fa5b089-762e-4d44-bb81-3b36108a4620",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4946314239501953,
+    "y": 0.3048136329650879,
+    "boardU": -0.014240254774018071,
+    "boardV": -0.5177357215780161,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.8926538228988647,
+    "multiplier": 1
+   },
+   {
+    "x": 0.47875,
+    "y": 0.2275,
+    "boardU": -0.05636604774535807,
+    "boardV": -0.7228116710875331,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4875,
+    "y": 0.2775,
+    "boardU": -0.033156498673740084,
+    "boardV": -0.5901856763925729,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 2 sat on empty black; the other two needle ends (single 20, treble 20) set, fields from geometry"
+ },
+ {
+  "id": "17bf2360-3e89-42e0-9193-60bf1b7442be",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.21625,
+    "y": 0.79625,
+    "boardU": -0.7526525198938993,
+    "boardV": 0.7858090185676393,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "x": 0.30601747512817384,
+    "y": 0.9000027465820313,
+    "boardU": -0.5145425062913164,
+    "boardV": 1.06101524292316,
+    "snapped": false,
+    "baseValue": 0,
+    "confidence": 0.78282630443573,
+    "multiplier": 1
+   },
+   {
+    "x": 0.2847874450683594,
+    "y": 0.842615966796875,
+    "boardU": -0.5708555833730523,
+    "boardV": 0.9087956678962203,
+    "snapped": false,
+    "baseValue": 0,
+    "confidence": 0.767235279083252,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 needle runs through the double 7 and ends in the black outside: miss"
+ },
+ {
+  "id": "43782c00-3a58-4e08-93ef-e99e614a3a78",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5244455718994141,
+    "y": 0.2218310546875,
+    "boardU": 0.06484236578093876,
+    "boardV": -0.7378486613063664,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.7979393005371094,
+    "multiplier": 1
+   },
+   {
+    "x": 0.55375,
+    "y": 0.235,
+    "boardU": 0.14257294429708214,
+    "boardV": -0.7029177718832892,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5270783996582031,
+    "y": 0.36028160095214845,
+    "boardU": 0.0718259937883369,
+    "boardV": -0.3706058330181739,
+    "snapped": false,
+    "baseValue": 1,
+    "confidence": 0.8462022542953491,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name; second needle in the single 1 added; label 2 field from geometry"
+ },
+ {
+  "id": "ef35cbda-85a4-4d8a-9179-389330b38c65",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.45647315979003905,
+    "y": 0.2590159034729004,
+    "boardU": -0.1154558095754928,
+    "boardV": -0.6392151101514585,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.929329514503479,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4982060623168945,
+    "y": 0.29054508209228513,
+    "boardU": -0.004758455392851734,
+    "boardV": -0.555583336625239,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.8012436032295227,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name; label 1 on the needle end at the 5/20 wire, field from geometry"
+ },
+ {
+  "id": "f950277f-04c7-4244-8cd1-199f9073f15c",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4841133117675781,
+    "y": 0.2520144271850586,
+    "boardU": -0.04213975658467317,
+    "boardV": -0.6577866652916217,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.8680233359336853,
+    "multiplier": 1
+   },
+   {
+    "x": 0.45397010803222654,
+    "y": 0.3247115325927734,
+    "boardU": -0.12209520415855,
+    "boardV": -0.4649561469687711,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.8164768218994141,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4736286163330078,
+    "y": 0.4886881256103516,
+    "boardU": -0.06995061980634541,
+    "boardV": -0.03000497185583151,
+    "snapped": false,
+    "baseValue": 25,
+    "confidence": 0.5401846766471863,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 on the outer bull edge, field from geometry"
+ },
+ {
+  "id": "65354329-5305-4765-b32e-d5f2dde36a53",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.50625,
+    "y": 0.21875,
+    "boardU": 0.01657824933686997,
+    "boardV": -0.7460212201591512,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.54375,
+    "y": 0.23375,
+    "boardU": 0.11604774535809007,
+    "boardV": -0.7062334217506631,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5362088775634766,
+    "y": 0.2896652412414551,
+    "boardU": 0.09604476807288202,
+    "boardV": -0.5579171319855305,
+    "snapped": false,
+    "baseValue": 1,
+    "confidence": 0.6738287806510925,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name, label 2 sat on empty black; needle ends re-measured, fields from geometry"
+ },
+ {
+  "id": "1ff95036-da1d-43d5-82b6-fc5f391793ce",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.45861373901367186,
+    "y": 0.2624149513244629,
+    "boardU": -0.10977788060033991,
+    "boardV": -0.6301990681048735,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.7682465314865112,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5368900299072266,
+    "y": 0.3083112907409668,
+    "boardU": 0.0978515382154551,
+    "boardV": -0.5084581147454466,
+    "snapped": false,
+    "baseValue": 1,
+    "confidence": 0.693231463432312,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5538965225219726,
+    "y": 0.3829984664916992,
+    "boardU": 0.14296159820151844,
+    "boardV": -0.3103488952474829,
+    "snapped": false,
+    "baseValue": 1,
+    "confidence": 0.8836244344711304,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "labels 1 and 2 end on wires next to the treble, fields from geometry"
+ },
+ {
+  "id": "df5613cf-a3be-4524-9631-965e3911db38",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.49251991271972656,
+    "y": 0.4854414367675781,
+    "boardU": -0.01984108031902776,
+    "boardV": -0.038616878600588385,
+    "snapped": false,
+    "baseValue": 25,
+    "confidence": 0.765184760093689,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 was the club name; label 1 on the outer bull kept, second tip hidden under the flights"
+ },
+ {
+  "id": "ca775068-39a5-4f7a-9479-84dc0b40edbc",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4850382995605469,
+    "y": 0.3032041549682617,
+    "boardU": -0.03968620806221039,
+    "boardV": -0.5220048939833909,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.3403337001800537,
+    "multiplier": 1
+   },
+   {
+    "x": 0.44908416748046875,
+    "y": 0.30051313400268553,
+    "boardU": -0.1350552586724971,
+    "boardV": -0.5291428806294812,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.9236379861831665,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5067192840576172,
+    "y": 0.529395523071289,
+    "boardU": 0.017823034635589225,
+    "boardV": 0.07797220973816721,
+    "snapped": false,
+    "baseValue": 25,
+    "confidence": 0.48049962520599365,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "labels kept on the needle ends, fields from geometry"
+ },
+ {
+  "id": "9b3a0f3e-1057-41f9-b98f-261b2647de8c",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46505630493164063,
+    "y": 0.2823381042480469,
+    "boardU": -0.09268884633517051,
+    "boardV": -0.5773525086258708,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.8836339712142944,
+    "multiplier": 3
+   },
+   {
+    "x": 0.4744118881225586,
+    "y": 0.5020201873779296,
+    "boardU": -0.06787297580223159,
+    "boardV": 0.005358587209361529,
+    "snapped": false,
+    "baseValue": 25,
+    "confidence": 0.7442108392715454,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on the barrel of the dart whose tip is label 2; fields from geometry"
+ },
+ {
+  "id": "bb7157aa-aeae-4d8e-9f3f-d29cd5e26371",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.45375,
+    "y": 0.18375,
+    "boardU": -0.12267904509283824,
+    "boardV": -0.8388594164456235,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.53375,
+    "y": 0.26,
+    "boardU": 0.089522546419098,
+    "boardV": -0.636604774535809,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on empty black; both needle ends set, fields from geometry"
+ },
+ {
+  "id": "fad47ebd-a9cf-4e21-86a0-77ec3afffaa6",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46830055236816404,
+    "y": 0.7745339965820313,
+    "boardU": -0.0840834154690614,
+    "boardV": 0.7282068874854934,
+    "snapped": false,
+    "baseValue": 3,
+    "confidence": 0.776425838470459,
+    "multiplier": 1
+   },
+   {
+    "x": 0.1525,
+    "y": 0.695,
+    "boardU": -0.9217506631299736,
+    "boardV": 0.5172413793103448,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "x": 0.18375,
+    "y": 0.59125,
+    "boardU": -0.8388594164456235,
+    "boardV": 0.24204244031830252,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 8,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 8,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 needle ends outside the double 16: miss; dart in the 11/8 area added, field from geometry"
+ },
+ {
+  "id": "d3755d85-f8b7-4ade-aa04-679109fca027",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46943115234375,
+    "y": 0.267001953125,
+    "boardU": -0.08108447654177761,
+    "boardV": -0.6180319545755978,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.8694553375244141,
+    "multiplier": 3
+   },
+   {
+    "x": 0.5278191375732422,
+    "y": 0.11432338714599609,
+    "boardU": 0.07379081584414322,
+    "boardV": -1.023014888206908,
+    "snapped": false,
+    "baseValue": 0,
+    "confidence": 0.8392894268035889,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name; label 2 above the double is a miss (geometry)"
+ },
+ {
+  "id": "934410c2-e032-4f08-bdb1-62b5a9566a52",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.47125,
+    "y": 0.30125,
+    "boardU": -0.07625994694960211,
+    "boardV": -0.5271883289124668,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5225,
+    "y": 0.29875,
+    "boardU": 0.059681697612732,
+    "boardV": -0.5338196286472148,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "both labels sat on the same barrel; needle ends below the treble set, fields from geometry"
+ },
+ {
+  "id": "a4c1b0fb-614f-43ee-82a6-2bc483d20489",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.41367767333984373,
+    "y": 0.784906005859375,
+    "boardU": -0.22897168875373067,
+    "boardV": 0.755718848433356,
+    "snapped": false,
+    "baseValue": 19,
+    "confidence": 0.7805756330490112,
+    "multiplier": 1
+   },
+   {
+    "x": 0.44429519653320315,
+    "y": 0.2993684387207031,
+    "boardU": -0.14775809938142487,
+    "boardV": -0.5321792076373918,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.8896436095237732,
+    "multiplier": 1
+   },
+   {
+    "x": 0.70125,
+    "y": 0.635,
+    "boardU": 0.533819628647215,
+    "boardV": 0.3580901856763926,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 15,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 15,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 sits in the single just outside the treble: single 15"
+ }
+]
