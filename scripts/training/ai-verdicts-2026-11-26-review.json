@@ -1,5 +1,56 @@
 [
  {
+  "id": "6e8741b7-f19e-4734-a0dc-440a6750036b",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5025,
+    "y": 0.26125,
+    "boardU": 0.0066312997347478695,
+    "boardV": -0.633289124668435,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.51875,
+    "y": 0.295,
+    "boardU": 0.049734748010610196,
+    "boardV": -0.5437665782493369,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5275,
+    "y": 0.28125,
+    "boardU": 0.07294429708222804,
+    "boardV": -0.580238726790451,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "three stacked needles in the 20 traced to their ends, fields from geometry"
+ },
+ {
   "id": "47ef666c-0c50-43b4-9d3b-ed2ab598fe48",
   "status": "confirmed",
   "labels": [
@@ -264,6 +315,205 @@
   "notes": "label 2 sat on the barrel, label 3 on the same dart; needle ends set, field of the right one from geometry"
  },
  {
+  "id": "b63620e8-ef1d-44fc-b57f-ac3841c5a482",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46125,
+    "y": 0.36125,
+    "boardU": -0.10278514588859418,
+    "boardV": -0.36803713527851456,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.42375,
+    "y": 0.3775,
+    "boardU": -0.2022546419098143,
+    "boardV": -0.3249336870026525,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 12,
+    "multiplier": 1
+   },
+   {
+    "x": 0.3925,
+    "y": 0.42,
+    "boardU": -0.2851458885941644,
+    "boardV": -0.21220159151193638,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 9,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 12,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 9,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 was the club name, label 2 sat on empty board; the three needle ends set, fields from geometry"
+ },
+ {
+  "id": "982a7004-30e7-4c82-a3ec-cf7223a2eae2",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5232285308837891,
+    "y": 0.2826249313354492,
+    "boardU": 0.06161414027530234,
+    "boardV": -0.576591694070427,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.683800220489502,
+    "multiplier": 1
+   },
+   {
+    "x": 0.50125,
+    "y": 0.26625,
+    "boardU": 0.0033156498673739348,
+    "boardV": -0.620026525198939,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   }
+  ],
+  "notes": "second needle ends in the treble 20 left of label 1; fields from geometry"
+ },
+ {
+  "id": "d1c2f167-49d1-4a24-a145-4436aca58142",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.47125,
+    "y": 0.31625,
+    "boardU": -0.07625994694960211,
+    "boardV": -0.48740053050397886,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.65,
+    "y": 0.36375,
+    "boardU": 0.3978779840848807,
+    "boardV": -0.36140583554376654,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 4,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 4,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 was the club name; both needle ends set, fields from geometry; third dart (top left) still in flight"
+ },
+ {
+  "id": "c57695b7-0d37-44d5-8ce1-ced257cbded9",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.519517822265625,
+    "y": 0.2782823944091797,
+    "boardU": 0.05177141184515896,
+    "boardV": -0.5881103596573483,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.7248386740684509,
+    "multiplier": 3
+   },
+   {
+    "x": 0.34125,
+    "y": 0.82,
+    "boardU": -0.42108753315649866,
+    "boardV": 0.8488063660477452,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "notes": "bottom-left dart needle ends at the 7/16 corner by the double, field from geometry; the bottom-right dart is still moving (see-through)"
+ },
+ {
+  "id": "2a4df9ed-ca18-428b-835e-9b026c2b2c9f",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4705884552001953,
+    "y": 0.38320968627929686,
+    "boardU": -0.07801470769178943,
+    "boardV": -0.3097886305588945,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.8378981351852417,
+    "multiplier": 1
+   },
+   {
+    "x": 0.7525,
+    "y": 0.55375,
+    "boardU": 0.6697612732095489,
+    "boardV": 0.14257294429708214,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 10,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 10,
+    "multiplier": 1
+   }
+  ],
+  "notes": "right dart hangs down, needle ends at 602,443 (field from geometry); top dart tip hidden behind the second flight"
+ },
+ {
   "id": "e33a5fd3-4cd4-4788-975a-19993f007a98",
   "status": "confirmed",
   "labels": [
@@ -285,6 +535,117 @@
    }
   ],
   "notes": "label 2 was the club name; label 1 kept, the other tips are hidden behind the front dart"
+ },
+ {
+  "id": "b8874bb7-0b83-4a73-a8a6-8d5f786caeff",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.3804795837402344,
+    "y": 0.6976219177246094,
+    "boardU": -0.31703028185614246,
+    "boardV": 0.5241960682350372,
+    "snapped": false,
+    "baseValue": 7,
+    "confidence": 0.8475516438484192,
+    "multiplier": 3
+   },
+   {
+    "x": 0.82125,
+    "y": 0.685,
+    "boardU": 0.8521220159151195,
+    "boardV": 0.49071618037135295,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 15,
+    "multiplier": 2
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 7,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 15,
+    "multiplier": 2
+   }
+  ],
+  "notes": "right dart hangs down, needle ends on the green double next to the 10 (field from geometry)"
+ },
+ {
+  "id": "2b5cc016-8c3c-4d9c-9a8b-62a6eb7b687e",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4945850372314453,
+    "y": 0.2737342643737793,
+    "boardU": -0.014363296468314872,
+    "boardV": -0.6001743650562886,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.793385922908783,
+    "multiplier": 3
+   },
+   {
+    "x": 0.4725,
+    "y": 0.365,
+    "boardU": -0.07294429708222819,
+    "boardV": -0.3580901856763926,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 was the club name; left dart needle ends at 378,292 by the 5/20 wire (field from geometry); third tip hidden"
+ },
+ {
+  "id": "f24293de-6d51-46d9-8daf-7e76047cf262",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5169445037841797,
+    "y": 0.3016468811035156,
+    "boardU": 0.04494563337978668,
+    "boardV": -0.5261355938898792,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.6317223310470581,
+    "multiplier": 1
+   },
+   {
+    "x": 0.50375,
+    "y": 0.29,
+    "boardU": 0.009946949602122099,
+    "boardV": -0.557029177718833,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "second needle ends at the lower edge of the treble 20 left of label 1; fields from geometry"
  },
  {
   "id": "70a93868-9e65-4a40-aeec-15ba8d167106",
@@ -359,6 +720,57 @@
    }
   ],
   "notes": "right dart (single 6) added; label 2 field from geometry"
+ },
+ {
+  "id": "ece5f6ac-2397-40fd-9576-c65d30a75283",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.2746011352539062,
+    "y": 0.71708251953125,
+    "boardU": -0.5978749728013095,
+    "boardV": 0.5758157016744028,
+    "snapped": false,
+    "baseValue": 16,
+    "confidence": 0.8914027810096741,
+    "multiplier": 1
+   },
+   {
+    "x": 0.495,
+    "y": 0.135,
+    "boardU": -0.013262599469496032,
+    "boardV": -0.9681697612732095,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 2
+   },
+   {
+    "x": 0.84,
+    "y": 0.66875,
+    "boardU": 0.9018567639257293,
+    "boardV": 0.4476127320954906,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 16,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 2
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 was the club name; top dart (double 20) and right dart (double 10 edge) added, fields from geometry"
  },
  {
   "id": "404e0d6f-e5da-44bf-927f-0aea5dc091c3",
@@ -472,6 +884,265 @@
   "notes": "two darts in the 20 added, fields from geometry"
  },
  {
+  "id": "13cbb0cb-d2fe-4f61-9699-90d4022a865c",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5388940048217773,
+    "y": 0.33969371795654296,
+    "boardU": 0.10316712154317587,
+    "boardV": -0.4252156022372873,
+    "snapped": false,
+    "baseValue": 1,
+    "confidence": 0.8773695826530457,
+    "multiplier": 1
+   },
+   {
+    "x": 0.5225,
+    "y": 0.3125,
+    "boardU": 0.059681697612732,
+    "boardV": -0.4973474801061008,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.48375,
+    "y": 0.485,
+    "boardU": -0.04310344827586203,
+    "boardV": -0.0397877984084881,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 sat on the flights; second needle in the 20 and the dart in the outer bull set, fields from geometry"
+ },
+ {
+  "id": "881c6a30-3929-4ce5-9183-ef7349a750ba",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4558085250854492,
+    "y": 0.32466564178466795,
+    "boardU": -0.11721876635159383,
+    "boardV": -0.46507787325021804,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.8600857257843018,
+    "multiplier": 1
+   },
+   {
+    "x": 0.6625,
+    "y": 0.65125,
+    "boardU": 0.4310344827586206,
+    "boardV": 0.4011936339522546,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 15,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 15,
+    "multiplier": 3
+   }
+  ],
+  "notes": "right dart needle ends at the inner edge of the treble, field from geometry"
+ },
+ {
+  "id": "5685fbb3-a176-440f-96f8-233cf9a47b1b",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.655,
+    "y": 0.6575,
+    "boardU": 0.4111405835543767,
+    "boardV": 0.41777188328912457,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 2,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 2,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 1 sat on the shaft; needle ends at the 13/6 corner of the treble, field from geometry"
+ },
+ {
+  "id": "0a552a2a-7397-4aa5-9e4d-f1fa5e612137",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.50875,
+    "y": 0.30125,
+    "boardU": 0.02320954907161813,
+    "boardV": -0.5271883289124668,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.49,
+    "y": 0.355,
+    "boardU": -0.026525198938992064,
+    "boardV": -0.38461538461538464,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "needle ends of the two visible darts set, fields from geometry; third tip hidden"
+ },
+ {
+  "id": "ac7510e9-dbf3-4ca5-8ceb-acfda860c53f",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4662782287597656,
+    "y": 0.3109684753417969,
+    "boardU": -0.08944766907223936,
+    "boardV": -0.5014098797299822,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.6471096277236938,
+    "multiplier": 1
+   },
+   {
+    "x": 0.43375,
+    "y": 0.565,
+    "boardU": -0.1757294429708222,
+    "boardV": 0.17241379310344812,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 16,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 16,
+    "multiplier": 1
+   }
+  ],
+  "notes": "dart by the bull: needle ends at 347,452 in the single 11 area, field from geometry"
+ },
+ {
+  "id": "d46ba510-5d5f-43c9-81a0-14cacef76759",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.38855201721191407,
+    "y": 0.8285889434814453,
+    "boardU": -0.2956179914803341,
+    "boardV": 0.8715887094998549,
+    "snapped": false,
+    "baseValue": 19,
+    "confidence": 0.8446700572967529,
+    "multiplier": 1
+   },
+   {
+    "x": 0.45875,
+    "y": 0.765,
+    "boardU": -0.1094164456233422,
+    "boardV": 0.7029177718832892,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 3,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 1
+   }
+  ],
+  "notes": "second dart needle ends just below the treble, field from geometry"
+ },
+ {
+  "id": "61c76ed2-b963-4411-85f8-0faf87de16be",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5300761413574219,
+    "y": 0.2915960884094238,
+    "boardU": 0.07977756328228597,
+    "boardV": -0.5527955214604143,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.4199206531047821,
+    "multiplier": 1
+   },
+   {
+    "x": 0.66375,
+    "y": 0.525,
+    "boardU": 0.4343501326259946,
+    "boardV": 0.06631299734748017,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 6,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 6,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name, label 2 sat on a dart still in flight (no tip); right dart needle ends in the single 6; label 1 field from geometry"
+ },
+ {
   "id": "1e61d57f-0fd2-491b-bdaf-a571b263848c",
   "status": "confirmed",
   "labels": [
@@ -544,6 +1215,66 @@
    }
   ],
   "notes": "label 2 on the needle end at the lower edge of the treble 5, field from geometry"
+ },
+ {
+  "id": "c757a004-d784-4359-b223-6270deb2ae2f",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4625,
+    "y": 0.25875,
+    "boardU": -0.0994694960212201,
+    "boardV": -0.6399204244031831,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4925,
+    "y": 0.33125,
+    "boardU": -0.01989389920424405,
+    "boardV": -0.44761273209549074,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 sat on empty black, label 2 on the flights; two visible needle ends set, fields from geometry; third tip hidden"
+ },
+ {
+  "id": "03db5530-0a32-4243-8232-dc734707f90f",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.45289207458496095,
+    "y": 0.29950307846069335,
+    "boardU": -0.12495470932371124,
+    "boardV": -0.5318220730485587,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.8262298107147217,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 1 is on the visible needle end, field from geometry; the other two tips hidden behind it"
  },
  {
   "id": "8f03d775-d5b5-496b-a421-83bf7d124738",
@@ -683,6 +1414,43 @@
    }
   ],
   "notes": "label 2 sat on empty black; the needle next to it ends at 407,192; third tip hidden"
+ },
+ {
+  "id": "3769df5a-4b40-40dd-bae8-93c82453a7c2",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.14125,
+    "y": 0.6225,
+    "boardU": -0.9515915119363395,
+    "boardV": 0.3249336870026527,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "x": 0.22804134368896484,
+    "y": 0.7410159301757813,
+    "boardU": -0.7213757461831172,
+    "boardV": 0.6392995495378814,
+    "snapped": false,
+    "baseValue": 16,
+    "confidence": 0.8338421583175659,
+    "multiplier": 2
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 16,
+    "multiplier": 2
+   }
+  ],
+  "notes": "label 1 moved onto the needle end at the outer edge of the double 8, field from geometry; middle dart tip hidden under the lower dart"
  },
  {
   "id": "0671b2a5-c553-401e-8661-460fb6814c71",
@@ -1060,6 +1828,57 @@
   "notes": "label 2 needle ends in the black just below the treble left of the 20/1 wire: single 20"
  },
  {
+  "id": "5103a71f-5df7-4fdd-a362-f10c98d2c323",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.63375,
+    "y": 0.36,
+    "boardU": 0.3547745358090187,
+    "boardV": -0.37135278514588865,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 18,
+    "multiplier": 1
+   },
+   {
+    "x": 0.79,
+    "y": 0.7125,
+    "boardU": 0.7692307692307693,
+    "boardV": 0.5636604774535809,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 15,
+    "multiplier": 2
+   },
+   {
+    "x": 0.83375,
+    "y": 0.6975,
+    "boardU": 0.8852785145888594,
+    "boardV": 0.5238726790450928,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 18,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 15,
+    "multiplier": 2
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 2 was the club name; dart in the 13 and both needles at the double 15 set, fields from geometry"
+ },
+ {
   "id": "7fa5b089-762e-4d44-bb81-3b36108a4620",
   "status": "confirmed",
   "labels": [
@@ -1160,6 +1979,57 @@
    }
   ],
   "notes": "label 2 needle runs through the double 7 and ends in the black outside: miss"
+ },
+ {
+  "id": "0816d27a-2a3a-490d-9ef3-c3f3205fe8a3",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.45,
+    "y": 0.215,
+    "boardU": -0.13262599469496017,
+    "boardV": -0.7559681697612732,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.45125,
+    "y": 0.235,
+    "boardU": -0.12931034482758624,
+    "boardV": -0.7029177718832892,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "x": 0.46125,
+    "y": 0.23,
+    "boardU": -0.10278514588859418,
+    "boardV": -0.7161803713527852,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "three needle ends at the 5/20 wire set, fields from geometry"
  },
  {
   "id": "43782c00-3a58-4e08-93ef-e99e614a3a78",
