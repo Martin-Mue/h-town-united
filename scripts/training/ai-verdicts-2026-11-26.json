@@ -1,0 +1,667 @@
+[
+ {
+  "id": "29d193ab-3354-4a8f-a0f3-a99b4e61ab89",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "0671b2a5-c553-401e-8661-460fb6814c71",
+  "status": "needs_review",
+  "notes": "label 1 is right; label 2 ~8 px below the needle end (single 20); label 3 ends exactly on the 5/20 wire below the treble, field not reliable"
+ },
+ {
+  "id": "16c58ff8-28b2-4fa9-9ec0-ad8dc96017bb",
+  "status": "needs_review",
+  "notes": "label 3 is right; labels 1 and 2 sit on empty black, the two needle ends nearby are too faint in the dark segment to set reliably"
+ },
+ {
+  "id": "6f23ed6a-1f58-44ce-8982-91a5eaf936ec",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.3332928466796875,
+    "y": 0.7712852478027343,
+    "boardU": -0.4421940406374339,
+    "boardV": 0.719589516718129,
+    "snapped": false,
+    "baseValue": 7,
+    "confidence": 0.8831471800804138,
+    "multiplier": 1
+   },
+   {
+    "x": 0.4768288040161133,
+    "y": 0.7254433441162109,
+    "boardU": -0.06146205831269727,
+    "boardV": 0.5979929552154142,
+    "snapped": false,
+    "baseValue": 3,
+    "confidence": 0.8649849891662598,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 7,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 3,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 1 sat on the flights of the dart whose tip is label 3"
+ },
+ {
+  "id": "27d771d0-87af-4c73-9d67-6c26054ddd45",
+  "status": "needs_review",
+  "notes": "label 2 is right; label 1 ends exactly on the 19/3 wire above the treble, label 3 is ~15 px short and its needle ends near the 16/19 wire; fields not reliable"
+ },
+ {
+  "id": "c45701b5-3c03-4eb1-bec7-6301ee590cfc",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 4,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 4,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "bd326769-7577-407c-b148-b4315ae8b537",
+  "status": "needs_review",
+  "notes": "label 1 is right; label 2 sits in the black below the green treble of the 1 near the 20/1 wire where a needle may run on; field not reliable"
+ },
+ {
+  "id": "c68de982-1fde-4bec-b3da-52f73a72b3ed",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 3
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "23567d4e-1cb6-4475-b11d-71412303991d",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 17,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 17,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "f117c3b2-5852-4428-990f-8a6b042fa24a",
+  "status": "needs_review",
+  "notes": "labels 1 and 2 are right; label 3 sits on the green treble of the 17 but the needle (lying along the ring) seems to end ~15 px to the upper right; treble or single not reliable"
+ },
+ {
+  "id": "f86f3b9e-e87d-4ef6-83cd-4984ac728b60",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 18,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "6100d795-9ac8-4586-858b-0887518fef44",
+  "status": "needs_review",
+  "notes": "the needle ends exactly on the lower wire of the treble 20, treble or single not reliable"
+ },
+ {
+  "id": "59946345-3478-40ce-a3e0-32857acd5dd1",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "6d22824f-ee90-4694-8738-0b6a8a758b4a",
+  "status": "needs_review",
+  "notes": "label 1 ~20 px short (needle crosses the 20/5 corner below the treble and ends at ~364,247), label 2 ~18 px short (ends at ~378,633 in the single 3), label 3 ends exactly on the outer wire of the double 3 (double or miss not reliable)"
+ },
+ {
+  "id": "45e22d5d-3916-4269-910f-cb4b0e2d673b",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 17,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "a12bfb22-44cd-4f1d-b080-b42222af833a",
+  "status": "needs_review",
+  "notes": "label 1 sat on empty single 5 (no dart there); label 2 sat on the barrels; three darts stacked in the 20 with needles ending at the upper edge of the treble, not reliable"
+ },
+ {
+  "id": "73159cb4-b588-406b-b954-701d82b63297",
+  "status": "needs_review",
+  "notes": "label 1 (treble 20) is right; label 2 sits where a needle meets the corner of treble 20, treble 1 and the black, field not reliable"
+ },
+ {
+  "id": "5103a71f-5df7-4fdd-a362-f10c98d2c323",
+  "status": "needs_review",
+  "notes": "label 2 was the club name; dart in the single 13 had no label; two darts overlap at the double 15, their needles end right on the inner edge of the double, not reliable"
+ },
+ {
+  "id": "7fa5b089-762e-4d44-bb81-3b36108a4620",
+  "status": "needs_review",
+  "notes": "label 1 is right; label 2 sat on empty black, the other needles cross the treble 20 and their ends are not clearly visible"
+ },
+ {
+  "id": "85b1fbc5-5e93-43d7-95f6-4b29b6419d45",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 3
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "f9d4e311-8dbc-4d8a-a0c9-54ddf540b36a",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 18,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "cca40d53-9cec-4a44-859e-ae852e6039f5",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "76ac66b9-d25d-4c26-9e6e-581d2f6ef7b8",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.09693363189697266,
+    "y": 0.6791975402832031,
+    "boardU": -1.0691415599549796,
+    "boardV": 0.47532504053900076,
+    "snapped": false,
+    "baseValue": 0,
+    "confidence": 0.8234648704528809,
+    "multiplier": 1
+   },
+   {
+    "x": 0.054590072631835934,
+    "y": 0.4554399871826172,
+    "boardU": -1.1814586932842546,
+    "boardV": -0.11819632047051103,
+    "snapped": false,
+    "baseValue": 0,
+    "confidence": 0.8720457553863525,
+    "multiplier": 1
+   },
+   {
+    "x": 0.1475,
+    "y": 0.65,
+    "boardU": -0.9350132625994696,
+    "boardV": 0.3978779840848807,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 (stored double 8) sits on the needle end in the black just outside the double: a miss"
+ },
+ {
+  "id": "31af2f8b-8856-45d0-85bc-030011456c22",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 8,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 0,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "17bf2360-3e89-42e0-9193-60bf1b7442be",
+  "status": "needs_review",
+  "notes": "labels 1 and 3 (misses below the double) are right; label 2 (double 7) sits where the needle crosses the double, the tip seems to run on into the black (miss), not reliable"
+ },
+ {
+  "id": "0816d27a-2a3a-490d-9ef3-c3f3205fe8a3",
+  "status": "needs_review",
+  "notes": "three needles end together on the 5/20 wire; only one label, the others cannot be separated reliably"
+ },
+ {
+  "id": "43782c00-3a58-4e08-93ef-e99e614a3a78",
+  "status": "needs_review",
+  "notes": "label 1 is right, label 3 was the club name; a second needle in the single 1 (~443,189) had no label; label 2 ends right on the 20/1 wire, field not reliable"
+ },
+ {
+  "id": "c82624c0-9922-4692-bbcb-cf3812ee5c45",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "196393b2-09f4-4923-92df-0265f7178494",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.46054897308349607,
+    "y": 0.3020724868774414,
+    "boardU": -0.10464463373077999,
+    "boardV": -0.5250066661075832,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.621179461479187,
+    "multiplier": 1
+   },
+   {
+    "x": 0.51125,
+    "y": 0.49125,
+    "boardU": 0.029840848806366,
+    "boardV": -0.023209549071617985,
+    "snapped": false,
+    "confidence": 1,
+    "baseValue": 25,
+    "multiplier": 2
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 25,
+    "multiplier": 2
+   }
+  ],
+  "notes": "label 2 was scored 25 but the needle ends inside the red bullseye"
+ },
+ {
+  "id": "0e396562-aa36-4f53-a750-0820fa53df1a",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.5010884094238282,
+    "y": 0.29811668395996094,
+    "boardU": 0.0028870276494116147,
+    "boardV": -0.535499512042544,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.9103391170501709,
+    "multiplier": 1
+   },
+   {
+    "x": 0.44778549194335937,
+    "y": 0.42478126525878906,
+    "boardU": -0.1385000213703994,
+    "boardV": -0.19951919029498874,
+    "snapped": false,
+    "baseValue": 12,
+    "confidence": 0.8126664757728577,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 12,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name"
+ },
+ {
+  "id": "ef35cbda-85a4-4d8a-9179-389330b38c65",
+  "status": "needs_review",
+  "notes": "label 2 is right, label 3 was the club name; label 1 ends exactly on the 5/20 wire above the treble, field not reliable"
+ },
+ {
+  "id": "f950277f-04c7-4244-8cd1-199f9073f15c",
+  "status": "needs_review",
+  "notes": "labels 1 and 2 are right; label 3 sits on the edge of the outer bull and the needle seems to run on just outside it, field not reliable"
+ },
+ {
+  "id": "8c059fed-0972-4f2f-a68e-05352399d286",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "081df1dd-f4ad-4604-9d49-82b454854943",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 19,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "65354329-5305-4765-b32e-d5f2dde36a53",
+  "status": "needs_review",
+  "notes": "label 3 was the club name; label 2 sits on empty black next to a needle; label 1 ends exactly at the corner of treble 20, treble 1 and the single; not reliable"
+ },
+ {
+  "id": "1ff95036-da1d-43d5-82b6-fc5f391793ce",
+  "status": "needs_review",
+  "notes": "label 3 is right; labels 1 and 2 end exactly on the 5/20 and 20/1 wires next to the treble, fields not reliable"
+ },
+ {
+  "id": "df5613cf-a3be-4524-9631-965e3911db38",
+  "status": "needs_review",
+  "notes": "label 2 was the club name; two stacked darts over the bull, label 1 sits on the outer bull but the visible needle end is outside it; not reliable"
+ },
+ {
+  "id": "ca775068-39a5-4f7a-9479-84dc0b40edbc",
+  "status": "needs_review",
+  "notes": "label 2 is right; label 1 sits on empty black next to a needle that crosses the treble 20; label 3 sits on the edge of the outer bull where the needle runs on; not reliable"
+ },
+ {
+  "id": "9b3a0f3e-1057-41f9-b98f-261b2647de8c",
+  "status": "needs_review",
+  "notes": "label 1 sat on the barrel of the dart whose tip is label 2; label 2 ends at the corner of treble 5/20 and label 3 at the edge of the outer bull where the needle runs on; fields not reliable"
+ },
+ {
+  "id": "229ccc08-05ec-4bb3-b53a-d2d70f72e449",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4654337310791016,
+    "y": 0.35437789916992185,
+    "boardU": -0.09168771597055277,
+    "boardV": -0.3862655194431783,
+    "snapped": false,
+    "baseValue": 5,
+    "confidence": 0.8632631301879883,
+    "multiplier": 1
+   },
+   {
+    "x": 0.42069656372070313,
+    "y": 0.49885780334472657,
+    "boardU": -0.2103539423854028,
+    "boardV": -0.0030296993508573183,
+    "snapped": false,
+    "baseValue": 11,
+    "confidence": 0.8713531494140625,
+    "multiplier": 1
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 11,
+    "multiplier": 1
+   }
+  ],
+  "notes": "label 3 was the club name"
+ },
+ {
+  "id": "bb7157aa-aeae-4d8e-9f3f-d29cd5e26371",
+  "status": "needs_review",
+  "notes": "label 1 sat on empty black; one needle ends at the corner of treble 20/1, the other at the top of the 20, neither reliable"
+ },
+ {
+  "id": "fad47ebd-a9cf-4e21-86a0-77ec3afffaa6",
+  "status": "needs_review",
+  "notes": "label 1 is right; label 2 (double 16) sits where the needle crosses the double, the tip seems to end just outside (miss); the dart in the 11/8 area had no label and its tip is not clear"
+ },
+ {
+  "id": "d3755d85-f8b7-4ade-aa04-679109fca027",
+  "status": "needs_review",
+  "notes": "label 3 was the club name; label 2 (double 20) sits on the black above the double, so a miss; label 1 ends exactly at the corner of treble 20 and the 5/20 wire, not reliable"
+ },
+ {
+  "id": "934410c2-e032-4f08-bdb1-62b5a9566a52",
+  "status": "needs_review",
+  "notes": "both labels sat on the same barrel; the two needles run through the treble 20 and end below it outside the clear view"
+ },
+ {
+  "id": "a81dc7cc-d36d-4eb0-a9e6-25b2fb3e94af",
+  "status": "confirmed",
+  "labels": [
+   {
+    "x": 0.4814246368408203,
+    "y": 0.30043634414672854,
+    "boardU": -0.049271520316126444,
+    "boardV": -0.5293465672500577,
+    "snapped": false,
+    "baseValue": 20,
+    "confidence": 0.5659557580947876,
+    "multiplier": 1
+   },
+   {
+    "x": 0.6477674865722656,
+    "y": 0.3359880065917969,
+    "boardU": 0.39195619780441815,
+    "boardV": -0.43504507535332454,
+    "snapped": false,
+    "baseValue": 18,
+    "confidence": 0.6493467092514038,
+    "multiplier": 3
+   }
+  ],
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 18,
+    "multiplier": 3
+   }
+  ],
+  "notes": "label 1 sat on the barrel of the dart whose tip is label 2"
+ },
+ {
+  "id": "a4c1b0fb-614f-43ee-82a6-2bc483d20489",
+  "status": "needs_review",
+  "notes": "labels 1 and 2 are right; label 3 (stored single 15) sits on the green treble of the 15 by eye but at the ring edge by geometry, treble or single not reliable"
+ },
+ {
+  "id": "2a5bcf7b-bf3c-4e50-8d55-a6ed577b7703",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 20,
+    "multiplier": 2
+   },
+   {
+    "baseValue": 10,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 20,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "6bf193ae-8796-406a-8b5f-99d15c6dcc7b",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 5,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ },
+ {
+  "id": "2e06f1b8-1b91-49c0-b6bc-85399be3742a",
+  "status": "confirmed",
+  "ai_segments": [
+   {
+    "baseValue": 2,
+    "multiplier": 1
+   },
+   {
+    "baseValue": 1,
+    "multiplier": 1
+   }
+  ],
+  "notes": "checked: all tips on the needle end"
+ }
+]
